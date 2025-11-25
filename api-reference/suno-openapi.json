@@ -1,0 +1,388 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AISA Suno Music API",
+    "version": "v1",
+    "description": "Proxy API for Suno Music via AISA, providing endpoints for music generation, lyrics, audio upload, concatenation, and task status query."
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/v1",
+      "description": "Base URL of AISA Suno Music proxy"
+    }
+  ],
+  "paths": {
+    "/suno/submit/music": {
+      "post": {
+        "operationId": "submitMusic",
+        "summary": "Generate a song",
+        "description": "Create a new Suno music generation task. Supports inspiration mode and custom mode, specifying prompt, tags, model version, title, etc." ,
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "prompt": { "type": "string", "description": "Lyrics or description for the song (required for custom mode)" },
+                  "tags": { "type": "string", "description": "Comma-separated tags describing the style or mood" },
+                  "mv": { "type": "string", "description": "Model version (e.g. chirp-v4, chirp-v3-5)" },
+                  "title": { "type": "string", "description": "Title of the song (required in custom mode)" },
+                  "make_instrumental": { "type": "boolean", "description": "If true, generate an instrumental-only track" },
+                  "task_id": { "type": "string", "description": "If continuing an existing song, provide its task ID" },
+                  "continue_at": { "type": "number", "format": "float", "description": "Time (in seconds) to continue generation from" },
+                  "continue_clip_id": { "type": "string", "description": "Clip ID of the song to continue from" },
+                  "gpt_description_prompt": { "type": "string", "description": "Description for inspiration mode" },
+                  "notify_hook": { "type": "string", "description": "Callback URL when the music generation is complete" }
+                },
+                "required": ["mv"]
+              },
+              "example": {
+                "prompt": "[Verse]\\nWalking down the streets\\nBeneath the city lights...",
+                "tags": "emotional punk",
+                "mv": "chirp-v4",
+                "title": "City Lights"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Song generation task submitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "string" },
+                    "message": { "type": "string" },
+                    "data": { "type": "string", "description": "Task ID for the song generation" }
+                  }
+                },
+                "example": {
+                  "code": "success",
+                  "message": "",
+                  "data": "736a6f88-bd29-4b1e-b110-37132a5325ac"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suno/submit/lyrics": {
+      "post": {
+        "operationId": "submitLyrics",
+        "summary": "Generate lyrics",
+        "description": "Generate song lyrics given a prompt or theme.",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "prompt": { "type": "string", "description": "Topic or keywords for lyric generation" },
+                  "notify_hook": { "type": "string", "description": "Callback URL when lyric generation is done" }
+                },
+                "required": ["prompt"]
+              },
+              "example": {
+                "prompt": "dance",
+                "notify_hook": "https://your-callback.com/lyrics"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lyrics generation task submitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "string" },
+                    "message": { "type": "string" },
+                    "data": { "type": "string", "description": "Task ID for the lyric generation" }
+                  }
+                },
+                "example": {
+                  "code": "success",
+                  "message": "",
+                  "data": "736a6f88-bd29-4b1e-b110-37132a5325ac"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suno/uploads/audio-url": {
+      "post": {
+        "operationId": "uploadAudioUrl",
+        "summary": "Upload audio by URL",
+        "description": "Upload an existing audio file by URL, so that it can be used for concatenation or other tasks.",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "url": { "type": "string", "description": "The public URL of the MP3 or WAV file to upload" }
+              },
+              "required": ["url"]
+            },
+            "example": {
+              "url": "http://cdn.example.com/ai/song.mp3"
+            }
+          } }
+        },
+        "responses": {
+          "200": {
+            "description": "Audio upload task submitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "string" },
+                    "message": { "type": "string" },
+                    "data": { "type": "string", "description": "ID of the uploaded audio (task or reference ID)" }
+                  }
+                },
+                "example": {
+                  "code": "success",
+                  "message": "",
+                  "data": "736a6f88-bd29-4b1e-b110-37132a5325ac"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suno/submit/concat": {
+      "post": {
+        "operationId": "submitConcat",
+        "summary": "Concatenate audio clips",
+        "description": "Concatenate multiple audio clips (or extend existing Suno-generated song).",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "clip_id": { "type": "string", "description": "ID of the song clip to concatenate / continue" },
+                "is_infill": { "type": "boolean", "description": "If true, fills missing parts (infill)" }
+              },
+              "required": ["clip_id"]
+            },
+            "example": { "clip_id": "736a6f88-bd29-4b1e-b110-37132a5325ac", "is_infill": false }
+          } }
+        },
+        "responses": {
+          "200": {
+            "description": "Concatenation task submitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "string" },
+                    "message": { "type": "string" },
+                    "data": { "type": "string", "description": "New task ID for concatenation" }
+                  }
+                },
+                "example": {
+                  "code": "success",
+                  "message": "",
+                  "data": "736a6f88-bd29-4b1e-b110-37132a5325ac"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suno/fetch": {
+      "post": {
+        "operationId": "fetchTasks",
+        "summary": "Batch fetch task status",
+        "description": "Retrieve the status and result for multiple Suno tasks by IDs and action type.",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "ids": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "List of task IDs to request status for"
+                },
+                "action": {
+                  "type": "string",
+                  "description": "Type of task to filter (e.g., MUSIC, LYRICS)"
+                }
+              },
+              "required": ["ids"]
+            },
+            "example": {
+              "ids": ["736a6f88-bd29-4b1e-b110-37132a5325ac"],
+              "action": "MUSIC"
+            }
+          } }
+        },
+        "responses": {
+          "200": {
+            "description": "Task list and status returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "string" },
+                    "message": { "type": "string" },
+                    "data": {
+                      "type": "array",
+                      "description": "Array of task objects",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "task_id": { "type": "string" },
+                          "action": { "type": "string" },
+                          "status": { "type": "string" },
+                          "fail_reason": { "type": "string" },
+                          "submit_time": { "type": "integer" },
+                          "start_time": { "type": "integer" },
+                          "finish_time": { "type": "integer" },
+                          "progress": { "type": "string" },
+                          "data": { "type": "object" }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "code": "success",
+                  "message": "",
+                  "data": [
+                    {
+                      "task_id": "736a6f88-bd29-4b1e-b110-37132a5325ac",
+                      "action": "MUSIC",
+                      "status": "SUCCESS",
+                      "fail_reason": "",
+                      "submit_time": 1690000000,
+                      "start_time": 1690000500,
+                      "finish_time": 1690001000,
+                      "progress": "100%",
+                      "data": {
+                        "id": "song_123",
+                        "title": "City Lights",
+                        "audio_url": "https://cdn.suno.audio/track.mp3"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suno/fetch/{id}": {
+      "get": {
+        "operationId": "fetchTask",
+        "summary": "Fetch single task by ID",
+        "description": "Get status and result for a single Suno task by its ID.",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The task ID to fetch"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task status and result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "string" },
+                    "message": { "type": "string" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "task_id": { "type": "string" },
+                        "action": { "type": "string" },
+                        "status": { "type": "string" },
+                        "fail_reason": { "type": "string" },
+                        "submit_time": { "type": "integer" },
+                        "start_time": { "type": "integer" },
+                        "finish_time": { "type": "integer" },
+                        "progress": { "type": "string" },
+                        "data": { "type": "object" }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "code": "success",
+                  "message": "",
+                  "data": {
+                    "task_id": "736a6f88-bd29-4b1e-b110-37132a5325ac",
+                    "action": "MUSIC",
+                    "status": "SUCCESS",
+                    "fail_reason": "",
+                    "submit_time": 1690000000,
+                    "start_time": 1690000500,
+                    "finish_time": 1690001000,
+                    "progress": "100%",
+                    "data": {
+                      "id": "song_123",
+                      "title": "City Lights",
+                      "audio_url": "https://cdn.suno.audio/track.mp3"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT or API Key",
+        "description": "API key in Bearer Authorization header"
+      }
+    }
+  }
+}

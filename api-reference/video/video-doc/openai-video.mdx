@@ -1,0 +1,391 @@
+# OpenAI Video Format (Sora Format)
+
+Calling the OpenAI video generation interface to generate videos, supporting models like Sora, and also supporting the use of the OpenAI video format to call Kling, Jimeng, and Vidu.
+
+## Generate Video
+
+### API Endpoint
+
+```
+POST /v1/videos
+```
+
+### Request Headers
+
+| Parameter | Type | Required | Description |
+|------|------|------|------|
+| Authorization | string | Yes | User Authentication Token (Bearer: sk-xxxx) |
+
+### Request Parameters (multipart/form-data)
+
+| Parameter | Type | Required | Description |
+|------|------|------|------|
+| prompt | string | Yes | Text prompt describing the video to be generated |
+| model | string | No | Video generation model, defaults to sora-2 |
+| seconds | string | No | Video duration (seconds), defaults to 4 seconds |
+| size | string | No | Output resolution, format is width x height, defaults to 720x1280 |
+| input\_reference | file | No | Input image file (used for Image-to-Video) |
+| metadata | string | No | Extended parameters (JSON string format) |
+
+#### metadata Parameter Description
+
+The `metadata` parameter is used to pass parameters unique to non-Sora models, such as Alibaba Cloud Wanxiang's image URL, watermark, prompt intelligent rewriting, etc. The format of the `metadata` parameter is a JSON string, for example:
+
+```json
+```
+
+### Request Examples
+
+#### Text-to-Video (Text Prompt Only)
+
+```bash
+curl http://api.aisa.one/v1/videos \
+  -H "Authorization: Bearer sk-xxxx" \
+  -F "prompt=一个穿着宇航服的宇航员在月球上行走, 高品质, 电影级" \
+  -F "model=sora-2" \
+  -F "seconds=5" \
+  -F "size=1920x1080"
+```
+
+#### Image-to-Video (Text Prompt + Image File)
+
+```bash
+curl http://api.aisa.one/v1/videos \
+  -H "Authorization: Bearer sk-xxxx" \
+  -F "prompt=猫咪慢慢睁开眼睛，伸懒腰" \
+  -F "model=sora-2" \
+  -F "seconds=3" \
+  -F "size=1920x1080" \
+  -F "input_reference=@/path/to/cat.jpg"
+```
+
+#### Alibaba Cloud Wanxiang Video Generation Examples
+
+##### Text-to-Video (Wanxiang 2.5)
+
+```bash
+curl http://api.aisa.one/v1/videos \
+  -H "Authorization: Bearer sk-xxxx" \
+  -F "prompt=一只可爱的小猫在花园里玩耍，阳光明媚，色彩鲜艳" \
+  -F "model=wan2.5-t2v-preview" \
+  -F "seconds=5" \
+  -F "size=1920*1080"
+```
+
+##### Image-to-Video (Wanxiang 2.5)
+
+```bash
+curl http://api.aisa.one/v1/videos \
+  -H "Authorization: Bearer sk-xxxx" \
+  -F "prompt=让这张图片动起来，添加自然的运动效果" \
+  -F "model=wan2.5-i2v-preview" \
+  -F "seconds=5" \
+  -F "size=1280P" \
+  -F 'metadata='
+```
+
+### Response Format
+
+#### 201 - Successfully Created
+
+```json
+```
+
+#### Response Field Description
+
+| Field | Type | Description |
+|------|------|------|
+| id | string | Video Task ID |
+| object | string | Object type, fixed as "video" |
+| model | string | Name of the model used |
+| created\_at | integer | Creation timestamp |
+| status | string | Task status (processing: processing) |
+| progress | integer | Generation progress percentage |
+
+## Retrieve Video
+
+Query the status and result of the video generation task based on the Task ID.
+
+### API Endpoint
+
+```
+GET /v1/videos/
+```
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+|------|------|------|------|
+| video\_id | string | Yes | Video Task ID |
+
+### Request Example
+
+```bash
+curl 'http://api.aisa.one/v1/videos/video_123' \
+  -H "Authorization: Bearer sk-xxxx"
+```
+
+### Response Format
+
+#### 200 - Successful Response
+
+```json
+```
+
+#### Response Field Description
+
+| Field | Type | Description |
+|------|------|------|
+| id | string | Video Task ID |
+| object | string | Object type, fixed as "video" |
+| model | string | Name of the model used |
+| created\_at | integer | Creation timestamp |
+| status | string | Task status (processing: processing, succeeded: successful, failed: failed) |
+| progress | integer | Generation progress percentage |
+| expires\_at | integer | Resource expiration timestamp |
+| size | string | Video resolution |
+| seconds | string | Video duration (seconds) |
+| quality | string | Video quality |
+| url | string | Video download link (when complete) |
+
+## Get Video Task Status
+
+Retrieve detailed information about the video generation task based on the Task ID.
+
+### API Endpoint
+
+```
+GET /v1/videos/
+```
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+|------|------|------|------|
+| video\_id | string | Yes | Identifier of the video task to retrieve |
+
+### Request Example
+
+```bash
+curl 'http://api.aisa.one/v1/videos/video_123' \
+  -H "Authorization: Bearer sk-xxxx"
+```
+
+### Response Format
+
+```json
+```
+
+#### Response Field Description
+
+| Field | Type | Description |
+|------|------|------|
+| id | string | Unique identifier for the video task |
+| object | string | Object type, fixed as "video" |
+| model | string | Name of the model that generated the video |
+| status | string | Current lifecycle status of the video task |
+| progress | integer | Approximate completion percentage of the generation task |
+| created\_at | integer | Unix timestamp (seconds) when the task was created |
+| expires\_at | integer | Unix timestamp (seconds) when the downloadable resource expires, if set |
+| size | string | Generated video resolution |
+| seconds | string | Duration of the generated video clip (seconds) |
+| quality | string | Video quality |
+| remixed\_from\_video\_id | string | Identifier of the source video if this video is a remix |
+| error | object | Object containing error information if generation failed |
+
+## Get Video Content
+
+Download the completed video content.
+
+### API Endpoint
+
+```
+GET /v1/videos//content
+```
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+|------|------|------|------|
+| video\_id | string | Yes | Identifier of the video to download |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+|------|------|------|------|
+| variant | string | No | Type of downloadable resource to return, defaults to MP4 video |
+
+### Request Example
+
+```bash
+curl 'http://api.aisa.one/v1/videos/video_123/content' \
+  -H "Authorization: Bearer sk-xxxx" \
+  -o "video.mp4"
+```
+
+### Response Description
+
+Directly returns the video file stream, Content-Type is `video/mp4`.
+
+#### Response Headers
+
+| Field | Description |
+|------|------|
+| Content-Type | Video file type, usually video/mp4 |
+| Content-Length | Video file size (bytes) |
+| Content-Disposition | File download information |
+
+## Error Responses
+
+### 400 - Request Parameter Error
+
+```json
+
+}
+```
+
+### 401 - Unauthorized
+
+```json
+
+}
+```
+
+### 403 - Forbidden
+
+```json
+
+}
+```
+
+### 404 - Task Not Found
+
+```json
+
+}
+```
+
+### 500 - Internal Server Error
+
+```json
+
+}
+```
+
+## Supported Models
+
+### OpenAI Compatible
+
+- `sora-2`: Sora video generation model
+
+### Other Services Called via OpenAI Format
+
+- Alibaba Cloud Wanxiang (Ali Wan): Use `wan2.5-t2v-preview` (Text-to-Video), `wan2.5-i2v-preview` (Image-to-Video), `wan2.2-i2v-flash`, `wan2.2-i2v-plus`, `wanx2.1-i2v-plus`, `wanx2.1-i2v-turbo`
+- Kling AI: Use `kling-v1`, `kling-v2-master`
+- Jimeng: Use `jimeng_vgfm_t2v_l20`, `jimeng_vgfm_i2v_l20`
+- Vidu: Use `viduq1`
+
+## Alibaba Cloud Wanxiang Special Instructions
+
+### Supported Features
+
+- **Text-to-Video (t2v)**: Generates video using only a text prompt
+- **Image-to-Video (i2v)**: Generates video using a text prompt + image
+- **Keyframe-to-Video (kf2v)**: Generates video by specifying the start and end frame images
+- **Audio Generation (s2v)**: Supports combining audio with video
+
+### Resolution Support
+
+- **480P**: 832×480, 480×832, 624×624
+- **720P**: 1280×720, 720×1280, 960×960, 1088×832, 832×1088
+- **1080P**: 1920×1080, 1080×1920, 1440×1440, 1632×1248, 1248×1632
+
+### Special Parameters
+
+- `watermark`: Whether to add a watermark (default false)
+- `prompt_extend`: Whether to enable prompt intelligent rewriting (default true)
+- `audio`: Whether to add audio (only supported by wan2.5)
+- `seed`: Random seed
+
+### Model Characteristics
+
+- **wan2.5-i2v-preview**: Wanxiang 2.5 preview version, supports video with sound, recommended
+- **wan2.2-i2v-flash**: Wanxiang 2.2 Express version, fast generation speed, silent video
+- **wan2.2-i2v-plus**: Wanxiang 2.2 Professional version, higher image quality, silent video
+- **wanx2.1-i2v-plus**: Wanxiang 2.1 Professional version, stable version
+- **wanx2.1-i2v-turbo**: Wanxiang 2.1 Express version
+
+## Best Practices
+
+1. **Request Format**: Use `multipart/form-data` format, which is the official OpenAI recommended method
+2. **`input_reference` Parameter**: Used for the Image-to-Video function, use the `@filename` syntax when uploading image files
+3. **Prompt Optimization**: Use detailed and specific descriptive words, including style and quality requirements
+4. **Parameter Settings**: Reasonably set duration and resolution according to requirements
+5. **Alibaba Cloud Wanxiang Special Instructions**:
+   - **Direct file upload is not supported**; all resources are passed via URL
+   - Use the `metadata` parameter to pass all extended parameters (JSON string format)
+   - Image-to-Video uses `metadata.img_url` to pass the image URL
+   - Keyframe-to-Video uses `metadata.first_frame_url` and `metadata.last_frame_url`
+6. **Error Handling**: Implement appropriate retry mechanisms and error handling
+7. **Asynchronous Processing**: Video generation is an asynchronous task and requires polling for status checks
+8. **Resource Management**: Download and clean up unnecessary video files promptly
+
+## JavaScript Examples
+
+### Using FormData (Recommended)
+
+```javascript
+async function generateVideoWithFormData() ,
+    body: formData
+  });
+
+  const result = await response.json();
+  return result.id;
+}
+
+// Image-to-Video Example
+async function generateVideoWithImage() ,
+    body: formData
+  });
+
+  const result = await response.json();
+  return result.id;
+}
+```
+
+### Alibaba Cloud Wanxiang Calling Example
+
+```javascript
+// 阿里云万相文生视频
+async function generateAliVideo() ));
+
+  const response = await fetch('http://api.aisa.one/v1/videos', ,
+    body: formData
+  });
+
+  const result = await response.json();
+  return result.id;
+}
+
+// 阿里云万相图生视频
+async function generateAliImageToVideo() ));
+
+  const response = await fetch('http://api.aisa.one/v1/videos', ,
+    body: formData
+  });
+
+  const result = await response.json();
+  return result.id;
+}
+
+// 阿里云万相首尾帧生视频
+async function generateAliKeyframeVideo() ));
+
+  const response = await fetch('http://api.aisa.one/v1/videos', ,
+    body: formData
+  });
+
+  const result = await response.json();
+  return result.id;
+}
+```

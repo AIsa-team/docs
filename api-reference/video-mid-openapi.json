@@ -1,0 +1,231 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AISA Video Generation API (Kling & Jimeng)",
+    "version": "v1",
+    "description": "Video generation API via AISA using Kling AI and Jimeng models."
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/v1",
+      "description": "AISA base URL"
+    }
+  ],
+  "paths": {
+    "/video/generations": {
+      "post": {
+        "operationId": "createVideoGeneration",
+        "summary": "Create a new video generation task",
+        "description": "Generate video using Kling‑AI or Jimeng model. Supports custom prompt, duration, fps, image and metadata." ,
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "description": "Model/Style ID (e.g. kling‑v1 or jimeng_vgfm_t2v_l20)"
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "description": "Text prompt for the video generation"
+                  },
+                  "duration": {
+                    "type": "number",
+                    "description": "Duration of the generated video in seconds"
+                  },
+                  "fps": {
+                    "type": "integer",
+                    "description": "Frames per second for the video"
+                  },
+                  "height": {
+                    "type": "integer",
+                    "description": "Height (pixel) of the video"
+                  },
+                  "width": {
+                    "type": "integer",
+                    "description": "Width (pixel) of the video"
+                  },
+                  "image": {
+                    "type": "string",
+                    "description": "Optional image input (URL or Base64) to condition the generation"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "description": "Vendor-specific or custom parameters (e.g. negative_prompt, quality_level, etc.)",
+                    "additionalProperties": true
+                  },
+                  "n": {
+                    "type": "integer",
+                    "description": "Number of videos to generate"
+                  },
+                  "response_format": {
+                    "type": "string",
+                    "description": "Response format of the video (e.g., mp4)"
+                  },
+                  "seed": {
+                    "type": "integer",
+                    "description": "Random seed to use for generation"
+                  },
+                  "user": {
+                    "type": "string",
+                    "description": "User identifier (optional)"
+                  }
+                },
+                "required": ["model", "prompt"]
+              },
+              "example": {
+                "model": "kling-v1",
+                "prompt": "an astronaut walking on the moon, cinematic high quality",
+                "duration": 5,
+                "fps": 30,
+                "width": 1920,
+                "height": 1080,
+                "metadata": {
+                  "seed": 20231234,
+                  "negative_prompt": "blurry",
+                  "image_tail": "https://example.com/end_frame.png"
+                },
+                "n": 1,
+                "response_format": "mp4",
+                "user": "user-123"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Task accepted / created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "Unique ID for this generation request"
+                    },
+                    "object": {
+                      "type": "string",
+                      "description": "The object type, e.g. \"video\""
+                    },
+                    "model": {
+                      "type": "string",
+                      "description": "Which model is used"
+                    },
+                    "created_at": {
+                      "type": "integer",
+                      "description": "Timestamp (unix) when the task was created"
+                    },
+                    "task_id": {
+                      "type": "string",
+                      "description": "Task ID to check status later"
+                    },
+                    "status": {
+                      "type": "string",
+                      "description": "Current task status (e.g. \"processing\")"
+                    }
+                  }
+                },
+                "example": {
+                  "id": "video_123",
+                  "object": "video",
+                  "model": "kling-v1",
+                  "created_at": 1712345678,
+                  "task_id": "abcd1234efgh",
+                  "status": "processing"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/video/generations/{task_id}": {
+      "get": {
+        "operationId": "getVideoGenerationStatus",
+        "summary": "Get a video generation task status",
+        "description": "Query the status and result of a video generation task by its task_id." ,
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The task ID returned from POST /v1/video/generations"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status and result of the video generation task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "task_id": { "type": "string" },
+                    "status": { "type": "string" },
+                    "format": { "type": "string" },
+                    "url": { "type": "string", "nullable": true, "description": "URL of generated video when succeeded" },
+                    "metadata": {
+                      "type": "object",
+                      "properties": {
+                        "duration": { "type": "number" },
+                        "fps": { "type": "number" },
+                        "height": { "type": "integer" },
+                        "width": { "type": "integer" },
+                        "seed": { "type": "integer" }
+                      },
+                      "additionalProperties": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "code": { "type": "string" },
+                        "message": { "type": "string" }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "task_id": "abcd1234efgh",
+                  "status": "succeeded",
+                  "format": "mp4",
+                  "url": "https://api.AISA.ai/videos/abcd1234efgh.mp4",
+                  "metadata": {
+                    "duration": 5,
+                    "fps": 30,
+                    "height": 512,
+                    "width": 512,
+                    "seed": 20231234
+                  },
+                  "error": null
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "API key, e.g. `Authorization: Bearer sk-xxxx`"
+      }
+    }
+  }
+}

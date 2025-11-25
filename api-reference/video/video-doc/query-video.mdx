@@ -1,0 +1,211 @@
+# Query Video API
+
+Query the status and results of a video generation task based on the Task ID.
+
+## Query Video Status
+
+### API Endpoint
+
+```
+GET /v1/video/generations/
+```
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+|------|------|------|------|
+| task\_id | string | Yes | Task ID |
+
+### Request Example
+
+```bash
+curl 'http://api.aisa.one/v1/video/generations/' \
+  -H "Authorization: Bearer sk-xxxx"
+```
+
+### Response Format
+
+#### 200 - Success Response
+
+```json
+,
+  "status": "succeeded",
+  "task_id": "abcd1234efgh",
+  "url": "https://example.com/video.mp4"
+}
+```
+
+#### Response Field Description
+
+| Field | Type | Description |
+|------|------|------|
+| task\_id | string | Task ID |
+| status | string | Task status (processing: processing, succeeded: success, failed: failure) |
+| format | string | Video format |
+| url | string | Video resource URL (on success) |
+| metadata | object | Result metadata |
+| error | object | Error information (null on success) |
+
+### Status Description
+
+| Status | Description |
+|------|------|
+| processing | The task is currently being processed |
+| queued | The task is queued awaiting processing |
+| in\_progress | The task is in progress |
+| succeeded | The task completed successfully |
+| failed | The task failed |
+
+## OpenAI Compatible Format Query
+
+### API Endpoint
+
+```
+GET /v1/videos/
+```
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+|------|------|------|------|
+| video\_id | string | Yes | Video Task ID |
+
+### Request Example
+
+```bash
+curl 'http://api.aisa.one/v1/videos/video_123' \
+  -H "Authorization: Bearer sk-xxxx"
+```
+
+### Response Format
+
+```json
+```
+
+#### Response Field Description
+
+| Field | Type | Description |
+|------|------|------|
+| id | string | Unique identifier for the video task |
+| object | string | Object type, fixed as "video" |
+| model | string | Name of the model that generated the video |
+| status | string | Current lifecycle status of the video task |
+| progress | integer | Approximate completion percentage of the generation task |
+| created\_at | integer | Unix timestamp (seconds) when the task was created |
+| expires\_at | integer | Unix timestamp (seconds) when the downloadable resource expires, if set |
+| size | string | Resolution of the generated video |
+| seconds | string | Duration of the generated video clip (seconds) |
+| quality | string | Video quality |
+| url | string | Video download link (upon completion) |
+
+## Retrieve Video Content
+
+### API Endpoint
+
+```
+GET /v1/videos//content
+```
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+|------|------|------|------|
+| video\_id | string | Yes | Identifier of the video to download |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+|------|------|------|------|
+| variant | string | No | The type of downloadable resource to return, defaults to MP4 video |
+
+### Request Example
+
+```bash
+curl 'http://api.aisa.one/v1/videos/video_123/content' \
+  -H "Authorization: Bearer sk-xxxx" \
+  -o "video.mp4"
+```
+
+### Response Description
+
+Directly returns the video file stream, with Content-Type as `video/mp4`
+
+#### Response Headers
+
+| Field | Description |
+|------|------|
+| Content-Type | Video file type, usually video/mp4 |
+| Content-Length | Video file size (bytes) |
+| Content-Disposition | File download information |
+
+## Error Responses
+
+### 400 - Invalid Request Parameters
+
+```json
+```
+
+### 401 - Unauthorized
+
+```json
+```
+
+### 403 - Forbidden
+
+```json
+```
+
+### 404 - Task Not Found
+
+```json
+```
+
+### 500 - Internal Server Error
+
+```json
+```
+
+## Polling Strategy
+
+### Recommended Polling Intervals
+
+1. **Initial Polling**: Wait 2-3 seconds after submitting the task before starting to poll.
+2. **Polling Frequency**:
+   - First 30 seconds: Poll once every 5 seconds.
+   - 30 seconds to 2 minutes: Poll once every 10 seconds.
+   - After 2 minutes: Poll once every 30 seconds.
+3. **Timeout Handling**: It is recommended to set a total timeout of 5-10 minutes.
+
+### Polling Example Code
+
+```javascript
+async function pollVideoStatus(taskId, maxAttempts = 30) ;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) /v1/video/generations/$`, );
+      
+      const result = await response.json();
+      
+      if (result.status === 'succeeded')  else if (result.status === 'failed') `);
+      }
+      
+      // 等待后重试
+      const delay = attempt < 6 ? 5000 : (attempt < 12 ? 10000 : 30000);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+    } catch (error)  failed:`, error);
+      if (attempt === maxAttempts - 1) 
+    }
+  }
+  
+  throw new Error('Max polling attempts reached');
+}
+```
+
+## Best Practices
+
+1. **Status Check**: Regularly check the task status to avoid overly frequent requests.
+2. **Error Handling**: Properly handle various error conditions, including network errors and API errors.
+3. **Timeout Setting**: Set a reasonable timeout period to avoid infinite waiting.
+4. **Caching Strategy**: Consider caching results for completed videos.
+5. **Concurrency Control**: Avoid initiating too many query requests simultaneously.
+6. **Resource Cleanup**: Download and promptly clean up unnecessary video files.

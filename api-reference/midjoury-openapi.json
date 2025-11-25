@@ -1,0 +1,371 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Midjourney Proxy Image API",
+    "version": "1.0.0",
+    "description": "Proxy API for Midjourney image generation and manipulation. Includes imagine, blend, describe, action, and task management endpoints."
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/v1",
+      "description": "Base URL for Midjourney Proxy API (replace with your proxy URL)"
+    }
+  ],
+  "paths": {
+    "/mj/submit/imagine": {
+      "post": {
+        "operationId": "submitImagine",
+        "summary": "Submit an imagine task (text → image)",
+        "description": "Generate an image from a text prompt using Midjourney proxy.",
+        "security": [{"BearerAuth":[]}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "prompt": {"type": "string", "description": "Text prompt to generate image."},
+                  "botType": {"type": "string", "enum":["MID_JOURNEY","NIJI_JOURNEY"], "description":"Bot type."},
+                  "base64Array": {"type": "array", "items": {"type":"string"}, "description":"Optional base64 images for reference."},
+                  "style": {"type": "string", "description":"Optional style for image generation."}
+                },
+                "required": ["prompt"]
+              },
+              "example": {
+                "prompt": "A futuristic city skyline at sunset, cyberpunk style",
+                "botType": "MID_JOURNEY",
+                "base64Array": ["data:image/png;base64,iVBORw0KGgoAAAANS..."],
+                "style": "vivid"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Task submitted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type":"object",
+                  "properties":{
+                    "id":{"type":"string","description":"Task ID"},
+                    "status":{"type":"string","description":"Task status"},
+                    "action":{"type":"string","description":"Action type"},
+                    "submitTime":{"type":"integer","description":"Timestamp"}
+                  }
+                },
+                "example":{
+                  "id":"task-123456",
+                  "status":"SUBMITTED",
+                  "action":"IMAGINE",
+                  "submitTime":1712345678
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mj/submit/blend": {
+      "post": {
+        "operationId": "submitBlend",
+        "summary": "Blend multiple images",
+        "description": "Combine multiple images into a single image.",
+        "security": [{"BearerAuth":[]}],
+        "requestBody": {
+          "required": true,
+          "content":{"application/json":{
+            "schema":{
+              "type":"object",
+              "properties":{
+                "imageBase64List":{"type":"array","items":{"type":"string"},"description":"Images to blend"},
+                "prompt":{"type":"string","description":"Optional prompt to guide blending"},
+                "botType":{"type":"string","enum":["MID_JOURNEY","NIJI_JOURNEY"]}
+              },
+              "required":["imageBase64List"]
+            },
+            "example":{
+              "imageBase64List":["data:image/png;base64,AAAA...","data:image/png;base64,BBBB..."],
+              "prompt":"Blend these two into a fantasy landscape",
+              "botType":"MID_JOURNEY"
+            }
+          }}
+        },
+        "responses":{
+          "200":{"description":"Blend task submitted","content":{"application/json":{"schema":{
+            "type":"object",
+            "properties":{"id":{"type":"string"},"status":{"type":"string"},"action":{"type":"string"},"submitTime":{"type":"integer"}}
+          },"example":{"id":"blend-654321","status":"SUBMITTED","action":"BLEND","submitTime":1712345689}}}}
+        }
+      }
+    },
+    "/mj/submit/describe": {
+      "post": {
+        "operationId": "submitDescribe",
+        "summary": "Describe an image (image → text)",
+        "description": "Generate a textual description for an input image.",
+        "security": [{"BearerAuth":[]}],
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{
+          "type":"object",
+          "properties":{
+            "imageBase64":{"type":"string","description":"Base64-encoded image"},
+            "botType":{"type":"string","enum":["MID_JOURNEY","NIJI_JOURNEY"]}
+          },
+          "required":["imageBase64"]
+        },"example":{"imageBase64":"data:image/png;base64,iVBORw0KGgoAAAANS...","botType":"MID_JOURNEY"}}}},
+        "responses":{"200":{"description":"Describe task submitted","content":{"application/json":{"schema":{
+          "type":"object",
+          "properties":{"id":{"type":"string"},"status":{"type":"string"},"action":{"type":"string"},"submitTime":{"type":"integer"}}
+        },"example":{"id":"desc-123abc","status":"SUBMITTED","action":"DESCRIBE","submitTime":1712345699}}}}}
+      }
+    },
+    "/mj/submit/action": {
+      "post": {
+        "operationId": "submitAction",
+        "summary": "Perform an action on a task",
+        "description": "Perform actions like UPSCALE, VARIATION, ZOOM, PAN on an existing task.",
+        "security": [{"BearerAuth":[]}],
+        "requestBody":{"required":true,"content":{"application/json":{"schema":{
+          "type":"object",
+          "properties":{
+            "taskId":{"type":"string","description":"ID of the existing task"},
+            "action":{"type":"string","enum":["UPSCALE","VARIATION","ZOOM","PAN"]},
+            "customId":{"type":"string","description":"Optional custom button ID"},
+            "chooseSameChannel":{"type":"boolean","description":"Use same Discord channel"}
+          },
+          "required":["taskId","action"]
+        },"example":{"taskId":"task-123456","action":"UPSCALE","customId":"U1","chooseSameChannel":true}}}},
+        "responses":{"200":{"description":"Action task submitted","content":{"application/json":{"schema":{
+          "type":"object","properties":{"id":{"type":"string"},"status":{"type":"string"},"action":{"type":"string"},"submitTime":{"type":"integer"}}
+        },"example":{"id":"action-789xyz","status":"SUBMITTED","action":"UPSCALE","submitTime":1712345700}}}}}
+      }
+    },
+    "/mj/task/list-by-condition": {
+      "post": {
+        "operationId": "listTasksByCondition",
+        "summary": "List tasks by filter conditions",
+        "security":[{"BearerAuth":[]}],
+        "requestBody":{"required":true,"content":{"application/json":{"schema":{
+          "type":"object",
+          "properties":{
+            "ids":{"type":"array","items":{"type":"string"}},
+            "status":{"type":"string"},
+            "action":{"type":"string"},
+            "page":{"type":"integer"},
+            "limit":{"type":"integer"}
+          }
+        },"example":{"ids":["task-123456","action-789xyz"],"status":"SUCCESS","action":"IMAGINE","page":1,"limit":20}}}},
+        "responses":{"200":{"description":"Task list","content":{"application/json":{"schema":{
+          "type":"object","properties":{"tasks":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"action":{"type":"string"},"status":{"type":"string"},"progress":{"type":"string"},"imageUrl":{"type":"string"},"submitTime":{"type":"integer"}}}},"total":{"type":"integer"}}
+        },"example":{"tasks":[{"id":"task-123456","action":"IMAGINE","status":"SUCCESS","progress":"100","imageUrl":"https://cdn.example-mj-proxy.com/attachments/abcd.png","submitTime":1712345678},{"id":"action-789xyz","action":"UPSCALE","status":"IN_PROGRESS","progress":"50","imageUrl":"","submitTime":1712345700}],"total":2}}}}}
+      }
+    },
+    "/mj/task/{id}/fetch": {
+      "get": {
+        "operationId": "fetchTask",
+        "summary": "Fetch task by ID",
+        "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"string"},"description":"Task ID"}],
+        "security":[{"BearerAuth":[]}],
+        "responses":{"200":{"description":"Task detail","content":{"application/json":{"schema":{
+          "type":"object","properties":{"id":{"type":"string"},"action":{"type":"string"},"status":{"type":"string"},"progress":{"type":"string"},"imageUrl":{"type":"string"},"submitTime":{"type":"integer"},"startTime":{"type":"integer"},"finishTime":{"type":"integer"}}
+        },"example":{"id":"task-123456","action":"IMAGINE","status":"SUCCESS","progress":"100","imageUrl":"https://cdn.example-mj-proxy.com/attachments/abcd.png","submitTime":1712345678,"startTime":1712345680,"finishTime":1712345690}}}}}
+      }
+    },
+    "/mj/task/{id}/image-seed": {
+      "get": {
+        "operationId": "getImageSeed",
+        "summary": "Get image seed by task ID",
+        "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"string"},"description":"Task ID"}],
+        "security":[{"BearerAuth":[]}],
+        "responses":{"200":{"description":"Seed value","content":{"application/json":{"schema":{"type":"object","properties":{"seed":{"type":"integer"}}},"example":{"seed":123456789}}}}}
+      }
+    },
+    "/mj/insight-face/swap": {
+      "post": {
+        "operationId": "swapFace",
+        "summary": "Face swap task",
+        "description": "Swap faces in an image. Provide source and target images in base64 format.",
+        "security": [{"BearerAuth":[]}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sourceImage": {
+                    "type": "string",
+                    "description": "Base64-encoded image containing the face to swap."
+                  },
+                  "targetImage": {
+                    "type": "string",
+                    "description": "Base64-encoded image containing the target face or scene."
+                  },
+                  "botType": {
+                    "type": "string",
+                    "enum": ["MID_JOURNEY", "NIJI_JOURNEY"],
+                    "description": "Bot type to use."
+                  }
+                },
+                "required": ["sourceImage", "targetImage"]
+              },
+              "example": {
+                "sourceImage": "data:image/png;base64,iVBORw0KGgoAAAANS...",
+                "targetImage": "data:image/png;base64,ABCD1234...",
+                "botType": "MID_JOURNEY"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Face swap task submitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {"type": "string", "description": "Task ID"},
+                    "status": {"type": "string", "description": "Task status"},
+                    "action": {"type": "string", "description": "Action type"},
+                    "submitTime": {"type": "integer", "description": "Timestamp"}
+                  }
+                },
+                "example": {
+                  "id": "swap-987xyz",
+                  "status": "SUBMITTED",
+                  "action": "FACE_SWAP",
+                  "submitTime": 1712345800
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mj/submit/modal": {
+      "post": {
+        "operationId": "submitModal",
+        "summary": "Submit modal task",
+        "description": "Submit an action via a modal popup (e.g., prompt confirmation or additional input).",
+        "security": [{"BearerAuth":[]}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "taskId": {"type": "string", "description": "Existing task ID"},
+                  "modalInput": {"type": "string", "description": "Input from modal popup"},
+                  "botType": {"type": "string", "enum": ["MID_JOURNEY", "NIJI_JOURNEY"]}
+                },
+                "required": ["taskId", "modalInput"]
+              },
+              "example": {
+                "taskId": "task-123456",
+                "modalInput": "High-detail variation",
+                "botType": "MID_JOURNEY"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Modal task submitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {"type": "string", "description": "Task ID"},
+                    "status": {"type": "string", "description": "Task status"},
+                    "action": {"type": "string", "description": "Action type"},
+                    "submitTime": {"type": "integer", "description": "Timestamp"}
+                  }
+                },
+                "example": {
+                  "id": "modal-456abc",
+                  "status": "SUBMITTED",
+                  "action": "MODAL",
+                  "submitTime": 1712345900
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mj/submit/upload-discord-images": {
+      "post": {
+        "operationId": "uploadDiscordImages",
+        "summary": "Upload images from Discord",
+        "description": "Upload one or more images from Discord to the Midjourney proxy for further processing (e.g., imagine, blend, or action tasks).",
+        "security": [{"BearerAuth":[]}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "discordUrls": {
+                    "type": "array",
+                    "description": "List of image URLs from Discord to upload.",
+                    "items": {"type": "string"}
+                  },
+                  "botType": {
+                    "type": "string",
+                    "enum": ["MID_JOURNEY", "NIJI_JOURNEY"],
+                    "description": "Bot type to use."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Optional textual description or prompt associated with the images."
+                  }
+                },
+                "required": ["discordUrls"]
+              },
+              "example": {
+                "discordUrls": [
+                  "https://cdn.discordapp.com/attachments/12345/abcde.png",
+                  "https://cdn.discordapp.com/attachments/12345/fghij.png"
+                ],
+                "botType": "MID_JOURNEY",
+                "description": "Upload for future blending and imagine tasks."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Discord images uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "uploadId": {"type": "string", "description": "Unique ID for this upload batch."},
+                    "status": {"type": "string", "description": "Upload task status."},
+                    "uploadedCount": {"type": "integer", "description": "Number of images successfully uploaded."},
+                    "submitTime": {"type": "integer", "description": "Timestamp of submission."}
+                  }
+                },
+                "example": {
+                  "uploadId": "upload-789xyz",
+                  "status": "SUBMITTED",
+                  "uploadedCount": 2,
+                  "submitTime": 1712346000
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+  },
+  "components":{
+    "securitySchemes":{"BearerAuth":{"type":"http","scheme":"bearer","bearerFormat":"API Key","description":"API key for authentication"}}}
+}

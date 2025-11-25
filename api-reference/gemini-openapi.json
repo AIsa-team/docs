@@ -1,0 +1,133 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Google Gemini Generate Content API",
+    "version": "v1beta",
+    "description": "Google Gemini API for content generation (text, image, audio) based on official documentation."
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/v1",
+      "description": "Gemini API base URL"
+    }
+  ],
+  "paths": {
+    "/models/{model}:generateContent": {
+      "post": {
+        "summary": "Generate content using the specified Gemini model",
+        "operationId": "generateContent",
+        "parameters": [
+          {
+            "name": "model",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The name of the model to use, format: models/{model}"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/GenerateContentRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful content generation",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GenerateContentResponse" }
+              }
+            }
+          },
+          "default": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        },
+        "security": [
+          { "ApiKeyAuth": [] }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "key",
+        "description": "Your Google API key"
+      }
+    },
+    "schemas": {
+      "GenerateContentRequest": {
+        "type": "object",
+        "properties": {
+          "contents": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Content" },
+            "description": "Content of the conversation, required"
+          },
+          "tools": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Tool" },
+            "description": "Optional tools the model can use"
+          },
+          "toolConfig": { "type": "object", "description": "Optional tool configuration" },
+          "safetySettings": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/SafetySetting" }
+          },
+          "systemInstruction": { "$ref": "#/components/schemas/Content" },
+          "generationConfig": { "$ref": "#/components/schemas/GenerationConfig" },
+          "cachedContent": { "type": "string", "description": "Optional cached content ID" }
+        },
+        "required": ["contents"]
+      },
+      "Content": {
+        "type": "object",
+        "properties": {
+          "parts": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                { "type": "object", "properties": { "text": { "type": "string" } } },
+                { "type": "object", "properties": { "inline_data": { "type": "object" } } }
+              ]
+            }
+          },
+          "role": { "type": "string", "enum": ["system","user","assistant"] }
+        }
+      },
+      "Tool": { "type": "object" },
+      "SafetySetting": { "type": "object" },
+      "GenerationConfig": { "type": "object" },
+      "GenerateContentResponse": {
+        "type": "object",
+        "properties": {
+          "candidates": { "type": "array", "items": { "$ref": "#/components/schemas/Content" } }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "integer" },
+              "message": { "type": "string" },
+              "status": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

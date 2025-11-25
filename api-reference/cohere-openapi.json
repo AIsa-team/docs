@@ -1,0 +1,111 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Cohere Rerank API",
+    "description": "Cohere Rerank API v1 — Re-rank a list of documents based on semantic relevance to a query.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/v1",
+      "description": "Base URL for Rerank API"
+    }
+  ],
+  "paths": {
+    "/rerank": {
+      "post": {
+        "operationId": "cohere-rerank",
+        "summary": "Re-rank documents by relevance",
+        "description": "Re-ranks a list of documents according to how relevant they are to the provided query. Returns a list of results including the original document index and the computed relevance score.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "description": "The reranking model to use. Example: `rerank-english-v3.0`."
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "The query used to compute semantic relevance for each document."
+                  },
+                  "top_n": {
+                    "type": "integer",
+                    "description": "The number of highest-ranked results to return. If omitted, all documents are re-ranked."
+                  },
+                  "documents": {
+                    "type": "array",
+                    "description": "The list of documents to be re-ranked. For Mint compatibility, documents are represented as objects with flexible structure.",
+                    "items": {
+                      "type": "object",
+                      "description": "A document object. For convenience, plain text documents may be represented via the `text` field.",
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "description": "The document content."
+                        }
+                      },
+                      "additionalProperties": true
+                    }
+                  }
+                },
+                "required": ["model", "query", "documents"],
+                "example": {
+                  "model": "rerank-english-v3.0",
+                  "query": "Organic skincare products for sensitive skin",
+                  "top_n": 3,
+                  "documents": [
+                    { "text": "Organic skincare for sensitive skin with aloe vera and chamomile..." },
+                    { "text": "New makeup trends focus on bold colors and innovative techniques..." },
+                    { "text": "Bio-Hautpflege für empfindliche Haut mit Aloe Vera und Kamille..." }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully returned the re-ranked results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "description": "The list of re-ranked documents ordered by relevance score.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "integer",
+                            "description": "The original index of the document in the input array."
+                          },
+                          "relevance_score": {
+                            "type": "number",
+                            "description": "A numeric score representing how relevant the document is to the query. Higher is more relevant."
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "example": {
+                    "results": [
+                      { "index": 0, "relevance_score": 0.92 },
+                      { "index": 2, "relevance_score": 0.74 },
+                      { "index": 1, "relevance_score": 0.21 }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
