@@ -17,8 +17,7 @@ Click the green **Use this template** button at the top of this repo to copy the
 Install the [Mintlify CLI](https://www.npmjs.com/package/mint) to preview your documentation changes locally. To install, use the following command:
 
 ```
-unset PUPPETEER_DOWNLOAD_HOST && unset PUPPETEER_DOWNLOAD_BASE_URL && export PUPPETEER_SKIP_DOWNLOAD=1 && rm -rf /usr/local/Cellar/nvm/0.39.1/versions/node/v24.11.1/lib/node_modules/mint && npm i -g mint --verbose
-
+unset PUPPETEER_DOWNLOAD_HOST && unset PUPPETEER_DOWNLOAD_BASE_URL && export PUPPETEER_SKIP_DOWNLOAD=1 && rm -rf /usr/local/Cellar/nvm/0.39.1/versions/node/v24.11.1/lib/node_modules/mint && rm -rf /usr/local/Cellar/nvm/0.39.1/versions/node/v24.11.1/bin/mintlify  && npm install -g @mintlify/cli@latest --verbose
 npm i -g mint
 ```
 
