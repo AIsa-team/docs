@@ -1,0 +1,274 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Tongyi Wanxiang Reference Video Generation API",
+    "version": "1.0.0",
+    "description": "Asynchronous APIs for generating character-consistent videos using reference videos."
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "paths": {
+    "/services/aigc/video-generation/video-synthesis": {
+      "post": {
+        "summary": "Create video generation task",
+        "description": "Create an asynchronous video generation task using reference videos. Returns a task_id for polling.",
+        "tags": [
+          "Video Generation"
+        ],
+        "parameters": [
+          {
+            "name": "X-DashScope-Async",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "enable"
+              ]
+            },
+            "description": "Must be set to enable for asynchronous execution"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "example": "wan2.6-t2v"
+                  },
+                  "input": {
+                    "type": "object",
+                    "properties": {
+                      "prompt": {
+                        "type": "string",
+                        "description": "Text prompt describing the video"
+                      },
+                      "negative_prompt": {
+                        "type": "string",
+                        "description": "Text prompt describing the video"
+                      },
+                      "img_url": {
+                        "type": "string"
+                      },
+                      "audio_url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "prompt",
+                      "img_url"
+                    ]
+                  },
+                  "parameters": {
+                    "type": "object",
+                    "properties": {
+                      "resolution": {
+                        "type": "string",
+                        "example": "720P"
+                      },
+                      "duration": {
+                        "type": "integer",
+                        "enum": [
+                          5,
+                          10
+                        ],
+                        "default": 5
+                      },
+                      "shot_type": {
+                        "type": "string",
+                        "enum": [
+                          "single",
+                          "multi"
+                        ],
+                        "default": "single"
+                      },
+                      "watermark": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "seed": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 2147483647
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "model",
+                  "input"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Task created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "output": {
+                      "type": "object",
+                      "properties": {
+                        "task_id": {
+                          "type": "string"
+                        },
+                        "task_status": {
+                          "type": "string",
+                          "enum": [
+                            "PENDING"
+                          ]
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/services/aigc/tasks": {
+      "get": {
+        "summary": "Query video generation task result",
+        "description": "Poll the status and result of an asynchronous video generation task.",
+        "tags": [
+          "Video Generation"
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task status response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "request_id": {
+                      "type": "string"
+                    },
+                    "output": {
+                      "type": "object",
+                      "properties": {
+                        "task_id": {
+                          "type": "string"
+                        },
+                        "task_status": {
+                          "type": "string",
+                          "enum": [
+                            "PENDING",
+                            "RUNNING",
+                            "SUCCEEDED",
+                            "FAILED",
+                            "CANCELED",
+                            "UNKNOWN"
+                          ]
+                        },
+                        "video_url": {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        "submit_time": {
+                          "type": "string"
+                        },
+                        "scheduled_time": {
+                          "type": "string"
+                        },
+                        "end_time": {
+                          "type": "string"
+                        },
+                        "orig_prompt": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "input_video_duration": {
+                          "type": "integer"
+                        },
+                        "output_video_duration": {
+                          "type": "integer"
+                        },
+                        "duration": {
+                          "type": "number"
+                        },
+                        "video_count": {
+                          "type": "integer"
+                        },
+                        "SR": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Task not found or expired"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key"
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ]
+}

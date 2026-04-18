@@ -1,0 +1,242 @@
+---
+title: "MarketPulse"
+description: "Real-time and historical equity market data for autonomous agents — prices, news, financial statements, metrics, analyst estimates, insider and institutional activity, SEC filings, earnings releases, segmented revenues, stock screening, and macro interest rates."
+---
+
+[View on GitHub →](https://github.com/AIsa-team/agent-skills/tree/main/marketpulse)
+
+**Complete equity market data for autonomous agents.** One `AISA_API_KEY` unlocks stocks, financials, filings, and macro data — everything an agent needs to research, screen, and analyze public companies.
+
+## Install
+
+```bash
+aisa skills install marketpulse
+```
+
+## What can agents do with it?
+
+<CardGroup cols={2}>
+  <Card title="Investment research" icon="magnifying-glass-chart">
+    "Full analysis: NVDA price trends, insider trades, analyst estimates, SEC filings."
+  </Card>
+  <Card title="Earnings analysis" icon="file-invoice-dollar">
+    "Get Tesla earnings press releases, analyst estimates, and price reaction."
+  </Card>
+  <Card title="Market screening" icon="filter">
+    "Find stocks with P/E < 15 and revenue growth > 20%."
+  </Card>
+  <Card title="Whale watching" icon="fish">
+    "Track insider trades at Apple and correlate with price movements."
+  </Card>
+  <Card title="Segment deep-dive" icon="chart-pie">
+    "Break down Apple's revenue by product segment and geography."
+  </Card>
+  <Card title="Macro context" icon="landmark">
+    "Pull the Fed funds rate history alongside bank earnings."
+  </Card>
+</CardGroup>
+
+## Core capabilities
+
+- **Prices** — historical OHLCV at second, minute, day, week, month, or year granularity
+- **News** — ticker-filtered company news
+- **Financial statements** — income, balance sheet, cash flow; annual, quarterly, or TTM
+- **Segmented revenues** — revenue broken down by business segment and geography
+- **Financial metrics** — real-time snapshot or historical series
+- **Analyst estimates** — EPS and growth estimates
+- **Earnings press releases** — for ~2,776 supported tickers
+- **Insider trades** — Form 4 filings by ticker
+- **Institutional ownership** — 13F holdings by ticker or investor
+- **SEC filings** — filings index and parsed filing items (10-K, 10-Q, 8-K, etc.)
+- **Company facts** — reference data by ticker or CIK
+- **Stock screener** — POST body filters across the universe (P/E, growth, etc.)
+- **Line-item search** — pull specific metrics across multiple tickers in one call
+- **Macro** — current and historical central-bank interest rates
+
+## Quick start
+
+```bash
+export AISA_API_KEY="your-key"
+```
+
+### Stock prices
+
+```bash
+# Historical daily data
+curl "https://api.aisa.one/apis/v1/financial/prices?ticker=AAPL&interval=day&interval_multiplier=1&start_date=2025-01-01&end_date=2025-12-31" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Intraday 5-minute bars
+curl "https://api.aisa.one/apis/v1/financial/prices?ticker=AAPL&interval=minute&interval_multiplier=5&start_date=2025-01-15&end_date=2025-01-15" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+**Required params:** `ticker`, `interval` (`second` · `minute` · `day` · `week` · `month` · `year`), `interval_multiplier`, `start_date`, `end_date`.
+
+### Financial statements
+
+```bash
+# All three statements in one call
+curl "https://api.aisa.one/apis/v1/financial/financials?ticker=AAPL&period=annual" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Or fetch them individually
+curl ".../financials/income-statements?ticker=AAPL&period=quarterly" -H "Authorization: Bearer $AISA_API_KEY"
+curl ".../financials/balance-sheets?ticker=AAPL&period=annual"      -H "Authorization: Bearer $AISA_API_KEY"
+curl ".../financials/cash-flow-statements?ticker=AAPL&period=ttm"   -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+**`period`** accepts `annual`, `quarterly`, or `ttm`.
+
+### Segmented revenues
+
+```bash
+curl "https://api.aisa.one/apis/v1/financial/financials/segmented-revenues?ticker=AAPL&period=annual" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+### Financial metrics
+
+```bash
+# Real-time snapshot
+curl "https://api.aisa.one/apis/v1/financial/financial-metrics/snapshot?ticker=AAPL" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Historical
+curl "https://api.aisa.one/apis/v1/financial/financial-metrics?ticker=AAPL&period=annual" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+### Insider trades & institutional ownership
+
+```bash
+curl "https://api.aisa.one/apis/v1/financial/insider-trades?ticker=AAPL" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+curl "https://api.aisa.one/apis/v1/financial/institutional-ownership?ticker=AAPL" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+### SEC filings
+
+```bash
+# Filings index
+curl "https://api.aisa.one/apis/v1/financial/filings?ticker=AAPL" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Parsed filing items (requires filing_type and year)
+curl "https://api.aisa.one/apis/v1/financial/filings/items?ticker=AAPL&filing_type=10-K&year=2024" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+### Stock screener (POST)
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/financial/financials/search/screener" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"filters":{"pe_ratio":{"max":15},"revenue_growth":{"min":0.2}}}'
+```
+
+### Line-item search
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/financial/financials/search/line-items" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"tickers":["AAPL","MSFT"],"line_items":["revenue","net_income"],"period":"annual"}'
+```
+
+### Macro interest rates
+
+```bash
+# Current rates
+curl "https://api.aisa.one/apis/v1/financial/macro/interest-rates/snapshot" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Historical (per central bank)
+curl "https://api.aisa.one/apis/v1/financial/macro/interest-rates?bank=fed" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+## Python client
+
+A bundled `market_client.py` wraps every endpoint for one-line usage:
+
+```bash
+# Prices (start/end are required)
+python3 scripts/market_client.py stock prices --ticker AAPL --start 2025-01-01 --end 2025-01-31
+python3 scripts/market_client.py stock prices --ticker AAPL --start 2025-01-01 --end 2025-01-31 --interval week
+
+# Statements
+python3 scripts/market_client.py stock statements --ticker AAPL --type all --period annual
+python3 scripts/market_client.py stock statements --ticker AAPL --type income --period quarterly
+
+# Analysis
+python3 scripts/market_client.py stock metrics --ticker AAPL --historical --period annual
+python3 scripts/market_client.py stock analyst --ticker AAPL
+python3 scripts/market_client.py stock earnings --ticker AAPL
+
+# Insider & institutional
+python3 scripts/market_client.py stock insider --ticker AAPL
+python3 scripts/market_client.py stock ownership --ticker AAPL
+
+# SEC filings
+python3 scripts/market_client.py stock filings --ticker AAPL --items --filing-type 10-K --year 2024
+
+# Screener / line items
+python3 scripts/market_client.py stock screen --pe-max 15 --growth-min 0.2
+python3 scripts/market_client.py stock line-items --tickers AAPL,MSFT --items revenue,net_income --period annual
+
+# Interest rates
+python3 scripts/market_client.py stock rates --historical --bank fed
+```
+
+## Endpoint reference
+
+| Endpoint                                       | Method | Purpose                                                                                            |
+| ---------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------- |
+| `/financial/prices`                            | GET    | [Historical prices](/api-reference/financial/getprices)                                            |
+| `/financial/news`                              | GET    | [Company news](/api-reference/financial/getnews)                                                   |
+| `/financial/financials`                        | GET    | [All statements](/api-reference/financial/getallfinancialstatements)                               |
+| `/financial/financials/income-statements`      | GET    | [Income statements](/api-reference/financial/getincomestatements)                                  |
+| `/financial/financials/balance-sheets`         | GET    | [Balance sheets](/api-reference/financial/getbalancesheets)                                        |
+| `/financial/financials/cash-flow-statements`   | GET    | [Cash flow](/api-reference/financial/getcashflowstatements)                                        |
+| `/financial/financials/segmented-revenues`     | GET    | [Segmented revenues](/api-reference/financial/getsegmentedrevenues)                                |
+| `/financial/financial-metrics/snapshot`        | GET    | [Metrics snapshot](/api-reference/financial/getfinancialmetricssnapshot)                           |
+| `/financial/financial-metrics`                 | GET    | [Historical metrics](/api-reference/financial/getfinancialmetrics)                                 |
+| `/financial/analyst-estimates`                 | GET    | [Analyst estimates](/api-reference/financial/get_analyst-estimates)                                |
+| `/financial/earnings/press-releases`           | GET    | [Earnings press releases](/api-reference/financial/getearningspressreleases)                       |
+| `/financial/insider-trades`                    | GET    | [Insider trades](/api-reference/financial/getinsidertrades)                                        |
+| `/financial/institutional-ownership`           | GET    | [Institutional ownership](/api-reference/financial/getinstitutionalownership)                      |
+| `/financial/filings`                           | GET    | [SEC filings](/api-reference/financial/getfilings)                                                 |
+| `/financial/filings/items`                     | GET    | [Filing items](/api-reference/financial/getfilingitems)                                            |
+| `/financial/company/facts`                     | GET    | [Company facts](/api-reference/financial/getcompanyfacts)                                          |
+| `/financial/financials/search/screener`        | POST   | Stock screener                                                                                     |
+| `/financial/financials/search/line-items`      | POST   | [Line-item search](/api-reference/financial/searchlineitems)                                       |
+| `/financial/macro/interest-rates/snapshot`     | GET    | [Rates snapshot](/api-reference/financial/get_macro-interest-rates-snapshot)                       |
+| `/financial/macro/interest-rates`              | GET    | [Historical rates](/api-reference/financial/get_macro-interest-rates)                              |
+
+## Get started
+
+1. Sign up at [aisa.one](https://aisa.one) (new accounts start with $2 free credit).
+2. Generate an API key from the console.
+3. `export AISA_API_KEY="your-key"` and install the skill:
+   ```bash
+   aisa skills install marketpulse
+   ```
+4. Start a new session in your agent — the skill loads automatically.
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Financial API reference" icon="chart-line" href="/api-reference/financial/getprices">
+    Every endpoint the MarketPulse skill wraps, with interactive playgrounds.
+  </Card>
+  <Card title="Error Codes" icon="triangle-exclamation" href="/api-reference/errors">
+    Handle 400/401/429 responses from Financial endpoints.
+  </Card>
+  <Card title="Rate Limits" icon="gauge-high" href="/api-reference/rate-limits">
+    Throughput caps per endpoint and tier.
+  </Card>
+</CardGroup>

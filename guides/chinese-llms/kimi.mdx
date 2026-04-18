@@ -1,0 +1,294 @@
+---
+title: Kimi K2.5 API — Access Moonshot AI's Kimi via AIsa
+description: >-
+  Access Kimi K2.5 — Moonshot AI's 1T parameter MoE model with 256K context —
+  through AIsa at ~80% of official pricing. Enterprise data privacy guaranteed.
+  OpenAI-compatible.
+sidebar_label: Kimi K2.5
+sidebar_position: 4
+slug: /docs/chinese-llms/kimi
+---
+# Kimi K2.5 API: Access Moonshot AI's Kimi Models
+
+Kimi K2.5 is Moonshot AI's flagship model: a 1-trillion-parameter mixture-of-experts architecture that activates only 32 billion parameters per request, delivering top-tier reasoning, visual coding, and agentic tool-calling at a fraction of the compute cost of a dense model its size.
+
+Through AIsa, you access Kimi K2.5 at **approximately 80% of Moonshot AI's official pricing**, under a formal enterprise data agreement that guarantees your data is never retained or stored by Moonshot after processing. One AIsa key. No Moonshot account required.
+
+***
+
+## Kimi K2.5 at a glance
+
+| Spec                          | Value                                      |
+| ----------------------------- | ------------------------------------------ |
+| Total parameters              | 1 trillion                                 |
+| Active parameters per request | 32 billion                                 |
+| Architecture                  | Mixture-of-Experts (MoE)                   |
+| Context window                | 256,000 tokens                             |
+| Release date                  | January 27, 2026                           |
+| Input pricing (via AIsa)      | ~$0.48/M tokens (≈80% of $0.60/M official) |
+| Output pricing (via AIsa)     | ~$2.00/M tokens (≈80% of $2.50/M official) |
+| Cache hit pricing             | $0.10/M input tokens                       |
+
+> See [aisa.one/models](https://aisa.one/models) for exact current rates.
+
+***
+
+## Quickstart
+
+### Python
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="YOUR_AISA_API_KEY",
+    base_url="https://api.aisa.one/v1"
+)
+
+response = client.chat.completions.create(
+    model="kimi-k2.5",
+    messages=[
+        {"role": "system", "content": "You are an expert software engineer and technical architect."},
+        {"role": "user", "content": "Design the database schema for a multi-tenant SaaS billing system."}
+    ]
+)
+print(response.choices[0].message.content)
+```
+
+### Node.js
+
+```javascript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.AISA_API_KEY,
+  baseURL: "https://api.aisa.one/v1",
+});
+
+const response = await client.chat.completions.create({
+  model: "kimi-k2.5",
+  messages: [
+    { role: "user", content: "Analyse this React component and suggest performance improvements." }
+  ],
+});
+console.log(response.choices[0].message.content);
+```
+
+### Streaming
+
+```python
+stream = client.chat.completions.create(
+    model="kimi-k2.5",
+    messages=[{"role": "user", "content": "Walk me through building an agentic coding assistant step by step."}],
+    stream=True
+)
+
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+```
+
+***
+
+## Why Kimi K2.5?
+
+### Mixture-of-Experts efficiency
+
+The 1T/32B MoE architecture means Kimi K2.5 has the knowledge capacity of a 1-trillion-parameter model but the inference speed and cost of a 32-billion-parameter model. Only ~3% of the network activates per token, which translates directly to faster responses and lower cost compared to a dense model of equivalent capability.
+
+### Built for agents
+
+Kimi K2.5 was specifically designed for agentic use cases. It supports:
+
+* **Tool calling** — natively compatible with OpenAI function calling schema
+* **JSON mode** — structured output for downstream parsing
+* **Partial mode** — stream structured data before the full response completes
+* **Internet search** — built-in search capability (available through AIsa's web search tools)
+* **Extended context** — 256K tokens with automatic caching for repeated prefixes
+
+### Visual coding
+
+Kimi K2.5 excels at reading and reasoning about visual content: UI screenshots, architecture diagrams, database schemas, and code rendered as images. This makes it particularly powerful for:
+
+* Reviewing UI/UX mockups and generating the corresponding code
+* Describing and debugging rendered output from data visualisations
+* Extracting structured data from screenshots of tables or dashboards
+
+***
+
+## Agentic tool calling
+
+Kimi K2.5 handles complex multi-step agentic workflows reliably. Here's an example with multiple tools:
+
+```python
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_codebase",
+            "description": "Search the codebase for files matching a pattern",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string"},
+                    "file_type": {"type": "string", "enum": ["py", "ts", "js", "go", "rust"]}
+                },
+                "required": ["pattern"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read the contents of a file",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"}
+                },
+                "required": ["path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Write content to a file",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"}
+                },
+                "required": ["path", "content"]
+            }
+        }
+    }
+]
+
+messages = [
+    {"role": "user", "content": "Find all authentication-related files in the codebase and add rate limiting to each login endpoint."}
+]
+
+# Agentic loop
+while True:
+    response = client.chat.completions.create(
+        model="kimi-k2.5",
+        messages=messages,
+        tools=tools,
+        tool_choice="auto"
+    )
+
+    message = response.choices[0].message
+    messages.append(message)
+
+    if not message.tool_calls:
+        print("Task complete:", message.content)
+        break
+
+    # Execute tool calls and feed results back
+    for tool_call in message.tool_calls:
+        result = execute_tool(tool_call.function.name, tool_call.function.arguments)
+        messages.append({
+            "role": "tool",
+            "tool_call_id": tool_call.id,
+            "content": str(result)
+        })
+```
+
+***
+
+## JSON mode and structured output
+
+```python
+import json
+
+response = client.chat.completions.create(
+    model="kimi-k2.5",
+    messages=[
+        {"role": "user", "content": "Extract all API endpoints from this codebase description and return as JSON with: method, path, description, and auth_required fields."}
+    ],
+    response_format={"type": "json_object"}
+)
+
+endpoints = json.loads(response.choices[0].message.content)
+```
+
+***
+
+## Using Kimi K2.5 with the 256K context window
+
+The 256K context window covers approximately 200,000 words — enough for most novels, large codebases, or extended research documents:
+
+```python
+# Load a large codebase into context
+import os
+
+codebase_contents = ""
+for root, dirs, files in os.walk("./my-project"):
+    # Skip node_modules, .git, etc.
+    dirs[:] = [d for d in dirs if d not in ['.git', 'node_modules', '__pycache__']]
+    for file in files:
+        if file.endswith(('.py', '.ts', '.js')):
+            path = os.path.join(root, file)
+            with open(path) as f:
+                codebase_contents += f"\n\n--- {path} ---\n{f.read()}"
+
+response = client.chat.completions.create(
+    model="kimi-k2.5",
+    messages=[
+        {"role": "system", "content": "You are a code reviewer. Analyse the entire codebase provided."},
+        {"role": "user", "content": f"Here is the codebase:\n{codebase_contents}\n\nIdentify all security vulnerabilities and provide remediation steps."}
+    ]
+)
+```
+
+***
+
+## Caching: reduce cost on repeated context
+
+Kimi K2.5 supports prompt caching. When the same prefix (e.g., a system prompt, document, or codebase) appears across multiple requests, cache hits cost $0.10/M input instead of the full rate.
+
+```python
+# First call — cold (full rate)
+response1 = client.chat.completions.create(
+    model="kimi-k2.5",
+    messages=[
+        {"role": "system", "content": large_system_prompt},  # This prefix is cached
+        {"role": "user", "content": "Question 1"}
+    ]
+)
+
+# Second call — cache hit (90% cheaper on the cached prefix)
+response2 = client.chat.completions.create(
+    model="kimi-k2.5",
+    messages=[
+        {"role": "system", "content": large_system_prompt},  # Cached — $0.10/M
+        {"role": "user", "content": "Question 2"}            # New — full rate
+    ]
+)
+```
+
+***
+
+## Enterprise data privacy
+
+AIsa holds a **Supplemental Enterprise Service Agreement** with Moonshot AI (effective February 10, 2026) with the following guarantees:
+
+* Customer data is **not retained** by Moonshot AI after processing
+* Generated outputs are **not stored** on Moonshot's infrastructure
+* Data is not used for model training or fine-tuning
+* Processing occurs within the boundaries of the enterprise agreement
+
+For organisations with GDPR, HIPAA, or internal data governance requirements, [contact us](mailto:developer@aisa.one) for a copy of the full data processing agreement.
+
+***
+
+## What's next
+
+* [All Chinese AI models](./index) — full comparison table
+* [Qwen models](./qwen) — Alibaba's 1M-context flagship
+* [DeepSeek V4](./deepseek) — 81% SWE-bench at frontier-beating price
+* [ByteDance Seed & Seedream](./bytedance) — Seed 1.6, 1.8, Flash, and Seedream 4.5 image generation

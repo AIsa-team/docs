@@ -1,0 +1,190 @@
+---
+title: "Async Operations"
+description: "How AIsa handles long-running API calls — create a task, poll its status, and download the result. Used by video generation and other heavyweight endpoints."
+---
+
+Some AIsa endpoints — notably video generation — take longer than an HTTP request can reasonably hold open. These endpoints use an **async task pattern**: one call creates the task and returns a task ID; a second call polls the task until it's done.
+
+<Note>
+  LLM inference, image generation, and most data APIs are **synchronous** — they return the result in a single response. The async pattern only applies to endpoints that return a `task_id` instead of a result.
+</Note>
+
+## The pattern
+
+<Steps>
+  <Step title="Create a task">
+    Send the generation request with the header `X-DashScope-Async: enable`. The response returns immediately with a `task_id` and initial status (`PENDING` or `RUNNING`).
+  </Step>
+  <Step title="Poll for completion">
+    Call `GET /apis/v1/services/aigc/tasks?task_id={task_id}` every few seconds until `task_status` is `SUCCEEDED` or `FAILED`.
+  </Step>
+  <Step title="Download the result">
+    On success, the response contains a time-limited URL (e.g., `video_url`). Download the asset and store it — the URL expires after a few hours.
+  </Step>
+</Steps>
+
+## Example: video generation
+
+### 1. Create the task
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/services/aigc/video-generation/video-synthesis" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "X-DashScope-Async: enable" \
+  -d '{
+    "model": "wan2.6-t2v",
+    "input": {
+      "prompt": "cinematic close-up, slow push-in, shallow depth of field"
+    }
+  }'
+```
+
+Response:
+
+```json
+{
+  "output": {
+    "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "task_status": "PENDING"
+  },
+  "request_id": "req_01JABCD9F1YYEXAMPLE"
+}
+```
+
+### 2. Poll the task
+
+```bash
+curl "https://api.aisa.one/apis/v1/services/aigc/tasks?task_id=a1b2c3d4-e5f6-7890-abcd-ef1234567890" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+While still running:
+
+```json
+{
+  "output": {
+    "task_id": "a1b2c3d4-...",
+    "task_status": "RUNNING",
+    "progress": 0.42
+  }
+}
+```
+
+On completion:
+
+```json
+{
+  "output": {
+    "task_id": "a1b2c3d4-...",
+    "task_status": "SUCCEEDED",
+    "video_url": "https://cdn.aisa.one/tasks/a1b2.../out.mp4",
+    "video_url_expires_at": "2026-04-17T23:00:00Z"
+  }
+}
+```
+
+### 3. Download the asset
+
+```bash
+curl -L "https://cdn.aisa.one/tasks/a1b2.../out.mp4" -o output.mp4
+```
+
+## Task lifecycle states
+
+| Status       | Meaning                                                          | Billing                      |
+| ------------ | ---------------------------------------------------------------- | ---------------------------- |
+| `PENDING`    | Task accepted, queued for execution                              | Not billed yet               |
+| `RUNNING`    | Actively generating. May include a `progress` (0.0–1.0) field    | Billed on success            |
+| `SUCCEEDED`  | Generation complete. Asset URL available for download            | Billed in full               |
+| `FAILED`     | Generation failed. `error.message` explains why                  | **Not billed**               |
+| `CANCELLED`  | Task was cancelled (e.g., user request or policy)                | Partial billing possible     |
+| `UNKNOWN`    | Transient state — poll again in a few seconds                    | —                            |
+
+## Polling best practices
+
+<Tip>
+  **Don't poll faster than 2 Hz** (every 500 ms). Most video jobs take 20–90 seconds, so polling every 3–5 s is plenty.
+</Tip>
+
+<Steps>
+  <Step title="Backoff on transient states">
+    When status is `PENDING` / `RUNNING` / `UNKNOWN`, wait before the next poll. A simple linear delay works; exponential is overkill for a bounded-duration job.
+    ```
+    3s → 3s → 3s → ... → until SUCCEEDED or FAILED
+    ```
+  </Step>
+  <Step title="Cap the total wait">
+    Enforce a hard timeout (e.g., 5 minutes). If the task hasn't completed, log the `task_id` for later inspection and surface a timeout to the caller.
+  </Step>
+  <Step title="Handle `FAILED` explicitly">
+    A failed task is **not billed**, but you should inspect `error.code` and `error.message` to decide whether to retry. Common causes: safety-policy violation, invalid prompt, upstream outage.
+  </Step>
+  <Step title="Cache the result URL">
+    Result URLs expire within a few hours. Download the asset and persist it to your own storage before the URL expires.
+  </Step>
+</Steps>
+
+### Minimal poller (Python)
+
+```python
+import time, requests, os
+
+API = "https://api.aisa.one/apis/v1"
+HEADERS = {"Authorization": f"Bearer {os.environ['AISA_API_KEY']}"}
+
+def create_video(prompt, model="wan2.6-t2v"):
+    r = requests.post(
+        f"{API}/services/aigc/video-generation/video-synthesis",
+        headers={**HEADERS, "X-DashScope-Async": "enable"},
+        json={"model": model, "input": {"prompt": prompt}},
+    )
+    r.raise_for_status()
+    return r.json()["output"]["task_id"]
+
+def wait_for_task(task_id, interval=3, timeout=300):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        r = requests.get(f"{API}/services/aigc/tasks", params={"task_id": task_id}, headers=HEADERS)
+        r.raise_for_status()
+        out = r.json()["output"]
+        status = out["task_status"]
+        if status == "SUCCEEDED":
+            return out["video_url"]
+        if status == "FAILED":
+            raise RuntimeError(f"Task failed: {out.get('error', {})}")
+        time.sleep(interval)
+    raise TimeoutError(f"Task {task_id} did not complete within {timeout}s")
+
+task_id = create_video("cinematic slow push-in on a neon city")
+video_url = wait_for_task(task_id)
+print("Video ready:", video_url)
+```
+
+## Concurrency limits
+
+Async endpoints cap concurrent in-flight tasks per key. Typical default:
+
+| Endpoint              | Concurrent tasks per key |
+| --------------------- | ------------------------ |
+| Video synthesis       | 3                        |
+| Image generation      | 30 RPM (synchronous)     |
+
+Hitting the concurrency cap returns `429` on the **create** call. The `Retry-After` header tells you how long to wait. See [Rate Limits](/api-reference/rate-limits) for the full table.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Video synthesis endpoint" icon="video" href="/api-reference/video/post_services-aigc-video-generation-video-synthesis">
+    Reference for the task-creation endpoint.
+  </Card>
+  <Card title="Task status endpoint" icon="hourglass-half" href="/api-reference/video/get_services-aigc-tasks">
+    Reference for the polling endpoint.
+  </Card>
+  <Card title="Media Gen skill" icon="image" href="/agent-skills/mediagen">
+    Agent-skill wrapper that handles task polling for you.
+  </Card>
+  <Card title="Error Codes" icon="triangle-exclamation" href="/api-reference/errors">
+    Handling failures and retries.
+  </Card>
+</CardGroup>

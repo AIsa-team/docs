@@ -1,0 +1,196 @@
+---
+title: "Prediction Market Data"
+description: "Unified access to Polymarket and Kalshi for autonomous agents — market discovery, implied-probability pricing, orderbooks, trade history, wallet positions, and P&L. Plus cross-platform sports market matching."
+---
+
+[View on GitHub →](https://github.com/AIsa-team/agent-skills/tree/main/prediction-market-data)
+
+**Unified prediction-market data for autonomous agents.** One `AISA_API_KEY` reads markets and prices across Polymarket and Kalshi — search events, track implied probabilities, inspect orderbooks, and analyze wallet positions.
+
+## Install
+
+```bash
+aisa skills install prediction-market-data
+```
+
+## What can agents do with it?
+
+<CardGroup cols={2}>
+  <Card title="Probability queries" icon="percent">
+    "What are the current odds of a Fed rate cut in June across markets?"
+  </Card>
+  <Card title="Sentiment tracking" icon="chart-line">
+    "Monitor election-related markets and flag price swings >5%."
+  </Card>
+  <Card title="Trading analysis" icon="chart-candlestick">
+    "Pull historical trades and OHLC for this market over the last 30 days."
+  </Card>
+  <Card title="Portfolio tracking" icon="wallet">
+    "What's the P&L on this Polymarket wallet across granularities?"
+  </Card>
+  <Card title="Orderbook depth" icon="layer-group">
+    "Check the top-of-book liquidity before placing a trade."
+  </Card>
+  <Card title="Cross-platform match" icon="shuffle">
+    "Find the Kalshi and Polymarket markets for the same NFL game."
+  </Card>
+</CardGroup>
+
+## Core capabilities
+
+- **Market discovery** — search Polymarket and Kalshi by keyword, status, category
+- **Price tracking** — current "Yes"/"No" prices (implied probabilities)
+- **Historical data** — trade history, orderbook snapshots, candlesticks
+- **Wallet analytics** — positions and P&L by granularity (Polymarket)
+- **Event index** — Polymarket event lookup
+- **Sports matching** — find equivalent markets across platforms (NFL, MLB, NBA, etc.)
+
+## Workflow pattern
+
+Most endpoints require IDs pulled from the search responses:
+
+<Steps>
+  <Step title="Search for markets">
+    Call `/polymarket/markets` or `/kalshi/markets` with a keyword.
+  </Step>
+  <Step title="Extract the identifier">
+    Polymarket → `token_id`. Kalshi → `market_ticker`.
+  </Step>
+  <Step title="Pass to downstream endpoints">
+    Use that identifier for price, orderbook, trades, or candlestick queries.
+  </Step>
+</Steps>
+
+## Quick start
+
+```bash
+export AISA_API_KEY="your-key"
+```
+
+### Polymarket
+
+```bash
+# Market discovery
+curl "https://api.aisa.one/apis/v1/polymarket/markets?search=election&status=active" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Events
+curl "https://api.aisa.one/apis/v1/polymarket/events" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Market price (implied probability) for a token_id
+curl "https://api.aisa.one/apis/v1/polymarket/market-price/TOKEN_ID" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Orderbook snapshot
+curl "https://api.aisa.one/apis/v1/polymarket/orderbooks?token_id=TOKEN_ID" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Candlesticks
+curl "https://api.aisa.one/apis/v1/polymarket/candlesticks?token_id=TOKEN_ID" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Activity / orders / positions
+curl "https://api.aisa.one/apis/v1/polymarket/activity?wallet=WALLET_ADDRESS" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Wallet P&L by granularity
+curl "https://api.aisa.one/apis/v1/polymarket/wallet-pnl?wallet=WALLET_ADDRESS&granularity=day" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+### Kalshi
+
+```bash
+# Market discovery
+curl "https://api.aisa.one/apis/v1/kalshi/markets?search=rates" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Market price
+curl "https://api.aisa.one/apis/v1/kalshi/market-price/KX-123" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Trades & orderbook
+curl "https://api.aisa.one/apis/v1/kalshi/trades?ticker=KX-123" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+curl "https://api.aisa.one/apis/v1/kalshi/orderbooks?ticker=KX-123" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+### Cross-platform sports matching
+
+```bash
+# All sports
+curl "https://api.aisa.one/apis/v1/matching-markets/sports" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# By sport (nfl, mlb, nba, etc.)
+curl "https://api.aisa.one/apis/v1/matching-markets/sports/nba?date=2025-08-16" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+## Python client
+
+```bash
+# Polymarket
+python3 scripts/prediction_market_client.py poly markets --search "recession"
+python3 scripts/prediction_market_client.py poly events
+python3 scripts/prediction_market_client.py poly market-price --token-id TOKEN_ID
+python3 scripts/prediction_market_client.py poly orderbook --token-id TOKEN_ID
+python3 scripts/prediction_market_client.py poly candlesticks --token-id TOKEN_ID
+python3 scripts/prediction_market_client.py poly wallet --address WALLET
+python3 scripts/prediction_market_client.py poly wallet-pnl --address WALLET --granularity day
+
+# Kalshi
+python3 scripts/prediction_market_client.py kalshi markets --search "interest rates"
+python3 scripts/prediction_market_client.py kalshi market-price --ticker KX-123
+python3 scripts/prediction_market_client.py kalshi trades --ticker KX-123
+python3 scripts/prediction_market_client.py kalshi orderbook --ticker KX-123
+
+# Matching
+python3 scripts/prediction_market_client.py matching sports --sport nba --date 2025-08-16
+```
+
+## Endpoint reference
+
+| Endpoint                              | Method | Purpose                                                                                            |
+| ------------------------------------- | ------ | -------------------------------------------------------------------------------------------------- |
+| `/polymarket/markets`                 | GET    | [Polymarket markets](/api-reference/prediction-market/get_polymarket-markets)                      |
+| `/polymarket/events`                  | GET    | [Polymarket events](/api-reference/prediction-market/get_polymarket-events)                        |
+| `/polymarket/market-price/{id}`       | GET    | [Market price](/api-reference/prediction-market/get_polymarket-market-price)                       |
+| `/polymarket/orderbooks`              | GET    | [Orderbook](/api-reference/prediction-market/get_polymarket-orderbooks)                            |
+| `/polymarket/candlesticks`            | GET    | [Candlesticks](/api-reference/prediction-market/get_polymarket-candlesticks)                       |
+| `/polymarket/activity`                | GET    | [Activity](/api-reference/prediction-market/get_polymarket-activity)                               |
+| `/polymarket/orders`                  | GET    | [Orders](/api-reference/prediction-market/get_polymarket-orders)                                   |
+| `/polymarket/positions`               | GET    | [Positions](/api-reference/prediction-market/get_polymarket-positions)                             |
+| `/polymarket/wallet`                  | GET    | [Wallet](/api-reference/prediction-market/get_polymarket-wallet)                                   |
+| `/polymarket/wallet-pnl`              | GET    | [Wallet P&L](/api-reference/prediction-market/get_polymarket-wallet-pnl)                           |
+| `/kalshi/markets`                     | GET    | [Kalshi markets](/api-reference/prediction-market/get_kalshi-markets)                              |
+| `/kalshi/market-price/{ticker}`       | GET    | [Kalshi price](/api-reference/prediction-market/get_kalshi-market-price)                           |
+| `/kalshi/trades`                      | GET    | [Kalshi trades](/api-reference/prediction-market/get_kalshi-trades)                                |
+| `/kalshi/orderbooks`                  | GET    | [Kalshi orderbook](/api-reference/prediction-market/get_kalshi-orderbooks)                         |
+| `/matching-markets/sports`            | GET    | [All sports](/api-reference/prediction-market/get_matching-markets-sports)                         |
+| `/matching-markets/sports/{sport}`    | GET    | [By sport](/api-reference/prediction-market/get_matching-markets-sports-by-sport)                  |
+
+## Get started
+
+1. Sign up at [aisa.one](https://aisa.one) (new accounts start with $2 free credit).
+2. Generate an API key from the console.
+3. `export AISA_API_KEY="your-key"` and install the skill:
+   ```bash
+   aisa skills install prediction-market-data
+   ```
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Prediction Market API reference" icon="chart-simple" href="/api-reference/prediction-market/get_polymarket-markets">
+    Every Polymarket, Kalshi, and matching-markets endpoint.
+  </Card>
+  <Card title="Arbitrage skill" icon="scale-balanced" href="/agent-skills/prediction-market-arbitrage">
+    Cross-platform arb detection built on the same data.
+  </Card>
+  <Card title="Error Codes" icon="triangle-exclamation" href="/api-reference/errors">
+    Handling upstream exchange errors.
+  </Card>
+</CardGroup>

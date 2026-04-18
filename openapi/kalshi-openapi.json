@@ -1,0 +1,817 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AIsa API proxy",
+    "description": "APIs for prediction markets.",
+    "version": "0.0.1"
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/kalshi/markets": {
+      "get": {
+        "summary": "Get Kalshi Markets",
+        "description": "Fetches Kalshi market data with optional filtering by market ticker, event ticker, status, and volume. Returns markets with details including pricing, volume, and status information.",
+        "operationId": "get_kalshi-markets",
+        "parameters": [
+          {
+            "name": "market_ticker",
+            "in": "query",
+            "required": false,
+            "description": "Filter markets by market ticker(s). Can provide multiple values.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "example": [
+                "KXMAYORNYCPARTY-25-D"
+              ]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "event_ticker",
+            "in": "query",
+            "required": false,
+            "description": "Filter markets by event ticker(s). Can provide multiple values.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "example": [
+                "KXMAYORNYCPARTY-25"
+              ]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Search markets by keywords in title and description. Must be URL encoded (e.g., 'bitcoin%20price' for 'bitcoin price').",
+            "schema": {
+              "type": "string",
+              "example": "bitcoin"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter markets by status (whether they're open or closed)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "closed"
+              ],
+              "example": "open"
+            }
+          },
+          {
+            "name": "min_volume",
+            "in": "query",
+            "required": false,
+            "description": "Filter markets with total trading volume greater than or equal to this amount (in dollars)",
+            "schema": {
+              "type": "number",
+              "example": 10000000
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Number of markets to return (1-100). Default: 10.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10,
+              "example": 20
+            }
+          },
+          {
+            "name": "pagination_key",
+            "in": "query",
+            "required": false,
+            "description": "Base64-encoded cursor for efficient pagination. Returned in the previous response's pagination object.",
+            "schema": {
+              "type": "string",
+              "example": "eyJvcGVuX3RpbWUiOiIyMDI1LTAxLTE5VDEyOjAwOjAwLjAwMFoiLCJtYXJrZXRfdGlja2VyIjoiS1hNQVlPUk5ZQ1BBUlRZLTI1LUQiLCJ0b3RhbCI6MTUwfQ=="
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Kalshi markets response with pagination",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "markets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "event_ticker": {
+                            "type": "string",
+                            "description": "The Kalshi event ticker",
+                            "example": "KXMAYORNYCPARTY-25"
+                          },
+                          "market_ticker": {
+                            "type": "string",
+                            "description": "The Kalshi market ticker",
+                            "example": "KXMAYORNYCPARTY-25-D"
+                          },
+                          "title": {
+                            "type": "string",
+                            "description": "Market question/title",
+                            "example": "Will a representative of the Democratic party win the NYC Mayor race in 2025?"
+                          },
+                          "start_time": {
+                            "type": "integer",
+                            "description": "Unix timestamp in seconds when the market opens",
+                            "example": 1731150000
+                          },
+                          "end_time": {
+                            "type": "integer",
+                            "description": "Unix timestamp in seconds when the market is scheduled to end",
+                            "example": 1793775600
+                          },
+                          "close_time": {
+                            "type": "integer",
+                            "nullable": true,
+                            "description": "Unix timestamp in seconds when the market actually resolves/closes (may be before end_time if market finishes early, null if not yet closed)",
+                            "example": 1793775600
+                          },
+                          "status": {
+                            "type": "string",
+                            "description": "Market status",
+                            "enum": [
+                              "open",
+                              "closed"
+                            ],
+                            "example": "open"
+                          },
+                          "last_price": {
+                            "type": "number",
+                            "description": "Last traded price in cents",
+                            "example": 89
+                          },
+                          "volume": {
+                            "type": "number",
+                            "description": "Total trading volume in dollars",
+                            "example": 18261146
+                          },
+                          "volume_24h": {
+                            "type": "number",
+                            "description": "24-hour trading volume in dollars",
+                            "example": 931138
+                          },
+                          "result": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "Market result (null if unresolved)",
+                            "example": null
+                          }
+                        }
+                      }
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "limit": {
+                          "type": "integer",
+                          "example": 20
+                        },
+                        "total": {
+                          "type": "integer",
+                          "description": "Total number of markets matching the filters",
+                          "example": 150
+                        },
+                        "has_more": {
+                          "type": "boolean",
+                          "description": "Whether there are more markets available",
+                          "example": true
+                        },
+                        "pagination_key": {
+                          "type": "string",
+                          "description": "Base64-encoded cursor for the next page. Only present when there are more results.",
+                          "example": "eyJvcGVuX3RpbWUiOiIyMDI1LTAxLTE5VDEyOjAwOjAwLjAwMFoiLCJtYXJrZXRfdGlja2VyIjoiS1hNQVlPUk5ZQ1BBUlRZLTI1LUQiLCJ0b3RhbCI6MTUwfQ=="
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid parameters or validation errors",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Invalid limit parameter"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "limit must be a number between 1 and 100"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kalshi/trades": {
+      "get": {
+        "summary": "Get Kalshi Trades",
+        "description": "Fetches historical trade data for Kalshi markets with optional filtering by ticker and time range. Returns executed trades with pricing, volume, and taker side information. All timestamps are in seconds.",
+        "operationId": "get_kalshi-trades",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "query",
+            "required": false,
+            "description": "The Kalshi market ticker to filter trades",
+            "schema": {
+              "type": "string",
+              "example": "KXNFLGAME-25NOV09PITLAC-PIT"
+            }
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "required": false,
+            "description": "Start time in Unix timestamp (seconds)",
+            "schema": {
+              "type": "integer",
+              "example": 1762716000
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "required": false,
+            "description": "End time in Unix timestamp (seconds)",
+            "schema": {
+              "type": "integer",
+              "example": 1762720600
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of trades to return (default: 100)",
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "example": 10
+            }
+          },
+          {
+            "name": "pagination_key",
+            "in": "query",
+            "required": false,
+            "description": "Base64-encoded cursor for efficient pagination. Returned in the previous response's pagination object.",
+            "schema": {
+              "type": "string",
+              "example": "eyJjcmVhdGVkX3RpbWUiOiIyMDI1LTAxLTE5VDEyOjAwOjAwLjAwMFoiLCJ0cmFkZV9pZCI6IjEyMzQ1Njc4OTAiLCJ0b3RhbCI6NTAwMDB9"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Kalshi trades response with pagination",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "trades": {
+                      "type": "array",
+                      "description": "Array of executed trades",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "trade_id": {
+                            "type": "string",
+                            "description": "Unique identifier for the trade",
+                            "example": "587f9eb0-1ae1-7b53-9536-fcf3fc503630"
+                          },
+                          "market_ticker": {
+                            "type": "string",
+                            "description": "The Kalshi market ticker",
+                            "example": "KXNFLGAME-25NOV09PITLAC-PIT"
+                          },
+                          "count": {
+                            "type": "integer",
+                            "description": "Number of contracts traded",
+                            "example": 93
+                          },
+                          "yes_price": {
+                            "type": "integer",
+                            "description": "Yes side price in cents",
+                            "example": 1
+                          },
+                          "no_price": {
+                            "type": "integer",
+                            "description": "No side price in cents",
+                            "example": 99
+                          },
+                          "yes_price_dollars": {
+                            "type": "number",
+                            "description": "Yes side price in dollars",
+                            "example": 0.01
+                          },
+                          "no_price_dollars": {
+                            "type": "number",
+                            "description": "No side price in dollars",
+                            "example": 0.99
+                          },
+                          "taker_side": {
+                            "type": "string",
+                            "description": "Which side was the taker (yes or no)",
+                            "enum": [
+                              "yes",
+                              "no"
+                            ],
+                            "example": "yes"
+                          },
+                          "created_time": {
+                            "type": "integer",
+                            "description": "Timestamp of the trade in seconds (Unix timestamp)",
+                            "example": 1762718746
+                          }
+                        }
+                      }
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "limit": {
+                          "type": "integer",
+                          "example": 50
+                        },
+                        "total": {
+                          "type": "integer",
+                          "description": "Total number of trades matching the filters",
+                          "example": 43154
+                        },
+                        "has_more": {
+                          "type": "boolean",
+                          "description": "Whether there are more trades available",
+                          "example": true
+                        },
+                        "pagination_key": {
+                          "type": "string",
+                          "description": "Base64-encoded cursor for the next page. Only present when there are more results.",
+                          "example": "eyJjcmVhdGVkX3RpbWUiOiIyMDI1LTAxLTE5VDEyOjAwOjAwLjAwMFoiLCJ0cmFkZV9pZCI6IjEyMzQ1Njc4OTAiLCJ0b3RhbCI6NTAwMDB9"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Invalid parameters"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Invalid time range or parameters"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kalshi/market-price/{market_ticker}": {
+      "parameters": [
+        {
+          "name": "market_ticker",
+          "in": "path",
+          "required": true,
+          "description": "The market ticker for the Kalshi market",
+          "schema": {
+            "type": "string",
+            "example": "KXNFLGAME-25AUG16ARIDEN-ARI"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Get Kalshi Market Price",
+        "description": "Fetches the current market price for a Kalshi market by `market_ticker`. When `at_time` is not provided, returns the most real-time price available. When `at_time` is provided, returns the historical market price at that specific timestamp. Returns prices for both yes and no sides.\n\n**Example Request (with historical timestamp):**\n```bash\ncurl 'https://api.domeapi.io/v1/kalshi/market-price/KXNFLGAME-25AUG16ARIDEN-ARI?at_time=1762164600' \\\n  -H 'Authorization: Bearer YOUR_TOKEN'\n```\n\n**Example Request (real-time price):**\n```bash\ncurl 'https://api.domeapi.io/v1/kalshi/market-price/KXNFLGAME-25AUG16ARIDEN-ARI' \\\n  -H 'Authorization: Bearer YOUR_TOKEN'\n```",
+        "operationId": "get_kalshi-market-price",
+        "parameters": [
+          {
+            "name": "at_time",
+            "in": "query",
+            "required": false,
+            "description": "Optional Unix timestamp (in seconds) to fetch a historical market price. If not provided, returns the most real-time price available.",
+            "schema": {
+              "type": "integer",
+              "example": 1762164600
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Market price response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "yes": {
+                      "type": "object",
+                      "description": "Yes side price information",
+                      "properties": {
+                        "price": {
+                          "type": "number",
+                          "description": "The yes side price in dollars (between 0 and 1)",
+                          "example": 0.75
+                        },
+                        "at_time": {
+                          "type": "integer",
+                          "description": "The timestamp for which the price was fetched (Unix timestamp in seconds)",
+                          "example": 1762164600
+                        }
+                      },
+                      "required": [
+                        "price",
+                        "at_time"
+                      ]
+                    },
+                    "no": {
+                      "type": "object",
+                      "description": "No side price information",
+                      "properties": {
+                        "price": {
+                          "type": "number",
+                          "description": "The no side price in dollars (between 0 and 1)",
+                          "example": 0.25
+                        },
+                        "at_time": {
+                          "type": "integer",
+                          "description": "The timestamp for which the price was fetched (Unix timestamp in seconds)",
+                          "example": 1762164600
+                        }
+                      },
+                      "required": [
+                        "price",
+                        "at_time"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "yes",
+                    "no"
+                  ]
+                },
+                "examples": {
+                  "with_at_time": {
+                    "summary": "Historical price lookup",
+                    "description": "Response when `at_time` parameter is provided",
+                    "value": {
+                      "yes": {
+                        "price": 0.75,
+                        "at_time": 1762164600
+                      },
+                      "no": {
+                        "price": 0.25,
+                        "at_time": 1762164600
+                      }
+                    }
+                  },
+                  "real_time": {
+                    "summary": "Real-time price lookup",
+                    "description": "Response when `at_time` parameter is omitted (most recent price)",
+                    "value": {
+                      "yes": {
+                        "price": 0.82,
+                        "at_time": 1757008834
+                      },
+                      "no": {
+                        "price": 0.18,
+                        "at_time": 1757008834
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Invalid at_time parameter"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "at_time must be a valid Unix timestamp in seconds"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Market not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Not Found"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "No price data found for market_ticker KXNFLGAME-25AUG16ARIDEN-ARI"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kalshi/orderbooks": {
+      "get": {
+        "summary": "Get Kalshi Orderbook History",
+        "description": "Fetches historical orderbook snapshots for a specific Kalshi market (ticker) over a specified time range. If no start_time and end_time are provided, returns the latest orderbook snapshot for the market. Returns snapshots of the order book including yes/no bids and asks with prices in both cents and dollars. All timestamps are in milliseconds. Orderbook data has history starting from October 29th, 2025. Note: When fetching the latest orderbook (without start/end times), the limit parameter is ignored.",
+        "operationId": "get_kalshi-orderbooks",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "query",
+            "required": true,
+            "description": "The Kalshi market ticker",
+            "schema": {
+              "type": "string",
+              "example": "KXNFLGAME-25AUG16ARIDEN-ARI"
+            }
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "required": false,
+            "description": "Start time in Unix timestamp (milliseconds). Optional - if not provided along with end_time, returns the latest orderbook snapshot.",
+            "schema": {
+              "type": "integer",
+              "example": 1760470000000
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "required": false,
+            "description": "End time in Unix timestamp (milliseconds). Optional - if not provided along with start_time, returns the latest orderbook snapshot.",
+            "schema": {
+              "type": "integer",
+              "example": 1760480000000
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of snapshots to return (default: 100, max: 200). Ignored when fetching the latest orderbook without start_time and end_time.",
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "maximum": 200,
+              "example": 100
+            }
+          },
+          {
+            "name": "paginationKey",
+            "in": "query",
+            "required": false,
+            "description": "Base64-encoded cursor for efficient pagination. Returned in the previous response's pagination object.",
+            "schema": {
+              "type": "string",
+              "example": "eyJ0aW1lc3RhbXAiOjE3NjA0NzAwMDAwMDAsInRpY2tlciI6IktYTkZMR0FNRS0yNUFVRzE2QVJJREVOLUFSSSIsInRvdGFsIjoxMDB9"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Kalshi orderbook history response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "snapshots": {
+                      "type": "array",
+                      "description": "Array of orderbook snapshots at different points in time",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "orderbook": {
+                            "type": "object",
+                            "properties": {
+                              "yes": {
+                                "type": "array",
+                                "description": "Yes side orders with prices in cents",
+                                "items": {
+                                  "type": "array",
+                                  "description": "[price_in_cents, contract_count]",
+                                  "items": {
+                                    "type": "number"
+                                  },
+                                  "minItems": 2,
+                                  "maxItems": 2,
+                                  "example": [
+                                    75,
+                                    100
+                                  ]
+                                }
+                              },
+                              "no": {
+                                "type": "array",
+                                "description": "No side orders with prices in cents",
+                                "items": {
+                                  "type": "array",
+                                  "description": "[price_in_cents, contract_count]",
+                                  "items": {
+                                    "type": "number"
+                                  },
+                                  "minItems": 2,
+                                  "maxItems": 2,
+                                  "example": [
+                                    25,
+                                    100
+                                  ]
+                                }
+                              },
+                              "yes_dollars": {
+                                "type": "array",
+                                "description": "Yes side orders with prices in dollars",
+                                "items": {
+                                  "type": "array",
+                                  "description": "[price_as_dollar_string, contract_count]",
+                                  "minItems": 2,
+                                  "maxItems": 2,
+                                  "items": {
+                                    "oneOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ]
+                                  },
+                                  "example": [
+                                    "0.75",
+                                    100
+                                  ]
+                                }
+                              },
+                              "no_dollars": {
+                                "type": "array",
+                                "description": "No side orders with prices in dollars",
+                                "items": {
+                                  "type": "array",
+                                  "description": "[price_as_dollar_string, contract_count]",
+                                  "minItems": 2,
+                                  "maxItems": 2,
+                                  "items": {
+                                    "oneOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ]
+                                  },
+                                  "example": [
+                                    "0.25",
+                                    100
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "timestamp": {
+                            "type": "integer",
+                            "description": "Timestamp of the snapshot in milliseconds",
+                            "example": 1760471849407
+                          },
+                          "ticker": {
+                            "type": "string",
+                            "description": "The Kalshi market ticker",
+                            "example": "KXNFLGAME-25AUG16ARIDEN-ARI"
+                          }
+                        }
+                      }
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "limit": {
+                          "type": "integer",
+                          "example": 100
+                        },
+                        "count": {
+                          "type": "integer",
+                          "description": "Number of snapshots returned",
+                          "example": 4
+                        },
+                        "paginationKey": {
+                          "type": "string",
+                          "description": "Base64-encoded cursor for fetching the next page of results. Only present when has_more is true.",
+                          "example": "eyJ0aW1lc3RhbXAiOjE3NjA0NzAwMDAwMDAsInRpY2tlciI6IktYTkZMR0FNRS0yNUFVRzE2QVJJREVOLUFSSSIsInRvdGFsIjoxMDB9"
+                        },
+                        "has_more": {
+                          "type": "boolean",
+                          "description": "Whether there are more snapshots available",
+                          "example": false
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Invalid parameters"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "ticker, start_time, and end_time are required"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "AISA API Key",
+        "description": "Your AIsa API key as a Bearer token."
+      }
+    }
+  }
+}

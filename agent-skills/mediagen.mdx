@@ -1,0 +1,134 @@
+---
+title: "Media Gen"
+description: "Unified image and video generation for autonomous agents. Gemini 3 Pro Image via GenerateContent; Qwen Wan 2.6 text-to-video via an async task API. One API key, two modalities."
+---
+
+[View on GitHub →](https://github.com/AIsa-team/agent-skills/tree/main/media-gen)
+
+**AI-powered image and video generation for autonomous agents.** One `AISA_API_KEY` unlocks Gemini 3 Pro Image and Qwen Wan 2.6 — high-fidelity synthesis from text or reference images.
+
+## Install
+
+```bash
+aisa skills install media-gen
+```
+
+## What can agents do with it?
+
+<CardGroup cols={2}>
+  <Card title="Marketing creatives" icon="palette">
+    "Generate a cinematic hero image for a product launch deck."
+  </Card>
+  <Card title="Social content" icon="hashtag">
+    "Create a 5-second video loop for the next post."
+  </Card>
+  <Card title="Storyboarding" icon="film">
+    "Produce 6 key frames illustrating the happy path of a user journey."
+  </Card>
+  <Card title="Reference-to-video" icon="image">
+    "Animate this static mock into a cinematic slow push-in."
+  </Card>
+  <Card title="Photorealism" icon="camera">
+    "8k ultra-detailed cyberpunk skyline with neon rain."
+  </Card>
+  <Card title="Agent reports" icon="chart-simple">
+    "Generate visual illustrations for a research report agent."
+  </Card>
+</CardGroup>
+
+## Core capabilities
+
+- **Image generation** — `gemini-3-pro-image-preview` via the `/v1/models/{model}:generateContent` endpoint. Returns base64 image data.
+- **Video generation** — `wan2.6-t2v` (text-to-video) and image-to-video via an async task system. POST creates a task, GET polls status.
+- **Asynchronous workflow** — long-running video jobs are handled with `X-DashScope-Async: enable` + status polling.
+
+## Quick start
+
+```bash
+export AISA_API_KEY="your-key"
+```
+
+### Image generation
+
+```bash
+curl -X POST "https://api.aisa.one/v1/models/gemini-3-pro-image-preview:generateContent" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [
+      {"role": "user", "parts": [{"text": "A cute red panda, ultra-detailed, cinematic lighting"}]}
+    ]
+  }'
+```
+
+The response returns base64-encoded image data in `candidates[0].content.parts[0].inline_data.data`.
+
+### Video generation (async)
+
+```bash
+# 1. Create the task
+curl -X POST "https://api.aisa.one/apis/v1/services/aigc/video-generation/video-synthesis" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "X-DashScope-Async: enable" \
+  -d '{
+    "model": "wan2.6-t2v",
+    "input": {
+      "prompt": "cinematic close-up, slow push-in, shallow depth of field",
+      "img_url": "https://example.com/reference.jpg"
+    }
+  }'
+
+# Response includes a task_id. Poll for completion:
+curl "https://api.aisa.one/apis/v1/services/aigc/tasks?task_id=YOUR_TASK_ID" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+When the task status is `SUCCEEDED`, the response includes a `video_url` you can download.
+
+## Python client
+
+```bash
+# Image
+python3 scripts/media_gen_client.py image --prompt "A cute red panda" --out out.png
+
+# Video — create + poll + download in one command
+python3 scripts/media_gen_client.py video-wait \
+  --prompt "cinematic close-up, slow push-in" \
+  --download --out out.mp4
+
+# Or create/poll separately
+python3 scripts/media_gen_client.py video-create --prompt "cinematic sunset"
+python3 scripts/media_gen_client.py video-status --task-id YOUR_TASK_ID
+```
+
+## Endpoint reference
+
+| Endpoint                                                  | Method | Purpose                                                                                                 |
+| --------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------- |
+| `/v1/models/{model}:generateContent`                      | POST   | [Image generation (Gemini 3)](/api-reference/chat/generatecontent)                                      |
+| `/apis/v1/services/aigc/video-generation/video-synthesis` | POST   | [Create video task](/api-reference/video/post_services-aigc-video-generation-video-synthesis)           |
+| `/apis/v1/services/aigc/tasks`                            | GET    | [Poll video task status](/api-reference/video/get_services-aigc-tasks)                                  |
+
+## Get started
+
+1. Sign up at [aisa.one](https://aisa.one) (new accounts start with $2 free credit).
+2. Generate an API key from the console.
+3. `export AISA_API_KEY="your-key"` and install the skill:
+   ```bash
+   aisa skills install media-gen
+   ```
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Video API reference" icon="video" href="/api-reference/video/post_services-aigc-video-generation-video-synthesis">
+    Create-task and poll-status endpoints with live playgrounds.
+  </Card>
+  <Card title="Gemini generateContent" icon="image" href="/api-reference/chat/generatecontent">
+    Image generation endpoint reference.
+  </Card>
+  <Card title="Async Operations" icon="hourglass-half" href="/api-reference/async-operations">
+    How task creation and polling work end-to-end.
+  </Card>
+</CardGroup>

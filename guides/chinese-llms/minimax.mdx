@@ -1,0 +1,189 @@
+---
+title: "MiniMax API — Access MiniMax-M2.5 via AIsa"
+description: "Access MiniMax-M2.5 — MiniMax's flagship 196K context model — through AIsa's unified API. OpenAI-compatible. No separate MiniMax account needed."
+sidebar_label: "MiniMax"
+sidebar_position: 6
+slug: /docs/chinese-llms/minimax
+---
+
+# MiniMax API: Access MiniMax-M2.5
+
+MiniMax is one of China's most well-funded independent AI labs, and MiniMax-M2.5 is its flagship text model — a large mixture-of-experts architecture with a 196,608-token context window, strong multilingual performance, and competitive reasoning capability.
+
+Through AIsa, you access MiniMax-M2.5 with a single OpenAI-compatible API key. No MiniMax account, no separate billing, no rate-limit management on your end.
+
+---
+
+## Supported MiniMax models
+
+| Model | Context window | Best for | Input price* | Output price* |
+|---|---|---|---|---|
+| `MiniMax-M2.5` | 196,608 tokens | Long-context reasoning, multilingual tasks, document analysis | $0.21/M | $0.84/M |
+
+\* See [aisa.one/models](https://aisa.one/models) for current AIsa rates.
+
+---
+
+## Quickstart
+
+### Python
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="YOUR_AISA_API_KEY",
+    base_url="https://api.aisa.one/v1"
+)
+
+response = client.chat.completions.create(
+    model="MiniMax-M2.5",
+    messages=[
+        {"role": "user", "content": "Summarise the key arguments in this research paper."}
+    ]
+)
+print(response.choices[0].message.content)
+```
+
+### Node.js
+
+```javascript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.AISA_API_KEY,
+  baseURL: "https://api.aisa.one/v1",
+});
+
+const response = await client.chat.completions.create({
+  model: "MiniMax-M2.5",
+  messages: [
+    { role: "user", content: "Draft a detailed competitive analysis of the EV market in Southeast Asia." }
+  ],
+});
+console.log(response.choices[0].message.content);
+```
+
+### Streaming
+
+```python
+stream = client.chat.completions.create(
+    model="MiniMax-M2.5",
+    messages=[{"role": "user", "content": "Write a thorough technical breakdown of retrieval-augmented generation."}],
+    stream=True
+)
+
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+```
+
+---
+
+## Model guide
+
+### MiniMax-M2.5 — long context, strong multilingual
+
+MiniMax-M2.5 is built around a mixture-of-experts architecture that gives it efficient inference relative to its capability level. Its 196K context window sits between DeepSeek V3.2 (128K) and Kimi K2.5 (256K), making it well-suited for tasks that require processing large documents, long conversation histories, or extended structured data — without reaching for the most expensive frontier context tiers.
+
+**Use when you need:**
+- Long document processing — contracts, reports, research papers — in a single pass
+- Strong multilingual reasoning, especially Chinese-English bilingual tasks
+- Cost-efficient processing across large batches of medium-length content
+- A capable general-purpose model with broad coverage across text task types
+
+```python
+# Long document processing
+with open("annual_report.txt") as f:
+    document = f.read()
+
+response = client.chat.completions.create(
+    model="MiniMax-M2.5",
+    messages=[
+        {"role": "system", "content": "You are a financial analyst. Extract key risks, opportunities, and financial highlights."},
+        {"role": "user", "content": f"Analyse this annual report:\n\n{document}"}
+    ]
+)
+
+# Multilingual tasks
+response = client.chat.completions.create(
+    model="MiniMax-M2.5",
+    messages=[
+        {"role": "user", "content": "请将以下英文合同条款翻译成中文，并标注任何可能存在法律风险的部分。\n\n[contract text here]"}
+    ]
+)
+
+# Extended conversation
+messages = [{"role": "system", "content": "You are a senior product strategist."}]
+messages.append({"role": "user", "content": "Let's build a go-to-market plan for our new B2B SaaS product..."})
+
+response = client.chat.completions.create(
+    model="MiniMax-M2.5",
+    messages=messages
+)
+```
+
+---
+
+## Function calling
+
+MiniMax-M2.5 supports function calling with the standard OpenAI tool-calling schema:
+
+```python
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_documents",
+            "description": "Search an internal document database and return relevant passages",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "max_results": {"type": "integer", "description": "Maximum number of results to return", "default": 5}
+                },
+                "required": ["query"]
+            }
+        }
+    }
+]
+
+response = client.chat.completions.create(
+    model="MiniMax-M2.5",
+    messages=[{"role": "user", "content": "Find all documents related to our Q3 revenue projections."}],
+    tools=tools,
+    tool_choice="auto"
+)
+```
+
+---
+
+## Context window: how MiniMax-M2.5 compares
+
+| Model | Context window | Provider |
+|---|---|---|
+| `qwen3.6-plus` | 1,000,000 tokens | Alibaba |
+| `kimi-k2.5` | 256,000 tokens | Moonshot AI |
+| `MiniMax-M2.5` | 196,608 tokens | MiniMax |
+| `qwen3-max` | 262,144 tokens | Alibaba |
+| `deepseek-v3.2` | 128,000 tokens | DeepSeek |
+| `seed-1-6-250915` | 131,072 tokens | ByteDance |
+
+For most document and conversation tasks that don't require million-token context, MiniMax-M2.5's 196K window is sufficient and cost-efficient.
+
+---
+
+## Data privacy
+
+MiniMax-M2.5 is accessed through AIsa's enterprise agreement with MiniMax. Customer data is not used for model training. For compliance requirements, [contact us](mailto:developer@aisa.one).
+
+---
+
+## What's next
+
+- [All Chinese AI models](./index) — full model comparison table
+- [Qwen models](./qwen) — Alibaba's 1M-context flagship with Key Account partner pricing
+- [DeepSeek V3.2](./deepseek) — cost-efficient general use and coding
+- [Kimi K2.5](./kimi) — 1T parameter MoE for agentic and visual coding tasks
+- [ByteDance Seed & Seedream](./bytedance) — Seed series and Seedream 4.5 image generation
+- [GLM-5](./glm) — Zhipu AI's flagship reasoning model

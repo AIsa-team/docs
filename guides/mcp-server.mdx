@@ -1,0 +1,157 @@
+---
+title: AIsa MCP Server – Web Search & API Tools for AI Agents
+excerpt: >-
+  Connect AI development tools like Cursor, Windsurf, and Claude Desktop to the
+  AIsa MCP server. Access real-time web search, documentation, and 50+ AI
+  models directly from your coding environment.
+---
+The AISA Model Context Protocol (MCP) server enables AI-powered code editors like Cursor and Windsurf, plus general-purpose tools like Claude Desktop, to interact directly with your AISA API and documentation.
+
+## What is MCP?
+
+Model Context Protocol (MCP) is an open standard that allows AI applications to securely access external data sources and tools. The AISA MCP server provides AI agents with:
+
+* **Direct API access** to AISA functionality
+* **Documentation search** capabilities
+* **Real-time data** from your AISA account
+* **Code generation** assistance for AISA integrations
+
+## AISA MCP Server Setup
+
+AISA hosts a remote MCP server at `https://docs.aisa.one/mcp`. Configure your AI development tools to connect to this server. If your APIs require authentication, you can pass in headers via query parameters or however headers are configured in your MCP client.
+
+<Tabs>
+  <Tab title="Cursor">
+    **Add to `~/.cursor/mcp.json`:**
+
+    ```json
+    {
+      "mcpServers": {
+        "aisa-pdqs": {
+          "url": "https://docs.aisa.one/mcp"
+        }
+      }
+    }
+    ```
+
+    </Tab>
+  <Tab title="Windsurf">
+    **Add to `~/.codeium/windsurf/mcp_config.json`:**
+
+    ```json
+    {
+      "mcpServers": {
+        "aisa-pdqs": {
+          "url": "https://docs.aisa.one/mcp"
+        }
+      }
+    }
+    ```
+
+  </Tab>
+  <Tab title="Claude Desktop">
+    **Add to `claude_desktop_config.json`:**
+
+    ```json
+    {
+      "mcpServers": {
+        "aisa-pdqs": {
+          "url": "https://docs.aisa.one/mcp"
+        }
+      }
+    }
+    ```
+
+  </Tab>
+</Tabs>
+
+## Testing Your MCP Setup
+
+Once configured, restart your AI editor so it picks up the new MCP config, then try one of the following prompts in a fresh chat.
+
+### Example 1 — Discover an AIsa endpoint
+
+> **Ask Cursor:** "Using the AIsa MCP tools, find the endpoint for searching Polymarket events and show me a curl example."
+
+The agent calls the MCP `search_docs` tool, retrieves `/api-reference/prediction-market/get_polymarket-events`, and produces:
+
+```bash
+curl "https://api.aisa.one/apis/v1/polymarket/events" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+### Example 2 — Generate a working integration
+
+> **Ask Windsurf:** "Write a Python function that uses AIsa's Chat Completions API to summarize the text I'll paste. Use the streaming format."
+
+The agent pulls the reference for `POST /v1/chat/completions` via MCP and generates:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.aisa.one/v1", api_key="...")
+
+def summarize_stream(text: str, model: str = "gpt-5"):
+    stream = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": "Summarize the user's text in 3 bullet points."},
+            {"role": "user", "content": text},
+        ],
+        stream=True,
+    )
+    for chunk in stream:
+        yield chunk.choices[0].delta.content or ""
+```
+
+### Example 3 — Compare models for a task
+
+> **Ask Claude Desktop:** "Which AIsa model is cheapest for long-context code review, and what's the per-1M input price?"
+
+The agent queries the MCP `list_models` tool, filters by context window and coding capability, and returns:
+
+> `gemini-2.5-flash-lite` — $0.07 / 1M input tokens, 1,048,576-token context window. Next cheapest: `qwen-flash` at $0.022 with 1M tokens.
+
+## Available MCP tools
+
+The AIsa MCP server exposes three tools to connected agents:
+
+| Tool          | What it does                                                  |
+| ------------- | ------------------------------------------------------------- |
+| `search_docs` | Full-text search across guides, API reference, and skill docs |
+| `get_page`    | Fetch a specific doc page by URL for detailed context         |
+| `list_models` | Return the model catalog with pricing and capability metadata |
+
+Your editor's chat surface invokes these automatically when the agent determines they're needed — you don't call them by name.
+
+## Troubleshooting
+
+<AccordionGroup>
+
+<Accordion title="Editor doesn't see the MCP server">
+**Fix:** Restart the editor after editing the config. Cursor/Windsurf load MCP servers at startup; changes don't hot-reload.
+</Accordion>
+
+<Accordion title="'Tool call failed' or timeouts">
+**Fix:** Confirm your machine can reach `https://docs.aisa.one/mcp` — some corporate networks block non-standard paths. Retry; the MCP protocol is over HTTP and transient errors are safe to retry.
+</Accordion>
+
+<Accordion title="Agent says it can't find AIsa tools">
+**Fix:** Different editors expose tools differently. If the agent can't see the server, try prompting explicitly: _"Use the **aisa-pdqs** MCP tools to find…"_. The server name in your config (here `aisa-pdqs`) is the handle the agent needs to invoke it.
+</Accordion>
+
+</AccordionGroup>
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Model Catalog" icon="list" href="/guides/models">
+    What the `list_models` MCP tool returns.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/chat/createchatcompletion">
+    Endpoints the agent will reach through generated code.
+  </Card>
+  <Card title="Authentication" icon="key" href="/guides/authentication">
+    Bearer-token auth for generated API calls.
+  </Card>
+</CardGroup>

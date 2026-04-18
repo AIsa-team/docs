@@ -1,0 +1,102 @@
+---
+title: OpenAI Chat
+description: "Create chat completion"
+excerpt: >-
+  **Starting a new project?** We recommend trying
+  [Responses](https://platform.openai.com/docs/api-reference/responses) to take
+  advantage of the latest OpenAI platform features. Compare [Chat Completions
+  with
+  Responses](https://platform.openai.com/docs/guides/responses-vs-chat-completions?api-mode=responses)
+openapi: "openapi/openai-chat.json POST /chat/completions"
+---
+Creates a model response for the given chat conversation. Learn more in the
+[text generation](https://platform.openai.com/docs/guides/text-generation), [vision](https://platform.openai.com/docs/guides/vision),
+and [audio](https://platform.openai.com/docs/guides/audio) guides.
+
+Parameter support can differ depending on the model used to generate the
+response, particularly for newer reasoning models. Parameters that are only
+supported for reasoning models are noted below. For the current state of
+unsupported parameters in reasoning models,
+[refer to the reasoning guide](https://platform.openai.com/docs/guides/reasoning).
+
+## Streaming responses
+
+Set `"stream": true` to receive server-sent events (SSE) as each token is generated. This produces a lower time-to-first-token and is ideal for chat UIs.
+
+<CodeGroup>
+
+```bash curl
+curl https://api.aisa.one/v1/chat/completions \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -N \
+  -d '{
+    "model": "gpt-5",
+    "messages": [{"role": "user", "content": "Write a haiku about APIs."}],
+    "stream": true
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
+
+stream = client.chat.completions.create(
+    model="gpt-5",
+    messages=[{"role": "user", "content": "Write a haiku about APIs."}],
+    stream=True,
+)
+
+for chunk in stream:
+    delta = chunk.choices[0].delta.content or ""
+    print(delta, end="", flush=True)
+```
+
+```typescript TypeScript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "https://api.aisa.one/v1",
+  apiKey: process.env.AISA_API_KEY,
+});
+
+const stream = await client.chat.completions.create({
+  model: "gpt-5",
+  messages: [{ role: "user", content: "Write a haiku about APIs." }],
+  stream: true,
+});
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.choices[0]?.delta?.content ?? "");
+}
+```
+
+</CodeGroup>
+
+### Stream anatomy
+
+Each line of the SSE stream looks like:
+
+```
+data: {"id":"chatcmpl-...","choices":[{"delta":{"content":"Quiet"},"index":0}]}
+data: {"id":"chatcmpl-...","choices":[{"delta":{"content":" packets"},"index":0}]}
+...
+data: {"id":"chatcmpl-...","choices":[{"delta":{},"finish_reason":"stop","index":0}]}
+data: [DONE]
+```
+
+- Each `data:` line is a JSON object. The first chunk includes the `role`; subsequent chunks contain only `delta.content`.
+- The stream ends with a final chunk whose `finish_reason` is set, followed by a literal `data: [DONE]` line.
+- If tool calls are used, `delta.tool_calls` arrives incrementally and should be concatenated by `index`.
+
+### Handling errors and timeouts
+
+- **Mid-stream errors** arrive as a normal SSE event with an `error` key instead of `choices`. Close the stream and surface the error to the caller.
+- **Stream disconnects** (network blip, client timeout) cannot be resumed — restart the request. The partial response is not billed beyond the tokens you received.
+- **Idle timeout**: AIsa closes streams that are idle (no tokens) for more than 60 s. Set your client read timeout to 120 s to give a safety margin.
+- **Client backpressure**: stop reading from the stream if your downstream consumer is slow — AIsa throttles delivery rather than dropping tokens.
+
+<Tip>
+  Streaming bills the same per-token rate as non-streaming. You pay for tokens that were delivered, even if the stream is cut off mid-response.
+</Tip>

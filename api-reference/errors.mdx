@@ -1,0 +1,159 @@
+---
+title: "Error Codes"
+description: "HTTP status codes, error payload shape, and recommended retry strategies for the AIsa API."
+---
+
+Every AIsa API response follows standard HTTP semantics. Successful calls return `2xx`; client errors return `4xx`; server or upstream errors return `5xx`. This page documents the error model and how to respond to each case.
+
+## Error response shape
+
+Error responses are always JSON with an `error` object:
+
+```json
+{
+  "error": {
+    "type": "authentication_error",
+    "code": "invalid_api_key",
+    "message": "The API key provided is invalid or has been revoked.",
+    "request_id": "req_01JABCD9F1YYEXAMPLE"
+  }
+}
+```
+
+| Field         | Meaning                                                                     |
+| ------------- | --------------------------------------------------------------------------- |
+| `type`        | High-level category — `authentication_error`, `invalid_request_error`, `rate_limit_error`, `api_error`, `upstream_error` |
+| `code`        | Machine-readable code (stable; safe to match on)                            |
+| `message`     | Human-readable explanation                                                  |
+| `request_id`  | Unique ID for the request. **Include in support tickets.**                  |
+
+## Status codes
+
+<AccordionGroup>
+
+<Accordion title="400 — Bad Request" icon="triangle-exclamation">
+The request payload is malformed: missing required parameter, wrong type, invalid JSON, or a value out of range.
+
+**Common codes:** `invalid_request`, `missing_parameter`, `invalid_parameter_type`, `json_parse_error`
+
+**Action:** Fix the request before retrying. Do not retry automatically.
+</Accordion>
+
+<Accordion title="401 — Unauthorized" icon="lock">
+No API key, malformed `Authorization` header, or the key is invalid/revoked.
+
+**Common codes:** `missing_api_key`, `invalid_api_key`, `revoked_api_key`
+
+**Action:** Verify the key in your [Dashboard](https://console.aisa.one) and resend with `Authorization: Bearer YOUR_AISA_API_KEY`.
+</Accordion>
+
+<Accordion title="403 — Forbidden" icon="ban">
+The key is valid but lacks permission for this endpoint, model, or region.
+
+**Common codes:** `insufficient_permissions`, `model_not_allowed`, `region_blocked`
+
+**Action:** Check your workspace plan and per-key scopes. Contact support if the restriction is unexpected.
+</Accordion>
+
+<Accordion title="404 — Not Found" icon="question">
+The endpoint path, model ID, or resource ID does not exist.
+
+**Common codes:** `unknown_model`, `resource_not_found`, `unknown_endpoint`
+
+**Action:** Double-check the model name against the [model catalog](/guides/models) and the endpoint path against the [API reference](/api-reference/chat/createchatcompletion).
+</Accordion>
+
+<Accordion title="422 — Unprocessable Entity" icon="circle-exclamation">
+Syntax is valid, but the request violates a business rule — e.g., `max_tokens` above the model's limit, an unsupported combination of parameters, or content that violates the upstream provider's safety policy.
+
+**Common codes:** `max_tokens_exceeded`, `unsupported_parameter`, `content_policy_violation`
+
+**Action:** Read the `message` carefully and adjust the payload. Do not retry blindly.
+</Accordion>
+
+<Accordion title="429 — Too Many Requests" icon="gauge-high">
+You hit a rate limit — either your account RPM/TPM cap or the upstream provider's throttle.
+
+**Common codes:** `rate_limit_exceeded`, `upstream_rate_limit`, `quota_exceeded`
+
+**Headers returned:**
+- `Retry-After` — seconds until the next attempt is allowed
+- `X-RateLimit-Limit` — your current limit
+- `X-RateLimit-Remaining` — requests remaining in the window
+- `X-RateLimit-Reset` — UNIX timestamp when the counter resets
+
+**Action:** Back off and retry (see [Retry guidance](#retry-guidance) below). See [Rate Limits](/api-reference/rate-limits) for the full quota table.
+</Accordion>
+
+<Accordion title="500 — Internal Server Error" icon="server">
+An unexpected error on AIsa's side. The `request_id` field is critical for support investigation.
+
+**Action:** Retry with exponential backoff (see below). If the error persists, contact [developer@aisa.one](mailto:developer@aisa.one) with the `request_id`.
+</Accordion>
+
+<Accordion title="502 / 503 / 504 — Upstream Errors" icon="cloud-exclamation">
+AIsa could not reach or got an error from the upstream model provider (OpenAI, Anthropic, etc.). Often transient.
+
+**Common codes:** `upstream_unavailable`, `upstream_timeout`, `gateway_error`
+
+**Action:** Retry with exponential backoff. For persistent issues, switch to an alternate model — the gateway can route Claude requests through different upstream deployments.
+</Accordion>
+
+</AccordionGroup>
+
+## Retry guidance
+
+<Steps>
+  <Step title="Only retry idempotent or safe-to-repeat calls">
+    All `GET` requests and most chat/completions calls are safe to retry. Do not blindly retry `POST` requests that create side effects (e.g., posting a tweet).
+  </Step>
+  <Step title="Respect `Retry-After`">
+    On 429 responses, always honor the `Retry-After` header. On 5xx without `Retry-After`, fall back to exponential backoff.
+  </Step>
+  <Step title="Use exponential backoff with jitter">
+    Start with 1 s; double each attempt; add ±25% jitter; cap at 30 s.
+    ```
+    1.0s → 2.0s → 4.0s → 8.0s → 16.0s → 30.0s (max)
+    ```
+  </Step>
+  <Step title="Limit total retry time">
+    Give up after 3–5 attempts or 60 s total — whichever comes first. Surface the error to the caller.
+  </Step>
+  <Step title="Never retry 4xx except 429">
+    `400`, `401`, `403`, `404`, and `422` indicate bugs in the request itself. Retrying will not help.
+  </Step>
+</Steps>
+
+### Minimal retry example (Python)
+
+```python
+import time, random
+from openai import OpenAI, APIError, RateLimitError
+
+client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
+
+def call_with_retry(messages, model="gpt-5", max_retries=5):
+    delay = 1.0
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(model=model, messages=messages)
+        except RateLimitError as e:
+            wait = getattr(e.response.headers, "Retry-After", None) or delay
+            time.sleep(float(wait) * (1 + random.uniform(-0.25, 0.25)))
+        except APIError as e:
+            if e.status_code >= 500:
+                time.sleep(delay * (1 + random.uniform(-0.25, 0.25)))
+            else:
+                raise
+        delay = min(delay * 2, 30)
+    raise RuntimeError("Exceeded max retries")
+```
+
+## Getting help
+
+When reporting an issue to [developer@aisa.one](mailto:developer@aisa.one), include:
+
+- The `request_id` from the error response
+- The HTTP status code and `error.code`
+- Your model ID and a minimal reproduction (curl with a redacted key)
+- The approximate timestamp of the failing request

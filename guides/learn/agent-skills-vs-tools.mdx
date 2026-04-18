@@ -1,0 +1,110 @@
+---
+title: "Pre-Built Skills vs Custom Skills — When to Use Each"
+description: >-
+  Understand when to install a pre-built Agent Skill from the agent-skills registry versus creating your own SKILL.md from scratch with aisa skills init.
+sidebar_label: "Pre-built vs custom skills"
+slug: /learn/agent-skills-vs-tools
+---
+
+# Pre-built skills vs custom skills — when to use each
+
+There are two ways to give your AI coding agent new capabilities with AIsa Agent Skills: install a pre-built skill from the [agent-skills](https://github.com/AIsa-team/agent-skills) registry, or write your own `SKILL.md` from scratch. The right choice depends on whether your use case is already covered.
+
+---
+
+## The core difference
+
+| | **Pre-built skill** (from registry) | **Custom skill** (your own SKILL.md) |
+|---|---|---|
+| **Source** | [AIsa-team/agent-skills](https://github.com/AIsa-team/agent-skills) | You write it |
+| **How to install** | `aisa skills install <slug>` | `aisa skills init <name>` + edit |
+| **Setup time** | 30 seconds | Minutes to hours |
+| **Maintenance** | Managed by AIsa team | Yours to maintain |
+| **API coverage** | AIsa's public catalogue | Any API you can reach |
+| **Customisation** | Use as-is | Fully custom instructions and scripts |
+
+---
+
+## Use a pre-built skill when…
+
+**The capability already exists in the registry.** If you need web search, financial data, Twitter/X access, image/video generation, or YouTube research — there's already a skill for it. Installing it takes one command and it comes with tested scripts and worked examples.
+
+**You want the AIsa team to maintain it.** Pre-built skills are updated when the underlying APIs change. You don't have to track API deprecations or rewrite instructions when endpoints move.
+
+**You're prototyping quickly.** `aisa skills install market` and a new Claude Code session is all you need to start querying live stock prices. Writing, testing, and maintaining an equivalent custom skill takes meaningfully longer.
+
+### Example: install and use the market skill
+
+```bash
+# Install
+aisa skills install market
+
+# Open a new agent session and ask:
+# "Pull the last 30 days of NVDA price data and flag any days where
+#  the move exceeded 5%. Cross-reference with earnings dates."
+```
+
+The agent reads the `market` skill description, loads the `SKILL.md` instructions, runs the bundled Python client, and calls AIsa's finance API — without you writing any code.
+
+---
+
+## Write a custom skill when…
+
+**You need to call your own internal APIs.** Pre-built skills cover AIsa's public API catalogue. They can't query your company's internal data warehouse, CRM, or proprietary service. For those, write a SKILL.md that describes your internal endpoints and authentication.
+
+**The existing skill doesn't cover your exact use case.** If you need a very specific workflow — a multi-step process combining several APIs in a particular order — a custom skill lets you encode exactly that sequence in the instructions body.
+
+**You want to share domain-specific knowledge with the agent.** SKILL.md files aren't just API wrappers. You can include domain context, decision rules, output formatting requirements, and caveats that your team has learned from production use.
+
+**You want to publish a skill for others.** Custom skills can be submitted to the [agent-skills](https://github.com/AIsa-team/agent-skills) registry as a pull request. If you've built something useful on top of AIsa APIs, contributing it benefits the whole ecosystem.
+
+### Example: scaffold and edit a custom skill
+
+```bash
+# Start from the closest built-in template
+aisa skills init internal-crm --template default
+
+# Edit the generated SKILL.md
+# - Set name, description, and metadata
+# - Write instructions that explain your CRM's auth and endpoints
+# - Add example curl/Python commands for common queries
+```
+
+The `description` field is the most important line you'll write. It's what your agent reads at startup to decide when to activate the skill. Be specific about the trigger condition:
+
+```yaml
+# ❌ Too generic — the agent won't know when to use this
+description: "Internal CRM access."
+
+# ✅ Clear trigger — the agent knows exactly when this applies
+description: "Look up customer account details, support history, and
+  renewal dates from the internal Salesforce CRM. Use when the user
+  asks about a specific customer or account."
+```
+
+---
+
+## Quick decision guide
+
+```
+Is there a pre-built skill in the OpenClaw registry for this?
+│
+├── YES → Does it cover your use case without modification?
+│         ├── YES → aisa skills install <slug>
+│         └── NO  → aisa skills init <name> (customise or extend)
+│
+└── NO  → Does it involve an AIsa public API not yet in the registry?
+          ├── YES → aisa skills init <name> --template <closest>
+          │         (and consider submitting a PR to agent-skills)
+          └── NO  → aisa skills init <name> --template default
+                    (write instructions for your internal API)
+```
+
+---
+
+## What's next
+
+- [Agent Skills](/agent-skills) — browse the full catalogue of pre-built skills
+- [Quickstart](/agent-skills/quickstart) — install your first skill in 5 minutes
+- [Standards](/agent-skills/standards) — how SKILL.md files work and how to author your own
+- [Getting Started with AIsa](/guides/getting-started-with-aisa) — if you're new to the AIsa API
