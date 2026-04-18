@@ -1,23 +1,36 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Tongyi Wanxiang Reference Video Generation API",
+    "title": "AIsa Video Generation API (async)",
     "version": "1.0.0",
-    "description": "Asynchronous APIs for generating character-consistent videos using reference videos."
+    "description": "Asynchronous video generation. Submit a task via `POST /apis/v1/services/aigc/video-generation/video-synthesis`, then poll `GET /apis/v1/services/aigc/tasks/{task_id}` until the status is `SUCCEEDED` or `FAILED`."
   },
   "servers": [
     {
       "url": "https://api.aisa.one/apis/v1"
     }
   ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "AISA API Key"
+      }
+    }
+  },
   "paths": {
     "/services/aigc/video-generation/video-synthesis": {
       "post": {
-        "summary": "Create video generation task",
-        "description": "Create an asynchronous video generation task using reference videos. Returns a task_id for polling.",
-        "tags": [
-          "Video Generation"
-        ],
+        "summary": "Create a video generation task",
+        "description": "Submit an asynchronous video generation task. Returns a `task_id` you then poll via `GET /apis/v1/services/aigc/tasks/{task_id}`.\n\n**Model.** Currently only `wan2.6-t2v` (text-to-video) is supported through this endpoint.\n\n**Header.** `X-DashScope-Async: enable` is required.\n\n**Body.** `model` and `input.prompt` are required. `input.img_url` / `input.audio_url` are optional reference media.\n\nFailed tasks (e.g., invalid prompt) are **not billed** — the task-status response returns `task_status: \"FAILED\"` with a `code` and `message`.",
+        "operationId": "createVideoSynthesisTask",
+        "tags": ["Video Generation"],
         "parameters": [
           {
             "name": "X-DashScope-Async",
@@ -25,11 +38,9 @@
             "required": true,
             "schema": {
               "type": "string",
-              "enum": [
-                "enable"
-              ]
+              "enum": ["enable"]
             },
-            "description": "Must be set to enable for asynchronous execution"
+            "description": "Must be `enable` to run asynchronously (the only mode currently supported)."
           }
         ],
         "requestBody": {
@@ -38,55 +49,55 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": ["model", "input"],
                 "properties": {
                   "model": {
                     "type": "string",
+                    "enum": ["wan2.6-t2v"],
+                    "description": "The only model currently accepted on this endpoint.",
                     "example": "wan2.6-t2v"
                   },
                   "input": {
                     "type": "object",
+                    "required": ["prompt"],
                     "properties": {
                       "prompt": {
                         "type": "string",
-                        "description": "Text prompt describing the video"
+                        "description": "Text prompt describing the video. Must contain words — empty or whitespace-only prompts fail upstream with `prompt must contain words`."
                       },
                       "negative_prompt": {
                         "type": "string",
-                        "description": "Text prompt describing the video"
+                        "description": "Optional negative prompt."
                       },
                       "img_url": {
-                        "type": "string"
+                        "type": "string",
+                        "format": "uri",
+                        "description": "Optional reference image URL (image-to-video use cases)."
                       },
                       "audio_url": {
-                        "type": "string"
+                        "type": "string",
+                        "format": "uri",
+                        "description": "Optional reference audio URL."
                       }
-                    },
-                    "required": [
-                      "prompt",
-                      "img_url"
-                    ]
+                    }
                   },
                   "parameters": {
                     "type": "object",
                     "properties": {
                       "resolution": {
                         "type": "string",
-                        "example": "720P"
+                        "enum": ["720P", "1080P"],
+                        "default": "720P"
                       },
                       "duration": {
                         "type": "integer",
-                        "enum": [
-                          5,
-                          10
-                        ],
-                        "default": 5
+                        "enum": [5, 10],
+                        "default": 5,
+                        "description": "Video length in seconds."
                       },
                       "shot_type": {
                         "type": "string",
-                        "enum": [
-                          "single",
-                          "multi"
-                        ],
+                        "enum": ["single", "multi"],
                         "default": "single"
                       },
                       "watermark": {
@@ -98,21 +109,45 @@
                         "minimum": 0,
                         "maximum": 2147483647
                       }
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "basic": {
+                  "summary": "Text-to-video, 5 s, 720P",
+                  "value": {
+                    "model": "wan2.6-t2v",
+                    "input": {
+                      "prompt": "cinematic close-up, slow push-in, shallow depth of field"
                     },
-                    "additionalProperties": false
+                    "parameters": {
+                      "resolution": "720P",
+                      "duration": 5
+                    }
                   }
                 },
-                "required": [
-                  "model",
-                  "input"
-                ]
+                "with_reference_image": {
+                  "summary": "Image-to-video with a reference",
+                  "value": {
+                    "model": "wan2.6-t2v",
+                    "input": {
+                      "prompt": "gentle camera orbit, golden hour lighting",
+                      "img_url": "https://example.com/reference.jpg"
+                    },
+                    "parameters": {
+                      "resolution": "1080P",
+                      "duration": 10
+                    }
+                  }
+                }
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Task created successfully",
+            "description": "Task created — poll `/services/aigc/tasks/{task_id}` for progress.",
             "content": {
               "application/json": {
                 "schema": {
@@ -122,13 +157,12 @@
                       "type": "object",
                       "properties": {
                         "task_id": {
-                          "type": "string"
+                          "type": "string",
+                          "description": "Pass this to `GET /services/aigc/tasks/{task_id}`."
                         },
                         "task_status": {
                           "type": "string",
-                          "enum": [
-                            "PENDING"
-                          ]
+                          "enum": ["PENDING"]
                         }
                       }
                     },
@@ -136,139 +170,164 @@
                       "type": "string"
                     }
                   }
+                },
+                "example": {
+                  "output": {
+                    "task_id": "b3be072e-cc82-4033-8fb7-0b089846544f",
+                    "task_status": "PENDING"
+                  },
+                  "request_id": "8a931b13-c44f-9230-a76b-83487d840060"
                 }
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "429": {
-            "description": "Rate limit exceeded"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ]
+          "400": { "description": "Invalid request body." },
+          "401": { "description": "Missing or invalid AIsa API key." },
+          "429": { "description": "Rate limit hit." },
+          "500": { "description": "`model not supported` (the model isn't routed through this endpoint) or `input param is required` (body missing `input`)." }
+        }
       }
     },
-    "/services/aigc/tasks": {
+    "/services/aigc/tasks/{task_id}": {
       "get": {
-        "summary": "Query video generation task result",
-        "description": "Poll the status and result of an asynchronous video generation task.",
-        "tags": [
-          "Video Generation"
-        ],
+        "summary": "Get video generation task result",
+        "description": "Poll the status and result of a task created by `POST /apis/v1/services/aigc/video-generation/video-synthesis`. The `task_id` is a **path parameter**, not a query string.\n\nSuggested polling: every 3–5 seconds, with a hard timeout around 5 minutes.",
+        "operationId": "getVideoSynthesisTask",
+        "tags": ["Video Generation"],
         "parameters": [
           {
             "name": "task_id",
-            "in": "query",
+            "in": "path",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" },
+            "description": "Task ID returned by the video-synthesis create call. Unknown IDs return `task_status: \"UNKNOWN\"` (HTTP 200)."
           }
         ],
         "responses": {
           "200": {
-            "description": "Task status response",
+            "description": "Task status response. Always HTTP 200 — inspect `output.task_status` to tell lifecycle states apart.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "request_id": {
-                      "type": "string"
-                    },
                     "output": {
                       "type": "object",
                       "properties": {
-                        "task_id": {
-                          "type": "string"
-                        },
+                        "task_id": { "type": "string" },
                         "task_status": {
                           "type": "string",
-                          "enum": [
-                            "PENDING",
-                            "RUNNING",
-                            "SUCCEEDED",
-                            "FAILED",
-                            "CANCELED",
-                            "UNKNOWN"
-                          ]
+                          "enum": ["PENDING", "RUNNING", "SUCCEEDED", "FAILED", "CANCELED", "UNKNOWN"]
                         },
                         "video_url": {
                           "type": "string",
-                          "format": "uri"
-                        },
-                        "submit_time": {
-                          "type": "string"
-                        },
-                        "scheduled_time": {
-                          "type": "string"
-                        },
-                        "end_time": {
-                          "type": "string"
+                          "format": "uri",
+                          "description": "Present on `SUCCEEDED`. Short-lived URL — download and persist the video before it expires."
                         },
                         "orig_prompt": {
-                          "type": "string"
+                          "type": "string",
+                          "description": "The original prompt as stored by the upstream provider."
+                        },
+                        "submit_time": {
+                          "type": "string",
+                          "description": "When the task was accepted."
+                        },
+                        "scheduled_time": {
+                          "type": "string",
+                          "description": "When the task was scheduled for execution."
+                        },
+                        "end_time": {
+                          "type": "string",
+                          "description": "When the task reached a terminal state."
+                        },
+                        "code": {
+                          "type": "string",
+                          "description": "Present on `FAILED`. Example: `InvalidParameter`."
+                        },
+                        "message": {
+                          "type": "string",
+                          "description": "Present on `FAILED`. Human-readable failure reason."
                         }
                       }
                     },
                     "usage": {
                       "type": "object",
+                      "description": "Present on `SUCCEEDED`.",
                       "properties": {
-                        "input_video_duration": {
-                          "type": "integer"
-                        },
-                        "output_video_duration": {
-                          "type": "integer"
-                        },
-                        "duration": {
-                          "type": "number"
-                        },
-                        "video_count": {
-                          "type": "integer"
-                        },
-                        "SR": {
-                          "type": "integer"
-                        }
+                        "input_video_duration": { "type": "integer" },
+                        "output_video_duration": { "type": "integer" },
+                        "duration": { "type": "number" },
+                        "video_count": { "type": "integer" },
+                        "SR": { "type": "integer" }
                       }
+                    },
+                    "request_id": { "type": "string" }
+                  }
+                },
+                "examples": {
+                  "succeeded": {
+                    "summary": "SUCCEEDED — video_url is populated",
+                    "value": {
+                      "output": {
+                        "task_id": "b3be072e-cc82-4033-8fb7-0b089846544f",
+                        "task_status": "SUCCEEDED",
+                        "video_url": "https://cdn.aisa.one/videos/wan2.6/20260418-abc.mp4",
+                        "orig_prompt": "cinematic close-up, slow push-in, shallow depth of field",
+                        "submit_time": "2026-04-18 15:16:01.841",
+                        "scheduled_time": "2026-04-18 15:16:01.867",
+                        "end_time": "2026-04-18 15:16:42.512"
+                      },
+                      "usage": {
+                        "output_video_duration": 5,
+                        "video_count": 1,
+                        "SR": 720
+                      },
+                      "request_id": "8a931b13-c44f-9230-a76b-83487d840060"
+                    }
+                  },
+                  "failed": {
+                    "summary": "FAILED (invalid prompt — not billed)",
+                    "value": {
+                      "output": {
+                        "task_id": "b3be072e-cc82-4033-8fb7-0b089846544f",
+                        "task_status": "FAILED",
+                        "code": "InvalidParameter",
+                        "message": "prompt must contain words",
+                        "submit_time": "2026-04-18 15:16:01.841",
+                        "scheduled_time": "2026-04-18 15:16:01.867",
+                        "end_time": "2026-04-18 15:16:01.941"
+                      },
+                      "request_id": "8a931b13-c44f-9230-a76b-83487d840060"
+                    }
+                  },
+                  "running": {
+                    "summary": "RUNNING (still processing)",
+                    "value": {
+                      "output": {
+                        "task_id": "b3be072e-cc82-4033-8fb7-0b089846544f",
+                        "task_status": "RUNNING"
+                      },
+                      "request_id": "8a931b13-c44f-9230-a76b-83487d840060"
+                    }
+                  },
+                  "unknown": {
+                    "summary": "UNKNOWN task_id (still returns HTTP 200)",
+                    "value": {
+                      "output": {
+                        "task_id": "bogus-task-id",
+                        "task_status": "UNKNOWN"
+                      },
+                      "request_id": "71b2b0ad-cb6f-9de4-a8bc-a88e4fb72f0e"
                     }
                   }
                 }
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Task not found or expired"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ]
+          "401": { "description": "Missing or invalid AIsa API key." },
+          "500": { "description": "`unsupported uri` — check the path. The correct pattern is `/services/aigc/tasks/{task_id}`, not `/services/aigc/tasks?task_id=`." }
+        }
       }
     }
-  },
-  "components": {
-    "securitySchemes": {
-      "BearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "API Key"
-      }
-    }
-  },
-  "security": [
-    {
-      "BearerAuth": []
-    }
-  ]
+  }
 }

@@ -54,8 +54,12 @@ Response:
 
 ### 2. Poll the task
 
+<Warning>
+  `task_id` is a **path parameter**, not a query string. `GET /services/aigc/tasks?task_id=...` returns `500 unsupported uri`.
+</Warning>
+
 ```bash
-curl "https://api.aisa.one/apis/v1/services/aigc/tasks?task_id=a1b2c3d4-e5f6-7890-abcd-ef1234567890" \
+curl "https://api.aisa.one/apis/v1/services/aigc/tasks/a1b2c3d4-e5f6-7890-abcd-ef1234567890" \
   -H "Authorization: Bearer $AISA_API_KEY"
 ```
 
@@ -65,9 +69,9 @@ While still running:
 {
   "output": {
     "task_id": "a1b2c3d4-...",
-    "task_status": "RUNNING",
-    "progress": 0.42
-  }
+    "task_status": "RUNNING"
+  },
+  "request_id": "8a931b13-c44f-9230-a76b-83487d840060"
 }
 ```
 
@@ -78,16 +82,42 @@ On completion:
   "output": {
     "task_id": "a1b2c3d4-...",
     "task_status": "SUCCEEDED",
-    "video_url": "https://cdn.aisa.one/tasks/a1b2.../out.mp4",
-    "video_url_expires_at": "2026-04-17T23:00:00Z"
-  }
+    "video_url": "https://cdn.aisa.one/videos/wan2.6/....mp4",
+    "orig_prompt": "cinematic slow push-in",
+    "submit_time": "2026-04-18 15:16:01.841",
+    "scheduled_time": "2026-04-18 15:16:01.867",
+    "end_time": "2026-04-18 15:16:42.512"
+  },
+  "usage": {
+    "output_video_duration": 5,
+    "video_count": 1,
+    "SR": 720
+  },
+  "request_id": "..."
+}
+```
+
+On failure, the error fields are **flat inside `output`** (not nested under `error`):
+
+```json
+{
+  "output": {
+    "task_id": "a1b2c3d4-...",
+    "task_status": "FAILED",
+    "code": "InvalidParameter",
+    "message": "prompt must contain words",
+    "submit_time": "2026-04-18 15:16:01.841",
+    "scheduled_time": "2026-04-18 15:16:01.867",
+    "end_time": "2026-04-18 15:16:01.941"
+  },
+  "request_id": "..."
 }
 ```
 
 ### 3. Download the asset
 
 ```bash
-curl -L "https://cdn.aisa.one/tasks/a1b2.../out.mp4" -o output.mp4
+curl -L "https://cdn.aisa.one/videos/wan2.6/....mp4" -o output.mp4
 ```
 
 ## Task lifecycle states
@@ -95,11 +125,11 @@ curl -L "https://cdn.aisa.one/tasks/a1b2.../out.mp4" -o output.mp4
 | Status       | Meaning                                                          | Billing                      |
 | ------------ | ---------------------------------------------------------------- | ---------------------------- |
 | `PENDING`    | Task accepted, queued for execution                              | Not billed yet               |
-| `RUNNING`    | Actively generating. May include a `progress` (0.0–1.0) field    | Billed on success            |
-| `SUCCEEDED`  | Generation complete. Asset URL available for download            | Billed in full               |
-| `FAILED`     | Generation failed. `error.message` explains why                  | **Not billed**               |
-| `CANCELLED`  | Task was cancelled (e.g., user request or policy)                | Partial billing possible     |
-| `UNKNOWN`    | Transient state — poll again in a few seconds                    | —                            |
+| `RUNNING`    | Actively generating                                              | Billed on success            |
+| `SUCCEEDED`  | Generation complete. `output.video_url` is populated             | Billed in full               |
+| `FAILED`     | Generation failed. `output.code` and `output.message` explain why | **Not billed**              |
+| `CANCELED`   | Task was cancelled (e.g., user request or policy)                | Partial billing possible     |
+| `UNKNOWN`    | The task_id is not recognized or has expired                     | —                            |
 
 ## Polling best practices
 
@@ -145,14 +175,15 @@ def create_video(prompt, model="wan2.6-t2v"):
 def wait_for_task(task_id, interval=3, timeout=300):
     deadline = time.time() + timeout
     while time.time() < deadline:
-        r = requests.get(f"{API}/services/aigc/tasks", params={"task_id": task_id}, headers=HEADERS)
+        # task_id goes in the PATH, not as a query parameter
+        r = requests.get(f"{API}/services/aigc/tasks/{task_id}", headers=HEADERS)
         r.raise_for_status()
         out = r.json()["output"]
         status = out["task_status"]
         if status == "SUCCEEDED":
             return out["video_url"]
         if status == "FAILED":
-            raise RuntimeError(f"Task failed: {out.get('error', {})}")
+            raise RuntimeError(f"Task failed: {out.get('code')}: {out.get('message')}")
         time.sleep(interval)
     raise TimeoutError(f"Task {task_id} did not complete within {timeout}s")
 
