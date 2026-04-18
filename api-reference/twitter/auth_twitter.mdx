@@ -1,0 +1,65 @@
+---
+title: "Link an X Account"
+description: "Start the OAuth flow that links an X/Twitter account to your AIsa API key. Call once per source user before using any Twitter write endpoint (follow, like, post, DM)."
+openapi: "openapi/twitter-actions.json POST /twitter/auth_twitter"
+---
+
+`POST /apis/v1/twitter/auth_twitter` is the first step for any X/Twitter **write** action routed through AIsa. It returns a short-lived X OAuth authorization URL — the source user opens it in a browser, approves the requested scopes, and X redirects back to AIsa's fixed callback. AIsa stores the resulting session against your API key, and every subsequent write call (e.g., [`POST /twitter/follow_twitter`](/api-reference/twitter/follow_twitter)) uses that session automatically.
+
+## When to call it
+
+- **Once per source user**, the first time you link their X account.
+- **Again** if the stored session is revoked, expired, or you need a different scope set.
+
+You do not call it before every write request. The OAuth session persists against your AIsa API key.
+
+## Flow
+
+<Steps>
+  <Step title="Start the flow">
+    Send `POST /apis/v1/twitter/auth_twitter` with your AIsa API key. Optionally include a `scopes` array in the body to request a narrower set than the default.
+  </Step>
+  <Step title="Open the auth URL">
+    The response returns an `auth_url` and a `state` token. Open `auth_url` in the source user's browser. X shows its standard "Authorize AIsa to access your account" screen.
+  </Step>
+  <Step title="User approves">
+    After the user clicks Authorize, X redirects to AIsa's fixed callback (`https://api.aisa.one/apis/v1/twitter/oauth_callback`). AIsa validates the `state` token, exchanges the authorization code for tokens, and stores the session against your API key.
+  </Step>
+  <Step title="Write endpoints unlock">
+    From this point on, any call to a Twitter write endpoint using your AIsa API key acts on behalf of the linked source user. You never pass OAuth tokens in the body of those calls.
+  </Step>
+</Steps>
+
+## Default scopes
+
+If you omit the `scopes` field, AIsa requests the full set needed for every Twitter write endpoint we expose:
+
+- `follows.write` — [follow](/api-reference/twitter/follow_twitter) / unfollow
+- `tweet.read` — read tweets (required by most write actions)
+- `users.read` — resolve users, read profile info
+- `tweet.write` — post, reply, quote
+- `like.write` — like / unlike
+- `dm.read` — read DM threads
+- `dm.write` — send DMs
+
+Pass a narrower array (e.g., `["follows.write", "tweet.read", "users.read"]`) if you only need a subset. Write calls that require a missing scope return `403`.
+
+## Expiry
+
+The `auth_url` returned by this endpoint is **short-lived** (typically 10 minutes). If the user doesn't complete the flow before `expires_at`, call `POST /apis/v1/twitter/auth_twitter` again to generate a fresh URL.
+
+The stored OAuth **session** itself lives longer (subject to X's token rotation rules) and is refreshed automatically as long as the user doesn't revoke access from X's app settings.
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Follow a user" icon="user-plus" href="/api-reference/twitter/follow_twitter">
+    First write endpoint that uses the session stored by this flow.
+  </Card>
+  <Card title="Twitter Autopilot skill" icon="twitter" href="/agent-skills/twitter-autopilot">
+    Agent skill that wraps the full read + write surface.
+  </Card>
+  <Card title="Authentication" icon="key" href="/guides/authentication">
+    AIsa API key lifecycle and storage best practices.
+  </Card>
+</CardGroup>
