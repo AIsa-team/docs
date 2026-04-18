@@ -1,0 +1,154 @@
+---
+title: "OpenAI-Compatible Image Generations"
+description: "Generate images with ByteDance Seedream via the standard POST /v1/images/generations endpoint. OpenAI-compatible request shape; minimum image size is 3,686,400 pixels (e.g., 1920×1920)."
+openapi: "openapi/openai-images-generations.json POST /images/generations"
+---
+
+The standard OpenAI-compatible `POST /v1/images/generations` endpoint. Currently routed to **ByteDance Seedream** (`seedream-4-5-251128`). Wan 2.7 models do **not** use this path — see [Image Generation via Chat](/api-reference/chat/image-generation).
+
+## Routing at a glance
+
+| Model | Endpoint |
+|---|---|
+| `seedream-4-5-251128` | **`POST /v1/images/generations`** *(this page)* |
+| `wan2.7-image` / `wan2.7-image-pro` | [`POST /v1/chat/completions`](/api-reference/chat/image-generation) |
+| `gemini-3-pro-image-preview` | [`POST /v1/models/{model}:generateContent`](/api-reference/chat/generatecontent) |
+
+## Supported models
+
+| Model | Cost per image | Notes |
+|---|---|---|
+| `seedream-4-5-251128` | $0.040 | Min image size **3,686,400 pixels** (e.g., 1920×1920) |
+
+## Size constraint ⚠️
+
+Seedream's upstream enforces a minimum of **3,686,400 pixels**. Requests below that are rejected with:
+
+```
+400 InvalidParameter: image size must be at least 3686400 pixels
+```
+
+| Size | Pixels | Accepted? |
+|---|---|---|
+| `1024x1024` | 1,048,576 | ❌ |
+| `1536x1536` | 2,359,296 | ❌ |
+| `1920x1920` | 3,686,400 | ✅ (exact threshold) |
+| `2048x2048` | 4,194,304 | ✅ |
+| `2304x1600` | 3,686,400 | ✅ |
+| `2560x1920` | 4,915,200 | ✅ |
+
+Any aspect ratio works as long as `width × height ≥ 3,686,400`.
+
+## Request
+
+<CodeGroup>
+
+```bash curl
+curl -sS -X POST "https://api.aisa.one/v1/images/generations" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "seedream-4-5-251128",
+    "prompt": "A cute red panda, ultra-detailed, cinematic lighting",
+    "n": 1,
+    "size": "2048x2048"
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
+
+resp = client.images.generate(
+    model="seedream-4-5-251128",
+    prompt="A cute red panda, ultra-detailed, cinematic lighting",
+    n=1,
+    size="2048x2048",
+)
+
+for item in resp.data:
+    print(item.url)
+```
+
+```typescript TypeScript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "https://api.aisa.one/v1",
+  apiKey: process.env.AISA_API_KEY,
+});
+
+const resp = await client.images.generate({
+  model: "seedream-4-5-251128",
+  prompt: "A cute red panda, ultra-detailed, cinematic lighting",
+  n: 1,
+  size: "2048x2048",
+});
+
+for (const item of resp.data) {
+  console.log(item.url);
+}
+```
+
+</CodeGroup>
+
+### Request fields
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `model` | string | yes | `seedream-4-5-251128` |
+| `prompt` | string | yes | Text description of the image to generate |
+| `n` | integer | no | Number of images. Each is billed separately at $0.040 |
+| `size` | string | yes | `WIDTHxHEIGHT`. Must satisfy `width × height ≥ 3,686,400` |
+
+## Response
+
+```json
+{
+  "model": "seedream-4-5-251128",
+  "created": 1776495432,
+  "data": [
+    {
+      "url": "https://cdn.aisa.one/images/seedream/...",
+      "size": "2048x2048"
+    }
+  ],
+  "usage": {
+    "generated_images": 1,
+    "output_tokens": 16384,
+    "total_tokens": 16384
+  }
+}
+```
+
+**AIsa's response adds a few extensions** over the vanilla OpenAI schema:
+- `model` echoed at the root
+- `data[].size` — actual dimensions of each returned image
+- `usage` — includes `generated_images` (drives billing), plus `output_tokens` / `total_tokens` for token accounting
+
+<Warning>
+  URLs in `data[].url` are **short-lived**. Download and persist the image to your own storage before it expires.
+</Warning>
+
+## Common 4xx causes
+
+- `400 InvalidParameter — image size must be at least 3686400 pixels` — `size` was too small. Use `1920x1920` or larger.
+- `404 openai_error` — you passed a model that isn't routed through this endpoint (e.g., `wan2.7-image`). Use the [chat-based route](/api-reference/chat/image-generation) instead.
+- `400 invalid_request` — malformed `size` string (e.g., `1024` instead of `1024x1024`).
+
+See [Error Codes](/api-reference/errors) and [Rate Limits](/api-reference/rate-limits) for more.
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Image Generation via Chat" icon="message" href="/api-reference/chat/image-generation">
+    The `/v1/chat/completions` route for the Wan 2.7 family.
+  </Card>
+  <Card title="Gemini generateContent" icon="google" href="/api-reference/chat/generatecontent">
+    Image preview through Gemini 3 Pro.
+  </Card>
+  <Card title="Media Gen skill" icon="image" href="/agent-skills/mediagen">
+    Agent skill that wraps image + video generation.
+  </Card>
+</CardGroup>

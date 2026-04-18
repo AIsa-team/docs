@@ -1,0 +1,249 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Image Generation via Chat Completions",
+    "version": "1.0.0",
+    "description": "Wan 2.7 image models (`wan2.7-image`, `wan2.7-image-pro`) are exposed through the standard `POST /v1/chat/completions` endpoint rather than `/v1/images/generations`. Send a chat request with a multimodal `content` array; AIsa returns `choices[].message.content[]` containing one or more `{type: \"image\"}` parts."
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/v1"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "AISA API Key"
+      }
+    }
+  },
+  "paths": {
+    "/chat/completions": {
+      "post": {
+        "summary": "Generate images via Chat Completions (wan2.7 family)",
+        "description": "Generate images with the Wan 2.7 image models. Request shape matches OpenAI Chat Completions with multimodal content; the response contains `choices[].message.content[]` where each item is `{type: \"image\", image: \"<url or base64>\"}`.\n\n**Important:** `messages[].content` must be an **array of typed parts**, not a plain string. Passing a string returns `400 invalid_parameter_error` with `Input should be a valid list: messages[*].content`.\n\nBy default `wan2.7-image` returns **4 candidate images** (billed per image). Set `n` to request a different count.",
+        "operationId": "generateImageViaChat",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["model", "messages"],
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "enum": ["wan2.7-image", "wan2.7-image-pro"],
+                    "description": "Image-generation model. `wan2.7-image` ($0.030/image) for standard quality, `wan2.7-image-pro` ($0.075/image) for higher fidelity."
+                  },
+                  "messages": {
+                    "type": "array",
+                    "description": "Conversation messages. Image prompts go in the last user message's `content` array as `{type: \"text\"}` parts.",
+                    "items": {
+                      "type": "object",
+                      "required": ["role", "content"],
+                      "properties": {
+                        "role": {
+                          "type": "string",
+                          "enum": ["system", "user", "assistant"]
+                        },
+                        "content": {
+                          "type": "array",
+                          "description": "Multimodal parts. For image generation, include at least one `{type: \"text\"}` part with the prompt.",
+                          "items": {
+                            "type": "object",
+                            "required": ["type"],
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": ["text", "image_url"]
+                              },
+                              "text": {
+                                "type": "string",
+                                "description": "Used when `type: \"text\"`."
+                              },
+                              "image_url": {
+                                "type": "object",
+                                "description": "Used when `type: \"image_url\"` (image-to-image use cases).",
+                                "properties": {
+                                  "url": { "type": "string", "format": "uri" }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "n": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 4,
+                    "default": 4,
+                    "description": "Number of images to generate. `wan2.7-image` returns 4 by default; pass `1` to save cost."
+                  }
+                }
+              },
+              "examples": {
+                "basic": {
+                  "summary": "Single-image prompt (n=1)",
+                  "value": {
+                    "model": "wan2.7-image",
+                    "messages": [
+                      {
+                        "role": "user",
+                        "content": [
+                          { "type": "text", "text": "A cute red panda, ultra-detailed, cinematic lighting" }
+                        ]
+                      }
+                    ],
+                    "n": 1
+                  }
+                },
+                "four_variants": {
+                  "summary": "Default 4 candidates for selection",
+                  "value": {
+                    "model": "wan2.7-image",
+                    "messages": [
+                      {
+                        "role": "user",
+                        "content": [
+                          { "type": "text", "text": "A futuristic cyberpunk city, neon lights, rainy night, 8k" }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "pro": {
+                  "summary": "Higher-fidelity pro model",
+                  "value": {
+                    "model": "wan2.7-image-pro",
+                    "messages": [
+                      {
+                        "role": "user",
+                        "content": [
+                          { "type": "text", "text": "Oil painting of a rolling hillside at sunset, artstation" }
+                        ]
+                      }
+                    ],
+                    "n": 1
+                  }
+                },
+                "image_to_image": {
+                  "summary": "Image-to-image (reference + prompt)",
+                  "value": {
+                    "model": "wan2.7-image-pro",
+                    "messages": [
+                      {
+                        "role": "user",
+                        "content": [
+                          { "type": "image_url", "image_url": { "url": "https://example.com/reference.jpg" } },
+                          { "type": "text", "text": "Transform into an oil painting in the style of Van Gogh" }
+                        ]
+                      }
+                    ],
+                    "n": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Images generated. Returned as Chat Completion with `message.content[]` image parts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "example": "chatcmpl-fcc86dfd-9424-9523-b0bd-cdf07383bee2" },
+                    "object": { "type": "string", "example": "chat.completion" },
+                    "created": { "type": "integer", "example": 1776495713 },
+                    "model": { "type": "string", "example": "wan2.7-image" },
+                    "choices": {
+                      "type": "array",
+                      "description": "One entry per generated image.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": { "type": "integer", "nullable": true },
+                          "finish_reason": { "type": "string", "example": "stop" },
+                          "message": {
+                            "type": "object",
+                            "properties": {
+                              "role": { "type": "string", "example": "assistant" },
+                              "content": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "required": ["type"],
+                                  "properties": {
+                                    "type": { "type": "string", "enum": ["image"] },
+                                    "image": {
+                                      "type": "string",
+                                      "description": "Short-lived URL to the generated image (or base64-encoded data, depending on your account configuration)."
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "prompt_tokens": { "type": "integer" },
+                        "completion_tokens": { "type": "integer" },
+                        "total_tokens": { "type": "integer" }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "id": "chatcmpl-fcc86dfd-9424-9523-b0bd-cdf07383bee2",
+                  "object": "chat.completion",
+                  "created": 1776495713,
+                  "model": "wan2.7-image",
+                  "choices": [
+                    {
+                      "index": 0,
+                      "finish_reason": "stop",
+                      "message": {
+                        "role": "assistant",
+                        "content": [
+                          { "type": "image", "image": "https://cdn.aisa.one/images/wan2.7/20260418-abc.png" }
+                        ]
+                      }
+                    }
+                  ],
+                  "usage": {
+                    "prompt_tokens": 104,
+                    "completion_tokens": 8,
+                    "total_tokens": 112
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request. Most common: `content` passed as a string instead of an array → `\"Input should be a valid list: messages[*].content\"`."
+          },
+          "401": { "description": "Missing or invalid AIsa API key." },
+          "429": { "description": "Rate limit hit." },
+          "500": { "description": "Internal error." },
+          "502": { "description": "Upstream provider unreachable." }
+        }
+      }
+    }
+  }
+}
