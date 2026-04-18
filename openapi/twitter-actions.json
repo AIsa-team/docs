@@ -103,6 +103,91 @@
         }
       }
     },
+    "/twitter/unfollow_twitter": {
+      "post": {
+        "summary": "Unfollow a user on X/Twitter",
+        "description": "Make the authenticated source user unfollow the given target user on X/Twitter. Mirrors the [official X v2 `DELETE /2/users/{source_user_id}/following/{target_user_id}` endpoint](https://docs.x.com/x-api/users/unfollow-user), routed through the AIsa gateway. Uses POST (not DELETE) for consistency with the other AIsa Twitter write actions.\n\n**Authentication.** Requires an OAuth session for the source user, attached to your AIsa API key. Link the account once via `POST /apis/v1/twitter/auth_twitter`.\n\n**Scopes.** The underlying X session must hold `follows.write`, `tweet.read`, and `users.read`.\n\nUnfollowing a user you don't currently follow is a no-op and still returns `200` with `following: false`.",
+        "operationId": "unfollowTwitterUser",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["target_user_id"],
+                "properties": {
+                  "target_user_id": {
+                    "type": "string",
+                    "description": "Numeric ID of the X/Twitter user to unfollow. Must match the X regex `^[0-9]{1,19}$`.",
+                    "pattern": "^[0-9]{1,19}$",
+                    "example": "2244994945"
+                  }
+                }
+              },
+              "examples": {
+                "unfollow_user": {
+                  "summary": "Unfollow @TwitterDev (id 2244994945)",
+                  "value": {
+                    "target_user_id": "2244994945"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unfollow succeeded (or the source user wasn't following the target to begin with).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "following": {
+                          "type": "boolean",
+                          "description": "`false` once the source user no longer follows the target user."
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "following": false
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request — missing or malformed `target_user_id`."
+          },
+          "401": {
+            "description": "Missing or invalid AIsa API key."
+          },
+          "403": {
+            "description": "OAuth session missing, expired, or lacking the `follows.write` scope. Re-authorize via `POST /apis/v1/twitter/auth_twitter`."
+          },
+          "429": {
+            "description": "Rate limit hit — either your AIsa key's RPM cap or the upstream X rate limit."
+          },
+          "500": {
+            "description": "Internal error."
+          },
+          "502": {
+            "description": "Upstream X API unreachable or returned an error. Safe to retry with exponential backoff."
+          }
+        }
+      }
+    },
     "/twitter/follow_twitter": {
       "post": {
         "summary": "Follow a user on X/Twitter",
