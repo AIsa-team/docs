@@ -1,0 +1,102 @@
+---
+title: "Post a Tweet"
+description: "Publish a tweet — plain text, reply, quote, poll, or with media — on behalf of the authenticated source user. Also supports editing an existing tweet within X's edit window."
+openapi: "openapi/twitter-actions.json POST /twitter/post_twitter"
+---
+
+Publish a tweet on behalf of the authenticated source user. Proxies the official [X v2 `POST /2/tweets` endpoint](https://docs.x.com/x-api/posts/create-post), routed through the AIsa gateway at `https://api.aisa.one/apis/v1/twitter/post_twitter`.
+
+One endpoint covers every variant:
+
+<CardGroup cols={3}>
+  <Card title="Plain text" icon="pen">
+    `{ "text": "Hello, World!" }`
+  </Card>
+  <Card title="Reply" icon="reply">
+    Set `reply.in_reply_to_tweet_id`.
+  </Card>
+  <Card title="Quote tweet" icon="quote-left">
+    Set `quote_tweet_id`.
+  </Card>
+  <Card title="With a poll" icon="square-poll-vertical">
+    Set `poll.options` + `poll.duration_minutes`.
+  </Card>
+  <Card title="With media" icon="image">
+    Set `media.media_ids` (1–4 IDs).
+  </Card>
+  <Card title="Edit a tweet" icon="pen-to-square">
+    Set `edit_options.previous_post_id` (within X's edit window).
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+- An **AIsa API key** (Bearer token for every request).
+- A one-time **OAuth authorization** for the source user account. Link your X account by calling [`POST /apis/v1/twitter/auth_twitter`](/api-reference/twitter/auth_twitter) — AIsa stores the session against your API key and uses it automatically on every write call.
+- The X session must hold `tweet.read`, `tweet.write`, `users.read`.
+
+## Mutually exclusive fields
+
+At most **one** of these may appear in a single request:
+
+- `media`
+- `poll`
+- `quote_tweet_id`
+- `card_uri`
+
+X will reject the request (`400 invalid-request`) if more than one is set.
+
+## Response
+
+On success the endpoint returns `201 Created`:
+
+```json
+{
+  "data": {
+    "id": "1346889436626259968",
+    "text": "Hello, World!"
+  }
+}
+```
+
+The returned `text` reflects what X actually stored (e.g., shortened URLs). Use `data.id` to reference this tweet in subsequent calls (reply, quote, like, edit, delete).
+
+## Editing tweets
+
+Pass `edit_options.previous_post_id` to edit an existing tweet instead of creating a new one. Edits are subject to X's edit window and edit count limits; the endpoint returns `409 conflict` if the window has passed or the edit quota is exhausted.
+
+## Reply settings
+
+Restrict who can reply with `reply_settings`:
+
+| Value | Who can reply |
+| --- | --- |
+| `following` | People you follow |
+| `mentionedUsers` | Users explicitly mentioned in the tweet |
+| `subscribers` | Your X Premium subscribers |
+| `verified` | Verified accounts |
+
+Omit the field for the default (everyone).
+
+## Common 4xx causes
+
+- `400 invalid-request` — set two mutually-exclusive fields, text too long, invalid poll duration, etc.
+- `403 client-forbidden` — OAuth session missing the `tweet.write` scope. Re-link via `auth_twitter`.
+- `404 resource-not-found` — referenced `in_reply_to_tweet_id`, `quote_tweet_id`, or `previous_post_id` doesn't exist or isn't visible to the source user.
+- `409 conflict` — duplicate content, or edit outside the allowed window.
+
+See the full list on [Error Codes](/api-reference/errors) and [Rate Limits](/api-reference/rate-limits) for tier caps.
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Link an X Account" icon="key" href="/api-reference/twitter/auth_twitter">
+    Start the OAuth flow this endpoint requires.
+  </Card>
+  <Card title="Follow a User" icon="user-plus" href="/api-reference/twitter/follow_twitter">
+    Another write endpoint using the same OAuth session.
+  </Card>
+  <Card title="Twitter Autopilot skill" icon="twitter" href="/agent-skills/twitter-autopilot">
+    Agent skill that wraps the full Twitter surface.
+  </Card>
+</CardGroup>

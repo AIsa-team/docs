@@ -103,6 +103,281 @@
         }
       }
     },
+    "/twitter/post_twitter": {
+      "post": {
+        "summary": "Post or edit a tweet",
+        "description": "Publish a new tweet on behalf of the authenticated source user, or edit an existing tweet. Mirrors the [official X v2 `POST /2/tweets` endpoint](https://docs.x.com/x-api/posts/create-post), routed through the AIsa gateway.\n\n**Authentication.** Requires an OAuth session for the source user, attached to your AIsa API key. Link the account once via `POST /apis/v1/twitter/auth_twitter`.\n\n**Scopes.** The underlying X session must hold `tweet.read`, `tweet.write`, and `users.read`.\n\n**Mutually exclusive fields.** `media`, `poll`, `quote_tweet_id`, and `card_uri` cannot be combined in the same request. At most one of them may be set.",
+        "operationId": "postTwitter",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "The content of the tweet. Optional when posting media, a poll, or a quote tweet; required otherwise.",
+                    "example": "Hello from AIsa — shipping agent-friendly Twitter APIs."
+                  },
+                  "reply": {
+                    "type": "object",
+                    "description": "Post as a reply to another tweet.",
+                    "required": ["in_reply_to_tweet_id"],
+                    "properties": {
+                      "in_reply_to_tweet_id": {
+                        "type": "string",
+                        "description": "Tweet ID being replied to.",
+                        "pattern": "^[0-9]{1,19}$"
+                      },
+                      "auto_populate_reply_metadata": {
+                        "type": "boolean",
+                        "description": "Auto-populate reply @-mentions from the original tweet."
+                      },
+                      "exclude_reply_user_ids": {
+                        "type": "array",
+                        "items": { "type": "string", "pattern": "^[0-9]{1,19}$" },
+                        "maxItems": 10,
+                        "description": "User IDs to exclude from reply auto-mentions (max 10)."
+                      }
+                    }
+                  },
+                  "quote_tweet_id": {
+                    "type": "string",
+                    "description": "Tweet ID to quote. Mutually exclusive with `media`, `poll`, and `card_uri`.",
+                    "pattern": "^[0-9]{1,19}$"
+                  },
+                  "media": {
+                    "type": "object",
+                    "description": "Attach media. Mutually exclusive with `poll`, `quote_tweet_id`, and `card_uri`.",
+                    "required": ["media_ids"],
+                    "properties": {
+                      "media_ids": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "minItems": 1,
+                        "maxItems": 4,
+                        "description": "1–4 media IDs from the X media-upload API."
+                      },
+                      "tagged_user_ids": {
+                        "type": "array",
+                        "items": { "type": "string", "pattern": "^[0-9]{1,19}$" },
+                        "maxItems": 10,
+                        "description": "User IDs tagged in the media (max 10)."
+                      }
+                    }
+                  },
+                  "poll": {
+                    "type": "object",
+                    "description": "Attach a poll. Mutually exclusive with `media`, `quote_tweet_id`, and `card_uri`.",
+                    "required": ["options", "duration_minutes"],
+                    "properties": {
+                      "options": {
+                        "type": "array",
+                        "items": { "type": "string", "maxLength": 25 },
+                        "minItems": 2,
+                        "maxItems": 4,
+                        "description": "2–4 poll choices, each 1–25 characters."
+                      },
+                      "duration_minutes": {
+                        "type": "integer",
+                        "minimum": 5,
+                        "maximum": 10080,
+                        "description": "Poll duration in minutes (5–10080, i.e. up to 7 days)."
+                      },
+                      "reply_settings": {
+                        "type": "string",
+                        "enum": ["following", "mentionedUsers", "subscribers", "verified"]
+                      }
+                    }
+                  },
+                  "card_uri": {
+                    "type": "string",
+                    "description": "Card URI. Mutually exclusive with `media`, `poll`, `quote_tweet_id`, and `direct_message_deep_link`."
+                  },
+                  "direct_message_deep_link": {
+                    "type": "string",
+                    "description": "Deep link that takes the conversation into a private DM."
+                  },
+                  "geo": {
+                    "type": "object",
+                    "description": "Attach a place to the tweet.",
+                    "properties": {
+                      "place_id": {
+                        "type": "string",
+                        "description": "X place ID."
+                      }
+                    }
+                  },
+                  "reply_settings": {
+                    "type": "string",
+                    "enum": ["following", "mentionedUsers", "subscribers", "verified"],
+                    "description": "Who is allowed to reply."
+                  },
+                  "for_super_followers_only": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Only visible to super followers."
+                  },
+                  "nullcast": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Nullcast (promoted-only) tweet — not shown in the public timeline or to followers."
+                  },
+                  "paid_partnership": {
+                    "type": "boolean",
+                    "description": "Marks the tweet as a paid partnership."
+                  },
+                  "made_with_ai": {
+                    "type": "boolean",
+                    "description": "Flags the tweet as containing AI-generated media."
+                  },
+                  "community_id": {
+                    "type": "string",
+                    "pattern": "^[0-9]{1,19}$",
+                    "description": "Post into the specified community."
+                  },
+                  "share_with_followers": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Also share the community post with your followers."
+                  },
+                  "edit_options": {
+                    "type": "object",
+                    "description": "Edit an existing tweet instead of creating a new one (subject to X's edit window).",
+                    "required": ["previous_post_id"],
+                    "properties": {
+                      "previous_post_id": {
+                        "type": "string",
+                        "pattern": "^[0-9]{1,19}$",
+                        "description": "Tweet ID to edit."
+                      }
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "simple_text": {
+                  "summary": "Plain text tweet",
+                  "value": {
+                    "text": "Hello, World!"
+                  }
+                },
+                "reply": {
+                  "summary": "Reply to a tweet",
+                  "value": {
+                    "text": "Totally agree 👌",
+                    "reply": {
+                      "in_reply_to_tweet_id": "1234567890123456789",
+                      "auto_populate_reply_metadata": true
+                    }
+                  }
+                },
+                "with_poll": {
+                  "summary": "Tweet with a poll",
+                  "value": {
+                    "text": "Pick your favorite:",
+                    "poll": {
+                      "options": ["Option A", "Option B", "Option C"],
+                      "duration_minutes": 60
+                    }
+                  }
+                },
+                "with_media": {
+                  "summary": "Tweet with media",
+                  "value": {
+                    "text": "Ship log 📸",
+                    "media": {
+                      "media_ids": ["1146654567674912769"],
+                      "tagged_user_ids": ["2244994945"]
+                    }
+                  }
+                },
+                "quote": {
+                  "summary": "Quote tweet",
+                  "value": {
+                    "text": "Worth reading:",
+                    "quote_tweet_id": "1234567890123456789"
+                  }
+                },
+                "edit": {
+                  "summary": "Edit an existing tweet",
+                  "value": {
+                    "text": "Updated tweet content (typo fixed).",
+                    "edit_options": {
+                      "previous_post_id": "1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tweet created (or edited) successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[0-9]{1,19}$",
+                          "description": "ID of the newly created or edited tweet."
+                        },
+                        "text": {
+                          "type": "string",
+                          "description": "Final text of the tweet as stored by X."
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "id": "1346889436626259968",
+                    "text": "Hello, World!"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request — violated a mutual-exclusivity rule, missing required field, or text too long."
+          },
+          "401": {
+            "description": "Missing or invalid AIsa API key."
+          },
+          "403": {
+            "description": "OAuth session missing, expired, or lacking `tweet.write`. Re-authorize via `POST /apis/v1/twitter/auth_twitter`."
+          },
+          "404": {
+            "description": "Referenced tweet (reply, quote, or edit target) not found."
+          },
+          "409": {
+            "description": "Conflict — e.g., duplicate tweet content or edit outside the allowed window."
+          },
+          "429": {
+            "description": "Rate limit hit."
+          },
+          "500": {
+            "description": "Internal error."
+          },
+          "502": {
+            "description": "Upstream X API unreachable."
+          }
+        }
+      }
+    },
     "/twitter/unfollow_twitter": {
       "post": {
         "summary": "Unfollow a user on X/Twitter",
