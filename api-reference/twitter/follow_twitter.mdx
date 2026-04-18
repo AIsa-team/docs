@@ -1,26 +1,60 @@
 ---
 title: "Follow a User"
-description: "Make the authenticated source user follow a target user on X/Twitter. Proxies the official X v2 follow-user endpoint through the AIsa gateway."
+description: "Follow a user on behalf of the authenticated source user. Routed through the AIsa gateway."
 openapi: "openapi/twitter-actions.json POST /twitter/follow_twitter"
 ---
 
-Follow a user on X/Twitter on behalf of the authenticated source user. This is a direct proxy for the official [X v2 `POST /2/users/{id}/following` endpoint](https://docs.x.com/x-api/users/follow-user), routed through the AIsa gateway at `https://api.aisa.one/apis/v1/twitter/follow_twitter`.
+Follow a user on behalf of the authenticated source user. Routed through the AIsa gateway at `https://api.aisa.one/apis/v1/twitter/follow_twitter`.
 
 ## Prerequisites
 
-- An **AIsa API key** (Bearer token for every request).
-- A one-time **OAuth authorization** for the source user account. Link your X account by calling [`POST /apis/v1/twitter/auth_twitter`](/api-reference/twitter/auth_twitter) — that endpoint kicks off the OAuth flow and stores the resulting session against your AIsa key, so you do not pass OAuth tokens in the request body here.
-- The X session must hold the following scopes: `follows.write`, `tweet.read`, `users.read`.
+- An **AIsa API key**. Pass it as `aisa_api_key` in the request body.
+- A one-time **OAuth authorization** for the source user account. Link your X account by calling [`POST /apis/v1/twitter/auth_twitter`](/api-reference/twitter/auth_twitter) — AIsa stores the session against your API key and uses it automatically on every write call.
+- The X session must hold `follows.write`, `tweet.read`, `users.read`.
 
-<Tip>
-  Looking to follow by `@username` instead of numeric ID? Resolve the user first with [`GET /twitter/user/info`](/api-reference/twitter/get_twitter-user-info), then pass the returned `id` as `target_user_id`.
-</Tip>
+## Request body
 
-## Response fields
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `aisa_api_key` | string | yes | Your AIsa API key. |
+| `target_user_id` | string | yes | Numeric ID of the user to follow. |
 
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `data.following` | boolean | `true` once the source user follows the target. For public accounts this is the success signal. |
-| `data.pending_follow` | boolean | `true` when the target is a **protected** account — the follow request has been sent and is awaiting the target user's approval. |
+## Response
 
-For the full set of error responses and retry guidance, see [Error Codes](/api-reference/errors). Write endpoints count toward your standard key RPM/TPM — see [Rate Limits](/api-reference/rate-limits).
+```json
+{
+  "ok": true,
+  "code": 200,
+  "data": {
+    "following": true
+  }
+}
+```
+
+**`data.following`** — `true` once the source user now follows the target user. `data.pending_follow` is `true` when the target is a protected account and the follow request is awaiting approval.
+
+## Idempotency
+
+Following a user already followed is a no-op. The endpoint still returns `200` with `data.following: true`.
+
+## Common 4xx causes
+
+- `400 invalid-request` — missing or non-numeric `target_user_id`.
+- `403 client-forbidden` — OAuth session missing the `follows.write` scope. Re-link via [`auth_twitter`](/api-reference/twitter/auth_twitter).
+- `404 resource-not-found` — target not found or not visible to the source user.
+
+See [Error Codes](/api-reference/errors) and [Rate Limits](/api-reference/rate-limits) for more.
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Link an X Account" icon="key" href="/api-reference/twitter/auth_twitter">
+    Start the OAuth flow this endpoint requires.
+  </Card>
+  <Card title="Inverse" icon="arrow-right-arrow-left">
+    [Unfollow a User](/api-reference/twitter/unfollow_twitter)
+  </Card>
+  <Card title="Twitter Autopilot skill" icon="twitter" href="/agent-skills/twitter-autopilot">
+    Agent skill that wraps this endpoint with a Python CLI.
+  </Card>
+</CardGroup>

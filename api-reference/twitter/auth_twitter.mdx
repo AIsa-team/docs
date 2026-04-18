@@ -17,38 +17,34 @@ You do not call it before every write request. The OAuth session persists agains
 
 <Steps>
   <Step title="Start the flow">
-    Send `POST /apis/v1/twitter/auth_twitter` with your AIsa API key. Optionally include a `scopes` array in the body to request a narrower set than the default.
+    Send `POST /apis/v1/twitter/auth_twitter` with `{ "aisa_api_key": "..." }` in the body.
   </Step>
   <Step title="Open the auth URL">
-    The response returns an `auth_url` and a `state` token. Open `auth_url` in the source user's browser. X shows its standard "Authorize AIsa to access your account" screen.
+    The response returns `{ "ok": true, "code": 200, "data": { "auth_url": "..." } }`. Open `data.auth_url` in the source user's browser. X shows its standard "Authorize AIsa to access your account" screen.
   </Step>
   <Step title="User approves">
-    After the user clicks Authorize, X redirects to AIsa's fixed callback (`https://api.aisa.one/apis/v1/twitter/oauth_callback`). AIsa validates the `state` token, exchanges the authorization code for tokens, and stores the session against your API key.
+    After the user clicks Authorize, X redirects to AIsa's fixed callback (`https://api.aisa.one/apis/v1/twitter/oauth_callback`). AIsa exchanges the authorization code for tokens and stores the session against your `aisa_api_key`.
   </Step>
   <Step title="Write endpoints unlock">
-    From this point on, any call to a Twitter write endpoint using your AIsa API key acts on behalf of the linked source user. You never pass OAuth tokens in the body of those calls.
+    From this point on, any Twitter write endpoint called with the same `aisa_api_key` acts on behalf of the linked source user. You never pass OAuth tokens to those calls.
   </Step>
 </Steps>
 
-## Default scopes
+## Scopes
 
-If you omit the `scopes` field, AIsa requests the full set needed for every Twitter write endpoint we expose:
+AIsa requests the full set needed for every Twitter write endpoint we expose:
 
-- `follows.write` — [follow](/api-reference/twitter/follow_twitter) / unfollow
+- `follows.write` — [follow](/api-reference/twitter/follow_twitter) / [unfollow](/api-reference/twitter/unfollow_twitter)
 - `tweet.read` — read tweets (required by most write actions)
 - `users.read` — resolve users, read profile info
-- `tweet.write` — post, reply, quote
-- `like.write` — like / unlike
-- `dm.read` — read DM threads
-- `dm.write` — send DMs
+- `tweet.write` — [post](/api-reference/twitter/post_twitter), reply, quote
+- `like.write` — [like](/api-reference/twitter/like_twitter) / [unlike](/api-reference/twitter/unlike_twitter)
 
-Pass a narrower array (e.g., `["follows.write", "tweet.read", "users.read"]`) if you only need a subset. Write calls that require a missing scope return `403`.
+Write calls that require a missing scope return `403`.
 
-## Expiry
+## Re-linking
 
-The `auth_url` returned by this endpoint is **short-lived** (typically 10 minutes). If the user doesn't complete the flow before `expires_at`, call `POST /apis/v1/twitter/auth_twitter` again to generate a fresh URL.
-
-The stored OAuth **session** itself lives longer (subject to X's token rotation rules) and is refreshed automatically as long as the user doesn't revoke access from X's app settings.
+If the stored session is revoked (user clicks "Revoke access" on X's app settings) or expires, the next write call returns `403`. Re-run `POST /apis/v1/twitter/auth_twitter` to generate a new `auth_url` and restore the session.
 
 ## Related
 

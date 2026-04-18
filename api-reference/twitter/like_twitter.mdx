@@ -1,32 +1,47 @@
 ---
 title: "Like a Tweet"
-description: "Like a tweet on behalf of the authenticated source user. Proxies the official X v2 like-post endpoint through the AIsa gateway."
+description: "Like a tweet on behalf of the authenticated source user. Routed through the AIsa gateway."
 openapi: "openapi/twitter-actions.json POST /twitter/like_twitter"
 ---
 
-Like a tweet on behalf of the authenticated source user. Proxies the official [X v2 `POST /2/users/{id}/likes` endpoint](https://docs.x.com/x-api/users/like-post), routed through the AIsa gateway at `https://api.aisa.one/apis/v1/twitter/like_twitter`.
+Like a tweet on behalf of the authenticated source user. Routed through the AIsa gateway at `https://api.aisa.one/apis/v1/twitter/like_twitter`.
 
 ## Prerequisites
 
-- An **AIsa API key** (Bearer token for every request).
+- An **AIsa API key**. Pass it as `aisa_api_key` in the request body.
 - A one-time **OAuth authorization** for the source user account. Link your X account by calling [`POST /apis/v1/twitter/auth_twitter`](/api-reference/twitter/auth_twitter) — AIsa stores the session against your API key and uses it automatically on every write call.
 - The X session must hold `like.write`, `tweet.read`, `users.read`.
 
-## Response fields
+## Request body
 
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `data.liked` | boolean | `true` once the source user has liked the target tweet. |
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `aisa_api_key` | string | yes | Your AIsa API key. |
+| `tweet_id` | string | yes | Numeric ID of the tweet to like. |
+
+## Response
+
+```json
+{
+  "ok": true,
+  "code": 200,
+  "data": {
+    "liked": true
+  }
+}
+```
+
+**`data.liked`** — `true` once the source user has liked the target tweet.
 
 ## Idempotency
 
-Liking a tweet the source user has already liked is a no-op. The endpoint still returns `200` with `{ "data": { "liked": true } }`. Safe to retry.
+Liking a tweet the source user has already liked is a no-op. The endpoint still returns `200` with `{ "ok": true, "code": 200, "data": { "liked": true } }`. Safe to retry.
 
 ## Common 4xx causes
 
-- `400 invalid-request` — missing or non-numeric `tweet_id`
-- `403 client-forbidden` — OAuth session missing the `like.write` scope. Re-link via `auth_twitter`.
-- `404 resource-not-found` — tweet doesn't exist or isn't visible to the source user (e.g., a protected account the source user doesn't follow).
+- `400 invalid-request` — missing or non-numeric `tweet_id`.
+- `403 client-forbidden` — OAuth session missing the `like.write` scope. Re-link via [`auth_twitter`](/api-reference/twitter/auth_twitter).
+- `404 resource-not-found` — target not found or not visible to the source user.
 
 See [Error Codes](/api-reference/errors) and [Rate Limits](/api-reference/rate-limits) for more.
 
@@ -36,10 +51,10 @@ See [Error Codes](/api-reference/errors) and [Rate Limits](/api-reference/rate-l
   <Card title="Link an X Account" icon="key" href="/api-reference/twitter/auth_twitter">
     Start the OAuth flow this endpoint requires.
   </Card>
-  <Card title="Post a Tweet" icon="pen" href="/api-reference/twitter/post_twitter">
-    Create tweets you (or your agents) can like.
+  <Card title="Inverse" icon="arrow-right-arrow-left">
+    [Unlike a Tweet](/api-reference/twitter/unlike_twitter)
   </Card>
-  <Card title="Follow a User" icon="user-plus" href="/api-reference/twitter/follow_twitter">
-    Another write endpoint using the same OAuth session.
+  <Card title="Twitter Autopilot skill" icon="twitter" href="/agent-skills/twitter-autopilot">
+    Agent skill that wraps this endpoint with a Python CLI.
   </Card>
 </CardGroup>
