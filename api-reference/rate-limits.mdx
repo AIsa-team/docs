@@ -1,0 +1,131 @@
+---
+title: "Rate Limits"
+description: "Request-per-minute, token-per-minute, and concurrency limits on the AIsa API, how to read rate-limit headers, and how to request a quota increase."
+---
+
+Every AIsa API endpoint applies rate limits to protect both the gateway and upstream providers. Limits are enforced per API key. This page documents the defaults, how to read the rate-limit headers, and how to handle throttling gracefully.
+
+## What's limited
+
+AIsa enforces three dimensions of capacity:
+
+| Dimension       | Applies to                              | What it measures                                                |
+| --------------- | --------------------------------------- | --------------------------------------------------------------- |
+| **RPM**         | All endpoints                           | Requests per minute                                             |
+| **TPM**         | LLM inference endpoints                 | Input + output tokens per minute (combined)                     |
+| **Concurrency** | Streaming + long-running endpoints      | Simultaneous in-flight requests                                 |
+
+<Note>
+  TPM counts **input + output** tokens together. A request that sends 10K tokens and generates 5K tokens consumes 15K TPM.
+</Note>
+
+## Default limits per tier
+
+| Tier            | RPM    | TPM           | Concurrency | Who gets it                             |
+| --------------- | -----: | ------------: | ----------: | --------------------------------------- |
+| **Free**        |    60  |      60,000   |           5 | New accounts with $2 signup credit      |
+| **Starter**     |   600  |     600,000   |          20 | After first paid top-up                 |
+| **Growth**      | 3,000  |   3,000,000   |          50 | $500+ topped up OR approved application |
+| **Enterprise**  | Custom |        Custom |      Custom | Contact sales                           |
+
+<Tip>
+  Moving from **Free → Starter** is automatic on your first wallet top-up. Higher tiers require a quota-increase request — see [Requesting a quota increase](#requesting-a-quota-increase).
+</Tip>
+
+### Per-endpoint overrides
+
+Some endpoints have tighter default limits independent of your tier because the upstream provider caps throughput:
+
+| Endpoint group                      | Default override                       |
+| ----------------------------------- | -------------------------------------- |
+| `POST /chat/completions` (GPT-5.4)  | RPM capped at upstream quota           |
+| `POST /messages` (Claude Opus)      | RPM capped at upstream quota           |
+| `POST /perplexity/sonar-deep-research` | 5 RPM per key (long-running)        |
+| `/aigc/video-generation`            | 3 concurrent video tasks per key       |
+| `/v1/models/*:generateContent` (image gen) | 30 RPM per key                  |
+
+## Reading rate-limit headers
+
+Every response (including `429`) includes four headers:
+
+```
+X-RateLimit-Limit-Requests:    600
+X-RateLimit-Remaining-Requests: 587
+X-RateLimit-Limit-Tokens:      600000
+X-RateLimit-Remaining-Tokens:  592104
+X-RateLimit-Reset-Requests:    1745012400
+X-RateLimit-Reset-Tokens:      1745012400
+Retry-After:                   3
+```
+
+| Header                            | Meaning                                         |
+| --------------------------------- | ----------------------------------------------- |
+| `X-RateLimit-Limit-Requests`      | Your RPM cap                                    |
+| `X-RateLimit-Remaining-Requests`  | Requests remaining this minute                  |
+| `X-RateLimit-Limit-Tokens`        | Your TPM cap                                    |
+| `X-RateLimit-Remaining-Tokens`    | Tokens remaining this minute                    |
+| `X-RateLimit-Reset-Requests`      | UNIX timestamp when the request counter resets  |
+| `X-RateLimit-Reset-Tokens`        | UNIX timestamp when the token counter resets    |
+| `Retry-After`                     | (429 only) Seconds until you can retry          |
+
+## Handling 429 responses
+
+<Steps>
+  <Step title="Detect a 429">
+    The response body follows the standard [error shape](/api-reference/errors) with `error.type = "rate_limit_error"` and a `code` of `rate_limit_exceeded`, `upstream_rate_limit`, or `quota_exceeded`.
+  </Step>
+  <Step title="Honor `Retry-After`">
+    Always wait at least the number of seconds in `Retry-After` before the next attempt. Never retry immediately.
+  </Step>
+  <Step title="Use exponential backoff + jitter">
+    After the initial wait, double the delay on each subsequent 429, with ±25% jitter. Cap at 30 seconds. See the [retry example](/api-reference/errors#retry-guidance).
+  </Step>
+  <Step title="Prefer queuing over retrying">
+    Instead of tight retry loops, queue requests and drain them at a rate below your RPM. A simple token-bucket with a leak rate of `RPM/60` requests per second is robust.
+  </Step>
+  <Step title="Stay under the cap">
+    Monitor `X-RateLimit-Remaining-*` on every response. When it drops below 10% of the limit, slow down preemptively — avoiding the 429 entirely.
+  </Step>
+</Steps>
+
+## Example: staying under the limit
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
+
+response = client.chat.completions.with_raw_response.create(
+    model="gpt-5",
+    messages=[{"role": "user", "content": "Hello"}],
+)
+remaining = int(response.headers.get("x-ratelimit-remaining-requests", 1000))
+if remaining < 50:
+    # Throttle preemptively — sleep a bit before the next call
+    time.sleep(1.0)
+body = response.parse()
+```
+
+## Requesting a quota increase
+
+If you need higher limits for production traffic:
+
+1. Top up your wallet — moving from Free → Starter is automatic.
+2. For Growth or Enterprise tiers, email [developer@aisa.one](mailto:developer@aisa.one) with:
+   - Your workspace ID
+   - Expected peak RPM and TPM
+   - Which models or endpoints you need the increase for
+   - A brief description of your use case
+
+Approvals for Growth typically land within one business day; Enterprise is negotiated with a dedicated account team.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Error Codes" icon="triangle-exclamation" href="/api-reference/errors">
+    Full list of HTTP status codes and recommended responses.
+  </Card>
+  <Card title="Usage Logs" icon="chart-line" href="/guides/dashboard/usage-logs">
+    Per-request billing and rate-limit telemetry in the dashboard.
+  </Card>
+</CardGroup>

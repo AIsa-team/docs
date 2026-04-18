@@ -1,0 +1,225 @@
+---
+title: "DeepSeek API — Access DeepSeek V3.2 via AIsa"
+description: "Access DeepSeek V3.2 — strong general-purpose performance at industry-beating price — through AIsa's unified API. No separate DeepSeek account needed. OpenAI-compatible."
+sidebar_label: "DeepSeek"
+sidebar_position: 3
+slug: /docs/chinese-llms/deepseek
+---
+
+# DeepSeek API: Access DeepSeek V3.2
+
+DeepSeek has become one of the most searched AI model families in the world — and for good reason. DeepSeek V3.2 delivers strong coding and reasoning performance at a fraction of the cost of comparable Western frontier models.
+
+Through AIsa, you access DeepSeek V3.2 with a single OpenAI-compatible API key — no DeepSeek account, no separate billing, no rate-limit headaches. AIsa routes DeepSeek requests via the Alibaba Bailian aggregation platform under AIsa's enterprise data agreement.
+
+---
+
+## Supported DeepSeek models
+
+| Model | Context window | Best for | Input price* | Output price* |
+|---|---|---|---|---|
+| `deepseek-v3.2` | 128,000 tokens | Cost-efficient general use, coding, reasoning | $0.28/M | $0.42/M |
+
+\* Prices reflect standard market rates. See [aisa.one/models](https://aisa.one/models) for current AIsa rates.
+
+---
+
+## Quickstart
+
+### Python
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="YOUR_AISA_API_KEY",
+    base_url="https://api.aisa.one/v1"
+)
+
+response = client.chat.completions.create(
+    model="deepseek-v3.2",
+    messages=[
+        {"role": "user", "content": "Review this pull request and identify any security vulnerabilities."}
+    ]
+)
+print(response.choices[0].message.content)
+```
+
+### Node.js
+
+```javascript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.AISA_API_KEY,
+  baseURL: "https://api.aisa.one/v1",
+});
+
+const response = await client.chat.completions.create({
+  model: "deepseek-v3.2",
+  messages: [
+    { role: "user", content: "Explain how transformer attention scales with sequence length." }
+  ],
+});
+console.log(response.choices[0].message.content);
+```
+
+### Streaming
+
+```python
+stream = client.chat.completions.create(
+    model="deepseek-v3.2",
+    messages=[{"role": "user", "content": "Write a comprehensive guide to async Python."}],
+    stream=True
+)
+
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+```
+
+---
+
+## Model guide
+
+### DeepSeek V3.2 — capable and cost-efficient
+
+DeepSeek V3.2 offers strong performance across reasoning, writing, coding, and multilingual tasks at a price point that makes it one of the most attractive models for production workloads. Its 128K context window covers the vast majority of real-world tasks — large documents, extended conversations, and mid-size codebases.
+
+**Use when you need:**
+- Reliable general-purpose performance at predictable, low cost
+- Strong coding capability for review, refactoring, and generation tasks
+- 128K context for most enterprise document tasks
+- Stable, production-hardened model behaviour
+
+```python
+# Code generation
+response = client.chat.completions.create(
+    model="deepseek-v3.2",
+    messages=[
+        {"role": "system", "content": "You are an expert software engineer."},
+        {"role": "user", "content": "Write a Python class for a rate-limited HTTP client with exponential backoff."}
+    ]
+)
+
+# Reasoning and analysis
+response = client.chat.completions.create(
+    model="deepseek-v3.2",
+    messages=[
+        {"role": "user", "content": "Analyse this database schema and suggest normalisation improvements."}
+    ]
+)
+
+# Long document tasks
+with open("contract.txt") as f:
+    document = f.read()
+
+response = client.chat.completions.create(
+    model="deepseek-v3.2",
+    messages=[
+        {"role": "user", "content": f"Summarise the key obligations and risk clauses in this contract:\n\n{document}"}
+    ]
+)
+```
+
+---
+
+## Cost comparison: DeepSeek V3.2 vs alternatives
+
+DeepSeek's pricing has redefined expectations for capable model costs:
+
+| Model | Input (per 1M tokens) | Output (per 1M tokens) |
+|---|---|---|
+| DeepSeek V3.2 (via AIsa) | $0.28 | $0.42 |
+| GPT-4.1 | ~$2.00 | ~$8.00 |
+| Claude Sonnet | ~$3.00 | ~$15.00 |
+
+---
+
+## Caching: reduce cost on repeated inputs
+
+DeepSeek V3.2 supports prompt caching. When the same prefix (e.g., a fixed system prompt or long document) appears across multiple requests, cache hits are charged at a significant discount:
+
+```python
+# System prompts and long documents are automatically cached
+response = client.chat.completions.create(
+    model="deepseek-v3.2",
+    messages=[
+        # This long system prompt is cached after the first call
+        {"role": "system", "content": open("large_codebase_context.txt").read()},
+        {"role": "user", "content": "Where is the authentication bug?"}
+    ]
+)
+
+# Check cache usage in the response
+print(response.usage.prompt_tokens_details)
+# → {'cached_tokens': 45000, 'audio_tokens': 0}
+```
+
+---
+
+## Function calling with DeepSeek
+
+```python
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "run_code",
+            "description": "Execute Python code and return the output",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "Python code to execute"},
+                    "language": {"type": "string", "enum": ["python", "bash"]}
+                },
+                "required": ["code"]
+            }
+        }
+    }
+]
+
+response = client.chat.completions.create(
+    model="deepseek-v3.2",
+    messages=[{"role": "user", "content": "Write and run a function that calculates the 100th Fibonacci number."}],
+    tools=tools,
+    tool_choice="auto"
+)
+```
+
+---
+
+## Switching from the DeepSeek API directly
+
+If you've been using DeepSeek's own API, switching to AIsa takes one change:
+
+```python
+# DeepSeek direct API
+client = OpenAI(
+    api_key="sk-deepseek-...",
+    base_url="https://api.deepseek.com/v1"  # ← change this
+)
+
+# AIsa — same models, plus 49+ others on one key
+client = OpenAI(
+    api_key="YOUR_AISA_API_KEY",
+    base_url="https://api.aisa.one/v1"      # ← to this
+)
+```
+
+Benefits of routing via AIsa: automatic failover if DeepSeek's API is unavailable, unified billing across all your models, and rate-limit management across providers.
+
+---
+
+## Data privacy
+
+AIsa routes DeepSeek requests via the Alibaba Bailian aggregation platform under AIsa's Alibaba Cloud Key Account enterprise data agreement. Customer data is not used for training and is not shared outside the processing pipeline. For compliance requirements, [contact us](mailto:developer@aisa.one).
+
+---
+
+## What's next
+
+- [All Chinese AI models](./index) — Qwen, DeepSeek, Kimi, ByteDance Seed side by side
+- [Qwen models](./qwen) — Alibaba's 1M-context flagship with Key Account partner pricing
+- [Kimi K2.5](./kimi) — 1T parameter MoE for agentic and visual coding tasks
+- [ByteDance Seed & Seedream](./bytedance) — Seed 1.6, 1.8, Flash, and Seedream 4.5 image generation

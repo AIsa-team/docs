@@ -1,0 +1,178 @@
+---
+title: "Authentication"
+description: "Authenticate every AIsa API request with a Bearer token. Covers API key generation, storage, rotation, scoping, and best practices for secure key management."
+---
+
+Every AIsa API request is authenticated with a single Bearer token — your **AIsa API key**. One key works across all 100+ endpoints: LLM inference, search, financial data, Twitter, prediction markets, and more.
+
+## How it works
+
+<Steps>
+  <Step title="Generate a key">
+    Create a key in the [dashboard](https://console.aisa.one) under **API Keys**. Each key has a unique prefix (`sk-aisa-...`) and is shown **once** — copy it immediately to a secure store.
+  </Step>
+  <Step title="Send it as a Bearer token">
+    Include the key in every request's `Authorization` header:
+    ```
+    Authorization: Bearer YOUR_AISA_API_KEY
+    ```
+  </Step>
+  <Step title="Get charged per request">
+    Every call deducts from your workspace wallet. Usage and cost appear in [Usage Logs](/guides/dashboard/usage-logs) in real time.
+  </Step>
+</Steps>
+
+## Authenticating with SDKs
+
+Because AIsa is OpenAI-compatible, the official OpenAI SDKs work by swapping `base_url` and `api_key`:
+
+<CodeGroup>
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.aisa.one/v1",
+    api_key="sk-aisa-..."
+)
+```
+
+```typescript TypeScript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "https://api.aisa.one/v1",
+  apiKey: process.env.AISA_API_KEY,
+});
+```
+
+```bash curl
+curl https://api.aisa.one/v1/chat/completions \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-5","messages":[{"role":"user","content":"Hello"}]}'
+```
+
+</CodeGroup>
+
+<Tip>
+  Pass the key through an environment variable (`AISA_API_KEY`) rather than hard-coding it in source. All AIsa examples and skill clients read from this variable by default.
+</Tip>
+
+## Key lifecycle
+
+### Creating keys
+
+- Navigate to [console.aisa.one](https://console.aisa.one) → **API Keys**.
+- Click **Create Key**, give it a label (e.g., `prod-web-app`, `ci-tests`), and copy the value.
+- Create **one key per deployment environment** — separate keys for dev, staging, prod, and each service. This makes rotation and revocation surgical.
+
+### Scoping and quotas
+
+On the key creation form you can optionally set:
+
+- **Spend cap** — maximum USD the key can charge per day/week/month. When hit, subsequent requests return `429 quota_exceeded`.
+- **Rate-limit overrides** — lower the default RPM/TPM below your account tier for a specific key.
+- **Model allowlist** — restrict the key to specific models (e.g., only `gpt-5-mini` for a cost-sensitive internal tool).
+
+### Rotating keys
+
+Rotate keys at least **every 90 days**, or immediately if you suspect exposure.
+
+<Steps>
+  <Step title="Create a new key">
+    Generate a new key with the same label + a version suffix (e.g., `prod-web-app-v2`).
+  </Step>
+  <Step title="Deploy the new key">
+    Push the new key to your secret manager. Wait for the deployment to roll out across every instance.
+  </Step>
+  <Step title="Revoke the old key">
+    Once you've verified no requests are still using the old key (check **Usage Logs** filtered by key), revoke it in the dashboard.
+  </Step>
+</Steps>
+
+### Revoking keys
+
+If a key leaks, **revoke it immediately** in the dashboard. Revocation is instant — the next request with that key returns `401 revoked_api_key`. Always revoke before investigating.
+
+## Storing keys securely
+
+<Warning>
+  Never commit keys to source control. Never paste keys in public issues, shared documents, or screenshots. AIsa keys grant full spend authority against your wallet.
+</Warning>
+
+<AccordionGroup>
+
+<Accordion title="Local development" icon="laptop-code">
+Use a `.env` file and a loader like `python-dotenv` or `dotenv` (Node). Add `.env` to `.gitignore`.
+
+```bash
+# .env
+AISA_API_KEY=sk-aisa-...
+```
+
+```python
+from dotenv import load_dotenv
+load_dotenv()
+```
+</Accordion>
+
+<Accordion title="CI/CD" icon="github">
+Store the key as a **secret** in your CI provider (GitHub Actions, GitLab CI, CircleCI). Reference it as an environment variable in the workflow.
+
+```yaml
+# GitHub Actions
+env:
+  AISA_API_KEY: ${{ secrets.AISA_API_KEY }}
+```
+
+Use a dedicated `ci-tests` key with a low spend cap so a runaway test can't drain the wallet.
+</Accordion>
+
+<Accordion title="Cloud deployments" icon="cloud">
+Use your cloud provider's secret manager:
+
+- **AWS**: Secrets Manager or Systems Manager Parameter Store
+- **GCP**: Secret Manager
+- **Azure**: Key Vault
+- **Fly/Render/Railway**: the platform's built-in env var encryption
+
+Rotate by updating the secret; the next container restart picks it up.
+</Accordion>
+
+<Accordion title="Client-side apps" icon="browser">
+**Never ship an API key in a browser, mobile app, or any client the user can inspect.** Always route through a backend proxy you control.
+
+If you need to call AIsa from a client, build a server-side endpoint that:
+1. Validates the caller (user auth)
+2. Applies per-user rate limits
+3. Forwards to AIsa with your server-held key
+</Accordion>
+
+</AccordionGroup>
+
+## Best practices
+
+- **One key per service** — never share keys across apps
+- **Scope narrowly** — use model allowlists and spend caps to blast-radius any leak
+- **Rotate on a schedule** — at minimum every 90 days; immediately on personnel change
+- **Monitor usage logs** — unusual spikes often appear in [Usage Logs](/guides/dashboard/usage-logs) before billing alerts
+- **Set quota alerts** — configure daily/weekly spend thresholds in [Settings](/guides/pricing/settings)
+- **Prefer SSO** for dashboard access so revocation propagates from your identity provider
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Security" icon="shield-check" href="/guides/security">
+    Data retention, transport security, and third-party provider handling.
+  </Card>
+  <Card title="Error Codes" icon="triangle-exclamation" href="/api-reference/errors">
+    401, 403, and other auth-related responses.
+  </Card>
+  <Card title="Rate Limits" icon="gauge-high" href="/api-reference/rate-limits">
+    RPM, TPM, and concurrency caps per tier.
+  </Card>
+  <Card title="Getting Started" icon="rocket" href="/guides/getting-started-with-aisa">
+    Make your first authenticated request.
+  </Card>
+</CardGroup>

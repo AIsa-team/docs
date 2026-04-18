@@ -1,0 +1,354 @@
+---
+title: "ByteDance Models API — Access Seed & Seedream via AIsa"
+description: "Access ByteDance's Seed 1.6, Seed 1.6 Flash, Seed 1.8, and Seedream 4.5 image generation through AIsa's unified API via BytePlus. OpenAI-compatible. One key."
+sidebar_label: "ByteDance (Seed & Seedream)"
+sidebar_position: 5
+slug: /docs/chinese-llms/bytedance
+---
+
+# ByteDance Models API: Seed Text & Seedream Image Generation
+
+AIsa gives you access to ByteDance's Seed model family — including text models and the Seedream 4.5 image generation model — through **BytePlus**, ByteDance's official international API platform. One AIsa key covers all of them alongside every other model in the catalogue.
+
+ByteDance's Seed team is the same research group behind the Doubao consumer AI app. Their models are optimised for strong multilingual reasoning, long-context comprehension, high-volume throughput, and — with Seedream — state-of-the-art text-to-image generation.
+
+---
+
+## Supported ByteDance models
+
+| Model string | Type | Context window | Best for |
+|---|---|---|---|
+| `seed-1-6-250915` | Text | 131,072 tokens | General reasoning, multilingual, long-context tasks |
+| `seed-1-6-flash-250715` | Text | 131,072 tokens | Fast, cost-efficient inference at scale |
+| `seed-1-8-251228` | Text | 131,072 tokens | Agentic tasks, tool calling, enhanced reasoning |
+| `seedream-4-5-251128` | Image | — | Text-to-image generation at up to 4K resolution |
+
+> See [aisa.one/models](https://aisa.one/models) for current rates on all ByteDance models.
+
+The date suffix in each model string is the release date in `YYMMDD` format — useful when pinning a specific version for production stability.
+
+---
+
+## Text models quickstart
+
+All Seed text models use the standard chat completions endpoint and are fully OpenAI-compatible.
+
+### Python
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="YOUR_AISA_API_KEY",
+    base_url="https://api.aisa.one/v1"
+)
+
+response = client.chat.completions.create(
+    model="seed-1-6-250915",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Summarise the key differences between transformer and Mamba architectures."}
+    ]
+)
+print(response.choices[0].message.content)
+```
+
+### Node.js
+
+```javascript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.AISA_API_KEY,
+  baseURL: "https://api.aisa.one/v1",
+});
+
+const response = await client.chat.completions.create({
+  model: "seed-1-6-flash-250715",
+  messages: [
+    { role: "user", content: "Classify the intent of this customer message." }
+  ],
+});
+console.log(response.choices[0].message.content);
+```
+
+### Streaming
+
+```python
+stream = client.chat.completions.create(
+    model="seed-1-8-251228",
+    messages=[{"role": "user", "content": "Walk me through debugging this async race condition step by step."}],
+    stream=True
+)
+
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+```
+
+---
+
+## Text model guide
+
+### `seed-1-6-250915` — general-purpose flagship
+
+Seed 1.6 is ByteDance's primary general-purpose text model. It delivers strong performance across reasoning, writing, and multilingual tasks with a 131K context window — enough for long documents, extended conversations, and mid-size codebases.
+
+**Use when you need:**
+- Reliable general-purpose text generation in English or Chinese
+- Long-document summarisation, extraction, or Q&A
+- A consistent, well-tested model for production workloads
+
+```python
+# Long document Q&A
+with open("technical_spec.txt") as f:
+    document = f.read()
+
+response = client.chat.completions.create(
+    model="seed-1-6-250915",
+    messages=[
+        {"role": "user", "content": f"What are the latency guarantees described in this spec?\n\n{document}"}
+    ]
+)
+```
+
+### `seed-1-6-flash-250715` — speed and throughput
+
+Seed 1.6 Flash is the fast variant of Seed 1.6, optimised for low latency and high-volume throughput. It's the right choice when you're processing thousands of requests per hour and response speed matters more than peak capability.
+
+**Use when you need:**
+- Sub-second response times on short-to-medium prompts
+- High-concurrency classification, extraction, or tagging pipelines
+- Minimum cost per token at Seed 1.6 quality levels
+
+```python
+import asyncio
+from openai import AsyncOpenAI
+
+client = AsyncOpenAI(
+    api_key="YOUR_AISA_API_KEY",
+    base_url="https://api.aisa.one/v1"
+)
+
+async def classify(text: str) -> str:
+    response = await client.chat.completions.create(
+        model="seed-1-6-flash-250715",
+        messages=[
+            {"role": "system", "content": "Classify as: positive, negative, or neutral. Reply with one word."},
+            {"role": "user", "content": text}
+        ],
+        max_tokens=5
+    )
+    return response.choices[0].message.content.strip()
+
+# Process 5,000 reviews concurrently
+semaphore = asyncio.Semaphore(100)
+
+async def classify_with_limit(text):
+    async with semaphore:
+        return await classify(text)
+
+results = asyncio.run(asyncio.gather(*[classify_with_limit(r) for r in reviews]))
+```
+
+### `seed-1-8-251228` — agents and tool calling
+
+Seed 1.8 is ByteDance's most capable text model, with enhanced agentic capabilities: reliable multi-step tool calling, stronger structured output, and improved reasoning for complex tasks. If you're building an agent that needs to plan, use tools, and verify its own output, Seed 1.8 is the right choice in this family.
+
+**Use when you need:**
+- Multi-step tool calling in an agentic loop
+- Complex reasoning with verifiable intermediate steps
+- The strongest reasoning capability in the ByteDance text model range
+
+```python
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "query_database",
+            "description": "Run a SQL query and return results as JSON",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Valid SQL query"},
+                    "database": {"type": "string", "enum": ["production", "analytics"]}
+                },
+                "required": ["query", "database"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_alert",
+            "description": "Send an alert to the on-call engineer",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
+                    "message": {"type": "string"}
+                },
+                "required": ["severity", "message"]
+            }
+        }
+    }
+]
+
+messages = [
+    {"role": "user", "content": "Check if any orders have been stuck in 'processing' status for more than 24 hours, and alert the team if there are more than 10."}
+]
+
+while True:
+    response = client.chat.completions.create(
+        model="seed-1-8-251228",
+        messages=messages,
+        tools=tools,
+        tool_choice="auto"
+    )
+    message = response.choices[0].message
+    messages.append(message)
+
+    if not message.tool_calls:
+        print(message.content)
+        break
+
+    for tool_call in message.tool_calls:
+        result = execute_tool(tool_call.function.name, tool_call.function.arguments)
+        messages.append({
+            "role": "tool",
+            "tool_call_id": tool_call.id,
+            "content": str(result)
+        })
+```
+
+---
+
+## Image generation: `seedream-4-5-251128`
+
+Seedream 4.5 is ByteDance's state-of-the-art text-to-image generation model, released November 2025. It generates images up to 4K resolution with exceptional prompt adherence, accurate typography, and multi-reference image support — capabilities where it ranks in the top 10 globally on the LM Arena leaderboard.
+
+Image generation uses the `images.generate` endpoint, not `chat.completions`.
+
+### Python
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="YOUR_AISA_API_KEY",
+    base_url="https://api.aisa.one/v1"
+)
+
+response = client.images.generate(
+    model="seedream-4-5-251128",
+    prompt="A photorealistic product shot of a glass water bottle on a white marble surface, soft studio lighting, 4K",
+    n=1,
+    size="1024x1024"   # see pricing page for available sizes up to 4K
+)
+
+image_url = response.data[0].url
+print(image_url)
+```
+
+### Node.js
+
+```javascript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.AISA_API_KEY,
+  baseURL: "https://api.aisa.one/v1",
+});
+
+const response = await client.images.generate({
+  model: "seedream-4-5-251128",
+  prompt: "Minimalist tech startup office, floor-to-ceiling windows, city skyline, golden hour lighting",
+  n: 1,
+  size: "1792x1024",
+});
+
+console.log(response.data[0].url);
+```
+
+### Generating multiple images
+
+```python
+# Generate 4 variations in one request
+response = client.images.generate(
+    model="seedream-4-5-251128",
+    prompt="Abstract geometric logo for an AI infrastructure company, dark blue and cyan, clean lines",
+    n=4,
+    size="1024x1024"
+)
+
+for i, image in enumerate(response.data):
+    print(f"Variation {i+1}: {image.url}")
+```
+
+### Prompting tips for Seedream 4.5
+
+Seedream 4.5 handles both natural language and structured prompt formats. A few patterns that work well:
+
+```python
+# For product imagery — be specific about lighting and surface
+prompt = "Professional product photography of [item], isolated on white background, soft diffused lighting, sharp focus, commercial quality"
+
+# For text in images — Seedream 4.5 renders readable typography
+prompt = "A poster with the headline 'Build the future of AI' in bold sans-serif type, dark background, cyan accent colour"
+
+# For multiple reference concepts
+prompt = "A dashboard UI screenshot showing real-time API metrics, dark theme, line charts, minimal design, MacBook Pro display"
+```
+
+Seedream 4.5 is one of the few image models that renders text in images accurately and readably — use this for generating marketing assets, UI mockups, and infographics that include copy.
+
+---
+
+## Choosing between ByteDance text models
+
+| If you need… | Use |
+|---|---|
+| Best overall capability | `seed-1-8-251228` |
+| Lowest latency / highest throughput | `seed-1-6-flash-250715` |
+| Stable general-purpose production model | `seed-1-6-250915` |
+| Image generation | `seedream-4-5-251128` |
+
+All three text models share the same 131K context window, so context length is not a differentiator — choose based on capability requirements and cost.
+
+---
+
+## JSON mode and structured output
+
+All Seed text models support JSON mode:
+
+```python
+import json
+
+response = client.chat.completions.create(
+    model="seed-1-8-251228",
+    messages=[
+        {
+            "role": "user",
+            "content": "Extract the company name, founding year, and HQ city from this text as JSON."
+        }
+    ],
+    response_format={"type": "json_object"}
+)
+
+data = json.loads(response.choices[0].message.content)
+```
+
+---
+
+## Data privacy
+
+ByteDance Seed models are routed through BytePlus, ByteDance's official international enterprise API platform. BytePlus enterprise service terms prohibit use of customer data for model training. For organisations with specific compliance or data residency requirements, [contact us](mailto:developer@aisa.one).
+
+---
+
+## What's next
+
+- [All Chinese AI models](./index) — full model comparison table
+- [Qwen models](./qwen) — Alibaba's 1M-context flagship with Key Account partner pricing
+- [DeepSeek V4](./deepseek) — 81% SWE-bench, 1M context, industry-leading cost
+- [Kimi K2.5](./kimi) — 1T parameter MoE for agentic and visual coding tasks
