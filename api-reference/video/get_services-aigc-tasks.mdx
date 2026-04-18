@@ -1,6 +1,25 @@
 ---
-title: Query video generation task result
-description: "Query video generation task result"
-excerpt: Poll the status and result of an asynchronous video generation task.
-openapi: "openapi/aliyun-video.json GET /services/aigc/tasks"
+title: "Get video generation task result"
+description: "Poll the status of an async video generation task. `task_id` is a path parameter, not a query string."
+openapi: "openapi/aliyun-video.json GET /services/aigc/tasks/{task_id}"
 ---
+
+Poll the status and result of a task created by [`POST /apis/v1/services/aigc/video-generation/video-synthesis`](/api-reference/video/post_services-aigc-video-generation-video-synthesis). The `task_id` goes in the **path**, not the query string.
+
+```bash
+curl "https://api.aisa.one/apis/v1/services/aigc/tasks/$TASK_ID" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+The endpoint returns HTTP 200 for every known task — inspect `output.task_status` to tell states apart:
+
+| `task_status` | Meaning |
+|---|---|
+| `PENDING` | Accepted, queued |
+| `RUNNING` | Actively generating |
+| `SUCCEEDED` | Done — `output.video_url` is populated (short-lived, download ASAP) |
+| `FAILED` | Failed — `output.code` and `output.message` explain why. **Failed tasks are not billed.** |
+| `CANCELED` | Cancelled |
+| `UNKNOWN` | The provided `task_id` isn't recognised (or expired) |
+
+See [Async Operations](/api-reference/async-operations) for the full polling pattern.
