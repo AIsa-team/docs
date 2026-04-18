@@ -1,0 +1,190 @@
+---
+title: "Image Generation via Chat"
+description: "Generate images with wan2.7-image and wan2.7-image-pro. These models route through /v1/chat/completions (not /v1/images/generations) using OpenAI's multimodal chat schema."
+openapi: "openapi/chat-image-generation.json POST /chat/completions"
+---
+
+Wan 2.7 image models are exposed through the **Chat Completions** endpoint, not the OpenAI-style `/v1/images/generations` path. Send a standard chat request with a multimodal `content` array containing a text prompt, and AIsa returns generated images as `{type: "image"}` parts inside `choices[].message.content[]`.
+
+<Note>
+  Looking for Seedream (`seedream-4-5-251128`)? It uses a different route — [`/v1/images/generations`](#). Gemini image previews use [`/v1/models/{model}:generateContent`](/api-reference/chat/generatecontent). This page only covers the **Wan 2.7 family**.
+</Note>
+
+## Supported models
+
+| Model | Cost per image | Typical use |
+| --- | --- | --- |
+| `wan2.7-image` | $0.030 | Fast, general-purpose image generation |
+| `wan2.7-image-pro` | $0.075 | Higher fidelity; also supports image-to-video via separate flow |
+
+## Request
+
+The request schema is the same `POST /v1/chat/completions` you already use for text — the only differences are which model you pass and how `content` is structured.
+
+**Critical rule:** `messages[].content` must be an **array of typed parts**. Passing a plain string returns `400 invalid_parameter_error` with the message `"Input should be a valid list: messages[*].content"`.
+
+<CodeGroup>
+
+```bash curl
+curl -sS -X POST "https://api.aisa.one/v1/chat/completions" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "wan2.7-image",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          { "type": "text", "text": "A cute red panda, ultra-detailed, cinematic lighting" }
+        ]
+      }
+    ],
+    "n": 1
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
+
+resp = client.chat.completions.create(
+    model="wan2.7-image",
+    messages=[
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "A cute red panda, ultra-detailed, cinematic lighting"}
+            ],
+        }
+    ],
+    n=1,
+)
+
+# Pull image URLs out of the response
+for choice in resp.choices:
+    for part in choice.message.content:
+        if part["type"] == "image":
+            print(part["image"])
+```
+
+```typescript TypeScript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "https://api.aisa.one/v1",
+  apiKey: process.env.AISA_API_KEY,
+});
+
+const resp = await client.chat.completions.create({
+  model: "wan2.7-image",
+  messages: [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "A cute red panda, ultra-detailed, cinematic lighting" },
+      ] as any,
+    },
+  ],
+  n: 1,
+});
+
+const urls = resp.choices
+  .flatMap((c) => (c.message.content as any[]))
+  .filter((p) => p.type === "image")
+  .map((p) => p.image);
+```
+
+</CodeGroup>
+
+### Request fields
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `model` | string | yes | `wan2.7-image` or `wan2.7-image-pro` |
+| `messages[].role` | string | yes | `user` for the prompt turn |
+| `messages[].content` | array | **yes** | Must be an array, not a string |
+| `messages[].content[].type` | string | yes | `text` for prompt parts; `image_url` for image-to-image inputs |
+| `messages[].content[].text` | string | when `type=text` | The prompt |
+| `messages[].content[].image_url.url` | string | when `type=image_url` | Reference image URL |
+| `n` | integer | no | Number of images. **Default is 4** for `wan2.7-image`; pass `1` to save cost |
+
+## Response shape
+
+```json
+{
+  "id": "chatcmpl-fcc86dfd-...",
+  "object": "chat.completion",
+  "created": 1776495713,
+  "model": "wan2.7-image",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": [
+          { "type": "image", "image": "https://cdn.aisa.one/images/wan2.7/..." }
+        ]
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 104,
+    "completion_tokens": 8,
+    "total_tokens": 112
+  }
+}
+```
+
+- **One choice per image.** If `n=4`, you get 4 entries in `choices`.
+- **Every `choice.message.content`** is an array with a single `{ "type": "image", "image": "..." }` part.
+- `image` is a short-lived URL (download it soon) or base64 data, depending on your workspace configuration.
+- `usage.total_tokens` reflects the small token cost of the request framing — **billing is per-image** at the rate in the table above, not per token.
+
+## Image-to-image
+
+Prepend an `image_url` part to the `content` array and follow it with a text instruction:
+
+```json
+{
+  "model": "wan2.7-image-pro",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "image_url", "image_url": { "url": "https://example.com/reference.jpg" } },
+        { "type": "text", "text": "Transform into an oil painting in the style of Van Gogh" }
+      ]
+    }
+  ],
+  "n": 1
+}
+```
+
+## Why the playground shows the Chat Completions path
+
+The playground sends exactly the same `POST /v1/chat/completions` request the standard [OpenAI Chat](/api-reference/chat/createchatcompletion) endpoint uses — only the `model` and `content` shape are tuned for images. Your existing OpenAI-compatible SDK code works without modification; just swap the model and content shape.
+
+## Common 4xx causes
+
+- `400 invalid_parameter_error — Input should be a valid list: messages[*].content` — `content` was passed as a string; wrap in an array of typed parts.
+- `400` referencing `messages` — you sent the Gemini-style `contents`/`parts`. Use `messages` with OpenAI multimodal parts for Wan models.
+- `404 openai_error` on `/v1/images/generations` — wrong endpoint. Wan models do **not** route through that path.
+- `500 model_not_found` — your workspace isn't provisioned for the Wan family. Contact support.
+
+See [Error Codes](/api-reference/errors) and [Rate Limits](/api-reference/rate-limits) for more.
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="OpenAI Chat" icon="message" href="/api-reference/chat/createchatcompletion">
+    The same endpoint used for text models.
+  </Card>
+  <Card title="Gemini generateContent" icon="google" href="/api-reference/chat/generatecontent">
+    Image preview through the Gemini 3 Pro endpoint.
+  </Card>
+  <Card title="Media Gen skill" icon="image" href="/agent-skills/mediagen">
+    Agent skill that wraps image + video generation.
+  </Card>
+</CardGroup>
