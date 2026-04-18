@@ -103,6 +103,94 @@
         }
       }
     },
+    "/twitter/like_twitter": {
+      "post": {
+        "summary": "Like a tweet",
+        "description": "Like a tweet on behalf of the authenticated source user. Mirrors the [official X v2 `POST /2/users/{id}/likes` endpoint](https://docs.x.com/x-api/users/like-post), routed through the AIsa gateway.\n\n**Authentication.** Requires an OAuth session for the source user, attached to your AIsa API key. Link the account once via `POST /apis/v1/twitter/auth_twitter`.\n\n**Scopes.** The underlying X session must hold `like.write`, `tweet.read`, and `users.read`.\n\nLiking a tweet already liked is a no-op and still returns `200` with `liked: true`.",
+        "operationId": "likeTwitter",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["tweet_id"],
+                "properties": {
+                  "tweet_id": {
+                    "type": "string",
+                    "description": "Numeric ID of the tweet to like. Must match X's regex `^[0-9]{1,19}$`.",
+                    "pattern": "^[0-9]{1,19}$",
+                    "example": "1346889436626259968"
+                  }
+                }
+              },
+              "examples": {
+                "like_tweet": {
+                  "summary": "Like tweet 1346889436626259968",
+                  "value": {
+                    "tweet_id": "1346889436626259968"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Like succeeded (or was already in place).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "liked": {
+                          "type": "boolean",
+                          "description": "`true` once the source user has liked the target tweet."
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "liked": true
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request — missing or malformed `tweet_id`."
+          },
+          "401": {
+            "description": "Missing or invalid AIsa API key."
+          },
+          "403": {
+            "description": "OAuth session missing, expired, or lacking `like.write`. Re-authorize via `POST /apis/v1/twitter/auth_twitter`."
+          },
+          "404": {
+            "description": "Tweet not found or not visible to the source user."
+          },
+          "429": {
+            "description": "Rate limit hit — either your AIsa key's RPM cap or the upstream X rate limit."
+          },
+          "500": {
+            "description": "Internal error."
+          },
+          "502": {
+            "description": "Upstream X API unreachable. Safe to retry with exponential backoff."
+          }
+        }
+      }
+    },
     "/twitter/post_twitter": {
       "post": {
         "summary": "Post or edit a tweet",
