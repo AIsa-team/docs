@@ -26,6 +26,83 @@
     }
   },
   "paths": {
+    "/twitter/auth_twitter": {
+      "post": {
+        "summary": "Link an X/Twitter account (start OAuth)",
+        "description": "Start the OAuth flow that links a user's X/Twitter account to the AIsa API key on the request. Call this once per source user. AIsa returns an authorization URL — the user opens it in a browser, approves the requested scopes, and X redirects back to AIsa's fixed callback. AIsa stores the resulting session against your API key, and every subsequent Twitter write call (e.g., `POST /twitter/follow_twitter`) uses that session automatically.\n\nThe returned `auth_url` is short-lived; generate a fresh one every time the user needs to (re-)link.",
+        "operationId": "authTwitterUser",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "scopes": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Optional list of X OAuth 2.0 scopes to request. Defaults to the set required by AIsa's Twitter write endpoints: `follows.write`, `tweet.read`, `users.read`, `tweet.write`, `like.write`, `dm.read`, `dm.write`.",
+                    "example": ["follows.write", "tweet.read", "users.read"]
+                  }
+                }
+              },
+              "example": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authorization URL generated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["auth_url", "state"],
+                  "properties": {
+                    "auth_url": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "Short-lived X OAuth authorization URL. Open it in a browser so the source user can approve the requested scopes."
+                    },
+                    "state": {
+                      "type": "string",
+                      "description": "Opaque CSRF state token that AIsa will validate when X redirects back to its callback. Store it client-side if you need to correlate the flow."
+                    },
+                    "expires_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When the `auth_url` expires. Request a new one if the user hasn't completed the flow before this time."
+                    }
+                  }
+                },
+                "example": {
+                  "auth_url": "https://twitter.com/i/oauth2/authorize?response_type=code&client_id=AIsa&redirect_uri=https%3A%2F%2Fapi.aisa.one%2Fapis%2Fv1%2Ftwitter%2Foauth_callback&scope=follows.write%20tweet.read%20users.read&state=0c2...d1f&code_challenge=...&code_challenge_method=S256",
+                  "state": "0c2ad1f...",
+                  "expires_at": "2026-04-18T07:00:00Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid `scopes` list — contains an unsupported scope."
+          },
+          "401": {
+            "description": "Missing or invalid AIsa API key."
+          },
+          "429": {
+            "description": "Rate limit hit."
+          },
+          "500": {
+            "description": "Internal error generating the OAuth URL."
+          }
+        }
+      }
+    },
     "/twitter/follow_twitter": {
       "post": {
         "summary": "Follow a user on X/Twitter",
