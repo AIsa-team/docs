@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Financial Datasets API \u2014 Macro Interest Rates",
+    "title": "Financial Datasets API \u2014 Analyst Estimates",
     "version": "1.0.0",
-    "description": "Central bank interest rate data (historical series + real-time snapshot), proxied through AIsa."
+    "description": "Consensus Wall Street analyst estimates (estimated revenue + estimated earnings per share) for US stock tickers, broken down by fiscal period (annual or quarterly). Proxied through AIsa from the Financial Datasets API."
   },
   "servers": [
     {
@@ -24,35 +24,40 @@
       }
     },
     "schemas": {
-      "InterestRatesResponse": {
+      "AnalystEstimatesResponse": {
         "type": "object",
         "properties": {
-          "interest_rates": {
+          "analyst_estimates": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/InterestRate"
+              "$ref": "#/components/schemas/AnalystEstimate"
             }
           }
         }
       },
-      "InterestRate": {
+      "AnalystEstimate": {
         "type": "object",
         "properties": {
-          "bank": {
+          "fiscal_period": {
             "type": "string",
-            "description": "The symbol of the central bank."
+            "format": "date",
+            "description": "The fiscal period of the analyst estimate."
           },
-          "name": {
+          "period": {
             "type": "string",
-            "description": "The name of the central bank."
+            "enum": [
+              "annual",
+              "quarterly"
+            ],
+            "description": "The period of the analyst estimate."
           },
-          "rate": {
+          "revenue": {
+            "type": "integer",
+            "description": "The estimated revenue."
+          },
+          "earnings_per_share": {
             "type": "number",
-            "description": "The interest rate of the central bank."
-          },
-          "date": {
-            "type": "string",
-            "description": "The date of the interest rate in YYYY-MM-DD format."
+            "description": "The estimated earnings per share."
           }
         }
       },
@@ -130,92 +135,57 @@
     }
   },
   "paths": {
-    "/macro/interest-rates": {
+    "/analyst-estimates": {
       "get": {
-        "summary": "Interest Rates (Historical)",
-        "description": "Historical interest rates for all major central banks in the world.",
-        "operationId": "getInterestRatesHistorical",
+        "summary": "Analyst Estimates",
+        "description": "",
+        "operationId": "getAnalystEstimates",
         "parameters": [
           {
-            "name": "bank",
+            "name": "ticker",
             "in": "query",
-            "description": "The bank whose interest rates to return. Use the /macro/interest-rates/banks endpoint to get a list of available banks.",
+            "description": "The ticker to get analyst estimates for.",
             "required": true,
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "start_date",
+            "name": "period",
             "in": "query",
-            "description": "The start date of the interest rates to return in YYYY-MM-DD format.",
+            "description": "The period to get analyst estimates for. Use the /analyst-estimates/periods endpoint to get a list of available periods. Defaults to 'annual'.",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "annual",
+                "quarterly"
+              ]
             }
           },
           {
-            "name": "end_date",
+            "name": "limit",
             "in": "query",
-            "description": "The end date of the interest rates to return in YYYY-MM-DD format.",
+            "description": "The maximum number of estimates to return (max 3 for annual, 12 for quarterly).",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Interest rates response",
+            "description": "Analyst estimates response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InterestRatesResponse"
+                  "$ref": "#/components/schemas/AnalystEstimatesResponse"
                 }
               }
             }
           },
           "400": {
             "$ref": "#/components/responses/BadRequestError"
-          },
-          "401": {
-            "$ref": "#/components/responses/UnauthorizedError"
-          },
-          "402": {
-            "$ref": "#/components/responses/PaymentRequiredError"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFoundError"
-          }
-        }
-      }
-    },
-    "/macro/interest-rates/snapshot": {
-      "get": {
-        "summary": "Interest Rates (Real-Time)",
-        "description": "Get the current interest rates from all major central banks in the world.",
-        "operationId": "getInterestRatesSnapshot",
-        "parameters": [
-          {
-            "name": "bank",
-            "in": "query",
-            "description": "The central bank code (e.g., FED, ECB, BOJ). Use the /macro/interest-rates/banks endpoint to get a list of available banks.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Interest rates snapshot response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InterestRatesResponse"
-                }
-              }
-            }
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
