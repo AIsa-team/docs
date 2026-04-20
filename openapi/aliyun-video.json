@@ -28,7 +28,7 @@
     "/services/aigc/video-generation/video-synthesis": {
       "post": {
         "summary": "Create a video generation task",
-        "description": "Submit an asynchronous video generation task. Returns a `task_id` you then poll via `GET /apis/v1/services/aigc/tasks/{task_id}`.\n\n**Model.** Currently only `wan2.6-t2v` (text-to-video) is supported through this endpoint.\n\n**Header.** `X-DashScope-Async: enable` is required.\n\n**Body.** `model` and `input.prompt` are required. `input.img_url` / `input.audio_url` are optional reference media.\n\nFailed tasks (e.g., invalid prompt) are **not billed** — the task-status response returns `task_status: \"FAILED\"` with a `code` and `message`.",
+        "description": "Submit an asynchronous video generation task. Returns a `task_id` you then poll via `GET /apis/v1/services/aigc/tasks/{task_id}`.\n\n**Models.** Four Wan variants are accepted on this single endpoint:\n\n| Model | Kind | Image input field |\n| --- | --- | --- |\n| `wan2.6-t2v` | text-to-video | _n/a_ |\n| `wan2.6-i2v` | image-to-video | `input.img_url` |\n| `wan2.7-t2v` | text-to-video | _n/a_ |\n| `wan2.7-i2v` | image-to-video | `input.media` ⚠️ *not* `input.img_url` |\n\n**Header.** `X-DashScope-Async: enable` is required.\n\n**Body.** `model` and `input.prompt` are always required. For i2v, provide a reference image using the field indicated in the table above — `wan2.6-i2v` uses `input.img_url` (string URL), while `wan2.7-i2v` uses `input.media` (array of URLs).\n\nFailed tasks (e.g., invalid prompt, missing required field) are **not billed** — the task-status response returns `task_status: \"FAILED\"` with a `code` and `message`.",
         "operationId": "createVideoSynthesisTask",
         "tags": ["Video Generation"],
         "parameters": [
@@ -53,13 +53,14 @@
                 "properties": {
                   "model": {
                     "type": "string",
-                    "enum": ["wan2.6-t2v"],
-                    "description": "The only model currently accepted on this endpoint.",
+                    "enum": ["wan2.6-t2v", "wan2.6-i2v", "wan2.7-t2v", "wan2.7-i2v"],
+                    "description": "Video generation model. Use `-t2v` suffix for text-to-video, `-i2v` for image-to-video. **Note the i2v schema difference:** `wan2.6-i2v` takes a reference image via `input.img_url` (string), while `wan2.7-i2v` takes it via `input.media` (array).",
                     "example": "wan2.6-t2v"
                   },
                   "input": {
                     "type": "object",
                     "required": ["prompt"],
+                    "description": "Required body container. `prompt` is always required; image inputs depend on the model (see field descriptions).",
                     "properties": {
                       "prompt": {
                         "type": "string",
@@ -72,7 +73,15 @@
                       "img_url": {
                         "type": "string",
                         "format": "uri",
-                        "description": "Optional reference image URL (image-to-video use cases)."
+                        "description": "Reference image URL. **Required** for `wan2.6-i2v`. Ignored by t2v models. **Do NOT use for `wan2.7-i2v`** — that model uses `media` instead."
+                      },
+                      "media": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        "description": "Reference image URLs as an array. **Required** for `wan2.7-i2v`. Do NOT use `img_url` with `wan2.7-i2v` — the upstream validator rejects submissions without `input.media`."
                       },
                       "audio_url": {
                         "type": "string",
@@ -114,8 +123,8 @@
                 }
               },
               "examples": {
-                "basic": {
-                  "summary": "Text-to-video, 5 s, 720P",
+                "wan26_t2v": {
+                  "summary": "wan2.6-t2v — text-to-video, 5 s, 720P",
                   "value": {
                     "model": "wan2.6-t2v",
                     "input": {
@@ -127,10 +136,10 @@
                     }
                   }
                 },
-                "with_reference_image": {
-                  "summary": "Image-to-video with a reference",
+                "wan26_i2v": {
+                  "summary": "wan2.6-i2v — image-to-video (uses img_url)",
                   "value": {
-                    "model": "wan2.6-t2v",
+                    "model": "wan2.6-i2v",
                     "input": {
                       "prompt": "gentle camera orbit, golden hour lighting",
                       "img_url": "https://example.com/reference.jpg"
@@ -138,6 +147,33 @@
                     "parameters": {
                       "resolution": "1080P",
                       "duration": 10
+                    }
+                  }
+                },
+                "wan27_t2v": {
+                  "summary": "wan2.7-t2v — text-to-video, newer model",
+                  "value": {
+                    "model": "wan2.7-t2v",
+                    "input": {
+                      "prompt": "wide sweeping shot of a neon cyberpunk skyline at dusk"
+                    },
+                    "parameters": {
+                      "resolution": "720P",
+                      "duration": 5
+                    }
+                  }
+                },
+                "wan27_i2v": {
+                  "summary": "wan2.7-i2v — image-to-video (uses media ARRAY, not img_url)",
+                  "value": {
+                    "model": "wan2.7-i2v",
+                    "input": {
+                      "prompt": "gentle zoom with parallax, cinematic color grading",
+                      "media": ["https://example.com/reference.jpg"]
+                    },
+                    "parameters": {
+                      "resolution": "720P",
+                      "duration": 5
                     }
                   }
                 }
@@ -184,7 +220,7 @@
           "400": { "description": "Invalid request body." },
           "401": { "description": "Missing or invalid AIsa API key." },
           "429": { "description": "Rate limit hit." },
-          "500": { "description": "`model not supported` (the model isn't routed through this endpoint) or `input param is required` (body missing `input`)." }
+          "500": { "description": "`model not supported` (the model isn't routed through this endpoint) or `input param is required` (body missing `input`).\n\nNote: for `wan2.7-i2v`, submission **succeeds with HTTP 200** even without the image input — the task later lands in `FAILED` status with `code: \"InvalidParameter\"` and `message: \"Field required: input.media\"`." }
         }
       }
     },
@@ -254,11 +290,37 @@
                       "type": "object",
                       "description": "Present on `SUCCEEDED`.",
                       "properties": {
-                        "input_video_duration": { "type": "integer" },
-                        "output_video_duration": { "type": "integer" },
-                        "duration": { "type": "number" },
-                        "video_count": { "type": "integer" },
-                        "SR": { "type": "integer" }
+                        "input_video_duration": {
+                          "type": "integer",
+                          "description": "Duration of any input video reference (0 when none)."
+                        },
+                        "output_video_duration": {
+                          "type": "integer",
+                          "description": "Duration of the generated video in seconds."
+                        },
+                        "duration": {
+                          "type": "number",
+                          "description": "Total duration used for billing."
+                        },
+                        "video_count": {
+                          "type": "integer",
+                          "description": "Number of videos produced (always 1 today)."
+                        },
+                        "size": {
+                          "type": "string",
+                          "description": "Actual dimensions of the generated video, formatted as `WIDTH*HEIGHT` (e.g., `1920*1080`). Note the `*` separator. Present on `wan2.6-*` outputs.",
+                          "example": "1920*1080"
+                        },
+                        "ratio": {
+                          "type": "string",
+                          "description": "Aspect ratio of the output (e.g., `16:9`). Present on `wan2.7-t2v` outputs.",
+                          "example": "16:9"
+                        },
+                        "SR": {
+                          "type": "integer",
+                          "description": "Super-resolution output height. `wan2.6-t2v` upscales 720P input to 1080. `wan2.6-i2v`, `wan2.7-t2v`, `wan2.7-i2v` return 720.",
+                          "example": 1080
+                        }
                       }
                     },
                     "request_id": { "type": "string" }

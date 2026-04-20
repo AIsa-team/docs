@@ -1,8 +1,89 @@
 ---
-title: Create video generation task
-description: "Create video generation task"
-excerpt: >-
-  Create an asynchronous video generation task using reference videos. Returns a
-  task_id for polling.
+title: "Create video generation task"
+description: "Submit an async text-to-video or image-to-video task with any of 4 Wan models (wan2.6-t2v, wan2.6-i2v, wan2.7-t2v, wan2.7-i2v). Returns a task_id to poll."
 openapi: "openapi/aliyun-video.json POST /services/aigc/video-generation/video-synthesis"
 ---
+
+Submit an asynchronous video generation task. Returns a `task_id` to poll via [`GET /apis/v1/services/aigc/tasks/{task_id}`](/api-reference/video/get_services-aigc-tasks).
+
+## Supported models
+
+Four Wan variants share this endpoint:
+
+| Model         | Kind             | Image input field | Output SR |
+| ------------- | ---------------- | ----------------- | --------- |
+| `wan2.6-t2v`  | text-to-video    | _n/a_             | 1080      |
+| `wan2.6-i2v`  | image-to-video   | `input.img_url`   | 720       |
+| `wan2.7-t2v`  | text-to-video    | _n/a_             | 720       |
+| `wan2.7-i2v`  | image-to-video   | **`input.media`** ⚠️ | 720       |
+
+<Warning>
+  **Schema trap on `wan2.7-i2v`.** It takes the reference image in `input.media` (an **array** of URL strings), not `input.img_url` like `wan2.6-i2v`. Submissions without `media` succeed at HTTP 200 with a `task_id`, then fail downstream with `code: "InvalidParameter"` / `message: "Field required: input.media"`. The task is **not billed** — but you wasted a round trip.
+</Warning>
+
+## Minimal bodies
+
+<CodeGroup>
+
+```json wan2.6-t2v
+{
+  "model": "wan2.6-t2v",
+  "input": {
+    "prompt": "cinematic close-up, slow push-in, shallow depth of field"
+  },
+  "parameters": { "resolution": "720P", "duration": 5 }
+}
+```
+
+```json wan2.6-i2v
+{
+  "model": "wan2.6-i2v",
+  "input": {
+    "prompt": "gentle camera orbit, golden hour lighting",
+    "img_url": "https://example.com/reference.jpg"
+  },
+  "parameters": { "resolution": "1080P", "duration": 10 }
+}
+```
+
+```json wan2.7-t2v
+{
+  "model": "wan2.7-t2v",
+  "input": {
+    "prompt": "wide sweeping shot of a neon cyberpunk skyline at dusk"
+  },
+  "parameters": { "resolution": "720P", "duration": 5 }
+}
+```
+
+```json wan2.7-i2v
+{
+  "model": "wan2.7-i2v",
+  "input": {
+    "prompt": "gentle zoom with parallax, cinematic color grading",
+    "media": ["https://example.com/reference.jpg"]
+  },
+  "parameters": { "resolution": "720P", "duration": 5 }
+}
+```
+
+</CodeGroup>
+
+## Required pieces
+
+- **Header**: `X-DashScope-Async: enable`
+- **Body**: `model` + `input.prompt` always. Image field only for `-i2v` models (see table).
+
+## What the response looks like
+
+```json
+{
+  "output": {
+    "task_id": "b3be072e-cc82-4033-8fb7-0b089846544f",
+    "task_status": "PENDING"
+  },
+  "request_id": "8a931b13-c44f-9230-a76b-83487d840060"
+}
+```
+
+Save the `task_id` and poll [`/services/aigc/tasks/{task_id}`](/api-reference/video/get_services-aigc-tasks) every 3–5 s. See [Async Operations](/api-reference/async-operations) for the full polling pattern (including failure handling).
