@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Interest Rates Snapshot",
+    "title": "Financial Datasets API \u2014 Macro Interest Rates",
     "version": "1.0.0",
-    "description": "The Interest Rates Snapshot API returns the latest published interest rate data for major central banks around the world. Source: official monetary policy announcements."
+    "description": "Central bank interest rate data (historical series + real-time snapshot), proxied through AIsa."
   },
   "servers": [
     {
@@ -11,96 +11,135 @@
       "description": "Production API"
     }
   ],
-  "paths": {
-    "/macro/interest-rates/snapshot": {
-      "get": {
-        "summary": "Get latest interest rate data snapshot",
-        "description": "Retrieve the most recent published interest rate data from central banks worldwide.",
-        "tags": [
-          "Macro",
-          "Interest Rates"
-        ],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Successful response with interest rate snapshot data",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "interest_rates": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "bank": {
-                            "type": "string",
-                            "description": "The central bank identifier."
-                          },
-                          "name": {
-                            "type": "string",
-                            "description": "The central bank full name."
-                          },
-                          "rate": {
-                            "type": "number",
-                            "description": "The published interest rate."
-                          },
-                          "date": {
-                            "type": "string",
-                            "format": "date",
-                            "description": "Publication date of the interest rate (YYYY-MM-DD)."
-                          }
-                        },
-                        "required": [
-                          "bank",
-                          "name",
-                          "rate",
-                          "date"
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "interest_rates"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request \u2013 missing parameters or invalid request"
-          },
-          "401": {
-            "description": "Unauthorized \u2013 invalid or missing API key"
-          },
-          "402": {
-            "description": "Payment Required \u2013 quota exceeded or billing issue"
-          },
-          "404": {
-            "description": "Not Found \u2013 endpoint does not exist"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
       }
     },
+    "schemas": {
+      "InterestRatesResponse": {
+        "type": "object",
+        "properties": {
+          "interest_rates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InterestRate"
+            }
+          }
+        }
+      },
+      "InterestRate": {
+        "type": "object",
+        "properties": {
+          "bank": {
+            "type": "string",
+            "description": "The symbol of the central bank."
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the central bank."
+          },
+          "rate": {
+            "type": "number",
+            "description": "The interest rate of the central bank."
+          },
+          "date": {
+            "type": "string",
+            "description": "The date of the interest rate in YYYY-MM-DD format."
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "A short error message."
+          },
+          "message": {
+            "type": "string",
+            "description": "A more detailed error message."
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequestError": {
+        "description": "Bad request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Bad Request",
+              "message": "Invalid request parameters"
+            }
+          }
+        }
+      },
+      "NotFoundError": {
+        "description": "The specified resource was not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Not Found",
+              "message": "Ticker XXXX not found"
+            }
+          }
+        }
+      },
+      "PaymentRequiredError": {
+        "description": "The request requires a paid subscription",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Payment Required",
+              "message": "This endpoint requires a paid subscription. Please upgrade your plan."
+            }
+          }
+        }
+      },
+      "UnauthorizedError": {
+        "description": "Unauthorized",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Unauthorized",
+              "message": "Invalid API key provided"
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
     "/macro/interest-rates": {
       "get": {
-        "summary": "Get historical interest rates",
-        "description": "Retrieve historical interest rate data for a specified central bank over an optional date range.",
-        "tags": [
-          "Macro",
-          "Interest Rates"
-        ],
+        "summary": "Interest Rates (Historical)",
+        "description": "Historical interest rates for all major central banks in the world.",
+        "operationId": "getInterestRatesHistorical",
         "parameters": [
           {
             "name": "bank",
             "in": "query",
-            "description": "Central bank whose historical rates to return (use the banks endpoint to list valid codes).",
+            "description": "The bank whose interest rates to return. Use the /macro/interest-rates/banks endpoint to get a list of available banks.",
             "required": true,
             "schema": {
               "type": "string"
@@ -109,103 +148,86 @@
           {
             "name": "start_date",
             "in": "query",
-            "description": "Start date for historical rates (YYYY-MM-DD).",
+            "description": "The start date of the interest rates to return in YYYY-MM-DD format.",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "date"
+              "type": "string"
             }
           },
           {
             "name": "end_date",
             "in": "query",
-            "description": "End date for historical rates (YYYY-MM-DD).",
+            "description": "The end date of the interest rates to return in YYYY-MM-DD format.",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "date"
+              "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response with historical interest rates",
+            "description": "Interest rates response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "interest_rates": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "bank": {
-                            "type": "string",
-                            "description": "Central bank identifier"
-                          },
-                          "name": {
-                            "type": "string",
-                            "description": "Central bank full name"
-                          },
-                          "rate": {
-                            "type": "number",
-                            "description": "Interest rate"
-                          },
-                          "date": {
-                            "type": "string",
-                            "format": "date",
-                            "description": "Date of the rate"
-                          }
-                        },
-                        "required": [
-                          "bank",
-                          "name",
-                          "rate",
-                          "date"
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "interest_rates"
-                  ]
+                  "$ref": "#/components/schemas/InterestRatesResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Bad Request \u2014 missing bank or invalid dates"
+            "$ref": "#/components/responses/BadRequestError"
           },
           "401": {
-            "description": "Unauthorized \u2014 missing or invalid API key"
+            "$ref": "#/components/responses/UnauthorizedError"
           },
           "402": {
-            "description": "Payment Required"
+            "$ref": "#/components/responses/PaymentRequiredError"
           },
           "404": {
-            "description": "Not Found"
+            "$ref": "#/components/responses/NotFoundError"
           }
-        },
-        "security": [
+        }
+      }
+    },
+    "/macro/interest-rates/snapshot": {
+      "get": {
+        "summary": "Interest Rates (Real-Time)",
+        "description": "Get the current interest rates from all major central banks in the world.",
+        "operationId": "getInterestRatesSnapshot",
+        "parameters": [
           {
-            "bearerAuth": []
+            "name": "bank",
+            "in": "query",
+            "description": "The central bank code (e.g., FED, ECB, BOJ). Use the /macro/interest-rates/banks endpoint to get a list of available banks.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
-        ]
+        ],
+        "responses": {
+          "200": {
+            "description": "Interest rates snapshot response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterestRatesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequiredError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
       }
     }
-  },
-  "components": {
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer"
-      }
-    }
-  },
-  "security": [
-    {
-      "bearerAuth": []
-    }
-  ]
+  }
 }

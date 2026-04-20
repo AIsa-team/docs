@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Financial Datasets API \u2013 Analyst Estimates (Earnings Per Share)",
+    "title": "Financial Datasets API \u2014 Analyst Estimates",
     "version": "1.0.0",
-    "description": "Get analyst earnings per share estimates for a given ticker. This endpoint returns probabilistic forecast estimates."
+    "description": "Wall Street analyst estimates and price targets for US stock tickers, proxied through AIsa. Schema pulled from the canonical Financial Datasets API."
   },
   "servers": [
     {
@@ -11,19 +11,140 @@
       "description": "Production API"
     }
   ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "AnalystEstimatesResponse": {
+        "type": "object",
+        "properties": {
+          "analyst_estimates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalystEstimate"
+            }
+          }
+        }
+      },
+      "AnalystEstimate": {
+        "type": "object",
+        "properties": {
+          "fiscal_period": {
+            "type": "string",
+            "format": "date",
+            "description": "The fiscal period of the analyst estimate."
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "annual",
+              "quarterly"
+            ],
+            "description": "The period of the analyst estimate."
+          },
+          "revenue": {
+            "type": "integer",
+            "description": "The estimated revenue."
+          },
+          "earnings_per_share": {
+            "type": "number",
+            "description": "The estimated earnings per share."
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "A short error message."
+          },
+          "message": {
+            "type": "string",
+            "description": "A more detailed error message."
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequestError": {
+        "description": "Bad request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Bad Request",
+              "message": "Invalid request parameters"
+            }
+          }
+        }
+      },
+      "NotFoundError": {
+        "description": "The specified resource was not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Not Found",
+              "message": "Ticker XXXX not found"
+            }
+          }
+        }
+      },
+      "PaymentRequiredError": {
+        "description": "The request requires a paid subscription",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Payment Required",
+              "message": "This endpoint requires a paid subscription. Please upgrade your plan."
+            }
+          }
+        }
+      },
+      "UnauthorizedError": {
+        "description": "Unauthorized",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Unauthorized",
+              "message": "Invalid API key provided"
+            }
+          }
+        }
+      }
+    }
+  },
   "paths": {
     "/analyst-estimates": {
       "get": {
-        "summary": "Get Analyst Estimates by Ticker",
-        "description": "Fetch earnings per share estimates for a specified stock ticker and period.",
-        "tags": [
-          "Analyst Estimates"
-        ],
+        "summary": "Analyst Estimates",
+        "description": "",
+        "operationId": "getAnalystEstimates",
         "parameters": [
           {
             "name": "ticker",
             "in": "query",
-            "description": "Stock ticker to get analyst estimates for",
+            "description": "The ticker to get analyst estimates for.",
             "required": true,
             "schema": {
               "type": "string"
@@ -32,89 +153,51 @@
           {
             "name": "period",
             "in": "query",
-            "description": "The period type ('annual' or 'quarterly'). Defaults to 'annual'.",
+            "description": "The period to get analyst estimates for. Use the /analyst-estimates/periods endpoint to get a list of available periods. Defaults to 'annual'.",
             "required": false,
             "schema": {
               "type": "string",
               "enum": [
                 "annual",
                 "quarterly"
-              ],
-              "default": "annual"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of estimates to return (max 3 for annual, 12 for quarterly).",
+            "required": false,
+            "schema": {
+              "type": "integer"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response with analyst estimates",
+            "description": "Analyst estimates response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "analyst_estimates": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "fiscal_period": {
-                            "type": "string",
-                            "description": "The fiscal period for the estimate"
-                          },
-                          "period": {
-                            "type": "string",
-                            "description": "The period type (annual or quarterly)"
-                          },
-                          "earnings_per_share": {
-                            "type": "number",
-                            "format": "float",
-                            "description": "Estimated earnings per share"
-                          }
-                        },
-                        "required": [
-                          "fiscal_period",
-                          "period",
-                          "earnings_per_share"
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "analyst_estimates"
-                  ]
+                  "$ref": "#/components/schemas/AnalystEstimatesResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Bad Request"
+            "$ref": "#/components/responses/BadRequestError"
           },
           "401": {
-            "description": "Unauthorized \u2013 missing or invalid API key"
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequiredError"
           },
           "404": {
-            "description": "Not Found"
+            "$ref": "#/components/responses/NotFoundError"
           }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
+        }
       }
     }
-  },
-  "components": {
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer"
-      }
-    }
-  },
-  "security": [
-    {
-      "bearerAuth": []
-    }
-  ]
+  }
 }
