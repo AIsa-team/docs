@@ -1,0 +1,288 @@
+---
+title: "Agent Discovery – Let Autonomous Agents Find and Use AIsa"
+description: "Integrate your autonomous agents with AIsa using the Google A2A agent card, OpenAI plugin manifest, and OpenAPI 3.1 spec. Covers programmatic discovery, authentication, and end-to-end integration patterns."
+---
+
+AIsa publishes three machine-readable discovery endpoints so that autonomous agents can find, understand, and invoke AIsa's capabilities without human intervention. This guide walks through each endpoint, explains the integration flow, and provides working code examples in Python, TypeScript, and bash.
+
+## Discovery Endpoints
+
+AIsa exposes the following well-known URLs for agent discovery. All three are publicly accessible, require no authentication to read, and include permissive CORS headers so browser-based agents can fetch them directly.
+
+| Endpoint | Protocol | URL | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Agent Card** | Google A2A | `https://aisa.one/.well-known/agent-card.json` | Primary discovery — advertises 13 skills with metadata, tags, and I/O modes |
+| **AI Plugin** | OpenAI Plugin (v1) | `https://aisa.one/.well-known/ai-plugin.json` | Backward compatibility with ChatGPT-era agent tooling |
+| **OpenAPI Spec** | OpenAPI 3.1.0 | `https://aisa.one/openapi.yaml` | Machine-readable specification covering 111+ API paths and 121 schemas |
+
+## How Agent Discovery Works
+
+The discovery flow follows three steps: **discover**, **inspect**, and **invoke**. An autonomous agent starts by fetching the agent card to learn what AIsa can do, selects the relevant skill, and then calls the corresponding API endpoint using the OpenAPI spec for request/response schemas.
+
+<Steps>
+  <Step title="Discover">
+    The agent fetches `/.well-known/agent-card.json` from `aisa.one`. The response contains a list of skills, each with an `id`, `name`, `description`, `tags`, and `examples`. The agent uses this metadata to determine whether AIsa can fulfill the current task.
+  </Step>
+  <Step title="Inspect">
+    Once the agent identifies a relevant skill, it fetches `/openapi.yaml` to retrieve the full request/response schema for the corresponding API endpoints. The OpenAPI spec provides parameter types, required fields, authentication requirements, and example payloads.
+  </Step>
+  <Step title="Invoke">
+    The agent constructs an authenticated API request using the schema from the OpenAPI spec, sends it to `api.aisa.one`, and processes the response. All endpoints use Bearer token authentication with an AIsa API key.
+  </Step>
+</Steps>
+
+## The A2A Agent Card
+
+The [Google Agent-to-Agent (A2A)](https://google.github.io/A2A/) protocol defines a standard format for agents to advertise their capabilities. AIsa's agent card lives at the well-known URL and describes the platform, authentication requirements, and the full skill catalog.
+
+### Fetching the Agent Card
+
+<CodeGroup>
+
+```bash curl
+curl -s https://aisa.one/.well-known/agent-card.json | jq .
+```
+
+```python Python
+import requests
+
+card = requests.get("https://aisa.one/.well-known/agent-card.json").json()
+print(f"Agent: {card['name']} — {card['description']}")
+print(f"Skills: {len(card['skills'])}")
+for skill in card["skills"]:
+    print(f"  • {skill['id']}: {skill['name']}")
+```
+
+```typescript TypeScript
+const res = await fetch("https://aisa.one/.well-known/agent-card.json");
+const card = await res.json();
+console.log(`Agent: ${card.name} — ${card.description}`);
+console.log(`Skills: ${card.skills.length}`);
+card.skills.forEach((s: any) => console.log(`  • ${s.id}: ${s.name}`));
+```
+
+</CodeGroup>
+
+### Agent Card Structure
+
+The top-level fields describe the agent identity, authentication, and capabilities:
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `name` | string | Agent name — `"AIsa"` |
+| `description` | string | One-line summary of the agent's purpose |
+| `url` | string | Base URL for API requests — `https://api.aisa.one` |
+| `provider` | object | Organization name and website |
+| `version` | string | Semantic version of the agent card |
+| `documentationUrl` | string | Link to human-readable documentation |
+| `capabilities` | object | Feature flags — streaming, push notifications, state history |
+| `authentication` | object | Supported auth schemes and credential instructions |
+
+### Skill Objects
+
+Each entry in the `skills` array describes a single capability:
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `id` | string | Unique skill identifier (e.g., `chat-completions`, `twitter-autopilot`) |
+| `name` | string | Human-readable skill name |
+| `description` | string | What the skill does and what data it provides |
+| `tags` | string[] | Searchable tags for filtering and matching |
+| `examples` | string[] | Natural-language example queries the skill can handle |
+| `inputModes` | string[] | Accepted content types (defaults to `application/json`) |
+| `outputModes` | string[] | Response content types (e.g., `application/json`, `text/event-stream`) |
+
+### Available Skills
+
+AIsa currently advertises 13 skills through the agent card:
+
+| Skill ID | Name | Tags |
+| :--- | :--- | :--- |
+| `chat-completions` | AI Model Inference | inference, llm, ai-models, text-generation, chat |
+| `twitter-autopilot` | Twitter/X Autopilot | social-media, twitter, x, search, automation, posting |
+| `marketpulse` | MarketPulse Financial Data | finance, stocks, equities, market-data, sec-filings |
+| `prediction-market-data` | Prediction Market Data | prediction-markets, polymarket, kalshi, trading |
+| `prediction-market-arbitrage` | Prediction Market Arbitrage | arbitrage, prediction-markets, trading, analysis |
+| `multi-source-search` | Multi-source Search | search, web-search, academic-search, research |
+| `perplexity-search` | Perplexity Search | search, perplexity, sonar, answers, citations |
+| `youtube-serp` | YouTube SERP | youtube, video-search, social-media, serp |
+| `media-gen` | Media Generation | image-generation, video-generation, creative, ai-art |
+| `last30days` | Last 30 Days Research Brief | research, news, aggregation, analysis, report |
+| `tavily-search` | Tavily Web & News Search | search, news, web-search, tavily |
+| `image-generation` | Image Generation | image-generation, ai-art, editing, creative |
+| `video-generation` | Video Generation | video-generation, ai-video, creative, wan |
+
+## The OpenAI Plugin Manifest
+
+For backward compatibility with agent frameworks that implement the original ChatGPT plugin protocol, AIsa also publishes an `ai-plugin.json` manifest at `/.well-known/ai-plugin.json`. This file follows the [OpenAI plugin schema v1](https://platform.openai.com/docs/plugins/getting-started) and references the same OpenAPI spec.
+
+```bash
+curl -s https://aisa.one/.well-known/ai-plugin.json | jq .
+```
+
+The manifest includes a `description_for_model` field that lists key API endpoints, helping LLM-based agents understand which tools are available without parsing the full OpenAPI spec.
+
+## The OpenAPI 3.1 Specification
+
+The consolidated OpenAPI spec at `/openapi.yaml` covers all 111+ AIsa API paths organized into 10 categories. It is the authoritative machine-readable contract for constructing API requests.
+
+### Fetching and Parsing the Spec
+
+<CodeGroup>
+
+```python Python
+import yaml, requests
+
+spec = yaml.safe_load(requests.get("https://aisa.one/openapi.yaml").text)
+paths = list(spec["paths"].keys())
+print(f"Total endpoints: {len(paths)}")
+print(f"First 5: {paths[:5]}")
+```
+
+```typescript TypeScript
+import YAML from "yaml";
+
+const res = await fetch("https://aisa.one/openapi.yaml");
+const spec = YAML.parse(await res.text());
+const paths = Object.keys(spec.paths);
+console.log(`Total endpoints: ${paths.length}`);
+```
+
+```bash curl
+curl -s https://aisa.one/openapi.yaml | head -50
+```
+
+</CodeGroup>
+
+### API Categories
+
+The spec organizes endpoints into the following tag groups:
+
+| Category | Example Endpoints | Description |
+| :--- | :--- | :--- |
+| AI Models | `/v1/chat/completions`, `/v1/models` | 50+ LLMs, OpenAI-compatible |
+| Twitter/X | `/apis/v1/twitter/tweet/advanced_search` | Profile, timeline, search, posting |
+| Financial Data | `/apis/v1/financial/prices`, `/apis/v1/financial/sec-filings` | Equities, SEC, earnings, screening |
+| Web & News Search | `/apis/v1/tavily/search`, `/apis/v1/search/smart` | Multi-source and Tavily search |
+| Prediction Markets | `/apis/v1/polymarket/events`, `/apis/v1/kalshi/markets` | Polymarket and Kalshi data |
+| Crypto Data | `/apis/v1/coingecko/simple/price` | CoinGecko market data |
+| Image Generation | `/v1/images/generations` | GPT-4o, Gemini Imagen, SeedREAM |
+| Video Generation | `/apis/v1/services/aigc/video-generation/*` | Wan 2.7 text-to-video and image-to-video |
+| YouTube Search | `/apis/v1/youtube/search` | YouTube SERP |
+| Scholar Search | `/apis/v1/scholar/search/scholar` | Academic paper search |
+
+## End-to-End Integration Example
+
+The following Python example demonstrates the complete discovery-to-invocation flow. An autonomous agent discovers AIsa's capabilities, identifies the `chat-completions` skill, and makes an authenticated API call.
+
+```python
+import requests
+
+# Step 1: Discover — fetch the agent card
+card = requests.get("https://aisa.one/.well-known/agent-card.json").json()
+
+# Step 2: Find a skill by tag
+target_tag = "llm"
+matching = [s for s in card["skills"] if target_tag in s.get("tags", [])]
+if not matching:
+    raise RuntimeError(f"No skill found with tag '{target_tag}'")
+
+skill = matching[0]
+print(f"Selected skill: {skill['name']} ({skill['id']})")
+
+# Step 3: Invoke — call the API using the base URL from the card
+response = requests.post(
+    f"{card['url']}/v1/chat/completions",
+    headers={
+        "Authorization": "Bearer YOUR_AISA_API_KEY",
+        "Content-Type": "application/json",
+    },
+    json={
+        "model": "gpt-4.1",
+        "messages": [
+            {"role": "user", "content": "Summarize the A2A protocol in two sentences."}
+        ],
+    },
+)
+
+result = response.json()
+print(result["choices"][0]["message"]["content"])
+```
+
+## Authentication
+
+All AIsa API endpoints require Bearer token authentication. Include your API key in the `Authorization` header of every request:
+
+```
+Authorization: Bearer YOUR_AISA_API_KEY
+```
+
+Generate an API key from the [AIsa dashboard](https://console.aisa.one). For detailed key management guidance — scoping, rotation, and secure storage — see the [Authentication](/guides/authentication) guide.
+
+<Warning>
+  The discovery endpoints (`agent-card.json`, `ai-plugin.json`, `openapi.yaml`) are publicly readable and require no authentication. However, all API calls to `api.aisa.one` require a valid Bearer token.
+</Warning>
+
+## Integration Patterns
+
+### Pattern 1: Tag-Based Skill Matching
+
+Agents can match tasks to skills using the `tags` array. This is the recommended approach for agents that need to dynamically select capabilities at runtime.
+
+```python
+def find_skills_by_tags(card, required_tags):
+    """Return skills that match ALL required tags."""
+    return [
+        skill for skill in card["skills"]
+        if all(tag in skill.get("tags", []) for tag in required_tags)
+    ]
+
+# Find skills for financial research
+finance_skills = find_skills_by_tags(card, ["finance", "stocks"])
+# Returns: [MarketPulse Financial Data]
+```
+
+### Pattern 2: Example-Based Intent Matching
+
+For LLM-powered agents, the `examples` field provides natural-language queries that can be used for semantic similarity matching against the user's intent.
+
+```python
+# Collect all examples with their skill IDs
+example_index = []
+for skill in card["skills"]:
+    for example in skill.get("examples", []):
+        example_index.append({"text": example, "skill_id": skill["id"]})
+
+# Use an embedding model to find the closest match to the user's query
+# user_query = "What's the stock price of Apple?"
+# → Matches MarketPulse skill via "Get the current stock price for AAPL"
+```
+
+## Interactive Explorer
+
+AIsa provides two browser-based tools for exploring the discovery surface:
+
+- **[API Explorer](https://aisa.one/api-explorer)** — Interactive Swagger UI for browsing and testing all 111+ endpoints with live request/response examples.
+- **[Agent Discovery](https://aisa.one/agent-discovery)** — Visual skill explorer with search and tag filtering, plus integration code examples.
+
+## CORS Support
+
+The discovery endpoints include permissive CORS headers (`Access-Control-Allow-Origin: *`) so that browser-based agents and web applications can fetch them directly without a proxy server. This applies to:
+
+- `/.well-known/agent-card.json`
+- `/.well-known/ai-plugin.json`
+- `/openapi.yaml`
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Authentication" icon="key" href="/guides/authentication">
+    API key generation, scoping, rotation, and secure storage.
+  </Card>
+  <Card title="Agent Skills" icon="puzzle-piece" href="/agent-skills">
+    Browse and install composable skills for Claude Code, Cursor, and OpenClaw.
+  </Card>
+  <Card title="Getting Started" icon="rocket" href="/guides/getting-started-with-aisa">
+    Make your first authenticated API request in minutes.
+  </Card>
+</CardGroup>
