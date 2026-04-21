@@ -110,7 +110,7 @@ def build_unified_spec():
                 "BearerAuth": {
                     "type": "http",
                     "scheme": "bearer",
-                    "description": "AIsa API key. Get yours at https://marketplace.aisa.one",
+                    "description": "AIsa API key. Get yours at https://aisa.one",
                 }
             },
             "schemas": {},
