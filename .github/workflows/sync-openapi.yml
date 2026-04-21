@@ -12,10 +12,12 @@
 #   3. Checks out the website repo (AIsa-team/new-style-landing-page)
 #   4. Copies the new openapi.yaml into client/public/
 #   5. Commits and pushes if there are changes
+#   6. Sends a Slack notification with the result
 #
-# Required secret:
+# Required secrets:
 #   LANDING_PAGE_PAT — a GitHub Personal Access Token with repo scope
 #   for AIsa-team/new-style-landing-page
+#   SLACK_WEBHOOK_URL — Slack incoming webhook for notifications
 # ------------------------------------------------------------------
 
 name: Sync OpenAPI Spec
@@ -51,9 +53,11 @@ jobs:
 
       # ── 3. Generate consolidated spec ──────────────────────────────
       - name: Consolidate OpenAPI specs
+        id: consolidate
         run: |
-          python scripts/consolidate_openapi.py \
-            --output /tmp/openapi.yaml
+          OUTPUT=$(python scripts/consolidate_openapi.py --output /tmp/openapi.yaml 2>&1)
+          echo "$OUTPUT"
+          echo "stats=$OUTPUT" >> "$GITHUB_OUTPUT"
 
       - name: Validate output
         run: |
@@ -107,3 +111,69 @@ jobs:
           else
             echo "ℹ️ No changes detected — openapi.yaml is already up to date"
           fi
+
+      # ── 6. Slack notifications ─────────────────────────────────────
+      - name: Notify Slack (spec updated)
+        if: steps.diff.outputs.changed == 'true'
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "✅ OpenAPI Spec Updated",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "The consolidated *openapi.yaml* has been regenerated and pushed to the website repo.\n\n• *Trigger:* `${{ github.event_name }}`\n• *Commit:* <https://github.com/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>\n• *Stats:* ${{ steps.consolidate.outputs.stats }}\n• *Workflow run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+                  }
+                }
+              ]
+            }
+
+      - name: Notify Slack (no changes)
+        if: steps.diff.outputs.changed == 'false'
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "ℹ️ OpenAPI sync ran — no changes detected. Spec is already up to date."
+            }
+
+      - name: Notify Slack (failure)
+        if: failure()
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "⚠️ OpenAPI Sync Failed",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "The sync-openapi workflow failed.\n\n• *Workflow run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+                  }
+                }
+              ]
+            }
