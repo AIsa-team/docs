@@ -99,8 +99,46 @@ def build_unified_spec():
             "license": {"name": "MIT", "url": "https://opensource.org/licenses/MIT"},
             "termsOfService": "https://aisa.one/tos",
         },
+        # Three-server setup. Data API ops inherit the top-level list,
+        # so OpenAPI consumers can pick /apis/v1 (Bearer) or /apis/v2
+        # (x402 pay-per-call) at call time. LLM ops have an
+        # operation-level override that pins them to /v1.
+        #
+        #   * /apis/v1 — default server for data APIs (Bearer)
+        #   * /apis/v2 — same data API surface, mirrored for x402
+        #     pay-per-call. No registration; receive HTTP 402 challenge,
+        #     settle with stablecoin micropayment. Spec: x402.org
+        #   * /v1     — LLM inference (OpenAI-compatible)
+        #
+        # Path keys stay relative to whichever server applies, matching
+        # the per-file spec convention.
         "servers": [
-            {"url": "https://api.aisa.one", "description": "AIsa Production API"}
+            {
+                "url": "https://api.aisa.one/apis/v1",
+                "description": (
+                    "AIsa Data APIs (Bearer auth — register at https://aisa.one)"
+                ),
+            },
+            {
+                "url": "https://api.aisa.one/apis/v2",
+                "description": (
+                    "AIsa Data APIs (x402 pay-per-call) — same surface as "
+                    "/apis/v1, mirrored. No registration; receive HTTP 402 "
+                    "challenge, settle with stablecoin micropayment. "
+                    "Spec: https://www.x402.org. "
+                    "Open-source gateway implementation: "
+                    "https://github.com/AIsa-team/aisa-proxy"
+                ),
+                # Non-standard `x-*` extension naming the open-source
+                # gateway that serves this surface. Ignored by vanilla
+                # OpenAPI parsers; tooling that walks
+                # `servers[].x-implementation` can deep-link the repo.
+                "x-implementation": "https://github.com/AIsa-team/aisa-proxy",
+            },
+            {
+                "url": "https://api.aisa.one/v1",
+                "description": "AIsa LLM Inference (OpenAI-compatible, Bearer auth)",
+            },
         ],
         "security": [{"BearerAuth": []}],
         "tags": [],
@@ -140,31 +178,36 @@ def build_unified_spec():
                 {"name": tag, "description": TAG_DESCRIPTIONS.get(tag, "")}
             )
 
-        # Determine path prefix from the spec's server URL
-        # e.g. https://api.aisa.one/v1 → /v1
-        # e.g. https://api.aisa.one/apis/v1 → /apis/v1
+        # Detect which top-level server this file's paths resolve
+        # against. /v1 specs need an operation-level `servers` override
+        # in the unified spec; /apis/v1 specs use the default (first)
+        # server and need no override. Path keys are kept RELATIVE in
+        # the unified output, matching the per-file convention.
         servers = spec.get("servers", [])
-        path_prefix = ""
-        if servers:
-            parsed = urlparse(servers[0].get("url", ""))
-            if parsed.path and parsed.path != "/":
-                path_prefix = parsed.path.rstrip("/")
+        file_server_url = servers[0].get("url", "") if servers else ""
+        is_llm = file_server_url == "https://api.aisa.one/v1"
 
-        # Merge paths
+        # Merge paths — preserve relative path keys
         for path, methods in spec.get("paths", {}).items():
-            full_path = path_prefix + path
-
             for method, operation in methods.items():
                 if isinstance(operation, dict):
                     operation["tags"] = [tag]
+                    # Drop any per-op servers from the input file
                     operation.pop("servers", None)
+                    # Add LLM-server override on operations from /v1
+                    # files so OpenAPI consumers route them to /v1
+                    # instead of the default /apis/v1.
+                    if is_llm:
+                        operation["servers"] = [
+                            {"url": "https://api.aisa.one/v1"}
+                        ]
 
-            if full_path in unified["paths"]:
+            if path in unified["paths"]:
                 for method, operation in methods.items():
-                    if method not in unified["paths"][full_path]:
-                        unified["paths"][full_path][method] = operation
+                    if method not in unified["paths"][path]:
+                        unified["paths"][path][method] = operation
             else:
-                unified["paths"][full_path] = methods
+                unified["paths"][path] = methods
 
         # Merge component schemas (prefix on collision)
         for schema_name, schema_def in (
