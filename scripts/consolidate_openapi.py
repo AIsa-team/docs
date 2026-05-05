@@ -183,9 +183,24 @@ def build_unified_spec():
         # in the unified spec; /apis/v1 specs use the default (first)
         # server and need no override. Path keys are kept RELATIVE in
         # the unified output, matching the per-file convention.
+        #
+        # When a file's server is a SUB-path of the unified default
+        # server (e.g. `/apis/v1/financial`), prepend the delta to
+        # each path key so the merged path resolves to the correct
+        # absolute URL. Without this, `/financials/balance-sheets`
+        # from a file with server `…/apis/v1/financial` collides at
+        # the top level instead of becoming `/financial/financials/
+        # balance-sheets`.
         servers = spec.get("servers", [])
         file_server_url = servers[0].get("url", "") if servers else ""
         is_llm = file_server_url == "https://api.aisa.one/v1"
+        default_server_url = unified["servers"][0]["url"]
+        path_prefix = ""
+        if (
+            file_server_url.startswith(default_server_url + "/")
+            and not is_llm
+        ):
+            path_prefix = file_server_url[len(default_server_url):]
 
         # Merge paths — preserve relative path keys
         for path, methods in spec.get("paths", {}).items():
@@ -202,12 +217,14 @@ def build_unified_spec():
                             {"url": "https://api.aisa.one/v1"}
                         ]
 
-            if path in unified["paths"]:
+            full_path = path_prefix + path
+
+            if full_path in unified["paths"]:
                 for method, operation in methods.items():
-                    if method not in unified["paths"][path]:
-                        unified["paths"][path][method] = operation
+                    if method not in unified["paths"][full_path]:
+                        unified["paths"][full_path][method] = operation
             else:
-                unified["paths"][path] = methods
+                unified["paths"][full_path] = methods
 
         # Merge component schemas (prefix on collision)
         for schema_name, schema_def in (
