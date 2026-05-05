@@ -125,8 +125,15 @@ def build_unified_spec():
                     "AIsa Data APIs (x402 pay-per-call) — same surface as "
                     "/apis/v1, mirrored. No registration; receive HTTP 402 "
                     "challenge, settle with stablecoin micropayment. "
-                    "Spec: https://www.x402.org"
+                    "Spec: https://www.x402.org. "
+                    "Open-source gateway implementation: "
+                    "https://github.com/AIsa-team/aisa-proxy"
                 ),
+                # Non-standard `x-*` extension naming the open-source
+                # gateway that serves this surface. Ignored by vanilla
+                # OpenAPI parsers; tooling that walks
+                # `servers[].x-implementation` can deep-link the repo.
+                "x-implementation": "https://github.com/AIsa-team/aisa-proxy",
             },
             {
                 "url": "https://api.aisa.one/v1",
