@@ -179,16 +179,35 @@ def build_unified_spec():
             )
 
         # Detect which top-level server this file's paths resolve
-        # against. /v1 specs need an operation-level `servers` override
-        # in the unified spec; /apis/v1 specs use the default (first)
-        # server and need no override. Path keys are kept RELATIVE in
-        # the unified output, matching the per-file convention.
+        # against, and capture any EXTRA path segment beyond the
+        # standard /apis/v1 or /v1 prefix.
+        #
+        # Examples:
+        #   /apis/v1                  -> data API,  no extra prefix
+        #   /apis/v1/financial        -> data API,  extra prefix /financial
+        #   /v1                       -> LLM,       no extra prefix
+        #
+        # The extra prefix is prepended to each path key during merge,
+        # so the unified spec has the full sub-namespace baked in
+        # (e.g., the financial endpoint's path becomes
+        # /financial/analyst-estimates instead of just /analyst-estimates).
         servers = spec.get("servers", [])
         file_server_url = servers[0].get("url", "") if servers else ""
-        is_llm = file_server_url == "https://api.aisa.one/v1"
+        parsed = urlparse(file_server_url)
+        file_server_path = parsed.path.rstrip("/")
+        is_llm = file_server_path.startswith("/v1")
+        if is_llm:
+            extra_prefix = file_server_path[len("/v1"):]
+        elif file_server_path.startswith("/apis/v1"):
+            extra_prefix = file_server_path[len("/apis/v1"):]
+        else:
+            extra_prefix = ""
 
-        # Merge paths — preserve relative path keys
+        # Merge paths — prepend any extra prefix from the file's
+        # server URL (e.g. "/financial") so the unified path key
+        # carries the full sub-namespace.
         for path, methods in spec.get("paths", {}).items():
+            full_path_key = (extra_prefix + path) if extra_prefix else path
             for method, operation in methods.items():
                 if isinstance(operation, dict):
                     operation["tags"] = [tag]
@@ -202,12 +221,12 @@ def build_unified_spec():
                             {"url": "https://api.aisa.one/v1"}
                         ]
 
-            if path in unified["paths"]:
+            if full_path_key in unified["paths"]:
                 for method, operation in methods.items():
-                    if method not in unified["paths"][path]:
-                        unified["paths"][path][method] = operation
+                    if method not in unified["paths"][full_path_key]:
+                        unified["paths"][full_path_key][method] = operation
             else:
-                unified["paths"][path] = methods
+                unified["paths"][full_path_key] = methods
 
         # Merge component schemas (prefix on collision)
         for schema_name, schema_def in (
