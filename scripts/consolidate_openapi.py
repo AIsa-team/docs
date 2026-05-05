@@ -99,24 +99,38 @@ def build_unified_spec():
             "license": {"name": "MIT", "url": "https://opensource.org/licenses/MIT"},
             "termsOfService": "https://aisa.one/tos",
         },
-        # Two-server setup matching the per-file spec convention:
-        #   * /apis/v1 — default server for data APIs (Twitter, financial,
-        #     prediction markets, search, etc.)
-        #   * /v1     — LLM inference (OpenAI-compatible chat / messages /
-        #     image generations). Operations originating from /v1 specs
-        #     get an operation-level `servers` override below.
-        # Path keys stay relative to whichever server applies, identical
-        # to how each per-file spec is written. Avoids the consumer
-        # mismatch where unified/openapi.yaml looked structurally
-        # different from openapi/*.json.
+        # Three-server setup. Data API ops inherit the top-level list,
+        # so OpenAPI consumers can pick /apis/v1 (Bearer) or /apis/v2
+        # (x402 pay-per-call) at call time. LLM ops have an
+        # operation-level override that pins them to /v1.
+        #
+        #   * /apis/v1 — default server for data APIs (Bearer)
+        #   * /apis/v2 — same data API surface, mirrored for x402
+        #     pay-per-call. No registration; receive HTTP 402 challenge,
+        #     settle with stablecoin micropayment. Spec: x402.org
+        #   * /v1     — LLM inference (OpenAI-compatible)
+        #
+        # Path keys stay relative to whichever server applies, matching
+        # the per-file spec convention.
         "servers": [
             {
                 "url": "https://api.aisa.one/apis/v1",
-                "description": "AIsa Data APIs",
+                "description": (
+                    "AIsa Data APIs (Bearer auth — register at https://aisa.one)"
+                ),
+            },
+            {
+                "url": "https://api.aisa.one/apis/v2",
+                "description": (
+                    "AIsa Data APIs (x402 pay-per-call) — same surface as "
+                    "/apis/v1, mirrored. No registration; receive HTTP 402 "
+                    "challenge, settle with stablecoin micropayment. "
+                    "Spec: https://www.x402.org"
+                ),
             },
             {
                 "url": "https://api.aisa.one/v1",
-                "description": "AIsa LLM Inference (OpenAI-compatible)",
+                "description": "AIsa LLM Inference (OpenAI-compatible, Bearer auth)",
             },
         ],
         "security": [{"BearerAuth": []}],
