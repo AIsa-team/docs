@@ -3,7 +3,20 @@
 Consolidate individual AIsa OpenAPI spec files into a single unified openapi.yaml.
 
 Reads all JSON specs from the openapi/ directory, merges paths (with correct
-server-path prefixes) and schemas, and outputs a single OpenAPI 3.1 YAML file.
+server-path prefixes) and schemas, and outputs a single OpenAPI 3.1 YAML file
+that includes the x402 (pay-per-call) surface:
+
+  * Three top-level servers: /apis/v1 (Bearer), /apis/v2 (x402),
+    /v1 (LLM, OpenAI-compatible).
+  * Every paid data-API op carries an `x-x402` annotation pointing at
+    its absolute /apis/v2 path and the open-source aisa-proxy gateway.
+  * Every paid path is mirrored under `/apis/v2/{rel}` via a $ref to
+    the relative op — single source of truth for parameters, responses,
+    schemas, tags.
+  * LLM ops are never mirrored at /apis/v2.
+  * /services/aigc/* (async video generation) is denylisted from the
+    mirror — the runtime gateway returns 404, not 402, so promising a
+    /apis/v2 surface there would make the spec a liar.
 
 Usage:
     python scripts/consolidate_openapi.py [--output path/to/openapi.yaml]
@@ -71,6 +84,161 @@ TAG_DESCRIPTIONS = {
     "Crypto Data": "Cryptocurrency prices, markets, and exchange data via CoinGecko",
     "Prediction Markets": "Query prediction markets — Polymarket, Kalshi, and matching markets",
 }
+
+# Server URLs used by the unified spec — keep in sync with the
+# `servers` list inside build_unified_spec().
+DATA_API_SERVER_URL = "https://api.aisa.one/apis/v1"
+DATA_API_X402_SERVER_URL = "https://api.aisa.one/apis/v2"
+LLM_SERVER_URL = "https://api.aisa.one/v1"
+X402_IMPLEMENTATION_URL = "https://github.com/AIsa-team/aisa-proxy"
+
+# Path-prefix denylist for the v2 (x402) mirror.
+#
+# Some operations look mirrorable (non-LLM, no per-op /v1 override)
+# but the runtime aisa-proxy gateway doesn't expose them at /apis/v2
+# — probing those paths returns 404 instead of the expected x402 402
+# challenge, which makes the spec a liar.
+#
+# Currently denylisted:
+#   /services/aigc/* — async video-generation endpoints. Not in
+#     aisa-proxy's pricing catalog; the payment lifecycle for async
+#     long-running jobs differs from per-call x402 settlement.
+#
+# Add to this list only after confirming the runtime gateway returns
+# 404 (not 402) for the endpoint at /apis/v2.
+V2_MIRROR_DENYLIST_PREFIXES = ("/services/aigc/",)
+
+
+def is_v2_excluded(path_key):
+    """Return True if path_key is on the v2-mirror denylist."""
+    return any(path_key.startswith(prefix) for prefix in V2_MIRROR_DENYLIST_PREFIXES)
+
+
+def is_llm_op(operation):
+    """Return True if the operation has an LLM /v1 server override."""
+    if not isinstance(operation, dict):
+        return False
+    for s in operation.get("servers") or []:
+        if isinstance(s, dict) and s.get("url") == LLM_SERVER_URL:
+            return True
+    return False
+
+
+def json_pointer_escape(s):
+    """JSON-pointer escape per RFC 6901: `~` → `~0`, `/` → `~1`."""
+    return s.replace("~", "~0").replace("/", "~1")
+
+
+def inject_x402_annotations(spec):
+    """Annotate every data-API operation with `x-x402`.
+
+    The signal for "this op is paid via x402" is absence of an LLM /v1
+    server override AND not on the denylist. The annotation holds NO
+    pricing — prices change upstream and live in the runtime HTTP 402
+    challenge response. We expose only the absolute v2 path and link
+    the open-source gateway implementation. Idempotent.
+    """
+    annotated = 0
+    for path_key, ops in spec.get("paths", {}).items():
+        if path_key.startswith("/apis/v2/"):
+            continue  # mirrors get the annotation transitively via $ref
+        excluded = is_v2_excluded(path_key)
+        for method, op in ops.items():
+            if not isinstance(op, dict):
+                continue
+            if method in ("parameters", "servers"):
+                continue
+            if excluded or is_llm_op(op):
+                # Defensive: drop any stale annotation that shouldn't
+                # be there (e.g., from a previous run before denylist).
+                op.pop("x-x402", None)
+                continue
+            op["x-x402"] = {
+                "path": f"/apis/v2{path_key}",
+                "source": X402_IMPLEMENTATION_URL,
+            }
+            annotated += 1
+    return annotated
+
+
+def add_v2_path_mirrors(spec):
+    """Add explicit `/apis/v2/{rel}` path-key mirrors for every paid op.
+
+    Each mirror path-item carries:
+      - a path-level `servers` override pointing at the bare host
+        (`https://api.aisa.one`), so the absolute path key resolves
+        correctly without colliding with the top-level /apis/v1 server;
+      - operation entries that `$ref` the corresponding operation
+        under the relative path key — single source of truth for
+        parameters, responses, schemas, x-x402, tags.
+
+    LLM ops are never mirrored. Denylisted paths are skipped (and any
+    stale mirrors of denylisted/missing paths are garbage-collected).
+    Idempotent.
+    """
+    mirrored = 0
+    new_paths = {}
+    # Set of relative paths that exist NOW (so we can garbage-collect
+    # stale mirrors whose underlying path no longer exists).
+    relative_paths = {
+        p for p in spec.get("paths", {}) if not p.startswith("/apis/v2/")
+    }
+
+    for path_key, ops in spec.get("paths", {}).items():
+        if path_key.startswith("/apis/v2/"):
+            underlying = path_key[len("/apis/v2"):]
+            if underlying not in relative_paths:
+                continue  # stale mirror — drop
+            if is_v2_excluded(underlying):
+                continue  # mirror of a now-denylisted path — drop
+        new_paths[path_key] = ops
+        if path_key.startswith("/apis/v2/"):
+            continue  # already a mirror, don't double-mirror
+        if is_v2_excluded(path_key):
+            continue  # not exposed at /apis/v2
+
+        # Skip if every operation on this path is LLM-only.
+        all_llm = True
+        for method, op in ops.items():
+            if not isinstance(op, dict):
+                continue
+            if method in ("parameters", "servers"):
+                continue
+            if not is_llm_op(op):
+                all_llm = False
+                break
+        if all_llm:
+            continue
+
+        v2_path_key = f"/apis/v2{path_key}"
+        if v2_path_key in new_paths:
+            continue  # idempotent — already mirrored
+
+        escaped_rel = json_pointer_escape(path_key)
+        mirror = {
+            "servers": [
+                {
+                    "url": "https://api.aisa.one",
+                    "description": (
+                        "AIsa root host (path key carries the /apis/v2 prefix)"
+                    ),
+                }
+            ],
+        }
+        for method, op in ops.items():
+            if not isinstance(op, dict):
+                continue
+            if method in ("parameters", "servers"):
+                continue
+            if is_llm_op(op):
+                continue  # don't mirror LLM ops on mixed-method paths
+            mirror[method] = {"$ref": f"#/paths/{escaped_rel}/{method}"}
+        if len(mirror) == 1:
+            continue  # only `servers`, no operations — nothing to mirror
+        new_paths[v2_path_key] = mirror
+        mirrored += 1
+    spec["paths"] = new_paths
+    return mirrored
 
 
 def load_spec(filepath):
@@ -257,6 +425,16 @@ def main():
 
     unified = build_unified_spec()
 
+    # Layer x402 surface on top of the consolidated spec:
+    #   1. Annotate every paid data-API op with `x-x402`.
+    #   2. Add `/apis/v2/{rel}` path-item mirrors that $ref the
+    #      relative op — single source of truth.
+    # Order matters: x-x402 annotations must run BEFORE mirroring so
+    # the annotation lives on the relative op and the $ref'd mirror
+    # picks it up transitively.
+    x402_annotated = inject_x402_annotations(unified)
+    v2_mirrored = add_v2_path_mirrors(unified)
+
     # Stats
     num_paths = len(unified["paths"])
     num_ops = sum(
@@ -267,6 +445,11 @@ def main():
     print(
         f"Consolidated: {num_paths} paths, {num_ops} operations, "
         f"{num_schemas} schemas, {len(unified['tags'])} tags",
+        file=sys.stderr,
+    )
+    print(
+        f"  x402: {x402_annotated} ops annotated, "
+        f"{v2_mirrored} /apis/v2/* mirrors added",
         file=sys.stderr,
     )
 
