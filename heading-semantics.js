@@ -1,22 +1,37 @@
-// Keep Mintlify-generated navigation labels out of the document heading outline.
-// Article headings remain untouched.
+// Keep Mintlify-generated labels and recommendation cards out of the heading outline.
+// Article headings remain untouched, except for the final "Related" recommendations label.
 (function () {
   if (typeof window === "undefined" || typeof document === "undefined") return;
 
-  var SELECTOR = [
-    "#table-of-contents h1",
-    "#table-of-contents h2",
-    "#table-of-contents h3",
-    "#table-of-contents h4",
-    "#table-of-contents h5",
-    "#table-of-contents h6",
-    ".sidebar-title:is(h1, h2, h3, h4, h5, h6)"
+  var HEADING_SELECTOR = "h1,h2,h3,h4,h5,h6";
+  var GENERATED_HEADING_SELECTOR = [
+    "#table-of-contents",
+    ".card",
+    ".card-group",
+    ".sidebar-title"
   ].join(",");
 
-  var scheduled = false;
+  var scheduledTimer = null;
+  var readyAt = Date.now() + 1200;
+
+  function normalizedText(node) {
+    return (node.textContent || "").replace(/\u200B/g, "").replace(/\s+/g, " ").trim();
+  }
+
+  function shouldReplaceHeading(heading) {
+    if (!heading || heading.id === "page-title") return false;
+
+    var text = normalizedText(heading);
+    if (text === "Documentation Index") return true;
+    if (text === "Related" && heading.id === "related") return true;
+    if (text === "On this page") return true;
+
+    return Boolean(heading.closest(GENERATED_HEADING_SELECTOR));
+  }
 
   function replaceHeading(heading) {
     if (!heading || heading.dataset.headingSemanticsFixed === "true") return;
+    if (!shouldReplaceHeading(heading)) return;
 
     var replacement = document.createElement("div");
     for (var i = 0; i < heading.attributes.length; i += 1) {
@@ -30,21 +45,25 @@
   }
 
   function normalizeGeneratedHeadings() {
-    scheduled = false;
-    document.querySelectorAll(SELECTOR).forEach(replaceHeading);
+    scheduledTimer = null;
+    document.querySelectorAll(HEADING_SELECTOR).forEach(replaceHeading);
   }
 
   function scheduleNormalize() {
-    if (scheduled) return;
-    scheduled = true;
-    window.requestAnimationFrame(normalizeGeneratedHeadings);
+    var delay = Math.max(250, readyAt - Date.now());
+    if (scheduledTimer) window.clearTimeout(scheduledTimer);
+    scheduledTimer = window.setTimeout(function () {
+      window.requestAnimationFrame(normalizeGeneratedHeadings);
+    }, delay);
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", scheduleNormalize, { once: true });
-  } else {
+  function scheduleAfterLoad() {
+    readyAt = Math.max(readyAt, Date.now() + 500);
     scheduleNormalize();
   }
+
+  if (document.readyState === "complete") scheduleAfterLoad();
+  else window.addEventListener("load", scheduleAfterLoad, { once: true });
 
   new MutationObserver(scheduleNormalize).observe(document.documentElement, {
     childList: true,
