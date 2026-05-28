@@ -70,6 +70,7 @@ FILE_TAG_MAP = {
     "polymarket-openapi.json": "Prediction Markets",
     "kalshi-openapi.json": "Prediction Markets",
     "matching-markets-openapi.json": "Prediction Markets",
+    "apollo.json": "Sales Intelligence",
 }
 
 TAG_DESCRIPTIONS = {
@@ -83,6 +84,7 @@ TAG_DESCRIPTIONS = {
     "Financial Data": "Stock prices, financials, analyst estimates, SEC filings, and macro data",
     "Crypto Data": "Cryptocurrency prices, markets, and exchange data via CoinGecko",
     "Prediction Markets": "Query prediction markets — Polymarket, Kalshi, and matching markets",
+    "Sales Intelligence": "B2B contact and company enrichment, search, and outreach via Apollo.io",
 }
 
 # Server URLs used by the unified spec — keep in sync with the
