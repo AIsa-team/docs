@@ -8,14 +8,13 @@ that includes the x402 (pay-per-call) surface:
 
   * Three top-level servers: /apis/v1 (Bearer), /apis/v2 (x402),
     /v1 (LLM, OpenAI-compatible).
-  * Every paid data-API op carries an `x-x402` annotation pointing at
-    its absolute /apis/v2 path and the open-source aisa-proxy gateway.
-  * Every paid path is mirrored under `/apis/v2/{rel}` via a $ref to
-    the relative op — single source of truth for parameters, responses,
-    schemas, tags.
-  * LLM ops are never mirrored at /apis/v2.
+  * Every paid data-API op carries an `x-x402.path` with its absolute
+    `/apis/v2/{rel}` route and an `x-x402.source` link to the open-source
+    aisa-proxy gateway. The top-level `/apis/v2` server also makes those
+    x402 routes addressable without duplicating path items.
+  * LLM ops are never annotated as /apis/v2.
   * /services/aigc/* (async video generation) is denylisted from the
-    mirror — the runtime gateway returns 404, not 402, so promising a
+    x402 surface — the runtime gateway returns 404, not 402, so promising a
     /apis/v2 surface there would make the spec a liar.
 
 Usage:
@@ -72,6 +71,7 @@ FILE_TAG_MAP = {
     "matching-markets-openapi.json": "Prediction Markets",
     "apollo.json": "Sales Intelligence",
     "dataforseo.json": "SEO & Search Data",
+    "agentmail.json": "Agent Email",
 }
 
 TAG_DESCRIPTIONS = {
@@ -87,6 +87,7 @@ TAG_DESCRIPTIONS = {
     "Prediction Markets": "Query prediction markets — Polymarket, Kalshi, and matching markets",
     "Sales Intelligence": "B2B contact and company enrichment, search, and outreach via Apollo.io",
     "SEO & Search Data": "SERP, keywords, backlinks, on-page, business listings, and AI optimization via DataForSEO",
+    "Agent Email": "AI-agent email accounts, inboxes, threads, drafts, and message send/reply via AgentMail.to",
 }
 
 # Server URLs used by the unified spec — keep in sync with the
@@ -95,6 +96,19 @@ DATA_API_SERVER_URL = "https://api.aisa.one/apis/v1"
 DATA_API_X402_SERVER_URL = "https://api.aisa.one/apis/v2"
 LLM_SERVER_URL = "https://api.aisa.one/v1"
 X402_IMPLEMENTATION_URL = "https://github.com/AIsa-team/aisa-proxy"
+
+COMPONENT_SECTIONS = (
+    "schemas",
+    "responses",
+    "parameters",
+    "examples",
+    "requestBodies",
+    "headers",
+    "securitySchemes",
+    "links",
+    "callbacks",
+    "pathItems",
+)
 
 # Path-prefix denylist for the v2 (x402) mirror.
 #
@@ -128,11 +142,6 @@ def is_llm_op(operation):
     return False
 
 
-def json_pointer_escape(s):
-    """JSON-pointer escape per RFC 6901: `~` → `~0`, `/` → `~1`."""
-    return s.replace("~", "~0").replace("/", "~1")
-
-
 def inject_x402_annotations(spec):
     """Annotate every data-API operation with `x-x402`.
 
@@ -145,7 +154,7 @@ def inject_x402_annotations(spec):
     annotated = 0
     for path_key, ops in spec.get("paths", {}).items():
         if path_key.startswith("/apis/v2/"):
-            continue  # mirrors get the annotation transitively via $ref
+            continue  # stale mirrors are removed separately
         excluded = is_v2_excluded(path_key)
         for method, op in ops.items():
             if not isinstance(op, dict):
@@ -165,84 +174,59 @@ def inject_x402_annotations(spec):
     return annotated
 
 
-def add_v2_path_mirrors(spec):
-    """Add explicit `/apis/v2/{rel}` path-key mirrors for every paid op.
+def remove_v2_path_mirrors(spec):
+    """Remove explicit `/apis/v2/{rel}` path-key mirrors.
 
-    Each mirror path-item carries:
-      - a path-level `servers` override pointing at the bare host
-        (`https://api.aisa.one`), so the absolute path key resolves
-        correctly without colliding with the top-level /apis/v1 server;
-      - operation entries that `$ref` the corresponding operation
-        under the relative path key — single source of truth for
-        parameters, responses, schemas, x-x402, tags.
-
-    LLM ops are never mirrored. Denylisted paths are skipped (and any
-    stale mirrors of denylisted/missing paths are garbage-collected).
-    Idempotent.
+    The unified spec already declares both `/apis/v1` and `/apis/v2`
+    as top-level servers. A relative path such as `/twitter/follow_twitter`
+    therefore resolves to both API surfaces depending on the selected
+    server. Keeping a second explicit `/apis/v2/...` path duplicates the
+    operation and previously required method-level `$ref`, which is not
+    valid OpenAPI.
     """
-    mirrored = 0
-    new_paths = {}
-    # Set of relative paths that exist NOW (so we can garbage-collect
-    # stale mirrors whose underlying path no longer exists).
-    relative_paths = {
-        p for p in spec.get("paths", {}) if not p.startswith("/apis/v2/")
-    }
-
-    for path_key, ops in spec.get("paths", {}).items():
-        if path_key.startswith("/apis/v2/"):
-            underlying = path_key[len("/apis/v2"):]
-            if underlying not in relative_paths:
-                continue  # stale mirror — drop
-            if is_v2_excluded(underlying):
-                continue  # mirror of a now-denylisted path — drop
-        new_paths[path_key] = ops
-        if path_key.startswith("/apis/v2/"):
-            continue  # already a mirror, don't double-mirror
-        if is_v2_excluded(path_key):
-            continue  # not exposed at /apis/v2
-
-        # Skip if every operation on this path is LLM-only.
-        all_llm = True
-        for method, op in ops.items():
-            if not isinstance(op, dict):
-                continue
-            if method in ("parameters", "servers"):
-                continue
-            if not is_llm_op(op):
-                all_llm = False
-                break
-        if all_llm:
-            continue
-
-        v2_path_key = f"/apis/v2{path_key}"
-        if v2_path_key in new_paths:
-            continue  # idempotent — already mirrored
-
-        escaped_rel = json_pointer_escape(path_key)
-        mirror = {
-            "servers": [
-                {
-                    "url": "https://api.aisa.one",
-                    "description": (
-                        "AIsa root host (path key carries the /apis/v2 prefix)"
-                    ),
-                }
-            ],
+    paths = spec.get("paths", {})
+    removed = sum(1 for path_key in paths if path_key.startswith("/apis/v2/"))
+    if removed:
+        spec["paths"] = {
+            path_key: ops
+            for path_key, ops in paths.items()
+            if not path_key.startswith("/apis/v2/")
         }
-        for method, op in ops.items():
-            if not isinstance(op, dict):
-                continue
-            if method in ("parameters", "servers"):
-                continue
-            if is_llm_op(op):
-                continue  # don't mirror LLM ops on mixed-method paths
-            mirror[method] = {"$ref": f"#/paths/{escaped_rel}/{method}"}
-        if len(mirror) == 1:
-            continue  # only `servers`, no operations — nothing to mirror
-        new_paths[v2_path_key] = mirror
-        mirrored += 1
-    spec["paths"] = new_paths
-    return mirrored
+    return removed
+
+
+def component_collision_prefix(filename):
+    """Return a stable prefix for component names on cross-file collision."""
+    return (
+        filename.replace(".json", "")
+        .replace("-", "_")
+        .title()
+        .replace("_", "")
+    )
+
+
+def merge_components(unified, spec, filename):
+    """Merge all reusable OpenAPI components from a source spec.
+
+    Component `$ref`s in source specs point at their local names, so we
+    preserve names whenever possible. If a name already exists with the
+    same definition, keep one copy. If a name collides with a different
+    definition, add a filename-prefixed variant, matching the historical
+    schema merge behavior.
+    """
+    source_components = spec.get("components", {})
+    prefix = component_collision_prefix(filename)
+
+    for section in COMPONENT_SECTIONS:
+        entries = source_components.get(section, {})
+        if not isinstance(entries, dict) or not entries:
+            continue
+        target = unified["components"].setdefault(section, {})
+        for name, definition in entries.items():
+            if name not in target:
+                target[name] = definition
+            elif target[name] != definition:
+                target[f"{prefix}_{name}"] = definition
 
 
 def load_spec(filepath):
@@ -398,20 +382,7 @@ def build_unified_spec():
             else:
                 unified["paths"][full_path] = methods
 
-        # Merge component schemas (prefix on collision)
-        for schema_name, schema_def in (
-            spec.get("components", {}).get("schemas", {}).items()
-        ):
-            if schema_name in unified["components"]["schemas"]:
-                prefix = (
-                    filename.replace(".json", "")
-                    .replace("-", "_")
-                    .title()
-                    .replace("_", "")
-                )
-                unified["components"]["schemas"][f"{prefix}_{schema_name}"] = schema_def
-            else:
-                unified["components"]["schemas"][schema_name] = schema_def
+        merge_components(unified, spec, filename)
 
     # Sort tags alphabetically
     unified["tags"].sort(key=lambda t: t["name"])
@@ -431,13 +402,11 @@ def main():
 
     # Layer x402 surface on top of the consolidated spec:
     #   1. Annotate every paid data-API op with `x-x402`.
-    #   2. Add `/apis/v2/{rel}` path-item mirrors that $ref the
-    #      relative op — single source of truth.
-    # Order matters: x-x402 annotations must run BEFORE mirroring so
-    # the annotation lives on the relative op and the $ref'd mirror
-    # picks it up transitively.
+    #   2. Remove any stale explicit `/apis/v2/{rel}` mirrors. The
+    #      `/apis/v2` server plus `x-x402.path` annotations describe
+    #      the x402 surface without duplicating operations.
     x402_annotated = inject_x402_annotations(unified)
-    v2_mirrored = add_v2_path_mirrors(unified)
+    v2_removed = remove_v2_path_mirrors(unified)
 
     # Stats
     num_paths = len(unified["paths"])
@@ -453,7 +422,7 @@ def main():
     )
     print(
         f"  x402: {x402_annotated} ops annotated, "
-        f"{v2_mirrored} /apis/v2/* mirrors added",
+        f"{v2_removed} stale /apis/v2/* mirrors removed",
         file=sys.stderr,
     )
 
