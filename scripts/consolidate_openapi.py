@@ -72,6 +72,7 @@ FILE_TAG_MAP = {
     "apollo.json": "Sales Intelligence",
     "dataforseo.json": "SEO & Search Data",
     "agentmail.json": "Agent Email",
+    "reddit.json": "Reddit",
 }
 
 TAG_DESCRIPTIONS = {
@@ -88,6 +89,7 @@ TAG_DESCRIPTIONS = {
     "Sales Intelligence": "B2B contact and company enrichment, search, and outreach via Apollo.io",
     "SEO & Search Data": "SERP, keywords, backlinks, on-page, business listings, and AI optimization via DataForSEO",
     "Agent Email": "AI-agent email accounts, inboxes, threads, drafts, and message send/reply via AgentMail.to",
+    "Reddit": "Read public Reddit data — search posts, browse subreddits, and fetch comments",
 }
 
 # Server URLs used by the unified spec — keep in sync with the
