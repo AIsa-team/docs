@@ -54,6 +54,7 @@ FILE_TAG_MAP = {
     "twitter-user-batch_01.json": "Twitter / X",
     "twitter-user-batch_02.json": "Twitter / X",
     "twitter-tweet-batch_01.json": "Twitter / X",
+    "twitter-tweet-replies-v2.json": "Twitter / X",
     "twitter-tweet-batch_02.json": "Twitter / X",
     "twitter-actions.json": "Twitter / X",
     "twitter-communities.json": "Twitter / X",
