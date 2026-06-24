@@ -82093,6 +82093,35 @@ paths:
       x-x402:
         path: /apis/v2/twitter/community/get_tweets_from_all_community
         source: https://github.com/AIsa-team/aisa-proxy
+  /twitter/list/tweets_timeline:
+    get:
+      tags:
+      - Twitter / X
+      summary: Get List Tweet Timeline
+      description: Get timeline tweets from a list. Each page returns up to 20 tweets. Use cursor for pagination.
+      parameters:
+      - name: listId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The list ID to get tweets from. e.g. 1846987139428634858
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Cursor for paginating through results. Leave empty for the first page.
+      responses:
+        '200':
+          description: List tweet timeline response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListTweetsTimelineResponse'
+      x-x402:
+        path: /apis/v2/twitter/list/tweets_timeline
+        source: https://github.com/AIsa-team/aisa-proxy
   /twitter/list/followers:
     get:
       tags:
@@ -82451,6 +82480,69 @@ paths:
                 $ref: '#/components/schemas/AdvancedSearchResponse'
       x-x402:
         path: /apis/v2/twitter/tweet/advanced_search
+        source: https://github.com/AIsa-team/aisa-proxy
+  /twitter/tweet/replies/v2:
+    get:
+      tags:
+      - Twitter / X
+      summary: Get Tweet Replies V2
+      description: Get tweet replies by tweet ID (V2). Each page returns up to 20 replies. Supports sorting by Relevance,
+        Latest, or Likes.
+      parameters:
+      - name: tweetId
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The tweet ID to get replies for. e.g. 1846987139428634858
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Cursor for paginating through results. Leave empty for the first page.
+      - name: queryType
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - Relevance
+          - Latest
+          - Likes
+          default: Relevance
+        description: Sort order for replies. Default is Relevance.
+      responses:
+        '200':
+          description: Tweet replies response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  replies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Tweet'
+                    description: Array of reply tweets
+                  has_next_page:
+                    type: boolean
+                    description: Indicates if there are more results available
+                  next_cursor:
+                    type: string
+                    description: Cursor for fetching the next page of results
+                  status:
+                    type: string
+                    enum:
+                    - success
+                    - error
+                    example: success
+                    description: Status of the request
+                  message:
+                    type: string
+                    description: Error message if status is error
+      x-x402:
+        path: /apis/v2/twitter/tweet/replies/v2
         source: https://github.com/AIsa-team/aisa-proxy
   /twitter/user_about:
     get:
@@ -82949,6 +83041,9 @@ components:
       type: http
       scheme: bearer
     TwitterTrend_BearerAuth:
+      type: http
+      scheme: bearer
+    TwitterTweetRepliesV2_BearerAuth:
       type: http
       scheme: bearer
     TwitterUserBatch01_BearerAuth:
@@ -90464,6 +90559,77 @@ components:
           type: string
         isLimitedReply:
           type: boolean
+    ListTweetsTimelineResponse:
+      type: object
+      properties:
+        tweets:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tweet'
+          description: Array of tweets from the list
+        has_next_page:
+          type: boolean
+          description: Indicates if there are more results available
+        next_cursor:
+          type: string
+          description: Cursor for fetching the next page of results
+        status:
+          type: string
+          enum:
+          - success
+          - error
+          example: success
+          description: Status of the request
+        msg:
+          type: string
+          description: Message of the request, error message if status is error
+    TwitterList_Tweet:
+      type: object
+      properties:
+        type:
+          type: string
+        id:
+          type: string
+          description: The ID of the tweet
+        url:
+          type: string
+          description: The URL of the tweet
+        text:
+          type: string
+          description: The text of the tweet
+        source:
+          type: string
+          description: The source client of the tweet
+        retweetCount:
+          type: integer
+        replyCount:
+          type: integer
+        likeCount:
+          type: integer
+        quoteCount:
+          type: integer
+        viewCount:
+          type: integer
+        createdAt:
+          type: string
+          description: The date and time the tweet was created
+        lang:
+          type: string
+          description: The language of the tweet
+        bookmarkCount:
+          type: integer
+        isReply:
+          type: boolean
+        inReplyToId:
+          type: string
+        conversationId:
+          type: string
+        inReplyToUserId:
+          type: string
+        inReplyToUsername:
+          type: string
+        author:
+          $ref: '#/components/schemas/TwitterUser'
     TwitterListFollowersResponse:
       type: object
       properties:
@@ -91077,6 +91243,54 @@ components:
           type: boolean
         next_cursor:
           type: string
+    TwitterTweetRepliesV2_Tweet:
+      type: object
+      properties:
+        type:
+          type: string
+        id:
+          type: string
+          description: The ID of the tweet
+        url:
+          type: string
+          description: The URL of the tweet
+        text:
+          type: string
+          description: The text of the tweet
+        source:
+          type: string
+          description: The source client of the tweet
+        retweetCount:
+          type: integer
+        replyCount:
+          type: integer
+        likeCount:
+          type: integer
+        quoteCount:
+          type: integer
+        viewCount:
+          type: integer
+        createdAt:
+          type: string
+          description: The date and time the tweet was created
+        lang:
+          type: string
+          description: The language of the tweet
+        bookmarkCount:
+          type: integer
+        isReply:
+          type: boolean
+        inReplyToId:
+          type: string
+        conversationId:
+          type: string
+        inReplyToUserId:
+          type: string
+        inReplyToUsername:
+          type: string
+        isLimitedReply:
+          type: boolean
+          description: Whether the tweet is a limited reply
     UserProfileAboutResponse:
       type: object
       properties:
