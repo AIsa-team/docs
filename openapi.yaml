@@ -35,6 +35,8 @@ servers:
   x-implementation: https://github.com/AIsa-team/aisa-proxy
 - url: https://api.aisa.one/v1
   description: AIsa LLM Inference (OpenAI-compatible, Bearer auth)
+- url: https://api.aisa.one/v1beta
+  description: AIsa Gemini-compatible GenerateContent (Bearer auth)
 security:
 - BearerAuth: []
 tags:
@@ -75586,7 +75588,7 @@ paths:
         source: https://github.com/AIsa-team/aisa-proxy
   /models/{model}:generateContent:
     post:
-      summary: Generate content using the specified Gemini model
+      summary: Generate content using a Gemini-compatible AIsa model
       operationId: generateContent
       parameters:
       - name: model
@@ -75594,7 +75596,8 @@ paths:
         required: true
         schema:
           type: string
-        description: 'The name of the model to use, format: models/{model}'
+          example: gemini-3.5-flash
+        description: 'The AIsa model ID to use, for example: gemini-3.5-flash.'
       requestBody:
         required: true
         content:
@@ -75619,7 +75622,7 @@ paths:
       tags:
       - AI Models
       servers:
-      - url: https://api.aisa.one/v1
+      - url: https://api.aisa.one/v1beta
   /instagram/profile:
     get:
       tags:
@@ -78756,55 +78759,6 @@ paths:
       x-x402:
         path: /apis/v2/financial/insider-trades
         source: https://github.com/AIsa-team/aisa-proxy
-  /financial/institutional-ownership:
-    get:
-      tags:
-      - Financial Data
-      operationId: getInstitutionalOwnership
-      summary: Get the equity holdings of an investment manager
-      description: Get institutional ownership by investor or ticker. Requires either investor or ticker parameter, but not
-        both.
-      parameters:
-      - name: investor
-        in: query
-        description: The name of the investment manager
-        schema:
-          type: string
-      - name: ticker
-        in: query
-        description: The ticker symbol, if queried by investor.
-        schema:
-          type: string
-      - name: limit
-        in: query
-        description: 'The maximum number of holdings to return (default: 10).'
-        required: false
-        schema:
-          type: integer
-          default: 10
-      - $ref: '#/components/parameters/ReportPeriod'
-      - $ref: '#/components/parameters/ReportPeriodGte'
-      - $ref: '#/components/parameters/ReportPeriodLte'
-      - $ref: '#/components/parameters/ReportPeriodGt'
-      - $ref: '#/components/parameters/ReportPeriodLt'
-      responses:
-        '200':
-          description: Institutional ownership response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InstitutionalOwnershipResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '402':
-          $ref: '#/components/responses/PaymentRequiredError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-      x-x402:
-        path: /apis/v2/financial/institutional-ownership
-        source: https://github.com/AIsa-team/aisa-proxy
   /financial/company/facts:
     get:
       tags:
@@ -79030,65 +78984,6 @@ paths:
       x-x402:
         path: /apis/v2/financial/filings/items
         source: https://github.com/AIsa-team/aisa-proxy
-  /financial/financials/segmented-revenues:
-    get:
-      tags:
-      - Financial Data
-      operationId: getSegmentedRevenues
-      summary: Get segmented revenue data (deprecated)
-      description: Deprecated. Use /financials/income-statements/segments instead.
-      parameters:
-      - name: ticker
-        in: query
-        description: The ticker symbol. Required if cik is not provided.
-        required: false
-        schema:
-          type: string
-      - name: period
-        in: query
-        description: The date or time period to which the reported revenue data relates in ISO 8601 format (YYYY-MM-DD).
-        required: true
-        schema:
-          type: string
-          enum:
-          - annual
-          - quarterly
-      - name: limit
-        in: query
-        description: The maximum number of revenue statements to return.
-        schema:
-          type: integer
-          format: int32
-      - name: cik
-        in: query
-        description: The Central Index Key (CIK) of the company.
-        required: false
-        schema:
-          type: string
-      - $ref: '#/components/parameters/ReportPeriod'
-      - $ref: '#/components/parameters/ReportPeriodGte'
-      - $ref: '#/components/parameters/ReportPeriodLte'
-      - $ref: '#/components/parameters/ReportPeriodGt'
-      - $ref: '#/components/parameters/ReportPeriodLt'
-      responses:
-        '200':
-          description: Segmented revenue response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SegmentedRevenuesResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '402':
-          $ref: '#/components/responses/PaymentRequiredError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-      deprecated: true
-      x-x402:
-        path: /apis/v2/financial/financials/segmented-revenues
-        source: https://github.com/AIsa-team/aisa-proxy
   /financial/financials/income-statements:
     get:
       tags:
@@ -79265,38 +79160,6 @@ paths:
           $ref: '#/components/responses/NotFoundError'
       x-x402:
         path: /apis/v2/financial/financials/cash-flow-statements
-        source: https://github.com/AIsa-team/aisa-proxy
-  /financial/earnings/press-releases:
-    get:
-      tags:
-      - Financial Data
-      operationId: getEarningsPressReleases
-      summary: Get earnings press releases
-      description: Get earnings press releases for a ticker.
-      parameters:
-      - name: ticker
-        in: query
-        description: The ticker symbol.
-        required: true
-        schema:
-          type: string
-      responses:
-        '200':
-          description: Earnings press releases response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PressReleasesResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '402':
-          $ref: '#/components/responses/PaymentRequiredError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-      x-x402:
-        path: /apis/v2/financial/earnings/press-releases
         source: https://github.com/AIsa-team/aisa-proxy
   /financial/prices/snapshot:
     get:
@@ -80270,7 +80133,8 @@ paths:
   /scholar/search/explain:
     post:
       summary: Explain search results
-      description: Generate explanations for search results in different languages and formats
+      description: Generate explanations for search results in different languages and formats. The COMPLETE and INCREMENTAL
+        response modes stream server-sent events; NON_STREAMING returns a JSON response.
       operationId: explainSearch
       tags:
       - Scholar Search
@@ -80284,11 +80148,17 @@ paths:
               $ref: '#/components/schemas/ExplainSearchRequest'
       responses:
         '200':
-          description: Successful explanation response
+          description: Successful explanation response. COMPLETE/INCREMENTAL stream text/event-stream; NON_STREAMING returns
+            application/json.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExplainSearchResponse'
+              description: Returned when response_mode is NON_STREAMING.
+            text/event-stream:
+              schema:
+                type: string
+              description: Server-sent event stream returned when response_mode is COMPLETE or INCREMENTAL.
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -90414,21 +90284,15 @@ components:
         parts:
           type: array
           items:
-            oneOf:
-            - type: object
-              properties:
-                text:
-                  type: string
-            - type: object
-              properties:
-                inline_data:
-                  type: object
+            $ref: '#/components/schemas/Part'
         role:
           type: string
           enum:
-          - system
           - user
+          - model
+          - system
           - assistant
+      additionalProperties: true
     Tool:
       type: object
     SafetySetting:
@@ -90441,7 +90305,14 @@ components:
         candidates:
           type: array
           items:
-            $ref: '#/components/schemas/Content'
+            $ref: '#/components/schemas/Candidate'
+        usageMetadata:
+          $ref: '#/components/schemas/UsageMetadata'
+        modelVersion:
+          type: string
+        responseId:
+          type: string
+      additionalProperties: true
     GeminiOpenapi_ErrorResponse:
       type: object
       properties:
@@ -90454,6 +90325,43 @@ components:
               type: string
             status:
               type: string
+    Part:
+      type: object
+      properties:
+        text:
+          type: string
+          description: Generated or input text content.
+        inline_data:
+          type: object
+          description: Inline binary data for multimodal content.
+        thoughtSignature:
+          type: string
+          description: Provider-generated thought signature metadata.
+      additionalProperties: true
+    Candidate:
+      type: object
+      properties:
+        content:
+          $ref: '#/components/schemas/Content'
+        finishReason:
+          type: string
+        index:
+          type: integer
+        safetyRatings:
+          type: array
+          items:
+            type: object
+      additionalProperties: true
+    UsageMetadata:
+      type: object
+      properties:
+        promptTokenCount:
+          type: integer
+        candidatesTokenCount:
+          type: integer
+        totalTokenCount:
+          type: integer
+      additionalProperties: true
     InterestRatesResponse:
       type: object
       properties:
@@ -90622,13 +90530,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/InsiderTrade'
-    InstitutionalOwnershipResponse:
-      type: object
-      properties:
-        institutional-ownership:
-          type: array
-          items:
-            $ref: '#/components/schemas/InstitutionalOwnership'
     FinancialsResponse:
       type: object
       properties:
@@ -90647,13 +90548,6 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/CashFlowStatement'
-    SegmentedRevenuesResponse:
-      type: object
-      properties:
-        segmented_revenues:
-          type: array
-          items:
-            $ref: '#/components/schemas/SegmentedRevenues'
     IncomeStatementResponse:
       type: object
       properties:
@@ -90712,13 +90606,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/FilingItem'
-    PressReleasesResponse:
-      type: object
-      properties:
-        press_releases:
-          type: array
-          items:
-            $ref: '#/components/schemas/PressRelease'
     PriceSnapshotResponse:
       type: object
       properties:
@@ -92662,10 +92549,11 @@ components:
           type: string
           enum:
           - COMPLETE
-          - SUMMARY
-          - BULLET_POINTS
-          default: COMPLETE
-          description: Format of the explanation response
+          - INCREMENTAL
+          - NON_STREAMING
+          default: NON_STREAMING
+          description: Format of the explanation response. COMPLETE and INCREMENTAL stream server-sent events; NON_STREAMING
+            returns a JSON response.
         language:
           type: string
           default: en
@@ -92682,38 +92570,12 @@ components:
     ExplainSearchResponse:
       type: object
       required:
-      - search_id
-      - explanation
+      - message
       properties:
-        search_id:
+        message:
           type: string
-          description: ID of the search being explained
-        explanation:
-          type: string
-          description: Detailed explanation of the search results
-        language:
-          type: string
-          description: Language of the explanation
-        response_mode:
-          type: string
-          description: Format of the response
-        summary:
-          type: string
-          description: Brief summary of the explanation
-        key_insights:
-          type: array
-          items:
-            type: string
-          description: List of key insights from the search results
-        confidence_score:
-          type: number
-          minimum: 0
-          maximum: 1
-          description: Confidence score for the explanation
-        generated_at:
-          type: string
-          format: date-time
-          description: Timestamp when the explanation was generated
+          description: Generated explanation text.
+      description: JSON explanation response returned when response_mode is NON_STREAMING.
     PlatformTxyzOpenapi_ErrorResponse:
       type: object
       properties:

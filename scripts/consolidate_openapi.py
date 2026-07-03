@@ -6,8 +6,8 @@ Reads all JSON specs from the openapi/ directory, merges paths (with correct
 server-path prefixes) and schemas, and outputs a single OpenAPI 3.1 YAML file
 that includes the x402 (pay-per-call) surface:
 
-  * Three top-level servers: /apis/v1 (Bearer), /apis/v2 (x402),
-    /v1 (LLM, OpenAI-compatible).
+  * Four top-level servers: /apis/v1 (Bearer), /apis/v2 (x402),
+    /v1 (LLM, OpenAI-compatible), and /v1beta (Gemini-compatible).
   * Every paid data-API op carries an `x-x402.path` with its absolute
     `/apis/v2/{rel}` route and an `x-x402.source` link to the open-source
     aisa-proxy gateway. The top-level `/apis/v2` server also makes those
@@ -97,7 +97,10 @@ TAG_DESCRIPTIONS = {
 # `servers` list inside build_unified_spec().
 DATA_API_SERVER_URL = "https://api.aisa.one/apis/v1"
 DATA_API_X402_SERVER_URL = "https://api.aisa.one/apis/v2"
-LLM_SERVER_URL = "https://api.aisa.one/v1"
+LLM_SERVER_URLS = {
+    "https://api.aisa.one/v1",
+    "https://api.aisa.one/v1beta",
+}
 X402_IMPLEMENTATION_URL = "https://github.com/AIsa-team/aisa-proxy"
 
 COMPONENT_SECTIONS = (
@@ -136,11 +139,11 @@ def is_v2_excluded(path_key):
 
 
 def is_llm_op(operation):
-    """Return True if the operation has an LLM /v1 server override."""
+    """Return True if the operation has an LLM server override."""
     if not isinstance(operation, dict):
         return False
     for s in operation.get("servers") or []:
-        if isinstance(s, dict) and s.get("url") == LLM_SERVER_URL:
+        if isinstance(s, dict) and s.get("url") in LLM_SERVER_URLS:
             return True
     return False
 
@@ -148,7 +151,7 @@ def is_llm_op(operation):
 def inject_x402_annotations(spec):
     """Annotate every data-API operation with `x-x402`.
 
-    The signal for "this op is paid via x402" is absence of an LLM /v1
+    The signal for "this op is paid via x402" is absence of an LLM
     server override AND not on the denylist. The annotation holds NO
     pricing — prices change upstream and live in the runtime HTTP 402
     challenge response. We expose only the absolute v2 path and link
@@ -258,16 +261,17 @@ def build_unified_spec():
             "license": {"name": "MIT", "url": "https://opensource.org/licenses/MIT"},
             "termsOfService": "https://aisa.one/tos",
         },
-        # Three-server setup. Data API ops inherit the top-level list,
+        # Four-server setup. Data API ops inherit the top-level list,
         # so OpenAPI consumers can pick /apis/v1 (Bearer) or /apis/v2
         # (x402 pay-per-call) at call time. LLM ops have an
-        # operation-level override that pins them to /v1.
+        # operation-level override that pins them to /v1 or /v1beta.
         #
         #   * /apis/v1 — default server for data APIs (Bearer)
         #   * /apis/v2 — same data API surface, mirrored for x402
         #     pay-per-call. No registration; receive HTTP 402 challenge,
         #     settle with stablecoin micropayment. Spec: x402.org
         #   * /v1     — LLM inference (OpenAI-compatible)
+        #   * /v1beta — Gemini-compatible generateContent
         #
         # Path keys stay relative to whichever server applies, matching
         # the per-file spec convention.
@@ -297,6 +301,10 @@ def build_unified_spec():
             {
                 "url": "https://api.aisa.one/v1",
                 "description": "AIsa LLM Inference (OpenAI-compatible, Bearer auth)",
+            },
+            {
+                "url": "https://api.aisa.one/v1beta",
+                "description": "AIsa Gemini-compatible GenerateContent (Bearer auth)",
             },
         ],
         "security": [{"BearerAuth": []}],
@@ -338,7 +346,7 @@ def build_unified_spec():
             )
 
         # Detect which top-level server this file's paths resolve
-        # against. /v1 specs need an operation-level `servers` override
+        # against. LLM specs need an operation-level `servers` override
         # in the unified spec; /apis/v1 specs use the default (first)
         # server and need no override. Path keys are kept RELATIVE in
         # the unified output, matching the per-file convention.
@@ -352,7 +360,7 @@ def build_unified_spec():
         # balance-sheets`.
         servers = spec.get("servers", [])
         file_server_url = servers[0].get("url", "") if servers else ""
-        is_llm = file_server_url == "https://api.aisa.one/v1"
+        is_llm = file_server_url in LLM_SERVER_URLS
         default_server_url = unified["servers"][0]["url"]
         path_prefix = ""
         if (
@@ -368,12 +376,12 @@ def build_unified_spec():
                     operation["tags"] = [tag]
                     # Drop any per-op servers from the input file
                     operation.pop("servers", None)
-                    # Add LLM-server override on operations from /v1
-                    # files so OpenAPI consumers route them to /v1
+                    # Add LLM-server override on operations from LLM
+                    # files so OpenAPI consumers route them to /v1 or /v1beta
                     # instead of the default /apis/v1.
                     if is_llm:
                         operation["servers"] = [
-                            {"url": "https://api.aisa.one/v1"}
+                            {"url": file_server_url}
                         ]
 
             full_path = path_prefix + path

@@ -1,20 +1,20 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Google Gemini Generate Content API",
+    "title": "Gemini-compatible Generate Content API",
     "version": "v1beta",
-    "description": "Google Gemini API for content generation (text, image, audio) based on official documentation."
+    "description": "AIsa Gemini-compatible API for native generateContent requests."
   },
   "servers": [
     {
-      "url": "https://api.aisa.one/v1",
-      "description": "Gemini API base URL"
+      "url": "https://api.aisa.one/v1beta",
+      "description": "Gemini-compatible API base URL"
     }
   ],
   "paths": {
     "/models/{model}:generateContent": {
       "post": {
-        "summary": "Generate content using the specified Gemini model",
+        "summary": "Generate content using a Gemini-compatible AIsa model",
         "operationId": "generateContent",
         "parameters": [
           {
@@ -22,9 +22,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "example": "gemini-3.5-flash"
             },
-            "description": "The name of the model to use, format: models/{model}"
+            "description": "The AIsa model ID to use, for example: gemini-3.5-flash."
           }
         ],
         "requestBody": {
@@ -124,35 +125,20 @@
           "parts": {
             "type": "array",
             "items": {
-              "oneOf": [
-                {
-                  "type": "object",
-                  "properties": {
-                    "text": {
-                      "type": "string"
-                    }
-                  }
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "inline_data": {
-                      "type": "object"
-                    }
-                  }
-                }
-              ]
+              "$ref": "#/components/schemas/Part"
             }
           },
           "role": {
             "type": "string",
             "enum": [
-              "system",
               "user",
+              "model",
+              "system",
               "assistant"
             ]
           }
-        }
+        },
+        "additionalProperties": true
       },
       "Tool": {
         "type": "object"
@@ -169,10 +155,20 @@
           "candidates": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Content"
+              "$ref": "#/components/schemas/Candidate"
             }
+          },
+          "usageMetadata": {
+            "$ref": "#/components/schemas/UsageMetadata"
+          },
+          "modelVersion": {
+            "type": "string"
+          },
+          "responseId": {
+            "type": "string"
           }
-        }
+        },
+        "additionalProperties": true
       },
       "ErrorResponse": {
         "type": "object",
@@ -192,6 +188,60 @@
             }
           }
         }
+      },
+      "Part": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Generated or input text content."
+          },
+          "inline_data": {
+            "type": "object",
+            "description": "Inline binary data for multimodal content."
+          },
+          "thoughtSignature": {
+            "type": "string",
+            "description": "Provider-generated thought signature metadata."
+          }
+        },
+        "additionalProperties": true
+      },
+      "Candidate": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/Content"
+          },
+          "finishReason": {
+            "type": "string"
+          },
+          "index": {
+            "type": "integer"
+          },
+          "safetyRatings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "UsageMetadata": {
+        "type": "object",
+        "properties": {
+          "promptTokenCount": {
+            "type": "integer"
+          },
+          "candidatesTokenCount": {
+            "type": "integer"
+          },
+          "totalTokenCount": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true
       }
     }
   },
