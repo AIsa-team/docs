@@ -1,11 +1,11 @@
 ---
 title: "Prediction Market Arbitrage ZH"
-description: "对比 Polymarket 和 Kalshi，发现潜在跨平台价差。"
+description: "基于当前已挂载的 Polymarket 和 Kalshi discovery endpoint 做跨市场候选研究。"
 ---
 
 [View on GitHub ->](https://github.com/AIsa-team/agent-skills/tree/main/prediction-market-arbitrage-zh)
 
-**预测市场套利扫描。** 对比 Polymarket 和 Kalshi 的价格与流动性，帮助发现跨平台价差机会。
+**预测市场跨平台研究。** 用 AIsa 查询当前已挂载的 Polymarket 和 Kalshi 市场发现数据，识别可能相同或相关的事件；如需实时价格、订单簿深度或交易执行，请继续使用交易所官方 API 或交易系统验证。
 
 ## Install
 
@@ -24,17 +24,17 @@ aisa skills install prediction-market-arbitrage-zh
 ## What can agents do with it?
 
 <CardGroup cols={2}>
-  <Card title="Cross-platform scans" icon="shuffle">
-    Compare equivalent markets across venues.
+  <Card title="Cross-market discovery" icon="shuffle">
+    Find related Polymarket and Kalshi markets for the same topic.
   </Card>
-  <Card title="Spread detection" icon="arrows-left-right">
-    Identify price differences worth deeper analysis.
+  <Card title="Candidate pairing" icon="arrows-left-right">
+    Compare titles, slugs, tickers, event names, and close times.
   </Card>
-  <Card title="Liquidity checks" icon="droplet">
-    Review whether an apparent spread is actionable.
+  <Card title="Liquidity triage" icon="droplet">
+    Use discovery response volume/liquidity fields to decide where to investigate further.
   </Card>
   <Card title="Chinese summaries" icon="language">
-    Produce Chinese-language arbitrage notes.
+    Produce Chinese-language research notes from mounted market data.
   </Card>
 </CardGroup>
 
@@ -44,90 +44,64 @@ aisa skills install prediction-market-arbitrage-zh
 export AISA_API_KEY="your-key"
 ```
 
-在 [aisa.one](https://aisa.one) 获取 Key（$0.01/次查询，按量付费）。
+在 [aisa.one](https://aisa.one) 获取 Key（按量付费）。
 
 ## 工作流程
 
-发现套利机会的步骤：
+跨平台研究步骤：
 
-1. **扫描匹配市场**（`scan` 批量扫描，`match` 分析特定市场）
-2. **查看价差** — 工具自动计算跨平台价格差异
-3. **验证流动性** — 用 `prediction_market_client.py orderbooks` 检查订单簿深度后再行动
+1. **发现候选市场**：查询 `/polymarket/markets`、`/polymarket/events` 和 `/kalshi/markets`。
+2. **人工/程序化配对**：按标题、slug、ticker、event_ticker、队伍/赛事名、结束时间等字段找可能等价的市场。
+3. **外部验证价格与深度**：AIsa 当前未挂载 price/orderbook/matching endpoint；交易前请用交易所官方 API 或交易系统验证实时价格、订单簿和可成交规模。
+
+<Warning>
+  旧版 AIsa-hosted price、orderbook、matching-market 示例已移除，因为鉴权实测返回 `api endpoint not found`。不要把 discovery 数据直接当成可执行报价。
+</Warning>
 
 ## 快速示例
 
-### 扫描某项运动的套利机会
+### 1. 查询 Polymarket 候选市场
 
 ```bash
-# 扫描指定日期所有 NBA 市场 — 自动显示价差
-python3 scripts/arbitrage_finder.py scan nba --date 2025-04-01
+python3 scripts/prediction_market_client.py polymarket markets --limit 5
+python3 scripts/prediction_market_client.py polymarket events --limit 5
 ```
 
-### 分析特定市场
+### 2. 查询 Kalshi 候选市场
 
 ```bash
-# 通过 Polymarket slug
-python3 scripts/arbitrage_finder.py match --polymarket-slug <slug>
-
-# 通过 Kalshi ticker
-python3 scripts/arbitrage_finder.py match --kalshi-ticker <ticker>
+python3 scripts/prediction_market_client.py kalshi markets --status open --limit 5
+python3 scripts/prediction_market_client.py kalshi trades --limit 5 --is-block-trade false
 ```
 
-### 行动前验证流动性
+### 3. 配对并外部验证
 
-```bash
-# 检查两边的订单簿深度
-python3 scripts/prediction_market_client.py polymarket orderbooks --token-id <id>
-python3 scripts/prediction_market_client.py kalshi orderbooks --ticker <ticker>
-```
+用 Polymarket `slug`/`question`/`conditionId` 和 Kalshi `ticker`/`event_ticker`/`title` 做候选配对。若要判断是否有价差，继续调用交易所官方 API 获取实时 YES/NO 价格与订单簿深度。
 
 ## 命令参考
 
-### arbitrage_finder.py — 自动检测
+### prediction_market_client.py — 已挂载市场数据
 
 ```bash
-python3 scripts/arbitrage_finder.py scan <运动类型> --date <YYYY-MM-DD> [--min-spread <百分比>] [--min-liquidity <美元>] [--json]
-python3 scripts/arbitrage_finder.py match --polymarket-slug <slug> [--min-spread <百分比>] [--min-liquidity <美元>] [--json]
-python3 scripts/arbitrage_finder.py match --kalshi-ticker <ticker> [--min-spread <百分比>] [--min-liquidity <美元>] [--json]
-```
+# Polymarket discovery
+python3 scripts/prediction_market_client.py polymarket markets [--limit <数值>]
+python3 scripts/prediction_market_client.py polymarket events [--limit <数值>]
+python3 scripts/prediction_market_client.py polymarket activity --user <钱包地址> [--limit <数值>]
 
-支持：`nba`、`nfl`、`mlb`、`nhl`、`soccer`、`tennis`。
-
-### prediction_market_client.py — 原始市场数据
-
-用于手动价格检查和深入分析。
-
-```bash
-# 搜索市场
-python3 scripts/prediction_market_client.py polymarket markets --search <关键词> --status open --limit 5
-python3 scripts/prediction_market_client.py kalshi markets --search <关键词> --status open --limit 5
-
-# 获取价格（使用 markets 输出中的 token_id / market_ticker）
-python3 scripts/prediction_market_client.py polymarket price <token_id>
-python3 scripts/prediction_market_client.py kalshi price <market_ticker>
-
-# 跨平台体育市场匹配
-python3 scripts/prediction_market_client.py sports by-date <运动类型> --date <YYYY-MM-DD>
-python3 scripts/prediction_market_client.py sports matching (--polymarket-slug <slug> | --kalshi-ticker <ticker>)
-
-# 订单簿深度
-python3 scripts/prediction_market_client.py polymarket orderbooks --token-id <id>
-python3 scripts/prediction_market_client.py kalshi orderbooks --ticker <ticker>
+# Kalshi discovery/trades
+python3 scripts/prediction_market_client.py kalshi markets [--status unopened|open|paused|closed|settled] [--limit <数值>]
+python3 scripts/prediction_market_client.py kalshi trades [--ticker <ticker>] [--is-block-trade true|false] [--limit <数值>]
 ```
 
 ## 理解套利
 
-当不同平台上所有互斥结果的合计成本低于 `1.0` 时，套利机会存在：
-
-> Polymarket 上 "Yes" 价格 `0.40` + Kalshi 上 "No" 价格 `0.55` = 成本 `0.95`，保证回报 `1.00` -> 5.3% 利润。
-
-务必验证订单簿深度 — 没有流动性的价差无法执行。
+真正的套利需要实时、可成交的互斥结果报价，并考虑手续费、滑点、订单簿深度和平台风险。当前 AIsa Prediction Market surface 适合做候选发现，不应单独用于下单判断。
 
 ## 安全与权限
 
 **需要：** `AISA_API_KEY` 环境变量。
 
-所有操作均为**只读**，通过 HTTPS GET 请求 `api.aisa.one`。套利价差在本地计算。不执行交易、不连接钱包、除 API Key 外不发送个人数据。每个响应包含 `usage.cost` 和 `usage.credits_remaining`。
+所有 AIsa 调用均为**只读**，通过 HTTPS GET 请求 `api.aisa.one`。不执行交易、不连接钱包、除 API Key 外不发送个人数据。
 
 完整文档：[AIsa API 参考](https://aisa.one/docs/api-reference)。
 
@@ -147,12 +121,12 @@ python3 scripts/prediction_market_client.py kalshi orderbooks --ticker <ticker>
 
 <CardGroup cols={3}>
   <Card title="Prediction Market Arbitrage" icon="scale-balanced" href="/agent-skills/prediction-market-arbitrage">
-    English-language arbitrage workflow.
+    English-language cross-market research workflow.
   </Card>
   <Card title="Prediction Market Data ZH" icon="chart-simple" href="/agent-skills/prediction-market-data-zh">
     Chinese-language market data workflow.
   </Card>
   <Card title="Prediction Market API" icon="code" href="/api-reference/prediction-market/get_polymarket-markets">
-    Market data endpoint reference.
+    Mounted Polymarket and Kalshi endpoint reference.
   </Card>
 </CardGroup>
