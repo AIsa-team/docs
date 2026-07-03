@@ -1,11 +1,11 @@
 ---
 title: "Media Gen"
-description: "Unified image and video generation for autonomous agents. Gemini 3 Pro Image via GenerateContent; Qwen Wan 2.6 text-to-video via an async task API. One API key, two modalities."
+description: "Unified media generation for autonomous agents. Gemini-compatible GenerateContent for text/multimodal calls; Qwen Wan 2.6 text-to-video via an async task API. One API key, two modalities."
 ---
 
 [View on GitHub →](https://github.com/AIsa-team/agent-skills/tree/main/media-gen)
 
-**AI-powered image and video generation for autonomous agents.** One `AISA_API_KEY` unlocks Gemini 3 Pro Image and Qwen Wan 2.6 — high-fidelity synthesis from text or reference images.
+**AI-powered media generation for autonomous agents.** One `AISA_API_KEY` unlocks Gemini-compatible GenerateContent and Qwen Wan 2.6 video synthesis.
 
 ## Install
 
@@ -46,7 +46,7 @@ aisa skills install media-gen
 
 ## Core capabilities
 
-- **Image generation** — `gemini-3-pro-image-preview` via the `/v1/models/{model}:generateContent` endpoint. Returns base64 image data.
+- **Gemini-compatible generation** — use `POST /v1beta/models/{model}:generateContent` with a verified model such as `gemini-3.5-flash` for native Gemini-format content generation.
 - **Video generation** — `wan2.6-t2v` (text-to-video) and image-to-video via an async task system. POST creates a task, GET polls status.
 - **Asynchronous workflow** — long-running video jobs are handled with `X-DashScope-Async: enable` + status polling.
 
@@ -56,20 +56,21 @@ aisa skills install media-gen
 export AISA_API_KEY="your-key"
 ```
 
-### Image generation
+### Gemini-compatible generation
 
 ```bash
-curl -X POST "https://api.aisa.one/v1/models/gemini-3-pro-image-preview:generateContent" \
+curl -X POST "https://api.aisa.one/v1beta/models/gemini-3.5-flash:generateContent" \
   -H "Authorization: Bearer $AISA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "contents": [
-      {"role": "user", "parts": [{"text": "A cute red panda, ultra-detailed, cinematic lighting"}]}
-    ]
+      {"role": "user", "parts": [{"text": "Return exactly: ok"}]}
+    ],
+    "generationConfig": {"maxOutputTokens": 16}
   }'
 ```
 
-The response returns base64-encoded image data in `candidates[0].content.parts[0].inline_data.data`.
+The response follows the Gemini `GenerateContentResponse` shape, with generated text in `candidates[0].content.parts[0].text`.
 
 ### Video generation (async)
 
@@ -97,9 +98,6 @@ When the task status is `SUCCEEDED`, the response includes a `video_url` you can
 ## Python client
 
 ```bash
-# Image
-python3 scripts/media_gen_client.py image --prompt "A cute red panda" --out out.png
-
 # Video — create + poll + download in one command
 python3 scripts/media_gen_client.py video-wait \
   --prompt "cinematic close-up, slow push-in" \
@@ -114,7 +112,7 @@ python3 scripts/media_gen_client.py video-status --task-id YOUR_TASK_ID
 
 | Endpoint                                                  | Method | Purpose                                                                                                 |
 | --------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------- |
-| `/v1/models/{model}:generateContent`                      | POST   | [Image generation (Gemini 3)](/api-reference/chat/generatecontent)                                      |
+| `/v1beta/models/{model}:generateContent`                  | POST   | [Gemini-compatible generation](/api-reference/chat/generatecontent)                                     |
 | `/apis/v1/services/aigc/video-generation/video-synthesis` | POST   | [Create video task](/api-reference/video/post_services-aigc-video-generation-video-synthesis)           |
 | `/apis/v1/services/aigc/tasks`                            | GET    | [Poll video task status](/api-reference/video/get_services-aigc-tasks)                                  |
 
@@ -134,8 +132,8 @@ python3 scripts/media_gen_client.py video-status --task-id YOUR_TASK_ID
   <Card title="Video API reference" icon="video" href="/api-reference/video/post_services-aigc-video-generation-video-synthesis">
     Create-task and poll-status endpoints with live playgrounds.
   </Card>
-  <Card title="Gemini generateContent" icon="image" href="/api-reference/chat/generatecontent">
-    Image generation endpoint reference.
+  <Card title="Gemini generateContent" icon="google" href="/api-reference/chat/generatecontent">
+    Gemini-compatible generation endpoint reference.
   </Card>
   <Card title="Async Operations" icon="hourglass-half" href="/api-reference/async-operations">
     How task creation and polling work end-to-end.

@@ -275,7 +275,7 @@
     "/scholar/search/explain": {
       "post": {
         "summary": "Explain search results",
-        "description": "Generate explanations for search results in different languages and formats",
+        "description": "Generate explanations for search results in different languages and formats. The COMPLETE and INCREMENTAL response modes stream server-sent events; NON_STREAMING returns a JSON response.",
         "operationId": "explainSearch",
         "tags": [
           "Search",
@@ -298,12 +298,19 @@
         },
         "responses": {
           "200": {
-            "description": "Successful explanation response",
+            "description": "Successful explanation response. COMPLETE/INCREMENTAL stream text/event-stream; NON_STREAMING returns application/json.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ExplainSearchResponse"
-                }
+                },
+                "description": "Returned when response_mode is NON_STREAMING."
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Server-sent event stream returned when response_mode is COMPLETE or INCREMENTAL."
               }
             }
           },
@@ -598,11 +605,11 @@
             "type": "string",
             "enum": [
               "COMPLETE",
-              "SUMMARY",
-              "BULLET_POINTS"
+              "INCREMENTAL",
+              "NON_STREAMING"
             ],
-            "default": "COMPLETE",
-            "description": "Format of the explanation response"
+            "default": "NON_STREAMING",
+            "description": "Format of the explanation response. COMPLETE and INCREMENTAL stream server-sent events; NON_STREAMING returns a JSON response."
           },
           "language": {
             "type": "string",
@@ -625,49 +632,15 @@
       "ExplainSearchResponse": {
         "type": "object",
         "required": [
-          "search_id",
-          "explanation"
+          "message"
         ],
         "properties": {
-          "search_id": {
+          "message": {
             "type": "string",
-            "description": "ID of the search being explained"
-          },
-          "explanation": {
-            "type": "string",
-            "description": "Detailed explanation of the search results"
-          },
-          "language": {
-            "type": "string",
-            "description": "Language of the explanation"
-          },
-          "response_mode": {
-            "type": "string",
-            "description": "Format of the response"
-          },
-          "summary": {
-            "type": "string",
-            "description": "Brief summary of the explanation"
-          },
-          "key_insights": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "List of key insights from the search results"
-          },
-          "confidence_score": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "description": "Confidence score for the explanation"
-          },
-          "generated_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Timestamp when the explanation was generated"
+            "description": "Generated explanation text."
           }
-        }
+        },
+        "description": "JSON explanation response returned when response_mode is NON_STREAMING."
       },
       "ErrorResponse": {
         "type": "object",
