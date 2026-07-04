@@ -1,11 +1,11 @@
 ---
 title: "Media Gen"
-description: "Unified media generation for autonomous agents. Gemini-compatible GenerateContent for text/multimodal calls; Qwen Wan 2.6 text-to-video via an async task API. One API key, two modalities."
+description: "Unified media generation for autonomous agents. Gemini-compatible GenerateContent for text/multimodal calls; image/media generation routes. One API key, two modalities."
 ---
 
 [View on GitHub →](https://github.com/AIsa-team/agent-skills/tree/main/media-gen)
 
-**AI-powered media generation for autonomous agents.** One `AISA_API_KEY` unlocks Gemini-compatible GenerateContent and Qwen Wan 2.6 video synthesis.
+**AI-powered media generation for autonomous agents.** One `AISA_API_KEY` unlocks Gemini-compatible GenerateContent and image/media generation routes.
 
 ## Install
 
@@ -28,13 +28,13 @@ aisa skills install media-gen
     "Generate a cinematic hero image for a product launch deck."
   </Card>
   <Card title="Social content" icon="hashtag">
-    "Create a 5-second video loop for the next post."
+    "Create social-ready image variations for the next post."
   </Card>
   <Card title="Storyboarding" icon="film">
     "Produce 6 key frames illustrating the happy path of a user journey."
   </Card>
-  <Card title="Reference-to-video" icon="image">
-    "Animate this static mock into a cinematic slow push-in."
+  <Card title="Reference images" icon="image">
+    "Use this static mock as visual context for a generated creative."
   </Card>
   <Card title="Photorealism" icon="camera">
     "8k ultra-detailed cyberpunk skyline with neon rain."
@@ -47,8 +47,6 @@ aisa skills install media-gen
 ## Core capabilities
 
 - **Gemini-compatible generation** — use `POST /v1beta/models/{model}:generateContent` with a verified model such as `gemini-3.5-flash` for native Gemini-format content generation.
-- **Video generation** — `wan2.6-t2v` (text-to-video) and image-to-video via an async task system. POST creates a task, GET polls status.
-- **Asynchronous workflow** — long-running video jobs are handled with `X-DashScope-Async: enable` + status polling.
 
 ## Quick start
 
@@ -72,49 +70,11 @@ curl -X POST "https://api.aisa.one/v1beta/models/gemini-3.5-flash:generateConten
 
 The response follows the Gemini `GenerateContentResponse` shape, with generated text in `candidates[0].content.parts[0].text`.
 
-### Video generation (async)
-
-```bash
-# 1. Create the task
-curl -X POST "https://api.aisa.one/apis/v1/services/aigc/video-generation/video-synthesis" \
-  -H "Authorization: Bearer $AISA_API_KEY" \
-  -H "Content-Type: application/json" \
-  -H "X-DashScope-Async: enable" \
-  -d '{
-    "model": "wan2.6-t2v",
-    "input": {
-      "prompt": "cinematic close-up, slow push-in, shallow depth of field",
-      "img_url": "https://example.com/reference.jpg"
-    }
-  }'
-
-# Response includes a task_id. Poll for completion:
-curl "https://api.aisa.one/apis/v1/services/aigc/tasks?task_id=YOUR_TASK_ID" \
-  -H "Authorization: Bearer $AISA_API_KEY"
-```
-
-When the task status is `SUCCEEDED`, the response includes a `video_url` you can download.
-
-## Python client
-
-```bash
-# Video — create + poll + download in one command
-python3 scripts/media_gen_client.py video-wait \
-  --prompt "cinematic close-up, slow push-in" \
-  --download --out out.mp4
-
-# Or create/poll separately
-python3 scripts/media_gen_client.py video-create --prompt "cinematic sunset"
-python3 scripts/media_gen_client.py video-status --task-id YOUR_TASK_ID
-```
-
 ## Endpoint reference
 
 | Endpoint                                                  | Method | Purpose                                                                                                 |
 | --------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------- |
 | `/v1beta/models/{model}:generateContent`                  | POST   | [Gemini-compatible generation](/api-reference/chat/generatecontent)                                     |
-| `/apis/v1/services/aigc/video-generation/video-synthesis` | POST   | [Create video task](/api-reference/video/post_services-aigc-video-generation-video-synthesis)           |
-| `/apis/v1/services/aigc/tasks`                            | GET    | [Poll video task status](/api-reference/video/get_services-aigc-tasks)                                  |
 
 ## Get started
 
@@ -129,13 +89,7 @@ python3 scripts/media_gen_client.py video-status --task-id YOUR_TASK_ID
 ## Related
 
 <CardGroup cols={3}>
-  <Card title="Video API reference" icon="video" href="/api-reference/video/post_services-aigc-video-generation-video-synthesis">
-    Create-task and poll-status endpoints with live playgrounds.
-  </Card>
   <Card title="Gemini generateContent" icon="google" href="/api-reference/chat/generatecontent">
     Gemini-compatible generation endpoint reference.
-  </Card>
-  <Card title="Async Operations" icon="hourglass-half" href="/api-reference/async-operations">
-    How task creation and polling work end-to-end.
   </Card>
 </CardGroup>

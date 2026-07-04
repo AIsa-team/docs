@@ -50,7 +50,6 @@ FILE_TAG_MAP = {
     "perplexity-openapi.json": "AI Models",
     "openai-images-generations.json": "Image Generation",
     "chat-image-generation.json": "Image Generation",
-    "aliyun-video.json": "Video Generation",
     "twitter-user-batch_01.json": "Twitter / X",
     "twitter-user-batch_02.json": "Twitter / X",
     "twitter-tweet-batch_01.json": "Twitter / X",
