@@ -2820,6 +2820,138 @@
             }
           ]
         }
+      },
+      "CoinGeckoObject": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "CoinGeckoObjectArray": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "CoinGeckoStringArray": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "CoinGeckoMarketChart": {
+        "type": "object",
+        "properties": {
+          "prices": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "market_caps": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "total_volumes": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "CoinGeckoOHLC": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      },
+      "CoinGeckoTickersResponse": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "tickers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "CoinGeckoSimplePriceMap": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "CoinGeckoNewsArticleArray": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "image": {
+              "type": "string"
+            },
+            "author": {
+              "type": "string"
+            },
+            "posted_at": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string"
+            },
+            "source_name": {
+              "type": "string"
+            },
+            "related_coin_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "CoinGeckoError": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "error": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
       }
     }
   },
@@ -2856,7 +2988,10 @@
                     "symbol": "eth",
                     "name": "Ethereum"
                   }
-                ]
+                ],
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoObjectArray"
+                }
               }
             }
           }
@@ -2880,7 +3015,10 @@
                   "eur",
                   "jpy",
                   "gbp"
-                ]
+                ],
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoStringArray"
+                }
               }
             }
           }
@@ -2962,11 +3100,46 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "en"
+            },
+            "description": "Response language locale. Official values include `en`, `zh`, `zh-tw`, and other supported CoinGecko locales.",
+            "example": "en"
+          },
+          {
+            "name": "precision",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "`full` or a value from `0` to `18` to specify decimal places for currency price values.",
+            "example": "2"
+          },
+          {
+            "name": "include_rehypothecated",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Include rehypothecated tokens in market data when supported by CoinGecko."
           }
         ],
         "responses": {
           "200": {
-            "description": "Array of coin market entries."
+            "description": "Array of coin market entries.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoObjectArray"
+                }
+              }
+            }
           }
         }
       }
@@ -3031,7 +3204,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Coin object."
+            "description": "Coin object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoObject"
+                }
+              }
+            }
           }
         }
       }
@@ -3116,6 +3296,9 @@
                     "usd": 3412.0,
                     "eur": 3147.8
                   }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoSimplePriceMap"
                 }
               }
             }
@@ -3141,13 +3324,23 @@
           {
             "name": "interval",
             "in": "query",
-            "description": "`daily` (default when days \u2265 90), else auto-granular.",
+            "description": "Data interval. CoinGecko supports `daily`; `hourly` is also available for supported ranges.",
             "schema": {
               "type": "string",
               "enum": [
-                "daily"
+                "daily",
+                "hourly"
               ]
             }
+          },
+          {
+            "name": "precision",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "`full` or a value from `0` to `18` to specify decimal places for currency price values.",
+            "example": "2"
           }
         ],
         "responses": {
@@ -3178,6 +3371,9 @@
                       25679876543
                     ]
                   ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoMarketChart"
                 }
               }
             }
@@ -3211,7 +3407,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Array of exchange objects."
+            "description": "Array of exchange objects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoObjectArray"
+                }
+              }
+            }
           }
         }
       }
@@ -3237,6 +3440,9 @@
                       }
                     }
                   ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoObject"
                 }
               }
             }
@@ -3263,7 +3469,10 @@
                     "category_id": "meme-token",
                     "name": "Meme"
                   }
-                ]
+                ],
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoObjectArray"
+                }
               }
             }
           }
@@ -3314,11 +3523,27 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "name": "include_exchange_logo",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Show exchange logos in ticker results."
           }
         ],
         "responses": {
           "200": {
-            "description": "Tickers array."
+            "description": "Tickers array.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoTickersResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -3353,7 +3578,24 @@
         ],
         "responses": {
           "200": {
-            "description": "Snapshot object for the given date."
+            "description": "Snapshot object for the given date.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "CoinGecko plan restriction or authorization error returned by the upstream provider.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoError"
+                }
+              }
+            }
           }
         }
       }
@@ -3379,6 +3621,15 @@
               "type": "string"
             },
             "example": "7"
+          },
+          {
+            "name": "precision",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "`full` or a value from `0` to `18` to specify decimal places for currency price values.",
+            "example": "2"
           }
         ],
         "responses": {
@@ -3394,7 +3645,10 @@
                     66900,
                     67234.12
                   ]
-                ]
+                ],
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoOHLC"
+                }
               }
             }
           }
@@ -3420,7 +3674,10 @@
                     "id": "gdax",
                     "name": "Coinbase Exchange"
                   }
-                ]
+                ],
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoObjectArray"
+                }
               }
             }
           }
@@ -3439,7 +3696,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Exchange object."
+            "description": "Exchange object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoObject"
+                }
+              }
+            }
           }
         }
       }
@@ -3468,7 +3732,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Array of categories with market data."
+            "description": "Array of categories with market data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoObjectArray"
+                }
+              }
+            }
           }
         }
       }
@@ -3476,7 +3747,7 @@
     "/coingecko/news": {
       "get": {
         "summary": "Crypto News",
-        "description": "Latest crypto news articles aggregated by CoinGecko.",
+        "description": "Latest crypto news articles aggregated by CoinGecko. This upstream endpoint is plan-gated by CoinGecko (Analyst/Lite/Pro/Enterprise or equivalent access).",
         "operationId": "coingeckoNews",
         "responses": {
           "200": {
@@ -3491,11 +3762,75 @@
                       "published_at": 1713398400
                     }
                   ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoNewsArticleArray"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "CoinGecko plan restriction or authorization error returned by the upstream provider.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoError"
                 }
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "coin_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter news by CoinGecko coin ID.",
+            "example": "bitcoin"
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter news by language.",
+            "example": "en"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "news",
+                "guides"
+              ]
+            },
+            "description": "Filter by article type.",
+            "example": "news"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "Page through results."
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100
+            },
+            "description": "Total results per page."
+          }
+        ]
       }
     },
     "/coingecko/exchanges/{id}/tickers": {
@@ -3538,14 +3873,31 @@
               "type": "string",
               "enum": [
                 "trust_score_desc",
+                "trust_score_asc",
                 "volume_desc"
               ]
             }
+          },
+          {
+            "name": "include_exchange_logo",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Show exchange logos in ticker results."
           }
         ],
         "responses": {
           "200": {
-            "description": "Tickers array."
+            "description": "Tickers array.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoTickersResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -3613,11 +3965,27 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "precision",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "`full` or a value from `0` to `18` to specify decimal places for currency price values.",
+            "example": "2"
           }
         ],
         "responses": {
           "200": {
-            "description": "Map keyed by contract address."
+            "description": "Map keyed by contract address.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoSimplePriceMap"
+                }
+              }
+            }
           }
         }
       }
@@ -3698,11 +4066,27 @@
           },
           {
             "$ref": "#/components/parameters/Days"
+          },
+          {
+            "name": "precision",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "`full` or a value from `0` to `18` to specify decimal places for currency price values.",
+            "example": "2"
           }
         ],
         "responses": {
           "200": {
-            "description": "Same shape as `/coins/{id}/market_chart`."
+            "description": "Same shape as `/coins/{id}/market_chart`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoMarketChart"
+                }
+              }
+            }
           }
         }
       }
@@ -3738,11 +4122,110 @@
               "type": "integer"
             },
             "example": 1713484800
+          },
+          {
+            "name": "precision",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "`full` or a value from `0` to `18` to specify decimal places for currency price values.",
+            "example": "2"
           }
         ],
         "responses": {
           "200": {
-            "description": "Same shape as `/coins/{id}/market_chart`."
+            "description": "Same shape as `/coins/{id}/market_chart`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoMarketChart"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "CoinGecko plan restriction or authorization error returned by the upstream provider.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/coingecko/coins/{id}/contract/{contract_address}/market_chart/range": {
+      "get": {
+        "summary": "Coin Market Chart Range by Contract",
+        "description": "Historical market data for a token contract within an explicit UNIX timestamp range.",
+        "operationId": "coingeckoCoinMarketChartRangeByContract",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Asset platform ID (e.g., `ethereum`).",
+            "schema": {
+              "type": "string"
+            },
+            "example": "ethereum"
+          },
+          {
+            "name": "contract_address",
+            "in": "path",
+            "required": true,
+            "description": "Token contract address.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+          },
+          {
+            "$ref": "#/components/parameters/VsCurrency"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "description": "Start UNIX timestamp (seconds).",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 1751328000
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "description": "End UNIX timestamp (seconds).",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 1751414400
+          },
+          {
+            "name": "precision",
+            "in": "query",
+            "description": "`full` or a value from `0` to `18` to specify decimal places for currency price values.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "2"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Same shape as `/coins/{id}/market_chart/range`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoinGeckoMarketChart"
+                }
+              }
+            }
           }
         }
       }
