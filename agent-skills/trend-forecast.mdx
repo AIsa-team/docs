@@ -124,31 +124,29 @@ curl -X POST "https://api.aisa.one/v1/chat/completions" \
 
 ### Step 2: Gather Prediction Market Signals
 
-Prices come in **two steps**: first query `/markets` to find the market and its
-ID, then pass that ID to `/market-price/` to get the current odds. Prices are
-decimals 0–1 representing probability (`0.65` = 65%).
+Use mounted prediction-market discovery endpoints to collect market context. AIsa currently exposes Polymarket market/event discovery and Kalshi markets/trades; use venue-native APIs or trading systems for current price and orderbook checks when the forecast requires executable odds.
 
 ```bash
-# 1. Find Polymarket markets (params: search, status, market_slug, limit)
-curl "https://api.aisa.one/apis/v1/polymarket/markets?search=<PREDICTION_MARKET_QUERY>&status=open&limit=5" \
+# Polymarket markets
+curl "https://api.aisa.one/apis/v1/polymarket/markets?limit=5" \
   -H "Authorization: Bearer $AISA_API_KEY"
 
-# 2. Price a token (token_id = side_a.id or side_b.id from step 1)
-curl "https://api.aisa.one/apis/v1/polymarket/market-price/<TOKEN_ID>" \
+# Polymarket events
+curl "https://api.aisa.one/apis/v1/polymarket/events?limit=5" \
   -H "Authorization: Bearer $AISA_API_KEY"
 ```
 
-For Kalshi, the flow is the same but keyed on `market_ticker`:
+For Kalshi:
 
 ```bash
-curl "https://api.aisa.one/apis/v1/kalshi/markets?search=<PREDICTION_MARKET_QUERY>&limit=5" \
+curl "https://api.aisa.one/apis/v1/kalshi/markets?limit=5&status=open" \
   -H "Authorization: Bearer $AISA_API_KEY"
 
-curl "https://api.aisa.one/apis/v1/kalshi/market-price/<MARKET_TICKER>" \
+curl "https://api.aisa.one/apis/v1/kalshi/trades?limit=5&is_block_trade=false" \
   -H "Authorization: Bearer $AISA_API_KEY"
 ```
 
-Extract: market titles, current YES/NO prices (decimal probability), volume, and recency.
+Extract: market titles, status, volume/liquidity fields, close times, and recent trade context.
 
 ### Step 3: Gather Twitter/X Social Sentiment
 

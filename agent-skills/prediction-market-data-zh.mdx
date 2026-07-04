@@ -1,11 +1,11 @@
 ---
 title: "Prediction Market Data ZH"
-description: "查询 Polymarket 和 Kalshi 的市场、价格、订单簿与交易数据。"
+description: "查询当前已挂载的 Polymarket 和 Kalshi 市场发现、事件、活动与交易历史数据。"
 ---
 
 [View on GitHub ->](https://github.com/AIsa-team/agent-skills/tree/main/prediction-market-data-zh)
 
-**预测市场数据查询。** 用 AIsa 访问 Polymarket 和 Kalshi 的市场、价格、订单簿与交易数据。
+**预测市场数据查询。** 用 AIsa 访问当前已挂载的 Polymarket 和 Kalshi 只读数据接口：市场发现、事件查询、用户活动和 Kalshi 交易历史。
 
 ## Install
 
@@ -27,14 +27,14 @@ aisa skills install prediction-market-data-zh
   <Card title="Market lookup" icon="magnifying-glass-dollar">
     Find relevant prediction markets for a topic.
   </Card>
-  <Card title="Price monitoring" icon="chart-line">
-    Read prices, order books, and market movement.
+  <Card title="Event lookup" icon="calendar-days">
+    Review Polymarket event groups and related markets.
   </Card>
-  <Card title="Wallet research" icon="wallet">
-    Review positions and trade history.
+  <Card title="Trade history" icon="chart-line">
+    Pull recent Kalshi trades with optional ticker and block-trade filters.
   </Card>
   <Card title="Chinese reports" icon="language">
-    Summarize market evidence in Chinese.
+    Summarize mounted market-discovery evidence in Chinese.
   </Card>
 </CardGroup>
 
@@ -44,97 +44,86 @@ aisa skills install prediction-market-data-zh
 export AISA_API_KEY="your-key"
 ```
 
-在 [aisa.one](https://aisa.one) 获取 Key（$0.01/次查询，按量付费）。
+在 [aisa.one](https://aisa.one) 获取 Key（按量付费）。
 
 ## 工作流程
 
 查询预测市场数据的步骤：
 
-1. **搜索市场**获取 ID（必须从这一步开始）
-2. **从返回结果中提取 ID**（`token_id`、`condition_id` 或 `market_ticker`）
-3. **用 ID 查询详情**（价格、订单簿、K线等）
+1. **搜索市场/事件**：先用 Polymarket 或 Kalshi discovery endpoint 找候选市场。
+2. **提取标识符**：例如 Polymarket `slug`/`conditionId`/`clobTokenIds`，Kalshi `ticker`/`event_ticker`。
+3. **继续验证**：如果需要实时价格、订单簿或交易执行，请使用交易所官方 API 或交易系统继续验证。
+
+<Warning>
+  AIsa 当前挂载的是下面列出的 discovery/trade-history endpoint。旧版 AIsa-hosted price、orderbook、wallet、candlestick、matching-market 示例已移除，因为鉴权实测返回 `api endpoint not found`。
+</Warning>
 
 ## 快速示例
 
-### Polymarket：搜索 -> 获取价格
+### Polymarket：市场与事件
 
 ```bash
-# 第一步：搜索市场，提取 token_id（side_a.id 或 side_b.id）
-python3 scripts/prediction_market_client.py polymarket markets --search "election" --status open --limit 5
+# 市场发现
+python3 scripts/prediction_market_client.py polymarket markets --limit 5
 
-# 第二步：用第一步的 token_id 获取价格
-python3 scripts/prediction_market_client.py polymarket price <token_id>
+# 事件查询
+python3 scripts/prediction_market_client.py polymarket events --limit 5
+
+# 指定用户活动
+python3 scripts/prediction_market_client.py polymarket activity --user <钱包地址> --limit 5
 ```
 
-### Kalshi：搜索 -> 获取价格
+### Kalshi：市场与交易
 
 ```bash
-# 第一步：搜索市场，提取 market_ticker
-python3 scripts/prediction_market_client.py kalshi markets --search "fed rate" --status open --limit 5
+# 市场发现
+python3 scripts/prediction_market_client.py kalshi markets --status open --limit 5
 
-# 第二步：用第一步的 market_ticker 获取价格
-python3 scripts/prediction_market_client.py kalshi price <market_ticker>
-```
-
-### 跨平台体育市场
-
-```bash
-python3 scripts/prediction_market_client.py sports by-date nba --date 2025-04-01
+# 交易历史
+python3 scripts/prediction_market_client.py kalshi trades --limit 5 --is-block-trade false
 ```
 
 ## ID 参考
 
-大多数命令需要从 `markets` 返回中获取 ID，务必先搜索。
+大多数后续分析需要从 discovery 返回中获取 ID 或 ticker。
 
 | 平台 | ID 字段 | 获取位置 |
 |------|---------|----------|
-| Polymarket | `token_id` | markets 输出中的 `side_a.id` 或 `side_b.id` |
-| Polymarket | `condition_id` | markets 输出中的 `condition_id` |
-| Kalshi | `market_ticker` | markets 输出中的 `market_ticker` |
+| Polymarket | `slug` | `/polymarket/markets` 返回中的 `slug` |
+| Polymarket | `conditionId` | `/polymarket/markets` 返回中的 `conditionId` |
+| Polymarket | `clobTokenIds` | `/polymarket/markets` 返回中的 `clobTokenIds` |
+| Kalshi | `ticker` | `/kalshi/markets` 返回中的 `ticker` |
+| Kalshi | `event_ticker` | `/kalshi/markets` 返回中的 `event_ticker` |
 
 ## 命令参考
 
 ### Polymarket
 
 ```bash
-python3 scripts/prediction_market_client.py polymarket markets [--search <关键词>] [--status open|closed] [--min-volume <数值>] [--limit <数值>]
-python3 scripts/prediction_market_client.py polymarket price <token_id> [--at-time <unix时间戳>]
+python3 scripts/prediction_market_client.py polymarket markets [--limit <数值>]
+python3 scripts/prediction_market_client.py polymarket events [--limit <数值>]
 python3 scripts/prediction_market_client.py polymarket activity --user <钱包地址> [--market-slug <slug>] [--limit <数值>]
-python3 scripts/prediction_market_client.py polymarket orders [--market-slug <slug>] [--token-id <id>] [--user <钱包地址>] [--limit <数值>]
-python3 scripts/prediction_market_client.py polymarket orderbooks --token-id <id> [--start <毫秒>] [--end <毫秒>] [--limit <数值>]
-python3 scripts/prediction_market_client.py polymarket candlesticks <condition_id> --start <unix时间戳> --end <unix时间戳> [--interval 1|60|1440]
-python3 scripts/prediction_market_client.py polymarket positions <钱包地址> [--limit <数值>]
-python3 scripts/prediction_market_client.py polymarket wallet (--eoa <地址> | --proxy <地址>) [--with-metrics]
-python3 scripts/prediction_market_client.py polymarket pnl <钱包地址> --granularity <day|week|month>
 ```
 
 ### Kalshi
 
 ```bash
-python3 scripts/prediction_market_client.py kalshi markets [--search <关键词>] [--status open|closed] [--min-volume <数值>] [--limit <数值>]
-python3 scripts/prediction_market_client.py kalshi price <market_ticker> [--at-time <unix时间戳>]
-python3 scripts/prediction_market_client.py kalshi trades [--ticker <ticker>] [--start <unix时间戳>] [--end <unix时间戳>] [--limit <数值>]
-python3 scripts/prediction_market_client.py kalshi orderbooks --ticker <ticker> [--start <毫秒>] [--end <毫秒>] [--limit <数值>]
+python3 scripts/prediction_market_client.py kalshi markets [--status unopened|open|paused|closed|settled] [--limit <数值>]
+python3 scripts/prediction_market_client.py kalshi trades [--ticker <ticker>] [--min-ts <unix时间戳>] [--max-ts <unix时间戳>] [--is-block-trade true|false] [--limit <数值>]
 ```
 
-### 跨平台体育市场
+## 理解返回数据
 
-```bash
-python3 scripts/prediction_market_client.py sports matching (--polymarket-slug <slug> | --kalshi-ticker <ticker>)
-python3 scripts/prediction_market_client.py sports by-date <运动类型> --date <YYYY-MM-DD>
-```
-
-支持：`nfl`、`mlb`、`cfb`、`nba`、`nhl`、`cbb`、`pga`、`tennis`。
-
-## 理解赔率
-
-价格为小数：`0.65` = 65% 隐含概率。"Yes" 价格 = 事件发生的概率。交易量越高 = 流动性越强。
+- Polymarket `/markets` 和 `/events` 返回顶层 JSON 数组。
+- Kalshi `/markets` 返回 `{ markets, cursor }`。
+- Kalshi `/trades` 返回 `{ trades, cursor }`。
+- 如需实时可执行价格、订单簿深度或交易动作，请以交易所官方接口/交易系统为准。
 
 ## 安全与权限
 
 **需要：** `AISA_API_KEY` 环境变量。
 
-所有操作均为**只读**，通过 HTTPS GET 请求 `api.aisa.one`。不执行交易、不连接钱包、除 API Key 外不发送个人数据。每个响应包含 `usage.cost` 和 `usage.credits_remaining`。
+所有操作均为**只读**，通过 HTTPS GET 请求 `api.aisa.one`。不执行交易、不连接钱包、除 API Key 外不发送个人数据。
 
 完整文档：[AIsa API 参考](https://aisa.one/docs/api-reference)。
 
@@ -157,9 +146,9 @@ python3 scripts/prediction_market_client.py sports by-date <运动类型> --date
     English-language prediction market data skill.
   </Card>
   <Card title="Prediction Market Arbitrage ZH" icon="scale-balanced" href="/agent-skills/prediction-market-arbitrage-zh">
-    Chinese-language arbitrage workflows.
+    Chinese-language cross-market research workflow.
   </Card>
   <Card title="Prediction Market API" icon="code" href="/api-reference/prediction-market/get_polymarket-events">
-    Polymarket and Kalshi endpoint docs.
+    Polymarket and Kalshi mounted endpoint docs.
   </Card>
 </CardGroup>

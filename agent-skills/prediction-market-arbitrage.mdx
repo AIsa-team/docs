@@ -1,11 +1,11 @@
 ---
 title: "Prediction Market Arbitrage"
-description: "Cross-platform arbitrage detection across prediction markets. Match equivalent events on Polymarket and Kalshi, compare implied probabilities, and verify orderbook depth before executing."
+description: "Cross-platform prediction-market research using the currently mounted Polymarket and Kalshi discovery endpoints."
 ---
 
 [View on GitHub →](https://github.com/AIsa-team/agent-skills/tree/main/prediction-market-arbitrage)
 
-**Find arbitrage opportunities across prediction markets.** One `AISA_API_KEY` matches equivalent events on Polymarket and Kalshi, compares implied probabilities, and verifies orderbook depth so agents can execute with confidence.
+**Research prediction-market opportunities with AIsa.** One `AISA_API_KEY` can pull mounted Polymarket and Kalshi market-discovery data so agents can identify candidate events before using venue-specific tooling for pricing, orderbook depth, or execution.
 
 ## Install
 
@@ -24,44 +24,42 @@ aisa skills install prediction-market-arbitrage
 ## What can agents do with it?
 
 <CardGroup cols={2}>
-  <Card title="Cross-exchange scan" icon="magnifying-glass-plus">
-    "Find NFL games with priced markets on both Polymarket and Kalshi."
+  <Card title="Cross-market discovery" icon="magnifying-glass-plus">
+    "Find related NFL, macro, or election markets on Polymarket and Kalshi."
   </Card>
-  <Card title="Spread detection" icon="arrows-left-right">
-    "Flag outcome pairs where combined implied probability < 1.0."
+  <Card title="Candidate pairing" icon="arrows-left-right">
+    "Compare titles, event tickers, slugs, and close times to identify likely equivalent markets."
   </Card>
-  <Card title="Liquidity verification" icon="droplet">
-    "Check top-of-book depth on both sides before triggering an alert."
+  <Card title="Liquidity triage" icon="droplet">
+    "Use volume and liquidity fields from discovery responses to prioritize venues for deeper checks."
   </Card>
-  <Card title="Sports arb workflow" icon="football">
-    "Daily NBA/NFL/MLB arbitrage scan with configurable edge threshold."
+  <Card title="Sports research workflow" icon="football">
+    "Build a same-day candidate list from available Polymarket and Kalshi market feeds."
   </Card>
   <Card title="Elections & macro" icon="landmark">
-    "Surface arbitrage windows on election, rate, and macro event markets."
+    "Surface comparable event markets before running venue-specific pricing checks."
   </Card>
   <Card title="Execution prep" icon="bullseye">
-    "Produce a trade plan with size limits from orderbook depth."
+    "Produce a research shortlist; perform execution and orderbook checks directly with each venue."
   </Card>
 </CardGroup>
 
 ## How it works
 
 <Steps>
-  <Step title="Match equivalent events">
-    Use the `/matching-markets/sports` (and `/sports/{sport}`) endpoints, or slug/ticker heuristics, to pair up a Polymarket `token_id` with a Kalshi `market_ticker` for the same real-world event.
+  <Step title="Discover candidate markets">
+    Query `/polymarket/markets`, `/polymarket/events`, and `/kalshi/markets` to find relevant market/event records.
   </Step>
-  <Step title="Compare prices">
-    Call each platform's `market-price` endpoint. An arbitrage window exists when the combined implied probabilities of mutually-exclusive outcomes sum to **less than 1.0**.
-
-    _Example:_ buying complementary outcomes at `0.40` and `0.55` totals `0.95` — a `0.05` edge before fees.
+  <Step title="Pair likely equivalents">
+    Match candidates by title, event ticker, slug, event date, sport/team names, or market close time.
   </Step>
-  <Step title="Verify liquidity">
-    Before executing, pull each platform's orderbook to confirm there's enough depth at the quoted price to absorb your size.
+  <Step title="Validate pricing outside this AIsa surface">
+    Use venue-native APIs or trading systems for current price, orderbook depth, and execution checks before trading.
   </Step>
 </Steps>
 
 <Warning>
-  When passing a path parameter with curl, make sure every `{placeholder}` is replaced with a concrete value. Literal `{` and `}` trigger cURL's URL globbing syntax and will fail.
+  AIsa currently mounts the Prediction Market discovery endpoints listed below. Older examples for AIsa-hosted `market-price`, `orderbooks`, and `matching-markets` routes were removed because authenticated probes returned `api endpoint not found`.
 </Warning>
 
 ## Quick start
@@ -70,65 +68,33 @@ aisa skills install prediction-market-arbitrage
 export AISA_API_KEY="your-key"
 ```
 
-### 1. Match markets
+### 1. Find Polymarket candidates
 
 ```bash
-# Find NBA games with markets on both platforms for a specific date
-curl "https://api.aisa.one/apis/v1/matching-markets/sports/nba?date=2025-08-16" \
+curl "https://api.aisa.one/apis/v1/polymarket/markets?limit=5" \
   -H "Authorization: Bearer $AISA_API_KEY"
 ```
 
-### 2. Compare prices
+### 2. Find Kalshi candidates
 
 ```bash
-# Polymarket implied probability
-curl "https://api.aisa.one/apis/v1/polymarket/market-price/POLY_TOKEN_ID" \
-  -H "Authorization: Bearer $AISA_API_KEY"
-
-# Kalshi implied probability
-curl "https://api.aisa.one/apis/v1/kalshi/market-price/KALSHI_MARKET_TICKER" \
+curl "https://api.aisa.one/apis/v1/kalshi/markets?limit=5&status=open" \
   -H "Authorization: Bearer $AISA_API_KEY"
 ```
 
-### 3. Check orderbook depth
+### 3. Compare manually or with venue-native tooling
 
-```bash
-# Polymarket orderbook
-curl "https://api.aisa.one/apis/v1/polymarket/orderbooks?token_id=POLY_TOKEN_ID" \
-  -H "Authorization: Bearer $AISA_API_KEY"
-
-# Kalshi orderbook
-curl "https://api.aisa.one/apis/v1/kalshi/orderbooks?ticker=KALSHI_MARKET_TICKER" \
-  -H "Authorization: Bearer $AISA_API_KEY"
-```
-
-## Python client
-
-```bash
-# Full sports arbitrage scan for a given day
-python3 scripts/arbitrage_finder.py find-sports-arbitrage --sport nba --date 2025-08-16
-
-# Check liquidity across a matched pair
-python3 scripts/arbitrage_finder.py check-liquidity \
-  --polymarket-token-id POLY_TOKEN_ID \
-  --kalshi-ticker KALSHI_MARKET_TICKER
-
-# Compare prices only (no liquidity check)
-python3 scripts/arbitrage_finder.py compare-prices \
-  --polymarket-token-id POLY_TOKEN_ID \
-  --kalshi-ticker KALSHI_MARKET_TICKER
-```
+Use shared fields such as Polymarket `slug`/`question` and Kalshi `ticker`/`event_ticker`/`title` to pair likely equivalents, then verify live prices and orderbooks with the relevant venue's official API before execution.
 
 ## Endpoint reference
 
-| Endpoint                              | Method | Purpose                                                                                    |
-| ------------------------------------- | ------ | ------------------------------------------------------------------------------------------ |
-| `/matching-markets/sports`            | GET    | [All sports](/api-reference/prediction-market/get_matching-markets-sports)                 |
-| `/matching-markets/sports/{sport}`    | GET    | [By sport](/api-reference/prediction-market/get_matching-markets-sports-by-sport)          |
-| `/polymarket/market-price/{token_id}` | GET    | [Polymarket price](/api-reference/prediction-market/get_polymarket-market-price)           |
-| `/kalshi/market-price/{ticker}`       | GET    | [Kalshi price](/api-reference/prediction-market/get_kalshi-market-price)                   |
-| `/polymarket/orderbooks`              | GET    | [Polymarket orderbook](/api-reference/prediction-market/get_polymarket-orderbooks)         |
-| `/kalshi/orderbooks`                  | GET    | [Kalshi orderbook](/api-reference/prediction-market/get_kalshi-orderbooks)                 |
+| Endpoint                 | Method | Purpose                                                                   |
+| ------------------------ | ------ | ------------------------------------------------------------------------- |
+| `/polymarket/markets`    | GET    | [Polymarket markets](/api-reference/prediction-market/get_polymarket-markets) |
+| `/polymarket/events`     | GET    | [Polymarket events](/api-reference/prediction-market/get_polymarket-events)   |
+| `/polymarket/activity`   | GET    | [Polymarket activity](/api-reference/prediction-market/get_polymarket-activity) |
+| `/kalshi/markets`        | GET    | [Kalshi markets](/api-reference/prediction-market/get_kalshi-markets)         |
+| `/kalshi/trades`         | GET    | [Kalshi trades](/api-reference/prediction-market/get_kalshi-trades)           |
 
 ## Get started
 
@@ -144,12 +110,12 @@ python3 scripts/arbitrage_finder.py compare-prices \
 
 <CardGroup cols={3}>
   <Card title="Prediction Market API" icon="chart-simple" href="/api-reference/prediction-market/get_polymarket-markets">
-    All Polymarket, Kalshi, and matching-markets endpoints.
+    Mounted Polymarket and Kalshi discovery endpoints.
   </Card>
   <Card title="Market Data skill" icon="chart-line" href="/agent-skills/prediction-market-data">
     The underlying data skill this one builds on.
   </Card>
   <Card title="Rate Limits" icon="gauge-high" href="/api-reference/rate-limits">
-    Concurrency caps when running arb scans.
+    Concurrency caps when running research scans.
   </Card>
 </CardGroup>
