@@ -1,0 +1,115 @@
+---
+title: "身份认证"
+description: "了解如何使用 Bearer token 认证 AIsa API 请求，包括 API Key 的生成、保存、轮换、额度限制和安全实践。"
+---
+
+AIsa 的每个 API 请求都通过 Bearer token 认证，也就是你的 **AIsa API Key**。同一个 key 可以用于 LLM 推理、搜索、金融数据、Twitter、预测市场等接口。
+
+## 工作方式
+
+<Steps>
+  <Step title="生成 API Key">
+    在 [控制台](https://console.aisa.one) 的 **API Keys** 页面创建 key。每个 key 都有 `sk-aisa-...` 前缀，并且只展示一次，请立即复制到安全位置。
+  </Step>
+  <Step title="作为 Bearer token 发送">
+    在每次请求的 `Authorization` header 中携带 key：
+    ```
+    Authorization: Bearer ***
+    ```
+  </Step>
+  <Step title="按请求计费">
+    每次调用都会从工作区钱包中扣费。你可以在 [Usage Logs](/guides/dashboard/usage-logs) 中查看实时用量和成本。
+  </Step>
+</Steps>
+
+## 使用 SDK 认证
+
+AIsa 兼容 OpenAI SDK。通常只需要替换 `base_url` 和 `api_key`：
+
+<CodeGroup>
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.aisa.one/v1",
+    api_key="sk-aisa-..."
+)
+```
+
+```typescript TypeScript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "https://api.aisa.one/v1",
+  apiKey: process.env.AISA_API_KEY,
+});
+```
+
+```bash curl
+curl https://api.aisa.one/v1/chat/completions \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-5","messages":[{"role":"user","content":"Hello"}]}'
+```
+
+</CodeGroup>
+
+<Tip>
+  建议通过环境变量 `AISA_API_KEY` 传入 key，不要把 key 写死在代码里。
+</Tip>
+
+## API Key 生命周期
+
+### 创建 key
+
+- 进入 [console.aisa.one](https://console.aisa.one) → **API Keys**。
+- 点击 **Create Key**，设置名称并复制 key。
+- 建议为不同环境和服务创建不同 key，例如 dev、staging、prod、ci-tests。
+
+### 配额和限制
+
+创建或编辑 key 时，可以设置：
+
+- **消费上限**：限制该 key 每天、每周或每月最多可消费的金额。
+- **速率限制**：为特定 key 设置更低的 RPM / TPM。
+- **模型白名单**：限制该 key 只能调用指定模型。
+
+### 轮换 key
+
+建议至少每 90 天轮换一次 key。如果怀疑 key 泄露，应立即轮换。
+
+<Steps>
+  <Step title="创建新 key">
+    使用相同用途的名称创建新 key，例如 `prod-web-app-v2`。
+  </Step>
+  <Step title="部署新 key">
+    将新 key 更新到 secret manager，等待服务完成部署。
+  </Step>
+  <Step title="撤销旧 key">
+    确认没有请求继续使用旧 key 后，在控制台撤销旧 key。
+  </Step>
+</Steps>
+
+## 安全建议
+
+<Warning>
+  不要把 API Key 提交到代码仓库、公开 issue、共享文档或截图中。AIsa key 具备消费权限，泄露后应立即撤销。
+</Warning>
+
+- 每个服务使用独立 key，避免多个项目共用。
+- 为 key 设置消费上限，降低泄露后的风险。
+- 定期轮换 key，人员变动或怀疑泄露时立即轮换。
+- 通过 [Usage Logs](/guides/dashboard/usage-logs) 监控异常调用。
+- 浏览器、移动端或任何用户可检查的客户端中不要直接放置 API Key，应通过后端代理转发请求。
+
+## 相关页面
+
+<CardGroup cols={2}>
+  <Card title="快速开始" icon="rocket" href="/zh/guides/getting-started-with-aisa">
+    完成第一次 AIsa API 调用。
+  </Card>
+  <Card title="错误码" icon="triangle-exclamation" href="/api-reference/errors">
+    查看 401、403 等认证相关错误。
+  </Card>
+</CardGroup>
