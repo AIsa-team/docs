@@ -1,0 +1,117 @@
+---
+title: "AIsa 快速开始 - 面向 AI Agent 的统一 LLM API"
+excerpt: >-
+  AIsa 统一模型网关快速开始：创建账号、获取 API Key，并用 OpenAI 兼容方式调用实时模型目录。
+---
+
+本指南会带你完成第一次 AIsa API 调用。完成后，你可以用一个统一 endpoint 访问 AIsa 的实时模型目录，并继续使用熟悉的 OpenAI 兼容 SDK。
+
+## 准备工作
+
+开始前你需要：
+
+1. 一个 AIsa 账号。
+2. 一个从 AIsa 控制台生成的 API Key。
+3. 基本了解 OpenAI 风格的 Chat Completions API。
+
+新注册账号会获得免费测试额度，可在浏览器里的 Model Playground 或直接通过 REST API 使用。
+
+## 第 1 步：创建账号并获取 API Key
+
+1. 打开 [AIsa 控制台](https://console.aisa.one/) 并注册账号。你可以使用邮箱注册，也可以通过 Google 或 GitHub 登录。
+
+![AIsa 注册流程动画：使用邮箱、Google 或 GitHub 注册，然后进入控制台](/images/a9ae421b-aisa-new-login.gif)
+
+2. 注册完成后进入 API Keys 页面。系统会为你生成一个可用的 key。请立即复制并安全保存，它会用于后续所有 API 请求和用量计费。
+
+![AIsa 控制台中的 API Keys 页面，展示可复制的 API Key](/images/fa17cce5-image.png)
+
+3. 如果需要为不同项目、环境或成员创建独立 key，可以随时回到 API Keys 页面新增，并为每个 key 设置额度限制。
+
+> 注意：key 的 quota 是这个 key 自身的消费上限，不等于账号总余额。实际可用额度取决于 key quota 和钱包余额中较低的一项。
+
+## 第 2 步：发起第一次 API 请求
+
+AIsa 的统一 endpoint 是：
+
+```text
+https://api.aisa.one/v1
+```
+
+如果你已经在使用 OpenAI SDK，通常只需要替换三个值：
+
+* `base_url`：指向 AIsa endpoint。
+* `api_key`：使用你的 AIsa API Key。
+* `model`：填写 AIsa 支持的模型 ID。
+
+### cURL 示例
+
+```curl
+curl --request POST \
+  --url https://api.aisa.one/v1/chat/completions \
+  --header "Authorization: Bearer $AISA_API_KEY" \
+  --header 'Content-Type: application/json' \
+  --data '
+{
+  "model": "gpt-5-mini",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Explain the concept of an AI gateway in one concise sentence."
+    }
+  ],
+  "stream": false
+}'
+```
+
+返回结构与 OpenAI Chat Completions 类似，包含 `choices`、生成的 `message` 和用量统计。
+
+## 第 3 步：使用官方 SDK
+
+AIsa 兼容 OpenAI SDK，因此不需要额外安装专用客户端。
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="<your_aisa_api_key>",
+    base_url="https://api.aisa.one/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-5-mini",
+    messages=[
+        {"role": "user", "content": "Explain the concept of an AI gateway in one concise sentence."}
+    ],
+    stream=False
+)
+
+print(response.choices[0].message.content)
+```
+
+```typescript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.AISA_API_KEY,
+  baseURL: "https://api.aisa.one/v1",
+});
+
+async function main() {
+  const response = await client.chat.completions.create({
+    model: "gpt-5-mini",
+    messages: [
+      { role: "user", content: "Explain the concept of an AI gateway in one concise sentence." }
+    ],
+    stream: false,
+  });
+
+  console.log(response.choices[0].message.content);
+}
+
+main();
+```
+
+## 下一步
+
+完成基础调用后，可以继续查看 [身份认证](/zh/guides/authentication)、[模型目录](/guides/models) 或 [API Reference](/api-reference)。
