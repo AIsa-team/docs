@@ -1,0 +1,194 @@
+---
+title: AIsa LLM 模型目录 - API Endpoint、能力和上下文窗口
+description: >-
+  AIsa LLM 与媒体模型目录：包含 GPT-5、Claude、Gemini、Grok、DeepSeek、Qwen、Kimi、MiniMax、GLM、Seed、Seedream、Wan 等模型通过 https://api.aisa.one/v1 调用时的模型 ID、provider、API endpoint、能力、上下文窗口和计费信息。
+---
+
+AIsa 的 Model Gateway 可以通过一个 API Key 路由 LLM 和媒体生成请求。本指南是面向 Agent 的稳定 Markdown 来源，适合需要了解 AIsa 支持哪些模型 ID、每个模型使用哪个 endpoint，以及各模型能力边界的场景。
+
+实时模型目录在 [aisa.one/models](https://aisa.one/models)。下方表格基于 2026 年 6 月 4 日的 Model Gateway 在线元数据刷新。模型可用性和价格可能变化，生产路由前请以实时模型目录为最终来源。
+
+## 如何调用模型
+
+使用 `AISA_API_KEY` 作为 Bearer token。对于 OpenAI 兼容 SDK，将 base URL 设置为 `https://api.aisa.one/v1`。
+
+```python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ["AISA_API_KEY"],
+    base_url="https://api.aisa.one/v1"
+)
+
+response = client.chat.completions.create(
+    model="qwen3.7-max",
+    messages=[{"role": "user", "content": "Compare these model options for a coding agent."}]
+)
+print(response.choices[0].message.content)
+```
+
+## Endpoint 类型
+
+| Endpoint | 当前模型数量 |
+| --- | ---: |
+| `POST /v1/chat/completions` | 55 |
+| `POST /v1/messages` | 10 |
+| `POST /v1/responses` | 4 |
+| `POST /v1/images/generations` | 1 |
+| `POST /v1beta/models/{model}:generateContent` | 1 |
+
+大多数文本、视觉、音频、代码和多模态模型使用 `POST /v1/chat/completions`。Claude 模型也可能提供 Anthropic 兼容的 `POST /v1/messages`。部分模型提供 `POST /v1/responses`、Gemini 兼容的 `POST /v1beta/models/{model}:generateContent`，或图像生成路由。调用时请始终使用下表中的精确模型字符串。
+
+## 能力标签说明
+
+| 能力 | 在 AIsa Model Gateway 中的含义 |
+| --- | --- |
+| Text | 自然语言生成、摘要、分析、翻译和长上下文推理。 |
+| Coding | 代码推理、代码补全、软件 Agent 规划和工具调用流程。 |
+| Vision | 图像/文档理解、视觉编码，以及基于视觉输入的空间推理。 |
+| Audio | 上游模型支持时的音频理解或语音到语音交互。 |
+| Image | 图像生成、图像编辑、图像一致性，或在图像中渲染文字。 |
+| Video | 视频理解、时序推理、长视频处理、图生视频或全模态/视频流程。 |
+
+## Provider 概览
+
+| Provider | 模型数量 | 能力 | 示例模型 ID |
+| --- | ---: | --- | --- |
+| OpenAI | 8 | Coding, Text, Vision, Image | `gpt-5`, `gpt-5-mini`, `gpt-5.2`, `gpt-5.2-chat-latest` ... |
+| Anthropic | 7 | Coding, Text, Vision | `claude-haiku-4-5-20251001`, `claude-opus-4-1-20250805`, `claude-opus-4-5-20251101`, `claude-opus-4-6` ... |
+| Google Gemini | 2 | Text | `gemini-3-pro-preview`, `gemini-3.5-flash` |
+| xAI | 4 | Text, Vision, Coding | `grok-4.20-0309-non-reasoning`, `grok-4.20-0309-reasoning`, `grok-4.3`, `grok-build-0.1` |
+| DeepSeek | 6 | Coding, Text | `deepseek-r1`, `deepseek-v3`, `deepseek-v3.1`, `deepseek-v3.2` ... |
+| Alibaba | 16 | Audio, Coding, Text, Video, Vision, Image | `qwen-flash`, `qwen-mt-flash`, `qwen-mt-lite`, `qwen-plus-2025-12-01` ... |
+| Moonshot | 3 | Coding, Text, Video, Vision | `kimi-k2-thinking`, `kimi-k2.5`, `kimi-k2.6` |
+| MiniMax | 2 | Coding, Text, Video, Vision | `MiniMax-M2.5`, `MiniMax-M3` |
+| Zhipu GLM | 1 | Coding, Text | `glm-5` |
+| ByteDance | 8 | Text, Video, Vision, Coding, Image | `seed-1-6-250915`, `seed-1-6-flash-250715`, `seed-1-8-251228`, `seed-2-0-lite-260228` ... |
+
+## 完整模型详情
+
+### OpenAI
+
+| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| --- | ---: | --- | --- | --- |
+| `gpt-5` | 400,000 | Coding, Text, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $1.2500 in / $10.0000 out per 1M tokens (cache read $0.1250/M) |
+| `gpt-5-mini` | 400,000 | Coding, Text, Vision; reasoning, long context, creative writing, spatial vision, document vision, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.1500 in / $1.2000 out per 1M tokens (cache read $0.0150/M) |
+| `gpt-5.2` | 400,000 | Coding, Text, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $1.7500 in / $14.0000 out per 1M tokens (cache read $1.7500/M) |
+| `gpt-5.2-chat-latest` | 400,000 | Coding, Text, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $1.7500 in / $14.0000 out per 1M tokens (cache read $1.7500/M) |
+| `gpt-5.3-codex` | 1,000,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $1.7500 in / $14.0000 out per 1M tokens (cache read $1.7500/M) |
+| `gpt-5.4` | 1,050,000 | Coding, Text, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `POST /v1/responses` | $2.5000 in / $15.0000 out per 1M tokens (cache read $2.5000/M) |
+| `gpt-5.5` | 400,000 | Coding, Text, Vision; code reasoning, long context, reasoning, vision | `POST /v1/messages`, `POST /v1/chat/completions`, `POST /v1/responses` | $5.0000 in / $40.0000 out per 1M tokens (cache read $5.0000/M) |
+| `gpt-image-2` | N/A | Image, Vision; image editing, image generation, text in images, vision | `POST /v1/images/generations` | $8.0000 in / $30.0000 out per 1M tokens (cache write $2.0000/M) |
+
+### Anthropic
+
+| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| --- | ---: | --- | --- | --- |
+| `claude-haiku-4-5-20251001` | 200,000 | Coding, Text, Vision; reasoning, long context, spatial vision, document vision, visual coding, code reasoning, agentic coding | `POST /v1/messages`, `POST /v1/chat/completions` | $1.0000 in / $5.0000 out per 1M tokens (cache read $0.1000/M; cache write $2.0000/M) |
+| `claude-opus-4-1-20250805` | 200,000 | Coding, Text, Vision; reasoning, long context, document vision, visual coding, code reasoning, agentic coding | `POST /v1/messages`, `POST /v1/chat/completions` | $15.0000 in / $75.0000 out per 1M tokens (cache read $1.5000/M; cache write $30.0000/M) |
+| `claude-opus-4-5-20251101` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, document vision, visual coding, code reasoning, code completion, agentic coding | `POST /v1/messages`, `POST /v1/chat/completions` | $5.0000 in / $25.0000 out per 1M tokens (cache read $0.5000/M; cache write $10.0000/M) |
+| `claude-opus-4-6` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, document vision, visual coding, code reasoning, code completion, agentic coding | `POST /v1/messages`, `POST /v1/chat/completions` | $5.0000 in / $25.0000 out per 1M tokens (cache read $0.5000/M; cache write $10.0000/M) |
+| `claude-opus-4-7` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `POST /v1/messages`, `POST /v1/chat/completions` | $5.0000 in / $25.0000 out per 1M tokens (cache read $0.5000/M; cache write $10.0000/M) |
+| `claude-opus-4-8` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `POST /v1/messages`, `POST /v1/chat/completions` | $5.0000 in / $25.0000 out per 1M tokens (cache read $0.5000/M; cache write $10.0000/M) |
+| `claude-sonnet-4-5-20250929` | 200,000 | Coding, Text, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `POST /v1/messages`, `POST /v1/chat/completions` | $3.0000 in / $15.0000 out per 1M tokens (cache read $0.3000/M; cache write $6.0000/M) |
+
+### Google Gemini
+
+| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| --- | ---: | --- | --- | --- |
+| `gemini-3-pro-preview` | N/A | Text; long context, creative writing | `POST /v1/chat/completions` | $2.0000 in / $12.0000 out per 1M tokens |
+| `gemini-3.5-flash` | N/A | Text; long context, creative writing | `POST /v1beta/models/{model}:generateContent`, `POST /v1/chat/completions` | $1.5000 in / $9.0000 out per 1M tokens (cache read $0.1500/M) |
+
+### xAI
+
+| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| --- | ---: | --- | --- | --- |
+| `grok-4.20-0309-non-reasoning` | 1,000,000 | Text, Vision; long context, creative writing, spatial vision, document vision | `POST /v1/chat/completions` | $1.2500 in / $2.5000 out per 1M tokens |
+| `grok-4.20-0309-reasoning` | 1,000,000 | Text, Vision; reasoning, long context, creative writing, spatial vision, document vision | `POST /v1/chat/completions` | $1.2500 in / $2.5000 out per 1M tokens |
+| `grok-4.3` | 1,000,000 | Text, Vision; reasoning, long context, creative writing, spatial vision, document vision | `POST /v1/chat/completions` | $1.2500 in / $2.5000 out per 1M tokens |
+| `grok-build-0.1` | 256,000 | Coding, Text, Vision; reasoning, long context, visual coding, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $1.0000 in / $2.0000 out per 1M tokens |
+
+### DeepSeek
+
+| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| --- | ---: | --- | --- | --- |
+| `deepseek-r1` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `POST /v1/chat/completions` | $0.4018 in / $1.6058 out per 1M tokens (cache read $0.4018/M) |
+| `deepseek-v3` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `POST /v1/chat/completions` | $0.2009 in / $0.8029 out per 1M tokens (cache read $0.2009/M) |
+| `deepseek-v3.1` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `POST /v1/chat/completions` | $0.4018 in / $1.2047 out per 1M tokens (cache read $0.4018/M) |
+| `deepseek-v3.2` | 128,000 | Coding, Text; reasoning, long context, creative writing, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.2009 in / $0.3017 out per 1M tokens (cache read $0.2009/M) |
+| `deepseek-v4-flash` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `POST /v1/chat/completions` | $0.0980 in / $0.1960 out per 1M tokens (cache read $0.0020/M) |
+| `deepseek-v4-pro` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `POST /v1/messages`, `POST /v1/chat/completions`, `POST /v1/responses` | $0.3045 in / $0.6090 out per 1M tokens (cache read $0.0025/M) |
+
+### Alibaba
+
+| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| --- | ---: | --- | --- | --- |
+| `qwen-flash` | 1,000,000 | Audio, Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, speech-to-speech, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.0225 in / $0.1800 out per 1M tokens (cache read $0.0225/M) |
+| `qwen-mt-flash` | 1,000,000 | Text; long context, translation | `POST /v1/chat/completions` | $0.0720 in / $0.2205 out per 1M tokens (cache read $0.0720/M) |
+| `qwen-mt-lite` | 1,000,000 | Text; translation | `POST /v1/chat/completions` | $0.0840 in / $0.2520 out per 1M tokens (cache read $0.0840/M) |
+| `qwen-plus-2025-12-01` | 1,000,000 | Audio, Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, speech-to-speech, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.2800 in / $0.8400 out per 1M tokens (cache read $0.2800/M) |
+| `qwen3-coder-480b-a35b-instruct` | 262,144 | Coding, Text; reasoning, long context, code reasoning, agentic coding | `POST /v1/chat/completions` | $1.0500 in / $5.2500 out per 1M tokens (cache read $1.0500/M) |
+| `qwen3-coder-flash` | 1,000,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.2100 in / $1.0500 out per 1M tokens (cache read $0.2100/M) |
+| `qwen3-coder-plus` | 1,000,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.7000 in / $3.5000 out per 1M tokens (cache read $0.7000/M) |
+| `qwen3-max` | 262,144 | Audio, Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, speech-to-speech, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.7200 in / $3.6000 out per 1M tokens (cache read $0.7200/M) |
+| `qwen3-vl-flash` | 131,072 | Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.0350 in / $0.2800 out per 1M tokens (cache read $0.0350/M) |
+| `qwen3-vl-flash-2025-10-15` | 131,072 | Coding, Text, Video, Vision; reasoning, long context, translation, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.0350 in / $0.2800 out per 1M tokens (cache read $0.0350/M) |
+| `qwen3-vl-plus` | 131,072 | Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.1400 in / $1.1200 out per 1M tokens (cache read $0.1400/M) |
+| `qwen3.6-plus` | 1,000,000 | Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, omni/video understanding, long video, temporal video, code reasoning, agentic coding | `POST /v1/chat/completions` | $0.2760 in / $1.6510 out per 1M tokens (cache read $0.2760/M) |
+| `qwen3.6-plus-2026-04-02` | 262,144 | Coding, Text, Vision; code reasoning, long context, reasoning, vision | `POST /v1/chat/completions` | $0.2760 in / $1.6510 out per 1M tokens (cache read $0.2760/M) |
+| `qwen3.7-max` | 1,000,000 | Coding, Text; reasoning, long context, translation, creative writing, code reasoning, agentic coding | `POST /v1/chat/completions` | $1.1550 in / $3.4657 out per 1M tokens (cache read $0.1155/M; cache write $1.4441/M) |
+| `wan2.7-image` | N/A | Image, Text, Vision; reasoning, vision, image generation, image editing, text in images, image consistency | `POST /v1/chat/completions` | $0.030 / request |
+| `wan2.7-image-pro` | N/A | Image, Text, Video, Vision; reasoning, long context, vision, image generation, image editing, text in images, image consistency, image-to-video | `POST /v1/chat/completions` | $0.075 / request |
+
+### Moonshot
+
+| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| --- | ---: | --- | --- | --- |
+| `kimi-k2-thinking` | 256,000 | Coding, Text; reasoning, long context, code reasoning, agentic coding | `POST /v1/chat/completions` | $0.4018 in / $1.6058 out per 1M tokens (cache read $0.4018/M) |
+| `kimi-k2.5` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, spatial vision, document vision, visual coding, omni/video understanding, long video, code reasoning, agentic coding | `POST /v1/chat/completions` | $0.4018 in / $2.1077 out per 1M tokens (cache read $0.4018/M) |
+| `kimi-k2.6` | 128,000 | Text; long context, reasoning | `POST /v1/chat/completions` | $0.6257 in / $2.5992 out per 1M tokens (cache read $0.6257/M) |
+
+### MiniMax
+
+| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| --- | ---: | --- | --- | --- |
+| `MiniMax-M2.5` | 262,144 | Coding, Text; reasoning, long context, creative writing, code reasoning, agentic coding | `POST /v1/chat/completions` | $0.2100 in / $0.8400 out per 1M tokens (cache read $0.2100/M) |
+| `MiniMax-M3` | 1,000,000 | Coding, Text, Video, Vision; reasoning, long context, code reasoning, agentic coding, vision, long video | `POST /v1/messages`, `POST /v1/chat/completions`, `POST /v1/responses` | $0.2100 in / $0.8400 out per 1M tokens (cache read $0.0500/M) |
+
+### Zhipu GLM
+
+| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| --- | ---: | --- | --- | --- |
+| `glm-5` | 128,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.4011 in / $1.8060 out per 1M tokens (cache read $0.4011/M) |
+
+### ByteDance
+
+| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| --- | ---: | --- | --- | --- |
+| `seed-1-6-250915` | 262,144 | Text, Video, Vision; reasoning, long context, creative writing, vision, omni/video understanding | `POST /v1/chat/completions` | $0.2250 in / $0.9000 out per 1M tokens (cache read $0.2250/M) |
+| `seed-1-6-flash-250715` | 262,144 | Text, Video, Vision; reasoning, long context, spatial vision, omni/video understanding, temporal video | `POST /v1/chat/completions` | $0.0675 in / $0.2700 out per 1M tokens (cache read $0.0675/M) |
+| `seed-1-8-251228` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.2250 in / $1.8000 out per 1M tokens (cache read $0.2250/M) |
+| `seed-2-0-lite-260228` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, creative writing, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.2500 in / $2.0000 out per 1M tokens (cache read $0.2500/M) |
+| `seed-2-0-mini-260215` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, spatial vision, document vision, omni/video understanding, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.1000 in / $0.4000 out per 1M tokens (cache read $0.1000/M) |
+| `seed-2-0-pro-260328` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.5000 in / $3.0000 out per 1M tokens (cache read $0.5000/M) |
+| `seedream-4-5-251128` | N/A | Image, Vision; vision, image generation, image editing, text in images, image consistency | `POST /v1/chat/completions` | $0.036 / request |
+| `seedream-5-0-260128` | 262,144 | Image, Vision; image editing, image generation, text in images, vision | `POST /v1/chat/completions` | $0.035 / request |
+
+## 如何选择模型
+
+| 需求 | 可优先尝试 | 原因 |
+| --- | --- | --- |
+| 前沿文本 + 视觉 | `gpt-5.5`, `claude-opus-4-8`, `gpt-5.4` | 推理能力强，多模态和代码能力覆盖广。 |
+| Agent 编程 | `gpt-5.3-codex`, `claude-opus-4-8`, `qwen3-coder-plus`, `MiniMax-M3` | 具备代码、长上下文和 Agent 子能力。 |
+| 低成本高频文本任务 | `qwen-flash`, `deepseek-v4-flash`, `qwen-mt-flash` | 常规任务的输入/输出价格较低。 |
+| 长上下文中文或双语任务 | `qwen3.6-plus`, `qwen3.7-max`, `MiniMax-M3` | 提供 1M token 上下文选项，并具备较强中文能力。 |
+| 视觉/文档任务 | `qwen3-vl-plus`, `claude-opus-4-8`, `gpt-5.4` | 带有视觉、文档和空间理解能力标签。 |
+| 图像生成 | `gpt-image-2`, `seedream-5-0-260128`, `wan2.7-image-pro` | 支持图像生成和图像编辑，并按请求计费。 |
+
+## Agent 使用注意事项
+
+- 不要编造 AIsa 模型 ID。请使用表格中的精确 `model` 字符串。
+- 不要假设某个模型支持其上游模型族的所有模态。请以这里列出的能力标签为准，或查看实时模型页面。
+- 如果某个模型出现在 [aisa.one/models](https://aisa.one/models) 但未出现在静态表格中，可能是定价 API 已在运行时启用该模型；请优先参考实时目录。
+- 价格表仅供参考。最终计费金额以 AIsa Usage Logs 为准，并可能包含工作区级别的定价规则。
