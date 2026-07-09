@@ -1,0 +1,365 @@
+---
+title: "OpenClaw 的 AIsa Provider"
+description: "将 AIsa 用作 OpenClaw 的模型 provider。"
+---
+
+[在 GitHub 上查看 ->](https://github.com/AIsa-team/agent-skills/tree/main/aisa-provider)
+
+**将 AIsa 用作 OpenClaw 模型 provider。** 配置 OpenClaw，通过一个网关访问 Qwen、DeepSeek、Kimi、GLM 以及其他模型。
+
+## 安装
+
+如果还没有安装 AIsa CLI，请先安装：
+
+```bash
+npm install -g @aisa-one/cli
+```
+
+然后安装该技能：
+
+```bash
+aisa skills install aisa-provider
+```
+
+## Agent 可以用它做什么？
+
+<CardGroup cols={2}>
+  <Card title="OpenClaw 设置" icon="robot">
+    使用 AIsa provider 配置 OpenClaw。
+  </Card>
+  <Card title="中文 LLM 路由" icon="language">
+    使用 Qwen、DeepSeek、GLM 和其他中文模型。
+  </Card>
+  <Card title="全球模型" icon="globe">
+    将提示路由到 GPT、Claude、Gemini 等模型。
+  </Card>
+  <Card title="Agent 运行时默认值" icon="sliders">
+    为 OpenClaw 工作流标准化模型选择。
+  </Card>
+</CardGroup>
+
+## 快速设置
+
+### 方式 1：环境变量（最快）
+
+```bash
+export AISA_API_KEY="your-key-here"
+```
+
+OpenClaw 会自动检测 `AISA_API_KEY`，并将 AIsa 注册为 provider。不需要修改配置文件。
+
+### 方式 2：交互式引导
+
+```bash
+openclaw onboard --auth-choice aisa-api-key
+```
+
+### 方式 3：CLI 传入 key
+
+```bash
+openclaw onboard --auth-choice aisa-api-key --aisa-api-key "your-key-here"
+```
+
+### 方式 4：在 `~/.openclaw/openclaw.json` 中手动配置
+
+```json
+{
+  "models": {
+    "providers": {
+      "aisa": {
+        "baseUrl": "https://api.aisa.one/v1",
+        "apiKey": "${AISA_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "aisa/qwen3-max",
+            "name": "Qwen3 Max",
+            "reasoning": true,
+            "input": ["text", "image"],
+            "contextWindow": 256000,
+            "maxTokens": 16384,
+            "supportsDeveloperRole": false,
+            "cost": {
+              "input": 1.20,
+              "output": 4.80,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            }
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "aisa/qwen3-max"
+      }
+    }
+  }
+}
+```
+
+## 可用模型
+
+### 默认模型（预配置，API 已验证 ✅）
+
+| 模型 | Model ID | 适合场景 | 上下文 | Reasoning | 已验证 |
+|-------|----------|----------|---------|-----------|----------|
+| Qwen3 Max | `aisa/qwen3-max` | 复杂推理、旗舰任务 | 256K | ✅ | ✅ |
+| Qwen Plus | `aisa/qwen-plus-2025-12-01` | 主要生产模型 | 256K | ✅ | ✅ |
+| Qwen MT Flash | `aisa/qwen-mt-flash` | 高频、轻量任务 | 256K | ✅ | ✅ |
+| DeepSeek V3.1 | `aisa/deepseek-v3.1` | 高性价比推理 | 128K | ✅ | ✅ |
+| **Kimi K2.5** | `aisa/kimi-k2.5` | **Moonshot 旗舰推理模型** | 128K | ✅ | ✅ |
+
+### ⭐ Kimi K2.5 — Moonshot AI 旗舰模型
+
+Kimi K2.5 是 Moonshot AI 最新推理模型，可通过 AIsa 访问，价格约为 **Moonshot 官方价格的 80%**。
+
+**主要特性：**
+- 强推理和多步问题求解
+- 在代码和数学基准上有竞争力
+- 通过 AIsa 的 Moonshot 合作渠道提供
+
+#### 🔒 零数据保留（ZDR）——企业级隐私
+
+通过 AIsa 访问 Kimi K2.5 时，具备**企业级零数据保留**保障。用户无需担心数据隐私：AIsa 已与 Moonshot AI 签署正式 ZDR 协议。
+
+根据 AIsa 与 Kimi（Moonshot AI PTE. LTD.）之间的 **Supplemental Enterprise Service Agreement**（2026 年 2 月 10 日生效）：
+
+- Moonshot 处理后**不会保留客户数据**
+- Moonshot 基础设施**不会存储生成结果**
+- **不会将数据用于模型训练** —— 你的 prompts 和 completions 保持私密
+- 处理过程受企业合同条款约束，而非消费者 ToS
+
+这让 AIsa 成为隐私敏感或企业工作负载访问 Kimi K2.5 的推荐路径。直接调用 Moonshot 消费者 API 时会适用普通消费者数据政策；通过 AIsa 路由时，你的数据享受谈判后的 ZDR 保护。
+
+**⚠️ 重要：Temperature 限制**
+
+Kimi K2.5 **只接受 `temperature=1.0`**。使用其他值会返回错误：
+
+```
+Error: invalid temperature: only 1 is allowed for this model
+```
+
+如果 OpenClaw 配置或 Agent 设置了不同 temperature，请为 Kimi 覆盖配置：
+
+```
+/model aisa/kimi-k2.5
+```
+
+未显式设置时，OpenClaw 会使用模型默认 temperature。
+
+**Kimi K2.5 价格对比（每 1M tokens）：**
+
+| 指标 | AIsa | Moonshot 官方 | 节省 |
+|--------|------|-------------------|---------|
+| Input/1M | ~$0.60 | ~$0.75 | ~20% off |
+| Output/1M | ~$2.40 | ~$3.00 | ~20% off |
+
+> 实际价格可能变化。请查看 https://console.aisa.one/pricing 获取实时费率。
+
+### 通过 AIsa 可用的更多模型
+
+用户可以把 AIsa 支持的任意模型加入配置。完整目录包含 **49+ 个模型**：
+
+**Qwen 系列（8 个模型）：**
+- `qwen3-max`、`qwen3-max-2026-01-23`、`qwen-plus-2025-12-01`
+- `qwen-mt-flash`、`qwen-mt-lite`
+- `qwen-vl-max`、`qwen3-vl-flash`、`qwen3-vl-plus`（视觉模型）
+
+**DeepSeek（4 个模型）：**
+- `deepseek-v3.1`、`deepseek-v3`、`deepseek-v3-0324`、`deepseek-r1`
+
+**Kimi / Moonshot（2 个模型）：**
+- `kimi-k2.5`、`kimi-k2-thinking`
+
+**还包括：** Claude 系列（10）、GPT 系列（9）、Gemini 系列（5）、Grok 系列（2）等。
+
+**列出所有可用模型：**
+
+```bash
+curl https://api.aisa.one/v1/models -H "Authorization: Bearer ***"
+```
+
+## Model ID 版本管理
+
+AIsa 对部分模型使用**带版本的 model ID**。如果遇到 `503 - No available channels`，model ID 可能需要更新。
+
+**已知 model ID 映射：**
+
+| 常用名称 | 正确 AIsa Model ID | ❌ 不可用 |
+|-------------|----------------------|------------------|
+| Qwen Plus | `qwen-plus-2025-12-01` | `qwen3-plus`、`qwen-plus`、`qwen-plus-latest` |
+| Qwen Flash | `qwen-mt-flash` | `qwen3-flash`、`qwen-turbo`、`qwen-turbo-latest` |
+| Qwen Max | `qwen3-max` | （可直接使用） |
+| DeepSeek V3.1 | `deepseek-v3.1` | （可直接使用） |
+| Kimi K2.5 | `kimi-k2.5` | （可直接使用） |
+
+检查最新 model ID：
+
+```bash
+curl https://api.aisa.one/v1/models -H "Authorization: Bearer ***"
+```
+
+## 切换模型
+
+在聊天（TUI）中：
+
+```
+/model aisa/qwen3-max
+/model aisa/deepseek-v3.1
+/model aisa/kimi-k2.5
+```
+
+通过 CLI：
+
+```bash
+openclaw models set aisa/qwen3-max
+```
+
+## 价格对比（每 1M tokens）
+
+> 以下价格仅供参考。实时价格可能变化，请始终查看 https://console.aisa.one/pricing 获取最新费率。
+
+### Qwen MT Flash（轻量）
+- **AIsa**：$0.05 input / $0.30 output（**约官方零售价 50% off**）
+- Bailian 官方：$0.10 / $0.40
+- OpenRouter：$0.11-0.13 / $0.45-0.50
+
+### Qwen Plus（生产）
+- **AIsa**：$0.30 input / $0.90 output（**约官方零售价 25% off**）
+- Bailian 官方：$0.40 / $1.20
+- OpenRouter：$0.45-0.50 / $1.35-1.50
+
+### Qwen3 Max（旗舰）
+- **AIsa**：$1.20 input / $4.80 output（**约官方零售价 40% off**）
+- Bailian 官方：$2.00 / $8.00
+- OpenRouter：$2.20-2.50 / $9.00-10.00
+
+### Kimi K2.5（Moonshot 旗舰）
+- **AIsa**：约 $0.60 input / 约 $2.40 output（**约官方 Moonshot 价格 20% off**）
+- Moonshot 官方：约 $0.75 / 约 $3.00
+- OpenRouter：供应有限
+
+### 规模化成本：Qwen-Max 每月 500M tokens
+- OpenRouter：约 $4,000-4,250/月
+- Bailian 官方：约 $3,400/月
+- AIsa：约 $2,040/月（**每年节省 $16,320-26,520**）
+
+## 官方合作关系
+
+AIsa 与以下厂商保持已验证合作：
+
+- **阿里云** —— Qwen Key Account（完整模型家族，3 个全球区域：中国、美国弗吉尼亚、新加坡）
+- **BytePlus** —— 字节跳动 Doubao
+- **DeepSeek** —— 通过阿里云集成
+- **Moonshot** —— Kimi K2.5 集成，并具备**企业零数据保留（ZDR）协议**（2026 年 2 月 10 日生效）
+
+## Qwen 区域支持
+
+AIsa 通过阿里云在 3 个全球区域提供 Qwen 模型访问：
+
+- 🇨🇳 中国（默认）
+- 🇺🇸 美国（弗吉尼亚）
+- 🇸🇬 新加坡
+
+这来自 AIsa 的 Key Account 身份。OpenRouter 或免费 Qwen Portal 等其他 provider 通常只通过中国区路由。
+
+## 响应延迟（2026 年 2 月测试）
+
+| 模型 | 平均延迟 | 评级 |
+|-------|-------------|--------|
+| Qwen3 Max | ~1,577 ms | ⭐⭐⭐⭐⭐ 最快 |
+| Qwen MT Flash | ~1,918 ms | ⭐⭐⭐⭐ 快 |
+| Kimi K2.5 | ~2,647 ms | ⭐⭐⭐ 中等 |
+| DeepSeek V3.1 | ~3,002 ms | ⭐⭐⭐ 中等 |
+| Qwen Plus | ~8,207 ms | ⭐⭐ 较慢 |
+
+## 故障排查
+
+### “503 - No available channels” 错误
+
+model ID 可能错误或过期。查看上方 **Model ID 版本管理** 章节获取正确 ID。常见修复：
+
+- `qwen3-plus` -> 使用 `qwen-plus-2025-12-01`
+- `qwen3-flash` -> 使用 `qwen-mt-flash`
+
+### “Model not found” 错误
+
+确保 OpenClaw 配置中的 model ID 使用 `aisa/` 前缀：
+
+```
+✅ aisa/qwen3-max
+❌ qwen3-max
+```
+
+### Kimi K2.5 “invalid temperature” 错误
+
+Kimi K2.5 只接受 `temperature=1.0`。如果配置中设置了其他值，请添加模型级覆盖或让 OpenClaw 使用默认值。
+
+### Kimi K2.5 空响应
+
+少数情况下 Kimi K2.5 可能返回空内容但消耗输出 tokens。重试请求即可，这通常是瞬时问题。
+
+### 未检测到 API key
+
+1. 检查环境变量：`echo $AISA_API_KEY`
+2. 或检查配置：`openclaw config get auth.profiles`
+3. 重新运行引导：`openclaw onboard --auth-choice aisa-api-key`
+
+### Streaming 不工作
+
+AIsa 使用 OpenAI-compatible API（`openai-completions`）。确保配置包含：
+
+```json
+"api": "openai-completions"
+```
+
+### 速率限制或每日上限
+
+AIsa **没有每日请求限制**（不同于免费 Qwen Portal 的 2,000 req/day 上限）。
+
+## 获取 API Key
+
+1. 访问 https://console.aisa.one/
+2. 注册并创建 API key
+3. 将其设置为 `AISA_API_KEY`，或使用 onboarding wizard
+
+## 说明
+
+- AIsa 端点兼容 OpenAI：`https://api.aisa.one/v1`
+- 所有模型支持 streaming 和 function calling
+- Qwen 模型的 `supportsDeveloperRole` 设置为 `false`
+- 默认上下文窗口：256,000 tokens（Qwen）或 131,072 tokens（DeepSeek/Kimi）
+- 所有默认模型都启用 reasoning（thinking）
+- Kimi K2.5 要求 `temperature=1.0`，其他值会报错
+- 通过 AIsa 使用 Kimi K2.5 受企业零数据保留（ZDR）保护：数据不会被保留或用于训练
+- 图像/视频生成模型（WAN）可用，但需要单独配置
+- AIsa API 总共支持 49+ 个模型；使用 models 端点发现所有可用选项
+
+## 开始使用
+
+1. 在 [aisa.one](https://aisa.one) 注册（新账户有 $2 免费额度）。
+2. 从控制台生成 API key。
+3. 设置 key 并安装技能：
+   ```bash
+   export AISA_API_KEY="your-key"
+   npm install -g @aisa-one/cli
+   aisa skills install aisa-provider
+   ```
+4. 启动新的 Agent 会话，让运行时加载更新后的技能说明。
+
+## 相关
+
+<CardGroup cols={3}>
+  <Card title="快速设置：在 OpenClaw 中使用 AIsa" icon="bolt" href="/zh/guides/tutorials/openclaw-quick-setup">
+    推荐的 OpenClaw 设置路径。
+  </Card>
+  <Card title="AIsa CN-LLM Route" icon="language" href="/zh/agent-skills/cn-llm">
+    将中文提示路由到中文 LLM。
+  </Card>
+  <Card title="AIsa LLM Router" icon="route" href="/zh/agent-skills/llm-router">
+    在支持的模型之间路由提示。
+  </Card>
+</CardGroup>

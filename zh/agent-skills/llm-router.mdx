@@ -1,0 +1,479 @@
+---
+title: "AIsa LLM Router"
+description: "用一个 AIsa key 在多个 LLM provider 之间路由提示。"
+---
+
+[在 GitHub 上查看 ->](https://github.com/AIsa-team/agent-skills/tree/main/llm-router)
+
+**一个网关连接多个 LLM。** 通过 AIsa 和单个 API key，在 OpenAI 兼容模型之间路由 Agent 请求。
+
+## 安装
+
+如果还没有安装 AIsa CLI，请先安装：
+
+```bash
+npm install -g @aisa-one/cli
+```
+
+然后安装该技能：
+
+```bash
+aisa skills install llm-router
+```
+
+## Agent 可以用它做什么？
+
+<CardGroup cols={2}>
+  <Card title="模型匹配" icon="route">
+    根据任务类型和约束选择模型。
+  </Card>
+  <Card title="Provider 覆盖" icon="globe">
+    在 GPT、Claude、Gemini、Qwen、DeepSeek、Grok 等模型间路由。
+  </Card>
+  <Card title="成本感知路由" icon="dollar-sign">
+    在质量需求允许时选择更便宜的模型。
+  </Card>
+  <Card title="Fallback 规划" icon="shuffle">
+    当模型不可用时建议替代模型。
+  </Card>
+</CardGroup>
+
+## 🔥 可以做什么？
+
+### 多模型聊天
+
+```
+"Chat with GPT-4 for reasoning, switch to Claude for creative writing"
+```
+
+### 模型对比
+
+```
+"Compare responses from GPT-4, Claude, and Gemini for the same question"
+```
+
+### 视觉分析
+
+```
+"Analyze this image with GPT-4o - what objects are in it?"
+```
+
+### 成本优化
+
+```
+"Route simple queries to fast/cheap models, complex queries to GPT-4"
+```
+
+### Fallback 策略
+
+```
+"If GPT-4 fails, automatically try Claude, then Gemini"
+```
+
+## 为什么需要 LLM Router？
+
+| 特性 | LLM Router | 直接调用 API |
+|---------|------------|-------------|
+| API Keys | 1 | 10+ |
+| SDK 兼容性 | OpenAI SDK | 多套 SDK |
+| 计费 | 统一 | 分 provider |
+| 模型切换 | 修改字符串 | 重写代码 |
+| Fallback 路由 | 内置 | 自行实现 |
+| 成本追踪 | 统一 | 分散 |
+
+## 支持的模型家族
+
+| 家族 | 开发者 | 示例模型 |
+|--------|-----------|----------------|
+| GPT | OpenAI | gpt-4.1, gpt-4o, gpt-4o-mini, o1, o1-mini, o3-mini |
+| Claude | Anthropic | claude-3-5-sonnet, claude-3-opus, claude-3-sonnet |
+| Gemini | Google | gemini-3-pro-preview, gemini-3.5-flash |
+| Qwen | Alibaba | qwen-max, qwen-plus, qwen2.5-72b-instruct |
+| Deepseek | Deepseek | deepseek-chat, deepseek-coder, deepseek-v3, deepseek-r1 |
+| Grok | xAI | grok-2, grok-beta |
+
+> **注意**：模型可用性可能变化。请查看 [console.aisa.one/pricing](https://console.aisa.one/pricing) 获取完整的当前可用模型和价格列表。
+
+## 快速开始
+
+```bash
+export AISA_API_KEY="your-key"
+```
+
+## API 端点
+
+### OpenAI 兼容 Chat Completions
+
+```
+POST https://api.aisa.one/v1/chat/completions
+```
+
+#### 请求
+
+```bash
+curl -X POST "https://api.aisa.one/v1/chat/completions" \
+  -H "Authorization: Bearer ***" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4.1",
+    "messages": [
+      {"role": "system", "content": "You are a helpful assistant."},
+      {"role": "user", "content": "Explain quantum computing in simple terms."}
+    ],
+    "temperature": 0.7,
+    "max_tokens": 1000
+  }'
+```
+
+#### 参数
+
+| 参数 | 类型 | 必填 | 描述 |
+|-----------|------|----------|-------------|
+| `model` | string | 是 | 模型标识符，例如 `gpt-4.1`、`claude-3-sonnet` |
+| `messages` | array | 是 | 对话消息 |
+| `temperature` | number | 否 | 随机性（0-2，默认 1） |
+| `max_tokens` | integer | 否 | 最大响应 tokens |
+| `stream` | boolean | 否 | 启用 streaming（默认 false） |
+| `top_p` | number | 否 | nucleus sampling（0-1） |
+| `frequency_penalty` | number | 否 | 频率惩罚（-2 到 2） |
+| `presence_penalty` | number | 否 | 存在惩罚（-2 到 2） |
+| `stop` | string/array | 否 | 停止序列 |
+
+#### 消息格式
+
+```json
+{
+  "role": "user|assistant|system",
+  "content": "message text or array for multimodal"
+}
+```
+
+#### 响应
+
+```json
+{
+  "id": "chatcmpl-xxx",
+  "object": "chat.completion",
+  "created": 1234567890,
+  "model": "gpt-4.1",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Quantum computing uses..."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 50,
+    "completion_tokens": 200,
+    "total_tokens": 250,
+    "cost": 0.0025
+  }
+}
+```
+
+### 流式响应
+
+```bash
+curl -X POST "https://api.aisa.one/v1/chat/completions" \
+  -H "Authorization: Bearer ***" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-3-sonnet",
+    "messages": [{"role": "user", "content": "Write a poem about AI."}],
+    "stream": true
+  }'
+```
+
+Streaming 返回 Server-Sent Events（SSE）：
+
+```
+data: {"id":"chatcmpl-xxx","choices":[{"delta":{"content":"In"}}]}
+data: {"id":"chatcmpl-xxx","choices":[{"delta":{"content":" circuits"}}]}
+...
+data: [DONE]
+```
+
+### 视觉 / 图像分析
+
+通过图片 URL 或 base64 数据分析图像：
+
+```bash
+curl -X POST "https://api.aisa.one/v1/chat/completions" \
+  -H "Authorization: Bearer ***" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {"type": "text", "text": "What is in this image?"},
+          {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}}
+        ]
+      }
+    ]
+  }'
+```
+
+### Function Calling
+
+启用 tools/functions 以获得结构化输出：
+
+```bash
+curl -X POST "https://api.aisa.one/v1/chat/completions" \
+  -H "Authorization: Bearer ***" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4.1",
+    "messages": [{"role": "user", "content": "What is the weather in Tokyo?"}],
+    "functions": [
+      {
+        "name": "get_weather",
+        "description": "Get current weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {"type": "string", "description": "City name"},
+            "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]}
+          },
+          "required": ["location"]
+        }
+      }
+    ],
+    "function_call": "auto"
+  }'
+```
+
+### Google Gemini 格式
+
+对于 Gemini 模型，也可以使用 native 格式：
+
+```
+POST https://api.aisa.one/v1beta/models/{model}:generateContent
+```
+
+```bash
+curl -X POST "https://api.aisa.one/v1beta/models/gemini-3.5-flash:generateContent" \
+  -H "Authorization: Bearer ***" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [
+      {
+        "role": "user",
+        "parts": [{"text": "Explain machine learning."}]
+      }
+    ],
+    "generationConfig": {
+      "temperature": 0.7,
+      "maxOutputTokens": 1000
+    }
+  }'
+```
+
+## Python 客户端
+
+### 安装
+
+不需要安装额外依赖，只使用标准库。
+
+### CLI 用法
+
+```bash
+# Basic completion
+python3 scripts/llm_router_client.py chat --model gpt-4.1 --message "Hello, world!"
+
+# With system prompt
+python3 scripts/llm_router_client.py chat --model claude-3-sonnet --system "You are a poet" --message "Write about the moon"
+
+# Streaming
+python3 scripts/llm_router_client.py chat --model gpt-4o --message "Tell me a story" --stream
+
+# Multi-turn conversation
+python3 scripts/llm_router_client.py chat --model qwen-max --messages '[{"role":"user","content":"Hi"},{"role":"assistant","content":"Hello!"},{"role":"user","content":"How are you?"}]'
+
+# Vision analysis
+python3 scripts/llm_router_client.py vision --model gpt-4o --image "https://example.com/image.jpg" --prompt "Describe this image"
+
+# List supported models
+python3 scripts/llm_router_client.py models
+
+# Compare models
+python3 scripts/llm_router_client.py compare --models "gpt-4.1,claude-3-sonnet,gemini-3.5-flash" --message "What is 2+2?"
+```
+
+### Python SDK 用法
+
+```python
+from llm_router_client import LLMRouterClient
+
+client = LLMRouterClient()  # 使用 AISA_API_KEY 环境变量
+
+response = client.chat(
+    model="gpt-4.1",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+print(response["choices"][0]["message"]["content"])
+
+for chunk in client.chat_stream(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Write a story."}]
+):
+    print(chunk, end="", flush=True)
+```
+
+## 使用场景
+
+### 1. 成本优化路由
+
+简单任务使用更便宜的模型：
+
+```python
+def smart_route(message: str) -> str:
+    if len(message) < 50:
+        model = "gpt-3.5-turbo"
+    else:
+        model = "gpt-4.1"
+    return client.chat(model=model, messages=[{"role": "user", "content": message}])
+```
+
+### 2. Fallback 策略
+
+失败后自动 fallback：
+
+```python
+def chat_with_fallback(message: str) -> str:
+    models = ["gpt-4.1", "claude-3-sonnet", "gemini-3.5-flash"]
+    for model in models:
+        try:
+            return client.chat(model=model, messages=[{"role": "user", "content": message}])
+        except Exception:
+            continue
+    raise Exception("All models failed")
+```
+
+### 3. 模型 A/B 测试
+
+对比模型输出：
+
+```python
+results = client.compare_models(
+    models=["gpt-4.1", "claude-3-opus"],
+    message="Analyze this quarterly report..."
+)
+
+for model, result in results.items():
+    log_response(model=model, latency=result["latency"], cost=result["cost"])
+```
+
+### 4. 专项模型选择
+
+为每种任务选择最合适的模型：
+
+```python
+MODEL_MAP = {
+    "code": "deepseek-coder",
+    "creative": "claude-3-opus",
+    "fast": "gpt-3.5-turbo",
+    "vision": "gpt-4o",
+    "chinese": "qwen-max",
+    "reasoning": "gpt-4.1"
+}
+
+def route_by_task(task_type: str, message: str) -> str:
+    model = MODEL_MAP.get(task_type, "gpt-4.1")
+    return client.chat(model=model, messages=[{"role": "user", "content": message}])
+```
+
+## 错误处理
+
+错误以 JSON 返回，包含 `error` 字段：
+
+```json
+{
+  "error": {
+    "code": "model_not_found",
+    "message": "Model 'xyz' is not available"
+  }
+}
+```
+
+常见错误码：
+
+- `401` - API key 无效或缺失
+- `402` - 额度不足
+- `404` - 模型不存在
+- `429` - 超出速率限制
+- `500` - 服务器错误
+
+## 最佳实践
+
+1. **使用 streaming** 改善长响应体验
+2. **设置 max_tokens** 控制成本
+3. **实现 fallback** 提高生产可靠性
+4. **缓存响应** 处理重复查询
+5. **监控 usage** 使用响应元数据
+6. **使用合适模型** —— 不要把 GPT-4 用在简单任务上
+
+## OpenAI SDK 兼容性
+
+只需修改 base URL 和 key：
+
+```python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ["AISA_API_KEY"],
+    base_url="https://api.aisa.one/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4.1",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+print(response.choices[0].message.content)
+```
+
+## 价格
+
+模型价格按 tokens 计费，并随模型变化。查看 [console.aisa.one/pricing](https://console.aisa.one/pricing) 获取当前费率。
+
+| 模型家族 | 大致成本 |
+|--------------|------------------|
+| GPT-4.1 / GPT-4o | ~$0.01 / 1K tokens |
+| Claude-3-Sonnet | ~$0.01 / 1K tokens |
+| Gemini-2.0-Flash | ~$0.001 / 1K tokens |
+| Qwen-Max | ~$0.005 / 1K tokens |
+| DeepSeek-V3 | ~$0.002 / 1K tokens |
+
+每个响应包含 `usage.cost` 和 `usage.credits_remaining`。
+
+## 开始使用
+
+1. 在 [aisa.one](https://aisa.one) 注册（新账户有 $2 免费额度）。
+2. 从控制台生成 API key。
+3. 设置 key 并安装技能：
+   ```bash
+   export AISA_API_KEY="your-key"
+   npm install -g @aisa-one/cli
+   aisa skills install llm-router
+   ```
+4. 启动新的 Agent 会话，让运行时加载更新后的技能说明。
+
+## 相关
+
+<CardGroup cols={3}>
+  <Card title="模型目录" icon="list" href="/zh/guides/models">
+    浏览支持的 model ID 和模型家族。
+  </Card>
+  <Card title="对比模型" icon="scale-balanced" href="/zh/guides/model-gateway/compare-models">
+    在生产路由前对比模型。
+  </Card>
+  <Card title="AIsa CN-LLM Route" icon="language" href="/zh/agent-skills/cn-llm">
+    中文模型路由。
+  </Card>
+</CardGroup>
