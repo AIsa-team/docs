@@ -1,0 +1,262 @@
+---
+title: "在 OpenClaw 中使用 AIsa"
+description: "把 AIsa 配置为 OpenClaw 的 LLM provider，然后用一段 prompt 连接 AIsa resource capabilities。"
+---
+
+本指南分为两部分：
+
+1. 将 AIsa 配置为 OpenClaw 的 LLM provider。
+2. 在 OpenClaw 中粘贴一段 prompt，让它连接 AIsa resource capabilities。
+
+## 1. 将 AIsa 用作 LLM provider
+
+如果你希望完全控制 OpenClaw 的模型配置——自定义模型列表、fallback chains、存储在系统 keychain 中的 auth profiles，或按 channel 路由——可以直接编辑 `openclaw.json`。
+
+### Step 1: 获取 AIsa API key
+
+<Steps>
+  <Step title="登录 dashboard">
+    [console.aisa.one](https://console.aisa.one/)
+  </Step>
+  <Step title="进入 API Keys">
+    [console.aisa.one/console/token](https://console.aisa.one/console/token)
+  </Step>
+  <Step title="创建新 key">
+    给它一个类似 `openclaw-local` 的标签。立即复制该值（以 `sk-aisa-` 开头）——它只会显示一次。
+  </Step>
+</Steps>
+
+### Step 2: 设置 API key
+
+把 key 添加到 `~/.openclaw/openclaw.json`，或在 shell 中导出：
+
+```bash
+export AISA_API_KEY="YOUR_AISA_API_KEY"
+```
+
+<Tip>
+  建议使用环境变量，不要把 key 硬编码进 `openclaw.json`。请参阅 [Authentication](/zh/guides/authentication) 了解轮换和存储最佳实践。
+</Tip>
+
+### Step 3: 配置 AIsa provider
+
+把下面的配置块添加到 `~/.openclaw/openclaw.json`：
+
+```json
+{
+  "env": {
+    "AISA_API_KEY": "YOUR_AISA_API_KEY"
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "aisa": {
+        "baseUrl": "https://api.aisa.one/v1",
+        "apiKey": "${AISA_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          { "id": "gpt-5-mini", "name": "GPT-5 Mini" },
+          { "id": "kimi-k2.5", "name": "Kimi K2.5" },
+          { "id": "claude-opus-4-8", "name": "Claude Opus 4.8" },
+          { "id": "gemini-3.5-flash", "name": "Gemini 3.5 Flash" },
+          { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash" },
+          { "id": "qwen3.7-max", "name": "Qwen3.7 Max" },
+          { "id": "MiniMax-M3", "name": "MiniMax M3" },
+          { "id": "glm-5", "name": "GLM 5" }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "aisa/kimi-k2.5"
+      },
+      "models": {
+        "aisa/kimi-k2.5": {}
+      }
+    }
+  }
+}
+```
+
+OpenClaw 现在会识别 `aisa` provider。引用任意模型时使用 `aisa/<model-id>` 格式。
+
+### Step 4: 重启 OpenClaw
+
+```bash
+openclaw gateway restart
+```
+
+你的 agents 现在会通过 AIsa 路由。
+
+## 2. 连接 AIsa resource capabilities
+
+当 OpenClaw 已经把 AIsa 用作 LLM provider 后，启动一个 OpenClaw session 并粘贴这段 prompt：
+
+```txt
+Read https://aisa.one/docs/agent-quickstart.md and help me safely connect, configure, and use AIsa's APIs, Skills, and LLMs in this agent environment.
+```
+
+OpenClaw 会获取 AIsa 面向 agent 的说明，并引导你完成 AIsa capabilities 的剩余设置。
+
+之后，OpenClaw 就可以同时使用 AIsa 模型和 AIsa resource capabilities。
+
+可以试试：
+
+```txt
+Use AIsa capabilities to search the web and summarize the latest information about OpenClaw.
+```
+
+### 视频 walkthrough
+
+<iframe
+  width="100%"
+  height="480"
+  src="https://www.youtube.com/embed/mlSivxqRPTI"
+  title="OpenClaw + AIsa manual setup"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  allowfullscreen
+></iframe>
+
+## LLM model 格式
+
+始终使用 `aisa/<model-id>`，例如 `aisa/kimi-k2.5`、`aisa/gpt-5`、`aisa/claude-opus-4-8`。你可以把任何支持的模型加入 provider config 的 `models` array；完整列表见 [model catalog](/zh/guides/models)。
+
+## 高级配置
+
+### Fallback chains
+
+如果 primary model 失败（上游 outage、rate limit），OpenClaw 可以自动使用 fallback model 重试：
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "aisa/kimi-k2.5",
+        "fallbacks": ["aisa/gpt-5-mini"]
+      },
+      "models": {
+        "aisa/kimi-k2.5": {},
+        "aisa/gpt-5-mini": {}
+      }
+    }
+  }
+}
+```
+
+### Auth profiles（keychain storage）
+
+把 API key 存入系统 keychain，避免写进 `openclaw.json`：
+
+<Steps>
+  <Step title="声明 auth profile">
+    ```json
+    {
+      "auth": {
+        "profiles": {
+          "aisa:default": {
+            "provider": "aisa",
+            "mode": "api_key"
+          }
+        }
+      }
+    }
+    ```
+  </Step>
+  <Step title="通过 OpenClaw CLI 保存 key">
+    ```bash
+    openclaw auth set aisa:default --key "$AISA_API_KEY"
+    ```
+  </Step>
+  <Step title="在 provider config 中引用 profile">
+    ```json
+    "providers": {
+      "aisa": {
+        "apiKey": "auth:aisa:default",
+        "baseUrl": "https://api.aisa.one/v1",
+        "api": "openai-completions"
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+### Per-channel models
+
+在每个 messaging platform 上使用不同模型：
+
+```json
+{
+  "telegram": {
+    "agents": {
+      "defaults": {
+        "model": { "primary": "aisa/kimi-k2.5" }
+      }
+    }
+  },
+  "discord": {
+    "agents": {
+      "defaults": {
+        "model": { "primary": "aisa/claude-opus-4-8" }
+      }
+    }
+  }
+}
+```
+
+## 监控用量
+
+在 [AIsa dashboard](https://console.aisa.one) 中追踪支出和每次请求的详细信息。可参阅 [Usage Logs](/zh/guides/dashboard/usage-logs) 了解可查看的内容。
+
+## Troubleshooting
+
+<AccordionGroup>
+
+<Accordion title="'No API key found for provider aisa'">
+**修复：**
+1. 确认已设置 `AISA_API_KEY`：`echo $AISA_API_KEY`
+2. 确认 `openclaw.json` 引用的是 `${AISA_API_KEY}`（而不是字面量字符串）。
+3. 重启 OpenClaw，让它重新读取 env。
+4. 最后才考虑临时硬编码 key 来验证其他配置是否正常；验证后再改回 env。
+</Accordion>
+
+<Accordion title="Authentication errors (401 / 403)">
+**修复：**
+1. 在 [dashboard](https://console.aisa.one) 中确认 key 有效。
+2. 确保 `baseUrl` 完全是 `https://api.aisa.one/v1`（不要有 trailing slash 问题）。
+3. 查看 [Authentication](/zh/guides/authentication) 了解轮换建议。
+</Accordion>
+
+<Accordion title="Model not working">
+**修复：**
+1. 对照 [catalog](/zh/guides/models) 仔细检查 model ID。
+2. 确认模型已经列在 `models.providers.aisa.models` 中。
+3. 使用 `aisa/<model-id>` 形式引用它。
+</Accordion>
+
+<Accordion title="OpenClaw does not know AIsa capabilities">
+**修复：** 把这段 prompt 粘贴到 OpenClaw session 中：
+
+```txt
+Read https://aisa.one/docs/agent-quickstart.md and help me safely connect, configure, and use AIsa's APIs, Skills, and LLMs in this agent environment.
+```
+</Accordion>
+
+</AccordionGroup>
+
+## 相关页面
+
+<CardGroup cols={3}>
+  <Card title="Authentication" icon="key" href="/zh/guides/authentication">
+    API key 生命周期、存储和最佳实践。
+  </Card>
+  <Card title="Model Catalog" icon="list" href="/zh/guides/models">
+    当前模型 ID、上下文窗口、endpoint、能力和计费说明。
+  </Card>
+  <Card title="OpenClaw docs" icon="arrow-up-right-from-square" href="https://docs.openclaw.ai/">
+    OpenClaw 官方文档。
+  </Card>
+</CardGroup>

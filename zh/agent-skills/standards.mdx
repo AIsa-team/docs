@@ -1,0 +1,76 @@
+---
+title: "Agent Skills 标准"
+description: "了解 AIsa Agent Skills 的结构、SKILL.md specification，以及跨受支持 AI agents 的 portable、auditable skills 标准。"
+privacy:
+  view: "public"
+---
+
+Agent Skills 是一种轻量、开放的格式，用于通过专门知识和 workflow 扩展 AI agent capabilities。遵循标准化结构后，skills 会变得 portable、self-documenting，并且易于被 agents 发现和执行。
+
+AIsa 的 agent skills 基于 [agentskills.io](https://agentskills.io) 定义的开放标准构建，并针对 AIsa ecosystem 做了适配，以确保高可靠性以及与 AIsa API proxy 的无缝集成。重要的是，AIsa agent skills 设计为广泛兼容，可以与所有主流 agent harnesses 无缝集成，包括 **OpenClaw**、**Claude Code** 和 **Hermes**。
+
+## Core Concepts
+
+### 1. Progressive Disclosure
+
+为了高效管理 context，skills 使用三层加载策略：
+
+- **Discovery**：Agents 最初只加载 skill 的 `name` 和 `description`，用于判断相关性。
+- **Activation**：当任务匹配时，完整 `SKILL.md` instructions 会被读入 context。
+- **Execution**：只有在 agent 明确需要时，才加载详细 scripts、references 或 assets。
+
+### 2. Portability and Auditability
+
+一个 skill 本质上只是包含 `SKILL.md` 文件的文件夹。这让它具备：
+
+- **Self-documenting**：人类可以像 agents 一样轻松阅读并审计 instructions。
+- **Versionable**：Skills 可以在 Git repositories 中管理，从而清晰追踪变更。
+- **Extensible**：它们可以从简单 text instructions 扩展到复杂 executable code。
+
+## Directory Structure
+
+标准 AIsa skill 遵循如下目录结构：
+
+```text
+skill-name/
+├── SKILL.md          # Required: Metadata and instructions
+├── scripts/          # Optional: Executable code (Python, Bash, etc.)
+├── references/       # Optional: Technical documentation or reference guides
+└── assets/           # Optional: Templates, images, or static data
+```
+
+## SKILL.md Specification
+
+`SKILL.md` 文件是每个 skill 的核心。它必须包含 YAML frontmatter，随后是 Markdown content。
+
+### Frontmatter Fields
+
+- **name**：短小、唯一的 identifier（小写字母数字和 hyphens）。
+- **description**：清楚说明该 skill 做什么，以及 agent 什么时候应该使用它。这是 discovery 的主要信号。
+- **metadata**：（可选）用于附加属性的 map，例如 author、version 或 platform-specific tags。
+- **homepage**：（可选）skill 主页或 repository 链接。
+
+### Body Content
+
+Markdown body 包含实际 instructions。对于 AIsa skills，我们建议包括：
+
+- **Step-by-step instructions**：清晰、可执行的步骤。
+- **Usage examples**：具体的 cURL 或 Python snippets。
+- **Edge cases**：如何处理常见错误或限制的说明。
+
+## AIsa-Specific Standards
+
+虽然 AIsa skills 遵循通用 specification，但我们会应用额外标准，确保它们与平台完美配合：
+
+| Standard | Description |
+| :-- | :-- |
+| **API Proxy Alignment** | 所有 skills 都必须使用 AIsa API proxy（`api.aisa.one`），而不是直接使用 upstream provider URLs。 |
+| **Authentication** | Skills 应依赖 `AISA_API_KEY` 环境变量完成认证。 |
+| **Bundled Clients** | 对于复杂交互，我们建议提供包含 standalone Python client 的 `scripts/` directory。 |
+| **Citation Support** | 对于 search 和 research skills，instructions 必须强调为事实性 claims 提供 inline citations。 |
+
+## References
+
+1. [What are skills? - Agent Skills](https://agentskills.io/what-are-skills)
+2. [Specification - Agent Skills](https://agentskills.io/specification)
+3. [AIsa Agent Skills Repository](https://github.com/AIsa-team/agent-skills)

@@ -1,0 +1,106 @@
+---
+title: "预构建 Skills 与自定义 Skills：什么时候使用哪一种"
+description: >-
+  了解何时从 agent-skills registry 安装预构建 Agent Skill，何时用 aisa skills init 从零创建自己的 SKILL.md。
+---
+
+你可以通过两种方式为 AI coding agent 增加 AIsa Agent Skills 能力：从 [agent-skills](https://github.com/AIsa-skills) registry 安装预构建 skill，或者从零编写自己的 `SKILL.md`。正确选择取决于你的用例是否已经被覆盖。
+
+---
+
+## 核心区别
+
+| | **预构建 skill**（来自 registry） | **自定义 skill**（你自己的 SKILL.md） |
+|---|---|---|
+| **来源** | [AIsa-team/agent-skills](https://github.com/AIsa-team/agent-skills) | 你自己编写 |
+| **安装方式** | `aisa skills install <slug>` | `aisa skills init <name>` + 编辑 |
+| **设置时间** | 30 秒 | 几分钟到几小时 |
+| **维护** | 由 AIsa team 维护 | 由你维护 |
+| **API 覆盖** | AIsa public catalogue | 任何你能访问的 API |
+| **自定义程度** | 直接使用 | 完全自定义 instructions 和 scripts |
+
+---
+
+## 什么时候使用预构建 skill
+
+**registry 中已经存在该能力。** 如果你需要 web search、financial data、Twitter/X access、image/video generation 或 YouTube research，通常已经有对应 skill。安装只需要一个命令，并且自带经过测试的 scripts 和 worked examples。
+
+**你希望由 AIsa team 维护。** 当底层 API 变化时，预构建 skills 会被更新。你不需要追踪 API deprecation，也不需要在 endpoint 迁移时重写说明。
+
+**你要快速 prototype。** 执行 `aisa skills install market`，再打开新的 Claude Code session，就可以开始查询实时股票价格。编写、测试并维护一个等价自定义 skill 会明显更耗时。
+
+### 示例：安装并使用 market skill
+
+```bash
+# Install
+aisa skills install market
+
+# Open a new agent session and ask:
+# "Pull the last 30 days of NVDA price data and flag any days where
+#  the move exceeded 5%. Cross-reference with earnings dates."
+```
+
+Agent 会读取 `market` skill description，加载 `SKILL.md` instructions，运行内置 Python client，并调用 AIsa finance API——整个过程不需要你写代码。
+
+---
+
+## 什么时候编写自定义 skill
+
+**你需要调用自己的 internal APIs。** 预构建 skills 覆盖的是 AIsa public API catalogue。它们无法查询你公司的内部 data warehouse、CRM 或 proprietary service。对于这些场景，需要编写一个 SKILL.md，描述内部 endpoint 和认证方式。
+
+**现有 skill 没有覆盖你的精确用例。** 如果你需要一个非常具体的 workflow，例如按特定顺序组合多个 API 的 multi-step process，自定义 skill 可以把这套顺序明确写入 instructions body。
+
+**你想把领域知识分享给 agent。** SKILL.md 不只是 API wrapper。你可以写入 domain context、decision rules、output formatting requirements，以及团队从生产使用中学到的 caveats。
+
+**你想为其他人发布 skill。** 自定义 skills 可以作为 pull request 提交到 [agent-skills](https://github.com/AIsa-team/agent-skills) registry。如果你基于 AIsa APIs 构建了有用能力，贡献它会让整个生态受益。
+
+### 示例：创建并编辑自定义 skill
+
+```bash
+# Start from the closest built-in template
+aisa skills init internal-crm --template default
+
+# Edit the generated SKILL.md
+# - Set name, description, and metadata
+# - Write instructions that explain your CRM's auth and endpoints
+# - Add example curl/Python commands for common queries
+```
+
+`description` 字段是最重要的一行。agent 会在启动时读取它，用来判断什么时候激活该 skill。请具体描述触发条件：
+
+```yaml
+# ❌ Too generic — the agent won't know when to use this
+description: "Internal CRM access."
+
+# ✅ Clear trigger — the agent knows exactly when this applies
+description: "Look up customer account details, support history, and
+  renewal dates from the internal Salesforce CRM. Use when the user
+  asks about a specific customer or account."
+```
+
+---
+
+## 快速决策指南
+
+```text
+OpenClaw registry 中是否已有对应预构建 skill？
+│
+├── YES → 它是否无需修改即可覆盖你的用例？
+│         ├── YES → aisa skills install <slug>
+│         └── NO  → aisa skills init <name>（customise or extend）
+│
+└── NO  → 是否涉及 registry 中还没有的 AIsa public API？
+          ├── YES → aisa skills init <name> --template <closest>
+          │         （并考虑提交 PR 到 agent-skills）
+          └── NO  → aisa skills init <name> --template default
+                    （为你的 internal API 编写 instructions）
+```
+
+---
+
+## 下一步
+
+- [Agent Skills](/agent-skills) — 浏览完整预构建 skills catalogue
+- [Quickstart](/agent-skills/quickstart) — 5 分钟安装第一个 skill
+- [Standards](/agent-skills/standards) — 了解 SKILL.md 文件如何工作，以及如何编写自己的 skill
+- [AIsa 入门](/zh/guides/getting-started-with-aisa) — 如果你刚开始使用 AIsa API
