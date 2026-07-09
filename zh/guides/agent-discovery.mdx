@@ -1,0 +1,287 @@
+---
+title: "Agent Discovery：让 Autonomous Agents 发现并使用 AIsa"
+description: "使用 Google A2A agent card、OpenAI plugin manifest 和 OpenAPI 3.1 spec，将你的 autonomous agents 与 AIsa 集成。涵盖 programmatic discovery、authentication 和端到端集成模式。"
+---
+
+AIsa 发布了三个 machine-readable discovery endpoints，让 autonomous agents 可以在没有人工介入的情况下发现、理解并调用 AIsa 的能力。本指南会逐一介绍这些 endpoint，解释集成流程，并提供 Python、TypeScript 和 bash 的可运行代码示例。
+
+## Discovery Endpoints
+
+AIsa 暴露以下 well-known URLs 用于 agent discovery。三者都可公开访问，读取时无需认证，并包含 permissive CORS headers，因此 browser-based agents 可以直接 fetch。
+
+| Endpoint | Protocol | URL | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Agent Card** | Google A2A | `https://aisa.one/.well-known/agent-card.json` | 主要 discovery 入口——发布 13 个 skills 及其 metadata、tags 和 I/O modes |
+| **AI Plugin** | OpenAI Plugin (v1) | `https://aisa.one/.well-known/ai-plugin.json` | 兼容 ChatGPT 时代的 agent tooling |
+| **OpenAPI Spec** | OpenAPI 3.1.0 | `https://aisa.one/openapi.yaml` | 覆盖 111+ API paths 和 121 schemas 的 machine-readable specification |
+
+## Agent Discovery 如何工作
+
+Discovery flow 包含三个步骤：**discover**、**inspect** 和 **invoke**。autonomous agent 会先获取 agent card，了解 AIsa 能做什么；然后选择相关 skill；最后根据 OpenAPI spec 中的 request/response schemas 调用对应 API endpoint。
+
+<Steps>
+  <Step title="Discover">
+    Agent 从 `aisa.one` 获取 `/.well-known/agent-card.json`。响应中包含 skills 列表，每个 skill 都有 `id`、`name`、`description`、`tags` 和 `examples`。agent 使用这些 metadata 判断 AIsa 是否能完成当前任务。
+  </Step>
+  <Step title="Inspect">
+    Agent 识别出相关 skill 后，会获取 `/openapi.yaml`，以取得对应 API endpoints 的完整 request/response schema。OpenAPI spec 提供 parameter types、required fields、authentication requirements 和 example payloads。
+  </Step>
+  <Step title="Invoke">
+    Agent 使用 OpenAPI spec 中的 schema 构造 authenticated API request，将其发送到 `api.aisa.one`，并处理响应。所有 endpoint 都使用 AIsa API key 的 Bearer token authentication。
+  </Step>
+</Steps>
+
+## A2A Agent Card
+
+[Google Agent-to-Agent (A2A)](https://google.github.io/A2A/) protocol 定义了 agents 发布自身能力的标准格式。AIsa 的 agent card 位于 well-known URL，描述平台、认证要求和完整 skill catalogue。
+
+### 获取 Agent Card
+
+<CodeGroup>
+
+```bash curl
+curl -s https://aisa.one/.well-known/agent-card.json | jq .
+```
+
+```python Python
+import requests
+
+card = requests.get("https://aisa.one/.well-known/agent-card.json").json()
+print(f"Agent: {card['name']} — {card['description']}")
+print(f"Skills: {len(card['skills'])}")
+for skill in card["skills"]:
+    print(f"  • {skill['id']}: {skill['name']}")
+```
+
+```typescript TypeScript
+const res = await fetch("https://aisa.one/.well-known/agent-card.json");
+const card = await res.json();
+console.log(`Agent: ${card.name} — ${card.description}`);
+console.log(`Skills: ${card.skills.length}`);
+card.skills.forEach((s: any) => console.log(`  • ${s.id}: ${s.name}`));
+```
+
+</CodeGroup>
+
+### Agent Card Structure
+
+顶层字段描述 agent identity、authentication 和 capabilities：
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `name` | string | Agent name — `"AIsa"` |
+| `description` | string | Agent 目的的一句话摘要 |
+| `url` | string | API requests 的 base URL — `https://api.aisa.one` |
+| `provider` | object | Organization name 和 website |
+| `version` | string | Agent card 的 semantic version |
+| `documentationUrl` | string | Human-readable documentation 链接 |
+| `capabilities` | object | Feature flags — streaming、push notifications、state history |
+| `authentication` | object | Supported auth schemes 和 credential instructions |
+
+### Skill Objects
+
+`skills` array 中的每一项都描述一个 capability：
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `id` | string | 唯一 skill identifier（例如 `chat-completions`、`twitter-autopilot`） |
+| `name` | string | Human-readable skill name |
+| `description` | string | skill 做什么以及提供什么数据 |
+| `tags` | string[] | 用于 filtering 和 matching 的 searchable tags |
+| `examples` | string[] | 该 skill 可处理的 natural-language example queries |
+| `inputModes` | string[] | 接受的 content types（默认 `application/json`） |
+| `outputModes` | string[] | Response content types（例如 `application/json`、`text/event-stream`） |
+
+### Available Skills
+
+AIsa 目前通过 agent card 发布 13 个 skills：
+
+| Skill ID | Name | Tags |
+| :--- | :--- | :--- |
+| `chat-completions` | AI Model Inference | inference, llm, ai-models, text-generation, chat |
+| `twitter-autopilot` | Twitter/X Autopilot | social-media, twitter, x, search, automation, posting |
+| `marketpulse` | MarketPulse Financial Data | finance, stocks, equities, market-data, sec-filings |
+| `prediction-market-data` | Prediction Market Data | prediction-markets, polymarket, kalshi, trading |
+| `prediction-market-arbitrage` | Prediction Market Arbitrage | arbitrage, prediction-markets, trading, analysis |
+| `multi-source-search` | Multi-source Search | search, web-search, academic-search, research |
+| `perplexity-search` | Perplexity Search | search, perplexity, sonar, answers, citations |
+| `youtube-serp` | YouTube SERP | youtube, video-search, social-media, serp |
+| `media-gen` | Media Generation | image-generation, video-generation, creative, ai-art |
+| `last30days` | Last 30 Days Research Brief | research, news, aggregation, analysis, report |
+| `tavily-search` | Tavily Web & News Search | search, news, web-search, tavily |
+| `image-generation` | Image Generation | image-generation, ai-art, editing, creative |
+| `video-generation` | Video Generation | video-generation, ai-video, creative, wan |
+
+## OpenAI Plugin Manifest
+
+为了兼容实现原始 ChatGPT plugin protocol 的 agent frameworks，AIsa 也在 `/.well-known/ai-plugin.json` 发布了一个 `ai-plugin.json` manifest。该文件遵循 [OpenAI plugin schema v1](https://platform.openai.com/docs/plugins/getting-started)，并引用同一份 OpenAPI spec。
+
+```bash
+curl -s https://aisa.one/.well-known/ai-plugin.json | jq .
+```
+
+manifest 包含 `description_for_model` 字段，列出关键 API endpoints，帮助 LLM-based agents 在不解析完整 OpenAPI spec 的情况下理解可用 tools。
+
+## OpenAPI 3.1 Specification
+
+`/openapi.yaml` 上的 consolidated OpenAPI spec 覆盖了按 10 个 categories 组织的全部 111+ AIsa API paths。它是构造 API requests 的权威 machine-readable contract。
+
+### 获取并解析 Spec
+
+<CodeGroup>
+
+```python Python
+import yaml, requests
+
+spec = yaml.safe_load(requests.get("https://aisa.one/openapi.yaml").text)
+paths = list(spec["paths"].keys())
+print(f"Total endpoints: {len(paths)}")
+print(f"First 5: {paths[:5]}")
+```
+
+```typescript TypeScript
+import YAML from "yaml";
+
+const res = await fetch("https://aisa.one/openapi.yaml");
+const spec = YAML.parse(await res.text());
+const paths = Object.keys(spec.paths);
+console.log(`Total endpoints: ${paths.length}`);
+```
+
+```bash curl
+curl -s https://aisa.one/openapi.yaml | head -50
+```
+
+</CodeGroup>
+
+### API Categories
+
+spec 把 endpoints 组织为以下 tag groups：
+
+| Category | Example Endpoints | Description |
+| :--- | :--- | :--- |
+| AI Models | `/v1/chat/completions`, `/v1/models` | 实时 LLM 和 media model catalogue、OpenAI-compatible chat routes |
+| Twitter/X | `/apis/v1/twitter/tweet/advanced_search` | Profile、timeline、search、posting |
+| Financial Data | `/apis/v1/financial/prices`, `/apis/v1/financial/sec-filings` | Equities、SEC、earnings、screening |
+| Web & News Search | `/apis/v1/tavily/search`, `/apis/v1/search/smart` | Multi-source 和 Tavily search |
+| Prediction Markets | `/apis/v1/polymarket/events`, `/apis/v1/kalshi/markets` | Polymarket 和 Kalshi data |
+| Crypto Data | `/apis/v1/coingecko/simple/price` | CoinGecko market data |
+| Image Generation | `/v1/images/generations` | GPT、Seedream、Wan 和其他 image-capable routes |
+| YouTube Search | `/apis/v1/youtube/search` | YouTube SERP |
+| Scholar Search | `/apis/v1/scholar/search/scholar` | Academic paper search |
+
+## End-to-End Integration Example
+
+下面的 Python 示例演示完整的 discovery-to-invocation flow。autonomous agent 会发现 AIsa 的能力，识别 `chat-completions` skill，并发起 authenticated API call。
+
+```python
+import requests
+
+# Step 1: Discover — fetch the agent card
+card = requests.get("https://aisa.one/.well-known/agent-card.json").json()
+
+# Step 2: Find a skill by tag
+target_tag = "llm"
+matching = [s for s in card["skills"] if target_tag in s.get("tags", [])]
+if not matching:
+    raise RuntimeError(f"No skill found with tag '{target_tag}'")
+
+skill = matching[0]
+print(f"Selected skill: {skill['name']} ({skill['id']})")
+
+# Step 3: Invoke — call the API using the base URL from the card
+response = requests.post(
+    f"{card['url']}/v1/chat/completions",
+    headers={
+        "Authorization": "Bearer YOUR_AISA_API_KEY",
+        "Content-Type": "application/json",
+    },
+    json={
+        "model": "gpt-5-mini",
+        "messages": [
+            {"role": "user", "content": "Summarize the A2A protocol in two sentences."}
+        ],
+    },
+)
+
+result = response.json()
+print(result["choices"][0]["message"]["content"])
+```
+
+## Authentication
+
+所有 AIsa API endpoints 都需要 Bearer token authentication。请在每个 request 的 `Authorization` header 中包含你的 API key：
+
+```text
+Authorization: Bearer YOUR_AISA_API_KEY
+```
+
+从 [AIsa dashboard](https://console.aisa.one) 生成 API key。关于 scoping、rotation 和 secure storage 的详细 key management 指南，请参阅 [Authentication](/zh/guides/authentication)。
+
+<Warning>
+  Discovery endpoints（`agent-card.json`、`ai-plugin.json`、`openapi.yaml`）可公开读取，无需认证。不过，对 `api.aisa.one` 的所有 API calls 都需要有效 Bearer token。
+</Warning>
+
+## Integration Patterns
+
+### Pattern 1: Tag-Based Skill Matching
+
+Agents 可以使用 `tags` array 把任务匹配到 skills。对于需要在运行时动态选择 capabilities 的 agents，这是推荐方式。
+
+```python
+def find_skills_by_tags(card, required_tags):
+    """Return skills that match ALL required tags."""
+    return [
+        skill for skill in card["skills"]
+        if all(tag in skill.get("tags", []) for tag in required_tags)
+    ]
+
+# Find skills for financial research
+finance_skills = find_skills_by_tags(card, ["finance", "stocks"])
+# Returns: [MarketPulse Financial Data]
+```
+
+### Pattern 2: Example-Based Intent Matching
+
+对于 LLM-powered agents，`examples` 字段提供 natural-language queries，可用于和用户 intent 做 semantic similarity matching。
+
+```python
+# Collect all examples with their skill IDs
+example_index = []
+for skill in card["skills"]:
+    for example in skill.get("examples", []):
+        example_index.append({"text": example, "skill_id": skill["id"]})
+
+# Use an embedding model to find the closest match to the user's query
+# user_query = "What's the stock price of Apple?"
+# → Matches MarketPulse skill via "Get the current stock price for AAPL"
+```
+
+## Interactive Explorer
+
+AIsa 提供两个 browser-based tools 来探索 discovery surface：
+
+- **[API Explorer](https://aisa.one/api-explorer)** — 用于浏览、测试和集成全部 111+ endpoints 的交互式 Swagger UI，包含 live request/response examples。
+- **[Agent Discovery](https://aisa.one/agent-discovery)** — 可视化 skill explorer，支持 search 和 tag filtering，并提供 integration code examples。
+
+## CORS Support
+
+Discovery endpoints 包含 permissive CORS headers（`Access-Control-Allow-Origin: *`），因此 browser-based agents 和 web applications 可以无需 proxy server 直接 fetch。适用于：
+
+- `/.well-known/agent-card.json`
+- `/.well-known/ai-plugin.json`
+- `/openapi.yaml`
+
+## 相关页面
+
+<CardGroup cols={3}>
+  <Card title="Authentication" icon="key" href="/zh/guides/authentication">
+    API key 生成、scoping、rotation 和 secure storage。
+  </Card>
+  <Card title="Agent Skills" icon="puzzle-piece" href="/agent-skills">
+    浏览并安装适用于 Claude Code、Cursor 和 OpenClaw 的 composable skills。
+  </Card>
+  <Card title="Getting Started" icon="rocket" href="/zh/guides/getting-started-with-aisa">
+    几分钟内完成第一个 authenticated API request。
+  </Card>
+</CardGroup>
