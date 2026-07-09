@@ -1,0 +1,404 @@
+---
+title: "SEO 关键词研究"
+description: "查找 keyword clusters、搜索意图、竞争对手缺口和页面创意。"
+---
+
+[在 GitHub 上查看 ->](https://github.com/AIsa-team/agent-skills/tree/main/seo-keyword-research)
+
+**面向 agents 的 SEO keyword research。** 将一个网站、产品或一组竞争对手转化为 keyword clusters、intent insights 和页面创意。
+
+## 安装
+
+如果尚未安装 AIsa CLI，请先安装：
+
+```bash
+npm install -g @aisa-one/cli
+```
+
+然后安装这个 skill：
+
+```bash
+aisa skills install seo-keyword-research
+```
+
+## Agents 可以用它做什么？
+
+<CardGroup cols={2}>
+  <Card title="关键词策略" icon="magnifying-glass-chart">
+    为产品、市场或 domain 构建经过验证的关键词计划。
+  </Card>
+  <Card title="竞争对手缺口" icon="code-compare">
+    对比竞争 domains，识别缺失的 organic opportunities。
+  </Card>
+  <Card title="意图聚类" icon="diagram-project">
+    按 search intent 对关键词分组，并映射到页面类型。
+  </Card>
+  <Card title="SERP 现实检查" icon="ranking-star">
+    在推荐页面或内容角度前，先检查 live results。
+  </Card>
+</CardGroup>
+
+## 要求
+
+此 skill 需要 AIsa API key。
+
+```bash
+export AISA_API_KEY="YOUR_AISA_API_KEY"
+```
+
+使用这些 AIsa endpoints：
+
+- Data APIs：`https://api.aisa.one/apis/v1/...`
+- LLM gateway：`https://api.aisa.one/v1/chat/completions`
+
+不要打印或提交 API keys。如果缺少 key，请让用户设置 `AISA_API_KEY`。
+
+## 兼容性
+
+适用于任何兼容 agentskills.io 的 harness，包括 Claude Code、Claude、OpenAI Codex、Cursor、Gemini CLI、OpenCode、Goose、OpenClaw、Hermes，以及其他支持 skill folders 的 agent runtimes。
+
+需要 Python 3、curl 和 `AISA_API_KEY`。可在 `https://aisa.one` 获取 API key。
+
+## 快速开始
+
+```bash
+export AISA_API_KEY="YOUR_AISA_API_KEY"
+
+python3 {baseDir}/scripts/site_crawler.py \
+  https://example.com \
+  --max-pages 12 \
+  --out site-profile.json
+
+python3 {baseDir}/scripts/aisa_client.py data \
+  /apis/v1/dataforseo/dataforseo_labs/google/keyword_suggestions/live \
+  payload.json \
+  --out keyword-suggestions.json
+```
+
+先使用 crawl output 生成 seed topics。然后使用 AIsa DataForSEO endpoints 验证 search demand、difficulty、intent 和 SERP reality。最后使用 AIsa LLM gateway 对已验证的关键词数据进行聚类、打分和总结。
+
+## 何时使用
+
+在以下请求中使用此 skill：
+
+- “Find SEO keywords for this site.”
+- “Build a keyword strategy for my SaaS.”
+- “Research keywords for this product category.”
+- “Find keyword gaps between us and competitors.”
+- “Cluster these keywords by search intent.”
+- “Pick the best SEO content topics for next month.”
+- “Create a keyword map for these landing pages.”
+
+除非用户明确要求把 keyword research 作为工作流的一部分，否则不要将此 skill 用于完整 technical audits、backlink audits、schema implementation 或 content writing。
+
+## 核心工作流
+
+### 1. 定义研究范围
+
+收集或推断：
+
+- Target domain 或 URL
+- Seed topics、products、services 或 categories
+- Target country、language 和 search engine
+- 竞争对手（如已提供）
+- 业务目标：traffic、leads、sales、awareness、local visibility 或 content planning
+- 约束：brand terms only、non-brand terms only、blog topics、landing pages、commercial pages 或 programmatic pages
+
+如果缺少 country 和 language，且用户市场很明显，则默认使用用户市场。否则使用 United States 和 English，并说明该假设。
+
+### 2. 在关键词研究前 crawl 网站
+
+当用户提供 domain 或 URL 时，先 crawl 网站，再查询 keyword tools。
+
+```bash
+python3 {baseDir}/scripts/site_crawler.py \
+  https://example.com \
+  --max-pages 12 \
+  --out site-profile.json
+```
+
+优先查看：
+
+- Homepage
+- Product、feature、pricing、docs、integrations、use case、comparison、blog 和 about pages
+- Sitemap URLs（如可用）
+- Navigation labels 和 internal links
+- Page titles、meta descriptions、headings、schema hints 和 visible copy
+
+使用 crawl 结果生成简短 business profile：
+
+- Product category
+- 主要 features 和 capabilities
+- Target audience 和 buyer roles
+- Use cases 和 jobs to be done
+- Integrations、platforms、APIs 或 supported tools
+- Pricing model 或 conversion goal（如可见）
+- 网站提到的 competitors、alternatives 和 category language
+- 现有 content themes 与 gaps
+
+除非用户明确要求 brand SEO，否则不要从 brand 或 domain keywords 开始。仅在产品和 category opportunities 完成映射后，把 brand keywords 放到单独的 “brand validation” section 中。
+
+如果本地 crawl 被阻止、结果太浅或大量依赖 JavaScript rendering，请使用 AIsa/DataForSEO OnPage helpers 作为 fallback evidence：
+
+- `/apis/v1/dataforseo/on_page/content_parsing/live`
+- `/apis/v1/dataforseo/on_page/task_post`
+- `/apis/v1/dataforseo/on_page/pages`
+- `/apis/v1/dataforseo/on_page/raw_html`
+- `/apis/v1/dataforseo/on_page/summary/{id}`
+
+### 3. 将 site profile 转换为 seed topics
+
+使用 AIsa LLM reasoning 将 crawl 结果转换为 seed topics。这些是 hypotheses，不是 final keywords。
+
+从以下维度生成 seed topics：
+
+- Product category terms
+- Feature and capability terms
+- Use case terms
+- Integration and platform terms
+- Pain points and problem terms
+- Competitor and alternative terms
+- Buyer role terms
+- Transactional modifiers：pricing、alternative、best、tool、API、software、platform、comparison
+- Informational modifiers：what is、how to、guide、examples、tutorial、checklist
+
+要求 LLM 说明每个 seed topic 为什么匹配 crawled site。移除无法从 crawl 结果证明的 seeds。
+
+### 4. 构建初始 keyword universe
+
+当输入可用时，按以下顺序使用 AIsa DataForSEO endpoints：
+
+1. Crawl-derived seed expansion：
+   - `/apis/v1/dataforseo/dataforseo_labs/google/keyword_suggestions/live`
+   - `/apis/v1/dataforseo/dataforseo_labs/google/keyword_ideas/live`
+   - `/apis/v1/dataforseo/dataforseo_labs/google/related_keywords/live`
+   - `/apis/v1/dataforseo/keywords_data/google_ads/keywords_for_keywords/live`
+2. Site-derived validation，在 seed expansion 之后：
+   - `/apis/v1/dataforseo/dataforseo_labs/google/keywords_for_site/live`
+   - `/apis/v1/dataforseo/keywords_data/google_ads/keywords_for_site/live`
+3. Demand 和 trend checks：
+   - `/apis/v1/dataforseo/keywords_data/google_ads/search_volume/live`
+   - `/apis/v1/dataforseo/keywords_data/clickstream_data/global_search_volume/live`
+   - `/apis/v1/dataforseo/keywords_data/dataforseo_trends/explore/live`
+4. Difficulty 和 intent：
+   - `/apis/v1/dataforseo/dataforseo_labs/google/bulk_keyword_difficulty/live`
+   - `/apis/v1/dataforseo/dataforseo_labs/google/search_intent/live`
+   - `/apis/v1/dataforseo/dataforseo_labs/google/keyword_overview/live`
+
+为每个关键词保留 source labels：`site`、`seed`、`suggestion`、`related`、`competitor`、`trend`、`serp` 或 `llm-generated`。在 search volume 或 SERP data 验证前，将 `llm-generated` keywords 视为 hypotheses。
+
+### 5. 通过竞争对手和 SERPs 扩展
+
+当提供了 competitors，或 DataForSEO 返回 SERP competitors 时：
+
+- 使用 `/apis/v1/dataforseo/dataforseo_labs/google/competitors_domain/live`
+- 使用 `/apis/v1/dataforseo/dataforseo_labs/google/domain_intersection/live`
+- 使用 `/apis/v1/dataforseo/dataforseo_labs/google/ranked_keywords/live`
+- 使用 `/apis/v1/dataforseo/dataforseo_labs/google/serp_competitors/live`
+- 使用 `/apis/v1/dataforseo/dataforseo_labs/google/relevant_pages/live`
+
+对最强的候选关键词，检查 live search results：
+
+- `/apis/v1/dataforseo/serp/google/organic/live/advanced`
+- `/apis/v1/dataforseo/serp/ai_summary`
+- `/apis/v1/dataforseo/serp/screenshot`
+
+使用 SERP data 识别 ranking page types、dominant content formats、user intent、SERP features、freshness patterns、weak results 和 content gaps。
+
+### 6. 规范化和清洗数据
+
+打分前：
+
+- 仅为 deduplication 转小写；输出中保留原始 keyword casing。
+- 合并 close duplicates、singular/plural variants 和明显拼写变体。
+- 除非用户要求，移除 irrelevant brand、adult、navigational 和 off-market terms。
+- 对缺失 volume、difficulty 或 intent 的关键词标记为 incomplete，不要猜数字。
+- 当 intent 因 geography 不同时，将 localized variants 分开保留。
+
+### 7. 按意图和 topic 聚类
+
+使用 AIsa LLM reasoning 对已验证关键词进行聚类。优先使用紧凑的 structured output。
+
+建议 cluster dimensions：
+
+- Parent topic
+- Subtopic
+- Search intent：informational、commercial、transactional、navigational、local、comparison 或 troubleshooting
+- Funnel stage：awareness、consideration、conversion、retention
+- Best page type：blog post、comparison page、landing page、product page、category page、tool page、glossary page、local page 或 programmatic template
+
+不要让 LLM 编造 metrics。它可以分类、总结和排序，但 metrics 必须来自 AIsa/DataForSEO data，或标记为 qualitative。
+
+每个 final keyword cluster 都必须在至少有五个已验证关键词时包含五个 representative keywords 及其 metrics。如果某个 cluster 少于五个已验证关键词，展示所有已验证关键词，并标记该 cluster 需要更多 expansion。
+
+### 8. 识别 high-opportunity keywords
+
+High-opportunity keywords 必须同时满足两个阈值：
+
+- Keyword difficulty 低于 40
+- Search volume 大于 1000
+
+不要悄悄放宽阈值。如果没有关键词同时满足两个阈值，请明确说明，并用最接近的候选提供单独的 “near opportunities” section。
+
+对每个 high-opportunity keyword，解释：
+
+- 为什么它适合 crawled site
+- crawl 中的哪个 feature、use case、product category 或 audience insight 支持它
+- 为什么 metric profile 有吸引力
+- 查看 SERP 后仍有哪些风险
+
+### 9. 为 opportunities 打分
+
+对每个 keyword 或 cluster 按 0 到 25 分打分：
+
+- Demand：search volume、trend 和 market size
+- Relevance：与 domain、product、ICP 或 page 的匹配度
+- Intent value：带来 qualified traffic 的可能性
+- Ranking feasibility：difficulty 的反向指标加上 SERP weakness
+- Strategic value：支持 product positioning、topical authority 或 conversion
+
+使用简单标签：
+
+- `High priority`：strong demand、clear fit、feasible SERP、valuable intent
+- `Medium priority`：有价值但受 difficulty、ambiguity 或 lower demand 限制
+- `Low priority`：fit 弱、demand 弱或 feasibility 差
+- `Validate first`：有意思但数据不完整的 idea
+
+### 10. 生成基于 SERP 的页面推荐
+
+检查 high-opportunity keywords，以及每个 cluster 中最强的 representative keyword 的 SERPs。根据观察到的 ranking results 推荐页面类型：
+
+- Landing page：SERP 主要由 product、software、API、platform 或 tool pages 主导。
+- Feature page：SERP 显示 feature-specific vendor pages、docs 或 tool capability pages。
+- Comparison page：query 包含 `vs`、`alternative`、`competitor`、`best`，或 SERP 包含 comparison lists 和 review pages。
+- Blog article 或 guide：SERP 主要由 explainers、tutorials、how-to articles 或 People Also Ask 主导。
+- Pricing page：query 包含 pricing、cost、cheap、free、plan，或 SERP 包含 pricing pages。
+- Documentation page：SERP 包含 API references、SDK docs、GitHub repos 或 developer guides。
+- Programmatic page：该 pattern 可在 locations、integrations、categories、competitors、templates 或 use cases 上重复。
+
+对每个推荐，解释 SERP evidence 和 suggested page angle。
+
+### 11. 产出 final deliverable
+
+返回简洁的 keyword research report，包含：
+
+- Executive summary
+- Research assumptions
+- Crawled-site business profile
+- Top keyword clusters
+- 每个 cluster 五个 representative keywords
+- difficulty 低于 40 且 volume 大于 1000 的 high-opportunity keywords
+- 为什么这些 keywords 是 opportunities
+- Priority keyword shortlist
+- Best content opportunities
+- SERP-based page recommendations
+- Recommended next pages、updates 或 programmatic templates
+- Data gaps 和 validation notes
+
+需要完整报告时，使用 `references/report-template.md`。
+
+## AIsa LLM 用法
+
+使用 AIsa LLM gateway 来：
+
+- 将 crawled site 总结为 product 和 business profile
+- 从 crawl 结果生成有依据的 seed topics
+- 分类 search intent
+- 将 keywords 分组成 clusters
+- 总结 SERP patterns
+- 将 raw metrics 转化为 SEO decisions
+- 起草 keyword strategy report
+- 将 keywords 转换为 page recommendations
+
+推荐 request pattern：
+
+```bash
+curl -sS "https://api.aisa.one/v1/chat/completions" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-5-mini",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are an SEO strategist. Use only provided metrics as facts. Mark unverified ideas clearly."
+      },
+      {
+        "role": "user",
+        "content": "Cluster these keyword rows by topic, search intent, and best page type."
+      }
+    ]
+  }'
+```
+
+## Helper Script
+
+使用 `scripts/aisa_client.py` 快速调用 API：
+
+```bash
+python3 {baseDir}/scripts/site_crawler.py \
+  https://example.com \
+  --max-pages 12 \
+  --out site-profile.json
+```
+
+```bash
+python3 {baseDir}/scripts/aisa_client.py data \
+  /apis/v1/dataforseo/dataforseo_labs/google/keyword_suggestions/live \
+  payload.json \
+  --out keyword-suggestions.json
+```
+
+```bash
+python3 {baseDir}/scripts/aisa_client.py chat \
+  --model gpt-5-mini \
+  --system system-prompt.txt \
+  --prompt cluster-prompt.txt \
+  --out clusters.md
+```
+
+## 质量规则
+
+- 当提供了网站时，在 keyword research 前 crawl 网站。
+- 除非用户明确要求 brand SEO，否则不要从 brand keywords 开始。
+- 优先使用 local crawler 和 live AIsa/DataForSEO data，而不是手动 browser scraping。
+- 引用使用了哪些 endpoint groups。
+- 区分 facts 和 recommendations。
+- 不要编造 search volume、CPC、keyword difficulty、rank 或 trend values。
+- 使用 LLM output 做 interpretation，不要用它替代 keyword data。
+- 每个 keyword cluster 应展示五个 representative keywords 及可用 metrics。
+- High-opportunity keywords 必须满足 difficulty &lt; 40 且 search volume > 1000。
+- SERP-based page recommendations 必须说明用户应创建 landing page、feature page、comparison page、pricing page、documentation page、programmatic page 还是 blog article，以及原因。
+- 如果 raw exports 包含 customer domains、competitors 或 internal strategy，请保持私密。
+- 让最终答案可执行：用户应知道要 targeting 哪些 keywords、创建哪类页面，以及原因。
+
+## References
+
+- `references/aisa-api-map.md`：endpoint groups 和 usage notes。
+- `references/report-template.md`：final keyword research report 结构。
+
+## 开始使用
+
+1. 在 [aisa.one](https://aisa.one) 注册（新账户有 $2 免费额度）。
+2. 从 console 生成 API key。
+3. 设置 key 并安装 skill：
+   ```bash
+   export AISA_API_KEY="YOUR_AISA_API_KEY"
+   npm install -g @aisa-one/cli
+   aisa skills install seo-keyword-research
+   ```
+4. 启动新的 agent session，让 runtime 加载更新后的 skill instructions。
+
+## 相关
+
+<CardGroup cols={3}>
+  <Card title="DataForSEO" icon="chart-column" href="/api-reference/dataforseo/post_dataforseo-dataforseo-labs-google-keyword-suggestions-live">
+    Keyword expansion 和 SERP intelligence endpoints。
+  </Card>
+  <Card title="AIsa Web Search" icon="globe" href="/agent-skills/web-search">
+    在制定 content plans 前搜索当前 web sources。
+  </Card>
+  <Card title="模型目录" icon="list" href="/zh/guides/models">
+    为 clustering 和 strategy synthesis 选择 LLM。
+  </Card>
+</CardGroup>
