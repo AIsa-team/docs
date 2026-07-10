@@ -1,0 +1,122 @@
+---
+title: "预测市场套利"
+description: "使用当前已挂载的 Polymarket 和 Kalshi discovery endpoint 进行跨平台预测市场研究。"
+---
+
+[在 GitHub 上查看 →](https://github.com/AIsa-team/agent-skills/tree/main/prediction-market-arbitrage)
+
+**用 AIsa 研究预测市场机会。** 一个 `AISA_API_KEY` 即可拉取已挂载的 Polymarket 和 Kalshi 市场发现数据，让 Agent 在使用交易所专用工具检查价格、订单簿深度或执行前，先识别候选事件。
+
+## 安装
+
+如果还没有安装 AIsa CLI，请先安装：
+
+```bash
+npm install -g @aisa-one/cli
+```
+
+然后安装该技能：
+
+```bash
+aisa skills install prediction-market-arbitrage
+```
+
+## Agent 可以用它做什么？
+
+<CardGroup cols={2}>
+  <Card title="跨市场发现" icon="magnifying-glass-plus">
+    “查找 Polymarket 和 Kalshi 上相关的 NFL、宏观或选举市场。”
+  </Card>
+  <Card title="候选配对" icon="arrows-left-right">
+    “比较标题、event ticker、slug 和关闭时间，识别可能等价的市场。”
+  </Card>
+  <Card title="流动性初筛" icon="droplet">
+    “使用 discovery 响应中的成交量和流动性字段，决定优先深入检查哪些交易场所。”
+  </Card>
+  <Card title="体育研究流程" icon="football">
+    “从可用 Polymarket 和 Kalshi 市场 feed 构建当日候选列表。”
+  </Card>
+  <Card title="选举与宏观" icon="landmark">
+    “在执行交易所专用价格检查前，先找出可比较的事件市场。”
+  </Card>
+  <Card title="执行准备" icon="bullseye">
+    “产出研究候选清单；执行和订单簿检查需直接在各交易场所完成。”
+  </Card>
+</CardGroup>
+
+## 工作方式
+
+<Steps>
+  <Step title="发现候选市场">
+    查询 `/polymarket/markets`、`/polymarket/events` 和 `/kalshi/markets`，找到相关市场/事件记录。
+  </Step>
+  <Step title="配对可能等价的市场">
+    按标题、event ticker、slug、事件日期、运动/队伍名称或市场关闭时间匹配候选项。
+  </Step>
+  <Step title="在 AIsa 之外验证价格">
+    交易前使用交易所原生 API 或交易系统检查当前价格、订单簿深度和执行条件。
+  </Step>
+</Steps>
+
+<Warning>
+  AIsa 当前挂载的是下方列出的 Prediction Market discovery 端点。旧版 AIsa-hosted `market-price`、`orderbooks` 和 `matching-markets` 路由示例已移除，因为鉴权探测返回 `api endpoint not found`。
+</Warning>
+
+## 快速开始
+
+```bash
+export AISA_API_KEY="your-key"
+```
+
+### 1. 查找 Polymarket 候选
+
+```bash
+curl "https://api.aisa.one/apis/v1/polymarket/markets?limit=5" \
+  -H "Authorization: Bearer ***""
+```
+
+### 2. 查找 Kalshi 候选
+
+```bash
+curl "https://api.aisa.one/apis/v1/kalshi/markets?limit=5&status=open" \
+  -H "Authorization: Bearer ***""
+```
+
+### 3. 手动或使用交易所原生工具比较
+
+使用 Polymarket `slug`/`question` 与 Kalshi `ticker`/`event_ticker`/`title` 等共享字段配对可能等价的市场，然后在执行前用对应交易所官方 API 验证实时价格和订单簿。
+
+## 端点参考
+
+| Endpoint                 | Method | Purpose                                                                   |
+| ------------------------ | ------ | ------------------------------------------------------------------------- |
+| `/polymarket/markets`    | GET    | [Polymarket markets](/api-reference/prediction-market/get_polymarket-markets) |
+| `/polymarket/events`     | GET    | [Polymarket events](/api-reference/prediction-market/get_polymarket-events)   |
+| `/polymarket/activity`   | GET    | [Polymarket activity](/api-reference/prediction-market/get_polymarket-activity) |
+| `/kalshi/markets`        | GET    | [Kalshi markets](/api-reference/prediction-market/get_kalshi-markets)         |
+| `/kalshi/trades`         | GET    | [Kalshi trades](/api-reference/prediction-market/get_kalshi-trades)           |
+
+## 开始使用
+
+1. 在 [aisa.one](https://aisa.one) 注册（新账户有 $2 免费额度）。
+2. 从控制台生成 API key。
+3. 设置 key 并安装技能：
+   ```bash
+   export AISA_API_KEY="your-key"
+   npm install -g @aisa-one/cli
+   aisa skills install prediction-market-arbitrage
+   ```
+
+## 相关
+
+<CardGroup cols={3}>
+  <Card title="预测市场 API" icon="chart-simple" href="/api-reference/prediction-market/get_polymarket-markets">
+    已挂载的 Polymarket 和 Kalshi 发现端点。
+  </Card>
+  <Card title="市场数据技能" icon="chart-line" href="/zh/agent-skills/prediction-market-data">
+    该技能构建于其上的底层数据技能。
+  </Card>
+  <Card title="速率限制" icon="gauge-high" href="/api-reference/rate-limits">
+    运行研究扫描时的并发限制。
+  </Card>
+</CardGroup>

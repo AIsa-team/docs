@@ -1,0 +1,404 @@
+---
+title: "SEO 关键词研究"
+description: "发现关键词集群、搜索意图、竞品缺口和页面创意。"
+---
+
+[在 GitHub 上查看 ->](https://github.com/AIsa-team/agent-skills/tree/main/seo-keyword-research)
+
+**面向 Agent 的 SEO 关键词研究。** 将网站、产品或竞品集合转化为关键词集群、意图洞察和页面创意。
+
+## 安装
+
+如果还没有安装 AIsa CLI，请先安装：
+
+```bash
+npm install -g @aisa-one/cli
+```
+
+然后安装该技能：
+
+```bash
+aisa skills install seo-keyword-research
+```
+
+## Agent 可以用它做什么？
+
+<CardGroup cols={2}>
+  <Card title="关键词策略" icon="magnifying-glass-chart">
+    为产品、市场或域名构建经过验证的关键词计划。
+  </Card>
+  <Card title="竞品缺口" icon="code-compare">
+    对比竞品域名，识别尚未覆盖的自然搜索机会。
+  </Card>
+  <Card title="意图聚类" icon="diagram-project">
+    按搜索意图对关键词分组，并映射到合适的页面类型。
+  </Card>
+  <Card title="SERP 现实校验" icon="ranking-star">
+    在推荐页面或内容角度前，先查看实时搜索结果。
+  </Card>
+</CardGroup>
+
+## 要求
+
+该技能需要 AIsa API key。
+
+```bash
+export AISA_API_KEY="your-aisa-api-key"
+```
+
+使用这些 AIsa 端点：
+
+- 数据 API：`https://api.aisa.one/apis/v1/...`
+- LLM 网关：`https://api.aisa.one/v1/chat/completions`
+
+不要打印或提交 API key。如果缺少 key，请让用户设置 `AISA_API_KEY`。
+
+## 兼容性
+
+适用于任何兼容 agentskills.io 的运行环境，包括 Claude Code、Claude、OpenAI Codex、Cursor、Gemini CLI、OpenCode、Goose、OpenClaw、Hermes，以及其他支持技能目录的 Agent 运行时。
+
+需要 Python 3、curl 和 `AISA_API_KEY`。可以在 `https://aisa.one` 获取 API key。
+
+## 快速开始
+
+```bash
+export AISA_API_KEY="your-aisa-api-key"
+
+python3 {baseDir}/scripts/site_crawler.py \
+  https://example.com \
+  --max-pages 12 \
+  --out site-profile.json
+
+python3 {baseDir}/scripts/aisa_client.py data \
+  /apis/v1/dataforseo/dataforseo_labs/google/keyword_suggestions/live \
+  payload.json \
+  --out keyword-suggestions.json
+```
+
+先用抓取结果生成种子主题。然后用 AIsa DataForSEO 端点验证搜索需求、难度、意图和 SERP 真实情况。最后用 AIsa LLM 网关对已验证的关键词数据进行聚类、评分和总结。
+
+## 何时使用
+
+适用于如下请求：
+
+- “帮这个网站找 SEO 关键词。”
+- “为我的 SaaS 制定关键词策略。”
+- “研究这个产品类别的关键词。”
+- “找出我们和竞品之间的关键词缺口。”
+- “按搜索意图聚类这些关键词。”
+- “挑选下个月最值得做的 SEO 内容主题。”
+- “为这些落地页创建关键词映射。”
+
+除非用户明确要求把关键词研究纳入流程，否则不要将此技能用于完整技术审计、外链审计、结构化数据实施或内容写作。
+
+## 核心流程
+
+### 1. 定义研究范围
+
+收集或推断：
+
+- 目标域名或 URL
+- 种子主题、产品、服务或分类
+- 目标国家、语言和搜索引擎
+- 已知竞品
+- 业务目标：流量、线索、销售、认知、本地曝光或内容规划
+- 限制条件：仅品牌词、仅非品牌词、博客主题、落地页、商业页面或程序化页面
+
+如果国家和语言缺失，且能明显判断用户市场，则默认使用该市场。否则使用美国和英语，并说明这个假设。
+
+### 2. 关键词研究前先抓取网站
+
+当用户提供域名或 URL 时，先抓取网站，再查询关键词工具。
+
+```bash
+python3 {baseDir}/scripts/site_crawler.py \
+  https://example.com \
+  --max-pages 12 \
+  --out site-profile.json
+```
+
+优先抓取：
+
+- 首页
+- 产品、功能、价格、文档、集成、用例、对比、博客和关于页面
+- 可用的 sitemap URL
+- 导航标签和内部链接
+- 页面标题、meta 描述、标题层级、结构化数据线索和可见文案
+
+用抓取结果生成简短的业务画像：
+
+- 产品类别
+- 主要功能和能力
+- 目标受众和买家角色
+- 用例与待完成任务
+- 集成、平台、API 或支持的工具
+- 可见的价格模式或转化目标
+- 网站提到的竞品、替代品和类别语言
+- 现有内容主题与缺口
+
+除非用户明确要求品牌 SEO，否则不要从品牌词或域名词开始。只有在产品和类别机会映射完成后，才把品牌关键词放入单独的“品牌验证”部分。
+
+如果本地抓取被阻止、结果过浅或严重依赖 JavaScript，可用 AIsa/DataForSEO OnPage 助手作为补充证据：
+
+- `/apis/v1/dataforseo/on_page/content_parsing/live`
+- `/apis/v1/dataforseo/on_page/task_post`
+- `/apis/v1/dataforseo/on_page/pages`
+- `/apis/v1/dataforseo/on_page/raw_html`
+- `/apis/v1/dataforseo/on_page/summary/{id}`
+
+### 3. 将网站画像转为种子主题
+
+使用 AIsa LLM 推理把抓取结果转成种子主题。这些是待验证假设，不是最终关键词。
+
+从以下维度生成种子主题：
+
+- 产品类别词
+- 功能和能力词
+- 用例词
+- 集成和平台词
+- 痛点和问题词
+- 竞品和替代品词
+- 买家角色词
+- 交易型修饰词：pricing、alternative、best、tool、API、software、platform、comparison
+- 信息型修饰词：what is、how to、guide、examples、tutorial、checklist
+
+要求 LLM 说明每个种子主题为何匹配抓取到的网站。删除无法从抓取内容中得到支撑的种子。
+
+### 4. 构建初始关键词池
+
+在输入条件可用时，按以下顺序使用 AIsa DataForSEO 端点：
+
+1. 基于抓取种子扩展：
+   - `/apis/v1/dataforseo/dataforseo_labs/google/keyword_suggestions/live`
+   - `/apis/v1/dataforseo/dataforseo_labs/google/keyword_ideas/live`
+   - `/apis/v1/dataforseo/dataforseo_labs/google/related_keywords/live`
+   - `/apis/v1/dataforseo/keywords_data/google_ads/keywords_for_keywords/live`
+2. 种子扩展后做站点验证：
+   - `/apis/v1/dataforseo/dataforseo_labs/google/keywords_for_site/live`
+   - `/apis/v1/dataforseo/keywords_data/google_ads/keywords_for_site/live`
+3. 需求和趋势检查：
+   - `/apis/v1/dataforseo/keywords_data/google_ads/search_volume/live`
+   - `/apis/v1/dataforseo/keywords_data/clickstream_data/global_search_volume/live`
+   - `/apis/v1/dataforseo/keywords_data/dataforseo_trends/explore/live`
+4. 难度和意图：
+   - `/apis/v1/dataforseo/dataforseo_labs/google/bulk_keyword_difficulty/live`
+   - `/apis/v1/dataforseo/dataforseo_labs/google/search_intent/live`
+   - `/apis/v1/dataforseo/dataforseo_labs/google/keyword_overview/live`
+
+为每个关键词保留来源标签：`site`、`seed`、`suggestion`、`related`、`competitor`、`trend`、`serp` 或 `llm-generated`。把 `llm-generated` 关键词视为假设，直到被搜索量或 SERP 数据验证。
+
+### 5. 通过竞品和 SERP 扩展
+
+当用户提供竞品，或 DataForSEO 返回 SERP 竞品时：
+
+- 使用 `/apis/v1/dataforseo/dataforseo_labs/google/competitors_domain/live`
+- 使用 `/apis/v1/dataforseo/dataforseo_labs/google/domain_intersection/live`
+- 使用 `/apis/v1/dataforseo/dataforseo_labs/google/ranked_keywords/live`
+- 使用 `/apis/v1/dataforseo/dataforseo_labs/google/serp_competitors/live`
+- 使用 `/apis/v1/dataforseo/dataforseo_labs/google/relevant_pages/live`
+
+对最强的候选关键词检查实时搜索结果：
+
+- `/apis/v1/dataforseo/serp/google/organic/live/advanced`
+- `/apis/v1/dataforseo/serp/ai_summary`
+- `/apis/v1/dataforseo/serp/screenshot`
+
+使用 SERP 数据识别排名页面类型、主导内容格式、用户意图、SERP 特性、新鲜度模式、薄弱结果和内容缺口。
+
+### 6. 规范化并清洗数据
+
+评分前：
+
+- 只在去重时转小写；输出保留原始关键词大小写
+- 合并近似重复、单复数变体和明显拼写变体
+- 删除无关品牌、成人、导航型和目标市场外词，除非用户要求保留
+- 将缺少搜索量、难度或意图的关键词标记为 incomplete，而不是猜测数值
+- 当不同地域的意图不同时，保留本地化变体
+
+### 7. 按意图和主题聚类
+
+使用 AIsa LLM 对已验证关键词聚类。优先输出紧凑结构化结果。
+
+建议聚类维度：
+
+- 父主题
+- 子主题
+- 搜索意图：信息型、商业型、交易型、导航型、本地型、对比型或排障型
+- 漏斗阶段：认知、考虑、转化、留存
+- 最佳页面类型：博客文章、对比页、落地页、产品页、分类页、工具页、术语页、本地页或程序化模板
+
+不要让 LLM 编造指标。LLM 可以分类、总结和排序，但指标必须来自 AIsa/DataForSEO 数据，否则标记为定性判断。
+
+每个最终关键词集群都应包含 5 个代表性关键词及其可用指标。如果某个集群少于 5 个已验证关键词，则展示全部已验证关键词，并标记该集群需要继续扩展。
+
+### 8. 识别高机会关键词
+
+高机会关键词必须同时满足：
+
+- Keyword difficulty 低于 40
+- 搜索量大于 1000
+
+不要默默放宽阈值。如果没有关键词同时满足两个条件，请明确说明，并用最接近的候选词提供单独的“近机会”部分。
+
+对每个高机会关键词，解释：
+
+- 为什么它匹配抓取到的网站
+- 抓取结果中的哪个功能、用例、产品类别或受众洞察支持它
+- 为什么其指标组合有吸引力
+- 查看 SERP 后还剩什么风险
+
+### 9. 为机会评分
+
+每个关键词或集群按 0 到 25 分评分：
+
+- 需求：搜索量、趋势和市场规模
+- 相关性：与域名、产品、ICP 或页面的匹配度
+- 意图价值：带来合格流量的可能性
+- 排名可行性：难度的反向指标加 SERP 薄弱程度
+- 战略价值：是否支撑产品定位、主题权威或转化
+
+使用简单标签：
+
+- `High priority`：需求强、匹配清晰、SERP 可行、意图有价值
+- `Medium priority`：有用，但受难度、歧义或较低需求限制
+- `Low priority`：匹配弱、需求弱或可行性差
+- `Validate first`：有趣但数据不完整
+
+### 10. 生成基于 SERP 的页面建议
+
+检查高机会关键词和每个集群中最强代表词的 SERP。根据实际排名结果推荐页面类型：
+
+- 落地页：SERP 以产品、软件、API、平台或工具页为主
+- 功能页：SERP 出现功能型厂商页面、文档或工具能力页面
+- 对比页：查询包含 `vs`、`alternative`、`competitor`、`best`，或 SERP 包含对比清单和评测页
+- 博客文章或指南：SERP 以解释、教程、how-to 文章或 People Also Ask 为主
+- 价格页：查询包含 pricing、cost、cheap、free、plan，或 SERP 出现价格页
+- 文档页：SERP 包含 API reference、SDK 文档、GitHub 仓库或开发者指南
+- 程序化页面：该模式可跨地域、集成、类别、竞品、模板或用例重复
+
+对每个建议说明 SERP 证据和推荐页面角度。
+
+### 11. 产出最终交付物
+
+返回简洁的关键词研究报告，包含：
+
+- 执行摘要
+- 研究假设
+- 抓取网站后的业务画像
+- 主要关键词集群
+- 每个集群 5 个代表性关键词
+- 难度低于 40 且搜索量高于 1000 的高机会关键词
+- 为什么这些词是机会
+- 优先关键词短名单
+- 最佳内容机会
+- 基于 SERP 的页面建议
+- 推荐新增、更新或程序化生成的页面
+- 数据缺口和验证说明
+
+完整报告可使用 `references/report-template.md`。
+
+## AIsa LLM 用法
+
+使用 AIsa LLM 网关：
+
+- 将抓取到的网站总结为产品和业务画像
+- 基于抓取结果生成有依据的种子主题
+- 分类搜索意图
+- 将关键词分组为集群
+- 总结 SERP 模式
+- 将原始指标转化为 SEO 决策
+- 撰写关键词策略报告
+- 将关键词转成页面建议
+
+推荐请求模式：
+
+```bash
+curl -sS "https://api.aisa.one/v1/chat/completions" \
+  -H "Authorization: Bearer ***" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-5-mini",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are an SEO strategist. Use only provided metrics as facts. Mark unverified ideas clearly."
+      },
+      {
+        "role": "user",
+        "content": "Cluster these keyword rows by topic, search intent, and best page type."
+      }
+    ]
+  }'
+```
+
+## 辅助脚本
+
+用 `scripts/aisa_client.py` 快速调用 API：
+
+```bash
+python3 {baseDir}/scripts/site_crawler.py \
+  https://example.com \
+  --max-pages 12 \
+  --out site-profile.json
+```
+
+```bash
+python3 {baseDir}/scripts/aisa_client.py data \
+  /apis/v1/dataforseo/dataforseo_labs/google/keyword_suggestions/live \
+  payload.json \
+  --out keyword-suggestions.json
+```
+
+```bash
+python3 {baseDir}/scripts/aisa_client.py chat \
+  --model gpt-5-mini \
+  --system system-prompt.txt \
+  --prompt cluster-prompt.txt \
+  --out clusters.md
+```
+
+## 质量规则
+
+- 当提供网站时，关键词研究前先抓取网站。
+- 除非用户明确要求品牌 SEO，否则不要从品牌关键词开始。
+- 优先使用本地爬虫和实时 AIsa/DataForSEO 数据，而不是手动浏览器抓取。
+- 标明使用了哪些端点组。
+- 区分事实与建议。
+- 不要编造搜索量、CPC、关键词难度、排名或趋势。
+- LLM 输出用于解释，不可替代关键词数据。
+- 每个关键词集群应展示 5 个代表性关键词及可用指标。
+- 高机会关键词必须满足 difficulty &lt; 40 且 search volume > 1000。
+- 基于 SERP 的页面建议必须说明应创建落地页、功能页、对比页、价格页、文档页、程序化页面还是博客文章，以及原因。
+- 如果原始导出包含客户域名、竞品或内部策略，请保持私密。
+- 最终答案要可执行：用户应知道该做哪些关键词、创建什么页面类型，以及为什么。
+
+## 参考
+
+- `references/aisa-api-map.md`：端点组和用法说明。
+- `references/report-template.md`：最终关键词研究报告结构。
+
+## 开始使用
+
+1. 在 [aisa.one](https://aisa.one) 注册（新账户有 $2 免费额度）。
+2. 从控制台生成 API key。
+3. 设置 key 并安装技能：
+   ```bash
+   export AISA_API_KEY="your-key"
+   npm install -g @aisa-one/cli
+   aisa skills install seo-keyword-research
+   ```
+4. 启动新的 Agent 会话，让运行时加载更新后的技能说明。
+
+## 相关
+
+<CardGroup cols={3}>
+  <Card title="DataForSEO" icon="chart-column" href="/api-reference/dataforseo/post_dataforseo-dataforseo-labs-google-keyword-suggestions-live">
+    关键词扩展和 SERP 情报端点。
+  </Card>
+  <Card title="AIsa Web Search" icon="globe" href="/agent-skills/web-search">
+    构建内容计划前搜索最新网页来源。
+  </Card>
+  <Card title="模型目录" icon="list" href="/zh/guides/models">
+    为聚类和策略综合选择 LLM。
+  </Card>
+</CardGroup>
