@@ -62,6 +62,7 @@ FILE_TAG_MAP = {
     "youte-search.json": "YouTube Search",
     "tavily.json": "Web & News Search",
     "platform-txyz-openapi.json": "Scholar Search",
+    "waveinflu.json": "WaveInflu",
     "openapi-financial.json": "Financial Data",
     "analyst-estimates.json": "Financial Data",
     "macro_snapshot.json": "Financial Data",
