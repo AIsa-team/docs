@@ -1,0 +1,154 @@
+---
+title: "OpenAI 兼容的图像生成"
+description: "通过标准 POST /v1/images/generations 端点使用 ByteDance Seedream 生成图像。采用 OpenAI 兼容的请求结构；图像最小尺寸为 3,686,400 像素（例如 1920×1920）。"
+openapi: "openapi/zh/openai-images-generations.json POST /images/generations"
+---
+
+标准的兼容 OpenAI 的 `POST /v1/images/generations` 端点。目前路由到 **ByteDance Seedream**（`seedream-4-5-251128`）。Wan 2.7 模型**不使用**此路径——请参阅[通过 Chat 生成图像](/zh/api-reference/chat/post_chat-completions-image-generation)。
+
+## 路由概览
+
+| 模型 | 端点 |
+|---|---|
+| `seedream-4-5-251128` | **`POST /v1/images/generations`** *（本页）* |
+| `wan2.7-image` / `wan2.7-image-pro` | [`POST /v1/chat/completions`](/zh/api-reference/chat/post_chat-completions-image-generation) |
+| 兼容 Gemini 的模型 | [`POST /v1beta/models/{model}:generateContent`](/zh/api-reference/chat/post_models-model-generatecontent) |
+
+## 支持的模型
+
+| 模型 | 每张图像费用 | 说明 |
+|---|---|---|
+| `seedream-4-5-251128` | $0.040 | 最小图像尺寸为 **3,686,400 像素**（例如 1920×1920） |
+
+## 尺寸限制 ⚠️
+
+Seedream 的上游服务要求图像至少包含 **3,686,400 像素**。低于该值的请求将被拒绝，并返回：
+
+```
+400 InvalidParameter: image size must be at least 3686400 pixels
+```
+
+| 尺寸 | 像素数 | 是否接受？ |
+|---|---|---|
+| `1024x1024` | 1,048,576 | ❌ |
+| `1536x1536` | 2,359,296 | ❌ |
+| `1920x1920` | 3,686,400 | ✅（恰好达到阈值） |
+| `2048x2048` | 4,194,304 | ✅ |
+| `2304x1600` | 3,686,400 | ✅ |
+| `2560x1920` | 4,915,200 | ✅ |
+
+只要满足 `width × height ≥ 3,686,400`，任何宽高比均可使用。
+
+## 请求
+
+<CodeGroup>
+
+```bash curl
+curl -sS -X POST "https://api.aisa.one/v1/images/generations" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "seedream-4-5-251128",
+    "prompt": "A cute red panda, ultra-detailed, cinematic lighting",
+    "n": 1,
+    "size": "2048x2048"
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
+
+resp = client.images.generate(
+    model="seedream-4-5-251128",
+    prompt="A cute red panda, ultra-detailed, cinematic lighting",
+    n=1,
+    size="2048x2048",
+)
+
+for item in resp.data:
+    print(item.url)
+```
+
+```typescript TypeScript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "https://api.aisa.one/v1",
+  apiKey: process.env.AISA_API_KEY,
+});
+
+const resp = await client.images.generate({
+  model: "seedream-4-5-251128",
+  prompt: "A cute red panda, ultra-detailed, cinematic lighting",
+  n: 1,
+  size: "2048x2048",
+});
+
+for (const item of resp.data) {
+  console.log(item.url);
+}
+```
+
+</CodeGroup>
+
+### 请求字段
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `model` | string | 是 | `seedream-4-5-251128` |
+| `prompt` | string | 是 | 对要生成的图像进行文本描述 |
+| `n` | integer | 否 | 图像数量。每张图像单独按 $0.040 计费 |
+| `size` | string | 是 | `WIDTHxHEIGHT`。必须满足 `width × height ≥ 3,686,400` |
+
+## 响应
+
+```json
+{
+  "model": "seedream-4-5-251128",
+  "created": 1776495432,
+  "data": [
+    {
+      "url": "https://cdn.aisa.one/images/seedream/...",
+      "size": "2048x2048"
+    }
+  ],
+  "usage": {
+    "generated_images": 1,
+    "output_tokens": 16384,
+    "total_tokens": 16384
+  }
+}
+```
+
+与原生 OpenAI 架构相比，**AIsa 的响应增加了一些扩展字段**：
+- 根级别回显的 `model`
+- `data[].size`——每张返回图像的实际尺寸
+- `usage`——包含用于计费的 `generated_images`，以及用于词元统计的 `output_tokens` / `total_tokens`
+
+<Warning>
+  `data[].url` 中的 URL **短期有效**。请在过期前下载图像并将其持久化到你自己的存储中。
+</Warning>
+
+## 常见 4xx 原因
+
+- `400 InvalidParameter — image size must be at least 3686400 pixels`——`size` 太小。请使用 `1920x1920` 或更大的尺寸。
+- `404 openai_error`——传入的模型未通过此端点路由（例如 `wan2.7-image`）。请改用[基于 Chat 的路由](/zh/api-reference/chat/post_chat-completions-image-generation)。
+- `400 invalid_request`——`size` 字符串格式错误（例如使用 `1024`，而不是 `1024x1024`）。
+
+更多信息请参阅[错误代码](/zh/api-reference/errors)和[速率限制](/zh/api-reference/rate-limits)。
+
+## 相关内容
+
+<CardGroup cols={3}>
+  <Card title="通过 Chat 生成图像" icon="message" href="/zh/api-reference/chat/post_chat-completions-image-generation">
+    Wan 2.7 系列使用的 `/v1/chat/completions` 路由。
+  </Card>
+  <Card title="Gemini generateContent" icon="google" href="/zh/api-reference/chat/post_models-model-generatecontent">
+    兼容 Gemini 的 generateContent 端点。
+  </Card>
+  <Card title="媒体生成技能" icon="image" href="/agent-skills/mediagen">
+    封装图像和视频生成的 Agent 技能。
+  </Card>
+</CardGroup>

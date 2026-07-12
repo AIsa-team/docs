@@ -1,0 +1,43 @@
+---
+title: "取消关注用户"
+description: "使已认证的源用户在 X/Twitter 上取消关注目标用户。通过 AIsa 网关代理官方 X v2 取消关注用户端点。"
+openapi: "openapi/zh/twitter-actions.json POST /twitter/unfollow_twitter"
+---
+
+代表已认证的源用户在 X/Twitter 上取消关注某个用户。这是官方 [X v2 `DELETE /2/users/{source_user_id}/following/{target_user_id}` 端点](https://docs.x.com/x-api/users/unfollow-user)的代理，通过 AIsa 网关上的 `https://api.aisa.one/apis/v1/twitter/unfollow_twitter` 提供。为与其他 Twitter 写入端点保持一致，AIsa 使用 `POST`。
+
+## 前提条件
+
+- **AIsa API 密钥**（每个请求均使用 Bearer token）。
+- 源用户账户需完成一次性 **OAuth 授权**。调用 [`POST /apis/v1/twitter/auth_twitter`](/zh/api-reference/twitter/post_twitter-auth-twitter) 关联你的 X 账户。该端点会启动 OAuth 流程，并将生成的会话与 AIsa 密钥关联，因此无需在此请求正文中传递 OAuth token。
+- X 会话必须具有以下作用域：`follows.write`、`tweet.read`、`users.read`。
+
+<Tip>
+  想要使用 `@username` 而非数字 ID 取消关注？请先通过 [`GET /twitter/user/info`](/zh/api-reference/twitter/get_twitter-user-info) 解析用户，然后将返回的 `id` 作为 `target_user_id` 传入。
+</Tip>
+
+## 响应字段
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `data.following` | boolean | 源用户不再关注目标用户后为 `false`。即使源用户最初并未关注目标用户，也会返回 `false`，因为取消关注操作具有幂等性。 |
+
+## 幂等性
+
+对未关注的用户调用 `unfollow_twitter` 不会执行任何操作。端点仍会返回 `200` 和 `{ "data": { "following": false } }`。这与 X 自身的行为一致，因此可以安全重试。
+
+有关完整的错误响应和重试指南，请参阅[错误代码](/zh/api-reference/errors)。写入端点会计入 API 密钥的标准 RPM/TPM 限额，请参阅[速率限制](/zh/api-reference/rate-limits)。
+
+## 相关内容
+
+<CardGroup cols={3}>
+  <Card title="关联 X 账户" icon="key" href="/zh/api-reference/twitter/post_twitter-auth-twitter">
+    启动用于启用此端点的 OAuth 流程。
+  </Card>
+  <Card title="关注用户" icon="user-plus" href="/zh/api-reference/twitter/post_twitter-follow-twitter">
+    执行相反操作。
+  </Card>
+  <Card title="检查关注关系" icon="user-group" href="/zh/api-reference/twitter/get_twitter-user-check-follow-relationship">
+    调用前验证关注关系。
+  </Card>
+</CardGroup>

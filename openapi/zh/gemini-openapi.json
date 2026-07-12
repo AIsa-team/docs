@@ -1,0 +1,253 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Gemini-compatible Generate Content API",
+    "version": "v1beta",
+    "description": "用于原生 generateContent 请求的 AIsa Gemini 兼容 API。"
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/v1beta",
+      "description": "Gemini-compatible API base URL"
+    }
+  ],
+  "paths": {
+    "/models/{model}:generateContent": {
+      "post": {
+        "summary": "使用兼容 Gemini 的 AIsa 模型生成内容",
+        "operationId": "generateContent",
+        "parameters": [
+          {
+            "name": "model",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "gemini-3.5-flash"
+            },
+            "description": "要使用的 AIsa 模型 ID，例如：gemini-3.5-flash。"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateContentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "内容生成成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateContentResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key"
+      }
+    },
+    "schemas": {
+      "GenerateContentRequest": {
+        "type": "object",
+        "properties": {
+          "contents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Content"
+            },
+            "description": "对话内容，必填"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tool"
+            },
+            "description": "模型可使用的可选工具"
+          },
+          "toolConfig": {
+            "type": "object",
+            "description": "可选工具配置"
+          },
+          "safetySettings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SafetySetting"
+            }
+          },
+          "systemInstruction": {
+            "$ref": "#/components/schemas/Content"
+          },
+          "generationConfig": {
+            "$ref": "#/components/schemas/GenerationConfig"
+          },
+          "cachedContent": {
+            "type": "string",
+            "description": "可选的缓存内容 ID"
+          }
+        },
+        "required": [
+          "contents"
+        ]
+      },
+      "Content": {
+        "type": "object",
+        "properties": {
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Part"
+            }
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "model",
+              "system",
+              "assistant"
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "Tool": {
+        "type": "object"
+      },
+      "SafetySetting": {
+        "type": "object"
+      },
+      "GenerationConfig": {
+        "type": "object"
+      },
+      "GenerateContentResponse": {
+        "type": "object",
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Candidate"
+            }
+          },
+          "usageMetadata": {
+            "$ref": "#/components/schemas/UsageMetadata"
+          },
+          "modelVersion": {
+            "type": "string"
+          },
+          "responseId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "integer"
+              },
+              "message": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "Part": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "生成或输入的文本内容。"
+          },
+          "inline_data": {
+            "type": "object",
+            "description": "多模态内容的内联二进制数据。"
+          },
+          "thoughtSignature": {
+            "type": "string",
+            "description": "提供商生成的思考签名元数据。"
+          }
+        },
+        "additionalProperties": true
+      },
+      "Candidate": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/Content"
+          },
+          "finishReason": {
+            "type": "string"
+          },
+          "index": {
+            "type": "integer"
+          },
+          "safetyRatings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "UsageMetadata": {
+        "type": "object",
+        "properties": {
+          "promptTokenCount": {
+            "type": "integer"
+          },
+          "candidatesTokenCount": {
+            "type": "integer"
+          },
+          "totalTokenCount": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ]
+}

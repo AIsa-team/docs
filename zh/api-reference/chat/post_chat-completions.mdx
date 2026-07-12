@@ -1,0 +1,94 @@
+---
+title: "OpenAI 聊天"
+description: "创建聊天补全"
+excerpt: "**正在启动新项目？** 建议尝试 [Responses](https://platform.openai.com/docs/api-reference/responses)，以使用 OpenAI 平台的最新功能。比较 [Chat Completions 与 Responses](https://platform.openai.com/docs/guides/responses-vs-chat-completions?api-mode=responses)"
+openapi: "openapi/zh/openai-chat.json POST /chat/completions"
+---
+为给定的聊天对话创建模型响应。有关更多信息，请参阅
+[文本生成](https://platform.openai.com/docs/guides/text-generation)、[视觉](https://platform.openai.com/docs/guides/vision)
+和[音频](https://platform.openai.com/docs/guides/audio)指南。
+
+支持的参数可能因用于生成响应的模型而异，尤其是较新的推理模型。下文会注明仅推理模型支持的参数。有关推理模型当前不支持的参数，
+[请参阅推理指南](https://platform.openai.com/docs/guides/reasoning)。
+
+## 流式响应
+
+设置 `"stream": true`，即可在生成每个词元时接收服务器发送事件（SSE）。这可以缩短首词元响应时间，非常适合聊天界面。
+
+<CodeGroup>
+
+```bash curl
+curl https://api.aisa.one/v1/chat/completions \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -N \
+  -d '{
+    "model": "gpt-5",
+    "messages": [{"role": "user", "content": "Write a haiku about APIs."}],
+    "stream": true
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
+
+stream = client.chat.completions.create(
+    model="gpt-5",
+    messages=[{"role": "user", "content": "Write a haiku about APIs."}],
+    stream=True,
+)
+
+for chunk in stream:
+    delta = chunk.choices[0].delta.content or ""
+    print(delta, end="", flush=True)
+```
+
+```typescript TypeScript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "https://api.aisa.one/v1",
+  apiKey: process.env.AISA_API_KEY,
+});
+
+const stream = await client.chat.completions.create({
+  model: "gpt-5",
+  messages: [{ role: "user", content: "Write a haiku about APIs." }],
+  stream: true,
+});
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.choices[0]?.delta?.content ?? "");
+}
+```
+
+</CodeGroup>
+
+### 流的结构
+
+SSE 流中的每一行如下所示：
+
+```
+data: {"id":"chatcmpl-...","choices":[{"delta":{"content":"Quiet"},"index":0}]}
+data: {"id":"chatcmpl-...","choices":[{"delta":{"content":" packets"},"index":0}]}
+...
+data: {"id":"chatcmpl-...","choices":[{"delta":{},"finish_reason":"stop","index":0}]}
+data: [DONE]
+```
+
+- 每个 `data:` 行都是一个 JSON 对象。第一个数据块包含 `role`；后续数据块仅包含 `delta.content`。
+- 流以设置了 `finish_reason` 的最终数据块结束，随后是字面量 `data: [DONE]` 行。
+- 如果使用工具调用，`delta.tool_calls` 会增量到达，应按 `index` 拼接。
+
+### 处理错误和超时
+
+- **流中错误**会作为普通 SSE 事件到达，其中包含 `error` 键而非 `choices`。请关闭流，并将错误返回给调用方。
+- **流断开**（网络短暂故障、客户端超时）无法恢复，请重新发起请求。对于部分响应，不会收取超出已接收词元的费用。
+- **空闲超时**：如果流超过 60 秒处于空闲状态（无词元），AIsa 会将其关闭。请将客户端读取超时设置为 120 秒，以留出安全余量。
+- **客户端背压**：如果下游消费者处理缓慢，请停止从流中读取；AIsa 会限制传输速率，而不会丢弃词元。
+
+<Tip>
+  流式与非流式采用相同的按词元费率。即使流在响应过程中被中断，已传输的词元仍会计费。
+</Tip>

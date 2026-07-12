@@ -1,0 +1,26 @@
+---
+title: "关注用户"
+description: "使已认证的源用户在 X/Twitter 上关注目标用户。通过 AIsa 网关代理官方 X v2 用户关注端点。"
+openapi: "openapi/zh/twitter-actions.json POST /twitter/follow_twitter"
+---
+
+代表已验证身份的源用户关注 X/Twitter 用户。此端点直接代理官方 [X v2 `POST /2/users/{id}/following` 端点](https://docs.x.com/x-api/users/follow-user)，并通过位于 `https://api.aisa.one/apis/v1/twitter/follow_twitter` 的 AIsa 网关路由。
+
+## 前提条件
+
+- 一个 **AIsa API 密钥**（每个请求都使用 Bearer token）。
+- 源用户账户的一次性 **OAuth 授权**。调用 [`POST /apis/v1/twitter/auth_twitter`](/zh/api-reference/twitter/post_twitter-auth-twitter) 关联您的 X 账户——该端点会启动 OAuth 流程，并将生成的会话与您的 AIsa 密钥关联存储，因此无需在此处的请求正文中传递 OAuth token。
+- X 会话必须拥有以下权限范围：`follows.write`、`tweet.read`、`users.read`。
+
+<Tip>
+  希望通过 `@username` 而不是数字 ID 关注用户？请先使用 [`GET /twitter/user/info`](/zh/api-reference/twitter/get_twitter-user-info) 解析用户，然后将返回的 `id` 作为 `target_user_id` 传递。
+</Tip>
+
+## 响应字段
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `data.following` | boolean | 源用户关注目标后为 `true`。对于公开账户，这是操作成功的标志。 |
+| `data.pending_follow` | boolean | 当目标是**受保护**账户时为 `true`——关注请求已发送，正在等待目标用户批准。 |
+
+有关完整的错误响应和重试指南，请参阅[错误代码](/zh/api-reference/errors)。写入端点计入您的标准密钥 RPM/TPM 限额——请参阅[速率限制](/zh/api-reference/rate-limits)。

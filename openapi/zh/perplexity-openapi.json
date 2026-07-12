@@ -1,0 +1,414 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Perplexity Sonar API",
+    "version": "1.0.0",
+    "description": "Perplexity Sonar API——内置网页搜索功能的 LLM。返回 AI 生成的答案，并附有网页来源引用。"
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "ChatCompletionRequest": {
+        "type": "object",
+        "required": [
+          "model",
+          "messages"
+        ],
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "要使用的 Sonar 模型。",
+            "enum": [
+              "sonar",
+              "sonar-pro",
+              "sonar-reasoning-pro",
+              "sonar-deep-research"
+            ]
+          },
+          "messages": {
+            "type": "array",
+            "description": "由截至目前的对话内容组成的消息列表。",
+            "items": {
+              "type": "object",
+              "required": [
+                "role",
+                "content"
+              ],
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "system",
+                    "user",
+                    "assistant"
+                  ],
+                  "description": "消息作者的角色。"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "消息内容。"
+                }
+              }
+            }
+          },
+          "max_tokens": {
+            "type": "integer",
+            "description": "响应中要生成的最大词元数。"
+          },
+          "temperature": {
+            "type": "number",
+            "description": "介于 0 和 2 之间的采样温度。较低的值会使输出更集中且更具确定性。",
+            "default": 0.2,
+            "minimum": 0,
+            "maximum": 2
+          },
+          "top_p": {
+            "type": "number",
+            "description": "核采样参数。模型会考虑累计概率质量达到 top_p 的词元。",
+            "default": 0.9,
+            "minimum": 0,
+            "maximum": 1
+          },
+          "top_k": {
+            "type": "integer",
+            "description": "用于 top-k 筛选的保留词元数。",
+            "default": 0,
+            "minimum": 0,
+            "maximum": 2048
+          },
+          "stream": {
+            "type": "boolean",
+            "description": "是否使用服务器发送事件以流式方式返回响应。",
+            "default": false
+          },
+          "search_context": {
+            "type": "string",
+            "description": "控制使用的搜索上下文量。会影响单次请求的成本。",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "default": "low"
+          },
+          "frequency_penalty": {
+            "type": "number",
+            "description": "根据新词元目前在文本中的出现频率对其施加惩罚。正值会降低逐字重复同一行的可能性。",
+            "default": 1,
+            "minimum": 0,
+            "maximum": 2
+          },
+          "presence_penalty": {
+            "type": "number",
+            "description": "根据新词元此前是否已出现在文本中对其施加惩罚。正值会提高谈论新主题的可能性。",
+            "default": 0,
+            "minimum": -2,
+            "maximum": 2
+          },
+          "return_citations": {
+            "type": "boolean",
+            "description": "是否在响应中返回引用和搜索结果。",
+            "default": true
+          },
+          "search_recency_filter": {
+            "type": "string",
+            "description": "按时效性筛选搜索结果。",
+            "enum": [
+              "month",
+              "week",
+              "day",
+              "hour"
+            ]
+          },
+          "search_domain_filter": {
+            "type": "array",
+            "description": "将搜索限制在特定域名。",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ChatCompletionResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "补全结果的唯一标识符。"
+          },
+          "model": {
+            "type": "string",
+            "description": "用于生成补全内容的模型。"
+          },
+          "object": {
+            "type": "string",
+            "example": "chat.completion"
+          },
+          "created": {
+            "type": "integer",
+            "description": "补全创建时间的 Unix 时间戳。"
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "integer"
+                },
+                "message": {
+                  "type": "object",
+                  "properties": {
+                    "role": {
+                      "type": "string"
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "AI 生成的答案，包含类似 [1][2] 的内联引用。"
+                    }
+                  }
+                },
+                "finish_reason": {
+                  "type": "string",
+                  "enum": [
+                    "stop",
+                    "length"
+                  ]
+                }
+              }
+            }
+          },
+          "citations": {
+            "type": "array",
+            "description": "答案中引用的来源 URL 列表。",
+            "items": {
+              "type": "string"
+            }
+          },
+          "search_results": {
+            "type": "array",
+            "description": "包含标题、摘要和 URL 的详细搜索结果。",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "snippet": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "prompt_tokens": {
+                "type": "integer"
+              },
+              "completion_tokens": {
+                "type": "integer"
+              },
+              "total_tokens": {
+                "type": "integer"
+              },
+              "search_context_size": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/perplexity/sonar": {
+      "post": {
+        "tags": [
+          "Perplexity Sonar"
+        ],
+        "operationId": "post_perplexity-sonar",
+        "summary": "Sonar — 轻量级搜索与回答",
+        "description": "适用于快速网页搜索并生成 AI 答案的高性价比模型。最适合简单的事实性查询。使用模型 `sonar`。\n\n**价格：** 每次请求 $0.012",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatCompletionRequest"
+              },
+              "example": {
+                "model": "sonar",
+                "messages": [
+                  {
+                    "role": "user",
+                    "content": "What are the latest developments in quantum computing?"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "包含 AI 答案和引用的成功响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCompletionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/perplexity/sonar-pro": {
+      "post": {
+        "tags": [
+          "Perplexity Sonar Pro"
+        ],
+        "operationId": "post_perplexity-sonar-pro",
+        "summary": "Sonar Pro — 面向复杂查询的高级搜索",
+        "description": "支持复杂查询和多步后续提问的高级搜索模型，更适合细致复杂的研究问题。使用模型 `sonar-pro`。\n\n**定价：** 每次请求 $0.012",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatCompletionRequest"
+              },
+              "example": {
+                "model": "sonar-pro",
+                "messages": [
+                  {
+                    "role": "user",
+                    "content": "Compare the economic policies of the US and EU regarding AI regulation in 2025-2026"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "包含 AI 答案和引用的成功响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCompletionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/perplexity/sonar-reasoning-pro": {
+      "post": {
+        "tags": [
+          "Perplexity Sonar Reasoning"
+        ],
+        "operationId": "post_perplexity-sonar-reasoning-pro",
+        "summary": "Sonar Reasoning Pro — 具备搜索功能的思维链推理",
+        "description": "具备思维链（CoT）的推理模型，可在 Web 搜索支持下进行精确的逐步分析。最适合分析性任务和复杂推理任务。使用模型 `sonar-reasoning-pro`。\n\n**定价：** 每次请求 $0.012",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatCompletionRequest"
+              },
+              "example": {
+                "model": "sonar-reasoning-pro",
+                "messages": [
+                  {
+                    "role": "user",
+                    "content": "Analyze whether Tesla stock is overvalued based on current P/E ratio compared to industry averages"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "包含 AI 答案和引用的成功响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCompletionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/perplexity/sonar-deep-research": {
+      "post": {
+        "tags": [
+          "Perplexity Deep Research"
+        ],
+        "operationId": "post_perplexity-sonar-deep-research",
+        "summary": "Sonar Deep Research — 详尽研究与综合报告",
+        "description": "专家级研究模型，可执行详尽的多步骤 Web 搜索并生成全面的报告。最适合深度研究任务。使用模型 `sonar-deep-research`。\n\n**定价：** 每次请求 $0.012\n\n> **注意：** 由于搜索过程非常详尽，深度研究请求可能需要明显更长的时间才能完成。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatCompletionRequest"
+              },
+              "example": {
+                "model": "sonar-deep-research",
+                "messages": [
+                  {
+                    "role": "user",
+                    "content": "Write a comprehensive analysis of the global semiconductor supply chain risks in 2026"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "包含 AI 答案和引用的成功响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCompletionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

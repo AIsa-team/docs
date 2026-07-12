@@ -1,0 +1,190 @@
+---
+title: "通过 Chat 生成图像"
+description: "使用 wan2.7-image 和 wan2.7-image-pro 生成图像。这些模型使用 OpenAI 的多模态聊天架构，通过 /v1/chat/completions（而非 /v1/images/generations）进行路由。"
+openapi: "openapi/zh/chat-image-generation.json POST /chat/completions"
+---
+
+Wan 2.7 图像模型通过 **Chat Completions** 端点提供，而不是 OpenAI 风格的 `/v1/images/generations` 路径。请发送标准聊天请求，并使用包含文本提示词的多模态 `content` 数组；AIsa 会在 `choices[].message.content[]` 中以 `{type: "image"}` 部分返回生成的图像。
+
+<Note>
+  正在查找 Seedream（`seedream-4-5-251128`）？它使用不同的路由——[`/v1/images/generations`](#)。兼容 Gemini 的 `generateContent` 请求使用 [`/v1beta/models/{model}:generateContent`](/zh/api-reference/chat/post_models-model-generatecontent)。本页仅介绍 **Wan 2.7 系列**。
+</Note>
+
+## 支持的模型
+
+| 模型 | 每张图像费用 | 典型用途 |
+| --- | --- | --- |
+| `wan2.7-image` | $0.030 | 快速、通用的图像生成 |
+| `wan2.7-image-pro` | $0.075 | 更高保真度；还支持通过独立流程进行图生视频 |
+
+## 请求
+
+请求架构与你已用于文本的 `POST /v1/chat/completions` 相同——唯一的区别是传入的模型以及 `content` 的结构。
+
+**关键规则：**`messages[].content` 必须是**带类型部分组成的数组**。传入普通字符串会返回 `400 invalid_parameter_error`，错误消息为 `"Input should be a valid list: messages[*].content"`。
+
+<CodeGroup>
+
+```bash curl
+curl -sS -X POST "https://api.aisa.one/v1/chat/completions" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "wan2.7-image",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          { "type": "text", "text": "A cute red panda, ultra-detailed, cinematic lighting" }
+        ]
+      }
+    ],
+    "n": 1
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
+
+resp = client.chat.completions.create(
+    model="wan2.7-image",
+    messages=[
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "A cute red panda, ultra-detailed, cinematic lighting"}
+            ],
+        }
+    ],
+    n=1,
+)
+
+# Pull image URLs out of the response
+for choice in resp.choices:
+    for part in choice.message.content:
+        if part["type"] == "image":
+            print(part["image"])
+```
+
+```typescript TypeScript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "https://api.aisa.one/v1",
+  apiKey: process.env.AISA_API_KEY,
+});
+
+const resp = await client.chat.completions.create({
+  model: "wan2.7-image",
+  messages: [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "A cute red panda, ultra-detailed, cinematic lighting" },
+      ] as any,
+    },
+  ],
+  n: 1,
+});
+
+const urls = resp.choices
+  .flatMap((c) => (c.message.content as any[]))
+  .filter((p) => p.type === "image")
+  .map((p) => p.image);
+```
+
+</CodeGroup>
+
+### 请求字段
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `model` | string | 是 | `wan2.7-image` 或 `wan2.7-image-pro` |
+| `messages[].role` | string | 是 | 提示词轮次使用 `user` |
+| `messages[].content` | array | **是** | 必须是数组，不能是字符串 |
+| `messages[].content[].type` | string | 是 | 提示词部分使用 `text`；图生图输入使用 `image_url` |
+| `messages[].content[].text` | string | 当 `type=text` 时 | 提示词 |
+| `messages[].content[].image_url.url` | string | 当 `type=image_url` 时 | 参考图像 URL |
+| `n` | integer | 否 | 图像数量。`wan2.7-image` 的**默认值为 4**；传入 `1` 可节省费用 |
+
+## 响应结构
+
+```json
+{
+  "id": "chatcmpl-fcc86dfd-...",
+  "object": "chat.completion",
+  "created": 1776495713,
+  "model": "wan2.7-image",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": [
+          { "type": "image", "image": "https://cdn.aisa.one/images/wan2.7/..." }
+        ]
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 104,
+    "completion_tokens": 8,
+    "total_tokens": 112
+  }
+}
+```
+
+- **每张图像对应一个 choice。**如果 `n=4`，`choices` 中会有 4 个条目。
+- **每个 `choice.message.content`** 都是一个数组，其中包含一个 `{ "type": "image", "image": "..." }` 部分。
+- 根据工作区配置，`image` 是短期有效的 URL（请尽快下载）或 base64 数据。
+- `usage.total_tokens` 反映请求封装产生的少量词元开销——**计费按图像计算**，费率见上表，而不是按词元计算。
+
+## 图生图
+
+在 `content` 数组开头添加一个 `image_url` 部分，并在其后添加文本指令：
+
+```json
+{
+  "model": "wan2.7-image-pro",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "image_url", "image_url": { "url": "https://example.com/reference.jpg" } },
+        { "type": "text", "text": "Transform into an oil painting in the style of Van Gogh" }
+      ]
+    }
+  ],
+  "n": 1
+}
+```
+
+## 为什么调试台显示 Chat Completions 路径
+
+调试台发送的正是标准 [OpenAI Chat](/zh/api-reference/chat/post_chat-completions) 端点所使用的 `POST /v1/chat/completions` 请求——只是针对图像调整了 `model` 和 `content` 的结构。现有兼容 OpenAI 的 SDK 代码无需修改；只需替换模型和 content 结构。
+
+## 常见 4xx 原因
+
+- `400 invalid_parameter_error — Input should be a valid list: messages[*].content`——`content` 被作为字符串传入；请将其包装为带类型部分组成的数组。
+- 引用 `messages` 的 `400`——你发送了 Gemini 风格的 `contents`/`parts`。Wan 模型应使用 `messages` 和 OpenAI 多模态部分。
+- `/v1/images/generations` 上的 `404 openai_error`——端点错误。Wan 模型**不会**通过该路径路由。
+- `500 model_not_found`——你的工作区尚未配置 Wan 系列。请联系支持团队。
+
+更多信息请参阅[错误代码](/zh/api-reference/errors)和[速率限制](/zh/api-reference/rate-limits)。
+
+## 相关内容
+
+<CardGroup cols={3}>
+  <Card title="OpenAI Chat" icon="message" href="/zh/api-reference/chat/post_chat-completions">
+    与文本模型使用相同的端点。
+  </Card>
+  <Card title="Gemini generateContent" icon="google" href="/zh/api-reference/chat/post_models-model-generatecontent">
+    兼容 Gemini 的 generateContent 端点。
+  </Card>
+  <Card title="媒体生成技能" icon="image" href="/agent-skills/mediagen">
+    封装图像和视频生成的 Agent 技能。
+  </Card>
+</CardGroup>

@@ -1,0 +1,45 @@
+---
+title: "取消点赞推文"
+description: "移除源用户对某条推文的点赞。通过 AIsa 网关代理官方 X v2 unlike-post 端点。"
+openapi: "openapi/zh/twitter-actions.json POST /twitter/unlike_twitter"
+---
+
+移除源用户对某条推文的点赞。此接口代理官方 [X v2 `DELETE /2/users/{id}/likes/{tweet_id}` 端点](https://docs.x.com/x-api/users/unlike-post)，并通过 AIsa 网关的 `https://api.aisa.one/apis/v1/twitter/unlike_twitter` 对外提供。为与其他 Twitter 写入端点保持一致，AIsa 使用 `POST`。
+
+## 前置条件
+
+- 一个 **AIsa API 密钥**（每个请求均使用 Bearer token）。
+- 对源用户账户执行一次性 **OAuth 授权**。通过调用 [`POST /apis/v1/twitter/auth_twitter`](/zh/api-reference/twitter/post_twitter-auth-twitter) 关联您的 X 账户——AIsa 会将会话与您的 API 密钥绑定存储，并在每次写入调用中自动使用该会话。
+- X 会话必须具有 `like.write`、`tweet.read`、`users.read` 权限范围。
+
+## 响应字段
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `data.liked` | boolean | 点赞移除后为 `false`。即使源用户最初并未点赞该推文，也会返回 `false`——取消点赞操作具有幂等性。 |
+
+## 幂等性
+
+对源用户未点赞的推文执行取消点赞不会产生任何变更。端点仍会返回 `200` 和 `{ "data": { "liked": false } }`。可安全重试。
+
+## 常见 4xx 原因
+
+- `400 invalid-request`——缺少 `tweet_id` 或其值不是数字
+- `403 client-forbidden`——OAuth 会话缺少 `like.write` 权限范围。请通过 `auth_twitter` 重新关联。
+- `404 resource-not-found`——推文不存在或对源用户不可见。
+
+更多信息请参阅[错误代码](/zh/api-reference/errors)和[速率限制](/zh/api-reference/rate-limits)。
+
+## 相关内容
+
+<CardGroup cols={3}>
+  <Card title="关联 X 账户" icon="key" href="/zh/api-reference/twitter/post_twitter-auth-twitter">
+    启动此端点所需的 OAuth 流程。
+  </Card>
+  <Card title="点赞推文" icon="heart" href="/zh/api-reference/twitter/post_twitter-like-twitter">
+    相反的操作。
+  </Card>
+  <Card title="发布推文" icon="pen" href="/zh/api-reference/twitter/post_twitter-post-twitter">
+    另一个使用相同 OAuth 会话的写入端点。
+  </Card>
+</CardGroup>

@@ -1,0 +1,320 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Claude Messages API",
+    "version": "1.0.0",
+    "description": "通过 AIsa 提供的 Anthropic 兼容 Messages API。使用 Claude 模型发送结构化消息并生成响应。"
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/v1"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "AISA API Key",
+        "description": "您的 AIsa API 密钥，作为 Bearer token 提供。"
+      }
+    }
+  },
+  "paths": {
+    "/messages": {
+      "post": {
+        "summary": "创建消息",
+        "description": "向 Claude 模型发送结构化对话并接收响应。兼容 Anthropic Messages API。",
+        "operationId": "createMessage",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "model",
+                  "max_tokens",
+                  "messages"
+                ],
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "description": "Claude 模型标识符。示例：claude-opus-4-7、claude-sonnet-4-6、claude-haiku-4-5-20251001。",
+                    "example": "claude-sonnet-4-6"
+                  },
+                  "max_tokens": {
+                    "type": "integer",
+                    "description": "停止前可生成的最大词元数。",
+                    "example": 1024
+                  },
+                  "messages": {
+                    "type": "array",
+                    "description": "对话轮次。",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "role",
+                        "content"
+                      ],
+                      "properties": {
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "assistant"
+                          ]
+                        },
+                        "content": {
+                          "description": "字符串或内容块数组。",
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "object"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "example": [
+                      {
+                        "role": "user",
+                        "content": "Hello, Claude"
+                      }
+                    ]
+                  },
+                  "system": {
+                    "description": "系统提示词。字符串或文本块数组。",
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "object"
+                        }
+                      }
+                    ]
+                  },
+                  "temperature": {
+                    "type": "number",
+                    "format": "float",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                    "default": 1.0,
+                    "description": "随机性。0 = 确定性，1 = 创造性。"
+                  },
+                  "top_p": {
+                    "type": "number",
+                    "format": "float",
+                    "description": "核采样。用于替代 temperature。"
+                  },
+                  "top_k": {
+                    "type": "integer",
+                    "description": "每个词元仅从概率最高的 K 个选项中采样。"
+                  },
+                  "stop_sequences": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "用于停止生成的自定义序列。"
+                  },
+                  "stream": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "启用 SSE 流式传输。"
+                  },
+                  "tools": {
+                    "type": "array",
+                    "description": "模型可使用的工具。",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "name",
+                        "input_schema"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "input_schema": {
+                          "type": "object"
+                        },
+                        "type": {
+                          "type": "string",
+                          "example": "custom"
+                        }
+                      }
+                    }
+                  },
+                  "tool_choice": {
+                    "type": "object",
+                    "description": "模型使用工具的方式。",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "auto",
+                          "any",
+                          "tool",
+                          "none"
+                        ]
+                      },
+                      "name": {
+                        "type": "string",
+                        "description": "当 type 为 tool 时必填。"
+                      },
+                      "disable_parallel_tool_use": {
+                        "type": "boolean",
+                        "default": false
+                      }
+                    }
+                  },
+                  "thinking": {
+                    "type": "object",
+                    "description": "为复杂推理启用扩展思考。",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "enabled"
+                        ]
+                      },
+                      "budget_tokens": {
+                        "type": "integer",
+                        "example": 10000
+                      },
+                      "display": {
+                        "type": "string",
+                        "enum": [
+                          "summarized",
+                          "omitted"
+                        ]
+                      }
+                    }
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "properties": {
+                      "user_id": {
+                        "type": "string",
+                        "description": "外部用户 ID（不含个人身份信息）。"
+                      }
+                    }
+                  },
+                  "service_tier": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "standard_only"
+                    ],
+                    "default": "auto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "example": "msg_024e7cf42f5d47cfa6982b5ff8b55642"
+                    },
+                    "type": {
+                      "type": "string",
+                      "example": "message"
+                    },
+                    "role": {
+                      "type": "string",
+                      "example": "assistant"
+                    },
+                    "content": {
+                      "type": "array",
+                      "description": "响应内容块（text、tool_use、thinking 等）。",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "model": {
+                      "type": "string",
+                      "example": "claude-sonnet-4-6"
+                    },
+                    "stop_reason": {
+                      "type": "string",
+                      "enum": [
+                        "end_turn",
+                        "stop_sequence",
+                        "max_tokens",
+                        "tool_use"
+                      ]
+                    },
+                    "stop_sequence": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "input_tokens": {
+                          "type": "integer"
+                        },
+                        "output_tokens": {
+                          "type": "integer"
+                        },
+                        "cache_creation_input_tokens": {
+                          "type": "integer"
+                        },
+                        "cache_read_input_tokens": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数无效"
+          },
+          "401": {
+            "description": "缺少 API 密钥或 API 密钥无效"
+          },
+          "429": {
+            "description": "超出速率限制"
+          },
+          "500": {
+            "description": "内部服务器错误"
+          }
+        }
+      }
+    }
+  }
+}
