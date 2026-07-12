@@ -1,0 +1,130 @@
+---
+title: "速率限制"
+description: "AIsa API 的每分钟请求数、每分钟 Token 数和并发限制，以及速率限制响应头和额度提升申请说明。"
+---
+
+AIsa API 的每个端点都会应用速率限制，以保护网关和上游提供商。限制按 API Key 执行。本页介绍默认限制、速率限制响应头的读取方式，以及如何妥善处理限流。
+
+## 限制维度
+
+AIsa 在三个维度上限制容量：
+
+| 维度 | 适用范围 | 衡量内容 |
+| --- | --- | --- |
+| **RPM** | 所有端点 | 每分钟请求数 |
+| **TPM** | LLM 推理端点 | 每分钟输入和输出 Token 总数 |
+| **并发数** | 流式和长时间运行的端点 | 同时进行中的请求数 |
+
+<Note>
+  TPM 会合并计算**输入和输出** Token。发送 10K Token 并生成 5K Token 的请求会消耗 15K TPM。
+</Note>
+
+## 各套餐的默认限制
+
+| 套餐 | RPM | TPM | 并发数 | 适用条件 |
+| --- | ---: | ---: | ---: | --- |
+| **免费版** | 60 | 60,000 | 5 | 包含 2 美元注册额度的新账户 |
+| **入门版** | 600 | 600,000 | 20 | 首次付费充值后 |
+| **成长版** | 3,000 | 3,000,000 | 50 | 累计充值 500 美元以上或申请获批 |
+| **企业版** | 自定义 | 自定义 | 自定义 | 联系销售团队 |
+
+<Tip>
+  首次为 Wallet 充值后，系统会自动从**免费版升级到入门版**。更高套餐需要提交额度提升申请，详见[申请提高额度](#申请提高额度)。
+</Tip>
+
+### 端点级覆盖限制
+
+由于上游提供商会限制吞吐量，部分端点的默认限制比账户套餐更严格：
+
+| 端点组 | 默认覆盖限制 |
+| --- | --- |
+| `POST /chat/completions`（GPT-5.4） | RPM 不超过上游额度 |
+| `POST /messages`（Claude Opus） | RPM 不超过上游额度 |
+| `POST /perplexity/sonar-deep-research` | 每个密钥 5 RPM（长时间运行） |
+| `/v1beta/models/*:generateContent` | 每个密钥 30 RPM |
+
+## 读取速率限制响应头
+
+每个响应（包括 `429`）都会包含以下响应头：
+
+```
+X-RateLimit-Limit-Requests:    600
+X-RateLimit-Remaining-Requests: 587
+X-RateLimit-Limit-Tokens:      600000
+X-RateLimit-Remaining-Tokens:  592104
+X-RateLimit-Reset-Requests:    1745012400
+X-RateLimit-Reset-Tokens:      1745012400
+Retry-After:                   3
+```
+
+| 响应头 | 含义 |
+| --- | --- |
+| `X-RateLimit-Limit-Requests` | RPM 上限 |
+| `X-RateLimit-Remaining-Requests` | 本分钟剩余请求数 |
+| `X-RateLimit-Limit-Tokens` | TPM 上限 |
+| `X-RateLimit-Remaining-Tokens` | 本分钟剩余 Token 数 |
+| `X-RateLimit-Reset-Requests` | 请求计数器重置时的 UNIX 时间戳 |
+| `X-RateLimit-Reset-Tokens` | Token 计数器重置时的 UNIX 时间戳 |
+| `Retry-After` | 仅用于 429；允许重试前需要等待的秒数 |
+
+## 处理 429 响应
+
+<Steps>
+  <Step title="检测 429">
+    响应体遵循标准[错误结构](/zh/api-reference/errors)，其中 `error.type = "rate_limit_error"`，`code` 为 `rate_limit_exceeded`、`upstream_rate_limit` 或 `quota_exceeded`。
+  </Step>
+  <Step title="遵守 `Retry-After`">
+    下次尝试前，始终至少等待 `Retry-After` 指定的秒数，切勿立即重试。
+  </Step>
+  <Step title="使用指数退避和抖动">
+    完成首次等待后，每次再次遇到 429 都将延迟翻倍，并添加 ±25% 抖动，上限为 30 秒。请参阅[重试示例](/zh/api-reference/errors#重试指南)。
+  </Step>
+  <Step title="优先排队，而不是反复重试">
+    不要使用紧密的重试循环。将请求放入队列，并以低于 RPM 的速率处理。采用 `RPM/60` 每秒泄漏速率的简单令牌桶即可稳定工作。
+  </Step>
+  <Step title="保持在上限以内">
+    监控每个响应中的 `X-RateLimit-Remaining-*`。剩余额度低于限制的 10% 时主动降速，从而避免触发 429。
+  </Step>
+</Steps>
+
+## 示例：保持在限制以内
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
+
+response = client.chat.completions.with_raw_response.create(
+    model="gpt-5",
+    messages=[{"role": "user", "content": "Hello"}],
+)
+remaining = int(response.headers.get("x-ratelimit-remaining-requests", 1000))
+if remaining < 50:
+    # Throttle preemptively — sleep a bit before the next call
+    time.sleep(1.0)
+body = response.parse()
+```
+
+## 申请提高额度
+
+如果生产流量需要更高限制：
+
+1. 为 Wallet 充值，系统会自动从免费版升级到入门版。
+2. 如需成长版或企业版，请发送邮件至 [developer@aisa.one](mailto:developer@aisa.one)，并提供：
+   - 工作区 ID
+   - 预期的峰值 RPM 和 TPM
+   - 需要提高额度的模型或端点
+   - 使用场景的简要说明
+
+成长版申请通常会在一个工作日内获批；企业版方案由专属客户团队协商。
+
+## 相关页面
+
+<CardGroup cols={2}>
+  <Card title="错误代码" icon="triangle-exclamation" href="/zh/api-reference/errors">
+    HTTP 状态码完整列表和建议的处理方式。
+  </Card>
+  <Card title="用量日志" icon="chart-line" href="/zh/guides/dashboard/usage-logs">
+    控制台中的单次请求计费和速率限制遥测数据。
+  </Card>
+</CardGroup>
