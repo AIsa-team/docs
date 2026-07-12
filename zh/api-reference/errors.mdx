@@ -1,0 +1,159 @@
+---
+title: "错误代码"
+description: "AIsa API 的 HTTP 状态码、错误 Payload 结构和建议的重试策略。"
+---
+
+AIsa API 的响应遵循标准 HTTP 语义：成功调用返回 `2xx`，客户端错误返回 `4xx`，服务端或上游错误返回 `5xx`。本页说明错误模型以及不同错误的处理方式。
+
+## 错误响应结构
+
+错误响应始终是包含 `error` 对象的 JSON：
+
+```json
+{
+  "error": {
+    "type": "authentication_error",
+    "code": "invalid_api_key",
+    "message": "The API key provided is invalid or has been revoked.",
+    "request_id": "req_01JABCD9F1YYEXAMPLE"
+  }
+}
+```
+
+| 字段 | 含义 |
+| --- | --- |
+| `type` | 高层错误类别，例如 `authentication_error`、`invalid_request_error`、`rate_limit_error`、`api_error`、`upstream_error` |
+| `code` | 机器可读的稳定错误代码，可安全用于程序匹配 |
+| `message` | 供人阅读的错误说明 |
+| `request_id` | 请求的唯一 ID。**提交支持工单时请附上该值。** |
+
+## 状态码
+
+<AccordionGroup>
+
+<Accordion title="400：请求错误" icon="triangle-exclamation">
+请求 Payload 格式错误，例如缺少必填参数、类型错误、JSON 无效或参数值超出范围。
+
+**常见代码：** `invalid_request`、`missing_parameter`、`invalid_parameter_type`、`json_parse_error`
+
+**处理方式：** 修正请求后再试，不要自动重试。
+</Accordion>
+
+<Accordion title="401：未授权" icon="lock">
+未提供 API Key、`Authorization` 请求头格式错误，或密钥无效/已撤销。
+
+**常见代码：** `missing_api_key`、`invalid_api_key`、`revoked_api_key`
+
+**处理方式：** 在[控制台](https://console.aisa.one)中检查密钥，并使用 `Authorization: Bearer YOUR_A...EY` 重新发送请求。
+</Accordion>
+
+<Accordion title="403：禁止访问" icon="ban">
+密钥有效，但无权访问该端点、模型或区域。
+
+**常见代码：** `insufficient_permissions`、`model_not_allowed`、`region_blocked`
+
+**处理方式：** 检查工作区套餐和密钥权限范围。如果限制不符合预期，请联系支持团队。
+</Accordion>
+
+<Accordion title="404：未找到" icon="question">
+端点路径、模型 ID 或资源 ID 不存在。
+
+**常见代码：** `unknown_model`、`resource_not_found`、`unknown_endpoint`
+
+**处理方式：** 对照[模型目录](/zh/guides/models)检查模型名，并对照 [API 参考](/api-reference/chat/post_chat-completions)检查端点路径。
+</Accordion>
+
+<Accordion title="422：无法处理的实体" icon="circle-exclamation">
+语法有效，但请求违反业务规则，例如 `max_tokens` 超过模型限制、参数组合不受支持，或内容违反上游提供商的安全策略。
+
+**常见代码：** `max_tokens_exceeded`、`unsupported_parameter`、`content_policy_violation`
+
+**处理方式：** 仔细阅读 `message` 并调整 Payload，不要盲目重试。
+</Accordion>
+
+<Accordion title="429：请求过多" icon="gauge-high">
+请求触发了速率限制，可能是账户 RPM/TPM 上限，也可能是上游提供商的限流。
+
+**常见代码：** `rate_limit_exceeded`、`upstream_rate_limit`、`quota_exceeded`
+
+**返回的响应头：**
+- `Retry-After`：允许再次尝试前需要等待的秒数
+- `X-RateLimit-Limit`：当前限制
+- `X-RateLimit-Remaining`：当前窗口中的剩余请求数
+- `X-RateLimit-Reset`：计数器重置时的 UNIX 时间戳
+
+**处理方式：** 退避后重试，具体方式见下方[重试指南](#重试指南)。完整额度表请参阅[速率限制](/zh/api-reference/rate-limits)。
+</Accordion>
+
+<Accordion title="500：内部服务器错误" icon="server">
+AIsa 侧发生意外错误。`request_id` 字段对于支持团队排查问题非常重要。
+
+**处理方式：** 使用指数退避重试。如果错误持续出现，请将 `request_id` 发送至 [developer@aisa.one](mailto:developer@aisa.one)。
+</Accordion>
+
+<Accordion title="502 / 503 / 504：上游错误" icon="cloud-exclamation">
+AIsa 无法连接上游模型提供商（例如 OpenAI、Anthropic），或从上游收到错误。此类问题通常是暂时的。
+
+**常见代码：** `upstream_unavailable`、`upstream_timeout`、`gateway_error`
+
+**处理方式：** 使用指数退避重试。如果问题持续出现，请切换备用模型；网关可以通过不同上游部署路由 Claude 请求。
+</Accordion>
+
+</AccordionGroup>
+
+## 重试指南
+
+<Steps>
+  <Step title="只重试幂等或可安全重复的调用">
+    所有 `GET` 请求和大多数聊天补全调用都可以安全重试。不要盲目重试会产生副作用的 `POST` 请求，例如发布推文。
+  </Step>
+  <Step title="遵守 `Retry-After`">
+    收到 429 响应时，始终遵守 `Retry-After` 响应头。收到未包含该响应头的 5xx 错误时，使用指数退避。
+  </Step>
+  <Step title="使用带抖动的指数退避">
+    从 1 秒开始，每次尝试将等待时间翻倍，并添加 ±25% 抖动，上限为 30 秒。
+    ```
+    1.0s → 2.0s → 4.0s → 8.0s → 16.0s → 30.0s (max)
+    ```
+  </Step>
+  <Step title="限制总重试时间">
+    尝试 3–5 次或总计 60 秒后停止，以先到者为准，并将错误返回给调用方。
+  </Step>
+  <Step title="除 429 外，不要重试 4xx">
+    `400`、`401`、`403`、`404` 和 `422` 表示请求本身存在问题，重试无法解决。
+  </Step>
+</Steps>
+
+### 最小重试示例（Python）
+
+```python
+import time, random
+from openai import OpenAI, APIError, RateLimitError
+
+client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
+
+def call_with_retry(messages, model="gpt-5", max_retries=5):
+    delay = 1.0
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(model=model, messages=messages)
+        except RateLimitError as e:
+            wait = getattr(e.response.headers, "Retry-After", None) or delay
+            time.sleep(float(wait) * (1 + random.uniform(-0.25, 0.25)))
+        except APIError as e:
+            if e.status_code >= 500:
+                time.sleep(delay * (1 + random.uniform(-0.25, 0.25)))
+            else:
+                raise
+        delay = min(delay * 2, 30)
+    raise RuntimeError("Exceeded max retries")
+```
+
+## 获取帮助
+
+向 [developer@aisa.one](mailto:developer@aisa.one) 报告问题时，请提供：
+
+- 错误响应中的 `request_id`
+- HTTP 状态码和 `error.code`
+- 模型 ID 和最小复现示例（使用已脱敏密钥的 cURL）
+- 请求失败的大致时间
