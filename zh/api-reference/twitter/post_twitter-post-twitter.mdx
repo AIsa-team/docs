@@ -1,0 +1,102 @@
+---
+title: "发布推文"
+description: "代表已认证的源用户发布推文，支持纯文本、回复、引用、投票或附带媒体。还支持在 X 的编辑时间窗口内编辑现有推文。"
+openapi: "openapi/zh/twitter-actions.json POST /twitter/post_twitter"
+---
+
+代表已认证的源用户发布推文。该端点代理官方 [X v2 `POST /2/tweets` 端点](https://docs.x.com/x-api/posts/create-post)，并通过位于 `https://api.aisa.one/apis/v1/twitter/post_twitter` 的 AIsa 网关进行路由。
+
+一个端点涵盖所有变体：
+
+<CardGroup cols={3}>
+  <Card title="纯文本" icon="pen">
+    `{ "text": "Hello, World!" }`
+  </Card>
+  <Card title="回复" icon="reply">
+    设置 `reply.in_reply_to_tweet_id`。
+  </Card>
+  <Card title="引用推文" icon="quote-left">
+    设置 `quote_tweet_id`。
+  </Card>
+  <Card title="附带投票" icon="square-poll-vertical">
+    设置 `poll.options` + `poll.duration_minutes`。
+  </Card>
+  <Card title="附带媒体" icon="image">
+    设置 `media.media_ids`（1–4 个 ID）。
+  </Card>
+  <Card title="编辑推文" icon="pen-to-square">
+    设置 `edit_options.previous_post_id`（须在 X 的编辑时限内）。
+  </Card>
+</CardGroup>
+
+## 前置条件
+
+- 一个 **AIsa API 密钥**（每个请求均使用 Bearer token）。
+- 对源用户账户进行一次性 **OAuth 授权**。通过调用 [`POST /apis/v1/twitter/auth_twitter`](/zh/api-reference/twitter/post_twitter-auth-twitter) 关联你的 X 账户——AIsa 会将会话与 API 密钥关联存储，并在每次写入调用时自动使用该会话。
+- X 会话必须拥有 `tweet.read`、`tweet.write`、`users.read`。
+
+## 互斥字段
+
+单个请求中最多只能出现以下字段中的**一个**：
+
+- `media`
+- `poll`
+- `quote_tweet_id`
+- `card_uri`
+
+如果设置了多个字段，X 将拒绝请求（`400 invalid-request`）。
+
+## 响应
+
+成功时，端点返回 `201 Created`：
+
+```json
+{
+  "data": {
+    "id": "1346889436626259968",
+    "text": "Hello, World!"
+  }
+}
+```
+
+返回的 `text` 反映 X 实际存储的内容（例如缩短后的 URL）。可使用 `data.id` 在后续调用中引用该推文（回复、引用、点赞、编辑、删除）。
+
+## 编辑推文
+
+传入 `edit_options.previous_post_id` 可编辑现有推文，而不是创建新推文。编辑受 X 的编辑时限和编辑次数限制；如果已超过时限或编辑配额已用尽，端点将返回 `409 conflict`。
+
+## 回复设置
+
+使用 `reply_settings` 限制可回复的用户：
+
+| 值 | 可回复的用户 |
+| --- | --- |
+| `following` | 你关注的人 |
+| `mentionedUsers` | 推文中明确提及的用户 |
+| `subscribers` | 你的 X Premium 订阅者 |
+| `verified` | 已认证账户 |
+
+省略该字段则使用默认设置（所有人）。
+
+## 常见 4xx 原因
+
+- `400 invalid-request`——设置了两个互斥字段、文本过长、投票持续时间无效等。
+- `403 client-forbidden`——OAuth 会话缺少 `tweet.write` scope。请通过 `auth_twitter` 重新关联。
+- `404 resource-not-found`——引用的 `in_reply_to_tweet_id`、`quote_tweet_id` 或 `previous_post_id` 不存在，或对源用户不可见。
+- `409 conflict`——内容重复，或在允许的时限之外进行编辑。
+
+完整列表请参阅[错误代码](/zh/api-reference/errors)，各层级上限请参阅[速率限制](/zh/api-reference/rate-limits)。
+
+## 相关内容
+
+<CardGroup cols={3}>
+  <Card title="关联 X 账户" icon="key" href="/zh/api-reference/twitter/post_twitter-auth-twitter">
+    启动此端点所需的 OAuth 流程。
+  </Card>
+  <Card title="关注用户" icon="user-plus" href="/zh/api-reference/twitter/post_twitter-follow-twitter">
+    使用同一 OAuth 会话的另一个写入端点。
+  </Card>
+  <Card title="Twitter 自动驾驶技能" icon="twitter" href="/agent-skills/twitter-autopilot">
+    封装完整 Twitter 功能面的 Agent 技能。
+  </Card>
+</CardGroup>

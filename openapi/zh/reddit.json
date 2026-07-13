@@ -1,0 +1,811 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Reddit API",
+    "description": "读取 Reddit 公开数据——搜索帖子、浏览 subreddit 以及获取评论。",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "AIsa API 密钥。前往 https://aisa.one 获取"
+      }
+    },
+    "schemas": {
+      "RedditPost": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "RedditComment": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "RedditPostsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "credits_remaining": {
+            "type": "integer"
+          },
+          "posts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RedditPost"
+            }
+          },
+          "after": {
+            "type": "string",
+            "nullable": true
+          },
+          "cursor": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "RedditCommentsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "credits_remaining": {
+            "type": "integer"
+          },
+          "comments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RedditComment"
+            }
+          },
+          "cursor": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "RedditSubredditDetailsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "credits_remaining": {
+            "type": "integer"
+          },
+          "subreddit_id": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "subscribers": {
+            "type": "integer"
+          },
+          "weekly_active_users": {
+            "type": "integer"
+          },
+          "weekly_contributions": {
+            "type": "integer"
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "AIsaSocialError": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "credits_remaining": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
+          },
+          "errorStatus": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "paths": {
+    "/reddit/search": {
+      "get": {
+        "tags": [
+          "Reddit API"
+        ],
+        "operationId": "get_reddit-search",
+        "summary": "搜索 Reddit",
+        "description": "在整个 Reddit 中搜索与查询匹配的帖子。每个帖子包含 title、author、selftext、subreddit、score、ups、upvote_ratio、num_comments、created_utc、url、permalink 和 is_video。支持排序（relevance、new、top、comment_count）、按时间范围筛选、通过 after token 分页，以及使用 trim 参数返回更精简的响应。",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "搜索查询",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "排序依据",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "relevance",
+                "new",
+                "top",
+                "comment_count"
+              ]
+            },
+            "example": "relevance"
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "description": "时间范围",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "day",
+                "week",
+                "month",
+                "year"
+              ]
+            },
+            "example": "all"
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "用于分页至下一页",
+            "schema": {
+              "type": "string"
+            },
+            "example": "t3_1i8z28z"
+          },
+          {
+            "name": "trim",
+            "in": "query",
+            "required": false,
+            "description": "设为 true 以返回精简版响应",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": "false"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功响应",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "posts": [
+                    {
+                      "id": "w63dgy",
+                      "author": "Morgentau7",
+                      "author_fullname": "t2_2hy2xjit",
+                      "subreddit": "MadeMeSmile",
+                      "title": "Player realizes that he nearly stole the dogs job",
+                      "downs": 0,
+                      "name": "t3_w63dgy",
+                      "upvote_ratio": 0.97,
+                      "ups": 220403,
+                      "total_awards_received": 0,
+                      "score": 220403,
+                      "created": 1658580900,
+                      "num_comments": 1246,
+                      "url": "https://www.reddit.com/r/MadeMeSmile/comments/w63dgy/player_realizes_that_he_nearly_stole_the_dogs_job/",
+                      "subreddit_subscribers": 11605207,
+                      "is_video": true,
+                      "created_utc": 1658580900
+                    }
+                  ],
+                  "after": "t3_1izmcgx"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RedditPostsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reddit/subreddit": {
+      "get": {
+        "tags": [
+          "Reddit API"
+        ],
+        "operationId": "get_reddit-subreddit",
+        "summary": "Subreddit 帖子",
+        "description": "获取 subreddit 中的帖子，并提供排序和筛选选项。每个帖子均包含 title、author、selftext、score、ups、upvote_ratio、num_comments、created_utc、url、permalink、subreddit_subscribers 和 is_video。支持 sort（best、hot、new、top、rising）、timeframe 筛选、通过 after token 进行分页，以及用于精简响应的 trim 参数。",
+        "parameters": [
+          {
+            "name": "subreddit",
+            "in": "query",
+            "required": true,
+            "description": "Subreddit 名称",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "description": "获取帖子的时间范围。运行时要求提供 `timeframe` 时必须设置 `sort=top`。",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "day",
+                "week",
+                "month",
+                "year"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "排序顺序",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "best",
+                "hot",
+                "new",
+                "top",
+                "rising"
+              ]
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "用于获取更多帖子的 after。请从上一次响应中获取 'after'。",
+            "schema": {
+              "type": "string"
+            },
+            "example": "t3_1234567890"
+          },
+          {
+            "name": "trim",
+            "in": "query",
+            "required": false,
+            "description": "设为 true 以返回精简版响应",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": "false"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功响应",
+            "content": {
+              "application/json": {
+                "example": {
+                  "posts": [
+                    {
+                      "id": "1lfbo7u",
+                      "author": "Vetro_Nodulare2",
+                      "author_fullname": "t2_16syu27ar1",
+                      "subreddit": "AskReddit",
+                      "title": "What is a thing you love that lots of people hate?",
+                      "downs": 0,
+                      "name": "t3_1lfbo7u",
+                      "upvote_ratio": 0.9,
+                      "ups": 45,
+                      "total_awards_received": 0,
+                      "score": 45,
+                      "created": 1750341959,
+                      "num_comments": 349,
+                      "url": "https://www.reddit.com/r/AskReddit/comments/1lfbo7u/what_is_a_thing_you_love_that_lots_of_people_hate/",
+                      "subreddit_subscribers": 56146328,
+                      "is_video": false,
+                      "created_utc": 1750341959
+                    }
+                  ],
+                  "after": "t3_1lfogps"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RedditPostsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "错误请求，例如提供 `timeframe`，但排序方式不是 `top`。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIsaSocialError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reddit/subreddit/details": {
+      "get": {
+        "tags": [
+          "Reddit API"
+        ],
+        "operationId": "get_reddit-subreddit-details",
+        "summary": "Subreddit 详情",
+        "description": "按名称或 URL 检索 subreddit 的元数据。subreddit 名称区分大小写。返回 display_name、description、subscribers、weekly_active_users、weekly_contributions、rules、icon_img、header_img、advertiser_category、submit_text 和 created_at。",
+        "parameters": [
+          {
+            "name": "subreddit",
+            "in": "query",
+            "required": false,
+            "description": "Subreddit 名称。必须区分大小写。因此应使用 'AskReddit'，而不是 'askreddit'。",
+            "schema": {
+              "type": "string"
+            },
+            "example": "AskReddit"
+          },
+          {
+            "name": "url",
+            "in": "query",
+            "required": false,
+            "description": "Subreddit URL",
+            "schema": {
+              "type": "string"
+            },
+            "example": "https://www.reddit.com/r/AbsoluteUnits/"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功响应",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "credits_remaining": 33950256,
+                  "subreddit_id": "t5_a7wuv",
+                  "display_name": "AbsoluteUnits",
+                  "weekly_active_users": 1428398,
+                  "weekly_contributions": 8923,
+                  "rules": "#ABSOLUTE UNITS\n\n---\n\n    Be in awe at the size of these lads\n\n---\n\n###[Check out our deep, well-reflected definitions of an absolute unit.](https://www.reddit.com/r/AbsoluteUnits/wiki/index)  ",
+                  "description": "Absolute Unit : an Animal or Public Figure, who is larger than we should normally expect.",
+                  "header_img": null,
+                  "icon_img": "https://styles.redditmedia.com/t5_a7wuv/styles/communityIcon_t3cspt08bl681.png?width=128&frame=1&auto=webp&s=6f7e59ccf1724bd6c8b3e0d2840c9b21297102c3",
+                  "subscribers": 1923642,
+                  "advertiser_category": "",
+                  "created_at": "2018-01-05T10:35:24.000Z",
+                  "submit_text": ""
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RedditSubredditDetailsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reddit/subreddit/search": {
+      "get": {
+        "tags": [
+          "Reddit API"
+        ],
+        "operationId": "get_reddit-subreddit-search",
+        "summary": "在 Subreddit 内搜索",
+        "description": "在指定 subreddit 中搜索与查询匹配的帖子、评论和媒体。返回的帖子包含 title、votes、num_comments、url 和 created_at；评论包含 author、body、votes 和父帖信息；媒体包含 title、media_type、图片尺寸和 gallery_count。支持 sort、时间范围筛选和基于游标的分页。",
+        "parameters": [
+          {
+            "name": "subreddit",
+            "in": "query",
+            "required": true,
+            "description": "Subreddit 名称（例如 'Fitness'，而不是 'r/Fitness' 或完整 URL）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "description": "用于查找匹配内容的搜索查询",
+            "schema": {
+              "type": "string"
+            },
+            "example": "push ups"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "排序顺序。对于帖子/媒体：relevance、hot、top、new、comments。对于评论：relevance、top、new",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "relevance",
+                "hot",
+                "top",
+                "new",
+                "comments"
+              ]
+            }
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "description": "用于筛选结果的时间范围",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "year",
+                "month",
+                "week",
+                "day",
+                "hour"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "用于获取更多结果的游标。从上一次响应中获取 'cursor'。",
+            "schema": {
+              "type": "string"
+            },
+            "example": "eyJjYW5kaWRhdGVzX3JldHVybmVkIjoi..."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功响应",
+            "content": {
+              "application/json": {
+                "example": {
+                  "posts": [
+                    {
+                      "id": "t3_8gmjrb",
+                      "post_id": "t3_8gmjrb",
+                      "title": "Is doing 50-100 pushups a day doing anything?",
+                      "url": "https://www.reddit.com/r/Fitness/comments/8gmjrb/is_doing_50100_pushups_a_day_doing_anything/",
+                      "permalink": "/r/Fitness/comments/8gmjrb/is_doing_50100_pushups_a_day_doing_anything/",
+                      "nsfw": false,
+                      "spoiler": false,
+                      "is_crosspost": false,
+                      "subreddit": {
+                        "id": "t5_2qhx4",
+                        "name": "Fitness",
+                        "nsfw": false,
+                        "quarantined": false,
+                        "icon": "https://b.thumbs.redditmedia.com/Ted4KOMuRbaCYlDS55cTqjpVVZ2ENHKtYFbBFjI1i2o.png",
+                        "banner": null,
+                        "description": "A place for the pursuit of physical fitness goals.\n\nPlease see the r/Fitness Wiki and FAQ at https://thefitness.wiki for help with common questions.",
+                        "weekly_visitors": 898726,
+                        "weekly_contributions": 1827
+                      },
+                      "votes": 1414,
+                      "num_comments": 582,
+                      "created_at": "2018-05-03T01:09:17.620000+0000",
+                      "created_at_iso": "2018-05-03T01:09:17.620Z",
+                      "thumbnail": null,
+                      "thumbnail_blurred": false,
+                      "position": 0,
+                      "relative_position": 0
+                    }
+                  ],
+                  "comments": [
+                    {
+                      "id": "t1_nxf7p27",
+                      "post_id": "t3_1q2p898",
+                      "parent_comment_id": null,
+                      "is_reply_to_comment": false,
+                      "author": "Philser23",
+                      "author_avatar": null,
+                      "author_nsfw": false,
+                      "body": "On the 30th my girlfriend out of the blue decided her new year's resolution would be to start going to the gym. I was so excited since none of my partners ever shared the fitness hobby with me.",
+                      "body_html": "<p>On the 30th my girlfriend out of the blue decided her new year's resolution would be to start going to the gym...</p>",
+                      "images": [],
+                      "votes": 123,
+                      "url": "https://www.reddit.com/r/Fitness/comments/1q2p898/gym_story_saturday/nxf7p27/",
+                      "permalink": "/r/Fitness/comments/1q2p898/gym_story_saturday/nxf7p27/",
+                      "created_at": "2026-01-03T11:26:02.434000+0000",
+                      "created_at_iso": "2026-01-03T11:26:02.434Z",
+                      "post": {
+                        "id": "t3_1q2p898",
+                        "title": "Gym Story Saturday",
+                        "url": "https://www.reddit.com/r/Fitness/comments/1q2p898/gym_story_saturday/",
+                        "permalink": "/r/Fitness/comments/1q2p898/gym_story_saturday/",
+                        "nsfw": false,
+                        "spoiler": false,
+                        "votes": 67,
+                        "num_comments": 80,
+                        "created_at": "2026-01-03T08:15:49.709000+0000",
+                        "created_at_iso": "2026-01-03T08:15:49.709Z"
+                      },
+                      "subreddit": {
+                        "id": "t5_2qhx4",
+                        "name": "Fitness",
+                        "nsfw": false,
+                        "quarantined": false,
+                        "icon": "https://b.thumbs.redditmedia.com/Ted4KOMuRbaCYlDS55cTqjpVVZ2ENHKtYFbBFjI1i2o.png"
+                      },
+                      "position": 0
+                    }
+                  ],
+                  "media": [
+                    {
+                      "id": "t3_geo4x",
+                      "title": "Bodyweight training for really strong people. See on you're own what I mean with strong. (Not me)",
+                      "url": "https://www.reddit.com/r/Fitness/comments/geo4x/bodyweight_training_for_really_strong_people_see/",
+                      "permalink": "/r/Fitness/comments/geo4x/bodyweight_training_for_really_strong_people_see/",
+                      "media_type": "image",
+                      "video": null,
+                      "image": {
+                        "src": "https://external-preview.redd.it/X6lz5yGIzqVA5LcI9w-FsQJJHhXoCugDhsXgWW3I404.jpg?format=pjpg&auto=webp&s=46814b0a707a532e39e6c20851ddc1fefb0a111f",
+                        "width": 480,
+                        "height": 360,
+                        "resolutions": [
+                          {
+                            "url": "https://external-preview.redd.it/X6lz5yGIzqVA5LcI9w-FsQJJHhXoCugDhsXgWW3I404.jpg?width=320&crop=smart&format=pjpg&auto=webp&s=144ac4171a1862e5d91d8dd90d44271e22a8273d",
+                            "width": 320
+                          }
+                        ]
+                      },
+                      "gallery_count": null,
+                      "aspect_ratio": 1.3333333333333333,
+                      "nsfw": false,
+                      "spoiler": false,
+                      "is_blurred": false,
+                      "subreddit": {
+                        "id": "t5_2qhx4",
+                        "name": "Fitness",
+                        "nsfw": false,
+                        "quarantined": false
+                      },
+                      "position": 0,
+                      "safe_search": "UNAVAILABLE"
+                    }
+                  ],
+                  "cursor": "eyJjYW5kaWRhdGVzX3JldHVybmVkIjoie1wic2VjdGlvbl8xX3BpcGVsaW5lXzBfZ2xvYmFsX21vZGlmaWVyc1wiOlwiM1wiLFwic2VjdGlvbl8xX3BpcGVsaW5lXzFfbG9jYWxfbW9kaWZpZXJzXCI6XCIzXCIsXCJzZWN0aW9uXzJfcGlwZWxpbmVfNl9zY29wZV9zd2l0Y2hlclwiOlwiMFwiLFwic2VjdGlvbl8yX3BpcGVsaW5lXzdfcG9zdF9zZWFyY2hcIjpcIjdcIn0ifQ=="
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RedditPostsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reddit/post/comments": {
+      "get": {
+        "tags": [
+          "Reddit API"
+        ],
+        "operationId": "get_reddit-post-comments",
+        "summary": "帖子评论",
+        "description": "通过 URL 获取 Reddit 帖子的评论和帖子详情。返回包含 title、author、score、ups、upvote_ratio、num_comments 和 created_utc 的帖子，以及 comments 数组；其中每条评论均包含 author、body、body_html、score、created_utc、parent_id、permalink 和嵌套 replies。支持基于游标的分页以加载更多评论，并支持 trim 参数以返回更精简的响应。",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": true,
+            "description": "Reddit 帖子 URL",
+            "schema": {
+              "type": "string"
+            },
+            "example": "https://www.reddit.com/r/AskReddit/comments/ablzuq/people_who_havent_pooped_in_2019_yet_why_are_you/"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "用于获取更多评论或回复的游标。",
+            "schema": {
+              "type": "string"
+            },
+            "example": "ed1lvsa,ed3fnpq,ed25l2w"
+          },
+          {
+            "name": "trim",
+            "in": "query",
+            "required": false,
+            "description": "设为 true 以返回精简版响应",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": "false"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功响应",
+            "content": {
+              "application/json": {
+                "example": {
+                  "comments": [
+                    {
+                      "id": "mymupxb",
+                      "author": "Background-Emu-2890",
+                      "author_fullname": "t2_efdlposp6",
+                      "body": "Black cat i have one and i love her so much !",
+                      "name": "t1_mymupxb",
+                      "created_utc": 1750342221,
+                      "created_at_iso": "2025-06-19T14:10:21.000Z",
+                      "parent_id": "t3_1lfbo7u",
+                      "url": "https://www.reddit.com/r/AskReddit/comments/1lfbo7u/what_is_a_thing_you_love_that_lots_of_people_hate/mymupxb/",
+                      "replies": {
+                        "items": [
+                          {
+                            "url": "https://www.reddit.com/r/AskReddit/comments/1lfbo7u/what_is_a_thing_you_love_that_lots_of_people_hate/mymxwde/",
+                            "created_utc": 1750343166,
+                            "created_at_iso": "2025-06-19T14:26:06.000Z",
+                            "subreddit_id": "t5_2qh1i",
+                            "approved_at_utc": null,
+                            "author_is_blocked": false,
+                            "comment_type": null,
+                            "awarders": [],
+                            "mod_reason_by": null,
+                            "banned_by": null,
+                            "author_flair_type": "text",
+                            "total_awards_received": 0,
+                            "subreddit": "AskReddit",
+                            "author_flair_template_id": null,
+                            "likes": null,
+                            "replies": {
+                              "items": [],
+                              "more": {
+                                "has_more": false,
+                                "next_cursor": null
+                              }
+                            },
+                            "user_reports": [],
+                            "saved": false,
+                            "id": "mymxwde",
+                            "banned_at_utc": null,
+                            "mod_reason_title": null,
+                            "gilded": 0,
+                            "archived": false,
+                            "collapsed_reason_code": null,
+                            "no_follow": false,
+                            "author": "doublestitch",
+                            "can_mod_post": false,
+                            "send_replies": true,
+                            "parent_id": "t1_mymupxb",
+                            "score": 19,
+                            "author_fullname": "t2_10py0g",
+                            "removal_reason": null,
+                            "approved_by": null,
+                            "mod_note": null,
+                            "all_awardings": [],
+                            "body": "House panthers for the win",
+                            "edited": false,
+                            "top_awarded_type": null,
+                            "author_flair_css_class": null,
+                            "name": "t1_mymxwde",
+                            "is_submitter": false,
+                            "downs": 0,
+                            "author_flair_richtext": [],
+                            "author_patreon_flair": false,
+                            "body_html": "&lt;div class=\"md\"&gt;&lt;p&gt;House panthers for the win&lt;/p&gt;\n&lt;/div&gt;",
+                            "gildings": {},
+                            "collapsed_reason": null,
+                            "distinguished": null,
+                            "associated_award": null,
+                            "stickied": false,
+                            "author_premium": false,
+                            "can_gild": false,
+                            "link_id": "t3_1lfbo7u",
+                            "unrepliable_reason": null,
+                            "author_flair_text_color": null,
+                            "score_hidden": false,
+                            "permalink": "/r/AskReddit/comments/1lfbo7u/what_is_a_thing_you_love_that_lots_of_people_hate/mymxwde/",
+                            "subreddit_type": "public",
+                            "locked": false,
+                            "report_reasons": null,
+                            "created": 1750343166,
+                            "author_flair_text": null,
+                            "treatment_tags": [],
+                            "collapsed": false,
+                            "subreddit_name_prefixed": "r/AskReddit",
+                            "controversiality": 0,
+                            "depth": 1,
+                            "author_flair_background_color": null,
+                            "collapsed_because_crowd_control": null,
+                            "mod_reports": [],
+                            "num_reports": null,
+                            "ups": 19
+                          }
+                        ],
+                        "more": {
+                          "has_more": true,
+                          "cursor": "myn970w"
+                        }
+                      },
+                      "ups": 75,
+                      "downs": 0,
+                      "score": 75
+                    }
+                  ],
+                  "post": {
+                    "id": "1lfbo7u",
+                    "author": "Vetro_Nodulare2",
+                    "author_fullname": "t2_16syu27ar1",
+                    "subreddit": "AskReddit",
+                    "title": "What is a thing you love that lots of people hate?",
+                    "downs": 0,
+                    "name": "t3_1lfbo7u",
+                    "upvote_ratio": 0.91,
+                    "ups": 47,
+                    "total_awards_received": 0,
+                    "score": 47,
+                    "created": 1750341959,
+                    "num_comments": 353,
+                    "url": "https://www.reddit.com/r/AskReddit/comments/1lfbo7u/what_is_a_thing_you_love_that_lots_of_people_hate/",
+                    "subreddit_subscribers": 56146601,
+                    "is_video": false,
+                    "created_utc": 1750341959
+                  },
+                  "more": {
+                    "has_more": true,
+                    "cursor": "myoaw2m,myob40l,myoeo9h"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RedditCommentsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,190 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "OpenAI-Compatible Image Generations",
+    "version": "1.0.0",
+    "description": "标准 OpenAI 兼容的 `POST /v1/images/generations` 端点。目前支持 **ByteDance Seedream** 系列。Wan 2.7 图像模型改为通过 [`/v1/chat/completions`](/api-reference/chat/post_chat-completions-image-generation) 路由，而兼容 Gemini 的 `generateContent` 请求使用 [`/v1beta/models/{model}:generateContent`](/api-reference/chat/post_models-model-generatecontent)。"
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/v1"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "AISA API Key"
+      }
+    }
+  },
+  "paths": {
+    "/images/generations": {
+      "post": {
+        "summary": "生成图像（OpenAI 兼容）",
+        "description": "使用兼容 OpenAI 的 images-generations 端点生成图像。目前路由至 **ByteDance Seedream**——Wan 2.7 系列不使用此路径。\n\n**尺寸限制。** Seedream 的上游要求每张图像至少包含 **3,686,400 像素**。低于该值的请求会返回 `400 InvalidParameter: image size must be at least 3686400 pixels`。1024×1024 图像（1,048,576 px）会被拒绝；1920×1920（3,686,400 px）和 2048×2048（4,194,304 px）可被接受。也可使用其他宽高比，只要满足 `width × height ≥ 3,686,400`。",
+        "operationId": "createImageGeneration",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "model",
+                  "prompt"
+                ],
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "enum": [
+                      "seedream-4-5-251128"
+                    ],
+                    "description": "图像生成模型。目前只有 `seedream-4-5-251128` 通过此端点路由。Wan 2.7 模型使用 `/v1/chat/completions`。"
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "description": "要生成的图像的文本描述。"
+                  },
+                  "n": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 1,
+                    "description": "要生成的图像数量。每张图像均按单张图像费率单独计费。"
+                  },
+                  "size": {
+                    "type": "string",
+                    "description": "图像尺寸，格式为 `WIDTHxHEIGHT`。必须满足 `width × height ≥ 3,686,400`。常见有效值：`1920x1920`、`2048x2048`、`2304x1600`、`2560x1920`。",
+                    "example": "2048x2048"
+                  }
+                }
+              },
+              "examples": {
+                "basic": {
+                  "summary": "Single 2K image",
+                  "value": {
+                    "model": "seedream-4-5-251128",
+                    "prompt": "A cute red panda, ultra-detailed, cinematic lighting",
+                    "n": 1,
+                    "size": "2048x2048"
+                  }
+                },
+                "minimum_size": {
+                  "summary": "Exactly at minimum allowed size (1920×1920)",
+                  "value": {
+                    "model": "seedream-4-5-251128",
+                    "prompt": "A futuristic cyberpunk city, neon lights, rainy night, 8k",
+                    "n": 1,
+                    "size": "1920x1920"
+                  }
+                },
+                "batch": {
+                  "summary": "Four candidates for selection",
+                  "value": {
+                    "model": "seedream-4-5-251128",
+                    "prompt": "Oil painting of a rolling hillside at sunset",
+                    "n": 4,
+                    "size": "2048x2048"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "图像生成成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "type": "string",
+                      "example": "seedream-4-5-251128"
+                    },
+                    "created": {
+                      "type": "integer",
+                      "example": 1776495432
+                    },
+                    "data": {
+                      "type": "array",
+                      "description": "每张生成的图像对应一个条目。",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string",
+                            "format": "uri",
+                            "description": "生成图像的短期有效 URL。请下载并持久化保存；该 URL 会过期。"
+                          },
+                          "size": {
+                            "type": "string",
+                            "description": "返回图像的实际尺寸。"
+                          }
+                        }
+                      }
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "generated_images": {
+                          "type": "integer"
+                        },
+                        "output_tokens": {
+                          "type": "integer"
+                        },
+                        "total_tokens": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "model": "seedream-4-5-251128",
+                  "created": 1776495432,
+                  "data": [
+                    {
+                      "url": "https://cdn.aisa.one/images/seedream/20260418-abc.png",
+                      "size": "2048x2048"
+                    }
+                  ],
+                  "usage": {
+                    "generated_images": 1,
+                    "output_tokens": 16384,
+                    "total_tokens": 16384
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求无效。最常见的情况：`size` 小于 3,686,400 像素 → `\"image size must be at least 3686400 pixels\"`。"
+          },
+          "401": {
+            "description": "AIsa API 密钥缺失或无效。"
+          },
+          "404": {
+            "description": "此端点不会路由该模型。Wan 2.7 模型在此处返回 `openai_error`——请对这些模型使用 `/v1/chat/completions`。"
+          },
+          "429": {
+            "description": "已达到速率限制。"
+          },
+          "500": {
+            "description": "内部错误。"
+          },
+          "502": {
+            "description": "无法连接上游提供商。"
+          }
+        }
+      }
+    }
+  }
+}

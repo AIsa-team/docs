@@ -1,0 +1,65 @@
+---
+title: "关联 X 账户"
+description: "启动 OAuth 流程，将 X/Twitter 账号关联到您的 AIsa API 密钥。在使用任何 Twitter 写入端点（关注、点赞、发帖、私信）之前，请为每个来源用户调用一次。"
+openapi: "openapi/zh/twitter-actions.json POST /twitter/auth_twitter"
+---
+
+`POST /apis/v1/twitter/auth_twitter` 是通过 AIsa 执行任何 X/Twitter **写入**操作的第一步。它会返回一个短期有效的 X OAuth 授权 URL——源用户在浏览器中打开该 URL，批准所请求的权限范围，然后 X 会重定向至 AIsa 的固定回调地址。AIsa 会将生成的会话与您的 API 密钥关联存储，后续每次写入调用（例如 [`POST /twitter/follow_twitter`](/zh/api-reference/twitter/post_twitter-follow-twitter)）都会自动使用该会话。
+
+## 何时调用
+
+- 每个源用户**调用一次**，即首次关联其 X 账户时。
+- 如果已存储的会话被撤销、已过期，或者需要其他权限范围集合，则**再次调用**。
+
+无需在每次写入请求前调用此端点。OAuth 会话会与您的 AIsa API 密钥持续关联。
+
+## 流程
+
+<Steps>
+  <Step title="启动流程">
+    使用您的 AIsa API 密钥发送 `POST /apis/v1/twitter/auth_twitter`。可以选择在请求正文中包含 `scopes` 数组，以请求比默认范围更窄的权限集合。
+  </Step>
+  <Step title="打开授权 URL">
+    响应会返回 `auth_url` 和 `state` token。在源用户的浏览器中打开 `auth_url`。X 将显示标准的“授权 AIsa 访问您的账户”页面。
+  </Step>
+  <Step title="用户批准">
+    用户点击授权后，X 会重定向至 AIsa 的固定回调地址（`https://api.aisa.one/apis/v1/twitter/oauth_callback`）。AIsa 会验证 `state` token，用授权码交换 token，并将会话与您的 API 密钥关联存储。
+  </Step>
+  <Step title="解锁写入端点">
+    此后，使用您的 AIsa API 密钥调用任何 Twitter 写入端点，都会代表已关联的源用户执行操作。您无需在这些调用的请求正文中传递 OAuth token。
+  </Step>
+</Steps>
+
+## 默认权限范围
+
+如果省略 `scopes` 字段，AIsa 将请求我们公开的所有 Twitter 写入端点所需的完整权限集合：
+
+- `follows.write` — [关注](/zh/api-reference/twitter/post_twitter-follow-twitter) / 取消关注
+- `tweet.read` — 读取推文（大多数写入操作均需要）
+- `users.read` — 解析用户、读取个人资料信息
+- `tweet.write` — 发布、回复、引用
+- `like.write` — 点赞 / 取消点赞
+- `dm.read` — 读取私信会话
+- `dm.write` — 发送私信
+
+如果只需要部分功能，请传递范围更窄的数组（例如 `["follows.write", "tweet.read", "users.read"]`）。需要缺失权限范围的写入调用将返回 `403`。
+
+## 过期时间
+
+此端点返回的 `auth_url` **短期有效**（通常为 10 分钟）。如果用户未在 `expires_at` 之前完成流程，请再次调用 `POST /apis/v1/twitter/auth_twitter` 生成新的 URL。
+
+已存储的 OAuth **会话**本身有效期更长（受 X 的 token 轮换规则约束）。只要用户未在 X 的应用设置中撤销访问权限，会话就会自动刷新。
+
+## 相关内容
+
+<CardGroup cols={3}>
+  <Card title="关注用户" icon="user-plus" href="/zh/api-reference/twitter/post_twitter-follow-twitter">
+    使用此流程所存储会话的第一个写入端点。
+  </Card>
+  <Card title="Twitter Autopilot 技能" icon="twitter" href="/agent-skills/twitter-autopilot">
+    封装完整读取和写入功能的智能体技能。
+  </Card>
+  <Card title="身份验证" icon="key" href="/guides/authentication">
+    AIsa API 密钥的生命周期和存储最佳实践。
+  </Card>
+</CardGroup>

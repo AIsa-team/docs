@@ -1,0 +1,788 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Twitter Actions API",
+    "version": "1.0.0",
+    "description": "对 X/Twitter 执行写入操作，并通过 AIsa 网关路由。参照官方 X v2 API 端点建模（例如 POST /2/users/{id}/following）。"
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "AISA API Key",
+        "description": "你的 AIsa API 密钥。经过身份验证的源用户（执行关注操作的账户）由附加到你的密钥的 OAuth 会话决定。"
+      }
+    }
+  },
+  "paths": {
+    "/twitter/auth_twitter": {
+      "post": {
+        "summary": "关联 X/Twitter 账户（启动 OAuth）",
+        "description": "启动 OAuth 流程，将用户的 X/Twitter 账户关联到请求中使用的 AIsa API 密钥。每个源用户调用一次。AIsa 会返回一个授权 URL——用户在浏览器中打开该 URL，批准所请求的权限范围，随后 X 会重定向回 AIsa 的固定回调地址。AIsa 会将生成的会话存储并与您的 API 密钥关联，此后每次 Twitter 写入调用（例如 `POST /twitter/follow_twitter`）都会自动使用该会话。\n\n返回的 `auth_url` 有效期较短；每当用户需要（重新）关联时，都应生成一个新的 URL。",
+        "operationId": "authTwitterUser",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "要请求的可选 X OAuth 2.0 scope 列表。默认为 AIsa 的 Twitter 写入端点所需的集合：`follows.write`、`tweet.read`、`users.read`、`tweet.write`、`like.write`、`dm.read`、`dm.write`。",
+                    "example": [
+                      "follows.write",
+                      "tweet.read",
+                      "users.read"
+                    ]
+                  }
+                }
+              },
+              "example": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已生成授权 URL。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "auth_url",
+                    "state"
+                  ],
+                  "properties": {
+                    "auth_url": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "短期有效的 X OAuth 授权 URL。在浏览器中打开该 URL，以便源用户批准所请求的权限范围。"
+                    },
+                    "state": {
+                      "type": "string",
+                      "description": "不透明的 CSRF state token，X 重定向回 AIsa 回调地址时，AIsa 将对其进行验证。如果需要关联此流程，请将其存储在客户端。"
+                    },
+                    "expires_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "`auth_url` 的过期时间。如果用户在此时间之前尚未完成流程，请请求一个新的 URL。"
+                    }
+                  }
+                },
+                "example": {
+                  "auth_url": "https://twitter.com/i/oauth2/authorize?response_type=code&client_id=AIsa&redirect_uri=https%3A%2F%2Fapi.aisa.one%2Fapis%2Fv1%2Ftwitter%2Foauth_callback&scope=follows.write%20tweet.read%20users.read&state=0c2...d1f&code_challenge=...&code_challenge_method=S256",
+                  "state": "0c2ad1f...",
+                  "expires_at": "2026-04-18T07:00:00Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`scopes` 列表无效——包含不支持的 scope。"
+          },
+          "401": {
+            "description": "AIsa API 密钥缺失或无效。"
+          },
+          "429": {
+            "description": "已达到速率限制。"
+          },
+          "500": {
+            "description": "生成 OAuth URL 时发生内部错误。"
+          }
+        }
+      }
+    },
+    "/twitter/unlike_twitter": {
+      "post": {
+        "summary": "取消点赞推文",
+        "description": "移除源用户对推文的点赞。对应[官方 X v2 `DELETE /2/users/{id}/likes/{tweet_id}` 端点](https://docs.x.com/x-api/users/unlike-post)，并通过 AIsa 网关路由。为与其他 AIsa Twitter 写入操作保持一致，此操作使用 POST（而非 DELETE）。\n\n**身份验证。**需要源用户的 OAuth 会话，并将其关联到你的 AIsa API 密钥。通过 `POST /apis/v1/twitter/auth_twitter` 关联一次账户即可。\n\n**权限范围。**底层 X 会话必须具有 `like.write`、`tweet.read` 和 `users.read`。\n\n如果源用户未点赞该推文，取消点赞操作不会产生任何影响，但仍会返回 `200`，其中 `liked: false`。",
+        "operationId": "unlikeTwitter",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "tweet_id"
+                ],
+                "properties": {
+                  "tweet_id": {
+                    "type": "string",
+                    "description": "要取消点赞的推文数字 ID。必须匹配 X 的正则表达式 `^[0-9]{1,19}$`。",
+                    "pattern": "^[0-9]{1,19}$",
+                    "example": "1346889436626259968"
+                  }
+                }
+              },
+              "examples": {
+                "unlike_tweet": {
+                  "summary": "Unlike tweet 1346889436626259968",
+                  "value": {
+                    "tweet_id": "1346889436626259968"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "取消点赞成功（或者源用户原本就没有点赞该推文）。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "liked": {
+                          "type": "boolean",
+                          "description": "移除点赞后为 `false`。"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "liked": false
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求无效 — 缺少 `tweet_id` 或其格式不正确。"
+          },
+          "401": {
+            "description": "AIsa API 密钥缺失或无效。"
+          },
+          "403": {
+            "description": "OAuth 会话缺失、已过期或缺少 `like.write` 权限。请通过 `POST /apis/v1/twitter/auth_twitter` 重新授权。"
+          },
+          "404": {
+            "description": "未找到推文，或该推文对源用户不可见。"
+          },
+          "429": {
+            "description": "已达到速率限制。"
+          },
+          "500": {
+            "description": "内部错误。"
+          },
+          "502": {
+            "description": "无法访问上游 X API。可安全地使用指数退避进行重试。"
+          }
+        }
+      }
+    },
+    "/twitter/like_twitter": {
+      "post": {
+        "summary": "点赞推文",
+        "description": "代表已认证的源用户点赞推文。此接口映射[官方 X v2 `POST /2/users/{id}/likes` 端点](https://docs.x.com/x-api/users/like-post)，并通过 AIsa 网关路由。\n\n**身份验证。**需要源用户的 OAuth 会话，并将其关联到您的 AIsa API 密钥。通过 `POST /apis/v1/twitter/auth_twitter` 关联一次账户即可。\n\n**权限范围。**底层 X 会话必须具有 `like.write`、`tweet.read` 和 `users.read` 权限。\n\n点赞已点赞的推文不会执行任何操作，但仍会返回 `200` 和 `liked: true`。",
+        "operationId": "likeTwitter",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "tweet_id"
+                ],
+                "properties": {
+                  "tweet_id": {
+                    "type": "string",
+                    "description": "要点赞的推文数字 ID。必须匹配 X 的正则表达式 `^[0-9]{1,19}$`。",
+                    "pattern": "^[0-9]{1,19}$",
+                    "example": "1346889436626259968"
+                  }
+                }
+              },
+              "examples": {
+                "like_tweet": {
+                  "summary": "Like tweet 1346889436626259968",
+                  "value": {
+                    "tweet_id": "1346889436626259968"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "点赞成功（或已点赞）。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "liked": {
+                          "type": "boolean",
+                          "description": "源用户点赞目标推文后为 `true`。"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "liked": true
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求无效 — 缺少 `tweet_id` 或其格式不正确。"
+          },
+          "401": {
+            "description": "AIsa API 密钥缺失或无效。"
+          },
+          "403": {
+            "description": "OAuth 会话缺失、已过期或缺少 `like.write` 权限。请通过 `POST /apis/v1/twitter/auth_twitter` 重新授权。"
+          },
+          "404": {
+            "description": "未找到推文，或该推文对源用户不可见。"
+          },
+          "429": {
+            "description": "已触发速率限制——可能是您的 AIsa 密钥达到 RPM 上限，或上游 X 触发速率限制。"
+          },
+          "500": {
+            "description": "内部错误。"
+          },
+          "502": {
+            "description": "无法访问上游 X API。可安全地使用指数退避进行重试。"
+          }
+        }
+      }
+    },
+    "/twitter/post_twitter": {
+      "post": {
+        "summary": "发布或编辑推文",
+        "description": "代表已认证的源用户发布新推文，或编辑现有推文。此接口镜像[官方 X v2 `POST /2/tweets` 端点](https://docs.x.com/x-api/posts/create-post)，并通过 AIsa 网关路由。\n\n**身份验证。**需要源用户的 OAuth 会话，并将其关联到你的 AIsa API 密钥。通过 `POST /apis/v1/twitter/auth_twitter` 完成一次账户关联。\n\n**权限范围。**底层 X 会话必须具有 `tweet.read`、`tweet.write` 和 `users.read` 权限。\n\n**互斥字段。**`media`、`poll`、`quote_tweet_id` 和 `card_uri` 不能在同一请求中组合使用。最多只能设置其中一个字段。",
+        "operationId": "postTwitter",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "推文内容。发布媒体、投票或引用推文时可选；其他情况下必填。",
+                    "example": "Hello from AIsa — shipping agent-friendly Twitter APIs."
+                  },
+                  "reply": {
+                    "type": "object",
+                    "description": "作为对另一条推文的回复发布。",
+                    "required": [
+                      "in_reply_to_tweet_id"
+                    ],
+                    "properties": {
+                      "in_reply_to_tweet_id": {
+                        "type": "string",
+                        "description": "被回复的 Tweet ID。",
+                        "pattern": "^[0-9]{1,19}$"
+                      },
+                      "auto_populate_reply_metadata": {
+                        "type": "boolean",
+                        "description": "根据原始推文自动填充回复中的 @提及。"
+                      },
+                      "exclude_reply_user_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "pattern": "^[0-9]{1,19}$"
+                        },
+                        "maxItems": 10,
+                        "description": "要从回复自动提及中排除的用户 ID（最多 10 个）。"
+                      }
+                    }
+                  },
+                  "quote_tweet_id": {
+                    "type": "string",
+                    "description": "要引用的 Tweet ID。不能与 `media`、`poll` 和 `card_uri` 同时使用。",
+                    "pattern": "^[0-9]{1,19}$"
+                  },
+                  "media": {
+                    "type": "object",
+                    "description": "附加媒体。不能与 `poll`、`quote_tweet_id` 和 `card_uri` 同时使用。",
+                    "required": [
+                      "media_ids"
+                    ],
+                    "properties": {
+                      "media_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "minItems": 1,
+                        "maxItems": 4,
+                        "description": "来自 X media-upload API 的 1–4 个媒体 ID。"
+                      },
+                      "tagged_user_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "pattern": "^[0-9]{1,19}$"
+                        },
+                        "maxItems": 10,
+                        "description": "媒体中标记的用户 ID（最多 10 个）。"
+                      }
+                    }
+                  },
+                  "poll": {
+                    "type": "object",
+                    "description": "附加投票。不能与 `media`、`quote_tweet_id` 和 `card_uri` 同时使用。",
+                    "required": [
+                      "options",
+                      "duration_minutes"
+                    ],
+                    "properties": {
+                      "options": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "maxLength": 25
+                        },
+                        "minItems": 2,
+                        "maxItems": 4,
+                        "description": "2–4 个投票选项，每个选项 1–25 个字符。"
+                      },
+                      "duration_minutes": {
+                        "type": "integer",
+                        "minimum": 5,
+                        "maximum": 10080,
+                        "description": "投票持续时间（分钟，5–10080，即最长 7 天）。"
+                      },
+                      "reply_settings": {
+                        "type": "string",
+                        "enum": [
+                          "following",
+                          "mentionedUsers",
+                          "subscribers",
+                          "verified"
+                        ]
+                      }
+                    }
+                  },
+                  "card_uri": {
+                    "type": "string",
+                    "description": "卡片 URI。不能与 `media`、`poll`、`quote_tweet_id` 和 `direct_message_deep_link` 同时使用。"
+                  },
+                  "direct_message_deep_link": {
+                    "type": "string",
+                    "description": "将对话跳转至私信的深层链接。"
+                  },
+                  "geo": {
+                    "type": "object",
+                    "description": "为推文附加地点。",
+                    "properties": {
+                      "place_id": {
+                        "type": "string",
+                        "description": "X 地点 ID。"
+                      }
+                    }
+                  },
+                  "reply_settings": {
+                    "type": "string",
+                    "enum": [
+                      "following",
+                      "mentionedUsers",
+                      "subscribers",
+                      "verified"
+                    ],
+                    "description": "允许回复的用户。"
+                  },
+                  "for_super_followers_only": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "仅超级关注者可见。"
+                  },
+                  "nullcast": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Nullcast（仅推广）推文——不会显示在公开时间线中，也不会向关注者显示。"
+                  },
+                  "paid_partnership": {
+                    "type": "boolean",
+                    "description": "将推文标记为付费合作内容。"
+                  },
+                  "made_with_ai": {
+                    "type": "boolean",
+                    "description": "标记该推文包含 AI 生成的媒体。"
+                  },
+                  "community_id": {
+                    "type": "string",
+                    "pattern": "^[0-9]{1,19}$",
+                    "description": "发布到指定社区。"
+                  },
+                  "share_with_followers": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "同时向你的关注者分享该社区帖子。"
+                  },
+                  "edit_options": {
+                    "type": "object",
+                    "description": "编辑现有推文，而不是创建新推文（受 X 的编辑时间窗口限制）。",
+                    "required": [
+                      "previous_post_id"
+                    ],
+                    "properties": {
+                      "previous_post_id": {
+                        "type": "string",
+                        "pattern": "^[0-9]{1,19}$",
+                        "description": "要编辑的推文 ID。"
+                      }
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "simple_text": {
+                  "summary": "Plain text tweet",
+                  "value": {
+                    "text": "Hello, World!"
+                  }
+                },
+                "reply": {
+                  "summary": "Reply to a tweet",
+                  "value": {
+                    "text": "Totally agree 👌",
+                    "reply": {
+                      "in_reply_to_tweet_id": "1234567890123456789",
+                      "auto_populate_reply_metadata": true
+                    }
+                  }
+                },
+                "with_poll": {
+                  "summary": "Tweet with a poll",
+                  "value": {
+                    "text": "Pick your favorite:",
+                    "poll": {
+                      "options": [
+                        "Option A",
+                        "Option B",
+                        "Option C"
+                      ],
+                      "duration_minutes": 60
+                    }
+                  }
+                },
+                "with_media": {
+                  "summary": "Tweet with media",
+                  "value": {
+                    "text": "Ship log 📸",
+                    "media": {
+                      "media_ids": [
+                        "1146654567674912769"
+                      ],
+                      "tagged_user_ids": [
+                        "2244994945"
+                      ]
+                    }
+                  }
+                },
+                "quote": {
+                  "summary": "Quote tweet",
+                  "value": {
+                    "text": "Worth reading:",
+                    "quote_tweet_id": "1234567890123456789"
+                  }
+                },
+                "edit": {
+                  "summary": "Edit an existing tweet",
+                  "value": {
+                    "text": "Updated tweet content (typo fixed).",
+                    "edit_options": {
+                      "previous_post_id": "1234567890123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tweet 已成功创建（或编辑）。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[0-9]{1,19}$",
+                          "description": "新创建或编辑的推文 ID。"
+                        },
+                        "text": {
+                          "type": "string",
+                          "description": "X 存储的推文最终文本。"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "id": "1346889436626259968",
+                    "text": "Hello, World!"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "无效请求——违反互斥规则、缺少必填字段或文本过长。"
+          },
+          "401": {
+            "description": "AIsa API 密钥缺失或无效。"
+          },
+          "403": {
+            "description": "OAuth 会话缺失、已过期或缺少 `tweet.write` 权限。请通过 `POST /apis/v1/twitter/auth_twitter` 重新授权。"
+          },
+          "404": {
+            "description": "未找到引用的推文（回复、引用或编辑目标）。"
+          },
+          "409": {
+            "description": "冲突——例如，推文内容重复或在允许的时间窗口之外编辑。"
+          },
+          "429": {
+            "description": "已达到速率限制。"
+          },
+          "500": {
+            "description": "内部错误。"
+          },
+          "502": {
+            "description": "无法连接上游 X API。"
+          }
+        }
+      }
+    },
+    "/twitter/unfollow_twitter": {
+      "post": {
+        "summary": "在 X/Twitter 上取消关注用户",
+        "description": "使已认证的源用户在 X/Twitter 上取消关注指定的目标用户。此操作对应[官方 X v2 `DELETE /2/users/{source_user_id}/following/{target_user_id}` 端点](https://docs.x.com/x-api/users/unfollow-user)，并通过 AIsa 网关路由。为与其他 AIsa Twitter 写入操作保持一致，此处使用 POST（而非 DELETE）。\n\n**身份验证。**需要源用户的 OAuth 会话，并将其关联到您的 AIsa API 密钥。通过 `POST /apis/v1/twitter/auth_twitter` 关联一次账户即可。\n\n**权限范围。**底层 X 会话必须具有 `follows.write`、`tweet.read` 和 `users.read` 权限。\n\n取消关注您当前并未关注的用户不会执行任何操作，但仍会返回 `200`，其中 `following: false`。",
+        "operationId": "unfollowTwitterUser",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "target_user_id"
+                ],
+                "properties": {
+                  "target_user_id": {
+                    "type": "string",
+                    "description": "要取消关注的 X/Twitter 用户的数字 ID。必须匹配 X 正则表达式 `^[0-9]{1,19}$`。",
+                    "pattern": "^[0-9]{1,19}$",
+                    "example": "2244994945"
+                  }
+                }
+              },
+              "examples": {
+                "unfollow_user": {
+                  "summary": "Unfollow @TwitterDev (id 2244994945)",
+                  "value": {
+                    "target_user_id": "2244994945"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "取消关注成功（或源用户原本就未关注目标用户）。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "following": {
+                          "type": "boolean",
+                          "description": "当源用户不再关注目标用户后，值为 `false`。"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "following": false
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "无效请求 — 缺少 `target_user_id` 或其格式不正确。"
+          },
+          "401": {
+            "description": "AIsa API 密钥缺失或无效。"
+          },
+          "403": {
+            "description": "OAuth 会话缺失、已过期或缺少 `follows.write` 作用域。请通过 `POST /apis/v1/twitter/auth_twitter` 重新授权。"
+          },
+          "429": {
+            "description": "已触发速率限制——可能是您的 AIsa 密钥达到 RPM 上限，或上游 X 触发速率限制。"
+          },
+          "500": {
+            "description": "内部错误。"
+          },
+          "502": {
+            "description": "上游 X API 无法访问或返回错误。可安全地使用指数退避重试。"
+          }
+        }
+      }
+    },
+    "/twitter/follow_twitter": {
+      "post": {
+        "summary": "在 X/Twitter 上关注用户",
+        "description": "使已认证的源用户在 X/Twitter 上关注指定的目标用户。此操作映射[官方 X v2 `POST /2/users/{id}/following` 端点](https://docs.x.com/x-api/users/follow-user)，并通过 AIsa 网关路由。\n\n**身份认证。**这是一项写入操作，需要源用户的 OAuth 会话，并将其关联到您的 AIsa API 密钥。调用 `POST /apis/v1/twitter/auth_twitter` 一次即可关联您的 X 账户——之后，AIsa 会自动为使用您的密钥发送的每个写入请求使用该会话。\n\n**权限范围。**底层 X 会话必须具有 `follows.write`、`tweet.read` 和 `users.read`。",
+        "operationId": "followTwitterUser",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "target_user_id"
+                ],
+                "properties": {
+                  "target_user_id": {
+                    "type": "string",
+                    "description": "要关注的 X/Twitter 用户的数字 ID。必须匹配 X 正则表达式 `^[0-9]{1,19}$`。",
+                    "pattern": "^[0-9]{1,19}$",
+                    "example": "6253282"
+                  }
+                }
+              },
+              "examples": {
+                "follow_user": {
+                  "summary": "Follow @TwitterDev (id 2244994945)",
+                  "value": {
+                    "target_user_id": "2244994945"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "关注成功（或已处于关注状态）。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "following": {
+                          "type": "boolean",
+                          "description": "当源用户现在已关注目标用户时为 `true`。"
+                        },
+                        "pending_follow": {
+                          "type": "boolean",
+                          "description": "当关注请求已发送给受保护账户且正在等待批准时为 `true`。"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "following": true,
+                    "pending_follow": false
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "无效请求 — 缺少 `target_user_id` 或其格式不正确。"
+          },
+          "401": {
+            "description": "AIsa API 密钥缺失或无效。"
+          },
+          "403": {
+            "description": "OAuth 会话缺失、已过期或缺少 `follows.write` 作用域。请从仪表板重新授权。"
+          },
+          "429": {
+            "description": "已触发速率限制——可能是您的 AIsa 密钥达到 RPM 上限，或上游 X 触发速率限制。"
+          },
+          "500": {
+            "description": "内部错误。"
+          },
+          "502": {
+            "description": "上游 X API 无法访问或返回错误。可安全地使用指数退避重试。"
+          }
+        }
+      }
+    }
+  }
+}

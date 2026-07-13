@@ -1,0 +1,45 @@
+---
+title: "点赞推文"
+description: "代表已认证的源用户为推文点赞。通过 AIsa 网关代理官方 X v2 like-post 端点。"
+openapi: "openapi/zh/twitter-actions.json POST /twitter/like_twitter"
+---
+
+代表已验证身份的源用户为推文点赞。此端点代理官方 [X v2 `POST /2/users/{id}/likes` 端点](https://docs.x.com/x-api/users/like-post)，并通过位于 `https://api.aisa.one/apis/v1/twitter/like_twitter` 的 AIsa 网关路由。
+
+## 前提条件
+
+- 一个 **AIsa API 密钥**（每个请求都使用 Bearer token）。
+- 源用户账户的一次性 **OAuth 授权**。调用 [`POST /apis/v1/twitter/auth_twitter`](/zh/api-reference/twitter/post_twitter-auth-twitter) 关联您的 X 账户——AIsa 会将会话与您的 API 密钥关联存储，并在每次写入调用中自动使用该会话。
+- X 会话必须拥有 `like.write`、`tweet.read`、`users.read` 权限范围。
+
+## 响应字段
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `data.liked` | boolean | 源用户为目标推文点赞后为 `true`。 |
+
+## 幂等性
+
+如果源用户已为某条推文点赞，再次点赞不会产生任何操作。端点仍会返回 `200` 和 `{ "data": { "liked": true } }`。可以安全重试。
+
+## 常见 4xx 原因
+
+- `400 invalid-request` — 缺少 `tweet_id` 或其值不是数字
+- `403 client-forbidden` — OAuth 会话缺少 `like.write` 权限范围。请通过 `auth_twitter` 重新关联。
+- `404 resource-not-found` — 推文不存在或对源用户不可见（例如，源用户未关注的受保护账户）。
+
+更多信息请参阅[错误代码](/zh/api-reference/errors)和[速率限制](/zh/api-reference/rate-limits)。
+
+## 相关内容
+
+<CardGroup cols={3}>
+  <Card title="关联 X 账户" icon="key" href="/zh/api-reference/twitter/post_twitter-auth-twitter">
+    启动此端点所需的 OAuth 流程。
+  </Card>
+  <Card title="发布推文" icon="pen" href="/zh/api-reference/twitter/post_twitter-post-twitter">
+    创建您（或您的智能体）可以点赞的推文。
+  </Card>
+  <Card title="关注用户" icon="user-plus" href="/zh/api-reference/twitter/post_twitter-follow-twitter">
+    使用同一 OAuth 会话的另一个写入端点。
+  </Card>
+</CardGroup>
