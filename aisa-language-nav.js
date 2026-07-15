@@ -1,5 +1,5 @@
 // Move Mintlify's native language selector to the right-side topbar controls so
-// the docs header matches the aisa.one website order: News / language / CTA.
+// the docs header matches the aisa.one website order: language / CTA.
 // Keep the original Mintlify trigger and dropdown behavior intact.
 (function () {
   if (typeof window === "undefined" || typeof document === "undefined") return;
