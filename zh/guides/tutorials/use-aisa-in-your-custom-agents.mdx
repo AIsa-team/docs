@@ -1,0 +1,147 @@
+---
+title: "在自建 Agent 中使用 AIsa"
+description: "把 AIsa 的模型和 capability layer 接入你自己开发的 agent——任意语言、任意框架。"
+---
+
+在自己开发 agent 而不是使用现成的运行时？AIsa 从两个层面接入：OpenAI 兼容（以及 Anthropic 兼容）的模型 endpoint 用于推理，加一份指令文件让你的 agent 掌握完整的 AIsa capability layer。
+
+AIsa endpoint：
+
+```txt
+https://api.aisa.one/v1
+```
+
+## 前置条件
+
+开始前，请确认你已经具备：
+
+- AIsa API key（[console.aisa.one/api-keys](https://console.aisa.one/api-keys)）
+- 一个 agent 代码库——任何能调用 OpenAI 或 Anthropic API 的语言或框架
+
+## 1. 把 Agent 的 LLM 调用指向 AIsa
+
+把 key 放在环境变量中：
+
+```bash
+export AISA_API_KEY="sk-aisa-..."
+```
+
+<CodeGroup>
+
+```python Python (OpenAI SDK)
+import os
+
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.aisa.one/v1",
+    api_key=os.environ["AISA_API_KEY"],
+)
+
+response = client.chat.completions.create(
+    model="kimi-k2.5",
+    messages=[{"role": "user", "content": "Hello from my agent"}],
+)
+```
+
+```ts TypeScript (OpenAI SDK)
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "https://api.aisa.one/v1",
+  apiKey: process.env.AISA_API_KEY,
+});
+
+const response = await client.chat.completions.create({
+  model: "kimi-k2.5",
+  messages: [{ role: "user", content: "Hello from my agent" }],
+});
+```
+
+```python Python (Anthropic SDK)
+import os
+
+from anthropic import Anthropic
+
+client = Anthropic(
+    base_url="https://api.aisa.one",  # 不带 /v1——SDK 会自己追加 /v1/messages
+    api_key=os.environ["AISA_API_KEY"],
+)
+
+response = client.messages.create(
+    model="claude-opus-4-8",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello from my agent"}],
+)
+```
+
+```bash curl
+curl https://api.aisa.one/v1/chat/completions \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "kimi-k2.5",
+    "messages": [{"role": "user", "content": "Hello from my agent"}]
+  }'
+```
+
+</CodeGroup>
+
+同一个 key 可以调用[模型目录](/zh/guides/models)中的所有模型——换一个 `model` 字符串就能切换厂商，不需要新的 SDK 或 key。Agent 框架（LangChain、Vercel AI SDK、LlamaIndex 等）同理：把 OpenAI 兼容 base URL 设为 `https://api.aisa.one/v1` 即可。
+
+## 2. 让 Agent 掌握 AIsa 能力层
+
+AIsa 把面向 agent 的说明——endpoints、Skills 和使用规则——发布为一个 markdown 文件：
+
+```txt
+https://aisa.one/docs/agent-quickstart.md
+```
+
+两种用法：
+
+- **写入 System prompt**：启动时抓取该文件，放进 agent 的 system prompt 或工具上下文，让它知道如何调用 AIsa 的搜索、数据和媒体 API。
+- **按需读取**：如果你的 agent 能浏览或抓取 URL，直接给它标准设置 prompt：
+
+```txt
+Read https://aisa.one/docs/agent-quickstart.md and help me safely connect, configure, and use AIsa's APIs, Skills, and LLMs in this agent environment.
+```
+
+端到端试一下：
+
+```txt
+Use AIsa capabilities to search the web and summarize the latest information about AI agent frameworks.
+```
+
+## 快速参考
+
+| 项目 | 值 |
+| --- | --- |
+| OpenAI 兼容 Base URL | `https://api.aisa.one/v1` |
+| Anthropic 兼容 Base URL | `https://api.aisa.one`（不带 `/v1`） |
+| 认证 Header | `Authorization: Bearer sk-aisa-...` |
+| Agent 指令文件 | `https://aisa.one/docs/agent-quickstart.md` |
+| 能力设置 Prompt | `Read https://aisa.one/docs/agent-quickstart.md and help me safely connect, configure, and use AIsa's APIs, Skills, and LLMs in this agent environment.` |
+
+## 故障排查
+
+| 问题 | 解决方法 |
+| --- | --- |
+| 身份认证错误（401） | 在[控制台](https://console.aisa.one)确认 key 有效，并以 Bearer token 方式发送 |
+| Anthropic SDK 报 404 | Base URL 用 `https://api.aisa.one`——SDK 会自己追加 `/v1/messages` |
+| 模型未找到 | 传入[模型目录](/zh/guides/models)中的准确模型 ID |
+| 框架不读取 base URL | 多数框架支持 `OPENAI_BASE_URL` / `OPENAI_API_KEY` 环境变量——设为 AIsa 的值 |
+| Agent 不了解 AIsa 能力 | 把 `agent-quickstart.md` 写入 system prompt，或粘贴设置 prompt |
+
+## 相关页面
+
+<CardGroup cols={3}>
+  <Card title="Agent 快速开始" icon="rocket" href="/zh/agent-quickstart">
+    本教程所基于的面向 agent 的指令文件。
+  </Card>
+  <Card title="认证" icon="key" href="/zh/guides/authentication">
+    API key 创建、轮换和存储最佳实践。
+  </Card>
+  <Card title="模型目录" icon="list" href="/zh/guides/models">
+    你的 agent 可调用的所有模型 ID、上下文窗口和 endpoint。
+  </Card>
+</CardGroup>

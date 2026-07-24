@@ -1,0 +1,115 @@
+---
+title: "在 Claude Code 中使用 AIsa"
+description: "只需两个环境变量，就能把 Claude Code 指向 AIsa 的 Anthropic 兼容 endpoint。"
+---
+
+Claude Code 原生使用 Anthropic Messages API，而 AIsa 提供 Anthropic 兼容 endpoint——所以整个配置只需要一个 base URL 和一个 API key。
+
+面向 Anthropic client 的 AIsa endpoint（不带 `/v1`——Claude Code 会自己追加 `/v1/messages`）：
+
+```txt
+https://api.aisa.one
+```
+
+## 前置条件
+
+开始前，请确认你已经具备：
+
+- AIsa API key（[console.aisa.one/api-keys](https://console.aisa.one/api-keys)）
+- macOS、Linux 或 Windows WSL2 上的 terminal
+
+## 1. 安装 Claude Code
+
+```bash
+npm install -g @anthropic-ai/claude-code
+```
+
+验证安装：
+
+```bash
+claude --version
+```
+
+## 2. 将 Claude Code 指向 AIsa
+
+在 shell 中导出这些变量（写入 `~/.zshrc` 或 `~/.bashrc` 可以持久生效）：
+
+```bash
+export ANTHROPIC_BASE_URL="https://api.aisa.one"
+export ANTHROPIC_AUTH_TOKEN="sk-aisa-..."
+export ANTHROPIC_MODEL="claude-opus-4-8"
+export ANTHROPIC_SMALL_FAST_MODEL="claude-haiku-4-5-20251001"
+```
+
+<Tip>
+  更喜欢用配置文件？把同样的值写入 `~/.claude/settings.json`：
+
+  ```json
+  {
+    "env": {
+      "ANTHROPIC_BASE_URL": "https://api.aisa.one",
+      "ANTHROPIC_AUTH_TOKEN": "sk-aisa-...",
+      "ANTHROPIC_MODEL": "claude-opus-4-8",
+      "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001"
+    }
+  }
+  ```
+</Tip>
+
+`ANTHROPIC_MODEL` 是主模型；`ANTHROPIC_SMALL_FAST_MODEL` 处理轻量后台任务。[模型目录](/zh/guides/models)中的任意 Claude 模型都可用——传入准确的模型 ID 即可。
+
+## 3. 启动 Claude Code 并连接 AIsa 能力
+
+```bash
+claude
+```
+
+如果 Claude Code 询问登录方式，选择 API key / auth token 路径——它会自动读取你导出的 `ANTHROPIC_AUTH_TOKEN`。
+
+然后粘贴这段 prompt：
+
+```txt
+Read https://aisa.one/docs/agent-quickstart.md and help me safely connect, configure, and use AIsa's APIs, Skills, and LLMs in this agent environment.
+```
+
+Claude Code 会获取 AIsa 面向 agent 的说明，并引导你完成剩余设置。
+
+可以试试：
+
+```txt
+Use AIsa capabilities to search the web and summarize the latest information about Claude Code.
+```
+
+## 快速参考
+
+| 项目 | 值 |
+| --- | --- |
+| `ANTHROPIC_BASE_URL` | `https://api.aisa.one`（不带 `/v1`） |
+| `ANTHROPIC_AUTH_TOKEN` | 你的 AIsa API key（`sk-aisa-...`） |
+| `ANTHROPIC_MODEL` | `claude-opus-4-8`（或任意 Claude 模型 ID） |
+| `ANTHROPIC_SMALL_FAST_MODEL` | `claude-haiku-4-5-20251001` |
+| 能力设置 Prompt | `Read https://aisa.one/docs/agent-quickstart.md and help me safely connect, configure, and use AIsa's APIs, Skills, and LLMs in this agent environment.` |
+
+## 故障排查
+
+| 问题 | 解决方法 |
+| --- | --- |
+| 404 或 "not found" 错误 | 从 `ANTHROPIC_BASE_URL` 中移除 `/v1`——Claude Code 会自己追加 `/v1/messages` |
+| 身份认证错误（401） | 在[控制台](https://console.aisa.one)中重新检查 `ANTHROPIC_AUTH_TOKEN` |
+| 环境变量未生效 | 重启 terminal，或用 `echo $ANTHROPIC_BASE_URL` 确认 |
+| 模型未找到 | 使用[模型目录](/zh/guides/models)中的准确 Claude 模型 ID |
+| Claude Code 不认识 AIsa 能力 | 把上面的能力设置 prompt 粘贴到会话中 |
+
+## 相关页面
+
+<CardGroup cols={3}>
+  <Card title="在 Codex 中使用 AIsa" icon="terminal" href="/zh/guides/tutorials/use-aisa-in-codex">
+    用同一个 AIsa key 配置 OpenAI 的 Codex CLI。
+  </Card>
+  <Card title="认证" icon="key" href="/zh/guides/authentication">
+    API key 创建、轮换和存储最佳实践。
+  </Card>
+  <Card title="模型目录" icon="list" href="/zh/guides/models">
+    浏览 Claude 模型 ID、上下文窗口和价格。
+  </Card>
+</CardGroup>

@@ -1,0 +1,83 @@
+---
+title: "在 Manus 中使用 AIsa"
+description: "一段 prompt 就能让 Manus 使用 AIsa 的 APIs、Skills 和 LLMs。"
+---
+
+Manus 是可以在自己的 sandbox 中运行代码、调用 HTTP API 的云端 agent。这意味着它不需要 provider 配置——把 AIsa API key 和一段 prompt 交给它，它会自己完成接入。
+
+AIsa endpoint：
+
+```txt
+https://api.aisa.one/v1
+```
+
+## 前置条件
+
+开始前，请确认你已经具备：
+
+- AIsa API key（[console.aisa.one/api-keys](https://console.aisa.one/api-keys)）
+- [Manus](https://manus.im) 账号
+
+## 1. 用设置 Prompt 启动 Manus 任务
+
+在 Manus 中新建任务，粘贴：
+
+```txt
+My AIsa API key is sk-aisa-... — keep it only in this task's environment and never print it in your output.
+Read https://aisa.one/docs/agent-quickstart.md and help me safely connect, configure, and use AIsa's APIs, Skills, and LLMs in this agent environment.
+```
+
+把 `sk-aisa-...` 换成你的真实 key。Manus 会获取 AIsa 面向 agent 的说明，把 key 存为 sandbox 中的环境变量，并通过 `https://api.aisa.one/v1` 验证连接。
+
+<Tip>
+  建议为 Manus 创建一个标记为 `manus` 的专用 key，方便独立轮换或撤销。参见[认证](/zh/guides/authentication)。
+</Tip>
+
+## 2. 在任务中使用 AIsa 能力
+
+连接成功后，直接让 Manus 使用 AIsa：
+
+```txt
+Use AIsa capabilities to search the web and summarize the latest information about Manus.
+```
+
+Manus 现在可以在 sandbox 中调用任意 AIsa 能力——[模型目录](/zh/guides/models)中的全部 LLM 推理，以及 AIsa 提供搜索、数据和媒体的 API 与 Skills 层。
+
+## 3. 在后续任务中复用设置
+
+Manus 的任务彼此隔离，新任务不会带上你的 key。两种做法：
+
+- 在每个需要 AIsa 的任务开头，重新粘贴同样的设置 prompt（含 key）。
+- 如果你的 Manus 工作区支持保存知识或自定义指令，可以把设置 prompt 存进去——但 key 本身建议由你自己保管、按任务粘贴，而不是持久存放在共享工作区设置中。
+
+## 快速参考
+
+| 项目 | 值 |
+| --- | --- |
+| API Base URL | `https://api.aisa.one/v1` |
+| API key | `sk-aisa-...`（为 Manus 使用专用 key） |
+| 能力设置 Prompt | `Read https://aisa.one/docs/agent-quickstart.md and help me safely connect, configure, and use AIsa's APIs, Skills, and LLMs in this agent environment.` |
+| 生效范围 | 按任务——每个新任务需要重新连接 |
+
+## 故障排查
+
+| 问题 | 解决方法 |
+| --- | --- |
+| Manus 无法访问 endpoint | 让它重试 `https://api.aisa.one/v1/models` 并显示 HTTP 状态码 |
+| 身份认证错误（401） | 在[控制台](https://console.aisa.one)确认 key 有效，然后重新粘贴 |
+| 新任务中 Manus 忘了 key | 正常现象——在新任务中重新粘贴设置 prompt |
+| 担心 key 泄露 | 使用低额度专用 key，敏感任务结束后及时轮换 |
+
+## 相关页面
+
+<CardGroup cols={3}>
+  <Card title="在 OpenClaw 中使用 AIsa" icon="screwdriver-wrench" href="/zh/guides/tutorials/use-aisa-in-openclaw">
+    用 AIsa 配置自托管的 agent 运行环境。
+  </Card>
+  <Card title="认证" icon="key" href="/zh/guides/authentication">
+    API key 创建、轮换和存储最佳实践。
+  </Card>
+  <Card title="模型目录" icon="list" href="/zh/guides/models">
+    浏览 Manus 可以通过 AIsa 调用的模型。
+  </Card>
+</CardGroup>

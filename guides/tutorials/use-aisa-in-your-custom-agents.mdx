@@ -1,0 +1,147 @@
+---
+title: "Use AIsa in Your Custom Agents"
+description: "Wire AIsa's models and capability layer into an agent you're building yourself — any language, any framework."
+---
+
+Building your own agent instead of using an off-the-shelf runtime? AIsa plugs in at two levels: an OpenAI-compatible (and Anthropic-compatible) model endpoint for inference, and one instruction file that teaches your agent the full AIsa capability layer.
+
+AIsa endpoint:
+
+```txt
+https://api.aisa.one/v1
+```
+
+## Prerequisites
+
+Before you start, make sure you have:
+
+- An AIsa API key ([console.aisa.one/api-keys](https://console.aisa.one/api-keys))
+- An agent codebase — any language or framework that can speak the OpenAI or Anthropic API
+
+## 1. Point your agent's LLM calls at AIsa
+
+Keep the key in an environment variable:
+
+```bash
+export AISA_API_KEY="sk-aisa-..."
+```
+
+<CodeGroup>
+
+```python Python (OpenAI SDK)
+import os
+
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.aisa.one/v1",
+    api_key=os.environ["AISA_API_KEY"],
+)
+
+response = client.chat.completions.create(
+    model="kimi-k2.5",
+    messages=[{"role": "user", "content": "Hello from my agent"}],
+)
+```
+
+```ts TypeScript (OpenAI SDK)
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "https://api.aisa.one/v1",
+  apiKey: process.env.AISA_API_KEY,
+});
+
+const response = await client.chat.completions.create({
+  model: "kimi-k2.5",
+  messages: [{ role: "user", content: "Hello from my agent" }],
+});
+```
+
+```python Python (Anthropic SDK)
+import os
+
+from anthropic import Anthropic
+
+client = Anthropic(
+    base_url="https://api.aisa.one",  # no /v1 — the SDK appends /v1/messages
+    api_key=os.environ["AISA_API_KEY"],
+)
+
+response = client.messages.create(
+    model="claude-opus-4-8",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello from my agent"}],
+)
+```
+
+```bash curl
+curl https://api.aisa.one/v1/chat/completions \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "kimi-k2.5",
+    "messages": [{"role": "user", "content": "Hello from my agent"}]
+  }'
+```
+
+</CodeGroup>
+
+The same key reaches every model in the [catalog](/guides/models) — swap the `model` string to switch providers, no new SDK or key needed. Agent frameworks (LangChain, Vercel AI SDK, LlamaIndex, ...) work the same way: set the OpenAI-compatible base URL to `https://api.aisa.one/v1`.
+
+## 2. Teach your agent the AIsa capability layer
+
+AIsa publishes its agent-facing instructions — endpoints, Skills, and usage rules — as a single markdown file:
+
+```txt
+https://aisa.one/docs/agent-quickstart.md
+```
+
+Two ways to use it:
+
+- **System prompt**: fetch the file at startup and include it in your agent's system prompt or tool context, so the agent knows how to call AIsa's search, data, and media APIs.
+- **On demand**: if your agent can browse or fetch URLs, give it the standard setup prompt:
+
+```txt
+Read https://aisa.one/docs/agent-quickstart.md and help me safely connect, configure, and use AIsa's APIs, Skills, and LLMs in this agent environment.
+```
+
+Try it end to end:
+
+```txt
+Use AIsa capabilities to search the web and summarize the latest information about AI agent frameworks.
+```
+
+## Quick reference
+
+| Item | Value |
+| --- | --- |
+| OpenAI-compatible base URL | `https://api.aisa.one/v1` |
+| Anthropic-compatible base URL | `https://api.aisa.one` (no `/v1`) |
+| Auth header | `Authorization: Bearer sk-aisa-...` |
+| Agent instructions file | `https://aisa.one/docs/agent-quickstart.md` |
+| Capability setup prompt | `Read https://aisa.one/docs/agent-quickstart.md and help me safely connect, configure, and use AIsa's APIs, Skills, and LLMs in this agent environment.` |
+
+## Troubleshooting
+
+| Problem | Fix |
+| --- | --- |
+| Authentication error (401) | Confirm the key is valid in the [dashboard](https://console.aisa.one) and sent as a Bearer token |
+| 404 with the Anthropic SDK | Use `https://api.aisa.one` as the base URL — the SDK appends `/v1/messages` itself |
+| Model not found | Pass an exact model ID from the [catalog](/guides/models) |
+| Framework ignores the base URL | Most frameworks read `OPENAI_BASE_URL` / `OPENAI_API_KEY` env vars — set those to AIsa's values |
+| Agent doesn't know AIsa capabilities | Include `agent-quickstart.md` in its system prompt, or paste the setup prompt |
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Agent Quickstart" icon="rocket" href="/agent-quickstart">
+    The agent-facing instruction file this tutorial builds on.
+  </Card>
+  <Card title="Authentication" icon="key" href="/guides/authentication">
+    API key creation, rotation, and storage best practices.
+  </Card>
+  <Card title="Model Catalog" icon="list" href="/guides/models">
+    Every model ID, context window, and endpoint your agent can call.
+  </Card>
+</CardGroup>

@@ -1,0 +1,117 @@
+---
+title: "在 Codex 中使用 AIsa"
+description: "在 OpenAI 的 Codex CLI 中用一段配置添加 AIsa 作为模型 provider。"
+---
+
+在 Codex CLI 中使用 AIsa，只需要在 `~/.codex/config.toml` 中加一段 provider 配置和一个 API key。
+
+AIsa endpoint：
+
+```txt
+https://api.aisa.one/v1
+```
+
+## 前置条件
+
+开始前，请确认你已经具备：
+
+- AIsa API key（[console.aisa.one/api-keys](https://console.aisa.one/api-keys)）
+- macOS、Linux 或 Windows WSL2 上的 terminal
+
+## 1. 安装 Codex
+
+```bash
+npm install -g @openai/codex
+```
+
+或使用 Homebrew：
+
+```bash
+brew install codex
+```
+
+验证安装：
+
+```bash
+codex --version
+```
+
+## 2. 添加 AIsa 作为模型 Provider
+
+导出你的 AIsa API key（写入 `~/.zshrc` 或 `~/.bashrc` 可以持久生效）：
+
+```bash
+export AISA_API_KEY="sk-aisa-..."
+```
+
+然后把这段配置加到 `~/.codex/config.toml`（文件不存在就新建）：
+
+```toml
+model = "gpt-5.3-codex"
+model_provider = "aisa"
+
+[model_providers.aisa]
+name = "AIsa"
+base_url = "https://api.aisa.one/v1"
+env_key = "AISA_API_KEY"
+wire_api = "chat"
+```
+
+- `env_key` 告诉 Codex 从哪个环境变量读取 key。
+- `wire_api = "chat"` 使用 AIsa 标准的 OpenAI 兼容 Chat Completions endpoint。[模型目录](/zh/guides/models)中暴露 `POST /v1/responses` 的模型（如 `gpt-5.4`、`gpt-5.5`）也支持 `wire_api = "responses"`。
+- `model` 可以换成任意具备 coding 能力的模型——`gpt-5`、`claude-opus-4-8`、`kimi-k2.5`、`qwen3-coder-plus` 等。
+
+## 3. 启动 Codex 并连接 AIsa 能力
+
+```bash
+codex
+```
+
+然后粘贴这段 prompt：
+
+```txt
+Read https://aisa.one/docs/agent-quickstart.md and help me safely connect, configure, and use AIsa's APIs, Skills, and LLMs in this agent environment.
+```
+
+Codex 会获取 AIsa 面向 agent 的说明，并引导你完成剩余设置。
+
+可以试试：
+
+```txt
+Use AIsa capabilities to search the web and summarize the latest information about Codex CLI.
+```
+
+## 快速参考
+
+| 项目 | 值 |
+| --- | --- |
+| 配置文件 | `~/.codex/config.toml` |
+| `base_url` | `https://api.aisa.one/v1` |
+| `env_key` | `AISA_API_KEY` |
+| `wire_api` | `chat`（支持的模型也可用 `responses`） |
+| 默认模型 | `gpt-5.3-codex` |
+| 能力设置 Prompt | `Read https://aisa.one/docs/agent-quickstart.md and help me safely connect, configure, and use AIsa's APIs, Skills, and LLMs in this agent environment.` |
+
+## 故障排查
+
+| 问题 | 解决方法 |
+| --- | --- |
+| 身份认证错误（401） | 确认 `AISA_API_KEY` 已导出：`echo $AISA_API_KEY` |
+| "unexpected status 404" | 确认 `base_url` 是准确的 `https://api.aisa.one/v1` |
+| `wire_api = "responses"` 报错 | 改用 `wire_api = "chat"`，或选择暴露 `POST /v1/responses` 的模型 |
+| 模型未找到 | 使用[模型目录](/zh/guides/models)中的准确模型 ID |
+| Codex 仍要求 ChatGPT 登录 | 确认 `config.toml` 顶层设置了 `model_provider = "aisa"` |
+
+## 相关页面
+
+<CardGroup cols={3}>
+  <Card title="在 Claude Code 中使用 AIsa" icon="terminal" href="/zh/guides/tutorials/use-aisa-in-claude-code">
+    用同一个 AIsa key 配置 Anthropic 的 Claude Code。
+  </Card>
+  <Card title="认证" icon="key" href="/zh/guides/authentication">
+    API key 创建、轮换和存储最佳实践。
+  </Card>
+  <Card title="模型目录" icon="list" href="/zh/guides/models">
+    选择 Codex 默认模型前，先浏览 coding 模型。
+  </Card>
+</CardGroup>
