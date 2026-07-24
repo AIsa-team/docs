@@ -1,0 +1,54 @@
+---
+title: "Install AIsa CIO"
+description: "Install AIsa CIO as a hermes-agent profile for live portfolio valuation, deep stock research, technical scans, and policy-driven allocation."
+---
+# Install AIsa CIO (hermes profile)
+
+AI Chief Investment Officer — live multi-market portfolio valuation, deep stock research, technical scans, policy-driven allocation decisions. Responds in English.
+
+## Prerequisites
+- [hermes-agent](https://hermes-agent.nousresearch.com) installed (`curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`)
+- `python3`, `curl`, `tar` on PATH
+
+## Environment variables
+| var | need | description |
+|---|---|---|
+| `AISA_API_KEY` | required | AISA multi-model gateway — default LLM + aisa-* skills (search / marketpulse / prediction-markets / twitter) |
+
+Keys live in `~/.aisa/credentials` (one `KEY=VALUE` per line, `chmod 600`) —
+the shared convention across all AIsa install targets. The installer resolves
+each required key as: environment variable → existing `~/.aisa/credentials`
+entry → interactive prompt, then writes it to both the profile `.env` (hermes
+runtime) and `~/.aisa/credentials` (never overwriting existing keys). If you
+already installed another AIsa target, no re-entry is needed.
+
+## Python environments
+
+`install.sh` builds these venvs under `$PROFILE_DIR/.venvs/` and points the
+listed env var at each venv's interpreter (set `AGENT_SKIP_OPTIONAL_SETUP=1`
+to skip the optional ones):
+
+| venv | requirements | env var | need | notes |
+|---|---|---|---|---|
+| `dsa` | `requirements/dsa.txt` | `DSA_VENV_PYTHON` | optional | powers `scan TICKER` / `market brief`; `port` valuation is pure stdlib and works without it |
+| `ta` | `requirements/ta.txt` | `TA_VENV_PYTHON` | optional | TradingAgents deep research (`ta TICKER`, ~15-20min runs); heavy install, skip to keep installs light |
+
+## Install
+
+Do **not** re-implement the steps by hand. Download and run the installer (it
+fetches the artifact, verifies `sha256`, stages the profile, seeds `.env`,
+renders templates, builds any python envs above, writes `.agentspec.json`, and
+switches the default hermes profile). Export required vars first if the session is non-interactive (`export AISA_API_KEY=…`).
+
+```bash
+curl -fsSL "https://github.com/AIsa-team/agent-index/releases/download/aisa-cio-v1.3.7/install-hermes.sh" | bash
+```
+
+Artifact (fetched by the installer): `https://github.com/AIsa-team/agent-index/releases/download/aisa-cio-v1.3.7/aisa-cio-hermes-v1.3.7.tar.gz`  
+Checksum: `ee51428b0855fb0985ded24ae757f274fb16fd2d66d9e50735fd8c26e15621e8`
+
+## Verify
+
+```bash
+hermes --profile aisa-cio -z "hello, who are you?"
+```
