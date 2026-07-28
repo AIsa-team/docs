@@ -1,0 +1,87 @@
+---
+title: AIsa Architecture and Integration Boundaries
+description: Understand where AIsa sits between an agent application and upstream models, APIs, Skills, actions, and billing systems.
+---
+
+AIsa sits between an agent application and supported upstream capabilities. The application sends an authenticated request to an AIsa endpoint; AIsa routes the request to the relevant model or API integration and returns the result.
+
+## High-level request path
+
+```text
+Agent or application
+  -> AIsa model or API endpoint
+  -> selected upstream capability
+  -> AIsa response and usage record
+  -> application verification and state handling
+```
+
+Agent Skills and machine-discovery resources help the agent choose and understand capabilities, but they do not replace the runtime request path.
+
+## Endpoint families
+
+| Surface | Base URL | Responsibility |
+| --- | --- | --- |
+| Model inference | `https://api.aisa.one/v1` | Model requests and compatible inference routes |
+| Data and capability APIs | `https://api.aisa.one/apis/v1` | Search, financial, social, company, media, and other supported APIs |
+| Documentation and discovery | `https://aisa.one` | Human and machine-readable capability metadata |
+
+Use the [Agent Quickstart](/agent-quickstart) for the smallest integration path.
+
+## What AIsa handles
+
+Depending on the selected surface, AIsa may handle:
+
+- Common authentication at the AIsa boundary.
+- Routing to a supported model or API provider.
+- Normalized or documented endpoint contracts.
+- Usage accounting and billing.
+- Machine-readable capability metadata.
+- Reusable Skill instructions for agent runtimes.
+
+## What the application still owns
+
+The application remains responsible for:
+
+- User intent and authorization.
+- Business logic and task state.
+- Evidence standards and result verification.
+- Secret storage in the client environment.
+- Retry and idempotency policy appropriate to the operation.
+- Confirmation for external writes and payments.
+- Long-term storage of application data.
+- Fallback behavior if a capability is unavailable.
+
+A common gateway does not remove the need for application-specific policy.
+
+## Read, write, and payment boundaries
+
+Classify each operation before execution:
+
+1. **Read:** retrieves data without changing an external system.
+2. **Write:** creates, updates, sends, publishes, or deletes external data.
+3. **Payment:** moves value or authorizes a billable runtime purchase.
+
+A credential that permits one class should not be assumed to permit another. Apply narrower confirmation and retry policies to writes and payments.
+
+## Data and provider boundaries
+
+AIsa integrates with upstream providers. Requests needed to fulfill an operation may be sent to the selected provider. Review [Security](/guides/security) and any relevant upstream terms for the workload.
+
+For current models and API contracts, use live or generated sources rather than architecture prose:
+
+- [Models](/guides/models)
+- [API Reference](/api-reference)
+- [OpenAPI specification](https://aisa.one/openapi.yaml)
+
+## Deployment considerations
+
+For production use, define:
+
+- Health and timeout expectations.
+- Retry behavior for reads versus writes.
+- Budget and balance monitoring.
+- Provider or route fallback policy.
+- Logging that excludes secrets and sensitive request content.
+- A verification step before reporting success.
+
+For an overall fit assessment, see [When to use AIsa](/evaluate/when-to-use-aisa).

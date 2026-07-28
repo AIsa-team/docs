@@ -1,19 +1,22 @@
 ---
 title: "Agent Discovery – Let Autonomous Agents Find and Use AIsa"
-description: "Integrate your autonomous agents with AIsa using the Google A2A agent card, OpenAI plugin manifest, and OpenAPI 3.1 spec. Covers programmatic discovery, authentication, and end-to-end integration patterns."
+description: "Integrate autonomous agents with AIsa using the A2A Agent Card, MCP manifest, OpenAI plugin manifest, OpenAPI 3.1 spec, and llms.txt resources."
 ---
 
-AIsa publishes three machine-readable discovery endpoints so that autonomous agents can find, understand, and invoke AIsa's capabilities without human intervention. This guide walks through each endpoint, explains the integration flow, and provides working code examples in Python, TypeScript, and bash.
+AIsa publishes several machine-readable discovery resources so that autonomous agents can find, understand, and invoke supported capabilities. This guide explains the main resources and the discovery-to-invocation flow.
 
 ## Discovery Endpoints
 
-AIsa exposes the following well-known URLs for agent discovery. All three are publicly accessible, require no authentication to read, and include permissive CORS headers so browser-based agents can fetch them directly.
+AIsa exposes the following public URLs for agent and documentation discovery. They require no authentication to read.
 
 | Endpoint | Protocol | URL | Purpose |
 | :--- | :--- | :--- | :--- |
-| **Agent Card** | Google A2A | `https://aisa.one/.well-known/agent-card.json` | Primary discovery — advertises 13 skills with metadata, tags, and I/O modes |
+| **Agent Card** | Google A2A | `https://aisa.one/.well-known/agent-card.json` | High-level capabilities with metadata, tags, examples, and I/O modes |
 | **AI Plugin** | OpenAI Plugin (v1) | `https://aisa.one/.well-known/ai-plugin.json` | Backward compatibility with ChatGPT-era agent tooling |
-| **OpenAPI Spec** | OpenAPI 3.1.0 | `https://aisa.one/openapi.yaml` | Machine-readable specification covering 111+ API paths and 121 schemas |
+| **MCP Manifest** | MCP discovery convention | `https://aisa.one/.well-known/mcp.json` | MCP-oriented server descriptors and status metadata |
+| **OpenAPI Spec** | OpenAPI 3.1.0 | `https://aisa.one/openapi.yaml` | Machine-readable request and response contracts |
+| **Product llms.txt** | llms.txt | `https://aisa.one/llms.txt` | Product fit, goals, interfaces, and evaluation routes |
+| **Technical llms.txt** | llms.txt | `https://aisa.one/docs/llms.txt` | Technical documentation router |
 
 ## How Agent Discovery Works
 
@@ -92,25 +95,16 @@ Each entry in the `skills` array describes a single capability:
 | `inputModes` | string[] | Accepted content types (defaults to `application/json`) |
 | `outputModes` | string[] | Response content types (e.g., `application/json`, `text/event-stream`) |
 
-### Available Skills
+### Available capabilities
 
-AIsa currently advertises 13 skills through the agent card:
+The Agent Card is generated from the public catalog. Fetch the live card instead of relying on a fixed capability list in documentation:
 
-| Skill ID | Name | Tags |
-| :--- | :--- | :--- |
-| `chat-completions` | AI Model Inference | inference, llm, ai-models, text-generation, chat |
-| `twitter-autopilot` | Twitter/X Autopilot | social-media, twitter, x, search, automation, posting |
-| `marketpulse` | MarketPulse Financial Data | finance, stocks, equities, market-data, sec-filings |
-| `prediction-market-data` | Prediction Market Data | prediction-markets, polymarket, kalshi, trading |
-| `prediction-market-arbitrage` | Prediction Market Arbitrage | arbitrage, prediction-markets, trading, analysis |
-| `multi-source-search` | Multi-source Search | search, web-search, academic-search, research |
-| `perplexity-search` | Perplexity Search | search, perplexity, sonar, answers, citations |
-| `youtube-serp` | YouTube SERP | youtube, video-search, social-media, serp |
-| `media-gen` | Media Generation | image-generation, video-generation, creative, ai-art |
-| `last30days` | Last 30 Days Research Brief | research, news, aggregation, analysis, report |
-| `tavily-search` | Tavily Web & News Search | search, news, web-search, tavily |
-| `image-generation` | Image Generation | image-generation, ai-art, editing, creative |
-| `video-generation` | Video Generation | video-generation, ai-video, creative, wan |
+```bash
+curl -s https://aisa.one/.well-known/agent-card.json \
+  | jq -r '.skills[] | [.id, .name, (.tags // [] | join(","))] | @tsv'
+```
+
+Use each capability's `description`, `tags`, and `examples` for matching. Confirm the underlying Skill or API documentation before invocation.
 
 ## The OpenAI Plugin Manifest
 
@@ -124,7 +118,7 @@ The manifest includes a `description_for_model` field that lists key API endpoin
 
 ## The OpenAPI 3.1 Specification
 
-The consolidated OpenAPI spec at `/openapi.yaml` covers all 111+ AIsa API paths organized into 10 categories. It is the authoritative machine-readable contract for constructing API requests.
+The consolidated OpenAPI spec at `/openapi.yaml` is the authoritative machine-readable contract for constructing API requests. Parse the live specification instead of relying on a fixed path or schema count.
 
 ### Fetching and Parsing the Spec
 
@@ -219,7 +213,7 @@ Authorization: Bearer YOUR_AISA_API_KEY
 Generate an API key from the [AIsa dashboard](https://console.aisa.one). For detailed key management guidance — scoping, rotation, and secure storage — see the [Authentication](/guides/authentication) guide.
 
 <Warning>
-  The discovery endpoints (`agent-card.json`, `ai-plugin.json`, `openapi.yaml`) are publicly readable and require no authentication. However, all API calls to `api.aisa.one` require a valid Bearer token.
+  The discovery resources (`agent-card.json`, `mcp.json`, `ai-plugin.json`, `openapi.yaml`, and llms.txt files) are publicly readable and require no authentication. API calls to `api.aisa.one` require the authentication documented for the selected route.
 </Warning>
 
 ## Integration Patterns
@@ -261,7 +255,7 @@ for skill in card["skills"]:
 
 AIsa provides two browser-based tools for exploring the discovery surface:
 
-- **[API Explorer](https://aisa.one/api-explorer)** — Interactive Swagger UI for browsing and testing all 111+ endpoints with live request/response examples.
+- **[API Explorer](https://aisa.one/api-explorer)** — Interactive API reference for browsing documented endpoints and request/response examples.
 - **[Agent Discovery](https://aisa.one/agent-discovery)** — Visual skill explorer with search and tag filtering, plus integration code examples.
 
 ## CORS Support
