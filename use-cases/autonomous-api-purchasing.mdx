@@ -1,0 +1,123 @@
+---
+title: Design an Autonomous API Purchasing Workflow
+description: Plan how an AI agent selects, authorizes, purchases, verifies, and audits a supported paid API capability without open-ended spending or duplicate charges.
+---
+
+An autonomous API purchasing workflow lets an agent request a supported paid capability at runtime under explicit budget and authorization rules. The agent may select a resource, but selection alone does not grant permission to spend.
+
+AIsa uses usage-based billing across model and API consumption. Some workflows may use a pre-funded AIsa balance, while a documented capability may support another programmatic payment flow. Do not assume every API supports the same payment protocol or settlement behavior.
+
+## Separate the decisions
+
+Treat the workflow as distinct stages:
+
+1. **Select:** identify the capability that could complete the task.
+2. **Estimate:** determine the documented price unit and expected workflow cost.
+3. **Authorize:** compare the cost and capability type with policy.
+4. **Execute:** submit the approved request through the documented interface.
+5. **Verify payment:** confirm the usage or settlement record.
+6. **Verify delivery:** confirm the API response is complete and usable.
+7. **Audit:** record the decision, amount, resource, and outcome without secrets.
+
+Successful payment does not prove that the requested resource was delivered successfully. Verify both independently.
+
+## Define policy before execution
+
+| Control | Example policy question |
+| --- | --- |
+| Allowed capabilities | Which model or API families may the agent purchase? |
+| Per-request limit | What is the maximum cost of one operation? |
+| Per-task limit | What is the maximum total cost across all workflow steps? |
+| Time-based limit | What daily or monthly ceiling applies? |
+| Confirmation threshold | Which amounts or capability types require human approval? |
+| Retry policy | Under which states can a request be retried safely? |
+| Fallback policy | May the agent choose a cheaper or alternate capability? |
+| Audit policy | Which request, decision, cost, and result fields are retained? |
+
+Keep authorization policy outside the model prompt where possible. Enforce it in application code or another trusted control layer.
+
+## Recommended workflow
+
+### 1. Define the task and success condition
+
+Specify the output required, acceptable quality, deadline, and maximum spend. A vague success condition can lead to unnecessary calls or repeated purchases.
+
+### 2. Choose the smallest sufficient capability
+
+Use [Capabilities by Goal](/by-goal) and [Capabilities by Interface](/by-interface) to identify whether the task needs a model, direct API, Skill, or another resource.
+
+Do not purchase a broader or more expensive capability when a documented smaller surface satisfies the requirement.
+
+### 3. Read current billing and availability information
+
+Before approval, verify:
+
+- Exact model, API, or capability identifier.
+- Current price unit and authentication requirements.
+- Availability, rate limits, and known constraints.
+- Whether the flow uses normal AIsa balance deduction or another documented payment mechanism.
+
+Use current documentation and live responses rather than a cached fixed price.
+
+### 4. Authorize the request
+
+Compare the estimate with policy. If confirmation is required, show:
+
+- The capability and intended task.
+- Expected price or maximum authorized amount.
+- Funding source or billing boundary.
+- What happens if the result fails or is incomplete.
+- Whether a retry can incur another charge.
+
+### 5. Execute once and preserve identifiers
+
+Submit the request through the exact documented API. Preserve any request, usage, transaction, or correlation identifiers returned by the system.
+
+Use idempotency controls only when the capability explicitly supports them. Do not invent an idempotency key contract for an endpoint that does not document one.
+
+### 6. Reconcile ambiguous outcomes
+
+| Observed state | Safe response |
+| --- | --- |
+| Request rejected before acceptance | Correct the request or select another capability |
+| No confirmed charge and no result | Check status before considering a retry |
+| Charge or usage record exists, result missing | Reconcile or seek support; do not blindly repurchase |
+| Result exists, settlement status uncertain | Preserve the result and reconcile the financial record separately |
+| Both payment and result verified | Mark the purchase complete and record the outcome |
+
+Network timeout does not prove that a request failed before billing.
+
+### 7. Audit without exposing secrets
+
+Record only the fields needed for review, such as:
+
+- Task and policy decision.
+- Capability identifier.
+- Authorized and actual amount when available.
+- Request or transaction reference.
+- Result status and verification outcome.
+- Retry or fallback decisions.
+
+Never store API keys, wallet secrets, signatures, or bearer tokens in the audit record.
+
+## When autonomous purchasing is useful
+
+Consider it when:
+
+- Resource needs vary by task.
+- A dedicated provider subscription is not justified for occasional use.
+- The workflow can state a clear maximum spend.
+- The application can verify both billing and delivery.
+- Budget, confirmation, retry, and audit controls are enforceable.
+
+## When a simpler billing flow is better
+
+Use normal account funding and application-controlled API calls when usage is predictable, purchasing decisions do not need to happen at runtime, or the application cannot safely reconcile ambiguous payment states.
+
+## Related guidance
+
+- [Machine Payments for AI Agents](/concepts/machine-payments-for-agents)
+- [AIsa Wallet and Payments](/guides/pricing/wallet)
+- [Pricing Evaluation Guide](/evaluate/pricing)
+- [Security Evaluation Guide](/evaluate/security)
+- [Authentication](/guides/authentication)
