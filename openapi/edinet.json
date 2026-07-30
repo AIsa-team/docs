@@ -1,0 +1,170 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "EDINET API",
+    "version": "draft-2026-07-28",
+    "description": "AIsa gateway endpoints for EDINET document list and document download."
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/edinet/documents.json": {
+      "get": {
+        "summary": "List EDINET documents",
+        "description": "Query the EDINET filing list for a given file date. Returns metadata only when type=1, or metadata plus filing results when type=2.",
+        "operationId": "getEdinetDocuments",
+        "tags": ["EDINET"],
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "examples": ["2026-07-23"]
+            },
+            "description": "File date in YYYY-MM-DD format."
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "enum": [1, 2],
+              "default": 1
+            },
+            "description": "Response mode: 1 for metadata only, 2 for metadata plus filing list."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EDINET document-list response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "metadata": {
+                      "type": "object",
+                      "description": "Metadata object with title, request parameter echo, result count, processDateTime, status, and message."
+                    },
+                    "results": {
+                      "type": "array",
+                      "description": "Filing document objects when type=2.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "seqNumber": { "type": "integer" },
+                          "docID": { "type": "string" },
+                          "filerName": { "type": "string" },
+                          "docTypeCode": { "type": "string" },
+                          "submitDateTime": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid request parameters." },
+          "401": { "description": "Invalid or missing AIsa API key." },
+          "429": { "description": "Rate limit exceeded." },
+          "500": { "description": "Gateway or upstream failure." }
+        },
+        "x-aisa-path": "/apis/v1/edinet/documents.json",
+        "x-provider-cost-micros-usd": 0,
+        "x-customer-pricing": {
+          "normal": 0.00001
+        }
+      }
+    },
+    "/edinet/documents/{docID}": {
+      "get": {
+        "summary": "Download an EDINET document",
+        "description": "Download a specific EDINET document by docID. The returned file type is selected by the type query parameter and the actual success payload must be interpreted from Content-Type.",
+        "operationId": "getEdinetDocumentDownload",
+        "tags": ["EDINET"],
+        "parameters": [
+          {
+            "name": "docID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "examples": ["S1000000"]
+            },
+            "description": "Document management identifier from the document list API."
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "enum": [1, 2, 3, 4, 5]
+            },
+            "description": "File type to download: 1 for filing body and audit report ZIP, 2 for PDF, 3 for alternate document and attachments ZIP, 4 for English document ZIP, 5 for CSV ZIP converted from XBRL."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Binary ZIP/PDF file content or JSON error payload depending on Content-Type.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid request parameters." },
+          "401": { "description": "Invalid or missing AIsa API key." },
+          "404": { "description": "Document not found." },
+          "429": { "description": "Rate limit exceeded." },
+          "500": { "description": "Gateway or upstream failure." }
+        },
+        "x-aisa-path": "/apis/v1/edinet/documents/{docID}",
+        "x-provider-cost-micros-usd": 0,
+        "x-customer-pricing": {
+          "normal": 0.00001
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
