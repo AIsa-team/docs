@@ -1,0 +1,77 @@
+---
+title: "Credit Balance"
+description: "Read the current wallet balance and the amount available to an API key."
+---
+
+Read the current wallet balance and the amount available to the API key used for
+the request. This is a read-only endpoint and does not accept query parameters.
+
+## Request
+
+```bash curl
+curl -sS https://api.aisa.one/v1/credits/balance \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+The endpoint requires a standard AIsa API key in the `Authorization` header. It
+does not accept MPP payment authorization.
+
+## Response
+
+```json
+{
+  "currency": "USD",
+  "account_balance_micros_usd": 2500000,
+  "available_balance_micros_usd": 1000000,
+  "wallet": {
+    "cash_micros_usd": 500000,
+    "trial_micros_usd": 2000000,
+    "promo_micros_usd": 0,
+    "credit_micros_usd": 0,
+    "trial_expires_at": "2026-08-10T00:00:00Z"
+  },
+  "api_key": {
+    "unlimited": false,
+    "remaining_micros_usd": 1000000,
+    "used_micros_usd": 300000
+  },
+  "as_of": "2026-08-03T12:00:00Z"
+}
+```
+
+All monetary values are integer microdollars. One dollar is `1,000,000`
+microdollars. This avoids floating-point rounding in automated clients.
+
+### Top-level fields
+
+| Field | Type | Description |
+|---|---|---|
+| `currency` | string | The balance currency. Currently always `USD`. |
+| `account_balance_micros_usd` | integer | Effective total wallet balance. |
+| `available_balance_micros_usd` | integer | Amount available to the authenticated API key. |
+| `wallet` | object | Current wallet buckets and Trial expiration. |
+| `api_key` | object | Remaining and used balance for this API key. |
+| `as_of` | string | UTC timestamp for the balance snapshot. |
+
+### Balance calculation
+
+`account_balance_micros_usd` is the sum of the effective cash, Trial, promo, and
+credit buckets. An expired Trial balance is excluded.
+
+For a limited API key, `available_balance_micros_usd` is the lower of the
+account balance and `api_key.remaining_micros_usd`. For an unlimited API key,
+it equals the account balance.
+
+The `wallet.trial_expires_at` field is `null` when no Trial expiration is set.
+The timestamp may remain present after expiration, while the expired Trial
+amount is no longer included in the effective balance.
+
+## Errors
+
+- `401 Unauthorized` — the API key is missing, invalid, revoked, or expired.
+- `403 Forbidden` — the user is disabled or the key is not allowed from the
+  requesting IP address.
+- `500 Internal Server Error` — the balance snapshot could not be read.
+
+See [Error Codes](/api-reference/errors) for the common error model and
+[Rate Limits](/api-reference/rate-limits) for request limits.
