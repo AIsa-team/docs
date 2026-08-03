@@ -606,7 +606,12 @@ def validate() -> None:
         if not (ROOT / f"{page}.mdx").exists():
             failures.append(f"missing Chinese navigation target: {page}")
 
-    extra = sorted(p.relative_to(ZH_API_DIR) for p in ZH_API_DIR.rglob("*.mdx") if p.relative_to(ZH_API_DIR) not in source_pages and p.name not in {"errors.mdx", "rate-limits.mdx"})
+    manual_pages = {"errors.mdx", "rate-limits.mdx", "credits-balance.mdx"}
+    extra = sorted(
+        p.relative_to(ZH_API_DIR)
+        for p in ZH_API_DIR.rglob("*.mdx")
+        if p.relative_to(ZH_API_DIR) not in source_pages and p.name not in manual_pages
+    )
     # zh/api-reference.mdx itself is a hand-written overview and intentionally extra.
     extra = [p for p in extra if str(p) != "."]
     if extra:
