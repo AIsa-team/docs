@@ -1,0 +1,73 @@
+---
+title: "额度余额"
+description: "查询当前钱包余额以及 API Key 实际可用的额度。"
+---
+
+查询当前钱包余额，以及发起请求的 API Key 实际可用的额度。该接口为只读接口，
+不接受查询参数。
+
+## 请求
+
+```bash curl
+curl -sS https://api.aisa.one/v1/credits/balance \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+接口要求在 `Authorization` 请求头中提供标准 AIsa API Key，不接受 MPP 支付授权。
+
+## 响应
+
+```json
+{
+  "currency": "USD",
+  "account_balance_micros_usd": 2500000,
+  "available_balance_micros_usd": 1000000,
+  "api_key": {
+    "unlimited": false,
+    "remaining_micros_usd": 1000000,
+    "used_micros_usd": 300000
+  },
+  "as_of": "2026-08-03T12:00:00Z"
+}
+```
+
+所有金额均使用整数微美元。一美元等于 `1,000,000` 微美元，以避免自动化客户端
+出现浮点舍入误差。
+
+### 顶层字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `currency` | string | 余额币种，目前固定为 `USD`。 |
+| `account_balance_micros_usd` | integer | 账户钱包的有效总余额。 |
+| `available_balance_micros_usd` | integer | 当前认证 API Key 实际可用的金额。 |
+| `api_key` | object | 当前 API Key 的剩余额度和已使用额度。 |
+| `as_of` | string | 该余额快照对应的 UTC 时间。 |
+
+### 余额计算
+
+`account_balance_micros_usd` 是有效 cash、Trial、promo 和 credit 余额之和。
+已经过期的 Trial 余额不会计入。
+
+对于有限额度 API Key，`available_balance_micros_usd` 取账户余额与
+`api_key.remaining_micros_usd` 中的较小值。对于无限额度 API Key，它等于账户
+余额。当账户余额或 Key 余额为负数时，可用余额最低为零。
+
+已过期的 Trial 金额不会计入有效余额。
+
+## 错误
+
+- `401 Unauthorized` — API Key 缺失、无效、已撤销或已过期。
+- `403 Forbidden` — 用户已被禁用，或当前请求 IP 不在 Key 的允许列表内。
+- `500 Internal Server Error` — 无法读取余额快照。
+
+该接口的错误响应使用字符串类型的 `error` 字段：
+
+```json
+{
+  "error": "invalid api key"
+}
+```
+
+有关状态码和重试的一般说明，请参阅[错误代码](/zh/api-reference/errors)；有关请求
+限制，请参阅[速率限制](/zh/api-reference/rate-limits)。
