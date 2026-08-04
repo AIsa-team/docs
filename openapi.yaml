@@ -76373,6 +76373,541 @@ paths:
       x-x402:
         path: /apis/v2/edinet/documents/{docID}
         source: https://github.com/AIsa-team/aisa-proxy
+  /firecrawl/scrape:
+    post:
+      tags:
+      - Other
+      summary: Scrape a single page and return its main content as markdown.
+      description: 'Synchronous. Fetch one URL and return its cleaned main content as markdown. On the AIsa metered profile
+        the request is restricted: the URL must be HTTPS and must not point at a PDF, proxy must be set to "basic", and if
+        formats is supplied it must be exactly ["markdown"]. Advanced options (actions, headers, parsers, profile, lockdown,
+        zeroDataRetention) are rejected. Billed at 1 Firecrawl credit per page scraped.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: The HTTPS URL to scrape. PDF URLs are not supported on the metered profile.
+                  example: https://docs.firecrawl.dev
+                proxy:
+                  type: string
+                  enum:
+                  - basic
+                  description: Proxy tier. Must be explicitly set to "basic" on the metered profile.
+                  example: basic
+                formats:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                    - markdown
+                  description: Optional output formats. When present it must be exactly ["markdown"].
+                  example:
+                  - markdown
+              required:
+              - url
+              - proxy
+      responses:
+        '200':
+          description: Scrape completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: True when the scrape succeeded.
+                  data:
+                    type: object
+                    properties:
+                      markdown:
+                        type: string
+                        description: The scraped page content in markdown.
+                      metadata:
+                        type: object
+                        description: Page metadata such as title, description, source URL, and HTTP status.
+                        properties:
+                          title:
+                            type: string
+                          description:
+                            type: string
+                          sourceURL:
+                            type: string
+                          statusCode:
+                            type: integer
+                  creditsUsed:
+                    type: integer
+                    description: Firecrawl credits consumed by the request (1 per page).
+      x-x402:
+        path: /apis/v2/firecrawl/scrape
+        source: https://github.com/AIsa-team/aisa-proxy
+  /firecrawl/search:
+    post:
+      tags:
+      - Other
+      summary: Run a web search and return ranked results.
+      description: 'Synchronous. Search the web and return ranked results. On the AIsa metered profile only the web source
+        is supported: scrapeOptions, enterprise mode, and non-web sources are rejected. Billed at roughly 2 Firecrawl credits
+        per 10 results (credits = ceil(limit / 10) * 2).'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                  description: The search query. Must be non-empty and at most 500 characters.
+                  maxLength: 500
+                  example: firecrawl web scraping api
+                limit:
+                  type: integer
+                  default: 10
+                  minimum: 1
+                  maximum: 100
+                  description: Maximum number of results to return.
+              required:
+              - query
+      responses:
+        '200':
+          description: Search completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: True when the search succeeded.
+                  data:
+                    type: object
+                    properties:
+                      web:
+                        type: array
+                        description: Ranked web search results.
+                        items:
+                          type: object
+                          properties:
+                            title:
+                              type: string
+                              description: Result title.
+                            url:
+                              type: string
+                              description: Result URL.
+                            description:
+                              type: string
+                              description: Result snippet.
+                  creditsUsed:
+                    type: integer
+                    description: Firecrawl credits consumed (about 2 per 10 results).
+      x-x402:
+        path: /apis/v2/firecrawl/search
+        source: https://github.com/AIsa-team/aisa-proxy
+  /firecrawl/map:
+    post:
+      tags:
+      - Other
+      summary: Discover the URLs on a website.
+      description: Synchronous. Given a starting URL, discover and return the links reachable on that site. The URL must be
+        HTTPS and limit is required (1 to 100000). Billed at 1 Firecrawl credit per discovered link/page.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: The HTTPS URL to map.
+                  example: https://docs.firecrawl.dev
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 100000
+                  description: Maximum number of links to discover. Required on the metered profile.
+                  example: 100
+              required:
+              - url
+              - limit
+      responses:
+        '200':
+          description: Map completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: True when the map succeeded.
+                  links:
+                    type: array
+                    description: Discovered links.
+                    items:
+                      type: object
+                      properties:
+                        url:
+                          type: string
+                          description: A discovered URL.
+                        title:
+                          type: string
+                          description: Title of the discovered page, when available.
+                  creditsUsed:
+                    type: integer
+                    description: Firecrawl credits consumed (1 per discovered link).
+      x-x402:
+        path: /apis/v2/firecrawl/map
+        source: https://github.com/AIsa-team/aisa-proxy
+  /firecrawl/parse:
+    post:
+      tags:
+      - Other
+      summary: Parse an uploaded HTML file into markdown.
+      description: 'Synchronous. Upload a single HTML/HTM file and receive its parsed markdown. This endpoint uses multipart/form-data
+        with two fields: file (the HTML upload) and options (a JSON string). On the metered profile options must set proxy
+        to "basic" and may only additionally set formats to ["markdown"]. The options JSON string is limited to 64 KB. Billed
+        at 1 Firecrawl credit.'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The HTML/HTM file to parse. Must have a text/html content type or an .html/.htm filename.
+                options:
+                  type: string
+                  description: JSON string of parse options. Must include proxy="basic"; may additionally include formats=["markdown"].
+                    No other keys are allowed.
+                  example: '{"proxy":"basic","formats":["markdown"]}'
+              required:
+              - file
+              - options
+      responses:
+        '200':
+          description: Parse completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: True when the parse succeeded.
+                  data:
+                    type: object
+                    properties:
+                      markdown:
+                        type: string
+                        description: The parsed content in markdown.
+                  creditsUsed:
+                    type: integer
+                    description: Firecrawl credits consumed (1).
+      x-x402:
+        path: /apis/v2/firecrawl/parse
+        source: https://github.com/AIsa-team/aisa-proxy
+  /firecrawl/crawl:
+    post:
+      tags:
+      - Other
+      summary: Submit an asynchronous crawl job.
+      description: |-
+        Asynchronous. Submit a crawl of an entire site rooted at url; the whole traversal runs as a background job.
+
+        Lifecycle:
+        1. Submit — POST /firecrawl/crawl with the crawl body and a required `Idempotency-Key` header. On success the API returns HTTP 202 Accepted, a `Location` response header pointing at the job resource (`/apis/v1/firecrawl/crawl/{jobId}`), and an integration_async_job body with `status` = queued.
+        2. Poll — GET /apis/v1/firecrawl/crawl/{jobId} to retrieve the job. Repeat until `status` is terminal (completed, failed, or cancelled). When completed, the scraped pages are in `output`.
+        3. List — GET /apis/v1/firecrawl/crawl (optional `limit`, `status`, `cursor` query params) to page through your jobs on this endpoint.
+        4. Cancel — POST /apis/v1/firecrawl/crawl/{jobId}/cancel to request cancellation.
+
+        The URL must be HTTPS and not a PDF, and limit (1 to 1000) bounds the number of pages. Billed at 1 Firecrawl credit per page crawled; total cost scales with the pages actually processed.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          maxLength: 191
+        description: Unique key (1 to 191 characters) that makes the submit idempotent. Re-submitting with the same key returns
+          the original job.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: The HTTPS root URL to crawl. PDF URLs are not supported.
+                  example: https://docs.firecrawl.dev
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000
+                  description: Maximum number of pages to crawl.
+                  example: 50
+                includePaths:
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 256
+                  maxItems: 20
+                  description: Only crawl URLs whose path matches one of these patterns.
+                excludePaths:
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 256
+                  maxItems: 20
+                  description: Skip URLs whose path matches one of these patterns.
+                maxDiscoveryDepth:
+                  type: integer
+                  minimum: 0
+                  maximum: 10
+                  description: Maximum link-discovery depth from the root URL.
+                sitemap:
+                  type: string
+                  enum:
+                  - skip
+                  - include
+                  - only
+                  description: How the site's sitemap is used during discovery.
+                ignoreQueryParameters:
+                  type: boolean
+                  description: Treat URLs that differ only by query string as the same page.
+                crawlEntireDomain:
+                  type: boolean
+                  description: Crawl the whole domain rather than only the subtree under the root URL.
+                allowExternalLinks:
+                  type: boolean
+                  description: Follow links to external domains.
+                allowSubdomains:
+                  type: boolean
+                  description: Follow links into subdomains of the root domain.
+                delay:
+                  type: number
+                  minimum: 0
+                  maximum: 30
+                  description: Delay in seconds between requests (0 to 30).
+                maxConcurrency:
+                  type: integer
+                  minimum: 1
+                  maximum: 20
+                  description: Maximum number of concurrent page fetches (1 to 20).
+                scrapeOptions:
+                  type: object
+                  description: Per-page scrape options applied while crawling. On the metered profile output is always markdown.
+                  properties:
+                    onlyMainContent:
+                      type: boolean
+                      description: Return only the main content of each page.
+                      default: true
+                    includeTags:
+                      type: array
+                      items:
+                        type: string
+                        maxLength: 128
+                      maxItems: 50
+                      description: HTML tags/selectors to keep.
+                    excludeTags:
+                      type: array
+                      items:
+                        type: string
+                        maxLength: 128
+                      maxItems: 50
+                      description: HTML tags/selectors to drop.
+                    maxAge:
+                      type: integer
+                      minimum: 0
+                      maximum: 31536000000
+                      description: Maximum acceptable cache age in milliseconds.
+                    minAge:
+                      type: integer
+                      minimum: 0
+                      maximum: 31536000000
+                      description: Minimum cache age in milliseconds before a page is refetched.
+                    timeout:
+                      type: integer
+                      minimum: 1000
+                      maximum: 300000
+                      description: Per-page timeout in milliseconds.
+              required:
+              - url
+              - limit
+      responses:
+        '202':
+          description: Crawl job accepted. The Location header points at the job resource; poll it until terminal.
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Path of the created job resource, e.g. /apis/v1/firecrawl/crawl/{jobId}.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncJob'
+      x-x402:
+        path: /apis/v2/firecrawl/crawl
+        source: https://github.com/AIsa-team/aisa-proxy
+  /firecrawl/crawl/{jobId}:
+    get:
+      tags:
+      - Other
+      summary: Poll a crawl job.
+      description: Retrieve a previously submitted crawl job. Repeat until `status` is terminal (completed, failed, or cancelled).
+        When completed, the crawled pages are in `output`.
+      parameters:
+      - in: path
+        name: jobId
+        required: true
+        schema:
+          type: string
+        description: The job id returned by the submit call.
+      responses:
+        '200':
+          description: The current state of the crawl job.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncJob'
+      x-x402:
+        path: /apis/v2/firecrawl/crawl/{jobId}
+        source: https://github.com/AIsa-team/aisa-proxy
+  /firecrawl/batch-scrape:
+    post:
+      tags:
+      - Other
+      summary: Submit an asynchronous batch scrape job.
+      description: |-
+        Asynchronous. Scrape many URLs in one background job.
+
+        Lifecycle:
+        1. Submit — POST /firecrawl/batch-scrape with the batch body and a required `Idempotency-Key` header. On success the API returns HTTP 202 Accepted, a `Location` header pointing at the job resource (`/apis/v1/firecrawl/batch-scrape/{jobId}`), and an integration_async_job body with `status` = queued.
+        2. Poll — GET /apis/v1/firecrawl/batch-scrape/{jobId} until `status` is terminal (completed, failed, or cancelled). When completed, the scraped documents are in `output`.
+        3. List — GET /apis/v1/firecrawl/batch-scrape (optional `limit`, `status`, `cursor` query params).
+        4. Cancel — POST /apis/v1/firecrawl/batch-scrape/{jobId}/cancel.
+
+        Every URL must be a unique HTTPS URL and must not be a PDF; 1 to 1000 URLs per job. Billed at 1 Firecrawl credit per page scraped; total cost scales with the pages actually processed.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          maxLength: 191
+        description: Unique key (1 to 191 characters) that makes the submit idempotent. Re-submitting with the same key returns
+          the original job.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                urls:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                  minItems: 1
+                  maxItems: 1000
+                  description: 1 to 1000 unique HTTPS URLs to scrape. PDF URLs are not supported.
+                  example:
+                  - https://docs.firecrawl.dev
+                  - https://docs.firecrawl.dev/introduction
+                maxConcurrency:
+                  type: integer
+                  minimum: 1
+                  maximum: 20
+                  description: Maximum number of concurrent scrapes (1 to 20).
+                onlyMainContent:
+                  type: boolean
+                  description: Return only the main content of each page.
+                  default: true
+                includeTags:
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 128
+                  maxItems: 50
+                  description: HTML tags/selectors to keep.
+                excludeTags:
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 128
+                  maxItems: 50
+                  description: HTML tags/selectors to drop.
+                maxAge:
+                  type: integer
+                  minimum: 0
+                  maximum: 31536000000
+                  description: Maximum acceptable cache age in milliseconds.
+                minAge:
+                  type: integer
+                  minimum: 0
+                  maximum: 31536000000
+                  description: Minimum cache age in milliseconds before a page is refetched.
+                timeout:
+                  type: integer
+                  minimum: 1000
+                  maximum: 300000
+                  description: Per-page timeout in milliseconds.
+              required:
+              - urls
+      responses:
+        '202':
+          description: Batch scrape job accepted. The Location header points at the job resource; poll it until terminal.
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Path of the created job resource, e.g. /apis/v1/firecrawl/batch-scrape/{jobId}.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncJob'
+      x-x402:
+        path: /apis/v2/firecrawl/batch-scrape
+        source: https://github.com/AIsa-team/aisa-proxy
+  /firecrawl/batch-scrape/{jobId}:
+    get:
+      tags:
+      - Other
+      summary: Poll a batch scrape job.
+      description: Retrieve a previously submitted batch scrape job. Repeat until `status` is terminal (completed, failed,
+        or cancelled). When completed, the scraped documents are in `output`.
+      parameters:
+      - in: path
+        name: jobId
+        required: true
+        schema:
+          type: string
+        description: The job id returned by the submit call.
+      responses:
+        '200':
+          description: The current state of the batch scrape job.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncJob'
+      x-x402:
+        path: /apis/v2/firecrawl/batch-scrape/{jobId}
+        source: https://github.com/AIsa-team/aisa-proxy
   /models/{model}:generateContent:
     post:
       summary: Generate content using a Gemini-compatible AIsa model
@@ -89815,6 +90350,78 @@ components:
           type: object
           additionalProperties: true
       additionalProperties: true
+    AsyncJob:
+      type: object
+      description: An asynchronous integration job. Returned by the submit call (HTTP 202) and by the poll/detail call. Poll
+        the job by its id until status is a terminal value (completed, failed, or cancelled).
+      properties:
+        id:
+          type: string
+          description: Unique AIsa job identifier. Use it to poll, list, or cancel the job.
+          example: iaj_01HZY8Q2M4K7N9V3T6W1X0B2C3
+        object:
+          type: string
+          description: Always "integration_async_job".
+          example: integration_async_job
+        endpoint:
+          type: string
+          description: The submit endpoint this job belongs to.
+          example: /apis/v1/firecrawl/crawl
+        status:
+          type: string
+          enum:
+          - queued
+          - running
+          - completed
+          - failed
+          - cancelled
+          description: Customer-facing lifecycle status. queued and running are non-terminal; completed, failed, and cancelled
+            are terminal.
+        createdAt:
+          type: string
+          format: date-time
+          description: When the job was accepted.
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the job reached a terminal status. Null while the job is still queued or running.
+        pricing:
+          type: object
+          properties:
+            currency:
+              type: string
+              example: USD
+            authorizedMicrosUSD:
+              type: integer
+              description: Amount authorized (held) when the job was admitted, in micro-USD. Metered jobs settle to the actual
+                credits consumed.
+            finalMicrosUSD:
+              type: integer
+              nullable: true
+              description: Final settled cost in micro-USD once the job is terminal. Null until settlement.
+            billingMode:
+              type: string
+              description: Billing mode for the job.
+              example: metered_result
+        output:
+          description: Job result payload. Present only once status is completed. For crawl this is the array of scraped pages;
+            for batch scrape it is the array of scraped documents.
+          nullable: true
+        outputExpired:
+          type: boolean
+          description: True when the result has been retained past its retention window and is no longer retrievable.
+        error:
+          type: object
+          nullable: true
+          description: Present when status is failed. Null otherwise.
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code.
+            message:
+              type: string
+              description: Human-readable error message.
     GenerateContentRequest:
       type: object
       properties:
