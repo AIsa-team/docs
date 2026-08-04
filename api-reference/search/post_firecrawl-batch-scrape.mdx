@@ -1,0 +1,18 @@
+---
+title: "Firecrawl Batch Scrape"
+description: "Scrape many URLs in one asynchronous job — submit a list, then poll the job for status and results."
+openapi: "openapi/firecrawl.json POST /firecrawl/batch-scrape"
+---
+
+{/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
+
+Scrape many URLs in a single **asynchronous job**. Provide a list of URLs; the batch runs in the background and you poll it for status and results.
+
+**Lifecycle**
+
+1. **Submit** — `POST /apis/v1/firecrawl/batch-scrape` with the batch body and a required `Idempotency-Key` header. On success you get back `202 Accepted`, a `Location` header pointing at the job resource (`/apis/v1/firecrawl/batch-scrape/{jobId}`), and a job object whose `status` starts as `queued`.
+2. **Poll** — `GET /apis/v1/firecrawl/batch-scrape/{jobId}` and repeat until `status` is terminal: `completed`, `failed`, or `cancelled`. When `completed`, the scraped documents are in `output`.
+3. **List** — `GET /apis/v1/firecrawl/batch-scrape` (optional `limit`, `status`, `cursor` query params).
+4. **Cancel** — `POST /apis/v1/firecrawl/batch-scrape/{jobId}/cancel`.
+
+Every URL must be a unique HTTPS URL and must not be a PDF; you can submit 1 to 1000 URLs per job. Billing is metered per Firecrawl credit — 1 credit per page scraped — so total cost scales with the pages actually processed. To follow links from a single root instead of listing URLs, use [`post_firecrawl-crawl`](/api-reference/search/post_firecrawl-crawl).
