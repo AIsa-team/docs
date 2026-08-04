@@ -1,0 +1,18 @@
+---
+title: "Firecrawl Crawl"
+description: "Crawl an entire website as an asynchronous job — submit, then poll the job for status and results."
+openapi: "openapi/firecrawl.json POST /firecrawl/crawl"
+---
+
+{/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
+
+Crawl an entire site rooted at `url`. Because a full traversal can take a while, Crawl runs as an **asynchronous job**: you submit the job and then poll it for status and results.
+
+**Lifecycle**
+
+1. **Submit** — `POST /apis/v1/firecrawl/crawl` with the crawl body and a required `Idempotency-Key` header. On success you get back `202 Accepted`, a `Location` header pointing at the job resource (`/apis/v1/firecrawl/crawl/{jobId}`), and a job object whose `status` starts as `queued`.
+2. **Poll** — `GET /apis/v1/firecrawl/crawl/{jobId}` and repeat until `status` is terminal: `completed`, `failed`, or `cancelled`. When `completed`, the crawled pages are in `output`.
+3. **List** — `GET /apis/v1/firecrawl/crawl` (optional `limit`, `status`, `cursor` query params) to page through your crawl jobs.
+4. **Cancel** — `POST /apis/v1/firecrawl/crawl/{jobId}/cancel` to request cancellation.
+
+The `url` must be HTTPS and not a PDF, and `limit` (1 to 1000) bounds the number of pages. Billing is metered per Firecrawl credit — 1 credit per page crawled — so total cost scales with the pages actually processed. To scrape a known set of URLs instead of following links, use [`post_firecrawl-batch-scrape`](/api-reference/search/post_firecrawl-batch-scrape).
