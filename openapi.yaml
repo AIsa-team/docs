@@ -6886,13 +6886,13 @@ paths:
         source: https://github.com/AIsa-team/aisa-proxy
   /chat/completions:
     post:
-      summary: Generate images via Chat Completions (wan2.7 family)
+      summary: Generate images via Chat Completions
       description: |-
-        Generate images with the Wan 2.7 image models. Request shape matches OpenAI Chat Completions with multimodal content; the response contains `choices[].message.content[]` where each item is `{type: "image", image: "<url or base64>"}`.
+        Generate images over the chat route. Request shape matches OpenAI Chat Completions with multimodal content; the response contains `choices[].message.content[]` where each item is `{type: "image", image: "<url or base64>"}`.
 
         **Important:** `messages[].content` must be an **array of typed parts**, not a plain string. Passing a string returns `400 invalid_parameter_error` with `Input should be a valid list: messages[*].content`.
 
-        By default `wan2.7-image` returns **4 candidate images** (billed per image). Set `n` to request a different count.
+        **Routing note:** `wan2.7-image`, `wan2.7-image-pro`, `seedream-5-0-260128`, and `gpt-image-2` return `400 model_route_not_supported` here — use `/v1/images/generations` for those.
       operationId: generateImageViaChat
       requestBody:
         required: true
@@ -6907,10 +6907,9 @@ paths:
                 model:
                   type: string
                   enum:
-                  - wan2.7-image
-                  - wan2.7-image-pro
-                  description: Image-generation model. `wan2.7-image` ($0.030/image) for standard quality, `wan2.7-image-pro`
-                    ($0.075/image) for higher fidelity.
+                  - seedream-4-5-251128
+                  description: Image-generation model on the chat route. `seedream-4-5-251128` is billed at $0.036 per request.
+                    Wan and gpt-image-2 models use `/v1/images/generations` instead.
                 messages:
                   type: array
                   description: 'Conversation messages. Image prompts go in the last user message''s `content` array as `{type:
@@ -6954,14 +6953,12 @@ paths:
                 n:
                   type: integer
                   minimum: 1
-                  maximum: 4
-                  default: 4
-                  description: Number of images to generate. `wan2.7-image` returns 4 by default; pass `1` to save cost.
+                  description: Number of images to generate. Each image is billed separately; pass `1` unless you want candidates.
             examples:
               basic:
                 summary: Single-image prompt (n=1)
                 value:
-                  model: wan2.7-image
+                  model: seedream-4-5-251128
                   messages:
                   - role: user
                     content:
@@ -6971,7 +6968,7 @@ paths:
               four_variants:
                 summary: Default 4 candidates for selection
                 value:
-                  model: wan2.7-image
+                  model: seedream-4-5-251128
                   messages:
                   - role: user
                     content:
@@ -6980,7 +6977,7 @@ paths:
               pro:
                 summary: Higher-fidelity pro model
                 value:
-                  model: wan2.7-image-pro
+                  model: seedream-4-5-251128
                   messages:
                   - role: user
                     content:
@@ -6990,7 +6987,7 @@ paths:
               image_to_image:
                 summary: Image-to-image (reference + prompt)
                 value:
-                  model: wan2.7-image-pro
+                  model: seedream-4-5-251128
                   messages:
                   - role: user
                     content:
@@ -7019,7 +7016,7 @@ paths:
                     example: 1776495713
                   model:
                     type: string
-                    example: wan2.7-image
+                    example: seedream-4-5-251128
                   choices:
                     type: array
                     description: One entry per generated image.
@@ -7066,7 +7063,7 @@ paths:
                 id: chatcmpl-fcc86dfd-9424-9523-b0bd-cdf07383bee2
                 object: chat.completion
                 created: 1776495713
-                model: wan2.7-image
+                model: seedream-4-5-251128
                 choices:
                 - index: 0
                   finish_reason: stop
@@ -7074,7 +7071,7 @@ paths:
                     role: assistant
                     content:
                     - type: image
-                      image: https://cdn.aisa.one/images/wan2.7/20260418-abc.png
+                      image: https://cdn.aisa.one/images/seedream/20260418-abc.png
                 usage:
                   prompt_tokens: 104
                   completion_tokens: 8
@@ -79341,9 +79338,9 @@ paths:
     post:
       summary: Generate images (OpenAI-compatible)
       description: |-
-        Generate images with the OpenAI-compatible images-generations endpoint. Currently routed to **ByteDance Seedream** — the Wan 2.7 family does not use this path.
+        Generate images with the OpenAI-compatible images-generations endpoint.
 
-        **Size constraint.** Seedream's upstream requires a minimum of **3,686,400 pixels** per image. Requests below that return `400 InvalidParameter: image size must be at least 3686400 pixels`. A 1024×1024 image (1,048,576 px) is rejected; 1920×1920 (3,686,400 px) and 2048×2048 (4,194,304 px) are accepted. Other aspect ratios are fine as long as `width × height ≥ 3,686,400`.
+        **Size constraint (Seedream routes only).** Seedream's upstream requires a minimum of **3,686,400 pixels** per image. Requests below that return `400 InvalidParameter: image size must be at least 3686400 pixels`. Wan and `gpt-image-2` routes accept smaller sizes — `1024x1024` is verified working for `wan2.7-image`.
       operationId: createImageGeneration
       requestBody:
         required: true
@@ -79358,9 +79355,12 @@ paths:
                 model:
                   type: string
                   enum:
-                  - seedream-4-5-251128
-                  description: Image generation model. Currently only `seedream-4-5-251128` is routed through this endpoint.
-                    Wan 2.7 models use `/v1/chat/completions`.
+                  - seedream-5-0-260128
+                  - wan2.7-image
+                  - wan2.7-image-pro
+                  - gpt-image-2
+                  description: Image generation model. `seedream-5-0-260128` ($0.035/request), `wan2.7-image` ($0.030/request),
+                    `wan2.7-image-pro` ($0.075/request), or `gpt-image-2` ($0.03/request or $0.05 per 1024×1024 image).
                 prompt:
                   type: string
                   description: Text description of the image to generate.
@@ -79371,28 +79371,28 @@ paths:
                   description: Number of images to generate. Each image is billed separately at the per-image rate.
                 size:
                   type: string
-                  description: 'Image dimensions as `WIDTHxHEIGHT`. Must satisfy `width × height ≥ 3,686,400`. Common valid
-                    values: `1920x1920`, `2048x2048`, `2304x1600`, `2560x1920`.'
+                  description: Image dimensions as `WIDTHxHEIGHT`. Seedream routes require `width × height ≥ 3,686,400` (e.g.
+                    `1920x1920`, `2048x2048`); Wan and `gpt-image-2` accept smaller sizes such as `1024x1024`.
                   example: 2048x2048
             examples:
               basic:
                 summary: Single 2K image
                 value:
-                  model: seedream-4-5-251128
+                  model: seedream-5-0-260128
                   prompt: A cute red panda, ultra-detailed, cinematic lighting
                   n: 1
                   size: 2048x2048
               minimum_size:
                 summary: Exactly at minimum allowed size (1920×1920)
                 value:
-                  model: seedream-4-5-251128
+                  model: seedream-5-0-260128
                   prompt: A futuristic cyberpunk city, neon lights, rainy night, 8k
                   n: 1
                   size: 1920x1920
               batch:
                 summary: Four candidates for selection
                 value:
-                  model: seedream-4-5-251128
+                  model: seedream-5-0-260128
                   prompt: Oil painting of a rolling hillside at sunset
                   n: 4
                   size: 2048x2048
@@ -79406,7 +79406,7 @@ paths:
                 properties:
                   model:
                     type: string
-                    example: seedream-4-5-251128
+                    example: seedream-5-0-260128
                   created:
                     type: integer
                     example: 1776495432
@@ -79433,7 +79433,7 @@ paths:
                       total_tokens:
                         type: integer
               example:
-                model: seedream-4-5-251128
+                model: seedream-5-0-260128
                 created: 1776495432
                 data:
                 - url: https://cdn.aisa.one/images/seedream/20260418-abc.png
@@ -79448,8 +79448,8 @@ paths:
         '401':
           description: Missing or invalid AIsa API key.
         '404':
-          description: The model isn't routed through this endpoint. Wan 2.7 models return `openai_error` here — use `/v1/chat/completions`
-            for those.
+          description: The model isn't routed through this endpoint. The gateway returns `model_route_not_supported` with
+            the model's actual supported routes — see the [model catalog](/guides/models).
         '429':
           description: Rate limit hit.
         '500':
