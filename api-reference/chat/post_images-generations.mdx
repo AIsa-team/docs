@@ -1,26 +1,31 @@
 ---
 title: "OpenAI-Compatible Image Generations"
-description: "Generate images with ByteDance Seedream via the standard POST /v1/images/generations endpoint. OpenAI-compatible request shape; minimum image size is 3,686,400 pixels (e.g., 1920×1920)."
+description: "Generate images with Seedream, Wan, and gpt-image-2 via the standard POST /v1/images/generations endpoint. OpenAI-compatible request shape; Seedream routes require a minimum image size of 3,686,400 pixels (e.g., 1920×1920)."
 openapi: "openapi/openai-images-generations.json POST /images/generations"
 ---
 
-The standard OpenAI-compatible `POST /v1/images/generations` endpoint. Currently routed to **ByteDance Seedream** (`seedream-4-5-251128`). Wan 2.7 models do **not** use this path — see [Image Generation via Chat](/api-reference/chat/post_chat-completions-image-generation).
+The standard OpenAI-compatible `POST /v1/images/generations` endpoint. As of July 28, 2026 it serves `seedream-5-0-260128`, `wan2.7-image`, `wan2.7-image-pro`, and `gpt-image-2`. The older `seedream-4-5-251128` route is reached through [Image Generation via Chat](/api-reference/chat/post_chat-completions-image-generation) instead.
 
 ## Routing at a glance
 
 | Model | Endpoint |
 |---|---|
-| `seedream-4-5-251128` | **`POST /v1/images/generations`** *(this page)* |
-| `wan2.7-image` / `wan2.7-image-pro` | [`POST /v1/chat/completions`](/api-reference/chat/post_chat-completions-image-generation) |
+| `seedream-5-0-260128` | **`POST /v1/images/generations`** *(this page)*, also `POST /v1/chat/completions` |
+| `wan2.7-image` / `wan2.7-image-pro` | **`POST /v1/images/generations`** *(this page)*, `POST /v1/images/edits` |
+| `gpt-image-2` | **`POST /v1/images/generations`** *(this page)*, `POST /v1/images/edits` |
+| `seedream-4-5-251128` | [`POST /v1/chat/completions`](/api-reference/chat/post_chat-completions-image-generation) |
 | Gemini-compatible models | [`POST /v1beta/models/{model}:generateContent`](/api-reference/chat/post_models-model-generatecontent) |
 
 ## Supported models
 
-| Model | Cost per image | Notes |
+| Model | Cost | Notes |
 |---|---|---|
-| `seedream-4-5-251128` | $0.040 | Min image size **3,686,400 pixels** (e.g., 1920×1920) |
+| `seedream-5-0-260128` | $0.035 / request | Min image size **3,686,400 pixels** (e.g., 1920×1920) |
+| `wan2.7-image` | $0.030 / request | Also accepts `POST /v1/images/edits` |
+| `wan2.7-image-pro` | $0.075 / request | Higher-quality Wan route |
+| `gpt-image-2` | $0.03 / request or $0.05 / image (1024×1024) | Token pricing also applies on some routes — see [AI Model Pricing](/guides/pricing/ai-model-pricing-llm-inference) |
 
-## Size constraint ⚠️
+## Size constraint ⚠️ (Seedream routes)
 
 Seedream's upstream enforces a minimum of **3,686,400 pixels**. Requests below that are rejected with:
 
@@ -48,7 +53,7 @@ curl -sS -X POST "https://api.aisa.one/v1/images/generations" \
   -H "Authorization: Bearer $AISA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "seedream-4-5-251128",
+    "model": "seedream-5-0-260128",
     "prompt": "A cute red panda, ultra-detailed, cinematic lighting",
     "n": 1,
     "size": "2048x2048"
@@ -61,7 +66,7 @@ from openai import OpenAI
 client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
 
 resp = client.images.generate(
-    model="seedream-4-5-251128",
+    model="seedream-5-0-260128",
     prompt="A cute red panda, ultra-detailed, cinematic lighting",
     n=1,
     size="2048x2048",
@@ -80,7 +85,7 @@ const client = new OpenAI({
 });
 
 const resp = await client.images.generate({
-  model: "seedream-4-5-251128",
+  model: "seedream-5-0-260128",
   prompt: "A cute red panda, ultra-detailed, cinematic lighting",
   n: 1,
   size: "2048x2048",
@@ -97,16 +102,16 @@ for (const item of resp.data) {
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `model` | string | yes | `seedream-4-5-251128` |
+| `model` | string | yes | One of `seedream-5-0-260128`, `wan2.7-image`, `wan2.7-image-pro`, `gpt-image-2` |
 | `prompt` | string | yes | Text description of the image to generate |
-| `n` | integer | no | Number of images. Each is billed separately at $0.040 |
-| `size` | string | yes | `WIDTHxHEIGHT`. Must satisfy `width × height ≥ 3,686,400` |
+| `n` | integer | no | Number of images. Each is billed separately at the model's per-request rate |
+| `size` | string | no | `WIDTHxHEIGHT`. Seedream routes must satisfy `width × height ≥ 3,686,400`; `wan2.7-image` and `gpt-image-2` accept smaller sizes (`1024x1024` verified working) |
 
 ## Response
 
 ```json
 {
-  "model": "seedream-4-5-251128",
+  "model": "seedream-5-0-260128",
   "created": 1776495432,
   "data": [
     {

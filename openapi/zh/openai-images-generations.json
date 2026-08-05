@@ -3,7 +3,7 @@
   "info": {
     "title": "OpenAI-Compatible Image Generations",
     "version": "1.0.0",
-    "description": "标准 OpenAI 兼容的 `POST /v1/images/generations` 端点。目前支持 **ByteDance Seedream** 系列。Wan 2.7 图像模型改为通过 [`/v1/chat/completions`](/api-reference/chat/post_chat-completions-image-generation) 路由，而兼容 Gemini 的 `generateContent` 请求使用 [`/v1beta/models/{model}:generateContent`](/api-reference/chat/post_models-model-generatecontent)。"
+    "description": "标准 OpenAI 兼容的 `POST /v1/images/generations` 端点。截至 2026 年 7 月 28 日，该端点服务 `seedream-5-0-260128`、`wan2.7-image`、`wan2.7-image-pro` 和 `gpt-image-2`。较早的 `seedream-4-5-251128` 改为通过 [`/v1/chat/completions`](/zh/api-reference/chat/post_chat-completions-image-generation) 路由，而兼容 Gemini 的 `generateContent` 请求使用 [`/v1beta/models/{model}:generateContent`](/zh/api-reference/chat/post_models-model-generatecontent)。"
   },
   "servers": [
     {
@@ -28,7 +28,7 @@
     "/images/generations": {
       "post": {
         "summary": "生成图像（OpenAI 兼容）",
-        "description": "使用兼容 OpenAI 的 images-generations 端点生成图像。目前路由至 **ByteDance Seedream**——Wan 2.7 系列不使用此路径。\n\n**尺寸限制。** Seedream 的上游要求每张图像至少包含 **3,686,400 像素**。低于该值的请求会返回 `400 InvalidParameter: image size must be at least 3686400 pixels`。1024×1024 图像（1,048,576 px）会被拒绝；1920×1920（3,686,400 px）和 2048×2048（4,194,304 px）可被接受。也可使用其他宽高比，只要满足 `width × height ≥ 3,686,400`。",
+        "description": "使用兼容 OpenAI 的 images-generations 端点生成图像。\n\n**尺寸限制（仅 Seedream 路由）。** Seedream 的上游要求每张图像至少包含 **3,686,400 像素**。低于该值的请求会返回 `400 InvalidParameter: image size must be at least 3686400 pixels`。Wan 和 `gpt-image-2` 路由接受更小的尺寸——`wan2.7-image` 已实测可用 `1024x1024`。",
         "operationId": "createImageGeneration",
         "requestBody": {
           "required": true,
@@ -44,9 +44,12 @@
                   "model": {
                     "type": "string",
                     "enum": [
-                      "seedream-4-5-251128"
+                      "seedream-5-0-260128",
+                      "wan2.7-image",
+                      "wan2.7-image-pro",
+                      "gpt-image-2"
                     ],
-                    "description": "图像生成模型。目前只有 `seedream-4-5-251128` 通过此端点路由。Wan 2.7 模型使用 `/v1/chat/completions`。"
+                    "description": "图像生成模型。`seedream-5-0-260128`（$0.035/次请求）、`wan2.7-image`（$0.030/次请求）、`wan2.7-image-pro`（$0.075/次请求）或 `gpt-image-2`（$0.03/次请求，或 1024×1024 每张 $0.05）。"
                   },
                   "prompt": {
                     "type": "string",
@@ -60,7 +63,7 @@
                   },
                   "size": {
                     "type": "string",
-                    "description": "图像尺寸，格式为 `WIDTHxHEIGHT`。必须满足 `width × height ≥ 3,686,400`。常见有效值：`1920x1920`、`2048x2048`、`2304x1600`、`2560x1920`。",
+                    "description": "图像尺寸，格式为 `WIDTHxHEIGHT`。Seedream 路由要求 `width × height ≥ 3,686,400`（例如 `1920x1920`、`2048x2048`）；Wan 和 `gpt-image-2` 接受更小的尺寸，例如 `1024x1024`。",
                     "example": "2048x2048"
                   }
                 }
@@ -69,7 +72,7 @@
                 "basic": {
                   "summary": "Single 2K image",
                   "value": {
-                    "model": "seedream-4-5-251128",
+                    "model": "seedream-5-0-260128",
                     "prompt": "A cute red panda, ultra-detailed, cinematic lighting",
                     "n": 1,
                     "size": "2048x2048"
@@ -78,7 +81,7 @@
                 "minimum_size": {
                   "summary": "Exactly at minimum allowed size (1920×1920)",
                   "value": {
-                    "model": "seedream-4-5-251128",
+                    "model": "seedream-5-0-260128",
                     "prompt": "A futuristic cyberpunk city, neon lights, rainy night, 8k",
                     "n": 1,
                     "size": "1920x1920"
@@ -87,7 +90,7 @@
                 "batch": {
                   "summary": "Four candidates for selection",
                   "value": {
-                    "model": "seedream-4-5-251128",
+                    "model": "seedream-5-0-260128",
                     "prompt": "Oil painting of a rolling hillside at sunset",
                     "n": 4,
                     "size": "2048x2048"
@@ -107,7 +110,7 @@
                   "properties": {
                     "model": {
                       "type": "string",
-                      "example": "seedream-4-5-251128"
+                      "example": "seedream-5-0-260128"
                     },
                     "created": {
                       "type": "integer",
@@ -148,7 +151,7 @@
                   }
                 },
                 "example": {
-                  "model": "seedream-4-5-251128",
+                  "model": "seedream-5-0-260128",
                   "created": 1776495432,
                   "data": [
                     {
@@ -172,7 +175,7 @@
             "description": "AIsa API 密钥缺失或无效。"
           },
           "404": {
-            "description": "此端点不会路由该模型。Wan 2.7 模型在此处返回 `openai_error`——请对这些模型使用 `/v1/chat/completions`。"
+            "description": "该模型未路由到此端点。网关会返回 `model_route_not_supported`，并附带该模型实际支持的路由——参见[模型目录](/zh/guides/models)。"
           },
           "429": {
             "description": "已达到速率限制。"

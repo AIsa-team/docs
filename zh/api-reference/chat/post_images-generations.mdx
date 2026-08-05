@@ -1,26 +1,31 @@
 ---
 title: "OpenAI 兼容的图像生成"
-description: "通过标准 POST /v1/images/generations 端点使用 ByteDance Seedream 生成图像。采用 OpenAI 兼容的请求结构；图像最小尺寸为 3,686,400 像素（例如 1920×1920）。"
+description: "通过标准 POST /v1/images/generations 端点使用 Seedream、Wan 和 gpt-image-2 生成图像。采用 OpenAI 兼容的请求结构；Seedream 路由要求图像最小尺寸为 3,686,400 像素（例如 1920×1920）。"
 openapi: "openapi/zh/openai-images-generations.json POST /images/generations"
 ---
 
-标准的兼容 OpenAI 的 `POST /v1/images/generations` 端点。目前路由到 **ByteDance Seedream**（`seedream-4-5-251128`）。Wan 2.7 模型**不使用**此路径——请参阅[通过 Chat 生成图像](/zh/api-reference/chat/post_chat-completions-image-generation)。
+标准的兼容 OpenAI 的 `POST /v1/images/generations` 端点。截至 2026 年 7 月 28 日，该端点服务 `seedream-5-0-260128`、`wan2.7-image`、`wan2.7-image-pro` 和 `gpt-image-2`。较早的 `seedream-4-5-251128` 需通过[通过 Chat 生成图像](/zh/api-reference/chat/post_chat-completions-image-generation)调用。
 
 ## 路由概览
 
 | 模型 | 端点 |
 |---|---|
-| `seedream-4-5-251128` | **`POST /v1/images/generations`** *（本页）* |
-| `wan2.7-image` / `wan2.7-image-pro` | [`POST /v1/chat/completions`](/zh/api-reference/chat/post_chat-completions-image-generation) |
+| `seedream-5-0-260128` | **`POST /v1/images/generations`** *（本页）*，也支持 `POST /v1/chat/completions` |
+| `wan2.7-image` / `wan2.7-image-pro` | **`POST /v1/images/generations`** *（本页）*、`POST /v1/images/edits` |
+| `gpt-image-2` | **`POST /v1/images/generations`** *（本页）*、`POST /v1/images/edits` |
+| `seedream-4-5-251128` | [`POST /v1/chat/completions`](/zh/api-reference/chat/post_chat-completions-image-generation) |
 | 兼容 Gemini 的模型 | [`POST /v1beta/models/{model}:generateContent`](/zh/api-reference/chat/post_models-model-generatecontent) |
 
 ## 支持的模型
 
-| 模型 | 每张图像费用 | 说明 |
+| 模型 | 费用 | 说明 |
 |---|---|---|
-| `seedream-4-5-251128` | $0.040 | 最小图像尺寸为 **3,686,400 像素**（例如 1920×1920） |
+| `seedream-5-0-260128` | $0.035 / 次请求 | 最小图像尺寸为 **3,686,400 像素**（例如 1920×1920） |
+| `wan2.7-image` | $0.030 / 次请求 | 同时支持 `POST /v1/images/edits` |
+| `wan2.7-image-pro` | $0.075 / 次请求 | 更高质量的 Wan 路由 |
+| `gpt-image-2` | $0.03 / 次请求，或 $0.05 / 张（1024×1024） | 部分路由同时按 token 计费，详见 [AI 模型价格](/zh/guides/pricing/ai-model-pricing-llm-inference) |
 
-## 尺寸限制 ⚠️
+## 尺寸限制 ⚠️（Seedream 路由）
 
 Seedream 的上游服务要求图像至少包含 **3,686,400 像素**。低于该值的请求将被拒绝，并返回：
 
@@ -48,7 +53,7 @@ curl -sS -X POST "https://api.aisa.one/v1/images/generations" \
   -H "Authorization: Bearer $AISA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "seedream-4-5-251128",
+    "model": "seedream-5-0-260128",
     "prompt": "A cute red panda, ultra-detailed, cinematic lighting",
     "n": 1,
     "size": "2048x2048"
@@ -61,7 +66,7 @@ from openai import OpenAI
 client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
 
 resp = client.images.generate(
-    model="seedream-4-5-251128",
+    model="seedream-5-0-260128",
     prompt="A cute red panda, ultra-detailed, cinematic lighting",
     n=1,
     size="2048x2048",
@@ -80,7 +85,7 @@ const client = new OpenAI({
 });
 
 const resp = await client.images.generate({
-  model: "seedream-4-5-251128",
+  model: "seedream-5-0-260128",
   prompt: "A cute red panda, ultra-detailed, cinematic lighting",
   n: 1,
   size: "2048x2048",
@@ -97,16 +102,16 @@ for (const item of resp.data) {
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `model` | string | 是 | `seedream-4-5-251128` |
+| `model` | string | 是 | `seedream-5-0-260128`、`wan2.7-image`、`wan2.7-image-pro`、`gpt-image-2` 之一 |
 | `prompt` | string | 是 | 对要生成的图像进行文本描述 |
-| `n` | integer | 否 | 图像数量。每张图像单独按 $0.040 计费 |
-| `size` | string | 是 | `WIDTHxHEIGHT`。必须满足 `width × height ≥ 3,686,400` |
+| `n` | integer | 否 | 图像数量。每张图像按该模型的单次请求价格单独计费 |
+| `size` | string | 否 | `WIDTHxHEIGHT`。Seedream 路由必须满足 `width × height ≥ 3,686,400`；`wan2.7-image` 和 `gpt-image-2` 接受更小的尺寸（`1024x1024` 已实测可用） |
 
 ## 响应
 
 ```json
 {
-  "model": "seedream-4-5-251128",
+  "model": "seedream-5-0-260128",
   "created": 1776495432,
   "data": [
     {

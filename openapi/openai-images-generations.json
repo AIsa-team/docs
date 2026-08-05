@@ -3,7 +3,7 @@
   "info": {
     "title": "OpenAI-Compatible Image Generations",
     "version": "1.0.0",
-    "description": "Standard OpenAI-compatible `POST /v1/images/generations` endpoint. Currently supports the **ByteDance Seedream** family. Wan 2.7 image models route through [`/v1/chat/completions`](/api-reference/chat/post_chat-completions-image-generation) instead, and Gemini-compatible `generateContent` requests use [`/v1beta/models/{model}:generateContent`](/api-reference/chat/post_models-model-generatecontent)."
+    "description": "Standard OpenAI-compatible `POST /v1/images/generations` endpoint. As of July 28, 2026 it serves `seedream-5-0-260128`, `wan2.7-image`, `wan2.7-image-pro`, and `gpt-image-2`. The older `seedream-4-5-251128` is routed through [`/v1/chat/completions`](/api-reference/chat/post_chat-completions-image-generation) instead, and Gemini-compatible `generateContent` requests use [`/v1beta/models/{model}:generateContent`](/api-reference/chat/post_models-model-generatecontent)."
   },
   "servers": [
     {
@@ -28,7 +28,7 @@
     "/images/generations": {
       "post": {
         "summary": "Generate images (OpenAI-compatible)",
-        "description": "Generate images with the OpenAI-compatible images-generations endpoint. Currently routed to **ByteDance Seedream** — the Wan 2.7 family does not use this path.\n\n**Size constraint.** Seedream's upstream requires a minimum of **3,686,400 pixels** per image. Requests below that return `400 InvalidParameter: image size must be at least 3686400 pixels`. A 1024×1024 image (1,048,576 px) is rejected; 1920×1920 (3,686,400 px) and 2048×2048 (4,194,304 px) are accepted. Other aspect ratios are fine as long as `width × height ≥ 3,686,400`.",
+        "description": "Generate images with the OpenAI-compatible images-generations endpoint.\n\n**Size constraint (Seedream routes only).** Seedream's upstream requires a minimum of **3,686,400 pixels** per image. Requests below that return `400 InvalidParameter: image size must be at least 3686400 pixels`. Wan and `gpt-image-2` routes accept smaller sizes — `1024x1024` is verified working for `wan2.7-image`.",
         "operationId": "createImageGeneration",
         "requestBody": {
           "required": true,
@@ -36,12 +36,20 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["model", "prompt"],
+                "required": [
+                  "model",
+                  "prompt"
+                ],
                 "properties": {
                   "model": {
                     "type": "string",
-                    "enum": ["seedream-4-5-251128"],
-                    "description": "Image generation model. Currently only `seedream-4-5-251128` is routed through this endpoint. Wan 2.7 models use `/v1/chat/completions`."
+                    "enum": [
+                      "seedream-5-0-260128",
+                      "wan2.7-image",
+                      "wan2.7-image-pro",
+                      "gpt-image-2"
+                    ],
+                    "description": "Image generation model. `seedream-5-0-260128` ($0.035/request), `wan2.7-image` ($0.030/request), `wan2.7-image-pro` ($0.075/request), or `gpt-image-2` ($0.03/request or $0.05 per 1024×1024 image)."
                   },
                   "prompt": {
                     "type": "string",
@@ -55,7 +63,7 @@
                   },
                   "size": {
                     "type": "string",
-                    "description": "Image dimensions as `WIDTHxHEIGHT`. Must satisfy `width × height ≥ 3,686,400`. Common valid values: `1920x1920`, `2048x2048`, `2304x1600`, `2560x1920`.",
+                    "description": "Image dimensions as `WIDTHxHEIGHT`. Seedream routes require `width × height ≥ 3,686,400` (e.g. `1920x1920`, `2048x2048`); Wan and `gpt-image-2` accept smaller sizes such as `1024x1024`.",
                     "example": "2048x2048"
                   }
                 }
@@ -64,7 +72,7 @@
                 "basic": {
                   "summary": "Single 2K image",
                   "value": {
-                    "model": "seedream-4-5-251128",
+                    "model": "seedream-5-0-260128",
                     "prompt": "A cute red panda, ultra-detailed, cinematic lighting",
                     "n": 1,
                     "size": "2048x2048"
@@ -73,7 +81,7 @@
                 "minimum_size": {
                   "summary": "Exactly at minimum allowed size (1920×1920)",
                   "value": {
-                    "model": "seedream-4-5-251128",
+                    "model": "seedream-5-0-260128",
                     "prompt": "A futuristic cyberpunk city, neon lights, rainy night, 8k",
                     "n": 1,
                     "size": "1920x1920"
@@ -82,7 +90,7 @@
                 "batch": {
                   "summary": "Four candidates for selection",
                   "value": {
-                    "model": "seedream-4-5-251128",
+                    "model": "seedream-5-0-260128",
                     "prompt": "Oil painting of a rolling hillside at sunset",
                     "n": 4,
                     "size": "2048x2048"
@@ -100,8 +108,14 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "model": { "type": "string", "example": "seedream-4-5-251128" },
-                    "created": { "type": "integer", "example": 1776495432 },
+                    "model": {
+                      "type": "string",
+                      "example": "seedream-5-0-260128"
+                    },
+                    "created": {
+                      "type": "integer",
+                      "example": 1776495432
+                    },
                     "data": {
                       "type": "array",
                       "description": "One entry per generated image.",
@@ -123,15 +137,21 @@
                     "usage": {
                       "type": "object",
                       "properties": {
-                        "generated_images": { "type": "integer" },
-                        "output_tokens": { "type": "integer" },
-                        "total_tokens": { "type": "integer" }
+                        "generated_images": {
+                          "type": "integer"
+                        },
+                        "output_tokens": {
+                          "type": "integer"
+                        },
+                        "total_tokens": {
+                          "type": "integer"
+                        }
                       }
                     }
                   }
                 },
                 "example": {
-                  "model": "seedream-4-5-251128",
+                  "model": "seedream-5-0-260128",
                   "created": 1776495432,
                   "data": [
                     {
@@ -151,13 +171,21 @@
           "400": {
             "description": "Invalid request. Most common: `size` smaller than 3,686,400 pixels → `\"image size must be at least 3686400 pixels\"`."
           },
-          "401": { "description": "Missing or invalid AIsa API key." },
-          "404": {
-            "description": "The model isn't routed through this endpoint. Wan 2.7 models return `openai_error` here — use `/v1/chat/completions` for those."
+          "401": {
+            "description": "Missing or invalid AIsa API key."
           },
-          "429": { "description": "Rate limit hit." },
-          "500": { "description": "Internal error." },
-          "502": { "description": "Upstream provider unreachable." }
+          "404": {
+            "description": "The model isn't routed through this endpoint. The gateway returns `model_route_not_supported` with the model's actual supported routes — see the [model catalog](/guides/models)."
+          },
+          "429": {
+            "description": "Rate limit hit."
+          },
+          "500": {
+            "description": "Internal error."
+          },
+          "502": {
+            "description": "Upstream provider unreachable."
+          }
         }
       }
     }

@@ -1,21 +1,26 @@
 ---
 title: "Image Generation via Chat"
-description: "Generate images with wan2.7-image and wan2.7-image-pro. These models route through /v1/chat/completions (not /v1/images/generations) using OpenAI's multimodal chat schema."
+description: "Image generation over the /v1/chat/completions route using OpenAI's multimodal chat schema. As of July 28, 2026 the Wan 2.7 image models have moved to /v1/images/generations; seedream-4-5-251128 is the remaining model configured on this route."
 openapi: "openapi/chat-image-generation.json POST /chat/completions"
 ---
 
-Wan 2.7 image models are exposed through the **Chat Completions** endpoint, not the OpenAI-style `/v1/images/generations` path. Send a standard chat request with a multimodal `content` array containing a text prompt, and AIsa returns generated images as `{type: "image"}` parts inside `choices[].message.content[]`.
+Some image models are reachable over the **Chat Completions** endpoint: you send a standard chat request with a multimodal `content` array containing a text prompt, and AIsa returns generated images as `{type: "image"}` parts inside `choices[].message.content[]`.
+
+<Warning>
+  **Routing changed.** `wan2.7-image` and `wan2.7-image-pro` no longer serve this route — calling them here returns `400 model_route_not_supported`. They now use [`POST /v1/images/generations`](/api-reference/chat/post_images-generations) and `POST /v1/images/edits`. `seedream-5-0-260128` and `gpt-image-2` are on `/v1/images/generations` as well.
+</Warning>
 
 <Note>
-  Looking for Seedream (`seedream-4-5-251128`)? It uses a different route — [`/v1/images/generations`](#). Gemini-compatible `generateContent` requests use [`/v1beta/models/{model}:generateContent`](/api-reference/chat/post_models-model-generatecontent). This page only covers the **Wan 2.7 family**.
+  Gemini-compatible `generateContent` requests use [`/v1beta/models/{model}:generateContent`](/api-reference/chat/post_models-model-generatecontent).
 </Note>
 
 ## Supported models
 
-| Model | Cost per image | Typical use |
+| Model | Cost | Status |
 | --- | --- | --- |
-| `wan2.7-image` | $0.030 | Fast, general-purpose image generation |
-| `wan2.7-image-pro` | $0.075 | Higher fidelity; also supports image-to-video via separate flow |
+| `seedream-4-5-251128` | $0.036 / request | Configured on this route; probes on July 28, 2026 returned `502 no available channel`, so verify availability before building on it |
+
+The multimodal request and response shapes below document how the gateway wraps image generation on the chat route. They were captured from the Wan models while those served this endpoint — re-verify against an actual response before depending on field-level details.
 
 ## Request
 
@@ -30,7 +35,7 @@ curl -sS -X POST "https://api.aisa.one/v1/chat/completions" \
   -H "Authorization: Bearer $AISA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "wan2.7-image",
+    "model": "seedream-4-5-251128",
     "messages": [
       {
         "role": "user",
@@ -49,7 +54,7 @@ from openai import OpenAI
 client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
 
 resp = client.chat.completions.create(
-    model="wan2.7-image",
+    model="seedream-4-5-251128",
     messages=[
         {
             "role": "user",
@@ -77,7 +82,7 @@ const client = new OpenAI({
 });
 
 const resp = await client.chat.completions.create({
-  model: "wan2.7-image",
+  model: "seedream-4-5-251128",
   messages: [
     {
       role: "user",
@@ -101,13 +106,13 @@ const urls = resp.choices
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `model` | string | yes | `wan2.7-image` or `wan2.7-image-pro` |
+| `model` | string | yes | `seedream-4-5-251128` |
 | `messages[].role` | string | yes | `user` for the prompt turn |
 | `messages[].content` | array | **yes** | Must be an array, not a string |
 | `messages[].content[].type` | string | yes | `text` for prompt parts; `image_url` for image-to-image inputs |
 | `messages[].content[].text` | string | when `type=text` | The prompt |
 | `messages[].content[].image_url.url` | string | when `type=image_url` | Reference image URL |
-| `n` | integer | no | Number of images. **Default is 4** for `wan2.7-image`; pass `1` to save cost |
+| `n` | integer | no | Number of images. Each is billed separately — pass `1` unless you want candidates |
 
 ## Response shape
 
@@ -116,7 +121,7 @@ const urls = resp.choices
   "id": "chatcmpl-fcc86dfd-...",
   "object": "chat.completion",
   "created": 1776495713,
-  "model": "wan2.7-image",
+  "model": "seedream-4-5-251128",
   "choices": [
     {
       "index": 0,
@@ -124,7 +129,7 @@ const urls = resp.choices
       "message": {
         "role": "assistant",
         "content": [
-          { "type": "image", "image": "https://cdn.aisa.one/images/wan2.7/..." }
+          { "type": "image", "image": "https://cdn.aisa.one/images/seedream/..." }
         ]
       }
     }
@@ -144,11 +149,11 @@ const urls = resp.choices
 
 ## Image-to-image
 
-Prepend an `image_url` part to the `content` array and follow it with a text instruction:
+Prepend an `image_url` part to the `content` array and follow it with a text instruction. For the Wan models this workflow now lives on [`POST /v1/images/edits`](/api-reference/chat/post_images-generations):
 
 ```json
 {
-  "model": "wan2.7-image-pro",
+  "model": "seedream-4-5-251128",
   "messages": [
     {
       "role": "user",
@@ -169,9 +174,10 @@ The playground sends exactly the same `POST /v1/chat/completions` request the st
 ## Common 4xx causes
 
 - `400 invalid_parameter_error — Input should be a valid list: messages[*].content` — `content` was passed as a string; wrap in an array of typed parts.
-- `400` referencing `messages` — you sent the Gemini-style `contents`/`parts`. Use `messages` with OpenAI multimodal parts for Wan models.
-- `404 openai_error` on `/v1/images/generations` — wrong endpoint. Wan models do **not** route through that path.
-- `500 model_not_found` — your workspace isn't provisioned for the Wan family. Contact support.
+- `400` referencing `messages` — you sent the Gemini-style `contents`/`parts`. Use `messages` with OpenAI multimodal parts.
+- `400 model_route_not_supported` — the model does not serve this endpoint. The error body lists the routes it does serve; `wan2.7-image`, `wan2.7-image-pro`, `seedream-5-0-260128`, and `gpt-image-2` all belong on [`/v1/images/generations`](/api-reference/chat/post_images-generations).
+- `502 no available channel` — the route exists but the upstream has no capacity right now. Retry, or use an image model on `/v1/images/generations`.
+- `500 model_not_found` — your workspace isn't provisioned for this model family. Contact support.
 
 See [Error Codes](/api-reference/errors) and [Rate Limits](/api-reference/rate-limits) for more.
 

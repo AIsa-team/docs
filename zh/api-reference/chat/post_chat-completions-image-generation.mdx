@@ -1,21 +1,26 @@
 ---
 title: "通过 Chat 生成图像"
-description: "使用 wan2.7-image 和 wan2.7-image-pro 生成图像。这些模型使用 OpenAI 的多模态聊天架构，通过 /v1/chat/completions（而非 /v1/images/generations）进行路由。"
+description: "通过 /v1/chat/completions 路由使用 OpenAI 多模态聊天架构生成图像。截至 2026 年 7 月 28 日，Wan 2.7 图像模型已迁移到 /v1/images/generations；seedream-4-5-251128 是此路由上剩余的已配置模型。"
 openapi: "openapi/zh/chat-image-generation.json POST /chat/completions"
 ---
 
-Wan 2.7 图像模型通过 **Chat Completions** 端点提供，而不是 OpenAI 风格的 `/v1/images/generations` 路径。请发送标准聊天请求，并使用包含文本提示词的多模态 `content` 数组；AIsa 会在 `choices[].message.content[]` 中以 `{type: "image"}` 部分返回生成的图像。
+部分图像模型可以通过 **Chat Completions** 端点调用：发送标准聊天请求，并使用包含文本提示词的多模态 `content` 数组；AIsa 会在 `choices[].message.content[]` 中以 `{type: "image"}` 部分返回生成的图像。
+
+<Warning>
+  **路由已变更。** `wan2.7-image` 和 `wan2.7-image-pro` 不再服务此路由 —— 在此调用会返回 `400 model_route_not_supported`。它们现在使用 [`POST /v1/images/generations`](/zh/api-reference/chat/post_images-generations) 和 `POST /v1/images/edits`。`seedream-5-0-260128` 和 `gpt-image-2` 同样在 `/v1/images/generations` 上。
+</Warning>
 
 <Note>
-  正在查找 Seedream（`seedream-4-5-251128`）？它使用不同的路由——[`/v1/images/generations`](#)。兼容 Gemini 的 `generateContent` 请求使用 [`/v1beta/models/{model}:generateContent`](/zh/api-reference/chat/post_models-model-generatecontent)。本页仅介绍 **Wan 2.7 系列**。
+  兼容 Gemini 的 `generateContent` 请求使用 [`/v1beta/models/{model}:generateContent`](/zh/api-reference/chat/post_models-model-generatecontent)。
 </Note>
 
 ## 支持的模型
 
-| 模型 | 每张图像费用 | 典型用途 |
+| 模型 | 费用 | 状态 |
 | --- | --- | --- |
-| `wan2.7-image` | $0.030 | 快速、通用的图像生成 |
-| `wan2.7-image-pro` | $0.075 | 更高保真度；还支持通过独立流程进行图生视频 |
+| `seedream-4-5-251128` | $0.036 / 次请求 | 此路由上已配置；2026 年 7 月 28 日实测返回 `502 no available channel`，依赖前请先确认可用性 |
+
+下方的多模态请求与响应结构说明的是网关在 chat 路由上对图像生成的封装方式。这些结构是 Wan 模型仍在此端点时实测记录的 —— 依赖字段级细节前，请以实际响应为准再核对一次。
 
 ## 请求
 
@@ -30,7 +35,7 @@ curl -sS -X POST "https://api.aisa.one/v1/chat/completions" \
   -H "Authorization: Bearer $AISA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "wan2.7-image",
+    "model": "seedream-4-5-251128",
     "messages": [
       {
         "role": "user",
@@ -49,7 +54,7 @@ from openai import OpenAI
 client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
 
 resp = client.chat.completions.create(
-    model="wan2.7-image",
+    model="seedream-4-5-251128",
     messages=[
         {
             "role": "user",
@@ -77,7 +82,7 @@ const client = new OpenAI({
 });
 
 const resp = await client.chat.completions.create({
-  model: "wan2.7-image",
+  model: "seedream-4-5-251128",
   messages: [
     {
       role: "user",
@@ -101,13 +106,13 @@ const urls = resp.choices
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `model` | string | 是 | `wan2.7-image` 或 `wan2.7-image-pro` |
+| `model` | string | 是 | `seedream-4-5-251128` |
 | `messages[].role` | string | 是 | 提示词轮次使用 `user` |
 | `messages[].content` | array | **是** | 必须是数组，不能是字符串 |
 | `messages[].content[].type` | string | 是 | 提示词部分使用 `text`；图生图输入使用 `image_url` |
 | `messages[].content[].text` | string | 当 `type=text` 时 | 提示词 |
 | `messages[].content[].image_url.url` | string | 当 `type=image_url` 时 | 参考图像 URL |
-| `n` | integer | 否 | 图像数量。`wan2.7-image` 的**默认值为 4**；传入 `1` 可节省费用 |
+| `n` | integer | 否 | 图像数量。每张单独计费；除非需要多个候选，否则传入 `1` |
 
 ## 响应结构
 
@@ -116,7 +121,7 @@ const urls = resp.choices
   "id": "chatcmpl-fcc86dfd-...",
   "object": "chat.completion",
   "created": 1776495713,
-  "model": "wan2.7-image",
+  "model": "seedream-4-5-251128",
   "choices": [
     {
       "index": 0,
@@ -124,7 +129,7 @@ const urls = resp.choices
       "message": {
         "role": "assistant",
         "content": [
-          { "type": "image", "image": "https://cdn.aisa.one/images/wan2.7/..." }
+          { "type": "image", "image": "https://cdn.aisa.one/images/seedream/..." }
         ]
       }
     }
@@ -144,11 +149,11 @@ const urls = resp.choices
 
 ## 图生图
 
-在 `content` 数组开头添加一个 `image_url` 部分，并在其后添加文本指令：
+在 `content` 数组开头添加一个 `image_url` 部分，并在其后添加文本指令。Wan 模型的这一流程现已迁移到 [`POST /v1/images/edits`](/zh/api-reference/chat/post_images-generations)：
 
 ```json
 {
-  "model": "wan2.7-image-pro",
+  "model": "seedream-4-5-251128",
   "messages": [
     {
       "role": "user",
@@ -169,9 +174,10 @@ const urls = resp.choices
 ## 常见 4xx 原因
 
 - `400 invalid_parameter_error — Input should be a valid list: messages[*].content`——`content` 被作为字符串传入；请将其包装为带类型部分组成的数组。
-- 引用 `messages` 的 `400`——你发送了 Gemini 风格的 `contents`/`parts`。Wan 模型应使用 `messages` 和 OpenAI 多模态部分。
-- `/v1/images/generations` 上的 `404 openai_error`——端点错误。Wan 模型**不会**通过该路径路由。
-- `500 model_not_found`——你的工作区尚未配置 Wan 系列。请联系支持团队。
+- 引用 `messages` 的 `400`——你发送了 Gemini 风格的 `contents`/`parts`。请使用 `messages` 和 OpenAI 多模态部分。
+- `400 model_route_not_supported`——该模型不服务此端点。错误响应中会列出它实际支持的路由；`wan2.7-image`、`wan2.7-image-pro`、`seedream-5-0-260128` 和 `gpt-image-2` 都属于 [`/v1/images/generations`](/zh/api-reference/chat/post_images-generations)。
+- `502 no available channel`——路由存在，但上游当前没有可用通道。请重试，或改用 `/v1/images/generations` 上的图像模型。
+- `500 model_not_found`——你的工作区尚未配置该模型系列。请联系支持团队。
 
 更多信息请参阅[错误代码](/zh/api-reference/errors)和[速率限制](/zh/api-reference/rate-limits)。
 

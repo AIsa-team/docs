@@ -3,7 +3,7 @@
   "info": {
     "title": "Image Generation via Chat Completions",
     "version": "1.0.0",
-    "description": "Wan 2.7 图像模型（`wan2.7-image`、`wan2.7-image-pro`）通过标准 `POST /v1/chat/completions` 端点提供，而非 `/v1/images/generations`。请发送包含多模态 `content` 数组的聊天请求；AIsa 返回的 `choices[].message.content[]` 包含一个或多个 `{type: \"image\"}` 部分。"
+    "description": "通过标准 `POST /v1/chat/completions` 路由生成图像，使用 OpenAI 的多模态 `content` 数组；AIsa 在 `choices[].message.content[]` 中返回一个或多个 `{type: \"image\"}` 部分。**截至 2026 年 7 月 28 日，Wan 2.7 图像模型已迁移到 `/v1/images/generations` 和 `/v1/images/edits`** —— `seedream-4-5-251128` 是此路由上剩余的已配置模型。"
   },
   "servers": [
     {
@@ -27,8 +27,8 @@
   "paths": {
     "/chat/completions": {
       "post": {
-        "summary": "通过 Chat Completions 生成图像（wan2.7 系列）",
-        "description": "使用 Wan 2.7 图像模型生成图像。请求结构与带多模态内容的 OpenAI Chat Completions 一致；响应包含 `choices[].message.content[]`，其中每一项均为 `{type: \"image\", image: \"<url or base64>\"}`。\n\n**重要：** `messages[].content` 必须是**类型化部分的数组**，而不能是纯字符串。传入字符串将返回 `400 invalid_parameter_error`，并显示 `Input should be a valid list: messages[*].content`。\n\n默认情况下，`wan2.7-image` 返回 **4 张候选图像**（按每张图像计费）。设置 `n` 可请求不同的数量。",
+        "summary": "通过 Chat Completions 生成图像",
+        "description": "通过 chat 路由生成图像。请求结构与 OpenAI Chat Completions 的多模态内容一致；响应在 `choices[].message.content[]` 中返回 `{type: \"image\", image: \"<url 或 base64>\"}`。\n\n**重要：** `messages[].content` 必须是**类型化部分组成的数组**，不能是普通字符串。传字符串会返回 `400 invalid_parameter_error`：`Input should be a valid list: messages[*].content`。\n\n**路由说明：** `wan2.7-image`、`wan2.7-image-pro`、`seedream-5-0-260128` 和 `gpt-image-2` 在此会返回 `400 model_route_not_supported` —— 这些模型请使用 `/v1/images/generations`。",
         "operationId": "generateImageViaChat",
         "requestBody": {
           "required": true,
@@ -44,10 +44,9 @@
                   "model": {
                     "type": "string",
                     "enum": [
-                      "wan2.7-image",
-                      "wan2.7-image-pro"
+                      "seedream-4-5-251128"
                     ],
-                    "description": "图像生成模型。`wan2.7-image`（$0.030/张图像）用于标准质量，`wan2.7-image-pro`（$0.075/张图像）用于更高保真度。"
+                    "description": "chat 路由上的图像生成模型。`seedream-4-5-251128` 按每次请求 $0.036 计费。Wan 和 gpt-image-2 模型请改用 `/v1/images/generations`。"
                   },
                   "messages": {
                     "type": "array",
@@ -106,9 +105,7 @@
                   "n": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 4,
-                    "default": 4,
-                    "description": "要生成的图像数量。`wan2.7-image` 默认返回 4 张；传入 `1` 可节省成本。"
+                    "description": "要生成的图像数量。每张图像单独计费；除非需要多个候选，否则传入 `1`。"
                   }
                 }
               },
@@ -116,7 +113,7 @@
                 "basic": {
                   "summary": "Single-image prompt (n=1)",
                   "value": {
-                    "model": "wan2.7-image",
+                    "model": "seedream-4-5-251128",
                     "messages": [
                       {
                         "role": "user",
@@ -134,7 +131,7 @@
                 "four_variants": {
                   "summary": "Default 4 candidates for selection",
                   "value": {
-                    "model": "wan2.7-image",
+                    "model": "seedream-4-5-251128",
                     "messages": [
                       {
                         "role": "user",
@@ -151,7 +148,7 @@
                 "pro": {
                   "summary": "Higher-fidelity pro model",
                   "value": {
-                    "model": "wan2.7-image-pro",
+                    "model": "seedream-4-5-251128",
                     "messages": [
                       {
                         "role": "user",
@@ -169,7 +166,7 @@
                 "image_to_image": {
                   "summary": "Image-to-image (reference + prompt)",
                   "value": {
-                    "model": "wan2.7-image-pro",
+                    "model": "seedream-4-5-251128",
                     "messages": [
                       {
                         "role": "user",
@@ -216,7 +213,7 @@
                     },
                     "model": {
                       "type": "string",
-                      "example": "wan2.7-image"
+                      "example": "seedream-4-5-251128"
                     },
                     "choices": {
                       "type": "array",
@@ -285,7 +282,7 @@
                   "id": "chatcmpl-fcc86dfd-9424-9523-b0bd-cdf07383bee2",
                   "object": "chat.completion",
                   "created": 1776495713,
-                  "model": "wan2.7-image",
+                  "model": "seedream-4-5-251128",
                   "choices": [
                     {
                       "index": 0,
@@ -295,7 +292,7 @@
                         "content": [
                           {
                             "type": "image",
-                            "image": "https://cdn.aisa.one/images/wan2.7/20260418-abc.png"
+                            "image": "https://cdn.aisa.one/images/seedream/20260418-abc.png"
                           }
                         ]
                       }

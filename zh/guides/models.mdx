@@ -1,12 +1,12 @@
 ---
 title: AIsa LLM 模型目录 - API Endpoint、能力和上下文窗口
 description: >-
-  AIsa LLM 与媒体模型目录：包含 GPT-5、Claude、Gemini、Grok、DeepSeek、Qwen、Kimi、MiniMax、GLM、Seed、Seedream、Wan 等模型通过 https://api.aisa.one/v1 调用时的模型 ID、provider、API endpoint、能力、上下文窗口和计费信息。
+  AIsa LLM 与媒体模型目录：涵盖全部 108 个模型（GPT、Claude、Gemini、Grok、DeepSeek、Qwen、Kimi、MiniMax、GLM、Seed、Seedream、Dreamina、Wan、StepFun、MiMo）通过 https://api.aisa.one/v1 调用时的模型 ID、provider、API endpoint、能力、上下文窗口和计费信息。
 ---
 
 AIsa 的 Model Gateway 可以通过一个 API Key 路由 LLM 和媒体生成请求。本指南是面向 Agent 的稳定 Markdown 来源，适合需要了解 AIsa 支持哪些模型 ID、每个模型使用哪个 endpoint，以及各模型能力边界的场景。
 
-实时模型目录在 [aisa.one/models](https://aisa.one/models)。下方表格基于 2026 年 6 月 4 日的 Model Gateway 在线元数据刷新。模型可用性和价格可能变化，生产路由前请以实时模型目录为最终来源。
+实时模型目录在 [aisa.one/models](https://aisa.one/models)。下方表格覆盖网关中全部 108 个模型，基于 2026 年 8 月 5 日的实时定价数据刷新。模型可用性和价格可能变化，生产路由前请以实时模型目录为最终来源。
 
 ## 如何调用模型
 
@@ -30,15 +30,18 @@ print(response.choices[0].message.content)
 
 ## Endpoint 类型
 
-| Endpoint | 当前模型数量 |
+| Endpoint | 当前模型数 |
 | --- | ---: |
-| `POST /v1/chat/completions` | 55 |
-| `POST /v1/messages` | 10 |
-| `POST /v1/responses` | 4 |
-| `POST /v1/images/generations` | 1 |
-| `POST /v1beta/models/{model}:generateContent` | 1 |
+| `POST /v1/chat/completions` | 95 |
+| `POST /v1/messages` | 85 |
+| `POST /v1/responses` | 72 |
+| `POST /v1/video/generations` | 8 |
+| `POST /v1/images/generations` | 4 |
+| `POST /v1/images/edits` | 3 |
+| `POST /v1/embeddings` | 2 |
+| `POST /v1beta/models/{model}:generateContent` | 2 |
 
-大多数文本、视觉、音频、代码和多模态模型使用 `POST /v1/chat/completions`。Claude 模型也可能提供 Anthropic 兼容的 `POST /v1/messages`。部分模型提供 `POST /v1/responses`、Gemini 兼容的 `POST /v1beta/models/{model}:generateContent`，或图像生成路由。调用时请始终使用下表中的精确模型字符串。
+大多数文本、视觉和代码模型同时支持 OpenAI 风格的 `chat/completions` 和 Anthropic 兼容的 `messages`，因此同一个模型 ID 在两种 SDK 下都能直接用。`POST /v1/responses` 现已覆盖大多数文本模型 —— 上表只统计 2026 年 8 月 5 日线上网关定价数据报告的路由。在模型不支持的路由上调用会返回 `400 model_route_not_supported`，并附带该模型支持的路由列表，因此切换协议前请先探测。Gemini 模型额外提供 `generateContent`。图像模型使用 `images/generations` 和 `images/edits`。视频模型是异步任务制：先提交到 `POST /v1/video/generations`，再轮询 `/v1/video/generations/{task_id}` 获取结果。Embedding 模型使用 `/v1/embeddings`。调用时请始终使用下表中的精确模型字符串。
 
 ## 能力标签说明
 
@@ -53,127 +56,204 @@ print(response.choices[0].message.content)
 
 ## Provider 概览
 
-| Provider | 模型数量 | 能力 | 示例模型 ID |
+| Provider | 模型数 | 类型 | 示例模型 ID |
 | --- | ---: | --- | --- |
-| OpenAI | 8 | Coding, Text, Vision, Image | `gpt-5`, `gpt-5-mini`, `gpt-5.2`, `gpt-5.2-chat-latest` …… |
-| Anthropic | 7 | Coding, Text, Vision | `claude-haiku-4-5-20251001`, `claude-opus-4-1-20250805`, `claude-opus-4-5-20251101`, `claude-opus-4-6` …… |
+| OpenAI | 27 | Image, Text | `gpt-4.1-mini`, `gpt-4o`, `gpt-4o-mini`, `gpt-5-chat-latest` ... |
+| Anthropic | 12 | Text | `claude-fable-5`, `claude-haiku-4-5-20251001`, `claude-opus-4-1-20250805`, `claude-opus-4-5-20251101` ... |
 | Google Gemini | 2 | Text | `gemini-3-pro-preview`, `gemini-3.5-flash` |
-| xAI | 4 | Text, Vision, Coding | `grok-4.20-0309-non-reasoning`, `grok-4.20-0309-reasoning`, `grok-4.3`, `grok-build-0.1` |
-| DeepSeek | 6 | Coding, Text | `deepseek-r1`, `deepseek-v3`, `deepseek-v3.1`, `deepseek-v3.2` …… |
-| Alibaba | 16 | Audio, Coding, Text, Video, Vision, Image | `qwen-flash`, `qwen-mt-flash`, `qwen-mt-lite`, `qwen-plus-2025-12-01` …… |
-| Moonshot | 3 | Coding, Text, Video, Vision | `kimi-k2-thinking`, `kimi-k2.5`, `kimi-k2.6` |
-| MiniMax | 2 | Coding, Text, Video, Vision | `MiniMax-M2.5`, `MiniMax-M3` |
-| Zhipu GLM | 1 | Coding, Text | `glm-5` |
-| ByteDance | 8 | Text, Video, Vision, Coding, Image | `seed-1-6-250915`, `seed-1-6-flash-250715`, `seed-1-8-251228`, `seed-2-0-lite-260228` …… |
+| xAI | 5 | Text | `grok-4.20-0309-non-reasoning`, `grok-4.20-0309-reasoning`, `grok-4.3`, `grok-4.5` ... |
+| DeepSeek | 7 | Text | `deepseek-r1`, `deepseek-v3`, `deepseek-v3.1`, `deepseek-v3.2` ... |
+| Alibaba | 24 | Image, Text, Video | `qwen-flash`, `qwen-mt-flash`, `qwen-mt-lite`, `qwen-plus-2025-12-01` ... |
+| Moonshot | 5 | Text | `kimi-k2-thinking`, `kimi-k2.5`, `kimi-k2.6`, `kimi-k2.7-code` ... |
+| MiniMax | 2 | Text | `MiniMax-M2.5`, `MiniMax-M3` |
+| Zhipu GLM | 4 | Text | `glm-5`, `glm-5.1`, `glm-5.2` ... |
+| ByteDance | 10 | Image, Text, Video | `seed-1-6-250915`, `seed-1-6-flash-250715`, `seed-1-8-251228`, `seed-2-0-lite-260228` ... |
+| Xiaomi | 2 | Text | `mimo-v2.5`, `mimo-v2.5-pro` |
+| StepFun | 3 | Text | `step-3.5-flash`, `step-3.5-flash-2603`, `step-3.7-flash` |
+| HappyHorse | 3 | Video | `happyhorse-1.1-i2v`, `happyhorse-1.1-r2v`, `happyhorse-1.1-t2v` |
+| 其他 | 2 | Embeddings | `text-embedding-3-large`, `text-embedding-3-small` |
 
 ## 完整模型详情
 
+上下文窗口和能力标签来自上一次 Model Gateway 元数据导出。此后新增的模型，上下文列显示 `—`，能力列只标注基础类型 —— 这些模型的实时上下文限制和能力标签请查看 [aisa.one/models](https://aisa.one/models)。
+
 ### OpenAI
 
-| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| Model ID | 上下文 | 能力 | Endpoint(s) | 计费 |
 | --- | ---: | --- | --- | --- |
-| `gpt-5` | 400,000 | Coding, Text, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $1.2500 输入 / $10.0000 输出，每 1M Token （缓存读取 $0.1250/M） |
-| `gpt-5-mini` | 400,000 | Coding, Text, Vision; reasoning, long context, creative writing, spatial vision, document vision, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.1500 输入 / $1.2000 输出，每 1M Token （缓存读取 $0.0150/M） |
-| `gpt-5.2` | 400,000 | Coding, Text, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $1.7500 输入 / $14.0000 输出，每 1M Token （缓存读取 $1.7500/M） |
-| `gpt-5.2-chat-latest` | 400,000 | Coding, Text, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $1.7500 输入 / $14.0000 输出，每 1M Token （缓存读取 $1.7500/M） |
-| `gpt-5.3-codex` | 1,000,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $1.7500 输入 / $14.0000 输出，每 1M Token （缓存读取 $1.7500/M） |
-| `gpt-5.4` | 1,050,000 | Coding, Text, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `POST /v1/responses` | $2.5000 输入 / $15.0000 输出，每 1M Token （缓存读取 $2.5000/M） |
-| `gpt-5.5` | 400,000 | Coding, Text, Vision; code reasoning, long context, reasoning, vision | `POST /v1/messages`, `POST /v1/chat/completions`, `POST /v1/responses` | $5.0000 输入 / $40.0000 输出，每 1M Token （缓存读取 $5.0000/M） |
-| `gpt-image-2` | 不适用 | Image, Vision; image editing, image generation, text in images, vision | `POST /v1/images/generations` | $8.0000 输入 / $30.0000 输出，每 1M Token （缓存写入 $2.0000/M） |
+| `gpt-4.1-mini` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.4211 输入 / $1.6842 输出，每 1M Token（缓存读取 $0.1053/M） |
+| `gpt-4o` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $2.6316 输入 / $10.5263 输出，每 1M Token（缓存读取 $1.3158/M） |
+| `gpt-4o-mini` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.1579 输入 / $0.6316 输出，每 1M Token（缓存读取 $0.0789/M） |
+| `gpt-5-chat-latest` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.3158 输入 / $10.5263 输出，每 1M Token（缓存读取 $0.1316/M） |
+| `gpt-5-nano` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.0526 输入 / $0.4211 输出，每 1M Token（缓存读取 $0.0053/M） |
+| `gpt-5-pro` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $15.7895 输入 / $126.3158 输出，每 1M Token |
+| `gpt-5-search-api` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.3158 输入 / $10.5263 输出，每 1M Token（缓存读取 $0.1316/M） |
+| `gpt-5.1` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.3158 输入 / $10.5263 输出，每 1M Token（缓存读取 $0.1316/M） |
+| `gpt-5.1-chat-latest` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.3158 输入 / $10.5263 输出，每 1M Token（缓存读取 $0.1316/M） |
+| `gpt-5.1-codex` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.3158 输入 / $10.5263 输出，每 1M Token（缓存读取 $0.1316/M） |
+| `gpt-5.1-codex-max` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.3158 输入 / $10.5263 输出，每 1M Token（缓存读取 $0.1316/M） |
+| `gpt-5.2` | 400,000 | Coding, Text, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.8421 输入 / $14.7368 输出，每 1M Token（缓存读取 $0.1842/M） |
+| `gpt-5.2-chat-latest` | 400,000 | Coding, Text, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.8421 输入 / $14.7368 输出，每 1M Token（缓存读取 $0.1842/M） |
+| `gpt-5.2-codex` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.8421 输入 / $14.7368 输出，每 1M Token（缓存读取 $0.1842/M） |
+| `gpt-5.2-pro` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $22.1053 输入 / $176.8421 输出，每 1M Token |
+| `gpt-5.3-chat-latest` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.8421 输入 / $14.7368 输出，每 1M Token（缓存读取 $0.1842/M） |
+| `gpt-5.3-codex` | 1,000,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.8421 输入 / $14.7368 输出，每 1M Token（缓存读取 $0.1842/M） |
+| `gpt-5.4` | 1,050,000 | Coding, Text, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $2.6316 输入 / $15.7895 输出，每 1M Token（缓存读取 $0.2632/M） |
+| `gpt-5.4-mini` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.7895 输入 / $4.7368 输出，每 1M Token（缓存读取 $0.0789/M） |
+| `gpt-5.4-nano` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.2105 输入 / $1.3158 输出，每 1M Token（缓存读取 $0.0211/M） |
+| `gpt-5.4-pro` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $31.5789 输入 / $189.4737 输出，每 1M Token |
+| `gpt-5.5` | 400,000 | Coding, Text, Vision; code reasoning, long context, reasoning, vision | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $5.2632 输入 / $40.0000 输出，每 1M Token（缓存读取 $0.5263/M） |
+| `gpt-5.5-pro` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $31.5789 输入 / $189.4737 输出，每 1M Token |
+| `gpt-5.6-luna` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.2105 输入 / $1.2632 输出，每 1M Token（缓存读取 $0.0211/M；缓存写入 $0.2500/M） |
+| `gpt-5.6-sol` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $5.2632 输入 / $31.5789 输出，每 1M Token（缓存读取 $0.5263/M；缓存写入 $6.2500/M） |
+| `gpt-5.6-terra` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $2.1053 输入 / $12.6316 输出，每 1M Token（缓存读取 $0.2105/M；缓存写入 $2.5000/M） |
+| `gpt-image-2` | 不适用 | Image, Vision; image editing, image generation, text in images, vision | `/v1/images/generations`, `/v1/images/edits` | $8.4211 输入 / $31.5789 输出，每 1M Token（缓存写入 $2.0000/M）；$0.03 / 次请求; $0.05 / 张图 (1024x1024) |
 
 ### Anthropic
 
-| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| Model ID | 上下文 | 能力 | Endpoint(s) | 计费 |
 | --- | ---: | --- | --- | --- |
-| `claude-haiku-4-5-20251001` | 200,000 | Coding, Text, Vision; reasoning, long context, spatial vision, document vision, visual coding, code reasoning, agentic coding | `POST /v1/messages`, `POST /v1/chat/completions` | $1.0000 输入 / $5.0000 输出，每 1M Token （缓存读取 $0.1000/M；缓存写入 $2.0000/M） |
-| `claude-opus-4-1-20250805` | 200,000 | Coding, Text, Vision; reasoning, long context, document vision, visual coding, code reasoning, agentic coding | `POST /v1/messages`, `POST /v1/chat/completions` | $15.0000 输入 / $75.0000 输出，每 1M Token （缓存读取 $1.5000/M；缓存写入 $30.0000/M） |
-| `claude-opus-4-5-20251101` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, document vision, visual coding, code reasoning, code completion, agentic coding | `POST /v1/messages`, `POST /v1/chat/completions` | $5.0000 输入 / $25.0000 输出，每 1M Token （缓存读取 $0.5000/M；缓存写入 $10.0000/M） |
-| `claude-opus-4-6` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, document vision, visual coding, code reasoning, code completion, agentic coding | `POST /v1/messages`, `POST /v1/chat/completions` | $5.0000 输入 / $25.0000 输出，每 1M Token （缓存读取 $0.5000/M；缓存写入 $10.0000/M） |
-| `claude-opus-4-7` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `POST /v1/messages`, `POST /v1/chat/completions` | $5.0000 输入 / $25.0000 输出，每 1M Token （缓存读取 $0.5000/M；缓存写入 $10.0000/M） |
-| `claude-opus-4-8` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `POST /v1/messages`, `POST /v1/chat/completions` | $5.0000 输入 / $25.0000 输出，每 1M Token （缓存读取 $0.5000/M；缓存写入 $10.0000/M） |
-| `claude-sonnet-4-5-20250929` | 200,000 | Coding, Text, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `POST /v1/messages`, `POST /v1/chat/completions` | $3.0000 输入 / $15.0000 输出，每 1M Token （缓存读取 $0.3000/M；缓存写入 $6.0000/M） |
+| `claude-fable-5` | — | Text | `/v1/chat/completions`, `/v1/messages` | $10.5263 输入 / $52.6316 输出，每 1M Token（缓存读取 $1.0526/M；缓存写入 $12.5000/M） |
+| `claude-haiku-4-5-20251001` | 200,000 | Coding, Text, Vision; reasoning, long context, spatial vision, document vision, visual coding, code reasoning, agentic coding | `/v1/chat/completions`, `/v1/messages` | $1.0526 输入 / $5.2632 输出，每 1M Token（缓存读取 $0.1053/M；缓存写入 $2.0000/M） |
+| `claude-opus-4-1-20250805` | 200,000 | Coding, Text, Vision; reasoning, long context, document vision, visual coding, code reasoning, agentic coding | `/v1/chat/completions`, `/v1/messages` | $15.7895 输入 / $78.9474 输出，每 1M Token（缓存读取 $1.5789/M；缓存写入 $30.0000/M） |
+| `claude-opus-4-5-20251101` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, document vision, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages` | $5.2632 输入 / $26.3158 输出，每 1M Token（缓存读取 $0.5263/M；缓存写入 $10.0000/M） |
+| `claude-opus-4-6` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, document vision, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages` | $5.2632 输入 / $26.3158 输出，每 1M Token（缓存读取 $0.5263/M；缓存写入 $10.0000/M） |
+| `claude-opus-4-7` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $5.2632 输入 / $26.3158 输出，每 1M Token（缓存读取 $0.5263/M；缓存写入 $10.0000/M） |
+| `claude-opus-4-8` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages` | $5.2632 输入 / $26.3158 输出，每 1M Token（缓存读取 $0.5263/M；缓存写入 $10.0000/M） |
+| `claude-opus-5` | — | Text | `/v1/chat/completions`, `/v1/messages` | $5.2632 输入 / $26.3158 输出，每 1M Token（缓存读取 $0.5263/M；缓存写入 $10.0000/M） |
+| `claude-sonnet-4-5-20250929` | 200,000 | Coding, Text, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages` | $3.1579 输入 / $15.7895 输出，每 1M Token（缓存读取 $0.3158/M；缓存写入 $6.0000/M） |
+| `claude-sonnet-4-6` | — | Text | `/v1/chat/completions`, `/v1/messages` | $3.1579 输入 / $15.7895 输出，每 1M Token（缓存读取 $0.3158/M；缓存写入 $6.0000/M） |
+| `claude-sonnet-4-6-thinking` | — | Text | `/v1/chat/completions`, `/v1/messages` | $3.1579 输入 / $15.7895 输出，每 1M Token（缓存读取 $0.3158/M；缓存写入 $6.0000/M） |
+| `claude-sonnet-5` | — | Text | `/v1/chat/completions`, `/v1/messages` | $2.1053 输入 / $10.5263 输出，每 1M Token（缓存读取 $0.2105/M；缓存写入 $2.5000/M） |
 
 ### Google Gemini
 
-| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| Model ID | 上下文 | 能力 | Endpoint(s) | 计费 |
 | --- | ---: | --- | --- | --- |
-| `gemini-3-pro-preview` | 不适用 | Text; long context, creative writing | `POST /v1/chat/completions` | $2.0000 输入 / $12.0000 输出，每 1M Token |
-| `gemini-3.5-flash` | 不适用 | Text; long context, creative writing | `POST /v1beta/models/{model}:generateContent`, `POST /v1/chat/completions` | $1.5000 输入 / $9.0000 输出，每 1M Token （缓存读取 $0.1500/M） |
+| `gemini-3-pro-preview` | 不适用 | Text; long context, creative writing | `/v1/chat/completions`, `/v1beta/models/{model}:generateContent` | $2.1053 输入 / $12.6316 输出，每 1M Token |
+| `gemini-3.5-flash` | 不适用 | Text; long context, creative writing | `/v1/chat/completions`, `/v1beta/models/{model}:generateContent` | $1.5789 输入 / $9.4737 输出，每 1M Token（缓存读取 $0.1579/M） |
 
 ### xAI
 
-| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| Model ID | 上下文 | 能力 | Endpoint(s) | 计费 |
 | --- | ---: | --- | --- | --- |
-| `grok-4.20-0309-non-reasoning` | 1,000,000 | Text, Vision; long context, creative writing, spatial vision, document vision | `POST /v1/chat/completions` | $1.2500 输入 / $2.5000 输出，每 1M Token |
-| `grok-4.20-0309-reasoning` | 1,000,000 | Text, Vision; reasoning, long context, creative writing, spatial vision, document vision | `POST /v1/chat/completions` | $1.2500 输入 / $2.5000 输出，每 1M Token |
-| `grok-4.3` | 1,000,000 | Text, Vision; reasoning, long context, creative writing, spatial vision, document vision | `POST /v1/chat/completions` | $1.2500 输入 / $2.5000 输出，每 1M Token |
-| `grok-build-0.1` | 256,000 | Coding, Text, Vision; reasoning, long context, visual coding, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $1.0000 输入 / $2.0000 输出，每 1M Token |
+| `grok-4.20-0309-non-reasoning` | 1,000,000 | Text, Vision; long context, creative writing, spatial vision, document vision | `/v1/chat/completions` | $1.3158 输入 / $2.6316 输出，每 1M Token |
+| `grok-4.20-0309-reasoning` | 1,000,000 | Text, Vision; reasoning, long context, creative writing, spatial vision, document vision | `/v1/chat/completions` | $1.3158 输入 / $2.6316 输出，每 1M Token |
+| `grok-4.3` | 1,000,000 | Text, Vision; reasoning, long context, creative writing, spatial vision, document vision | `/v1/chat/completions` | $1.3158 输入 / $2.6316 输出，每 1M Token |
+| `grok-4.5` | — | Text | `/v1/chat/completions` | $2.1053 输入 / $6.3158 输出，每 1M Token（缓存写入 $0.5000/M） |
+| `grok-build-0.1` | 256,000 | Coding, Text, Vision; reasoning, long context, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions` | $1.0526 输入 / $2.1053 输出，每 1M Token |
 
 ### DeepSeek
 
-| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| Model ID | 上下文 | 能力 | Endpoint(s) | 计费 |
 | --- | ---: | --- | --- | --- |
-| `deepseek-r1` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `POST /v1/chat/completions` | $0.4018 输入 / $1.6058 输出，每 1M Token （缓存读取 $0.4018/M） |
-| `deepseek-v3` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `POST /v1/chat/completions` | $0.2009 输入 / $0.8029 输出，每 1M Token （缓存读取 $0.2009/M） |
-| `deepseek-v3.1` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `POST /v1/chat/completions` | $0.4018 输入 / $1.2047 输出，每 1M Token （缓存读取 $0.4018/M） |
-| `deepseek-v3.2` | 128,000 | Coding, Text; reasoning, long context, creative writing, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.2009 输入 / $0.3017 输出，每 1M Token （缓存读取 $0.2009/M） |
-| `deepseek-v4-flash` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `POST /v1/chat/completions` | $0.0980 输入 / $0.1960 输出，每 1M Token （缓存读取 $0.0020/M） |
-| `deepseek-v4-pro` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `POST /v1/messages`, `POST /v1/chat/completions`, `POST /v1/responses` | $0.3045 输入 / $0.6090 输出，每 1M Token （缓存读取 $0.0025/M） |
+| `deepseek-r1` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.4229 输入 / $1.6903 输出，每 1M Token（缓存读取 $0.4229/M） |
+| `deepseek-v3` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.2115 输入 / $0.8452 输出，每 1M Token（缓存读取 $0.2115/M） |
+| `deepseek-v3.1` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.4229 输入 / $1.2681 输出，每 1M Token（缓存读取 $0.4229/M） |
+| `deepseek-v3.2` | 128,000 | Coding, Text; reasoning, long context, creative writing, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.2115 输入 / $0.3176 输出，每 1M Token（缓存读取 $0.2115/M） |
+| `deepseek-v4-flash` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.1032 输入 / $0.2063 输出，每 1M Token（缓存读取 $0.0021/M） |
+| `deepseek-v4-flash-0731` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.1380 输入 / $0.2750 输出，每 1M Token（缓存写入 $0.0280/M） |
+| `deepseek-v4-pro` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.3205 输入 / $0.6411 输出，每 1M Token（缓存读取 $0.0027/M） |
 
 ### Alibaba
 
-| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| Model ID | 上下文 | 能力 | Endpoint(s) | 计费 |
 | --- | ---: | --- | --- | --- |
-| `qwen-flash` | 1,000,000 | Audio, Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, speech-to-speech, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.0225 输入 / $0.1800 输出，每 1M Token （缓存读取 $0.0225/M） |
-| `qwen-mt-flash` | 1,000,000 | Text; long context, translation | `POST /v1/chat/completions` | $0.0720 输入 / $0.2205 输出，每 1M Token （缓存读取 $0.0720/M） |
-| `qwen-mt-lite` | 1,000,000 | Text; translation | `POST /v1/chat/completions` | $0.0840 输入 / $0.2520 输出，每 1M Token （缓存读取 $0.0840/M） |
-| `qwen-plus-2025-12-01` | 1,000,000 | Audio, Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, speech-to-speech, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.2800 输入 / $0.8400 输出，每 1M Token （缓存读取 $0.2800/M） |
-| `qwen3-coder-480b-a35b-instruct` | 262,144 | Coding, Text; reasoning, long context, code reasoning, agentic coding | `POST /v1/chat/completions` | $1.0500 输入 / $5.2500 输出，每 1M Token （缓存读取 $1.0500/M） |
-| `qwen3-coder-flash` | 1,000,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.2100 输入 / $1.0500 输出，每 1M Token （缓存读取 $0.2100/M） |
-| `qwen3-coder-plus` | 1,000,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.7000 输入 / $3.5000 输出，每 1M Token （缓存读取 $0.7000/M） |
-| `qwen3-max` | 262,144 | Audio, Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, speech-to-speech, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.7200 输入 / $3.6000 输出，每 1M Token （缓存读取 $0.7200/M） |
-| `qwen3-vl-flash` | 131,072 | Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.0350 输入 / $0.2800 输出，每 1M Token （缓存读取 $0.0350/M） |
-| `qwen3-vl-flash-2025-10-15` | 131,072 | Coding, Text, Video, Vision; reasoning, long context, translation, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.0350 输入 / $0.2800 输出，每 1M Token （缓存读取 $0.0350/M） |
-| `qwen3-vl-plus` | 131,072 | Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.1400 输入 / $1.1200 输出，每 1M Token （缓存读取 $0.1400/M） |
-| `qwen3.6-plus` | 1,000,000 | Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, omni/video understanding, long video, temporal video, code reasoning, agentic coding | `POST /v1/chat/completions` | $0.2760 输入 / $1.6510 输出，每 1M Token （缓存读取 $0.2760/M） |
-| `qwen3.6-plus-2026-04-02` | 262,144 | Coding, Text, Vision; code reasoning, long context, reasoning, vision | `POST /v1/chat/completions` | $0.2760 输入 / $1.6510 输出，每 1M Token （缓存读取 $0.2760/M） |
-| `qwen3.7-max` | 1,000,000 | Coding, Text; reasoning, long context, translation, creative writing, code reasoning, agentic coding | `POST /v1/chat/completions` | $1.1550 输入 / $3.4657 输出，每 1M Token （缓存读取 $0.1155/M；缓存写入 $1.4441/M） |
-| `wan2.7-image` | 不适用 | Image, Text, Vision; reasoning, vision, image generation, image editing, text in images, image consistency | `POST /v1/chat/completions` | 每次请求 $0.030 |
-| `wan2.7-image-pro` | 不适用 | Image, Text, Video, Vision; reasoning, long context, vision, image generation, image editing, text in images, image consistency, image-to-video | `POST /v1/chat/completions` | 每次请求 $0.075 |
+| `qwen-flash` | 1,000,000 | Audio, Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, speech-to-speech, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.0154 输入 / $0.1512 输出，每 1M Token（缓存读取 $0.0035/M） |
+| `qwen-mt-flash` | 1,000,000 | Text; long context, translation | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.0720 输入 / $0.2205 输出，每 1M Token（缓存读取 $0.0720/M） |
+| `qwen-mt-lite` | 1,000,000 | Text; translation | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.0840 输入 / $0.2520 输出，每 1M Token（缓存读取 $0.0840/M） |
+| `qwen-plus-2025-12-01` | 1,000,000 | Audio, Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, speech-to-speech, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions` | $0.2800 输入 / $0.8400 输出，每 1M Token（缓存读取 $0.2800/M） |
+| `qwen3-coder-480b-a35b-instruct` | 262,144 | Coding, Text; reasoning, long context, code reasoning, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.0500 输入 / $5.2500 输出，每 1M Token（缓存读取 $1.0500/M） |
+| `qwen3-coder-flash` | 1,000,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.2100 输入 / $1.0500 输出，每 1M Token（缓存读取 $0.2100/M） |
+| `qwen3-coder-plus` | 1,000,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.7000 输入 / $3.5000 输出，每 1M Token（缓存读取 $0.7000/M） |
+| `qwen3-max` | 262,144 | Audio, Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, speech-to-speech, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.7200 输入 / $3.6000 输出，每 1M Token（缓存读取 $0.7200/M） |
+| `qwen3-vl-flash` | 131,072 | Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.0350 输入 / $0.2800 输出，每 1M Token（缓存读取 $0.0350/M） |
+| `qwen3-vl-flash-2025-10-15` | 131,072 | Coding, Text, Video, Vision; reasoning, long context, translation, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.0350 输入 / $0.2800 输出，每 1M Token（缓存读取 $0.0350/M） |
+| `qwen3-vl-plus` | 131,072 | Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.1400 输入 / $1.1200 输出，每 1M Token（缓存读取 $0.1400/M） |
+| `qwen3.6-plus` | 1,000,000 | Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, omni/video understanding, long video, temporal video, code reasoning, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.2760 输入 / $1.6510 输出，每 1M Token（缓存读取 $0.2760/M） |
+| `qwen3.6-plus-2026-04-02` | 262,144 | Coding, Text, Vision; code reasoning, long context, reasoning, vision | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.2760 输入 / $1.6510 输出，每 1M Token（缓存读取 $0.2760/M） |
+| `qwen3.7-flash` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.1732 输入 / $0.6930 输出，每 1M Token（缓存读取 $0.0347/M；缓存写入 $0.2166/M） |
+| `qwen3.7-flash-2026-07-15` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.1732 输入 / $0.6930 输出，每 1M Token（缓存读取 $0.0347/M；缓存写入 $0.2166/M） |
+| `qwen3.7-max` | 1,000,000 | Coding, Text; reasoning, long context, translation, creative writing, code reasoning, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.1550 输入 / $3.4657 输出，每 1M Token（缓存读取 $0.1155/M；缓存写入 $1.4441/M） |
+| `qwen3.7-max-2026-06-08` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.1550 输入 / $3.4657 输出，每 1M Token（缓存读取 $0.2310/M） |
+| `qwen3.7-plus` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.1932 输入 / $0.7707 输出，每 1M Token（缓存读取 $0.0392/M） |
+| `qwen3.8-max` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.7325 输入 / $5.1986 输出，每 1M Token（缓存读取 $0.2163/M；缓存写入 $2.1662/M） |
+| `wan2.7-i2v` | — | Video | `/v1/video/generations` | $0.060208 / 输出秒 (720p); $0.100347 / 输出秒 (1080p) |
+| `wan2.7-image` | 不适用 | Image, Text, Vision; reasoning, vision, image generation, image editing, text in images, image consistency | `/v1/images/generations`, `/v1/images/edits` | $0.03 / 次请求 |
+| `wan2.7-image-pro` | 不适用 | Image, Text, Video, Vision; reasoning, long context, vision, image generation, image editing, text in images, image consistency, image-to-video | `/v1/images/generations`, `/v1/images/edits` | $0.075 / 次请求 |
+| `wan2.7-r2v` | — | Video | `/v1/video/generations` | $0.060208 / 输出秒 (720p); $0.100347 / 输出秒 (1080p) |
+| `wan2.7-t2v` | — | Video | `/v1/video/generations` | $0.060208 / 输出秒 (720p); $0.100347 / 输出秒 (1080p) |
 
 ### Moonshot
 
-| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| Model ID | 上下文 | 能力 | Endpoint(s) | 计费 |
 | --- | ---: | --- | --- | --- |
-| `kimi-k2-thinking` | 256,000 | Coding, Text; reasoning, long context, code reasoning, agentic coding | `POST /v1/chat/completions` | $0.4018 输入 / $1.6058 输出，每 1M Token （缓存读取 $0.4018/M） |
-| `kimi-k2.5` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, spatial vision, document vision, visual coding, omni/video understanding, long video, code reasoning, agentic coding | `POST /v1/chat/completions` | $0.4018 输入 / $2.1077 输出，每 1M Token （缓存读取 $0.4018/M） |
-| `kimi-k2.6` | 128,000 | Text; long context, reasoning | `POST /v1/chat/completions` | $0.6257 输入 / $2.5992 输出，每 1M Token （缓存读取 $0.6257/M） |
+| `kimi-k2-thinking` | 256,000 | Coding, Text; reasoning, long context, code reasoning, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.4229 输入 / $1.6903 输出，每 1M Token（缓存读取 $0.4229/M） |
+| `kimi-k2.5` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, spatial vision, document vision, visual coding, omni/video understanding, long video, code reasoning, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.4229 输入 / $2.2186 输出，每 1M Token（缓存读取 $0.0847/M） |
+| `kimi-k2.6` | 128,000 | Text; long context, reasoning | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.6587 输入 / $2.7360 输出，每 1M Token（缓存读取 $0.6587/M） |
+| `kimi-k2.7-code` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.6257 输入 / $2.5992 输出，每 1M Token（缓存读取 $0.1252/M） |
+| `kimi-k3` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $3.1579 输入 / $15.7895 输出，每 1M Token（缓存读取 $0.3158/M） |
 
 ### MiniMax
 
-| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| Model ID | 上下文 | 能力 | Endpoint(s) | 计费 |
 | --- | ---: | --- | --- | --- |
-| `MiniMax-M2.5` | 262,144 | Coding, Text; reasoning, long context, creative writing, code reasoning, agentic coding | `POST /v1/chat/completions` | $0.2100 输入 / $0.8400 输出，每 1M Token （缓存读取 $0.2100/M） |
-| `MiniMax-M3` | 1,000,000 | Coding, Text, Video, Vision; reasoning, long context, code reasoning, agentic coding, vision, long video | `POST /v1/messages`, `POST /v1/chat/completions`, `POST /v1/responses` | $0.2100 输入 / $0.8400 输出，每 1M Token （缓存读取 $0.0500/M） |
+| `MiniMax-M2.5` | 262,144 | Coding, Text; reasoning, long context, creative writing, code reasoning, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.2211 输入 / $0.8842 输出，每 1M Token（缓存读取 $0.2211/M） |
+| `MiniMax-M3` | 1,000,000 | Coding, Text, Video, Vision; reasoning, long context, code reasoning, agentic coding, vision, long video | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.2211 输入 / $0.8842 输出，每 1M Token（缓存读取 $0.0526/M） |
 
 ### Zhipu GLM
 
-| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| Model ID | 上下文 | 能力 | Endpoint(s) | 计费 |
 | --- | ---: | --- | --- | --- |
-| `glm-5` | 128,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.4011 输入 / $1.8060 输出，每 1M Token （缓存读取 $0.4011/M） |
+| `glm-5` | 128,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.4222 输入 / $1.9011 输出，每 1M Token（缓存读取 $0.4222/M） |
+| `glm-5.1` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.5775 输入 / $2.3107 输出，每 1M Token（缓存读取 $0.1155/M） |
+| `glm-5.2` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.7700 输入 / $2.6957 输出，每 1M Token（缓存读取 $0.1925/M） |
+| `z-ai/glm-5v-turbo` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $1.2000 输入 / $4.0000 输出，每 1M Token（缓存读取 $0.2400/M） |
 
 ### ByteDance
 
-| 模型 ID | 上下文 | 能力 | Endpoint | 计费 |
+| Model ID | 上下文 | 能力 | Endpoint(s) | 计费 |
 | --- | ---: | --- | --- | --- |
-| `seed-1-6-250915` | 262,144 | Text, Video, Vision; reasoning, long context, creative writing, vision, omni/video understanding | `POST /v1/chat/completions` | $0.2250 输入 / $0.9000 输出，每 1M Token （缓存读取 $0.2250/M） |
-| `seed-1-6-flash-250715` | 262,144 | Text, Video, Vision; reasoning, long context, spatial vision, omni/video understanding, temporal video | `POST /v1/chat/completions` | $0.0675 输入 / $0.2700 输出，每 1M Token （缓存读取 $0.0675/M） |
-| `seed-1-8-251228` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.2250 输入 / $1.8000 输出，每 1M Token （缓存读取 $0.2250/M） |
-| `seed-2-0-lite-260228` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, creative writing, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.2500 输入 / $2.0000 输出，每 1M Token （缓存读取 $0.2500/M） |
-| `seed-2-0-mini-260215` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, spatial vision, document vision, omni/video understanding, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.1000 输入 / $0.4000 输出，每 1M Token （缓存读取 $0.1000/M） |
-| `seed-2-0-pro-260328` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `POST /v1/chat/completions` | $0.5000 输入 / $3.0000 输出，每 1M Token （缓存读取 $0.5000/M） |
-| `seedream-4-5-251128` | 不适用 | Image, Vision; vision, image generation, image editing, text in images, image consistency | `POST /v1/chat/completions` | 每次请求 $0.036 |
-| `seedream-5-0-260128` | 262,144 | Image, Vision; image editing, image generation, text in images, vision | `POST /v1/chat/completions` | 每次请求 $0.035 |
+| `seed-1-6-250915` | 262,144 | Text, Video, Vision; reasoning, long context, creative writing, vision, omni/video understanding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.2368 输入 / $0.9474 输出，每 1M Token（缓存读取 $0.2368/M） |
+| `seed-1-6-flash-250715` | 262,144 | Text, Video, Vision; reasoning, long context, spatial vision, omni/video understanding, temporal video | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.0711 输入 / $0.2842 输出，每 1M Token（缓存读取 $0.0711/M） |
+| `seed-1-8-251228` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.2368 输入 / $1.8947 输出，每 1M Token（缓存读取 $0.2368/M） |
+| `seed-2-0-lite-260228` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, creative writing, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.2632 输入 / $2.1053 输出，每 1M Token（缓存读取 $0.2632/M） |
+| `seed-2-0-mini-260215` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, spatial vision, document vision, omni/video understanding, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions` | $0.1053 输入 / $0.4211 输出，每 1M Token（缓存读取 $0.1053/M） |
+| `seed-2-0-pro-260328` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.5263 输入 / $3.1579 输出，每 1M Token（缓存读取 $0.5263/M） |
+| `dreamina-seedance-2-0-260128` | — | Video | `/v1/video/generations` | $4.3 / 1M Token (480p, 720p, 4k); $4.7 / 1M Token (1080p) |
+| `dreamina-seedance-2-0-fast-260128` | — | Video | `/v1/video/generations` | $3.3 / 1M Token (480p, 720p) |
+| `seedream-4-5-251128` | 不适用 | Image, Vision; vision, image generation, image editing, text in images, image consistency | `/v1/chat/completions` | $0.036 / 次请求 |
+| `seedream-5-0-260128` | 262,144 | Image, Vision; image editing, image generation, text in images, vision | `/v1/images/generations` | $0.035 / 次请求 |
+
+### Xiaomi
+
+| Model ID | 上下文 | 能力 | Endpoint(s) | 计费 |
+| --- | ---: | --- | --- | --- |
+| `mimo-v2.5` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.1505 输入 / $0.3011 输出，每 1M Token（缓存读取 $0.0031/M） |
+| `mimo-v2.5-pro` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.5158 输入 / $0.9021 输出，每 1M Token（缓存读取 $0.0038/M） |
+
+### StepFun
+
+| Model ID | 上下文 | 能力 | Endpoint(s) | 计费 |
+| --- | ---: | --- | --- | --- |
+| `step-3.5-flash` | — | Text | `/v1/chat/completions`, `/v1/messages` | $0.1053 输入 / $0.3158 输出，每 1M Token（缓存读取 $0.0211/M） |
+| `step-3.5-flash-2603` | — | Text | `/v1/chat/completions`, `/v1/messages` | $0.1053 输入 / $0.3158 输出，每 1M Token（缓存读取 $0.0211/M） |
+| `step-3.7-flash` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | $0.2105 输入 / $1.2105 输出，每 1M Token（缓存读取 $0.0421/M） |
+
+### HappyHorse
+
+| Model ID | 上下文 | 能力 | Endpoint(s) | 计费 |
+| --- | ---: | --- | --- | --- |
+| `happyhorse-1.1-i2v` | — | Video | `/v1/video/generations` | $0.098 / 输出秒（720p）；$0.126 / 输出秒（更高档；上游数据把两档都标为 720p） |
+| `happyhorse-1.1-r2v` | — | Video | `/v1/video/generations` | $0.098 / 输出秒 (720p); $0.126 / 输出秒 (1080p) |
+| `happyhorse-1.1-t2v` | — | Video | `/v1/video/generations` | $0.098 / 输出秒 (720p); $0.126 / 输出秒 (1080p) |
+
+### 其他
+
+| Model ID | 上下文 | 能力 | Endpoint(s) | 计费 |
+| --- | ---: | --- | --- | --- |
+| `text-embedding-3-small` | — | Embeddings | `/v1/embeddings` | $0.0211 输入，每 1M Token |
+| `text-embedding-3-large` | — | Embeddings | `/v1/embeddings` | $0.1368 输入，每 1M Token |
 
 ## 如何选择模型
 
@@ -186,9 +266,12 @@ print(response.choices[0].message.content)
 | 视觉/文档任务 | `qwen3-vl-plus`, `claude-opus-4-8`, `gpt-5.4` | 带有视觉、文档和空间理解能力标签。 |
 | 图像生成 | `gpt-image-2`, `seedream-5-0-260128`, `wan2.7-image-pro` | 支持图像生成和图像编辑，并按请求计费。 |
 
+上一次能力导出之后新增的模型 —— 包括 `gpt-5.6-luna`、`gpt-5.6-sol`、`gpt-5.6-terra`、`claude-opus-5`、`claude-sonnet-5`、`kimi-k3`、`kimi-k2.7-code`、`glm-5.2` 和 `grok-4.5` —— 还没有反映在这张表里。在把生产流量切到这些模型前，请先查看实时模型目录。
+
 ## Agent 使用注意事项
 
 - 不要编造 AIsa 模型 ID。请使用表格中的精确 `model` 字符串。
 - 不要假设某个模型支持其上游模型族的所有模态。请以这里列出的能力标签为准，或查看实时模型页面。
 - 如果某个模型出现在 [aisa.one/models](https://aisa.one/models) 但未出现在静态表格中，可能是定价 API 已在运行时启用该模型；请优先参考实时目录。
 - 价格表仅供参考。最终计费金额以 AIsa Usage Logs 为准，并可能包含工作区级别的定价规则。
+- 上下文列显示 `—` 表示当前元数据导出没有公布该模型的上下文窗口。不要假设一个默认值，请查看实时模型目录。
