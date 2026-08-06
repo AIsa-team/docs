@@ -1,0 +1,293 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Jina Embeddings & Rerank API",
+    "version": "1.0.0",
+    "description": "Jina embeddings and reranking served via the AIsa relay (OpenAI-compatible) path. Includes text embeddings (jina-embeddings-v3, 1024-dim) and document reranking (jina-reranker-v3). Billing is token-based at $0.050 per 1M tokens for both endpoints."
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/v1"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key"
+      }
+    }
+  },
+  "paths": {
+    "/embeddings": {
+      "post": {
+        "summary": "Create embeddings",
+        "description": "Generate embedding vectors for one or more input strings using jina-embeddings-v3 (1024-dim output). OpenAI-compatible request and response. Served via the AIsa relay path /v1/embeddings. Billing is token-based at $0.050 per 1M tokens.",
+        "operationId": "createEmbedding",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "model",
+                  "input"
+                ],
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "description": "Embedding model name.",
+                    "example": "jina-embeddings-v3"
+                  },
+                  "input": {
+                    "description": "A non-empty string, or an array of non-empty strings, to embed.",
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "minItems": 1
+                      }
+                    ],
+                    "example": "A fast, OpenAI-compatible embeddings endpoint."
+                  }
+                }
+              },
+              "example": {
+                "model": "jina-embeddings-v3",
+                "input": "A fast, OpenAI-compatible embeddings endpoint."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Embedding list.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "example": "list"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "object": {
+                            "type": "string",
+                            "example": "embedding"
+                          },
+                          "index": {
+                            "type": "integer",
+                            "example": 0
+                          },
+                          "embedding": {
+                            "type": "array",
+                            "description": "1024-dim embedding vector.",
+                            "items": {
+                              "type": "number",
+                              "format": "float"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "model": {
+                      "type": "string",
+                      "example": "jina-embeddings-v3"
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "total_tokens": {
+                          "type": "integer",
+                          "example": 9
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "object": "list",
+                  "data": [
+                    {
+                      "object": "embedding",
+                      "index": 0,
+                      "embedding": [
+                        0.0123,
+                        -0.0456,
+                        0.0789
+                      ]
+                    }
+                  ],
+                  "model": "jina-embeddings-v3",
+                  "usage": {
+                    "total_tokens": 9
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rerank": {
+      "post": {
+        "summary": "Rerank documents",
+        "description": "Rerank a list of documents against a query using jina-reranker-v3, returning documents ordered by relevance score. Served via the AIsa relay path /v1/rerank. Billing is token-based at $0.050 per 1M tokens.",
+        "operationId": "createRerank",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "model",
+                  "query",
+                  "documents"
+                ],
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "description": "Rerank model name.",
+                    "example": "jina-reranker-v3"
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "Non-empty query string to rank documents against.",
+                    "example": "What is the capital of France?"
+                  },
+                  "documents": {
+                    "type": "array",
+                    "description": "Non-empty array of document strings to rerank.",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "Paris is the capital of France.",
+                      "Berlin is the capital of Germany.",
+                      "The Eiffel Tower is in Paris."
+                    ]
+                  },
+                  "top_n": {
+                    "type": "integer",
+                    "description": "Optional. Return only the top N most relevant documents.",
+                    "example": 2
+                  }
+                }
+              },
+              "example": {
+                "model": "jina-reranker-v3",
+                "query": "What is the capital of France?",
+                "documents": [
+                  "Paris is the capital of France.",
+                  "Berlin is the capital of Germany.",
+                  "The Eiffel Tower is in Paris."
+                ],
+                "top_n": 2
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reranked results ordered by relevance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "type": "string",
+                      "example": "jina-reranker-v3"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "integer",
+                            "description": "Index of the document in the original request array.",
+                            "example": 0
+                          },
+                          "relevance_score": {
+                            "type": "number",
+                            "format": "float",
+                            "example": 0.98
+                          },
+                          "document": {
+                            "type": "object",
+                            "properties": {
+                              "text": {
+                                "type": "string",
+                                "example": "Paris is the capital of France."
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "total_tokens": {
+                          "type": "integer",
+                          "example": 27
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "model": "jina-reranker-v3",
+                  "results": [
+                    {
+                      "index": 0,
+                      "relevance_score": 0.98,
+                      "document": {
+                        "text": "Paris is the capital of France."
+                      }
+                    },
+                    {
+                      "index": 2,
+                      "relevance_score": 0.71,
+                      "document": {
+                        "text": "The Eiffel Tower is in Paris."
+                      }
+                    }
+                  ],
+                  "usage": {
+                    "total_tokens": 27
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Embeddings & Rerank"
+    }
+  ]
+}
