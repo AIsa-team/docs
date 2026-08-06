@@ -79111,9 +79111,13 @@ paths:
   /kalshi/markets:
     get:
       summary: Get Kalshi Markets
-      description: Fetches Kalshi market data. AIsa returns the Kalshi Trade API response shape with top-level `markets` and
-        `cursor` fields.
-      operationId: get_kalshi-markets
+      description: |-
+        List markets on Kalshi, the CFTC-regulated US prediction exchange, with live bid/ask quotes in dollars. Use this when you need odds from a regulated venue, or to cross-check a Polymarket price against a second market; fetch specific markets with `tickers` (comma-separated), scope to a group with `event_ticker` / `series_ticker`, or narrow with `status`, `search`, and the created / close / settled timestamp ranges.
+
+        Returns `markets[]` with `title`, `status`, `yes_bid_dollars` / `yes_ask_dollars`, `last_price_dollars`, `volume_fp`, `open_interest_fp`, and `rules_primary` (the settlement criteria), plus a `cursor` to page with.
+
+        For executed fills rather than quotes, use `get_kalshi_trades`. For the crypto-native venue carrying similar questions, use `get_polymarket_markets`.
+      operationId: get_kalshi_markets
       parameters:
       - name: tickers
         in: query
@@ -79337,9 +79341,13 @@ paths:
   /kalshi/trades:
     get:
       summary: Get Kalshi Trades
-      description: Fetches Kalshi trades. AIsa returns the Kalshi Trade API response shape with top-level `trades` and `cursor`
-        fields.
-      operationId: get_kalshi-trades
+      description: |-
+        Get the executed-trade tape for Kalshi markets — actual fills, not quotes. Use this when you need realized prices and traded size over a window, for example to see how conviction moved while an event unfolded; narrow with `ticker` and the `min_ts` / `max_ts` Unix-second range, and set `is_block_trade` to isolate large negotiated trades.
+
+        Returns `trades[]` with `trade_id`, `ticker`, `count_fp` (contracts), `yes_price_dollars` / `no_price_dollars`, `taker_side`, and `created_time`, plus a `cursor` to page with.
+
+        For the current quotes, settlement rules, and market metadata rather than fills, use `get_kalshi_markets`.
+      operationId: get_kalshi_trades
       parameters:
       - name: limit
         in: query
@@ -81186,10 +81194,14 @@ paths:
         source: https://github.com/AIsa-team/aisa-proxy
   /polymarket/markets:
     get:
-      summary: Get Markets
-      description: 'Fetches Polymarket Gamma market data. This AIsa route returns the upstream Polymarket Gamma response directly:
-        a top-level JSON array of market objects.'
-      operationId: get_polymarket-markets
+      summary: Get Polymarket Markets
+      description: |-
+        List individual Polymarket prediction markets — one binary question each — with live pricing. Use this when you need the market-implied probability of a specific outcome, or to screen markets by size and timing; filter with `slug`, `condition_ids`, `clob_token_ids`, `tag_id`, `closed`, and the `volume_num_*` / `start_date_*` / `end_date_*` ranges.
+
+        Returns a top-level array of market objects. The probability signal is `outcomes` paired with `outcomePrices`, quoted against `bestBid` / `bestAsk`; `conditionId` and `clobTokenIds` are the on-chain identifiers you need to join to other Polymarket data.
+
+        For the topic that groups several related questions together, use `get_polymarket_events`. For the same kind of question on the US-regulated Kalshi exchange, use `get_kalshi_markets`.
+      operationId: get_polymarket_markets
       parameters:
       - name: limit
         in: query
@@ -81454,10 +81466,14 @@ paths:
         source: https://github.com/AIsa-team/aisa-proxy
   /polymarket/events:
     get:
-      summary: Get Events
-      description: 'Fetches Polymarket Gamma events. This AIsa route returns the upstream Polymarket Gamma response directly:
-        a top-level JSON array of event objects.'
-      operationId: get_polymarket-events
+      summary: Get Polymarket Events
+      description: |-
+        List Polymarket events — the topic-level grouping that bundles related markets, such as an election or a season-long series. Use this to browse by subject rather than by individual question, or to find every market attached to one storyline; filter with `tag_slug`, `active`, `featured`, `archived`, `closed`, and the liquidity / volume ranges.
+
+        Returns a top-level array of event objects with `title`, `ticker`, `slug`, `volume`, `volume24hr`, `liquidity`, `startDate` / `endDate`, and a nested `markets` array holding the tradable questions.
+
+        When you already know which question you want and need its price, use `get_polymarket_markets` instead.
+      operationId: get_polymarket_events
       parameters:
       - name: limit
         in: query
@@ -81695,10 +81711,14 @@ paths:
         source: https://github.com/AIsa-team/aisa-proxy
   /polymarket/activity:
     get:
-      summary: Get Activity
-      description: Fetches Polymarket activity for a required user/wallet filter, with optional market, condition, and time
-        range filters.
-      operationId: get_polymarket-activity
+      summary: Get Polymarket Wallet Activity
+      description: |-
+        Get one wallet's on-chain Polymarket activity — a per-address lookup, not a market-wide trade feed. The `user` parameter is required. Use it to reconstruct what a specific trader did — position splits, merges and redemptions, with size, price, and the transaction that settled them; narrow further with `market_slug`, `condition_id`, and the `start_time` / `end_time` Unix-second range.
+
+        Returns `activities[]` with `side` (`MERGE` / `SPLIT` / `REDEEM`), `market_slug`, `condition_id`, `shares`, `price`, `timestamp`, and `tx_hash`, plus a `pagination` object whose key you pass back as `pagination_key`.
+
+        For market-wide prices rather than one wallet's history, use `get_polymarket_markets`.
+      operationId: get_polymarket_activity
       parameters:
       - name: user
         in: query
