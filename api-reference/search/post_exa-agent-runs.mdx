@@ -1,0 +1,18 @@
+---
+title: "Exa Agent Runs"
+description: "Submit a research task to the Exa Agent as an asynchronous job — submit, then poll the run for status and results."
+openapi: "openapi/exa.json POST /exa/agent/runs"
+---
+
+{/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
+
+Submit a natural-language research `query` and the Exa Agent runs it in the background, returning a structured result. Because deep research takes time, Agent Runs is an **asynchronous job**: you submit the run and then poll it for status and results.
+
+**Lifecycle**
+
+1. **Submit** — `POST /apis/v1/exa/agent/runs` with the research body and a required `Idempotency-Key` header. On success you get back `202 Accepted`, a `Location` header pointing at the job resource (`/apis/v1/exa/agent/runs/{jobId}`), and a job object whose `status` starts as `queued`. Re-submitting with the same key and the same request body returns the original run; the same key with a different body returns `409 idempotency_conflict`.
+2. **Poll** — `GET /apis/v1/exa/agent/runs/{jobId}` and repeat until `status` is terminal: `completed`, `failed`, or `cancelled`. When `completed`, the research result is in `output`. The provider supports polling only — there is no webhook or SSE callback.
+3. **List** — `GET /apis/v1/exa/agent/runs` (optional `status` filter, paginated) to page through your runs.
+4. **Cancel** — `POST /apis/v1/exa/agent/runs/{jobId}/cancel` to request cancellation; cancelled runs are not billed.
+
+Supply an `outputSchema` to validate the structured output, `effort` to trade depth for latency, `previousRunId` to continue a prior run, and `input`/`dataSources` for row-processing and Exa Connect sources. Billed at a flat **$0.10** per run. For a single-shot cited answer instead of a multi-step run, use [`post_exa-answer`](/api-reference/search/post_exa-answer).
