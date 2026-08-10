@@ -1,136 +1,120 @@
 ---
 title: "模型 Playground：通过一个端点测试 100 多个 AI 模型"
 excerpt: >-
-  在集成前测试 100+ AI 模型的交互式环境。发送请求，调整 temperature、top-p 等参数，并通过 AIsa 统一的 OpenAI 兼容 API 验证行为。新用户包含 $2 免费额度。
+  在集成前测试 100+ AI 模型的交互式控制台。选择 key、路由和模型，调整 stream / temperature / max tokens，并查看 AIsa 实际发送的 JSON 或 cURL 请求——使用与生产完全相同的 OpenAI 和 Anthropic 兼容 API。
 ---
 
-Playground 是一个交互式环境，用于在把模型集成到应用前测试 AIsa 支持的模型。你可以发送请求、调整模型参数、检查响应，并使用与生产请求相同的 API 和配置实时验证行为。
+Playground 是一个交互式环境，用于在把模型集成到应用之前测试 AIsa 支持的模型。它通过与生产代码相同的中转端点发送真实请求，并在结果旁边展示完整的请求体和原始响应。
 
-![AIsa 模型 Playground 动画演示：选择模型、输入提示词并实时查看流式响应](/images/9f5feddc-Sid_Playground.gif)
+![AIsa Playground 界面：左侧为请求面板，右侧为 JSON 请求预览与输出面板](/images/playground-overview.png)
 
-注册后即可开始使用 Playground。新账户会获得 **免费额度**，并且可以在**不生成 API key** 的情况下使用 Playground。
+入口在 [**Console → Playground**](https://console.aisa.one/playground)。请求使用你自己的 API key 发送，因此运行测试前至少需要一个**已启用的 key**。新账户会获得**免费额度**，可以直接用于 Playground（具体金额和领取条件以当时官方活动为准）。
 
-这个页面常用于试验不同模型、调优生成参数，并在开发过程中验证输出。
+## 端点栏
 
-## 模型配置
+面板上方的横条显示当前配置实际请求的端点，例如 `POST https://api.aisa.one/v1/chat/completions`，右侧的 `stream: true` / `stream: false` 标签与 Stream 开关保持同步。
 
-左侧面板包含配置项，用于控制请求如何发送到所选模型。
+切换 **Route** 时，端点会随之变化。
 
-![Playground 配置面板，展示模型选择器、Temperature 滑块、最大 Token 数和其他生成参数](/images/23facb9b-image.png)
+## 请求面板
 
-可用选项会因所选模型而变化。并非所有模型都支持相同参数或输入类型。
+左侧面板用于定义请求。
 
-### 分组
+![Playground 请求面板：Key、Route、Model 选择器，Stream、Temperature、Max tokens 控件，以及 System 和 User 提示词输入框](/images/playground-request.png)
 
-**Group** 选择器决定请求归属的 workspace group。Group 用于在团队或项目之间组织用量、权限和计费。
+### Key
 
-如果没有配置自定义 group，请求会使用默认 group。
+**Key** 选择器决定使用哪个 API key 认证请求。列表只包含已启用的 key，每一项显示 key 名称以及脱敏后的前后缀。
 
-### 模型
+完整 key 不会下发到浏览器，请求在后端签名。用量会记在所选 key 上，因此可以用一个专用 key 把 Playground 流量与应用流量区分开。
 
-**Model** 选择器用于选择由哪个模型处理请求。这里包含来自不同 provider 的模型，全部通过同一个统一 API 访问。
+如果还没有已启用的 key，请先在 [API Keys](https://console.aisa.one/api-keys) 页面创建一个。
 
-切换模型不需要修改请求格式，只需要更改模型标识符。
+### Route
 
-配置项和筛选条件会根据所选模型动态更新。某个模型显示的参数，可能不适用于另一个模型。
+**Route** 选择器决定请求使用哪套 API：
 
-### 自定义 Request Body 模式
+* **Chat completions** — `POST /v1/chat/completions`，OpenAI 兼容路由。System 提示词会作为 `messages` 中的 `system` 消息发送。
+* **Messages** — `POST /v1/messages`，Anthropic 兼容路由。System 提示词会作为顶层 `system` 字段发送。
 
-启用 **Custom Request Body Mode** 后，你可以手动定义完整 JSON 请求体。对于需要直接控制 UI 中未暴露参数的高级用例，这会很有用。
+切换路由会重新加载模型列表，因为两条路由暴露的模型集合不同。
 
-关闭时，请求会根据当前选择的配置项自动生成。
+### Model
 
-### 图片 URL
+**Model** 选择器列出所选 key 在当前路由下可用的全部模型。选择器下方的计数显示已加载的模型数量，刷新按钮可以重新拉取列表。
 
-**Image URLs** 选项允许你向请求附加图片 URL，从而启用多模态输入。
+切换模型不需要改动请求格式，只有 `model` 标识符会变化。
 
-它适用于支持图像理解或视觉语言能力的模型。启用后，你可以提供一个或多个图片 URL，与文本 prompt 一起发送。
-
-该选项只会在支持图像输入的模型上出现。
+如果账户仍在试用额度状态，而所选模型要求付费余额，Playground 会显示充值提示并禁用 **Run Test**。此时可以换一个模型，或先充值。
 
 ## 生成参数
 
-这些控件会影响模型如何生成响应。修改会立即应用到新的请求。
+### Stream
 
-可用生成参数因模型而异。
+**Stream** 控制响应是否以 server-sent events 增量返回。开启后，输出会在 Output 面板逐 token 出现，请求体中会包含 `"stream": true`。
 
-### Temperature（温度）
+### Temperature
 
-Temperature 控制模型输出的随机性。
+**Temperature** 是可选参数：旁边的开关决定请求中是否包含 `temperature`。开关关闭时该参数会被省略，使用模型自身的默认值。
 
-较低值会生成更确定、更聚焦的响应；较高值会增加创造性和变化。
+开启后，较低的值输出更确定，较高的值变化更多。取值范围为 0–2。
 
-### Top P（核心采样）
+### Max Tokens
 
-Top P（nucleus sampling）会把 token 选择限制在累计概率达到指定阈值的最小集合内。
+**Max tokens** 设置生成 token 的上限，用于控制响应长度和成本。该参数始终包含在请求中。
 
-它会影响生成过程中模型词汇选择的多样性。Top P 常用于替代 temperature，或与较低 temperature 组合使用。
+### System 与 User
 
-### 频率惩罚
+**System** 字段用于约束模型行为，**User** 字段则是提示词本身。两者都是纯文本输入框，编辑时请求预览会实时更新。
 
-Frequency Penalty 会降低响应中重复词语或短语出现的概率。值越高，越能减少生成内容中的重复。
+点击 **Run Test** 发送请求。请求进行中按钮会变为 **Stop**，点击即可立刻中断连接。
 
-### 存在惩罚
+## Debug 面板
 
-Presence Penalty 鼓励模型引入新概念，而不是继续围绕已有内容展开。提高这个值会让模型在长回答中更倾向探索新主题。
+右侧面板在运行之前就能看到 AIsa 将要发送的确切内容。
 
-### 最大 Token 数
+![Debug 面板展示带语法高亮的 JSON 请求体，下方 Output 面板含 Result 与 Response 标签](/images/playground-debug.png)
 
-Max Tokens 设置模型在响应中最多可生成的 token 数量，用于控制响应长度和使用成本。
+* **JSON** — 将要提交的请求体，带行号
+* **cURL** — 同一个请求的终端命令形式，使用 `$AISA_API_KEY`，可直接复制粘贴
 
-如果没有显式设置，会使用模型默认限制。
+面板右上角的复制按钮会复制当前标签页的内容。把验证好的配置从 Playground 迁到脚本或同事的终端，cURL 是最快的方式。
 
-## 对话面板
+<Note>
+  生成的命令用单引号包裹 JSON 请求体。如果 System 或 User 提示词中包含单引号（`'`），需要先转义再在 shell 中执行，否则请求体会被截断。
+</Note>
 
-右侧主面板是你与模型交互的区域。
+## 输出面板
 
-* 在底部输入框输入 prompt
-* 提交请求，接收所选模型的响应
-* 在对话视图中查看生成结果
+请求预览下方是 Output 面板。
 
-响应会以与 API 调用相同的形式出现，因此 Playground 很适合验证 prompt 行为和输出质量。
+* **Result** — 提取出的助手文本，开启 Stream 时实时流式显示
+* **Response** — 响应 payload：非流式请求为完整 JSON 响应体；流式请求则按行显示每个 SSE 事件的 `data` 内容（`data:` 前缀和其他事件字段会被去掉）
 
-## 调试模式
+底部信息行显示请求延迟（毫秒）、网关返回的 `x-request-id`，以及本次调用是否为流式。排查问题时可以用这个 request ID 去 [Usage Logs](https://console.aisa.one/logs) 页面对照，或提供给支持人员。
 
-**Show debug** 选项会展示额外的请求和响应细节。
-
-![调试模式输出，展示原始 API 请求头、响应 Payload、Token 用量和延迟指标](/images/2f75904c-Screenshot_2026-02-12_171229.png)
-
-其中包括原始请求 payload 和内部元数据，有助于排查异常行为或验证请求结构。
-
-## 导入与导出
-
-Playground 支持导入和导出配置，方便复用测试。
-
-* **Export** 会下载当前配置和请求设置
-* **Import** 会载入之前保存的配置
-
-这适合在团队中分享测试设置，或复用常见场景。
+错误会内联显示，原始错误内容可在 **Response** 标签中查看。
 
 ## 用量与计费
 
-Playground 中发出的所有请求都会计入用量和账单，与 API 请求相同。
-
-新用户可以使用注册时提供的免费额度立即开始测试，无需创建或管理 API key。
+Playground 的所有请求都与普通 API 请求一样计入用量和账单，并会以所选 key 的名义出现在日志和用量图表中。
 
 ## Playground 最适合用来做什么
 
-Playground 适合：
-
-* 比较不同模型的输出
-* 在生产使用前调优生成参数
-* 测试多模态输入
-* 调试 prompt 行为
-* 不写代码也能验证请求配置
+* 不改代码就能比较不同模型的输出
+* 确认某个 key 能否访问指定模型
+* 在写集成代码前验证请求体
+* 复制一条可用的 cURL 命令作为起点
+* 在同一个界面里结合原始响应和 request ID 排查错误
 
 ## 相关页面
 
 <CardGroup cols={3}>
-  <Card title="聊天补全 API" icon="code" href="/api-reference/chat/post_chat-completions">
+  <Card title="聊天补全 API" icon="code" href="/zh/api-reference/chat/post_chat-completions">
     在这里验证后，用代码发送相同请求。
   </Card>
-  <Card title="Dashboard 概览" icon="gauge" href="/zh/guides/dashboard/overview">
-    监控测试请求产生的流量。
+  <Card title="身份认证" icon="key" href="/zh/guides/authentication">
+    创建并管理 Playground 使用的 API key。
   </Card>
   <Card title="模型目录" icon="list" href="/zh/guides/models">
     浏览当前模型 ID、上下文窗口、endpoint、能力和计费说明。

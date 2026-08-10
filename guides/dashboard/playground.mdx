@@ -1,128 +1,113 @@
 ---
 title: Model Playground – Test 100+ AI Models from a Single Endpoint
 excerpt: >-
-  An interactive environment for testing 100+ AI models before integration.
-  Send requests, adjust parameters like temperature and top-p, and validate
-  behavior using AIsa's unified OpenAI-compatible API. Free $2 credit included.
+  An interactive console for testing 100+ AI models before integration. Pick a
+  key, route and model, tune stream/temperature/max tokens, and inspect the exact
+  JSON or cURL request AIsa sends — using the same OpenAI- and Anthropic-compatible
+  APIs you ship with.
 ---
-The Playground is an interactive environment for testing models available through AIsa before integrating them into your application. It allows you to send requests, adjust model parameters, inspect responses, and validate behavior in real time using the same APIs and configuration used for production requests.
+The Playground is an interactive environment for testing models available through AIsa before integrating them into your application. It sends real requests through the same relay endpoints your production code uses, and shows you the exact request body and raw response alongside the result.
 
-![Animated demo of the AIsa Model Playground — select a model, enter a prompt, and see a streaming response in real time](/images/9f5feddc-Sid_Playground.gif)
+![AIsa Playground showing the request panel on the left and the JSON request preview plus output panel on the right](/images/playground-overview.png)
 
-You can start using the Playground immediately after signing up. New accounts receive **free credits**, and the Playground can be used **without generating an API key**.
+Open it at [**Console → Playground**](https://console.aisa.one/playground). Requests are sent with one of your own API keys, so you need at least one **enabled key** before running a test. New accounts receive **free credits** that the Playground can spend immediately (the exact amount and eligibility depend on the promotion running at the time — see the official announcements for current terms).
 
-This page is commonly used to experiment with different models, tune generation parameters, and verify outputs during development.
+## Endpoint Bar
 
-## Model Configuration
+The bar above the panels shows the exact endpoint the current configuration targets, for example `POST https://api.aisa.one/v1/chat/completions`, along with a `stream: true` / `stream: false` chip that reflects the Stream toggle.
 
-The left panel contains configuration options that control how requests are sent to the selected model.
+The endpoint changes when you change the **Route**.
 
-![Playground configuration panel showing model selector, temperature slider, max tokens, and other generation parameters](/images/23facb9b-image.png)
+## Request Panel
 
-Available options may change depending on the selected model. Not all models support the same parameters or input types.
+The left panel defines the request.
 
-### Group
+![Playground request panel with Key, Route, Model selectors, Stream, Temperature and Max tokens controls, and System and User prompt fields](/images/playground-request.png)
 
-The **Group** selector determines which workspace group the request is associated with. Groups are used to organize usage, permissions, and billing across teams or projects.
+### Key
 
-If no custom groups are configured, requests are sent under the default group.
+The **Key** selector chooses which of your API keys authenticates the request. Only enabled keys are listed, and each entry shows the key name plus a masked prefix and suffix.
+
+The full key value is never sent to the browser — the request is signed on the backend. Usage is attributed to the selected key, so you can isolate Playground traffic from application traffic by testing with a dedicated key.
+
+If you have no enabled keys, create one first — see [API Keys](https://console.aisa.one/api-keys).
+
+### Route
+
+The **Route** selector chooses the API surface used for the request:
+
+* **Chat completions** — `POST /v1/chat/completions`, the OpenAI-compatible route. The system prompt is sent as a `system` message inside `messages`.
+* **Messages** — `POST /v1/messages`, the Anthropic-compatible route. The system prompt is sent as a top-level `system` field.
+
+Changing the route reloads the model list, because the two routes expose different sets of models.
 
 ### Model
 
-The **Model** selector allows you to choose which model will handle the request. This includes models from different providers, all accessed through the same unified API.
+The **Model** selector lists every model the selected key can reach on the current route. The counter below the selectors shows how many models were loaded, and the refresh button re-fetches the list.
 
-Changing the model does not require modifying the request format. Only the model identifier changes.
+Switching models does not change the request format — only the `model` identifier changes.
 
-Configuration options and filters update dynamically based on the selected model. Parameters shown for one model may not be available for another.
-
-### Custom Request Body Mode
-
-When enabled, **Custom Request Body Mode** allows you to manually define the full JSON request body. This is useful for advanced use cases where you need direct control over parameters that are not exposed through the UI.
-
-When disabled, requests are automatically generated based on the selected configuration options.
-
-### Image URLs
-
-The **Image URLs** option enables multimodal input by allowing you to attach image URLs to the request.
-
-This is used with models that support image understanding or vision-language capabilities. When enabled, you can provide one or more image URLs that are sent alongside the text prompt.
-
-This option is only available for models that support image input.
+If your account is still on trial credits and the selected model requires a paid balance, the Playground shows a top-up notice and disables **Run Test** for that model. Pick another model or add credits to continue.
 
 ## Generation Parameters
 
-These controls affect how the model generates responses. Changes apply immediately to new requests.
+### Stream
 
-Available generation parameters vary by model.
+**Stream** controls whether the response is delivered incrementally as server-sent events. When enabled, output appears token by token in the Output panel and `"stream": true` is included in the request body.
 
 ### Temperature
 
-Temperature controls the randomness of the model’s output.
+**Temperature** is opt-in: the toggle next to it decides whether `temperature` is included in the request at all. When the toggle is off, the parameter is omitted and the model's own default applies.
 
-Lower values produce more deterministic and focused responses. Higher values increase creativity and variation.
-
-### Top P
-
-Top P (nucleus sampling) limits token selection to the smallest possible set whose cumulative probability meets the specified threshold.
-
-This influences how diverse the model’s vocabulary choices are during generation. Top P is commonly used instead of temperature, or in combination with lower temperature values.
-
-### Frequency Penalty
-
-Frequency Penalty reduces the likelihood of repeated words or phrases appearing in the response. Higher values encourage less repetition across the generated output.
-
-### Presence Penalty
-
-Presence Penalty encourages the model to introduce new concepts rather than continuing existing ones. Increasing this value makes the model more likely to explore new topics in longer responses.
+When enabled, lower values produce more deterministic output and higher values increase variation. Accepted range is 0–2.
 
 ### Max Tokens
 
-Max Tokens sets the maximum number of tokens the model can generate in a response. This helps control response length and usage cost.
+**Max tokens** sets the upper bound on generated tokens, controlling response length and cost. It is always included in the request.
 
-If not explicitly set, the model’s default limits apply.
+### System and User
 
-## Chat Panel
+The **System** field carries instructions that shape the model's behavior; the **User** field carries the prompt itself. Both are plain text areas and both update the request preview as you type.
 
-The main panel on the right is where you interact with the model.
+**Run Test** sends the request. While a request is in flight the button becomes **Stop**, which aborts the connection immediately.
 
-* Enter your prompt in the input field at the bottom
-* Submit the request to receive a response from the selected model
-* View generated output in the conversation view
+## Debug Panel
 
-Responses appear exactly as they would when using the API, making the Playground useful for validating prompt behavior and output quality.
+The right panel shows exactly what AIsa sends, before you run anything.
 
-## Debug Mode
+![Debug panel showing the JSON request body with syntax highlighting, and the Output panel below it with Result and Response tabs](/images/playground-debug.png)
 
-The **Show debug** option reveals additional request and response details.
+* **JSON** — the request body as it will be posted, with line numbers
+* **cURL** — the same request as a copy-and-paste terminal command using `$AISA_API_KEY`
 
-![Debug mode output showing the raw API request headers, response payload, token usage, and latency metrics](/images/2f75904c-Screenshot_2026-02-12_171229.png)
+The copy button in the panel header copies whichever tab is active. The cURL command is the fastest way to move a validated configuration from the Playground into a script or a teammate's terminal.
 
-This includes raw request payloads and internal metadata, which can be helpful when troubleshooting unexpected behavior or validating request structure.
+<Note>
+  The generated command wraps the JSON body in single quotes. If your System or User prompt contains a single quote (`'`), escape it before running the command in a shell, or the body will be truncated.
+</Note>
 
-## Import and Export
+## Output Panel
 
-The Playground supports importing and exporting configurations to make testing reusable.
+Below the request preview, the Output panel shows the response.
 
-* **Export** downloads the current configuration and request setup
-* **Import** loads a previously saved configuration
+* **Result** — the extracted assistant text, streamed live when Stream is on
+* **Response** — the response payload: the full JSON body for a non-streamed request, or, when streaming, the `data` payload of each SSE event on its own line (the `data:` prefixes and other event fields are stripped)
 
-This is useful for sharing test setups across teams or reusing common scenarios.
+The footer line reports request latency in milliseconds, the `x-request-id` returned by the gateway, and whether the call was streamed. Use that request ID when correlating a test with the [Usage Logs](https://console.aisa.one/logs) page or when contacting support.
+
+Errors are shown inline, with the raw error body available under the **Response** tab.
 
 ## Usage and Billing
 
-All requests made in the Playground count toward usage and billing, the same as API requests.
-
-New users can begin testing immediately using the free credits provided at signup, without creating or managing API keys.
+All Playground requests count toward usage and billing exactly like API requests, and appear in your logs and usage charts under the key you selected.
 
 ## What the Playground Is Best Used For
 
-The Playground is intended for:
-
-* Comparing outputs across different models
-* Tuning generation parameters before production use
-* Testing multimodal inputs
-* Debugging prompt behavior
-* Validating request configuration without writing code
+* Comparing outputs across models without changing code
+* Checking that a model is reachable with a specific key
+* Validating the request body before writing the integration
+* Copying a working cURL command as a starting point
+* Debugging errors with the raw response and request ID in one place
 
 ## Related
 
@@ -130,8 +115,8 @@ The Playground is intended for:
   <Card title="Chat Completions API" icon="code" href="/api-reference/chat/post_chat-completions">
     Ship the same request via code once you've validated it here.
   </Card>
-  <Card title="Dashboard Overview" icon="gauge" href="/guides/dashboard/overview">
-    Monitor the traffic your test requests generate.
+  <Card title="Authentication" icon="key" href="/guides/authentication">
+    Create and manage the API key the Playground authenticates with.
   </Card>
   <Card title="Model Catalog" icon="list" href="/guides/models">
     Browse current model IDs, context windows, endpoints, capabilities, and billing notes.
