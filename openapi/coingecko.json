@@ -2959,8 +2959,8 @@
     "/coingecko/coins/list": {
       "get": {
         "summary": "Coins List (ID Map)",
-        "description": "List all coins with id, symbol, and name. Use to map symbols to CoinGecko IDs.",
-        "operationId": "coingeckoCoinsList",
+        "description": "The full CoinGecko identifier map: every listed coin as `id`, `symbol` and `name`. Use it once to resolve a ticker into the `id` that every other CoinGecko tool requires — `bitcoin`, not BTC. Set `include_platform` to also get each coin's contract address per chain. Mind the size: this returns roughly 18,000 entries and takes several seconds, so cache it instead of calling it per lookup. If you already know the ids and only want numbers, call `get_coingecko_simple_price` directly; to identify a coin from a contract address instead, use `get_coingecko_token_data`.",
+        "operationId": "get_coingecko_coins_list",
         "parameters": [
           {
             "name": "include_platform",
@@ -3001,8 +3001,8 @@
     "/coingecko/simple/supported_vs_currencies": {
       "get": {
         "summary": "Supported Currencies",
-        "description": "List of all supported fiat and crypto currencies for `vs_currency` parameters.",
-        "operationId": "coingeckoSupportedVsCurrencies",
+        "description": "The 63 quote currencies accepted by the `vs_currency` / `vs_currencies` parameter of every other CoinGecko tool — fiat such as `usd` and `eur`, metals such as `xau`, and crypto such as `btc`. Returns a flat array of lowercase strings and takes no parameters. Call it before using a non-obvious quote currency rather than guessing at one. For the coin-side identifier map use `get_coingecko_coins_list`.",
+        "operationId": "get_coingecko_simple_supported_vs_currencies",
         "responses": {
           "200": {
             "description": "Array of currency codes.",
@@ -3028,8 +3028,8 @@
     "/coingecko/coins/markets": {
       "get": {
         "summary": "Coins Markets",
-        "description": "List all coins with market data: price, market cap, volume, and other metrics.",
-        "operationId": "coingeckoCoinsMarkets",
+        "description": "A ranked market table covering many coins in one call: one row per coin with `current_price`, `market_cap`, `market_cap_rank`, `total_volume`, `high_24h`, `low_24h`, `price_change_percentage_24h`, `circulating_supply`, `total_supply`, `max_supply`, `ath` and `atl` with their dates, and `image`. Page with `per_page` and `page`, sort with `order` (market cap, volume or id, ascending or descending), and narrow with `ids` or `category`. Passing `price_change_percentage` adds a matching `price_change_percentage_24h_in_currency` field. Use it for leaderboards and segment scans. For the price of a few known coins `get_coingecko_simple_price` is far lighter; for one coin in full use `get_coingecko_coins_id`.",
+        "operationId": "get_coingecko_coins_markets",
         "parameters": [
           {
             "$ref": "#/components/parameters/VsCurrency"
@@ -3147,8 +3147,8 @@
     "/coingecko/coins/{id}": {
       "get": {
         "summary": "Coin Data by ID",
-        "description": "Current data (price, markets, links, community, developer data) for a coin.",
-        "operationId": "coingeckoCoinById",
+        "description": "Everything CoinGecko holds on one coin, selected by `id`: `description`, `links`, `image`, `categories`, `platforms` and `detail_platforms` (contract addresses per chain), `market_cap_rank`, and a `market_data` block carrying `current_price`, `market_cap`, `total_volume`, `fully_diluted_valuation`, `ath` and `atl` with dates and change percentages. The heavy sections are opt-in via `market_data`, `community_data`, `developer_data`, `tickers`, `sparkline` and `localization` — leave them off unless needed, the full payload is large. Use it for a coin profile. For a price table across many coins use `get_coingecko_coins_markets`; to look the same coin up by contract address use `get_coingecko_token_data`.",
+        "operationId": "get_coingecko_coins_id",
         "parameters": [
           {
             "$ref": "#/components/parameters/CoinId"
@@ -3219,8 +3219,8 @@
     "/coingecko/simple/price": {
       "get": {
         "summary": "Simple Price",
-        "description": "Current price for any cryptocurrencies in any supported currencies.",
-        "operationId": "coingeckoSimplePrice",
+        "description": "The cheapest price lookup: pass comma-separated CoinGecko `ids` and `vs_currencies`, get back a map keyed by coin id. Field names are built from the quote currency — with `vs_currencies` set to usd you get `usd`, plus `usd_market_cap`, `usd_24h_vol`, `usd_24h_change` and `last_updated_at` when the matching `include_market_cap`, `include_24hr_vol`, `include_24hr_change` and `include_last_updated_at` flags are set. Use it whenever the ids are already known and only current numbers are needed. For rank, supply or all-time-high data use `get_coingecko_coins_markets`; if you hold a contract address rather than an id use `get_coingecko_simple_token_price_id`.",
+        "operationId": "get_coingecko_simple_price",
         "parameters": [
           {
             "name": "ids",
@@ -3309,8 +3309,8 @@
     "/coingecko/coins/{id}/market_chart": {
       "get": {
         "summary": "Coin Historical Chart",
-        "description": "Historical market data (price, market cap, 24h volume) for a coin.",
-        "operationId": "coingeckoCoinMarketChart",
+        "description": "Historical series for one coin over a trailing window set by `days`, returned as three parallel arrays: `prices`, `market_caps` and `total_volumes`. Each entry is a two-element pair of timestamp and value, and the timestamp is in milliseconds. Granularity follows `days` automatically, or force it with `interval` (`daily` or `hourly`). Use it to chart a trend ending now. For an explicit start and end use `get_coingecko_coins_id_market_chart_range`; for candlesticks use `get_coingecko_coins_id_ohlc`; for one specific past day use `get_coingecko_coins_id_history`.",
+        "operationId": "get_coingecko_coins_id_market_chart",
         "parameters": [
           {
             "$ref": "#/components/parameters/CoinId"
@@ -3384,8 +3384,8 @@
     "/coingecko/exchanges": {
       "get": {
         "summary": "Exchanges List",
-        "description": "List all exchanges with current trading volume and metadata.",
-        "operationId": "coingeckoExchangesList",
+        "description": "A paged directory of active exchanges with `id`, `name`, `year_established`, `country`, `description`, `url`, `image`, `trust_score`, `trust_score_rank`, `trade_volume_24h_btc` and `has_trading_incentive`. Page with `per_page` and `page`. Use it to rank or filter venues by trust and volume. If you only need the identifier mapping, `get_coingecko_exchanges_list` returns all of them with no market data and no paging; for one venue in full use `get_coingecko_exchanges_id`.",
+        "operationId": "get_coingecko_exchanges",
         "parameters": [
           {
             "name": "per_page",
@@ -3422,8 +3422,8 @@
     "/coingecko/search/trending": {
       "get": {
         "summary": "Trending Search",
-        "description": "Top-7 trending coin searches on CoinGecko in the last 24 hours.",
-        "operationId": "coingeckoTrendingSearch",
+        "description": "CoinGecko's current trending board, ranked by search activity on CoinGecko itself: `coins` (15 entries), `nfts` (7) and `categories` (6). Each coin carries `id`, `name`, `symbol`, `market_cap_rank`, `price_btc`, `score` and a nested `data` block. Takes no parameters. Use it as a discovery entry point when the user named no specific asset. It reflects attention rather than price action — for movers ranked by market data use `get_coingecko_coins_markets` ordered by volume.",
+        "operationId": "get_coingecko_search_trending",
         "responses": {
           "200": {
             "description": "Trending coins, nfts, and categories.",
@@ -3453,8 +3453,8 @@
     "/coingecko/coins/categories/list": {
       "get": {
         "summary": "Categories List",
-        "description": "List all categories used by CoinGecko.",
-        "operationId": "coingeckoCategoriesList",
+        "description": "A flat identifier map of roughly 856 CoinGecko categories, each as `category_id` and `name`. These are the values accepted by the `category` filter on `get_coingecko_coins_markets`, so use this to turn a theme into a usable id. It carries no market data at all; for category market caps, 24h change and leading coins use `get_coingecko_coins_categories`.",
+        "operationId": "get_coingecko_coins_categories_list",
         "responses": {
           "200": {
             "description": "Array of categories.",
@@ -3482,8 +3482,8 @@
     "/coingecko/coins/{id}/tickers": {
       "get": {
         "summary": "Coin Tickers",
-        "description": "Tickers (exchange-listed pairs) for a coin.",
-        "operationId": "coingeckoCoinTickers",
+        "description": "Every trading pair for one coin across venues: `base`, `target`, `market`, `last`, `volume`, `converted_last`, `converted_volume`, `trust_score`, `bid_ask_spread_percentage`, `last_traded_at`, `trade_url`, and the anomaly flags `is_anomaly` and `is_stale`. Setting `depth` adds `cost_to_move_up_usd` and `cost_to_move_down_usd`. Narrow with `exchange_ids`, page with `page`, sort with `order` (trust score or volume). Use it to compare where one asset trades and how deep each book is. For every pair on one venue regardless of coin, use `get_coingecko_exchanges_id_tickers`.",
+        "operationId": "get_coingecko_coins_id_tickers",
         "parameters": [
           {
             "$ref": "#/components/parameters/CoinId"
@@ -3551,8 +3551,8 @@
     "/coingecko/coins/{id}/history": {
       "get": {
         "summary": "Coin Historical Data",
-        "description": "Historical snapshot (price, market cap, volume) for a coin on a given date.",
-        "operationId": "coingeckoCoinHistory",
+        "description": "A snapshot of one coin on a single calendar day. `date` is required and must be formatted dd-mm-yyyy (day, month, four-digit year). Returns `market_data` holding `current_price`, `market_cap` and `total_volume` as of that day, alongside `community_data`, `developer_data` and `public_interest_stats`. Use it for one fixed point in time. For a continuous series use `get_coingecko_coins_id_market_chart` for a trailing window, or `get_coingecko_coins_id_market_chart_range` for an explicit one.",
+        "operationId": "get_coingecko_coins_id_history",
         "parameters": [
           {
             "$ref": "#/components/parameters/CoinId"
@@ -3603,8 +3603,8 @@
     "/coingecko/coins/{id}/ohlc": {
       "get": {
         "summary": "Coin OHLC",
-        "description": "OHLC candles for a coin.",
-        "operationId": "coingeckoCoinOhlc",
+        "description": "Candlestick data for one coin as a bare array of rows, each row positional: timestamp in milliseconds, then open, high, low and close. There are no field names in the response and no volume. Candle width is derived from `days`, which is required. Use it for candle or technical analysis. For a price line together with market cap and traded volume use `get_coingecko_coins_id_market_chart` instead.",
+        "operationId": "get_coingecko_coins_id_ohlc",
         "parameters": [
           {
             "$ref": "#/components/parameters/CoinId"
@@ -3658,8 +3658,8 @@
     "/coingecko/exchanges/list": {
       "get": {
         "summary": "Exchanges List (ID Map)",
-        "description": "List all exchange IDs and names — use to resolve exchange names to IDs.",
-        "operationId": "coingeckoExchangesListIdMap",
+        "description": "A flat identifier map of roughly 1,500 exchanges as `id` and `name`. Use it to resolve a venue name into the `id` required by `get_coingecko_exchanges_id` and by the `exchange_ids` filter on `get_coingecko_coins_id_tickers`. It takes no parameters and carries no market data; for trust scores and volumes use `get_coingecko_exchanges`.",
+        "operationId": "get_coingecko_exchanges_list",
         "responses": {
           "200": {
             "description": "Array of `{id, name}`.",
@@ -3687,8 +3687,8 @@
     "/coingecko/exchanges/{id}": {
       "get": {
         "summary": "Exchange Data by ID",
-        "description": "Detailed data for a single exchange (volume, tickers, trust score, etc.).",
-        "operationId": "coingeckoExchangeById",
+        "description": "The full profile of one exchange: `name`, `year_established`, `country`, `description`, `url`, `image`, social handles, `centralized`, `trust_score`, `trust_score_rank`, `trade_volume_24h_btc`, `coins`, `pairs`, plus an embedded `tickers` sample and `status_updates`. Use it for venue due diligence. For a ranked list across many venues use `get_coingecko_exchanges`; for that venue's complete paged pair list use `get_coingecko_exchanges_id_tickers`.",
+        "operationId": "get_coingecko_exchanges_id",
         "parameters": [
           {
             "$ref": "#/components/parameters/ExchangeId"
@@ -3711,8 +3711,8 @@
     "/coingecko/coins/categories": {
       "get": {
         "summary": "Categories with Market Data",
-        "description": "All categories with market cap, volume, and top-3 coins.",
-        "operationId": "coingeckoCategoriesMarketData",
+        "description": "Roughly 749 crypto categories with market data attached: `id`, `name`, `market_cap`, `market_cap_change_24h`, `volume_24h`, `top_3_coins_id`, `top_3_coins`, `content` and `updated_at`. Sort with `order` by market cap, name or 24h market-cap change. Use it to see which sectors are moving. For the plain identifier list that the `category` filter expects, `get_coingecko_coins_categories_list` is smaller and faster.",
+        "operationId": "get_coingecko_coins_categories",
         "parameters": [
           {
             "name": "order",
@@ -3747,8 +3747,8 @@
     "/coingecko/news": {
       "get": {
         "summary": "Crypto News",
-        "description": "Latest crypto news articles aggregated by CoinGecko. This upstream endpoint is plan-gated by CoinGecko (Analyst/Lite/Pro/Enterprise or equivalent access).",
-        "operationId": "coingeckoNews",
+        "description": "Crypto news headlines from CoinGecko, filterable by `coin_id`, `language` and `type` (`news` or `guides`), paged with `page` and `per_page`. Availability warning: this endpoint is restricted to CoinGecko Analyst plans and above, and on the current upstream subscription it returns HTTP 401 with an upgrade message in the body. Treat it as unavailable until the upstream plan changes. For coin context that does work today, `get_coingecko_coins_id` returns `description` and `links` including official channels.",
+        "operationId": "get_coingecko_news",
         "responses": {
           "200": {
             "description": "Array of news articles.",
@@ -3836,8 +3836,8 @@
     "/coingecko/exchanges/{id}/tickers": {
       "get": {
         "summary": "Exchange Tickers",
-        "description": "Tickers traded on a given exchange.",
-        "operationId": "coingeckoExchangeTickers",
+        "description": "Every trading pair listed on one exchange, paged: `base`, `target`, `market`, `last`, `volume`, `converted_last`, `converted_volume`, `trust_score`, `bid_ask_spread_percentage`, `timestamp`, `trade_url` and the `is_anomaly` / `is_stale` flags. Narrow to specific assets with `coin_ids`, sort with `order`, and set `depth` to add order-book move costs. Use it to audit one venue's coverage or liquidity. For one coin's pairs across all venues use `get_coingecko_coins_id_tickers` instead.",
+        "operationId": "get_coingecko_exchanges_id_tickers",
         "parameters": [
           {
             "$ref": "#/components/parameters/ExchangeId"
@@ -3905,8 +3905,8 @@
     "/coingecko/simple/token_price/{id}": {
       "get": {
         "summary": "Coin Price by Token Address",
-        "description": "Current price of one or more tokens by contract address on a supported platform.",
-        "operationId": "coingeckoTokenPriceByAddress",
+        "description": "Price lookup keyed by on-chain contract address rather than CoinGecko id. `id` is the asset platform, `contract_addresses` a comma-separated list of token addresses, `vs_currencies` the quote currency. Returns a map keyed by lowercase contract address whose field names are built from the quote currency — `usd`, plus `usd_market_cap`, `usd_24h_vol`, `usd_24h_change` and `last_updated_at` when the matching `include_market_cap`, `include_24hr_vol`, `include_24hr_change` and `include_last_updated_at` flags are set. Use it when you hold an address and no id. For the token's full profile use `get_coingecko_token_data`; if you already have the CoinGecko id use `get_coingecko_simple_price`.",
+        "operationId": "get_coingecko_simple_token_price_id",
         "parameters": [
           {
             "name": "id",
@@ -3996,8 +3996,8 @@
           "Contract"
         ],
         "summary": "Coin Data by Token Address",
-        "description": "This endpoint allows you to **query all the metadata (image, websites, socials, description, contract address, etc.) and market data (price, ATH, exchange tickers, etc.) of a coin from the CoinGecko coin page based on an asset platform and a particular token contract address**",
-        "operationId": "coingeckoCoinByTokenAddress",
+        "description": "A full coin profile looked up by contract address instead of CoinGecko id. `id` is the asset platform and `contract_address` the token; both are required and there are no other parameters. Returns the same shape as `get_coingecko_coins_id` — `description`, `links`, `image`, `categories`, `platforms`, `detail_platforms`, `market_cap_rank`, a `market_data` block and an embedded `tickers` array — plus `contract_address` itself. Use it to identify an unknown token from an address. If only the current price is needed, `get_coingecko_simple_token_price_id` is far lighter.",
+        "operationId": "get_coingecko_token_data",
         "parameters": [
           {
             "name": "id",
@@ -4039,8 +4039,8 @@
     "/coingecko/coins/{id}/contract/{contract_address}/market_chart": {
       "get": {
         "summary": "Coin Historical Chart by Contract",
-        "description": "Historical market data for a token by contract address.",
-        "operationId": "coingeckoCoinMarketChartByContract",
+        "description": "Historical series for a token identified by contract address, over a trailing window set by `days`. `id` is the asset platform, `contract_address` the token. Returns `prices`, `market_caps` and `total_volumes` as timestamp-and-value pairs, with timestamps in milliseconds — the same shape as `get_coingecko_coins_id_market_chart`. Use it when you have an address rather than a CoinGecko id. For an explicit start and end use `get_coingecko_token_market_chart_range`.",
+        "operationId": "get_coingecko_token_market_chart",
         "parameters": [
           {
             "name": "id",
@@ -4094,8 +4094,8 @@
     "/coingecko/coins/{id}/market_chart/range": {
       "get": {
         "summary": "Coin Market Chart Range",
-        "description": "Historical market data within an explicit UNIX timestamp range.",
-        "operationId": "coingeckoCoinMarketChartRange",
+        "description": "Historical series for one coin between two explicit points in time. `from` and `to` are Unix timestamps in seconds, while the timestamps inside the response are in milliseconds — the two are not the same unit, which is the usual source of empty or misaligned results. Returns `prices`, `market_caps` and `total_volumes` as timestamp-and-value pairs; CoinGecko picks granularity from the window length. Use it to line a series up with a known event window. For a trailing window ending now, `get_coingecko_coins_id_market_chart` takes a `days` count instead.",
+        "operationId": "get_coingecko_coins_id_market_chart_range",
         "parameters": [
           {
             "$ref": "#/components/parameters/CoinId"
@@ -4160,8 +4160,8 @@
     "/coingecko/coins/{id}/contract/{contract_address}/market_chart/range": {
       "get": {
         "summary": "Coin Market Chart Range by Contract",
-        "description": "Historical market data for a token contract within an explicit UNIX timestamp range.",
-        "operationId": "coingeckoCoinMarketChartRangeByContract",
+        "description": "Historical series between two explicit points in time for a token identified by contract address. `id` is the asset platform and `contract_address` the token; `from` and `to` are Unix timestamps in seconds while response timestamps are in milliseconds. Returns `prices`, `market_caps` and `total_volumes` as timestamp-and-value pairs. Use it when you have an address and a fixed window. For a trailing window use `get_coingecko_token_market_chart`; if you hold a CoinGecko id rather than an address use `get_coingecko_coins_id_market_chart_range`.",
+        "operationId": "get_coingecko_token_market_chart_range",
         "parameters": [
           {
             "name": "id",
