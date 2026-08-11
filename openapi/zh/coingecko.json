@@ -171,11 +171,8 @@
                 }
               },
               "whitepaper": {
-                "type": "array",
-                "description": "代币白皮书 URL",
-                "items": {
-                  "type": "string"
-                }
+                "type": "string",
+                "description": "代币白皮书 URL"
               },
               "blockchain_site": {
                 "type": "array",
@@ -207,7 +204,8 @@
               },
               "snapshot_url": {
                 "type": "string",
-                "description": "代币快照 URL"
+                "description": "代币快照 URL",
+                "nullable": true
               },
               "twitter_screen_name": {
                 "type": "string",
@@ -219,7 +217,8 @@
               },
               "bitcointalk_thread_identifier": {
                 "type": "string",
-                "description": "代币的 Bitcointalk 主题标识符"
+                "description": "代币的 Bitcointalk 主题标识符",
+                "nullable": true
               },
               "telegram_channel_identifier": {
                 "type": "string",
@@ -227,7 +226,8 @@
               },
               "subreddit_url": {
                 "type": "string",
-                "description": "币种 subreddit URL"
+                "description": "币种 subreddit URL",
+                "nullable": true
               },
               "repos_url": {
                 "type": "object",
@@ -761,7 +761,8 @@
             "properties": {
               "facebook_likes": {
                 "type": "number",
-                "description": "代币的 Facebook 点赞数"
+                "description": "代币的 Facebook 点赞数",
+                "nullable": true
               },
               "reddit_average_posts_48h": {
                 "type": "number",
@@ -781,7 +782,8 @@
               },
               "telegram_channel_user_count": {
                 "type": "number",
-                "description": "代币 Telegram 频道用户数"
+                "description": "代币 Telegram 频道用户数",
+                "nullable": true
               }
             }
           },
@@ -822,10 +824,12 @@
                 "description": "4 周内新增和删除的币种代码",
                 "properties": {
                   "additions": {
-                    "type": "number"
+                    "type": "number",
+                    "nullable": true
                   },
                   "deletions": {
-                    "type": "number"
+                    "type": "number",
+                    "nullable": true
                   }
                 }
               },
@@ -958,11 +962,13 @@
                 },
                 "trade_url": {
                   "type": "string",
-                  "description": "代币行情交易 URL"
+                  "description": "代币行情交易 URL",
+                  "nullable": true
                 },
                 "token_info_url": {
                   "type": "string",
-                  "description": "代币行情代码信息 URL"
+                  "description": "代币行情代码信息 URL",
+                  "nullable": true
                 },
                 "coin_id": {
                   "type": "string",
@@ -2959,8 +2965,8 @@
     "/coingecko/coins/list": {
       "get": {
         "summary": "币种列表（ID 映射）",
-        "description": "列出所有代币的 id、symbol 和 name。用于将代币符号映射到 CoinGecko ID。",
-        "operationId": "coingeckoCoinsList",
+        "description": "完整的 CoinGecko 标识符映射：列出所有已收录币种的 `id`、`symbol` 和 `name`。用它一次性把行情代码解析成其他所有 CoinGecko 工具都需要的 `id`——是 `bitcoin`，不是 BTC。设置 `include_platform` 还可以获得各条链上的合约地址。注意体量：该接口返回约 18,000 条记录，耗时数秒，因此请缓存结果，不要每次查询都调用。如果 id 已知且只需要数值，请直接调用 `get_coingecko_simple_price`；如果要从合约地址反查币种，请使用 `get_coingecko_token_data`。",
+        "operationId": "get_coingecko_coins_list",
         "parameters": [
           {
             "name": "include_platform",
@@ -3001,8 +3007,8 @@
     "/coingecko/simple/supported_vs_currencies": {
       "get": {
         "summary": "支持的货币",
-        "description": "`vs_currency` 参数支持的所有法定货币和加密货币列表。",
-        "operationId": "coingeckoSupportedVsCurrencies",
+        "description": "列出其他所有 CoinGecko 工具的 `vs_currency` / `vs_currencies` 参数所接受的 63 种计价货币——法币（如 `usd`、`eur`）、贵金属（如 `xau`）以及加密货币（如 `btc`）。返回小写字符串的扁平数组，无需任何参数。在使用不常见的计价货币前先调用它，而不要靠猜。如需币种一侧的标识符映射，请使用 `get_coingecko_coins_list`。",
+        "operationId": "get_coingecko_simple_supported_vs_currencies",
         "responses": {
           "200": {
             "description": "货币代码数组。",
@@ -3028,8 +3034,8 @@
     "/coingecko/coins/markets": {
       "get": {
         "summary": "币种市场",
-        "description": "列出所有代币及其市场数据：价格、市值、交易量和其他指标。",
-        "operationId": "coingeckoCoinsMarkets",
+        "description": "一次调用返回覆盖多个币种的排名行情表：每个币种一行，包含 `current_price`、`market_cap`、`market_cap_rank`、`total_volume`、`high_24h`、`low_24h`、`price_change_percentage_24h`、`circulating_supply`、`total_supply`、`max_supply`、带日期的 `ath` 和 `atl`，以及 `image`。用 `per_page` 和 `page` 分页，用 `order` 排序（按市值、成交量或 id，升序或降序），用 `ids` 或 `category` 收窄范围。传入 `price_change_percentage` 会额外返回对应的 `price_change_percentage_24h_in_currency` 字段。适合用于榜单和板块扫描。如果只需要少数已知币种的价格，`get_coingecko_simple_price` 更轻量；如需某一币种的完整信息，请使用 `get_coingecko_coins_id`。",
+        "operationId": "get_coingecko_coins_markets",
         "parameters": [
           {
             "$ref": "#/components/parameters/VsCurrency"
@@ -3147,8 +3153,8 @@
     "/coingecko/coins/{id}": {
       "get": {
         "summary": "按 ID 获取币种数据",
-        "description": "代币的当前数据（价格、市场、链接、社区和开发者数据）。",
-        "operationId": "coingeckoCoinById",
+        "description": "按 `id` 返回 CoinGecko 收录的某个币种的全部信息：`description`、`links`、`image`、`categories`、`platforms` 和 `detail_platforms`（各链上的合约地址）、`market_cap_rank`，以及包含 `current_price`、`market_cap`、`total_volume`、`fully_diluted_valuation`、`ath` 和 `atl`（含日期和涨跌幅）的 `market_data` 区块。体量较大的部分通过 `market_data`、`community_data`、`developer_data`、`tickers`、`sparkline` 和 `localization` 按需开启——除非确实需要，否则请保持关闭，完整响应体很大。适合用于获取币种档案。如需跨多个币种的价格表，请使用 `get_coingecko_coins_markets`；如需按合约地址查询同一币种，请使用 `get_coingecko_token_data`。",
+        "operationId": "get_coingecko_coins_id",
         "parameters": [
           {
             "$ref": "#/components/parameters/CoinId"
@@ -3219,8 +3225,8 @@
     "/coingecko/simple/price": {
       "get": {
         "summary": "简单价格",
-        "description": "以任意受支持货币计价的任意加密货币当前价格。",
-        "operationId": "coingeckoSimplePrice",
+        "description": "最经济的价格查询：传入逗号分隔的 CoinGecko `ids` 和 `vs_currencies`，返回以币种 id 为键的映射。字段名由计价货币拼接而成——当 `vs_currencies` 设为 usd 时，会返回 `usd`，并在设置了对应的 `include_market_cap`、`include_24hr_vol`、`include_24hr_change` 和 `include_last_updated_at` 标志时额外返回 `usd_market_cap`、`usd_24h_vol`、`usd_24h_change` 和 `last_updated_at`。当 id 已知且只需要当前数值时使用它。如需排名、供应量或历史最高价数据，请使用 `get_coingecko_coins_markets`；如果你手上是合约地址而不是 id，请使用 `get_coingecko_simple_token_price_id`。",
+        "operationId": "get_coingecko_simple_price",
         "parameters": [
           {
             "name": "ids",
@@ -3309,8 +3315,8 @@
     "/coingecko/coins/{id}/market_chart": {
       "get": {
         "summary": "币种历史图表",
-        "description": "某种加密货币的历史市场数据（价格、市值、24 小时交易量）。",
-        "operationId": "coingeckoCoinMarketChart",
+        "description": "返回单个币种在由 `days` 指定的回溯窗口内的历史序列，以三个平行数组给出：`prices`、`market_caps` 和 `total_volumes`。每个条目是「时间戳，数值」的二元组，时间戳单位为毫秒。粒度会依据 `days` 自动调整，也可以用 `interval`（`daily` 或 `hourly`）强制指定。适合绘制截至当前的走势图。如需指定明确的起止时间，请使用 `get_coingecko_coins_id_market_chart_range`；如需 K 线，请使用 `get_coingecko_coins_id_ohlc`；如需某一个具体历史日期，请使用 `get_coingecko_coins_id_history`。",
+        "operationId": "get_coingecko_coins_id_market_chart",
         "parameters": [
           {
             "$ref": "#/components/parameters/CoinId"
@@ -3384,8 +3390,8 @@
     "/coingecko/exchanges": {
       "get": {
         "summary": "交易所列表",
-        "description": "列出所有交易所及其当前交易量和元数据。",
-        "operationId": "coingeckoExchangesList",
+        "description": "分页返回活跃交易所目录，包含 `id`、`name`、`year_established`、`country`、`description`、`url`、`image`、`trust_score`、`trust_score_rank`、`trade_volume_24h_btc` 和 `has_trading_incentive`。用 `per_page` 和 `page` 分页。适合用于按信任度和成交量对交易场所排序或筛选。如果只需要标识符映射，`get_coingecko_exchanges_list` 会返回全部交易所，不含行情数据也无需分页；如需某个交易所的完整信息，请使用 `get_coingecko_exchanges_id`。",
+        "operationId": "get_coingecko_exchanges",
         "parameters": [
           {
             "name": "per_page",
@@ -3422,8 +3428,8 @@
     "/coingecko/search/trending": {
       "get": {
         "summary": "热门搜索",
-        "description": "过去 24 小时内 CoinGecko 上搜索热度最高的 7 种加密货币。",
-        "operationId": "coingeckoTrendingSearch",
+        "description": "CoinGecko 当前的热门榜，按 CoinGecko 站内搜索活跃度排名：`coins`（15 条）、`nfts`（7 条）和 `categories`（6 条）。每个币种包含 `id`、`name`、`symbol`、`market_cap_rank`、`price_btc`、`score` 以及嵌套的 `data` 区块。无需任何参数。当用户没有指名具体资产时，可作为发现入口。它反映的是关注度而非价格表现——如需按行情数据排序的涨跌榜，请使用按成交量排序的 `get_coingecko_coins_markets`。",
+        "operationId": "get_coingecko_search_trending",
         "responses": {
           "200": {
             "description": "热门代币、NFT 和类别。",
@@ -3453,8 +3459,8 @@
     "/coingecko/coins/categories/list": {
       "get": {
         "summary": "类别列表",
-        "description": "列出 CoinGecko 使用的所有类别。",
-        "operationId": "coingeckoCategoriesList",
+        "description": "约 856 个 CoinGecko 板块的扁平标识符映射，每条包含 `category_id` 和 `name`。这些正是 `get_coingecko_coins_markets` 的 `category` 过滤条件所接受的值，因此可用它把一个主题转换成可用的 id。该接口完全不含行情数据；如需板块市值、24 小时涨跌和龙头币种，请使用 `get_coingecko_coins_categories`。",
+        "operationId": "get_coingecko_coins_categories_list",
         "responses": {
           "200": {
             "description": "类别数组。",
@@ -3482,8 +3488,8 @@
     "/coingecko/coins/{id}/tickers": {
       "get": {
         "summary": "币种行情代码",
-        "description": "币种的交易代码（交易所上市交易对）。",
-        "operationId": "coingeckoCoinTickers",
+        "description": "列出某个币种在各交易场所的所有交易对：`base`、`target`、`market`、`last`、`volume`、`converted_last`、`converted_volume`、`trust_score`、`bid_ask_spread_percentage`、`last_traded_at`、`trade_url`，以及异常标志 `is_anomaly` 和 `is_stale`。设置 `depth` 会额外返回 `cost_to_move_up_usd` 和 `cost_to_move_down_usd`。可用 `exchange_ids` 收窄范围，用 `page` 分页，用 `order` 排序（按信任分或成交量）。适合用于比较某个资产在哪里交易、各交易场所深度如何。如需查看某个交易所上的全部交易对（不限币种），请使用 `get_coingecko_exchanges_id_tickers`。",
+        "operationId": "get_coingecko_coins_id_tickers",
         "parameters": [
           {
             "$ref": "#/components/parameters/CoinId"
@@ -3551,8 +3557,8 @@
     "/coingecko/coins/{id}/history": {
       "get": {
         "summary": "加密货币历史数据",
-        "description": "某种代币在指定日期的历史快照（价格、市值、交易量）。",
-        "operationId": "coingeckoCoinHistory",
+        "description": "某个币种在单个日历日上的快照。`date` 为必填，格式必须是 dd-mm-yyyy（日、月、四位年份）。返回该日的 `market_data`，包含 `current_price`、`market_cap` 和 `total_volume`，同时还有 `community_data`、`developer_data` 和 `public_interest_stats`。适合用于查询某个固定时间点。如需连续序列，回溯窗口请使用 `get_coingecko_coins_id_market_chart`，明确起止时间请使用 `get_coingecko_coins_id_market_chart_range`。",
+        "operationId": "get_coingecko_coins_id_history",
         "parameters": [
           {
             "$ref": "#/components/parameters/CoinId"
@@ -3603,8 +3609,8 @@
     "/coingecko/coins/{id}/ohlc": {
       "get": {
         "summary": "币种 OHLC",
-        "description": "某种币的 OHLC K 线数据。",
-        "operationId": "coingeckoCoinOhlc",
+        "description": "单个币种的 K 线数据，以裸数组形式返回，每行按位置排列：毫秒时间戳，然后是开盘、最高、最低和收盘价。响应中没有字段名，也不含成交量。K 线周期由必填的 `days` 推导。适合用于 K 线或技术分析。如果需要价格曲线并同时包含市值和成交量，请改用 `get_coingecko_coins_id_market_chart`。",
+        "operationId": "get_coingecko_coins_id_ohlc",
         "parameters": [
           {
             "$ref": "#/components/parameters/CoinId"
@@ -3658,8 +3664,8 @@
     "/coingecko/exchanges/list": {
       "get": {
         "summary": "交易所列表（ID 映射）",
-        "description": "列出所有交易所 ID 和名称——用于将交易所名称解析为 ID。",
-        "operationId": "coingeckoExchangesListIdMap",
+        "description": "约 1,500 家交易所的扁平标识符映射，仅含 `id` 和 `name`。用它把交易场所名称解析成 `get_coingecko_exchanges_id` 以及 `get_coingecko_coins_id_tickers` 的 `exchange_ids` 过滤条件所需的 `id`。该接口无需参数，也不含任何行情数据；如需信任分和成交量，请使用 `get_coingecko_exchanges`。",
+        "operationId": "get_coingecko_exchanges_list",
         "responses": {
           "200": {
             "description": "`{id, name}` 数组。",
@@ -3687,8 +3693,8 @@
     "/coingecko/exchanges/{id}": {
       "get": {
         "summary": "按 ID 获取交易所数据",
-        "description": "单个交易所的详细数据（交易量、交易对、信任评分等）。",
-        "operationId": "coingeckoExchangeById",
+        "description": "某个交易所的完整档案：`name`、`year_established`、`country`、`description`、`url`、`image`、社交账号、`centralized`、`trust_score`、`trust_score_rank`、`trade_volume_24h_btc`、`coins`、`pairs`，以及内嵌的 `tickers` 样本和 `status_updates`。适合用于交易场所尽调。如需跨多个交易所的排名列表，请使用 `get_coingecko_exchanges`；如需该交易所完整的分页交易对列表，请使用 `get_coingecko_exchanges_id_tickers`。",
+        "operationId": "get_coingecko_exchanges_id",
         "parameters": [
           {
             "$ref": "#/components/parameters/ExchangeId"
@@ -3711,8 +3717,8 @@
     "/coingecko/coins/categories": {
       "get": {
         "summary": "包含市场数据的类别",
-        "description": "所有类别及其市值、交易量和排名前三的代币。",
-        "operationId": "coingeckoCategoriesMarketData",
+        "description": "约 749 个加密板块及其附带的行情数据：`id`、`name`、`market_cap`、`market_cap_change_24h`、`volume_24h`、`top_3_coins_id`、`top_3_coins`、`content` 和 `updated_at`。可用 `order` 按市值、名称或 24 小时市值涨跌排序。适合用于观察哪些板块在异动。如果只需要 `category` 过滤条件所需的纯标识符列表，`get_coingecko_coins_categories_list` 更小更快。",
+        "operationId": "get_coingecko_coins_categories",
         "parameters": [
           {
             "name": "order",
@@ -3747,8 +3753,8 @@
     "/coingecko/news": {
       "get": {
         "summary": "加密货币新闻",
-        "description": "由 CoinGecko 聚合的最新加密货币新闻文章。此上游端点受 CoinGecko 套餐限制（Analyst/Lite/Pro/Enterprise 或同等访问权限）。",
-        "operationId": "coingeckoNews",
+        "description": "来自 CoinGecko 的加密新闻标题，可按 `coin_id`、`language` 和 `type`（`news` 或 `guides`）过滤，并用 `page` 和 `per_page` 分页。可用性提示：该 endpoint 仅对 CoinGecko Analyst 及以上套餐开放，在当前上游订阅下会返回 HTTP 401，响应体中带升级提示。在上游套餐变更之前，请视其为不可用。如果需要当前可用的币种背景信息，`get_coingecko_coins_id` 会返回 `description` 和包含官方渠道的 `links`。",
+        "operationId": "get_coingecko_news",
         "responses": {
           "200": {
             "description": "新闻文章数组。",
@@ -3836,8 +3842,8 @@
     "/coingecko/exchanges/{id}/tickers": {
       "get": {
         "summary": "交易所股票代码",
-        "description": "在指定交易所交易的股票代码。",
-        "operationId": "coingeckoExchangeTickers",
+        "description": "分页返回某个交易所上架的全部交易对：`base`、`target`、`market`、`last`、`volume`、`converted_last`、`converted_volume`、`trust_score`、`bid_ask_spread_percentage`、`timestamp`、`trade_url`，以及 `is_anomaly` / `is_stale` 标志。可用 `coin_ids` 收窄到特定资产，用 `order` 排序，并设置 `depth` 以附加订单簿撬动成本。适合用于审视某个交易场所的币种覆盖或流动性。如需某个币种在所有交易场所的交易对，请改用 `get_coingecko_coins_id_tickers`。",
+        "operationId": "get_coingecko_exchanges_id_tickers",
         "parameters": [
           {
             "$ref": "#/components/parameters/ExchangeId"
@@ -3905,8 +3911,8 @@
     "/coingecko/simple/token_price/{id}": {
       "get": {
         "summary": "按 Token 地址查询币种价格",
-        "description": "按合约地址获取受支持平台上一种或多种代币的当前价格。",
-        "operationId": "coingeckoTokenPriceByAddress",
+        "description": "以链上合约地址而非 CoinGecko id 为键的价格查询。`id` 是资产所在链，`contract_addresses` 是逗号分隔的代币地址列表，`vs_currencies` 是计价货币。返回以小写合约地址为键的映射，其字段名由计价货币拼接而成——包含 `usd`，并在设置了对应的 `include_market_cap`、`include_24hr_vol`、`include_24hr_change` 和 `include_last_updated_at` 标志时额外返回 `usd_market_cap`、`usd_24h_vol`、`usd_24h_change` 和 `last_updated_at`。当你只有地址而没有 id 时使用它。如需该代币的完整档案，请使用 `get_coingecko_token_data`；如果你已经有 CoinGecko id，请使用 `get_coingecko_simple_price`。",
+        "operationId": "get_coingecko_simple_token_price_id",
         "parameters": [
           {
             "name": "id",
@@ -3996,8 +4002,8 @@
           "Contract"
         ],
         "summary": "按 Token 地址获取代币数据",
-        "description": "此端点允许您根据资产平台和特定 token 合约地址，**查询 CoinGecko 币种页面中某个币种的全部元数据（图片、网站、社交账号、描述、合约地址等）和市场数据（价格、ATH、交易所行情代码等）**",
-        "operationId": "coingeckoCoinByTokenAddress",
+        "description": "按合约地址而非 CoinGecko id 查询完整的币种档案。`id` 是资产所在链，`contract_address` 是代币地址；两者均为必填，且没有其他参数。返回结构与 `get_coingecko_coins_id` 相同——`description`、`links`、`image`、`categories`、`platforms`、`detail_platforms`、`market_cap_rank`、`market_data` 区块和内嵌的 `tickers` 数组——并额外包含 `contract_address` 本身。适合用于从地址识别未知代币。如果只需要当前价格，`get_coingecko_simple_token_price_id` 更轻量。",
+        "operationId": "get_coingecko_token_data",
         "parameters": [
           {
             "name": "id",
@@ -4039,8 +4045,8 @@
     "/coingecko/coins/{id}/contract/{contract_address}/market_chart": {
       "get": {
         "summary": "按合约查询代币历史图表",
-        "description": "按合约地址获取词元的历史市场数据。",
-        "operationId": "coingeckoCoinMarketChartByContract",
+        "description": "返回按合约地址标识的代币在由 `days` 指定的回溯窗口内的历史序列。`id` 是资产所在链，`contract_address` 是代币地址。返回 `prices`、`market_caps` 和 `total_volumes`，均为「时间戳，数值」二元组，时间戳单位为毫秒——结构与 `get_coingecko_coins_id_market_chart` 相同。当你手上是地址而不是 CoinGecko id 时使用它。如需明确的起止时间，请使用 `get_coingecko_token_market_chart_range`。",
+        "operationId": "get_coingecko_token_market_chart",
         "parameters": [
           {
             "name": "id",
@@ -4094,8 +4100,8 @@
     "/coingecko/coins/{id}/market_chart/range": {
       "get": {
         "summary": "代币市场图表范围",
-        "description": "明确 UNIX 时间戳范围内的历史市场数据。",
-        "operationId": "coingeckoCoinMarketChartRange",
+        "description": "返回单个币种在两个明确时间点之间的历史序列。`from` 和 `to` 为 Unix 秒级时间戳，而响应内部的时间戳单位为毫秒——两者单位不同，这是结果为空或错位的常见原因。返回 `prices`、`market_caps` 和 `total_volumes`，均为「时间戳，数值」二元组；CoinGecko 会根据窗口长度自动选择粒度。适合用于把序列对齐到某个已知事件窗口。如需截至当前的回溯窗口，`get_coingecko_coins_id_market_chart` 改用 `days` 天数参数。",
+        "operationId": "get_coingecko_coins_id_market_chart_range",
         "parameters": [
           {
             "$ref": "#/components/parameters/CoinId"
@@ -4160,8 +4166,8 @@
     "/coingecko/coins/{id}/contract/{contract_address}/market_chart/range": {
       "get": {
         "summary": "按合约获取代币市场图表区间",
-        "description": "明确 UNIX 时间戳范围内的 token 合约历史市场数据。",
-        "operationId": "coingeckoCoinMarketChartRangeByContract",
+        "description": "返回按合约地址标识的代币在两个明确时间点之间的历史序列。`id` 是资产所在链，`contract_address` 是代币地址；`from` 和 `to` 为 Unix 秒级时间戳，而响应中的时间戳单位为毫秒。返回 `prices`、`market_caps` 和 `total_volumes`，均为「时间戳，数值」二元组。当你有地址且需要固定时间窗口时使用它。如需回溯窗口，请使用 `get_coingecko_token_market_chart`；如果你手上是 CoinGecko id 而不是地址，请使用 `get_coingecko_coins_id_market_chart_range`。",
+        "operationId": "get_coingecko_token_market_chart_range",
         "parameters": [
           {
             "name": "id",

@@ -1,0 +1,215 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "EDINET API",
+    "version": "draft-2026-07-28",
+    "description": "用于 EDINET 文档列表和文档下载的 AIsa 网关 endpoint。"
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/edinet/documents.json": {
+      "get": {
+        "summary": "列出 EDINET 文档",
+        "description": "按指定文件日期查询 EDINET 申报列表。type=1 时仅返回元数据，type=2 时返回元数据加申报结果。",
+        "operationId": "getEdinetDocuments",
+        "tags": [
+          "EDINET"
+        ],
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "examples": [
+                "2026-07-23"
+              ]
+            },
+            "description": "文件日期，格式为 YYYY-MM-DD。"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                1,
+                2
+              ],
+              "default": 1
+            },
+            "description": "响应模式：1 仅返回元数据，2 返回元数据加申报列表。"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EDINET 文档列表响应。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "metadata": {
+                      "type": "object",
+                      "description": "元数据对象，包含标题、请求参数回显、结果数量、processDateTime、status 和 message。"
+                    },
+                    "results": {
+                      "type": "array",
+                      "description": "type=2 时返回的申报文档对象。",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "seqNumber": {
+                            "type": "integer"
+                          },
+                          "docID": {
+                            "type": "string"
+                          },
+                          "filerName": {
+                            "type": "string"
+                          },
+                          "docTypeCode": {
+                            "type": "string"
+                          },
+                          "submitDateTime": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数无效。"
+          },
+          "401": {
+            "description": "AIsa API 密钥无效或缺失。"
+          },
+          "429": {
+            "description": "超出速率限制。"
+          },
+          "500": {
+            "description": "网关或上游故障。"
+          }
+        },
+        "x-aisa-path": "/apis/v1/edinet/documents.json",
+        "x-provider-cost-micros-usd": 0,
+        "x-customer-pricing": {
+          "normal": 1e-05
+        }
+      }
+    },
+    "/edinet/documents/{docID}": {
+      "get": {
+        "summary": "下载 EDINET 文档",
+        "description": "按 docID 下载指定的 EDINET 文档。返回的文件类型由 type 查询参数选择，实际成功响应的内容需根据 Content-Type 解析。",
+        "operationId": "getEdinetDocumentDownload",
+        "tags": [
+          "EDINET"
+        ],
+        "parameters": [
+          {
+            "name": "docID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "examples": [
+                "S1000000"
+              ]
+            },
+            "description": "来自文档列表 API 的文档管理标识符。"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            },
+            "description": "要下载的文件类型：1 为申报正文和审计报告 ZIP，2 为 PDF，3 为替代文档及附件 ZIP，4 为英文文档 ZIP，5 为由 XBRL 转换的 CSV ZIP。"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "根据 Content-Type，返回二进制 ZIP/PDF 文件内容或 JSON 错误载荷。",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数无效。"
+          },
+          "401": {
+            "description": "AIsa API 密钥无效或缺失。"
+          },
+          "404": {
+            "description": "未找到文档。"
+          },
+          "429": {
+            "description": "超出速率限制。"
+          },
+          "500": {
+            "description": "网关或上游故障。"
+          }
+        },
+        "x-aisa-path": "/apis/v1/edinet/documents/{docID}",
+        "x-provider-cost-micros-usd": 0,
+        "x-customer-pricing": {
+          "normal": 1e-05
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

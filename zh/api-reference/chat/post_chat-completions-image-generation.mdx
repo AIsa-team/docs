@@ -1,32 +1,32 @@
 ---
 title: "通过 Chat 生成图像"
-description: "通过 /v1/chat/completions 路由使用 OpenAI 多模态聊天架构生成图像。截至 2026 年 7 月 28 日，Wan 2.7 图像模型已迁移到 /v1/images/generations；seedream-4-5-251128 是此路由上剩余的已配置模型。"
+description: "通过 /v1/chat/completions 路由、使用 OpenAI 的多模态 chat schema 生成图像。截至 2026 年 7 月 28 日，Wan 2.7 图像模型已迁移至 /v1/images/generations；seedream-4-5-251128 是该路由上仍在配置的模型。"
 openapi: "openapi/zh/chat-image-generation.json POST /chat/completions"
 ---
 
-部分图像模型可以通过 **Chat Completions** 端点调用：发送标准聊天请求，并使用包含文本提示词的多模态 `content` 数组；AIsa 会在 `choices[].message.content[]` 中以 `{type: "image"}` 部分返回生成的图像。
+部分图像模型可以通过 **Chat Completions** endpoint 访问：你发送一个标准的 chat 请求，其中 `content` 为包含文本提示词的多模态数组，AIsa 会在 `choices[].message.content[]` 中以 `{type: "image"}` 分片的形式返回生成的图像。
 
 <Warning>
-  **路由已变更。** `wan2.7-image` 和 `wan2.7-image-pro` 不再服务此路由 —— 在此调用会返回 `400 model_route_not_supported`。它们现在使用 [`POST /v1/images/generations`](/zh/api-reference/chat/post_images-generations) 和 `POST /v1/images/edits`。`seedream-5-0-260128` 和 `gpt-image-2` 同样在 `/v1/images/generations` 上。
+  **路由已变更。** `wan2.7-image` 和 `wan2.7-image-pro` 不再服务该路由——在此调用会返回 `400 model_route_not_supported`。它们现在使用 [`POST /v1/images/generations`](/zh/api-reference/chat/post_images-generations) 和 `POST /v1/images/edits`。`seedream-5-0-260128` 和 `gpt-image-2` 同样位于 `/v1/images/generations`。
 </Warning>
 
 <Note>
-  兼容 Gemini 的 `generateContent` 请求使用 [`/v1beta/models/{model}:generateContent`](/zh/api-reference/chat/post_models-model-generatecontent)。
+  Gemini 兼容的 `generateContent` 请求请使用 [`/v1beta/models/{model}:generateContent`](/zh/api-reference/chat/post_models-model-generatecontent)。
 </Note>
 
 ## 支持的模型
 
 | 模型 | 费用 | 状态 |
 | --- | --- | --- |
-| `seedream-4-5-251128` | $0.036 / 次请求 | 此路由上已配置；2026 年 7 月 28 日实测返回 `502 no available channel`，依赖前请先确认可用性 |
+| `seedream-4-5-251128` | $0.036 / 次请求 | 已在该路由上配置；2026 年 7 月 28 日的探测返回 `502 no available channel`，因此在依赖它之前请先确认可用性 |
 
-下方的多模态请求与响应结构说明的是网关在 chat 路由上对图像生成的封装方式。这些结构是 Wan 模型仍在此端点时实测记录的 —— 依赖字段级细节前，请以实际响应为准再核对一次。
+下面的多模态请求和响应结构说明了网关如何在 chat 路由上封装图像生成。这些内容取自 Wan 系列模型仍在该 endpoint 服务时的实测结果——在依赖字段级细节之前，请对照实际响应重新确认。
 
 ## 请求
 
-请求架构与你已用于文本的 `POST /v1/chat/completions` 相同——唯一的区别是传入的模型以及 `content` 的结构。
+请求 schema 与你已经在用的 `POST /v1/chat/completions` 完全相同——唯一的区别在于传入的模型，以及 `content` 的结构。
 
-**关键规则：**`messages[].content` 必须是**带类型部分组成的数组**。传入普通字符串会返回 `400 invalid_parameter_error`，错误消息为 `"Input should be a valid list: messages[*].content"`。
+**关键规则：** `messages[].content` 必须是**带类型分片的数组**。传入普通字符串会返回 `400 invalid_parameter_error`，错误信息为 `"Input should be a valid list: messages[*].content"`。
 
 <CodeGroup>
 
@@ -107,12 +107,12 @@ const urls = resp.choices
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `model` | string | 是 | `seedream-4-5-251128` |
-| `messages[].role` | string | 是 | 提示词轮次使用 `user` |
+| `messages[].role` | string | 是 | 提示词那一轮使用 `user` |
 | `messages[].content` | array | **是** | 必须是数组，不能是字符串 |
-| `messages[].content[].type` | string | 是 | 提示词部分使用 `text`；图生图输入使用 `image_url` |
+| `messages[].content[].type` | string | 是 | 提示词分片用 `text`；图生图输入用 `image_url` |
 | `messages[].content[].text` | string | 当 `type=text` 时 | 提示词 |
-| `messages[].content[].image_url.url` | string | 当 `type=image_url` 时 | 参考图像 URL |
-| `n` | integer | 否 | 图像数量。每张单独计费；除非需要多个候选，否则传入 `1` |
+| `messages[].content[].image_url.url` | string | 当 `type=image_url` 时 | 参考图 URL |
+| `n` | integer | 否 | 生成图像数量。每张单独计费——除非需要多个候选，否则传 `1` |
 
 ## 响应结构
 
@@ -142,14 +142,14 @@ const urls = resp.choices
 }
 ```
 
-- **每张图像对应一个 choice。**如果 `n=4`，`choices` 中会有 4 个条目。
-- **每个 `choice.message.content`** 都是一个数组，其中包含一个 `{ "type": "image", "image": "..." }` 部分。
-- 根据工作区配置，`image` 是短期有效的 URL（请尽快下载）或 base64 数据。
-- `usage.total_tokens` 反映请求封装产生的少量词元开销——**计费按图像计算**，费率见上表，而不是按词元计算。
+- **每张图对应一个 choice。** 如果 `n=4`，`choices` 中会有 4 个条目。
+- **每个 `choice.message.content`** 都是一个数组，包含单个 `{ "type": "image", "image": "..." }` 分片。
+- `image` 是一个短时效 URL（请尽快下载）或 base64 数据，取决于你的 workspace 配置。
+- `usage.total_tokens` 只反映请求封装本身的少量 token 成本——**计费按图片张数**，使用上表中的费率，而不是按 token。
 
 ## 图生图
 
-在 `content` 数组开头添加一个 `image_url` 部分，并在其后添加文本指令。Wan 模型的这一流程现已迁移到 [`POST /v1/images/edits`](/zh/api-reference/chat/post_images-generations)：
+在 `content` 数组开头放一个 `image_url` 分片，后面跟一条文本指令。对于 Wan 系列模型，该工作流现在位于 [`POST /v1/images/edits`](/zh/api-reference/chat/post_images-generations)：
 
 ```json
 {
@@ -167,30 +167,30 @@ const urls = resp.choices
 }
 ```
 
-## 为什么调试台显示 Chat Completions 路径
+## 为什么 playground 显示的是 Chat Completions 路径
 
-调试台发送的正是标准 [OpenAI Chat](/zh/api-reference/chat/post_chat-completions) 端点所使用的 `POST /v1/chat/completions` 请求——只是针对图像调整了 `model` 和 `content` 的结构。现有兼容 OpenAI 的 SDK 代码无需修改；只需替换模型和 content 结构。
+playground 发送的请求与标准 [OpenAI Chat](/zh/api-reference/chat/post_chat-completions) endpoint 使用的 `POST /v1/chat/completions` 完全一致——只有 `model` 和 `content` 结构针对图像做了调整。你现有的 OpenAI 兼容 SDK 代码无需修改，只要替换模型和 content 结构即可。
 
 ## 常见 4xx 原因
 
-- `400 invalid_parameter_error — Input should be a valid list: messages[*].content`——`content` 被作为字符串传入；请将其包装为带类型部分组成的数组。
-- 引用 `messages` 的 `400`——你发送了 Gemini 风格的 `contents`/`parts`。请使用 `messages` 和 OpenAI 多模态部分。
-- `400 model_route_not_supported`——该模型不服务此端点。错误响应中会列出它实际支持的路由；`wan2.7-image`、`wan2.7-image-pro`、`seedream-5-0-260128` 和 `gpt-image-2` 都属于 [`/v1/images/generations`](/zh/api-reference/chat/post_images-generations)。
-- `502 no available channel`——路由存在，但上游当前没有可用通道。请重试，或改用 `/v1/images/generations` 上的图像模型。
-- `500 model_not_found`——你的工作区尚未配置该模型系列。请联系支持团队。
+- `400 invalid_parameter_error — Input should be a valid list: messages[*].content`——`content` 传成了字符串；请改为带类型分片的数组。
+- 提到 `messages` 的 `400`——你发送的是 Gemini 风格的 `contents`/`parts`。请使用带 OpenAI 多模态分片的 `messages`。
+- `400 model_route_not_supported`——该模型不服务此 endpoint。错误响应体中会列出它支持的路由；`wan2.7-image`、`wan2.7-image-pro`、`seedream-5-0-260128` 和 `gpt-image-2` 都属于 [`/v1/images/generations`](/zh/api-reference/chat/post_images-generations)。
+- `502 no available channel`——路由存在，但上游当前没有容量。请重试，或改用 `/v1/images/generations` 上的图像模型。
+- `500 model_not_found`——你的 workspace 未开通该模型系列。请联系支持。
 
-更多信息请参阅[错误代码](/zh/api-reference/errors)和[速率限制](/zh/api-reference/rate-limits)。
+更多内容参见[错误码](/zh/api-reference/errors)和[速率限制](/zh/api-reference/rate-limits)。
 
-## 相关内容
+## 相关
 
 <CardGroup cols={3}>
   <Card title="OpenAI Chat" icon="message" href="/zh/api-reference/chat/post_chat-completions">
-    与文本模型使用相同的端点。
+    文本模型使用的同一个 endpoint。
   </Card>
   <Card title="Gemini generateContent" icon="google" href="/zh/api-reference/chat/post_models-model-generatecontent">
-    兼容 Gemini 的 generateContent 端点。
+    Gemini 兼容的 generateContent endpoint。
   </Card>
-  <Card title="媒体生成技能" icon="image" href="/agent-skills/mediagen">
-    封装图像和视频生成的 Agent 技能。
+  <Card title="Media Gen skill" icon="image" href="/agent-skills/mediagen">
+    封装图像与视频生成的 Agent 技能。
   </Card>
 </CardGroup>

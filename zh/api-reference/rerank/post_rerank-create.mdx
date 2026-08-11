@@ -1,0 +1,49 @@
+---
+title: "重排序文档"
+description: "使用 Jina rerank 按与查询的相关性对文档重新排序，通过 OpenAI 兼容的 AIsa 中继提供服务。"
+openapi: "openapi/zh/jina.json POST /rerank"
+---
+
+使用 `jina-reranker-v3` 针对某个 `query` 对文档列表重排序。需要提供非空的 `query` 和非空的 `documents` 数组；结果按 `relevance_score` 排序返回。可选的 `top_n` 用于只返回最相关的若干文档。它与基于 embedding 的检索天然互补：先用 embedding 召回候选，再用重排序确定最终顺序。
+
+通过 AIsa 中继路径 `/v1/rerank` 提供服务——OpenAI 兼容。按 token 计费，**每 100 万 tokens $0.050**；`usage.total_tokens` 字段给出每次请求计费的 token 数。
+
+<CodeGroup>
+
+```bash curl
+curl https://api.aisa.one/v1/rerank \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "jina-reranker-v3",
+    "query": "What is the capital of France?",
+    "documents": [
+      "Paris is the capital of France.",
+      "Berlin is the capital of Germany.",
+      "The Eiffel Tower is in Paris."
+    ],
+    "top_n": 2
+  }'
+```
+
+```python Python
+import requests
+
+resp = requests.post(
+    "https://api.aisa.one/v1/rerank",
+    headers={"Authorization": "Bearer sk-aisa-..."},
+    json={
+        "model": "jina-reranker-v3",
+        "query": "What is the capital of France?",
+        "documents": [
+            "Paris is the capital of France.",
+            "Berlin is the capital of Germany.",
+            "The Eiffel Tower is in Paris.",
+        ],
+        "top_n": 2,
+    },
+)
+print(resp.json()["results"])
+```
+
+</CodeGroup>

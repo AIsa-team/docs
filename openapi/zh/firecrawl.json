@@ -1,0 +1,807 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Firecrawl API",
+    "version": "1.0.0",
+    "description": "Firecrawl 各 endpoint 的统一 API 文档，包括 Scrape、Search、Map、Parse、Crawl 和 Batch Scrape。Scrape、Search、Map 和 Parse 是同步接口。Crawl 和 Batch Scrape 是异步接口：调用方提交任务，然后轮询返回的任务资源以获取状态和结果。\n\n计费按消耗的 Firecrawl credit 计量，而不是按请求固定收费，因此总费用随任务产生的页面、链接或结果数量增长。大致 credit 消耗：Scrape = 每页 1 credit，Map = 每页 1 credit，Search = 每 10 条结果约 2 credits，Crawl = 每页 1 credit，Batch Scrape = 每页 1 credit。每个 credit 对应的美元费率取决于你的等级（normal $0.005，vip $0.004，svip $0.0034）。"
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "AsyncJob": {
+        "type": "object",
+        "description": "一个异步集成任务。由提交调用（HTTP 202）以及轮询/详情调用返回。请按 id 轮询该任务，直到 status 进入终态（completed、failed 或 cancelled）。",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "唯一的 AIsa 任务标识符。可用它轮询、列出或取消该任务。",
+            "example": "iaj_01HZY8Q2M4K7N9V3T6W1X0B2C3"
+          },
+          "object": {
+            "type": "string",
+            "description": "始终为 \"integration_async_job\"。",
+            "example": "integration_async_job"
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "该任务所属的提交 endpoint。",
+            "example": "/apis/v1/firecrawl/crawl"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "description": "面向用户的生命周期状态。queued 和 running 为非终态；completed、failed 和 cancelled 为终态。"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "任务被受理的时间。"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "任务进入终态的时间。任务仍处于排队或运行中时为 null。"
+          },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "example": "USD"
+              },
+              "authorizedMicrosUSD": {
+                "type": "integer",
+                "description": "任务被受理时授权（冻结）的金额，单位为微美元。计量型任务最终按实际消耗的 credits 结算。"
+              },
+              "finalMicrosUSD": {
+                "type": "integer",
+                "nullable": true,
+                "description": "任务进入终态后的最终结算金额，单位为微美元。结算前为 null。"
+              },
+              "billingMode": {
+                "type": "string",
+                "description": "该任务的计费模式。",
+                "example": "metered_result"
+              }
+            }
+          },
+          "output": {
+            "description": "任务结果载荷。仅在 status 为 completed 后出现。对 crawl 而言是抓取到的页面数组；对 batch scrape 而言是抓取到的文档数组。",
+            "nullable": true
+          },
+          "outputExpired": {
+            "type": "boolean",
+            "description": "当结果已超过留存窗口、不再可获取时为 true。"
+          },
+          "error": {
+            "type": "object",
+            "nullable": true,
+            "description": "当 status 为 failed 时出现，否则为 null。",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "机器可读的错误码。"
+              },
+              "message": {
+                "type": "string",
+                "description": "人类可读的错误信息。"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/firecrawl/scrape": {
+      "post": {
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/scrape"
+        ],
+        "summary": "抓取单个页面并以 markdown 返回其正文内容。",
+        "description": "同步接口。抓取单个 URL，并以 markdown 返回清洗后的正文内容。在 AIsa 计量模式下该请求受限：URL 必须是 HTTPS 且不能指向 PDF，proxy 必须设为 \"basic\"，如果提供 formats，其值必须正好是 [\"markdown\"]。高级选项（actions、headers、parsers、profile、lockdown、zeroDataRetention）会被拒绝。每抓取一页计 1 个 Firecrawl credit。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "要抓取的 HTTPS URL。计量模式下不支持 PDF URL。",
+                    "example": "https://docs.firecrawl.dev"
+                  },
+                  "proxy": {
+                    "type": "string",
+                    "enum": [
+                      "basic"
+                    ],
+                    "description": "代理层级。在计量模式下必须显式设为 \"basic\"。",
+                    "example": "basic"
+                  },
+                  "formats": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "markdown"
+                      ]
+                    },
+                    "description": "可选的输出格式。若提供，其值必须正好是 [\"markdown\"]。",
+                    "example": [
+                      "markdown"
+                    ]
+                  }
+                },
+                "required": [
+                  "url",
+                  "proxy"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "抓取成功完成。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "抓取成功时为 true。"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "markdown": {
+                          "type": "string",
+                          "description": "以 markdown 表示的抓取页面内容。"
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "description": "页面元数据，例如标题、描述、来源 URL 和 HTTP 状态。",
+                          "properties": {
+                            "title": {
+                              "type": "string"
+                            },
+                            "description": {
+                              "type": "string"
+                            },
+                            "sourceURL": {
+                              "type": "string"
+                            },
+                            "statusCode": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "creditsUsed": {
+                      "type": "integer",
+                      "description": "该请求消耗的 Firecrawl credits（每页 1 个）。"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/firecrawl/search": {
+      "post": {
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/search"
+        ],
+        "summary": "执行网页搜索并返回排序结果。",
+        "description": "同步接口。搜索网页并返回排序结果。在 AIsa 计量模式下仅支持 web 来源：scrapeOptions、企业模式和非 web 来源都会被拒绝。计费约为每 10 条结果 2 个 Firecrawl credits（credits = ceil(limit / 10) * 2）。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "搜索查询词。必须非空，且不超过 500 字符。",
+                    "maxLength": 500,
+                    "example": "firecrawl web scraping api"
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "default": 10,
+                    "minimum": 1,
+                    "maximum": 100,
+                    "description": "返回结果数量的上限。"
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "搜索成功完成。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "搜索成功时为 true。"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "web": {
+                          "type": "array",
+                          "description": "排序后的网页搜索结果。",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "title": {
+                                "type": "string",
+                                "description": "结果标题。"
+                              },
+                              "url": {
+                                "type": "string",
+                                "description": "结果 URL。"
+                              },
+                              "description": {
+                                "type": "string",
+                                "description": "结果摘要片段。"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "creditsUsed": {
+                      "type": "integer",
+                      "description": "消耗的 Firecrawl credits（约每 10 条结果 2 个）。"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/firecrawl/map": {
+      "post": {
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/map"
+        ],
+        "summary": "发现网站上的 URL。",
+        "description": "同步接口。给定一个起始 URL，发现并返回该站点上可达的链接。URL 必须是 HTTPS，limit 为必填（1 到 100000）。每发现一个链接/页面计 1 个 Firecrawl credit。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "要做 map 的 HTTPS URL。",
+                    "example": "https://docs.firecrawl.dev"
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000,
+                    "description": "要发现的链接数量上限。在计量模式下为必填。",
+                    "example": 100
+                  }
+                },
+                "required": [
+                  "url",
+                  "limit"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "map 成功完成。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "map 成功时为 true。"
+                    },
+                    "links": {
+                      "type": "array",
+                      "description": "发现的链接。",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string",
+                            "description": "一个已发现的 URL。"
+                          },
+                          "title": {
+                            "type": "string",
+                            "description": "所发现页面的标题（如果有）。"
+                          }
+                        }
+                      }
+                    },
+                    "creditsUsed": {
+                      "type": "integer",
+                      "description": "消耗的 Firecrawl credits（每发现一个链接 1 个）。"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/firecrawl/parse": {
+      "post": {
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/parse"
+        ],
+        "summary": "把上传的 HTML 文件解析成 markdown。",
+        "description": "同步接口。上传单个 HTML/HTM 文件并获得解析后的 markdown。该 endpoint 使用 multipart/form-data，包含两个字段：file（上传的 HTML）和 options（JSON 字符串）。在计量模式下，options 必须把 proxy 设为 \"basic\"，且最多只能额外把 formats 设为 [\"markdown\"]。options JSON 字符串限制为 64 KB。计费为 1 个 Firecrawl credit。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "要解析的 HTML/HTM 文件。必须是 text/html 内容类型，或文件名以 .html/.htm 结尾。"
+                  },
+                  "options": {
+                    "type": "string",
+                    "description": "解析选项的 JSON 字符串。必须包含 proxy=\"basic\"；可以额外包含 formats=[\"markdown\"]。不允许其他键。",
+                    "example": "{\"proxy\":\"basic\",\"formats\":[\"markdown\"]}"
+                  }
+                },
+                "required": [
+                  "file",
+                  "options"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "解析成功完成。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "解析成功时为 true。"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "markdown": {
+                          "type": "string",
+                          "description": "以 markdown 表示的解析内容。"
+                        }
+                      }
+                    },
+                    "creditsUsed": {
+                      "type": "integer",
+                      "description": "消耗的 Firecrawl credits（1 个）。"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/firecrawl/crawl": {
+      "post": {
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/crawl"
+        ],
+        "summary": "提交一个异步的抓取任务。",
+        "description": "异步接口。提交以 url 为根的整站抓取；整个遍历过程作为后台任务运行。\n\n生命周期：\n1. 提交 —— POST /firecrawl/crawl，带上抓取请求体和必填的 `Idempotency-Key` 请求头。成功时 API 返回 HTTP 202 Accepted、指向任务资源的 `Location` 响应头（`/apis/v1/firecrawl/crawl/{jobId}`），以及 `status` = queued 的 integration_async_job 响应体。\n2. 轮询 —— GET /apis/v1/firecrawl/crawl/{jobId} 获取任务。重复直到 `status` 进入终态（completed、failed 或 cancelled）。完成时，抓取到的页面位于 `output` 中。\n3. 列表 —— GET /apis/v1/firecrawl/crawl（可选 `limit`、`status`、`cursor` 查询参数）用于翻阅该 endpoint 下的任务。\n4. 取消 —— POST /apis/v1/firecrawl/crawl/{jobId}/cancel 请求取消。\n\nURL 必须是 HTTPS 且不能是 PDF，limit（1 到 1000）限制抓取页数。每抓取一页计 1 个 Firecrawl credit；总费用随实际处理的页数增长。",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 191
+            },
+            "description": "使提交具备幂等性的唯一 key（1 到 191 字符）。使用相同 key 重复提交会返回原任务。"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "要抓取的 HTTPS 根 URL。不支持 PDF URL。",
+                    "example": "https://docs.firecrawl.dev"
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000,
+                    "description": "抓取页面数量的上限。",
+                    "example": 50
+                  },
+                  "includePaths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 256
+                    },
+                    "maxItems": 20,
+                    "description": "只抓取路径匹配这些模式之一的 URL。"
+                  },
+                  "excludePaths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 256
+                    },
+                    "maxItems": 20,
+                    "description": "跳过路径匹配这些模式之一的 URL。"
+                  },
+                  "maxDiscoveryDepth": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10,
+                    "description": "从根 URL 出发的链接发现最大深度。"
+                  },
+                  "sitemap": {
+                    "type": "string",
+                    "enum": [
+                      "skip",
+                      "include",
+                      "only"
+                    ],
+                    "description": "发现过程中如何使用站点的 sitemap。"
+                  },
+                  "ignoreQueryParameters": {
+                    "type": "boolean",
+                    "description": "把仅查询字符串不同的 URL 视为同一个页面。"
+                  },
+                  "crawlEntireDomain": {
+                    "type": "boolean",
+                    "description": "抓取整个域名，而不仅限于根 URL 之下的子树。"
+                  },
+                  "allowExternalLinks": {
+                    "type": "boolean",
+                    "description": "沿链接进入外部域名。"
+                  },
+                  "allowSubdomains": {
+                    "type": "boolean",
+                    "description": "沿链接进入根域名的子域名。"
+                  },
+                  "delay": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 30,
+                    "description": "两次请求之间的延迟秒数（0 到 30）。"
+                  },
+                  "maxConcurrency": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "并发抓取页面数的上限（1 到 20）。"
+                  },
+                  "scrapeOptions": {
+                    "type": "object",
+                    "description": "抓取过程中对每个页面应用的抓取选项。在计量模式下输出始终为 markdown。",
+                    "properties": {
+                      "onlyMainContent": {
+                        "type": "boolean",
+                        "description": "只返回每个页面的正文内容。",
+                        "default": true
+                      },
+                      "includeTags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "maxLength": 128
+                        },
+                        "maxItems": 50,
+                        "description": "要保留的 HTML 标签/选择器。"
+                      },
+                      "excludeTags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "maxLength": 128
+                        },
+                        "maxItems": 50,
+                        "description": "要丢弃的 HTML 标签/选择器。"
+                      },
+                      "maxAge": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 31536000000,
+                        "description": "可接受的最大缓存时长，单位为毫秒。"
+                      },
+                      "minAge": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 31536000000,
+                        "description": "重新抓取页面前所需的最小缓存时长，单位为毫秒。"
+                      },
+                      "timeout": {
+                        "type": "integer",
+                        "minimum": 1000,
+                        "maximum": 300000,
+                        "description": "单页超时时间，单位为毫秒。"
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "url",
+                  "limit"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "抓取任务已受理。Location 响应头指向该任务资源；请轮询直到终态。",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "所创建任务资源的路径，例如 /apis/v1/firecrawl/crawl/{jobId}。"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJob"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/firecrawl/crawl/{jobId}": {
+      "get": {
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/crawl"
+        ],
+        "summary": "轮询抓取任务。",
+        "description": "获取此前提交的抓取任务。重复调用直到 `status` 进入终态（completed、failed 或 cancelled）。完成时，抓取到的页面位于 `output` 中。",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "提交调用返回的任务 id。"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "该抓取任务的当前状态。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJob"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/firecrawl/batch-scrape": {
+      "post": {
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/batch-scrape"
+        ],
+        "summary": "提交一个异步的批量抓取任务。",
+        "description": "异步接口。在一个后台任务中抓取多个 URL。\n\n生命周期：\n1. 提交 —— POST /firecrawl/batch-scrape，带上批量请求体和必填的 `Idempotency-Key` 请求头。成功时 API 返回 HTTP 202 Accepted、指向任务资源的 `Location` 响应头（`/apis/v1/firecrawl/batch-scrape/{jobId}`），以及 `status` = queued 的 integration_async_job 响应体。\n2. 轮询 —— GET /apis/v1/firecrawl/batch-scrape/{jobId}，直到 `status` 进入终态（completed、failed 或 cancelled）。完成时，抓取到的文档位于 `output` 中。\n3. 列表 —— GET /apis/v1/firecrawl/batch-scrape（可选 `limit`、`status`、`cursor` 查询参数）。\n4. 取消 —— POST /apis/v1/firecrawl/batch-scrape/{jobId}/cancel。\n\n每个 URL 都必须是唯一的 HTTPS URL 且不能是 PDF；单个任务 1 到 1000 个 URL。每抓取一页计 1 个 Firecrawl credit；总费用随实际处理的页数增长。",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 191
+            },
+            "description": "使提交具备幂等性的唯一 key（1 到 191 字符）。使用相同 key 重复提交会返回原任务。"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "urls": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000,
+                    "description": "1 到 1000 个唯一的 HTTPS URL 用于抓取。不支持 PDF URL。",
+                    "example": [
+                      "https://docs.firecrawl.dev",
+                      "https://docs.firecrawl.dev/introduction"
+                    ]
+                  },
+                  "maxConcurrency": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "并发抓取数的上限（1 到 20）。"
+                  },
+                  "onlyMainContent": {
+                    "type": "boolean",
+                    "description": "只返回每个页面的正文内容。",
+                    "default": true
+                  },
+                  "includeTags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    "maxItems": 50,
+                    "description": "要保留的 HTML 标签/选择器。"
+                  },
+                  "excludeTags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    "maxItems": 50,
+                    "description": "要丢弃的 HTML 标签/选择器。"
+                  },
+                  "maxAge": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 31536000000,
+                    "description": "可接受的最大缓存时长，单位为毫秒。"
+                  },
+                  "minAge": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 31536000000,
+                    "description": "重新抓取页面前所需的最小缓存时长，单位为毫秒。"
+                  },
+                  "timeout": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 300000,
+                    "description": "单页超时时间，单位为毫秒。"
+                  }
+                },
+                "required": [
+                  "urls"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "批量抓取任务已受理。Location 响应头指向该任务资源；请轮询直到终态。",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "所创建任务资源的路径，例如 /apis/v1/firecrawl/batch-scrape/{jobId}。"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJob"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/firecrawl/batch-scrape/{jobId}": {
+      "get": {
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/batch-scrape"
+        ],
+        "summary": "轮询批量抓取任务。",
+        "description": "获取此前提交的批量抓取任务。重复调用直到 `status` 进入终态（completed、failed 或 cancelled）。完成时，抓取到的文档位于 `output` 中。",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "提交调用返回的任务 id。"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "该批量抓取任务的当前状态。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJob"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+---
+title: "Firecrawl 站点抓取"
+description: "以异步任务方式抓取整个网站——先提交，然后轮询该任务的状态和结果。"
+openapi: "openapi/zh/firecrawl.json POST /firecrawl/crawl"
+---
+
+{/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
+
+以 `url` 为根抓取整个站点。由于完整遍历可能耗时较长，Crawl 以**异步任务**方式运行：先提交任务，然后轮询获取状态和结果。
+
+**生命周期**
+
+1. **提交** —— `POST /apis/v1/firecrawl/crawl`，带上抓取请求体和必填的 `Idempotency-Key` 请求头。成功后返回 `202 Accepted`、指向任务资源的 `Location` 响应头（`/apis/v1/firecrawl/crawl/{jobId}`），以及一个 `status` 初始为 `queued` 的任务对象。
+2. **轮询** —— `GET /apis/v1/firecrawl/crawl/{jobId}`，重复直到 `status` 进入终态：`completed`、`failed` 或 `cancelled`。当为 `completed` 时，抓取到的页面位于 `output` 中。
+3. **列表** —— `GET /apis/v1/firecrawl/crawl`（可选 `limit`、`status`、`cursor` 查询参数）用于翻阅你的抓取任务。
+4. **取消** —— `POST /apis/v1/firecrawl/crawl/{jobId}/cancel` 请求取消。
+
+`url` 必须是 HTTPS 且不能是 PDF，`limit`（1 到 1000）限制抓取页数。计费按 Firecrawl credit 计量——每抓取一页消耗 1 credit——因此总费用随实际处理的页数增长。如果要抓取一组已知 URL 而不是沿链接遍历，请使用 [`post_firecrawl-batch-scrape`](/zh/api-reference/search/post_firecrawl-batch-scrape)。

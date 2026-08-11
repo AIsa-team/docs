@@ -1,0 +1,619 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Exa API",
+    "version": "1.0.0",
+    "description": "通过 AIsa 网关开放的 Exa 神经语义搜索 endpoint 的统一 API 文档：Search、Contents、Answer，以及异步的研究型 Agent Runs。\n\nSearch、Contents 和 Answer 为同步接口，每次成功请求固定计费 $0.08。Agent Runs 为异步接口：调用方提交任务，然后轮询返回的任务资源以获取状态和结果，每次任务固定计费 $0.10。上游 4xx 响应（例如 401/403/404）不计费。Exa 返回的 `costDollars` 字段是上游成本明细，仅供参考——客户计费以上述 AIsa 固定价格为准。"
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "AsyncJob": {
+        "type": "object",
+        "description": "一个异步集成任务。由提交调用（HTTP 202）以及轮询/详情调用返回。请按 id 轮询该任务，直到 status 进入终态（completed、failed 或 cancelled）。",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "唯一的 AIsa 任务标识符。可用它轮询、列出或取消该任务。",
+            "example": "iaj_01HZY8Q2M4K7N9V3T6W1X0B2C3"
+          },
+          "object": {
+            "type": "string",
+            "description": "始终为 \"integration_async_job\"。",
+            "example": "integration_async_job"
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "该任务所属的提交 endpoint。",
+            "example": "/apis/v1/exa/agent/runs"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "description": "面向用户的生命周期状态。queued 和 running 为非终态；completed、failed 和 cancelled 为终态。"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "任务被受理的时间。"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "任务进入终态的时间。任务仍处于排队或运行中时为 null。"
+          },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "example": "USD"
+              },
+              "authorizedMicrosUSD": {
+                "type": "integer",
+                "description": "任务被受理时授权（冻结）的金额，单位为微美元。Agent Runs 按每次任务固定 $0.10 结算。"
+              },
+              "finalMicrosUSD": {
+                "type": "integer",
+                "nullable": true,
+                "description": "任务进入终态后的最终结算金额，单位为微美元。结算前为 null。"
+              },
+              "billingMode": {
+                "type": "string",
+                "description": "该任务的计费模式。",
+                "example": "flat_per_call"
+              }
+            }
+          },
+          "output": {
+            "description": "任务结果载荷。仅在 status 为 completed 后出现。对 Agent Runs 而言是结构化的研究结果。",
+            "nullable": true
+          },
+          "outputExpired": {
+            "type": "boolean",
+            "description": "当结果已超过留存窗口、不再可获取时为 true。"
+          },
+          "error": {
+            "type": "object",
+            "nullable": true,
+            "description": "当 status 为 failed 时出现，否则为 null。",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "机器可读的错误码。"
+              },
+              "message": {
+                "type": "string",
+                "description": "人类可读的错误信息。"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/exa/search": {
+      "post": {
+        "tags": [
+          "https://docs.exa.ai/reference/search"
+        ],
+        "summary": "执行神经语义网页搜索。",
+        "description": "同步接口。用自然语言 query 搜索公开网页，返回最相关的结果，可选择内联返回页面内容。每次成功请求固定计费 $0.08。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "自然语言搜索查询。",
+                    "example": "latest evaluation frameworks for AI agents"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "fast",
+                      "instant",
+                      "deep-lite",
+                      "deep",
+                      "deep-reasoning"
+                    ],
+                    "default": "auto",
+                    "description": "搜索模式。auto 让 Exa 自行选择；deep 模式以更高延迟换取更高质量的检索。"
+                  },
+                  "numResults": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "default": 10,
+                    "description": "返回的结果数量。"
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "company",
+                      "research paper",
+                      "news",
+                      "personal site",
+                      "financial report",
+                      "people"
+                    ],
+                    "description": "关于优先抓取哪类页面的可选提示。"
+                  },
+                  "includeDomains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "只返回来自这些域名的结果。"
+                  },
+                  "excludeDomains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "排除来自这些域名的结果。"
+                  },
+                  "startPublishedDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "仅返回在该 ISO 8601 日期当天或之后发布的结果。"
+                  },
+                  "endPublishedDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "仅返回在该 ISO 8601 日期当天或之前发布的结果。"
+                  },
+                  "contents": {
+                    "type": "object",
+                    "description": "随每条结果一并返回的内容选项。",
+                    "properties": {
+                      "text": {
+                        "type": "boolean",
+                        "description": "返回完整的页面文本。"
+                      },
+                      "highlights": {
+                        "type": "boolean",
+                        "description": "返回高亮的相关片段。"
+                      },
+                      "summary": {
+                        "type": "boolean",
+                        "description": "返回该页面由 AI 生成的摘要。"
+                      }
+                    }
+                  },
+                  "outputSchema": {
+                    "type": "object",
+                    "description": "用于从结果中合成结构化输出的 JSON Schema。"
+                  },
+                  "systemPrompt": {
+                    "type": "string",
+                    "description": "用于引导结构化输出如何生成的指令。"
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "搜索成功完成。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requestId": {
+                      "type": "string",
+                      "description": "Exa 请求标识符。"
+                    },
+                    "results": {
+                      "type": "array",
+                      "description": "排序后的搜索结果。",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "publishedDate": {
+                            "type": "string"
+                          },
+                          "author": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "output": {
+                      "description": "结构化输出，仅在提供了 outputSchema 时出现。",
+                      "nullable": true
+                    },
+                    "costDollars": {
+                      "description": "上游 Exa 的成本明细。仅供参考；客户计费为固定 $0.08。",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exa/contents": {
+      "post": {
+        "tags": [
+          "https://docs.exa.ai/reference/get-contents"
+        ],
+        "summary": "为一组 URL 提取完整页面内容。",
+        "description": "同步接口。获取一组 URL 的完整页面文本、摘要和元数据。优先返回缓存的即时结果；缓存未命中时 Exa 会退回实时抓取。每次成功请求固定计费 $0.08。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "要获取内容的 URL（或 Exa 结果 id）。",
+                    "example": [
+                      "https://example.com/article"
+                    ]
+                  },
+                  "text": {
+                    "type": "boolean",
+                    "description": "返回完整的页面文本。"
+                  },
+                  "highlights": {
+                    "type": "boolean",
+                    "description": "返回高亮的相关片段。"
+                  },
+                  "summary": {
+                    "type": "boolean",
+                    "description": "返回该页面由 AI 生成的摘要。"
+                  },
+                  "subpages": {
+                    "type": "integer",
+                    "description": "同时抓取的关联子页面数量。"
+                  },
+                  "livecrawl": {
+                    "type": "string",
+                    "enum": [
+                      "always",
+                      "fallback",
+                      "never"
+                    ],
+                    "description": "新鲜度策略：始终实时抓取、缓存未命中时退回实时抓取，或从不实时抓取。"
+                  }
+                },
+                "required": [
+                  "ids"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "内容获取成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "publishedDate": {
+                            "type": "string"
+                          },
+                          "author": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "highlights": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "summary": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exa/answer": {
+      "post": {
+        "tags": [
+          "https://docs.exa.ai/reference/answer"
+        ],
+        "summary": "获得针对某个问题的带引用直接答案。",
+        "description": "同步接口。检索相关来源并生成带引用的直接答案（或详细摘要）。每次成功请求固定计费 $0.08。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "要回答的问题。",
+                    "example": "Which manufacturers had the top three global EV sales in 2025?"
+                  },
+                  "text": {
+                    "type": "boolean",
+                    "description": "包含每条引用的完整页面文本。"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "fast",
+                      "instant",
+                      "deep-lite",
+                      "deep",
+                      "deep-reasoning"
+                    ],
+                    "description": "作答前用于收集来源的检索模式。"
+                  },
+                  "outputSchema": {
+                    "type": "object",
+                    "description": "用于结构化答案输出的 JSON Schema。"
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "答案生成成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "answer": {
+                      "description": "生成的答案。为字符串；当提供了 outputSchema 时为结构化对象。",
+                      "nullable": true
+                    },
+                    "citations": {
+                      "type": "array",
+                      "description": "支撑该答案的来源。",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "author": {
+                            "type": "string"
+                          },
+                          "publishedDate": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "costDollars": {
+                      "description": "上游 Exa 的成本明细。仅供参考；客户计费为固定 $0.08。",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exa/agent/runs": {
+      "post": {
+        "tags": [
+          "https://docs.exa.ai/reference/create-a-research-task"
+        ],
+        "summary": "提交一个异步的研究型 Agent 任务。",
+        "description": "异步接口。提交一个自然语言研究任务；Agent 在后台执行并返回结构化结果。按每次任务固定 $0.10 计费。\n\n生命周期：\n1. 提交 —— POST /exa/agent/runs，带上研究请求体和必填的 `Idempotency-Key` 请求头。成功时 API 返回 HTTP 202 Accepted、指向任务资源的 `Location` 响应头（`/apis/v1/exa/agent/runs/{jobId}`），以及 `status` = queued 的 integration_async_job 响应体。使用相同 key 和相同请求指纹重复提交会返回原任务；相同 key 但指纹不同则返回 409 idempotency_conflict。\n2. 轮询 —— GET /apis/v1/exa/agent/runs/{jobId} 获取任务。重复直到 `status` 进入终态（completed、failed 或 cancelled）。完成时，研究结果位于 `output` 中。该提供商仅支持轮询（没有 webhook 或 SSE 回调）。\n3. 列表 —— GET /apis/v1/exa/agent/runs（可选 status 过滤，支持分页）用于翻阅该 endpoint 下的任务。\n4. 取消 —— POST /apis/v1/exa/agent/runs/{jobId}/cancel 请求取消。已取消的任务不计费。",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 191
+            },
+            "description": "使提交具备幂等性的唯一 key（1 到 191 字符）。使用相同 key 和相同请求指纹重复提交会返回原任务。"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "自然语言研究查询。",
+                    "example": "Summarize the main changes in RAG evaluation methods over the past year as a bullet list."
+                  },
+                  "outputSchema": {
+                    "type": "object",
+                    "description": "用于校验结构化输出的 JSON Schema。"
+                  },
+                  "input": {
+                    "type": "object",
+                    "description": "行处理输入：要处理的行以及排除项。",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {},
+                        "description": "该任务的输入行。"
+                      },
+                      "exclusion": {
+                        "description": "要排除在处理之外的条目。"
+                      }
+                    }
+                  },
+                  "effort": {
+                    "type": "string",
+                    "description": "该任务的算力/深度层级。"
+                  },
+                  "previousRunId": {
+                    "type": "string",
+                    "description": "从此前已完成的任务继续。"
+                  },
+                  "dataSources": {
+                    "type": "array",
+                    "items": {},
+                    "description": "授予该 Agent 访问权限的第三方数据源（Exa Connect）。"
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "研究任务已受理。Location 响应头指向该任务资源；请轮询直到终态。",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "所创建任务资源的路径，例如 /apis/v1/exa/agent/runs/{jobId}。"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJob"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "idempotency_conflict——同一个 Idempotency-Key 被用于了不同的请求体。"
+          }
+        }
+      }
+    },
+    "/exa/agent/runs/{jobId}": {
+      "get": {
+        "tags": [
+          "https://docs.exa.ai/reference/get-a-research-task"
+        ],
+        "summary": "轮询研究型 Agent 任务。",
+        "description": "获取此前提交的 Agent 任务。重复调用直到 `status` 进入终态（completed、failed 或 cancelled）。完成时，研究结果位于 `output` 中。",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "提交调用返回的任务 id。"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "该研究任务的当前状态。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJob"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

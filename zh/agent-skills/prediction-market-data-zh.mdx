@@ -1,0 +1,154 @@
+---
+title: "Prediction Market Data ZH"
+description: "查询当前已挂载的 Polymarket 和 Kalshi 市场发现、事件、活动与交易历史数据。"
+---
+
+[在 GitHub 上查看 ->](https://github.com/AIsa-team/agent-skills/tree/main/prediction-market-data-zh)
+
+**预测市场数据查询。** 用 AIsa 访问当前已挂载的 Polymarket 和 Kalshi 只读数据接口：市场发现、事件查询、用户活动和 Kalshi 交易历史。
+
+## 安装
+
+如果还没有安装 AIsa CLI，请先安装：
+
+```bash
+npm install -g @aisa-one/cli
+```
+
+然后安装该技能：
+
+```bash
+aisa skills install prediction-market-data-zh
+```
+
+## Agent 可以用它做什么？
+
+<CardGroup cols={2}>
+  <Card title="市场查询" icon="magnifying-glass-dollar">
+    针对某个话题找到相关的预测市场。
+  </Card>
+  <Card title="事件查询" icon="calendar-days">
+    查看 Polymarket 事件分组及其关联市场。
+  </Card>
+  <Card title="交易历史" icon="chart-line">
+    拉取最近的 Kalshi 成交，可按 ticker 和大宗交易过滤。
+  </Card>
+  <Card title="中文报告" icon="language">
+    用中文总结已挂载的市场发现证据。
+  </Card>
+</CardGroup>
+
+## 配置
+
+```bash
+export AISA_API_KEY="your-key"
+```
+
+在 [aisa.one](https://aisa.one) 获取 Key（按量付费）。
+
+## 工作流程
+
+查询预测市场数据的步骤：
+
+1. **搜索市场/事件**：先用 Polymarket 或 Kalshi discovery endpoint 找候选市场。
+2. **提取标识符**：例如 Polymarket `slug`/`conditionId`/`clobTokenIds`，Kalshi `ticker`/`event_ticker`。
+3. **继续验证**：如果需要实时价格、订单簿或交易执行，请使用交易所官方 API 或交易系统继续验证。
+
+<Warning>
+  AIsa 当前挂载的是下面列出的 discovery/trade-history endpoint。旧版 AIsa-hosted price、orderbook、wallet、candlestick、matching-market 示例已移除，因为鉴权实测返回 `api endpoint not found`。
+</Warning>
+
+## 快速示例
+
+### Polymarket：市场与事件
+
+```bash
+# 市场发现
+python3 scripts/prediction_market_client.py polymarket markets --limit 5
+
+# 事件查询
+python3 scripts/prediction_market_client.py polymarket events --limit 5
+
+# 指定用户活动
+python3 scripts/prediction_market_client.py polymarket activity --user <钱包地址> --limit 5
+```
+
+### Kalshi：市场与交易
+
+```bash
+# 市场发现
+python3 scripts/prediction_market_client.py kalshi markets --status open --limit 5
+
+# 交易历史
+python3 scripts/prediction_market_client.py kalshi trades --limit 5 --is-block-trade false
+```
+
+## ID 参考
+
+大多数后续分析需要从 discovery 返回中获取 ID 或 ticker。
+
+| 平台 | ID 字段 | 获取位置 |
+|------|---------|----------|
+| Polymarket | `slug` | `/polymarket/markets` 返回中的 `slug` |
+| Polymarket | `conditionId` | `/polymarket/markets` 返回中的 `conditionId` |
+| Polymarket | `clobTokenIds` | `/polymarket/markets` 返回中的 `clobTokenIds` |
+| Kalshi | `ticker` | `/kalshi/markets` 返回中的 `ticker` |
+| Kalshi | `event_ticker` | `/kalshi/markets` 返回中的 `event_ticker` |
+
+## 命令参考
+
+### Polymarket
+
+```bash
+python3 scripts/prediction_market_client.py polymarket markets [--limit <数值>]
+python3 scripts/prediction_market_client.py polymarket events [--limit <数值>]
+python3 scripts/prediction_market_client.py polymarket activity --user <钱包地址> [--market-slug <slug>] [--limit <数值>]
+```
+
+### Kalshi
+
+```bash
+python3 scripts/prediction_market_client.py kalshi markets [--status unopened|open|paused|closed|settled] [--limit <数值>]
+python3 scripts/prediction_market_client.py kalshi trades [--ticker <ticker>] [--min-ts <unix时间戳>] [--max-ts <unix时间戳>] [--is-block-trade true|false] [--limit <数值>]
+```
+
+## 理解返回数据
+
+- Polymarket `/markets` 和 `/events` 返回顶层 JSON 数组。
+- Kalshi `/markets` 返回 `{ markets, cursor }`。
+- Kalshi `/trades` 返回 `{ trades, cursor }`。
+- 如需实时可执行价格、订单簿深度或交易动作，请以交易所官方接口/交易系统为准。
+
+## 安全与权限
+
+**需要：** `AISA_API_KEY` 环境变量。
+
+所有操作均为**只读**，通过 HTTPS GET 请求 `api.aisa.one`。不执行交易、不连接钱包、除 API Key 外不发送个人数据。
+
+完整文档：[AIsa API 参考](https://aisa.one/docs/api-reference)。
+
+## 开始使用
+
+1. 在 [aisa.one](https://aisa.one) 注册（新账户有 $2 免费额度）。
+2. 从控制台生成 API key。
+3. 设置密钥并安装技能：
+   ```bash
+   export AISA_API_KEY="your-key"
+   npm install -g @aisa-one/cli
+   aisa skills install prediction-market-data-zh
+   ```
+4. 启动新的 Agent 会话，让运行时加载更新后的技能指令。
+
+## 相关
+
+<CardGroup cols={3}>
+  <Card title="Prediction Market Data" icon="chart-simple" href="/zh/agent-skills/prediction-market-data">
+    英文版预测市场数据技能。
+  </Card>
+  <Card title="Prediction Market Arbitrage ZH" icon="scale-balanced" href="/zh/agent-skills/prediction-market-arbitrage-zh">
+    中文版跨市场研究工作流。
+  </Card>
+  <Card title="Prediction Market API" icon="code" href="/zh/api-reference/prediction-market/get_polymarket-events">
+    Polymarket 和 Kalshi 已挂载 endpoint 文档。
+  </Card>
+</CardGroup>
