@@ -1,217 +1,88 @@
 ---
 title: "Usage Logs - 追踪 API 请求、Token 与账单"
 excerpt: >-
-  查看 AIsa 账户中 API 请求、token 消耗和账单细节的完整历史。按模型、API key 和日期范围筛选，用于审计用量并排查异常成本。
+  最近 30 天 AIsa API 流量的逐条请求记录——端点、密钥、模型、延迟、Token、缓存命中、用量价值和状态，并提供搜索与筛选，用于审计消费和排查失败。
 ---
 
-![用量日志表格，展示 API 请求的时间戳、Token 数量、模型、延迟、成本和 IP 地址](/images/b5e7c8ba-Screenshot_2026-02-13_170200.png)
+**Usage & Logs** 记录最近 30 天里经过你的 AIsa 密钥的每一次请求。[Dashboard](/zh/guides/dashboard/overview) 回答的是*花了多少*，这个页面回答的是*具体哪一次请求*——端点、模型、延迟、Token、缓存命中、成本和状态，逐行呈现。
 
-Usage Logs 页面提供账户相关活动的完整历史。它记录 API 请求、token 消耗、账单细节以及重要的系统级操作，方便你在一个地方监控用量、核对成本并审计账户事件。
+![AIsa 控制台使用日志页面，展示汇总卡片、用量价值趋势、模型占比、筛选工具栏和逐条请求日志表](/images/logs-overview.png)
 
-这个页面适合用于：
+入口在 [**Console → Usage & Logs**](https://console.aisa.one/logs)。页面上的所有数字都基于当前筛选条件，而不只是屏幕上可见的这几行。
 
-* 追踪 API 消耗和支出
-* 查看每次请求的 token 用量
-* 监控请求性能
-* 审计不同 group 或 API key 的活动
-* 排查异常扣费或系统操作
+## 汇总卡片
 
-## 记录哪些内容
+![四张汇总卡片：筛选后的请求数、Token 总数、缓存 Token 和用量价值及实际扣款](/images/logs-metrics.png)
 
-Usage Logs 同时包含 API 活动和关键平台事件。
+**Requests** 是符合当前筛选条件的调用次数。
 
-### API 请求
+**Tokens** 是这些调用的输入加输出 Token 总数。
 
-通过以下方式发出的请求都会被记录：
+**Cache Tokens** 是缓存读取加写入的命中数。在支持 prompt 缓存的模型上，缓存读取数高、而 Token 数相对低，正是缓存生效的表现。
 
-* API keys
-* Playground
-* LLM 推理 API
-* 按次调用 API（Search、Financial、YouTube、Scholar、Twitter 等）
+**Usage Value** 是这些流量按标准价计算的价值，下方显示实际从余额中**扣除**的金额。两者不一致，说明存在折扣、活动或退款。
 
-每次请求都会记录用量、性能和账单信息。
+## 用量价值趋势与模型占比
 
-### 系统与账号事件
+![用量价值趋势图，旁边是按用量价值排列的模型占比面板](/images/logs-trend.png)
 
-重要的账户级操作也会被记录。例如：
+**Usage Value Trend** 以 USD / 天为单位绘制窗口内的用量价值。把鼠标移到图上——或聚焦图表后用方向键——可查看任意一个点的数值，右上角的数字标注峰值。
 
-* 启用双因素认证
-* 安全相关配置变更
+**Model Split** 按用量价值给模型排序，最多显示 5 项。注意它是基于**当前页**的日志计算的，因此会随筛选和翻页变化，并不是整个 30 天的汇总——需要完整窗口的拆分，请看 [Dashboard](/zh/guides/dashboard/overview) 上的模型占比。
 
-这些条目会作为 system events 出现，用于审计。它们通常不会产生用量费用。
+## 搜索与筛选
 
-## 概览指标
+![工具栏包含搜索框、每页行数选择器、流式筛选和状态筛选，下方是日志表头](/images/logs-table.png)
 
-页面顶部会展示所选时间范围内的汇总指标。
+搜索框会匹配 request ID、密钥、端点和模型——把错误响应或 [Playground](/zh/guides/dashboard/playground) 里的 request ID 粘进来，就能直接定位到那次调用。
 
-**Used Quota**  
-显示所选时间段内消耗的总额度。
+另外三个控件用于进一步收窄结果：
 
-**RPM（每分钟请求数）**
+* **Rows** — 每页 10、20 或 50 条
+* **Stream** — 全部、流式或非流式
+* **Status** — 全部、成功、失败或已退款
 
-表示传入请求速率。
+修改任意筛选条件都会回到第一页。
 
-**TPM（每分钟 Token 数）**
+## 日志表字段
 
-表示 Token 消耗速率。
+每一行对应一次 API 请求。
 
-这些指标有助于识别流量突增和整体用量模式。
+| 字段 | 含义 |
+| --- | --- |
+| **Time** | 请求到达时间，下方是 request ID |
+| **Endpoint** | 处理该请求的 API 路由，例如 `/v1/chat/completions` |
+| **API Key** | 使用的密钥名称；未命名时显示密钥前缀 |
+| **Model** | 处理该请求的模型 |
+| **Stream** | `stream`（流式）或 `sync`（同步） |
+| **Latency** | 请求总耗时，下方是首 token 耗时 |
+| **Tokens** | Token 总数，下方是输入 / 输出拆分 |
+| **Cache** | 缓存 Token 总数，下方是读取 / 写入拆分 |
+| **Usage Value** | 该次调用按标准价计算的价值；实际扣款不同时会显示在下方 |
+| **Status** | `success`、`failed` 或 `refunded` |
 
-## 筛选与搜索
+表格底部显示当前查看的区间，并提供上一页 / 下一页控件。
 
-Usage logs 可以通过筛选缩小结果范围。
+如果没有匹配结果，表格会直接给出提示，而不是显示空网格——此时可以放宽筛选条件或清空搜索框。
 
-可用筛选项包括：
+## 典型用法
 
-* **日期和时间范围**
-* **Group**
-* **Token Name**
-* **Model Name**
-
-点击 **Query** 应用筛选，点击 **Reset** 清空筛选。
-
-可以通过 **Column settings** 调整表格列的显示。
-
-## 日志表格字段
-
-表格中的每一行代表一个事件，可能是一次 API 请求，也可能是一次系统操作。
-
-**Time**
-
-事件发生的时间戳。
-
-**Tokens**
-
-请求使用的 API key。对于系统事件，该字段可能为空。
-
-**Group**
-
-API key 所属的 workspace group。
-
-### 类型
-
-表示请求类型。
-
-例如：
-
-* _**Consume**_ - 标准 API 请求，会消耗额度
-* _**System**_ - 账户或平台级操作
-
-**Model**
-
-处理请求的模型（适用于 LLM 调用）。
-
-**首字响应时间**
-
-支持的 API 请求会展示性能细节，包括：
-
-* 总请求耗时
-* 首个响应 token 的时间
-* 响应是否为 streaming
-
-**Input / Output**
-
-输入和输出 token 数量（适用于 LLM 请求）。
-
-**Spend**
-
-事件对应的成本：
-
-* LLM 请求的 token-based cost
-* 按次调用 API 的固定 per-call cost
-* 系统事件通常无成本
-
-**IP**
-
-与请求相关的源 IP 地址（如果可用）。
-
-只有当用户启用 IP 记录时，才会记录请求和错误类型日志的 IP。
-
-**Details**
-
-附加信息，例如应用的价格 ratio，或系统事件描述。
-
-## 查看日志详情
-
-点击一条日志可以展开详细拆分。
-
-![展开的日志条目，展示详细计费明细，包括模型价格倍率、缓存命中率、Token 数量和单次请求成本计算](/images/92ad0f58-Screenshot_2026-02-13_170917.png)
-
-展开视图包含：
-
-### 模型倍率与缓存倍率
-
-显示应用到该请求的模型级计费倍数。
-
-示例字段可能包括：
-
-* Model ratio
-* Cache ratio
-* Completion ratio
-* Group ratio
-
-### 计费过程
-
-账单拆分展示成本如何计算。
-
-它包括：
-
-* 每 1M tokens 的 input token 价格
-* 每 1M tokens 的 output token 价格
-* 应用的倍数
-* 最终计算出的 spend
-
-详细公式会展示出来以保证透明度。实际账户扣费以最终计算金额为准。
-
-### 请求路径
-
-显示处理请求所使用的内部 API route。
-
-示例：`/pg/chat/completions`
-
-这有助于识别使用了哪个 endpoint。
-
-这部分拆分可以完整说明最终成本的计算方式。
-
-对于系统事件，展开视图会描述执行的操作。
-
-## 账单如何体现
-
-用量成本基于以下因素计算：
-
-* Token 消耗（适用于 LLM APIs）
-* 固定 per-call 价格（适用于非 LLM APIs）
-* 适用的模型或 group 价格规则
-
-Usage Logs 会显示每个事件的计算成本。实际账户余额扣减会反映最终计算金额。
-
-## 实用场景
-
-Usage Logs 页面适合用于：
-
-* 核对每次请求的 token 消耗
-* 追踪正在使用哪些模型
-* 审计不同 group 的成本分布
-* 调试异常计费行为
-* 查看请求延迟和 streaming 性能
-
-## 注意事项
-
-* 所有 Playground 活动都会出现在 Usage Logs 中。
-* 所有 API key 请求都会出现在 Usage Logs 中。
-* 系统级操作会被记录以支持审计可见性。
-* 日志中显示的成本会在适用时从账户余额中扣除。
+* **排查失败请求** — 筛选 Failed，拿到 request ID，与应用日志对照
+* **解释成本突增** — 找出峰值当天是哪个模型和哪个密钥推高了用量价值
+* **验证缓存是否生效** — 对重复 prompt 比较缓存读取数与总 Token 数
+* **检查流式表现** — 筛选 Streaming，对比首 token 耗时与总延迟
+* **审计密钥活动** — 搜索密钥名称，查看它在窗口内的全部调用
 
 ## 相关页面
 
 <CardGroup cols={3}>
   <Card title="Dashboard 概览" icon="gauge" href="/zh/guides/dashboard/overview">
-    查看高层支出和用量指标。
+    查看整体消费和用量指标。
   </Card>
-  <Card title="价格" icon="dollar-sign" href="/zh/guides/pricing/ai-model-pricing-llm-inference">
-    查看日志成本背后的 token 单价。
+  <Card title="定价" icon="dollar-sign" href="/zh/guides/pricing/ai-model-pricing-llm-inference">
+    日志中成本背后的每 token 价格。
   </Card>
-  <Card title="速率限制" icon="gauge-high" href="/api-reference/rate-limits">
-    了解 RPM 和 TPM 如何影响流量。
+  <Card title="速率限制" icon="gauge-high" href="/zh/api-reference/rate-limits">
+    请求数和 token 速率如何影响你的流量。
   </Card>
 </CardGroup>
