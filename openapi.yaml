@@ -81170,12 +81170,15 @@ paths:
     post:
       tags:
       - AI Models
-      operationId: post_perplexity-sonar
+      operationId: post_perplexity_sonar
       summary: Sonar — lightweight search + answer
-      description: |-
-        Cost-effective model for quick web searches with AI-generated answers. Best for simple factual queries. Uses model `sonar`.
-
-        **Pricing:** $0.012 per request
+      description: 'Ask a question and get a written answer with web citations, rather than a list of links to read yourself.
+        Body is OpenAI chat-completions shaped: `model` (required, `sonar`) and `messages`. Returns `choices[0].message.content`
+        as prose, plus `citations` (an array of URL strings) and `search_results[]` with `title`, `url`, `snippet`, `date`
+        and `source`, and a `usage` block. Measured at about 3 seconds. Billed at a flat $0.012 per request. This is the cheapest
+        and fastest of the four Perplexity endpoints — use it for a single factual question. Step up to `post_perplexity_sonar_pro`
+        for multi-part questions, or `post_perplexity_sonar_reasoning_pro` when the answer requires working through steps.
+        If you need results you can iterate over rather than prose, use `post_tavily_search`.'
       requestBody:
         required: true
         content:
@@ -81201,12 +81204,14 @@ paths:
     post:
       tags:
       - AI Models
-      operationId: post_perplexity-sonar-pro
+      operationId: post_perplexity_sonar_pro
       summary: Sonar Pro — advanced search for complex queries
-      description: |-
-        Advanced search model supporting complex queries and multi-step follow-ups. Better for nuanced research questions. Uses model `sonar-pro`.
-
-        **Pricing:** $0.012 per request
+      description: Ask a question that needs more than one search pass and get a written answer with citations. Same request
+        and response shape as `post_perplexity_sonar` — `model` (required, `sonar-pro`) and `messages` in, `choices[0].message.content`,
+        `citations`, `search_results[]` and `usage` out. Measured at about 10 seconds, roughly three times `sonar`, for the
+        same flat $0.012 per request. Use it for questions with several parts or follow-ups. For a single lookup `sonar` answers
+        in a third of the time at the same price; when the difficulty is reasoning rather than retrieval, `post_perplexity_sonar_reasoning_pro`
+        shows its working.
       requestBody:
         required: true
         content:
@@ -81232,12 +81237,13 @@ paths:
     post:
       tags:
       - AI Models
-      operationId: post_perplexity-sonar-reasoning-pro
+      operationId: post_perplexity_sonar_reasoning_pro
       summary: Sonar Reasoning Pro — chain-of-thought reasoning with search
-      description: |-
-        Reasoning model with Chain of Thought (CoT) for precise, step-by-step analysis backed by web search. Best for analytical and complex reasoning tasks. Uses model `sonar-reasoning-pro`.
-
-        **Pricing:** $0.012 per request
+      description: Ask a question that has to be worked through, not just looked up, and get a step-by-step answer backed
+        by web search. Same shape as the other Perplexity endpoints — `model` (required, `sonar-reasoning-pro`) and `messages`
+        in; `choices[0].message.content`, `citations`, `search_results[]` and `usage` out. Measured at about 5 seconds, flat
+        $0.012 per request. Use it for comparison, causation and analysis. When the question is simply what is the case, `post_perplexity_sonar`
+        is faster; when you need a long report over many sources rather than an answer, `post_perplexity_sonar_deep_research`.
       requestBody:
         required: true
         content:
@@ -81263,14 +81269,15 @@ paths:
     post:
       tags:
       - AI Models
-      operationId: post_perplexity-sonar-deep-research
+      operationId: post_perplexity_sonar_deep_research
       summary: Sonar Deep Research — exhaustive research & comprehensive reports
-      description: |-
-        Expert-level research model that conducts exhaustive multi-step web searches and generates comprehensive reports. Best for deep-dive research tasks. Uses model `sonar-deep-research`.
-
-        **Pricing:** $0.012 per request
-
-        > **Note:** Deep research requests may take significantly longer to complete due to the exhaustive search process.
+      description: 'Commission a report: this endpoint runs many searches and writes a long, cited document. `model` (required,
+        `sonar-deep-research`) and `messages` in; `choices[0].message.content`, `citations`, `search_results[]` and `usage`
+        out, where `usage` also reports `num_search_queries` and `reasoning_tokens`. ⚠️ Budget for the wait: a two-sentence
+        question measured **192 seconds** and returned 86 KB after 10 upstream searches — roughly 60 times slower and 10 times
+        larger than `post_perplexity_sonar`, at the same flat $0.012 per request. Many clients time out well before it answers,
+        so call it only when a report is genuinely the deliverable, and never in a loop. For anything you would read in one
+        sitting, the other three Perplexity endpoints answer in seconds.'
       requestBody:
         required: true
         content:
@@ -81610,9 +81617,13 @@ paths:
   /scholar/search/mixed:
     post:
       summary: Smart search combining web and academic results
-      description: Perform intelligent search that combines web and academic results Parameters are accepted as query parameters;
-        request bodies are not supported for this operation.
-      operationId: searchSmart
+      description: 'Search the web and academic sources together, for questions that straddle both. ⚠️ Parameters go in the
+        **query string**: `query` (required), `max_num_results`, `as_ylo`/`as_yhi`. Returns a search `id` and `results[]`;
+        **the entry shape varies by source** — every result has `title`, `link` and `snippet`, and academic ones additionally
+        carry `authors` and `number_of_citations`, so treat those two as optional rather than assuming they are there. Measured
+        at about 3 seconds. Use it when you do not know in advance which kind of source will answer. When you do, `post_scholar_search_web`
+        or `post_scholar_search_scholar` is more predictable. Keep the `id` for `post_scholar_search_explain`.'
+      operationId: post_scholar_search_mixed
       tags:
       - Scholar Search
       security:
@@ -81670,9 +81681,13 @@ paths:
   /scholar/search/web:
     post:
       summary: Search the web
-      description: Perform web search and return structured results Parameters are accepted as query parameters; request bodies
-        are not supported for this operation.
-      operationId: searchWeb
+      description: 'Search the open web and get back a lean result list. ⚠️ Despite being a POST, parameters go in the **query
+        string** — `query` (required), `max_num_results` (default 10, max 100), and `as_ylo`/`as_yhi` for a year range. A
+        JSON body is not accepted. Returns a search `id` and `results[]` carrying only `title`, `link` and `snippet`. Measured
+        at about 4 seconds for a roughly 600-byte response. Its virtue is how little it returns, which suits an agent that
+        only needs to know what exists. It gives you no page text — if you need the content, `post_tavily_search` returns
+        it in the same call. Keep the `id`: it is what `post_scholar_search_explain` needs.'
+      operationId: post_scholar_search_web
       tags:
       - Scholar Search
       security:
@@ -81730,9 +81745,13 @@ paths:
   /scholar/search/scholar:
     post:
       summary: Search academic papers
-      description: Perform academic paper search using Google Scholar or similar sources Parameters are accepted as query
-        parameters; request bodies are not supported for this operation.
-      operationId: searchScholar
+      description: 'Search academic literature. ⚠️ Parameters go in the **query string**, not a body: `query` (required),
+        `max_num_results`, and `as_ylo`/`as_yhi` to bound publication years. Returns a search `id` and `results[]` with `title`,
+        `link`, `snippet`, `authors` and `number_of_citations` — that last field is what a general web search cannot give
+        you. Measured at under 2 seconds. Use it when the question calls for peer-reviewed sources or when citation counts
+        matter. For current events and product pages a general engine is better: `post_tavily_search`. To cover both at once,
+        `post_scholar_search_mixed`. Keep the `id` for `post_scholar_search_explain`.'
+      operationId: post_scholar_search_scholar
       tags:
       - Scholar Search
       security:
@@ -81790,9 +81809,14 @@ paths:
   /scholar/search/explain:
     post:
       summary: Explain search results
-      description: Generate explanations for search results in different languages and formats. The COMPLETE and INCREMENTAL
-        response modes stream server-sent events; NON_STREAMING returns a JSON response.
-      operationId: explainSearch
+      description: 'Explain a result set you already fetched. Unlike the three search endpoints this one takes a **JSON body**:
+        `search_id` (required — the `id` returned by `post_scholar_search_web`, `post_scholar_search_scholar` or `post_scholar_search_mixed`),
+        plus `detail_level` (BRIEF / MODERATE / DETAILED), `language`, and `response_mode`. ⚠️ Use `response_mode: NON_STREAMING`.
+        It returns `{"message": "…"}` as JSON, measured at about 2 KB. The COMPLETE and INCREMENTAL modes emit server-sent
+        events in which **each event repeats the whole answer so far** — the identical explanation measured 177 KB that way,
+        roughly 90 times larger, and a tool call cannot consume a stream incrementally anyway. It only ever explains an existing
+        search; it cannot run one.'
+      operationId: post_scholar_search_explain
       tags:
       - Scholar Search
       security:
@@ -83106,12 +83130,14 @@ paths:
       - Web & News Search
       summary: Execute a search query using Tavily Search.
       operationId: post_tavily_search
-      description: Run a web search optimized for AI agents and get back ranked results with page content already extracted
-        — no separate scrape step. Use this as the general-purpose entry point for open-web research when the answer is not
-        in a structured API. Supports basic vs advanced depth, result count, topic (general/news/finance), time-range and
-        explicit start/end date filters, an optional LLM-generated `answer`, raw page content, and image results. If you already
-        know the exact URLs, use `post_tavily_extract` instead — it is cheaper and more precise than searching for pages you
-        can already name.
+      description: 'Search the web and get back ranked results with the page text already extracted, so there is no second
+        call to fetch content. `query` is required. Returns `results[]` with `url`, `title`, `content` (the extracted excerpt),
+        `score` and optionally `raw_content`, alongside `query`, `images`, `response_time` and `request_id`; set `include_answer`
+        to also get a one-paragraph `answer`. Filter with `topic` (general/news/finance), `time_range` or explicit `start_date`/`end_date`,
+        and trade cost against depth with `search_depth`. Measured at roughly 6 seconds for 2 results. This is the default
+        choice for open-web research. Reach past it when: you already know the URLs — `post_tavily_extract` is cheaper and
+        exact; you want a written answer with citations rather than a list to iterate — `post_perplexity_sonar`; you want
+        peer-reviewed papers — `post_scholar_search_scholar`.'
       requestBody:
         required: true
         content:
@@ -83480,11 +83506,12 @@ paths:
       - Web & News Search
       summary: Extract web page content from specified URLs using Tavily Extract.
       operationId: post_tavily_extract
-      description: Extract clean, parsed content from one or more URLs you already have. Use this when you know exactly which
-        pages you need — links from a search result, a sitemap, or a user-supplied URL — and want readable text instead of
-        raw HTML. Supports basic vs advanced depth, markdown or text output, optional images and favicons, per-source chunk
-        limits, and a `query` parameter that reranks the extracted chunks by your intent so you only pay attention to the
-        relevant parts. To find URLs in the first place use `post_tavily_search`; to walk an entire site use `post_tavily_crawl`.
+      description: Fetch clean, parsed content for URLs you already have — from a search result, a sitemap, or a user. `urls`
+        is required and takes several at once. Returns `results[]` with `url`, `title`, `raw_content` and `images`, plus a
+        `failed_results[]` array — **read that one**, because a page that could not be fetched is reported there rather than
+        raising an error. Choose `format` (markdown or text) and `extract_depth`. Measured at about 1 second for one page.
+        Use this instead of `post_tavily_search` whenever you can already name the pages; searching for pages you can name
+        costs more and may not return them. To discover the URLs of a whole site first, use `post_tavily_map`.
       requestBody:
         required: true
         content:
@@ -83604,11 +83631,12 @@ paths:
       - Web & News Search
       summary: Graph-based website traversal tool using Tavily Crawl.
       operationId: post_tavily_crawl
-      description: Traverse a website from a root URL and return the content of the pages it finds, guided by natural-language
-        `instructions` plus regex include/exclude filters on paths and domains. Use this when you need broad coverage of one
-        site — documentation, a product catalog, a competitor's blog — rather than a handful of known pages. Control cost
-        with `max_depth`, `max_breadth`, and `limit`. If you only need the URL structure without page content, use `post_tavily_map`
-        — it is far cheaper. For a few known URLs use `post_tavily_extract`.
+      description: Walk a site from a root `url` and return the content of the pages it finds. Steer it with natural-language
+        `instructions` plus regex path and domain filters, and bound it with `max_depth`, `max_breadth` and `limit`. Returns
+        `base_url` and `results[]` with `url` and `raw_content`. Measured at about 4.5 seconds for a 3-page limit; cost and
+        time grow with the bounds you set, so set them. Use it for broad coverage of one site — documentation, a catalogue,
+        a competitor's blog. For a handful of known pages `post_tavily_extract` is far cheaper; to see how big a site is before
+        paying to crawl it, run `post_tavily_map` first.
       requestBody:
         required: true
         content:
@@ -83752,10 +83780,11 @@ paths:
       - Web & News Search
       summary: Generate comprehensive site maps using Tavily Map.
       operationId: post_tavily_map
-      description: Discover a website's URL structure from a root URL without fetching page content, guided by natural-language
-        `instructions` and regex path/domain filters. Use this to scope a site before committing to a crawl — see how large
-        it is and which sections matter, then fetch only what you need. Returns the discovered links. Follow up with `post_tavily_extract`
-        for specific pages, or `post_tavily_crawl` when you do want the content of everything it finds.
+      description: 'List a site''s URLs from a root `url` without fetching any page content. Steer it with natural-language
+        `instructions` and regex `select_paths` / `exclude_paths` / `select_domains` filters. Returns `base_url` and `results`
+        — **a flat array of URL strings, not objects** — with `response_time` and `request_id`. Fast and cheap: measured at
+        about 1.5 seconds. Use it to size a site before committing to a crawl, then fetch only the parts that matter with
+        `post_tavily_extract`. When you want the content rather than the shape, `post_tavily_crawl` does both in one call.'
       requestBody:
         required: true
         content:
