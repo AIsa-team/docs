@@ -251,9 +251,9 @@
         "tags": [
           "Perplexity Sonar"
         ],
-        "operationId": "post_perplexity-sonar",
+        "operationId": "post_perplexity_sonar",
         "summary": "Sonar — 轻量级搜索与回答",
-        "description": "适用于快速网页搜索并生成 AI 答案的高性价比模型。最适合简单的事实性查询。使用模型 `sonar`。\n\n**价格：** 每次请求 $0.012",
+        "description": "提一个问题，拿回一段带网页引用的文字答案，而不是一堆需要自己读的链接。请求体是 OpenAI chat-completions 形状：`model`（必填，`sonar`）和 `messages`。返回 `choices[0].message.content` 作为正文，外加 `citations`（URL 字符串数组）、`search_results[]`（含 `title`、`url`、`snippet`、`date`、`source`）和一个 `usage` 块。实测约 3 秒。按次计费，每次 $0.012。这是四个 Perplexity 端点里最快最便宜的一个，适合单个事实性问题。问题分多个部分时升级到 `post_perplexity_sonar_pro`，需要一步步推演时用 `post_perplexity_sonar_reasoning_pro`。如果你要的是可遍历的结果而不是成段文字，用 `post_tavily_search`。",
         "requestBody": {
           "required": true,
           "content": {
@@ -292,9 +292,9 @@
         "tags": [
           "Perplexity Sonar Pro"
         ],
-        "operationId": "post_perplexity-sonar-pro",
+        "operationId": "post_perplexity_sonar_pro",
         "summary": "Sonar Pro — 面向复杂查询的高级搜索",
-        "description": "支持复杂查询和多步后续提问的高级搜索模型，更适合细致复杂的研究问题。使用模型 `sonar-pro`。\n\n**定价：** 每次请求 $0.012",
+        "description": "提一个需要多轮检索才能回答的问题，拿回带引用的文字答案。请求与返回形状和 `post_perplexity_sonar` 完全相同 —— 传 `model`（必填，`sonar-pro`）和 `messages`，返回 `choices[0].message.content`、`citations`、`search_results[]` 和 `usage`。实测约 10 秒，大约是 `sonar` 的三倍，而计费同样是每次 $0.012。适合有多个分支或需要追问的问题。若只是一次查找，`sonar` 用三分之一的时间、同样的价格就够；若难点在推理而不在检索，`post_perplexity_sonar_reasoning_pro` 会把推演过程写出来。",
         "requestBody": {
           "required": true,
           "content": {
@@ -333,9 +333,9 @@
         "tags": [
           "Perplexity Sonar Reasoning"
         ],
-        "operationId": "post_perplexity-sonar-reasoning-pro",
+        "operationId": "post_perplexity_sonar_reasoning_pro",
         "summary": "Sonar Reasoning Pro — 具备搜索功能的思维链推理",
-        "description": "具备思维链（CoT）的推理模型，可在 Web 搜索支持下进行精确的逐步分析。最适合分析性任务和复杂推理任务。使用模型 `sonar-reasoning-pro`。\n\n**定价：** 每次请求 $0.012",
+        "description": "提一个需要推演而不只是查找的问题，拿回一份有网页支撑的分步回答。形状与其余 Perplexity 端点一致 —— 传 `model`（必填，`sonar-reasoning-pro`）和 `messages`，返回 `choices[0].message.content`、`citations`、`search_results[]` 和 `usage`。实测约 5 秒，按次计费每次 $0.012。适合比较、归因和分析类问题。如果问题只是「是什么」，`post_perplexity_sonar` 更快；如果要的是跨多源的长篇报告而不是一个答案，用 `post_perplexity_sonar_deep_research`。",
         "requestBody": {
           "required": true,
           "content": {
@@ -374,9 +374,9 @@
         "tags": [
           "Perplexity Deep Research"
         ],
-        "operationId": "post_perplexity-sonar-deep-research",
+        "operationId": "post_perplexity_sonar_deep_research",
         "summary": "Sonar Deep Research — 详尽研究与综合报告",
-        "description": "专家级研究模型，可执行详尽的多步骤 Web 搜索并生成全面的报告。最适合深度研究任务。使用模型 `sonar-deep-research`。\n\n**定价：** 每次请求 $0.012\n\n> **注意：** 由于搜索过程非常详尽，深度研究请求可能需要明显更长的时间才能完成。",
+        "description": "委托它写一份报告：这个端点会跑很多次检索，产出一篇长的、带引用的文档。传 `model`（必填，`sonar-deep-research`）和 `messages`；返回 `choices[0].message.content`、`citations`、`search_results[]` 和 `usage`，其中 `usage` 还会报告 `num_search_queries` 与 `reasoning_tokens`。⚠️ 要为等待留出预算：一个两句话的问题实测耗时 **192 秒**、返回 86 KB、触发了 10 次上游检索 —— 比 `post_perplexity_sonar` 慢约 60 倍、大约 10 倍，而计费同样是每次 $0.012。很多客户端在它返回之前就超时了，所以只在「报告本身就是交付物」时调用，且绝不要放进循环。凡是能一口气读完的内容，另外三个 Perplexity 端点几秒就能给。",
         "requestBody": {
           "required": true,
           "content": {

@@ -31,7 +31,7 @@
         ],
         "summary": "Execute a search query using Tavily Search.",
         "operationId": "post_tavily_search",
-        "description": "Run a web search optimized for AI agents and get back ranked results with page content already extracted — no separate scrape step. Use this as the general-purpose entry point for open-web research when the answer is not in a structured API. Supports basic vs advanced depth, result count, topic (general/news/finance), time-range and explicit start/end date filters, an optional LLM-generated `answer`, raw page content, and image results. If you already know the exact URLs, use `post_tavily_extract` instead — it is cheaper and more precise than searching for pages you can already name.",
+        "description": "Search the web and get back ranked results with the page text already extracted, so there is no second call to fetch content. `query` is required. Returns `results[]` with `url`, `title`, `content` (the extracted excerpt), `score` and optionally `raw_content`, alongside `query`, `images`, `response_time` and `request_id`; set `include_answer` to also get a one-paragraph `answer`. Filter with `topic` (general/news/finance), `time_range` or explicit `start_date`/`end_date`, and trade cost against depth with `search_depth`. Measured at roughly 6 seconds for 2 results. This is the default choice for open-web research. Reach past it when: you already know the URLs — `post_tavily_extract` is cheaper and exact; you want a written answer with citations rather than a list to iterate — `post_perplexity_sonar`; you want peer-reviewed papers — `post_scholar_search_scholar`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -464,7 +464,7 @@
         ],
         "summary": "Extract web page content from specified URLs using Tavily Extract.",
         "operationId": "post_tavily_extract",
-        "description": "Extract clean, parsed content from one or more URLs you already have. Use this when you know exactly which pages you need — links from a search result, a sitemap, or a user-supplied URL — and want readable text instead of raw HTML. Supports basic vs advanced depth, markdown or text output, optional images and favicons, per-source chunk limits, and a `query` parameter that reranks the extracted chunks by your intent so you only pay attention to the relevant parts. To find URLs in the first place use `post_tavily_search`; to walk an entire site use `post_tavily_crawl`.",
+        "description": "Fetch clean, parsed content for URLs you already have — from a search result, a sitemap, or a user. `urls` is required and takes several at once. Returns `results[]` with `url`, `title`, `raw_content` and `images`, plus a `failed_results[]` array — **read that one**, because a page that could not be fetched is reported there rather than raising an error. Choose `format` (markdown or text) and `extract_depth`. Measured at about 1 second for one page. Use this instead of `post_tavily_search` whenever you can already name the pages; searching for pages you can name costs more and may not return them. To discover the URLs of a whole site first, use `post_tavily_map`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -628,7 +628,7 @@
         ],
         "summary": "Graph-based website traversal tool using Tavily Crawl.",
         "operationId": "post_tavily_crawl",
-        "description": "Traverse a website from a root URL and return the content of the pages it finds, guided by natural-language `instructions` plus regex include/exclude filters on paths and domains. Use this when you need broad coverage of one site — documentation, a product catalog, a competitor's blog — rather than a handful of known pages. Control cost with `max_depth`, `max_breadth`, and `limit`. If you only need the URL structure without page content, use `post_tavily_map` — it is far cheaper. For a few known URLs use `post_tavily_extract`.",
+        "description": "Walk a site from a root `url` and return the content of the pages it finds. Steer it with natural-language `instructions` plus regex path and domain filters, and bound it with `max_depth`, `max_breadth` and `limit`. Returns `base_url` and `results[]` with `url` and `raw_content`. Measured at about 4.5 seconds for a 3-page limit; cost and time grow with the bounds you set, so set them. Use it for broad coverage of one site — documentation, a catalogue, a competitor's blog. For a handful of known pages `post_tavily_extract` is far cheaper; to see how big a site is before paying to crawl it, run `post_tavily_map` first.",
         "requestBody": {
           "required": true,
           "content": {
@@ -819,7 +819,7 @@
         ],
         "summary": "Generate comprehensive site maps using Tavily Map.",
         "operationId": "post_tavily_map",
-        "description": "Discover a website's URL structure from a root URL without fetching page content, guided by natural-language `instructions` and regex path/domain filters. Use this to scope a site before committing to a crawl — see how large it is and which sections matter, then fetch only what you need. Returns the discovered links. Follow up with `post_tavily_extract` for specific pages, or `post_tavily_crawl` when you do want the content of everything it finds.",
+        "description": "List a site's URLs from a root `url` without fetching any page content. Steer it with natural-language `instructions` and regex `select_paths` / `exclude_paths` / `select_domains` filters. Returns `base_url` and `results` — **a flat array of URL strings, not objects** — with `response_time` and `request_id`. Fast and cheap: measured at about 1.5 seconds. Use it to size a site before committing to a crawl, then fetch only the parts that matter with `post_tavily_extract`. When you want the content rather than the shape, `post_tavily_crawl` does both in one call.",
         "requestBody": {
           "required": true,
           "content": {

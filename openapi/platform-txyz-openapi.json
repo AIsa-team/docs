@@ -20,8 +20,8 @@
     "/scholar/search/mixed": {
       "post": {
         "summary": "Smart search combining web and academic results",
-        "description": "Perform intelligent search that combines web and academic results Parameters are accepted as query parameters; request bodies are not supported for this operation.",
-        "operationId": "searchSmart",
+        "description": "Search the web and academic sources together, for questions that straddle both. ⚠️ Parameters go in the **query string**: `query` (required), `max_num_results`, `as_ylo`/`as_yhi`. Returns a search `id` and `results[]`; **the entry shape varies by source** — every result has `title`, `link` and `snippet`, and academic ones additionally carry `authors` and `number_of_citations`, so treat those two as optional rather than assuming they are there. Measured at about 3 seconds. Use it when you do not know in advance which kind of source will answer. When you do, `post_scholar_search_web` or `post_scholar_search_scholar` is more predictable. Keep the `id` for `post_scholar_search_explain`.",
+        "operationId": "post_scholar_search_mixed",
         "tags": [
           "Search",
           "Smart"
@@ -105,8 +105,8 @@
     "/scholar/search/web": {
       "post": {
         "summary": "Search the web",
-        "description": "Perform web search and return structured results Parameters are accepted as query parameters; request bodies are not supported for this operation.",
-        "operationId": "searchWeb",
+        "description": "Search the open web and get back a lean result list. ⚠️ Despite being a POST, parameters go in the **query string** — `query` (required), `max_num_results` (default 10, max 100), and `as_ylo`/`as_yhi` for a year range. A JSON body is not accepted. Returns a search `id` and `results[]` carrying only `title`, `link` and `snippet`. Measured at about 4 seconds for a roughly 600-byte response. Its virtue is how little it returns, which suits an agent that only needs to know what exists. It gives you no page text — if you need the content, `post_tavily_search` returns it in the same call. Keep the `id`: it is what `post_scholar_search_explain` needs.",
+        "operationId": "post_scholar_search_web",
         "tags": [
           "Search",
           "Web"
@@ -190,8 +190,8 @@
     "/scholar/search/scholar": {
       "post": {
         "summary": "Search academic papers",
-        "description": "Perform academic paper search using Google Scholar or similar sources Parameters are accepted as query parameters; request bodies are not supported for this operation.",
-        "operationId": "searchScholar",
+        "description": "Search academic literature. ⚠️ Parameters go in the **query string**, not a body: `query` (required), `max_num_results`, and `as_ylo`/`as_yhi` to bound publication years. Returns a search `id` and `results[]` with `title`, `link`, `snippet`, `authors` and `number_of_citations` — that last field is what a general web search cannot give you. Measured at under 2 seconds. Use it when the question calls for peer-reviewed sources or when citation counts matter. For current events and product pages a general engine is better: `post_tavily_search`. To cover both at once, `post_scholar_search_mixed`. Keep the `id` for `post_scholar_search_explain`.",
+        "operationId": "post_scholar_search_scholar",
         "tags": [
           "Search",
           "Academic"
@@ -275,8 +275,8 @@
     "/scholar/search/explain": {
       "post": {
         "summary": "Explain search results",
-        "description": "Generate explanations for search results in different languages and formats. The COMPLETE and INCREMENTAL response modes stream server-sent events; NON_STREAMING returns a JSON response.",
-        "operationId": "explainSearch",
+        "description": "Explain a result set you already fetched. Unlike the three search endpoints this one takes a **JSON body**: `search_id` (required — the `id` returned by `post_scholar_search_web`, `post_scholar_search_scholar` or `post_scholar_search_mixed`), plus `detail_level` (BRIEF / MODERATE / DETAILED), `language`, and `response_mode`. ⚠️ Use `response_mode: NON_STREAMING`. It returns `{\"message\": \"…\"}` as JSON, measured at about 2 KB. The COMPLETE and INCREMENTAL modes emit server-sent events in which **each event repeats the whole answer so far** — the identical explanation measured 177 KB that way, roughly 90 times larger, and a tool call cannot consume a stream incrementally anyway. It only ever explains an existing search; it cannot run one.",
+        "operationId": "post_scholar_search_explain",
         "tags": [
           "Search",
           "Explanation"

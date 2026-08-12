@@ -1,28 +1,9 @@
 ---
 title: "解释搜索结果"
-description: "解释搜索结果"
-excerpt: "以不同语言和格式生成搜索结果说明"
+description: "对一份已经取回的检索结果做解释。"
 openapi: "openapi/zh/platform-txyz-openapi.json POST /scholar/search/explain"
 ---
 
-根据此前的 Scholar Search、Web Search 或 Smart Search 请求生成说明。将返回的搜索 `id` 作为 `search_id` 传递。
+{/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
 
-**最适合：** 总结搜索结果、生成本地化说明，以及将搜索输出转化为易读的答案。
-
-## 示例
-
-```bash
-curl -X POST "https://api.aisa.one/apis/v1/scholar/search/explain" \
-  -H "Authorization: Bearer ${AISA_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "search_id": "search_id",
-    "response_mode": "NON_STREAMING",
-    "language": "en",
-    "detail_level": "BRIEF"
-  }'
-```
-
-## 响应
-
-`NON_STREAMING` 返回包含 `message` 字段的 JSON 对象。`COMPLETE` 和 `INCREMENTAL` 为能够处理流式响应的客户端传输服务器发送事件。
+对一份已经取回的检索结果做解释。和那三个搜索端点不同，这个接收 **JSON 请求体**：`search_id`（必填 —— 由 [`post_scholar_search_web`](/zh/api-reference/scholar/post_scholar-search-web)、[`post_scholar_search_scholar`](/zh/api-reference/scholar/post_scholar-search-scholar) 或 [`post_scholar_search_mixed`](/zh/api-reference/scholar/post_scholar-search-mixed) 返回的 `id`），以及 `detail_level`（BRIEF / MODERATE / DETAILED）、`language`、`response_mode`。⚠️ 请用 `response_mode: NON_STREAMING`，它返回 `{"message": "…"}` 这样的 JSON，实测约 2 KB。COMPLETE 与 INCREMENTAL 模式发的是 server-sent events，而**每个事件都会重复到目前为止的整段答案** —— 同一份解释那样返回实测 177 KB，大约 90 倍，何况一次工具调用本来也没法增量消费流式响应。它只能解释已有的检索，不能自己发起检索。

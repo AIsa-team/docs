@@ -31,7 +31,7 @@
         ],
         "summary": "使用 Tavily Search 执行搜索查询。",
         "operationId": "post_tavily_search",
-        "description": "执行一次面向 AI agent 优化的网页搜索，返回已提取页面内容的排序结果——无需再单独抓取。当答案不在结构化 API 中时，这是开放网页研究的通用入口。支持 basic 与 advanced 深度、结果数量、主题（general/news/finance）、时间范围和明确的起止日期过滤、可选的 LLM 生成 `answer`、原始页面内容以及图片结果。如果你已经知道确切的 URL，请改用 `post_tavily_extract`——对已经能点名的页面来说，它比搜索更便宜也更精确。",
+        "description": "搜索网页，返回的排序结果里已经带好页面正文，不需要再调一次抓取。`query` 必填。返回 `results[]`，每条含 `url`、`title`、`content`（提取出的正文片段）、`score`，以及可选的 `raw_content`；顶层还有 `query`、`images`、`response_time` 和 `request_id`。设 `include_answer` 可以额外拿到一段 `answer`。可用 `topic`（general/news/finance）、`time_range` 或明确的 `start_date`/`end_date` 过滤，用 `search_depth` 在成本与深度之间取舍。实测取 2 条结果约 6 秒。开放网页检索优先选它。什么时候该换：已经知道 URL —— `post_tavily_extract` 更便宜也更准确；想要的是一段带引用的答案而不是一个可遍历的列表 —— `post_perplexity_sonar`；要的是同行评审论文 —— `post_scholar_search_scholar`。",
         "requestBody": {
           "required": true,
           "content": {
@@ -464,7 +464,7 @@
         ],
         "summary": "使用 Tavily Extract 从指定 URL 提取网页内容。",
         "operationId": "post_tavily_extract",
-        "description": "从你已有的一个或多个 URL 中提取干净、已解析的内容。当你确切知道需要哪些页面时使用——比如搜索结果中的链接、站点地图，或用户提供的 URL——并希望得到可读文本而不是原始 HTML。支持 basic 与 advanced 两种深度、markdown 或纯文本输出、可选的图片和 favicon、每个来源的分块数量限制，以及一个 `query` 参数：它会按你的意图对提取出的分块重新排序，让你只关注相关部分。如果还需要先找到 URL，请使用 `post_tavily_search`；如需遍历整个站点，请使用 `post_tavily_crawl`。",
+        "description": "取回你已经拿到的 URL 的干净正文 —— 来自搜索结果、站点地图或用户输入。`urls` 必填，可一次传多个。返回 `results[]`，含 `url`、`title`、`raw_content` 和 `images`，另有一个 `failed_results[]` 数组 —— **这个一定要读**，取不到的页面会被记在那里，而不是抛错。可选 `format`（markdown 或 text）与 `extract_depth`。实测取 1 个页面约 1 秒。只要页面能点得出名字，就用它而不是 `post_tavily_search` —— 为已知页面去搜索既贵又未必搜得到。想先摸清整站有哪些 URL，用 `post_tavily_map`。",
         "requestBody": {
           "required": true,
           "content": {
@@ -628,7 +628,7 @@
         ],
         "summary": "使用 Tavily Crawl、基于图的网站遍历工具。",
         "operationId": "post_tavily_crawl",
-        "description": "从一个根 URL 出发遍历网站，并返回所发现页面的内容，遍历过程由自然语言 `instructions` 以及针对路径和域名的正则包含/排除过滤条件引导。当你需要对某个站点做广覆盖时使用——例如文档站、产品目录或竞品博客——而不是只看少数已知页面。用 `max_depth`、`max_breadth` 和 `limit` 控制成本。如果只需要 URL 结构而不要页面内容，请使用 `post_tavily_map`——它便宜得多。如果只有少数已知 URL，请使用 `post_tavily_extract`。",
+        "description": "从根 `url` 遍历站点并返回沿途页面的正文。可用自然语言 `instructions` 加正则路径/域名过滤引导，并用 `max_depth`、`max_breadth`、`limit` 限定范围。返回 `base_url` 和 `results[]`，每条含 `url` 与 `raw_content`。实测限制 3 个页面时约 4.5 秒；成本和耗时随你设的上限增长，所以务必设。适合需要覆盖某一个站点的场景 —— 文档站、商品目录、竞品博客。若只是几个已知页面，`post_tavily_extract` 便宜得多；想在付费爬取前先看看站有多大，先跑 `post_tavily_map`。",
         "requestBody": {
           "required": true,
           "content": {
@@ -819,7 +819,7 @@
         ],
         "summary": "使用 Tavily Map 生成全面的站点地图。",
         "operationId": "post_tavily_map",
-        "description": "从一个根 URL 出发发现网站的 URL 结构，但不抓取页面内容，过程由自然语言 `instructions` 和正则路径/域名过滤条件引导。适合在决定是否全量抓取之前先摸清站点规模——看清它有多大、哪些板块重要，然后只抓取需要的部分。返回发现到的链接。之后可用 `post_tavily_extract` 抓取特定页面，或在确实需要全部内容时使用 `post_tavily_crawl`。",
+        "description": "从根 `url` 列出站点的 URL 结构，不抓取任何页面正文。可用自然语言 `instructions` 和正则 `select_paths` / `exclude_paths` / `select_domains` 过滤。返回 `base_url` 和 `results` —— **是一个扁平的 URL 字符串数组，不是对象数组** —— 以及 `response_time`、`request_id`。又快又便宜，实测约 1.5 秒。用它在决定爬取之前先估算站点规模，再用 `post_tavily_extract` 只取需要的那部分。如果要的是内容而不是结构，`post_tavily_crawl` 一次调用就能同时给到。",
         "requestBody": {
           "required": true,
           "content": {
