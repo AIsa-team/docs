@@ -1,0 +1,201 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Oxylabs AI Search API",
+    "version": "1.0.0",
+    "description": "Oxylabs AI Search for GEO/AEO (Generative / Answer Engine Optimization) exposed through the AIsa gateway. A single passthrough endpoint queries the major AI answer engines — ChatGPT, Gemini, Perplexity, Google AI Overviews, and Google AI Mode — and returns the AI-generated answer text together with the cited source URLs, so you can monitor brand/product visibility and citations across AI answers.\n\nBilled at a flat $0.001 per successful result (a Realtime single query returns 1 result = $0.001). All three tiers (normal, VIP, SVIP) are priced identically at $0.001 — cost pass-through with zero profit. Only successful 2xx responses are billed; 400, 429, 5xx, and 6xx responses are not billed, and upstream 4xx responses are not billed. AI sources (chatgpt, gemini, perplexity) typically take ~40–60s; Google-type sources take ~4–8s — set your client timeout to at least 90s."
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/oxylabs/ai-search": {
+      "post": {
+        "tags": [
+          "https://developers.oxylabs.io/scraper-apis/web-scraper-api"
+        ],
+        "summary": "Query an AI answer engine for GEO/AEO visibility.",
+        "description": "Synchronous passthrough to the upstream Oxylabs Realtime endpoint (POST /v1/queries). Pick an AI answer engine with `source` and send the parameters that source expects; the request body is passed through unchanged. The response returns the AI-generated answer text and the cited source URLs, letting you track how a brand or product is surfaced and cited across AI answers. Billed at a flat $0.001 per successful result; 400/429/5xx/6xx and upstream 4xx responses are not billed. AI sources (chatgpt, gemini, perplexity) take ~40–60s and Google-type sources ~4–8s, so use a client timeout of at least 90s.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Passthrough body. `source` selects the AI answer engine; the remaining fields are the parameters that source expects (see per-source notes on each property). Additional upstream parameters are passed through as-is.",
+                "additionalProperties": true,
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "chatgpt",
+                      "gemini",
+                      "perplexity",
+                      "google_search",
+                      "google_ai_mode"
+                    ],
+                    "description": "The AI answer engine to query. `google_search` returns Google AI Overviews. Each source expects a specific subset of the parameters below.",
+                    "example": "google_search"
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "description": "The natural-language prompt. Used by `chatgpt` (max 4000 chars), `gemini` (max 8000 chars), and `perplexity`. Use `query` instead for the Google-type sources.",
+                    "example": "best noise cancelling headphones 2026"
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "The search query. Used by `google_search` and `google_ai_mode`. Use `prompt` instead for chatgpt/gemini/perplexity.",
+                    "example": "best noise cancelling headphones 2026"
+                  },
+                  "search": {
+                    "type": "boolean",
+                    "description": "For `chatgpt`, set to true to have ChatGPT browse the web before answering.",
+                    "example": true
+                  },
+                  "render": {
+                    "type": "string",
+                    "enum": [
+                      "html"
+                    ],
+                    "description": "For `google_search` and `google_ai_mode`, set to \"html\" to render the page before parsing.",
+                    "example": "html"
+                  },
+                  "parse": {
+                    "type": "boolean",
+                    "description": "Return structured, parsed results instead of raw output. Recommended for every source.",
+                    "example": true
+                  },
+                  "geo_location": {
+                    "type": "string",
+                    "description": "Country-level geo-location for the query, e.g. \"United States\".",
+                    "example": "United States"
+                  }
+                },
+                "required": [
+                  "source"
+                ]
+              },
+              "examples": {
+                "google_search": {
+                  "summary": "Google AI Overviews (google_search)",
+                  "value": {
+                    "source": "google_search",
+                    "query": "best noise cancelling headphones 2026",
+                    "parse": true,
+                    "render": "html",
+                    "geo_location": "United States"
+                  }
+                },
+                "chatgpt": {
+                  "summary": "ChatGPT answer with web browsing",
+                  "value": {
+                    "source": "chatgpt",
+                    "prompt": "best noise cancelling headphones 2026",
+                    "search": true,
+                    "parse": true,
+                    "geo_location": "United States"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Query completed successfully. `results[]` holds one result per query. The parsed shape inside `content` varies by source (see property descriptions); the example below shows the `google_search` (Google AI Overviews) shape.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "description": "One entry per query. A Realtime single query returns exactly one result, which is the billed unit.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "content": {
+                            "type": "object",
+                            "description": "Parsed answer payload. The structure varies by source:\n- `google_search` → `content.results.ai_overviews[]` with `answer_text` and `references[]{source, url}` (shown below).\n- `chatgpt` / `gemini` → `response_text` plus `citations[]`.\n- `perplexity` → `top_sources[]` / `sources_results[]`.\n- `google_ai_mode` → `content.citations[]{text, urls[]}`.",
+                            "properties": {
+                              "results": {
+                                "type": "object",
+                                "description": "Google-type parsed results container.",
+                                "properties": {
+                                  "ai_overviews": {
+                                    "type": "array",
+                                    "description": "Google AI Overviews returned for the query.",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "answer_text": {
+                                          "type": "array",
+                                          "description": "The AI-generated answer, split into fragments that may carry inline references.",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "fragments": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "references": {
+                                                      "type": "array",
+                                                      "items": {}
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        },
+                                        "references": {
+                                          "type": "array",
+                                          "description": "Cited sources for this overview.",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "source": {
+                                                "type": "string"
+                                              },
+                                              "url": {
+                                                "type": "string"
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
