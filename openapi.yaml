@@ -76545,8 +76545,13 @@ paths:
       tags:
       - Other
       summary: Run a neural semantic web search.
-      description: Synchronous. Search the open web with a natural-language query and get back the most relevant results,
-        optionally with page contents inline. Billed at a flat $0.08 per successful request.
+      description: 'Search the web by meaning rather than by keyword. `query` is required; narrow with `category`, `includeDomains`,
+        `excludeDomains`, `startPublishedDate`, `endPublishedDate`, and set `numResults`. Returns `requestId`, `resolvedSearchType`,
+        `searchTime`, `costDollars` and `results[]` with `id`, `title` and `url`. **`id` is the URL**, and it is what `post_exa_contents`
+        takes. Measured at 1.4 seconds — the fastest search here. Billed a flat $0.08 per successful request. ⚠️ Results carry
+        **no page text** unless you ask: pass `contents`, or follow up with `post_exa_contents`. Choose it over `post_tavily_search`
+        when the query is a description rather than keywords; choose Tavily when you want the text in the same call, and `post_exa_answer`
+        when you want a written answer rather than a list.'
       requestBody:
         required: true
         content:
@@ -76657,6 +76662,7 @@ paths:
                   costDollars:
                     description: Upstream Exa cost breakdown. Informational only; customer billing is the flat $0.08.
                     nullable: true
+      operationId: post_exa_search
       x-x402:
         path: /apis/v2/exa/search
         source: https://github.com/AIsa-team/aisa-proxy
@@ -76665,8 +76671,12 @@ paths:
       tags:
       - Other
       summary: Extract full page contents for a set of URLs.
-      description: Synchronous. Fetch full page text, summaries, and metadata for a list of URLs. Cached instant results are
-        served first; on a cache miss Exa falls back to a live crawl. Billed at a flat $0.08 per successful request.
+      description: Fetch page text and metadata for URLs you already have. `ids` is required and takes the `id` values from
+        `post_exa_search` — which are plain URLs, so any URL works. Toggle `text`, `highlights`, `summary`, `subpages` and
+        `livecrawl`. Returns `results[]` with `id`, `title`, `url`, `author` and `text`, plus a **`statuses[]` array giving
+        per-URL `status` and `source`** — read it, because a URL that could not be fetched is reported there rather than raising.
+        Cached results are served instantly; a miss falls back to a live crawl. Measured at 1.2 seconds. Billed a flat $0.08
+        per successful request. For a whole site rather than a URL list, `post_firecrawl_crawl`.
       requestBody:
         required: true
         content:
@@ -76735,6 +76745,7 @@ paths:
                             type: string
                         summary:
                           type: string
+      operationId: post_exa_contents
       x-x402:
         path: /apis/v2/exa/contents
         source: https://github.com/AIsa-team/aisa-proxy
@@ -76743,8 +76754,12 @@ paths:
       tags:
       - Other
       summary: Get a direct, cited answer to a question.
-      description: Synchronous. Retrieve relevant sources and generate a direct answer (or a detailed summary) with source
-        citations. Billed at a flat $0.08 per successful request.
+      description: 'Ask a question and get a written answer with citations. `query` is required; `text` includes the source
+        text and `outputSchema` shapes a structured reply. Returns `requestId`, `answer` as prose, `citations[]` with `id`,
+        `title` and `url`, and `costDollars`. Measured at 2.1 seconds with 8 citations. Billed a flat $0.08 per successful
+        request. It sits between a search and a research run: faster and cheaper than `post_exa_agent_runs`, and more direct
+        than reading `post_exa_search` results yourself. `post_perplexity_sonar` answers the same shape of question for $0.012
+        — reach for Exa when the retrieval needs to be semantic.'
       requestBody:
         required: true
         content:
@@ -76808,6 +76823,7 @@ paths:
                   costDollars:
                     description: Upstream Exa cost breakdown. Informational only; customer billing is the flat $0.08.
                     nullable: true
+      operationId: post_exa_answer
       x-x402:
         path: /apis/v2/exa/answer
         source: https://github.com/AIsa-team/aisa-proxy
@@ -76816,14 +76832,14 @@ paths:
       tags:
       - Other
       summary: Submit an asynchronous research Agent run.
-      description: |-
-        Asynchronous. Submit a natural-language research task; the Agent runs it in the background and returns a structured result. Billed at a flat $0.10 per run.
-
-        Lifecycle:
-        1. Submit — POST /exa/agent/runs with the research body and a required `Idempotency-Key` header. On success the API returns HTTP 202 Accepted, a `Location` response header pointing at the job resource (`/apis/v1/exa/agent/runs/{jobId}`), and an integration_async_job body with `status` = queued. Re-submitting with the same key and request fingerprint returns the original run; the same key with a different fingerprint returns 409 idempotency_conflict.
-        2. Poll — GET /apis/v1/exa/agent/runs/{jobId} to retrieve the run. Repeat until `status` is terminal (completed, failed, or cancelled). When completed, the research result is in `output`. The provider supports polling only (no webhook or SSE callback).
-        3. List — GET /apis/v1/exa/agent/runs (optional status filter, paginated) to page through your runs on this endpoint.
-        4. Cancel — POST /apis/v1/exa/agent/runs/{jobId}/cancel to request cancellation. Cancelled runs are not billed.
+      description: Hand a research task to an agent that works in the background. `query` and an `Idempotency-Key` are required;
+        `effort` trades depth against time, `outputSchema` shapes the result, `dataSources` restricts where it looks, and
+        `previousRunId` continues an earlier run. Asynchronous. Submitting returns HTTP 202 and a job envelope — `id`, `object`,
+        `endpoint`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error` — with `output` still null. Poll `get_exa_agent_run`
+        until terminal; `output` then carries `text`, `structured` and `grounding`. A one-sentence question completed in well
+        under a minute. Billed a flat $0.10 per run — `pricing.billingMode` is `fixed_request`, so unlike a Firecrawl crawl
+        the price does not grow with what it finds. Use it when a report is the deliverable. For an answer you read in one
+        sitting, `post_exa_answer` returns in about two seconds. Send a fresh `Idempotency-Key` per distinct task.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -76883,6 +76899,7 @@ paths:
                 $ref: '#/components/schemas/AsyncJob'
         '409':
           description: idempotency_conflict — the same Idempotency-Key was reused with a different request body.
+      operationId: post_exa_agent_runs
       x-x402:
         path: /apis/v2/exa/agent/runs
         source: https://github.com/AIsa-team/aisa-proxy
@@ -76891,8 +76908,10 @@ paths:
       tags:
       - Other
       summary: Poll a research Agent run.
-      description: Retrieve a previously submitted Agent run. Repeat until `status` is terminal (completed, failed, or cancelled).
-        When completed, the research result is in `output`.
+      description: Fetch an Agent run submitted by `post_exa_agent_runs`, by its `jobId`. Returns the same envelope — `id`,
+        `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error`. Repeat until `status` is `completed`, `failed`
+        or `cancelled`; on success `output` carries `text`, `structured` and `grounding`. Reads a run only; it cannot start
+        one.
       parameters:
       - in: path
         name: jobId
@@ -76907,6 +76926,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AsyncJob'
+      operationId: get_exa_agent_run
       x-x402:
         path: /apis/v2/exa/agent/runs/{jobId}
         source: https://github.com/AIsa-team/aisa-proxy
@@ -76915,10 +76935,12 @@ paths:
       tags:
       - Other
       summary: Scrape a single page and return its main content as markdown.
-      description: 'Synchronous. Fetch one URL and return its cleaned main content as markdown. On the AIsa metered profile
-        the request is restricted: the URL must be HTTPS and must not point at a PDF, proxy must be set to "basic", and if
-        formats is supplied it must be exactly ["markdown"]. Advanced options (actions, headers, parsers, profile, lockdown,
-        zeroDataRetention) are rejected. Billed at 1 Firecrawl credit per page scraped.'
+      description: 'Fetch one URL and get its main content back as markdown. `url` and `proxy` are both required — `proxy`
+        must be `basic` on the metered profile — and `formats` selects the output. Returns `success` and `data` with `markdown`
+        plus a large `metadata` object carrying the page''s og: and twitter: tags, `statusCode`, `sourceURL` and `language`.
+        Measured at about 10 seconds for one page. ⚠️ The URL must be HTTPS and must not point at a PDF; both are rejected
+        rather than best-effort. Use it when you have the URL and want the text. For several URLs at once `post_firecrawl_batch_scrape`
+        runs them as one background job, and `post_tavily_extract` does a small batch synchronously. To find URLs first, `post_firecrawl_map`.'
       requestBody:
         required: true
         content:
@@ -76981,6 +77003,7 @@ paths:
                   creditsUsed:
                     type: integer
                     description: Firecrawl credits consumed by the request (1 per page).
+      operationId: post_firecrawl_scrape
       x-x402:
         path: /apis/v2/firecrawl/scrape
         source: https://github.com/AIsa-team/aisa-proxy
@@ -76989,9 +77012,13 @@ paths:
       tags:
       - Other
       summary: Run a web search and return ranked results.
-      description: 'Synchronous. Search the web and return ranked results. On the AIsa metered profile only the web source
-        is supported: scrapeOptions, enterprise mode, and non-web sources are rejected. Billed at roughly 2 Firecrawl credits
-        per 10 results (credits = ceil(limit / 10) * 2).'
+      description: 'Search the web and get back ranked results. `query` is required; `limit` sets how many. Returns `success`,
+        `creditsUsed`, a request `id`, and `data.web[]` with `url`, `title`, `description` and `position` — **titles and snippets
+        only, no page text**. Measured at about 15 seconds for 2 results, the slowest of the search tools here. Billed per
+        Firecrawl credit, roughly `ceil(limit / 10) * 2`. On the AIsa metered profile only the web source is supported; `scrapeOptions`,
+        enterprise mode and non-web sources are rejected. Reach for something else when: you want the page text in the same
+        call — `post_tavily_search` returns it and answers in a third of the time; you already know the URLs — `post_firecrawl_scrape`;
+        you want relevance judged by meaning rather than keywords — `post_exa_search`.'
       requestBody:
         required: true
         content:
@@ -77044,6 +77071,7 @@ paths:
                   creditsUsed:
                     type: integer
                     description: Firecrawl credits consumed (about 2 per 10 results).
+      operationId: post_firecrawl_search
       x-x402:
         path: /apis/v2/firecrawl/search
         source: https://github.com/AIsa-team/aisa-proxy
@@ -77052,8 +77080,12 @@ paths:
       tags:
       - Other
       summary: Discover the URLs on a website.
-      description: Synchronous. Given a starting URL, discover and return the links reachable on that site. The URL must be
-        HTTPS and limit is required (1 to 100000). Billed at 1 Firecrawl credit per discovered link/page.
+      description: List the URLs reachable from a starting page, without fetching any content. `url` and `limit` are both
+        required (limit 1 to 100000). Returns `success`, a request `id`, and `links[]` with `url` and `title` — note these
+        are **objects with a title**, unlike `post_tavily_map` which returns bare strings. Measured at about 9 seconds. Billed
+        1 credit per discovered link, so `limit` is a cost control, not just a page control. Use it to size a site before
+        paying to crawl it, then fetch only what matters with `post_firecrawl_scrape`. When you want content and structure
+        in one pass, `post_firecrawl_crawl`.
       requestBody:
         required: true
         content:
@@ -77101,6 +77133,7 @@ paths:
                   creditsUsed:
                     type: integer
                     description: Firecrawl credits consumed (1 per discovered link).
+      operationId: post_firecrawl_map
       x-x402:
         path: /apis/v2/firecrawl/map
         source: https://github.com/AIsa-team/aisa-proxy
@@ -77109,10 +77142,12 @@ paths:
       tags:
       - Other
       summary: Parse an uploaded HTML file into markdown.
-      description: 'Synchronous. Upload a single HTML/HTM file and receive its parsed markdown. This endpoint uses multipart/form-data
-        with two fields: file (the HTML upload) and options (a JSON string). On the metered profile options must set proxy
-        to "basic" and may only additionally set formats to ["markdown"]. The options JSON string is limited to 64 KB. Billed
-        at 1 Firecrawl credit.'
+      description: 'Parse an HTML file you upload and get markdown back. This is `multipart/form-data` with two fields: `file`
+        (an HTML upload that must carry a `text/html` content type or an `.html`/`.htm` filename) and `options` (a JSON string
+        that must set `proxy` to `basic`, may additionally set `formats` to `["markdown"]`, and is capped at 64 KB). Returns
+        `success` and `data.markdown` with `metadata`. Billed 1 Firecrawl credit. ⚠️ **Not available as an MCP tool.** A tool
+        call carries JSON, so the file arrives as a plain form field with no filename and upstream rejects it — verified.
+        Over MCP use `post_firecrawl_scrape` with a URL instead. This endpoint is for HTTP clients that hold an actual file.'
       requestBody:
         required: true
         content:
@@ -77152,6 +77187,7 @@ paths:
                   creditsUsed:
                     type: integer
                     description: Firecrawl credits consumed (1).
+      operationId: post_firecrawl_parse
       x-x402:
         path: /apis/v2/firecrawl/parse
         source: https://github.com/AIsa-team/aisa-proxy
@@ -77160,16 +77196,15 @@ paths:
       tags:
       - Other
       summary: Submit an asynchronous crawl job.
-      description: |-
-        Asynchronous. Submit a crawl of an entire site rooted at url; the whole traversal runs as a background job.
-
-        Lifecycle:
-        1. Submit — POST /firecrawl/crawl with the crawl body and a required `Idempotency-Key` header. On success the API returns HTTP 202 Accepted, a `Location` response header pointing at the job resource (`/apis/v1/firecrawl/crawl/{jobId}`), and an integration_async_job body with `status` = queued.
-        2. Poll — GET /apis/v1/firecrawl/crawl/{jobId} to retrieve the job. Repeat until `status` is terminal (completed, failed, or cancelled). When completed, the scraped pages are in `output`.
-        3. List — GET /apis/v1/firecrawl/crawl (optional `limit`, `status`, `cursor` query params) to page through your jobs on this endpoint.
-        4. Cancel — POST /apis/v1/firecrawl/crawl/{jobId}/cancel to request cancellation.
-
-        The URL must be HTTPS and not a PDF, and limit (1 to 1000) bounds the number of pages. Billed at 1 Firecrawl credit per page crawled; total cost scales with the pages actually processed.
+      description: Crawl a whole site rooted at `url` and return the content of every page it keeps. `url`, `limit` and an
+        `Idempotency-Key` are required; steer it with `includePaths`, `excludePaths`, `maxDiscoveryDepth`, `crawlEntireDomain`,
+        `allowSubdomains`, `delay` and `maxConcurrency`. Asynchronous. Submitting returns HTTP 202 and a job envelope — `id`,
+        `object`, `endpoint`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error` — with `output` still null.
+        Poll `get_firecrawl_crawl_job` until `status` is `completed`, `failed` or `cancelled`; `output` is then an array of
+        pages, each with `markdown` and `metadata`. A 3-page crawl measured 43 KB and finished in under a minute, and `pricing.billingMode`
+        is `metered_result`, so **cost scales with what it finds** — set `limit`. Send a fresh `Idempotency-Key` per distinct
+        crawl; reusing one returns the earlier job instead of starting a new one. For a handful of known URLs `post_firecrawl_batch_scrape`
+        is cheaper, and for structure alone `post_firecrawl_map` costs far less.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -77297,6 +77332,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AsyncJob'
+      operationId: post_firecrawl_crawl
       x-x402:
         path: /apis/v2/firecrawl/crawl
         source: https://github.com/AIsa-team/aisa-proxy
@@ -77305,8 +77341,10 @@ paths:
       tags:
       - Other
       summary: Poll a crawl job.
-      description: Retrieve a previously submitted crawl job. Repeat until `status` is terminal (completed, failed, or cancelled).
-        When completed, the crawled pages are in `output`.
+      description: Fetch a crawl job submitted by `post_firecrawl_crawl`, by its `jobId`. Returns the same envelope the submission
+        returned — `id`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error`. Repeat until `status` is `completed`,
+        `failed` or `cancelled`; on success `output` is an array of pages with `markdown` and `metadata`. Polling is cheap
+        and fast, measured under a second. This tool only reads a job — it cannot start one.
       parameters:
       - in: path
         name: jobId
@@ -77321,6 +77359,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AsyncJob'
+      operationId: get_firecrawl_crawl_job
       x-x402:
         path: /apis/v2/firecrawl/crawl/{jobId}
         source: https://github.com/AIsa-team/aisa-proxy
@@ -77329,16 +77368,13 @@ paths:
       tags:
       - Other
       summary: Submit an asynchronous batch scrape job.
-      description: |-
-        Asynchronous. Scrape many URLs in one background job.
-
-        Lifecycle:
-        1. Submit — POST /firecrawl/batch-scrape with the batch body and a required `Idempotency-Key` header. On success the API returns HTTP 202 Accepted, a `Location` header pointing at the job resource (`/apis/v1/firecrawl/batch-scrape/{jobId}`), and an integration_async_job body with `status` = queued.
-        2. Poll — GET /apis/v1/firecrawl/batch-scrape/{jobId} until `status` is terminal (completed, failed, or cancelled). When completed, the scraped documents are in `output`.
-        3. List — GET /apis/v1/firecrawl/batch-scrape (optional `limit`, `status`, `cursor` query params).
-        4. Cancel — POST /apis/v1/firecrawl/batch-scrape/{jobId}/cancel.
-
-        Every URL must be a unique HTTPS URL and must not be a PDF; 1 to 1000 URLs per job. Billed at 1 Firecrawl credit per page scraped; total cost scales with the pages actually processed.
+      description: Scrape many URLs as one background job. `urls` and an `Idempotency-Key` are required; `maxConcurrency`,
+        `onlyMainContent`, `includeTags`, `excludeTags`, `maxAge`, `minAge` and `timeout` tune it. Asynchronous. Submitting
+        returns HTTP 202 and a job envelope — `id`, `object`, `endpoint`, `status`, `createdAt`, `completedAt`, `pricing`,
+        `output`, `error` — with `output` still null. Poll `get_firecrawl_batch_scrape_job` until terminal; `output` is then
+        an array of documents with `markdown` and `metadata`. Use it when you have a list of URLs and do not need them immediately.
+        When you do need them immediately, `post_tavily_extract` returns a small batch synchronously in about a second; for
+        a single page `post_firecrawl_scrape`. Send a fresh `Idempotency-Key` per distinct batch.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -77418,6 +77454,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AsyncJob'
+      operationId: post_firecrawl_batch_scrape
       x-x402:
         path: /apis/v2/firecrawl/batch-scrape
         source: https://github.com/AIsa-team/aisa-proxy
@@ -77426,8 +77463,9 @@ paths:
       tags:
       - Other
       summary: Poll a batch scrape job.
-      description: Retrieve a previously submitted batch scrape job. Repeat until `status` is terminal (completed, failed,
-        or cancelled). When completed, the scraped documents are in `output`.
+      description: Fetch a batch scrape job submitted by `post_firecrawl_batch_scrape`, by its `jobId`. Returns the same envelope
+        — `id`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error`. Repeat until `status` is terminal; on
+        success `output` is an array of documents with `markdown` and `metadata`. Reads a job only; it cannot start one.
       parameters:
       - in: path
         name: jobId
@@ -77442,6 +77480,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AsyncJob'
+      operationId: get_firecrawl_batch_scrape_job
       x-x402:
         path: /apis/v2/firecrawl/batch-scrape/{jobId}
         source: https://github.com/AIsa-team/aisa-proxy
@@ -81320,7 +81359,8 @@ paths:
         and `source`, and a `usage` block. Measured at about 3 seconds. Billed at a flat $0.012 per request. This is the cheapest
         and fastest of the four Perplexity endpoints — use it for a single factual question. Step up to `post_perplexity_sonar_pro`
         for multi-part questions, or `post_perplexity_sonar_reasoning_pro` when the answer requires working through steps.
-        If you need results you can iterate over rather than prose, use `post_tavily_search`.'
+        If you need results you can iterate over rather than prose, use `post_tavily_search`; `post_exa_answer` answers the
+        same shape of question with semantic retrieval, at $0.08.'
       requestBody:
         required: true
         content:
@@ -83277,9 +83317,10 @@ paths:
         `score` and optionally `raw_content`, alongside `query`, `images`, `response_time` and `request_id`; set `include_answer`
         to also get a one-paragraph `answer`. Filter with `topic` (general/news/finance), `time_range` or explicit `start_date`/`end_date`,
         and trade cost against depth with `search_depth`. Measured at roughly 6 seconds for 2 results. This is the default
-        choice for open-web research. Reach past it when: you already know the URLs — `post_tavily_extract` is cheaper and
-        exact; you want a written answer with citations rather than a list to iterate — `post_perplexity_sonar`; you want
-        peer-reviewed papers — `post_scholar_search_scholar`.'
+        choice for open-web research, and the only search here that returns ranked results and page text in one call. Reach
+        past it when: you already know the URLs — `post_tavily_extract` is cheaper and exact; the query is a description rather
+        than keywords — `post_exa_search` matches on meaning; you want a written answer rather than a list to iterate — `post_perplexity_sonar`;
+        you want peer-reviewed papers — `post_scholar_search_scholar`.'
       requestBody:
         required: true
         content:
@@ -83653,7 +83694,8 @@ paths:
         `failed_results[]` array — **read that one**, because a page that could not be fetched is reported there rather than
         raising an error. Choose `format` (markdown or text) and `extract_depth`. Measured at about 1 second for one page.
         Use this instead of `post_tavily_search` whenever you can already name the pages; searching for pages you can name
-        costs more and may not return them. To discover the URLs of a whole site first, use `post_tavily_map`.
+        costs more and may not return them. For a long list that can wait, `post_firecrawl_batch_scrape` runs it as a background
+        job. To discover the URLs of a whole site first, use `post_tavily_map`.
       requestBody:
         required: true
         content:
@@ -83773,12 +83815,13 @@ paths:
       - Web & News Search
       summary: Graph-based website traversal tool using Tavily Crawl.
       operationId: post_tavily_crawl
-      description: Walk a site from a root `url` and return the content of the pages it finds. Steer it with natural-language
+      description: 'Walk a site from a root `url` and return the content of the pages it finds. Steer it with natural-language
         `instructions` plus regex path and domain filters, and bound it with `max_depth`, `max_breadth` and `limit`. Returns
         `base_url` and `results[]` with `url` and `raw_content`. Measured at about 4.5 seconds for a 3-page limit; cost and
         time grow with the bounds you set, so set them. Use it for broad coverage of one site — documentation, a catalogue,
-        a competitor's blog. For a handful of known pages `post_tavily_extract` is far cheaper; to see how big a site is before
-        paying to crawl it, run `post_tavily_map` first.
+        a competitor''s blog. It answers synchronously, which `post_firecrawl_crawl` does not: that one runs as a background
+        job and suits crawls too large to wait on. For a handful of known pages `post_tavily_extract` is far cheaper; to size
+        a site before paying to crawl it, run `post_tavily_map` first.'
       requestBody:
         required: true
         content:
