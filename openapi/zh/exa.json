@@ -121,7 +121,7 @@
           "https://docs.exa.ai/reference/search"
         ],
         "summary": "执行神经语义网页搜索。",
-        "description": "同步接口。用自然语言 query 搜索公开网页，返回最相关的结果，可选择内联返回页面内容。每次成功请求固定计费 $0.08。",
+        "description": "按语义而不是关键词搜索网页。`query` 必填；可用 `category`、`includeDomains`、`excludeDomains`、`startPublishedDate`、`endPublishedDate` 收窄，用 `numResults` 控制条数。返回 `requestId`、`resolvedSearchType`、`searchTime`、`costDollars` 和 `results[]`（含 `id`、`title`、`url`）。**`id` 就是 URL**，也正是 `post_exa_contents` 要的东西。实测 1.4 秒，是这里最快的搜索。按次固定计费 $0.08。⚠️ 结果**默认不带页面正文**：要么传 `contents`，要么再调一次 `post_exa_contents`。查询是一段描述而不是关键词时，选它而不是 `post_tavily_search`；想在同一次调用里拿到正文，选 Tavily；想要一段写好的答案而不是列表，用 `post_exa_answer`。",
         "requestBody": {
           "required": true,
           "content": {
@@ -273,7 +273,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_exa_search"
       }
     },
     "/exa/contents": {
@@ -282,7 +283,7 @@
           "https://docs.exa.ai/reference/get-contents"
         ],
         "summary": "为一组 URL 提取完整页面内容。",
-        "description": "同步接口。获取一组 URL 的完整页面文本、摘要和元数据。优先返回缓存的即时结果；缓存未命中时 Exa 会退回实时抓取。每次成功请求固定计费 $0.08。",
+        "description": "为你已经拿到的 URL 取回页面正文和元信息。`ids` 必填，接收 `post_exa_search` 返回的 `id` —— 那本身就是 URL，所以任何 URL 都能用。可开关 `text`、`highlights`、`summary`、`subpages`、`livecrawl`。返回 `results[]`（含 `id`、`title`、`url`、`author`、`text`），外加一个 **`statuses[]` 数组，逐个 URL 给出 `status` 和 `source`** —— 一定要读，取不到的 URL 记在那里而不是抛错。命中缓存时立即返回，未命中则回落到实时抓取。实测 1.2 秒。按次固定计费 $0.08。要的是整站而不是一份 URL 清单，用 `post_firecrawl_crawl`。",
         "requestBody": {
           "required": true,
           "content": {
@@ -384,7 +385,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_exa_contents"
       }
     },
     "/exa/answer": {
@@ -393,7 +395,7 @@
           "https://docs.exa.ai/reference/answer"
         ],
         "summary": "获得针对某个问题的带引用直接答案。",
-        "description": "同步接口。检索相关来源并生成带引用的直接答案（或详细摘要）。每次成功请求固定计费 $0.08。",
+        "description": "提一个问题，拿回一段带引用的答案。`query` 必填；`text` 会带上来源正文，`outputSchema` 可以约束结构化输出。返回 `requestId`、成段的 `answer`、`citations[]`（含 `id`、`title`、`url`）和 `costDollars`。实测 2.1 秒、8 条引用。按次固定计费 $0.08。它介于搜索和研究之间：比 `post_exa_agent_runs` 更快更便宜，又比自己去读 `post_exa_search` 的结果更直接。`post_perplexity_sonar` 回答同一类问题只要 $0.012 —— 当检索本身需要语义匹配时才选 Exa。",
         "requestBody": {
           "required": true,
           "content": {
@@ -485,7 +487,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_exa_answer"
       }
     },
     "/exa/agent/runs": {
@@ -494,7 +497,7 @@
           "https://docs.exa.ai/reference/create-a-research-task"
         ],
         "summary": "提交一个异步的研究型 Agent 任务。",
-        "description": "异步接口。提交一个自然语言研究任务；Agent 在后台执行并返回结构化结果。按每次任务固定 $0.10 计费。\n\n生命周期：\n1. 提交 —— POST /exa/agent/runs，带上研究请求体和必填的 `Idempotency-Key` 请求头。成功时 API 返回 HTTP 202 Accepted、指向任务资源的 `Location` 响应头（`/apis/v1/exa/agent/runs/{jobId}`），以及 `status` = queued 的 integration_async_job 响应体。使用相同 key 和相同请求指纹重复提交会返回原任务；相同 key 但指纹不同则返回 409 idempotency_conflict。\n2. 轮询 —— GET /apis/v1/exa/agent/runs/{jobId} 获取任务。重复直到 `status` 进入终态（completed、failed 或 cancelled）。完成时，研究结果位于 `output` 中。该提供商仅支持轮询（没有 webhook 或 SSE 回调）。\n3. 列表 —— GET /apis/v1/exa/agent/runs（可选 status 过滤，支持分页）用于翻阅该 endpoint 下的任务。\n4. 取消 —— POST /apis/v1/exa/agent/runs/{jobId}/cancel 请求取消。已取消的任务不计费。",
+        "description": "把一个研究任务交给后台的 agent。`query` 和 `Idempotency-Key` 必填；`effort` 在深度与耗时之间取舍，`outputSchema` 约束产出结构，`dataSources` 限定检索范围，`previousRunId` 可以接着上一次继续。异步。提交后返回 HTTP 202 和一个任务信封 —— `id`、`object`、`endpoint`、`status`、`createdAt`、`completedAt`、`pricing`、`output`、`error`，此时 `output` 还是 null。轮询 `get_exa_agent_run` 直到终态；届时 `output` 含 `text`、`structured` 和 `grounding`。一个单句问题实测远不到一分钟就完成。按次固定计费 $0.10 —— `pricing.billingMode` 是 `fixed_request`，也就是说和 Firecrawl 的爬取不同，**价格不随它找到多少而增长**。当交付物本身就是一份报告时用它。想要一口气读完的答案，`post_exa_answer` 约 2 秒就返回。每个不同的任务换一个新的 `Idempotency-Key`。",
         "parameters": [
           {
             "in": "header",
@@ -580,7 +583,8 @@
           "409": {
             "description": "idempotency_conflict——同一个 Idempotency-Key 被用于了不同的请求体。"
           }
-        }
+        },
+        "operationId": "post_exa_agent_runs"
       }
     },
     "/exa/agent/runs/{jobId}": {
@@ -589,7 +593,7 @@
           "https://docs.exa.ai/reference/get-a-research-task"
         ],
         "summary": "轮询研究型 Agent 任务。",
-        "description": "获取此前提交的 Agent 任务。重复调用直到 `status` 进入终态（completed、failed 或 cancelled）。完成时，研究结果位于 `output` 中。",
+        "description": "按 `jobId` 取回 `post_exa_agent_runs` 提交的 Agent 运行。返回同一个信封 —— `id`、`status`、`createdAt`、`completedAt`、`pricing`、`output`、`error`。反复轮询直到 `status` 为 `completed`、`failed` 或 `cancelled`；成功时 `output` 含 `text`、`structured` 和 `grounding`。只读取运行，不能发起运行。",
         "parameters": [
           {
             "in": "path",
@@ -612,7 +616,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "get_exa_agent_run"
       }
     }
   }

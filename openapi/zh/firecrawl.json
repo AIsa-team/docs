@@ -121,7 +121,7 @@
           "https://docs.firecrawl.dev/api-reference/endpoint/scrape"
         ],
         "summary": "抓取单个页面并以 markdown 返回其正文内容。",
-        "description": "同步接口。抓取单个 URL，并以 markdown 返回清洗后的正文内容。在 AIsa 计量模式下该请求受限：URL 必须是 HTTPS 且不能指向 PDF，proxy 必须设为 \"basic\"，如果提供 formats，其值必须正好是 [\"markdown\"]。高级选项（actions、headers、parsers、profile、lockdown、zeroDataRetention）会被拒绝。每抓取一页计 1 个 Firecrawl credit。",
+        "description": "抓取一个 URL，返回它的正文 markdown。`url` 和 `proxy` 都必填 —— 计量档位下 `proxy` 必须是 `basic` —— `formats` 选择输出格式。返回 `success` 和 `data`，其中 `markdown` 是正文，`metadata` 是一大坨页面元信息（og: 与 twitter: 标签、`statusCode`、`sourceURL`、`language`）。实测抓 1 个页面约 10 秒。⚠️ URL 必须是 HTTPS，且不能指向 PDF，两者都是直接拒绝而不是尽力而为。有 URL 又要正文时用它。多个 URL 一起处理用 `post_firecrawl_batch_scrape`（后台任务），少量且要立刻拿到用 `post_tavily_extract`（同步）。要先找出 URL，用 `post_firecrawl_map`。",
         "requestBody": {
           "required": true,
           "content": {
@@ -213,7 +213,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_firecrawl_scrape"
       }
     },
     "/firecrawl/search": {
@@ -222,7 +223,7 @@
           "https://docs.firecrawl.dev/api-reference/endpoint/search"
         ],
         "summary": "执行网页搜索并返回排序结果。",
-        "description": "同步接口。搜索网页并返回排序结果。在 AIsa 计量模式下仅支持 web 来源：scrapeOptions、企业模式和非 web 来源都会被拒绝。计费约为每 10 条结果 2 个 Firecrawl credits（credits = ceil(limit / 10) * 2）。",
+        "description": "搜索网页，返回排序后的结果。`query` 必填，`limit` 控制条数。返回 `success`、`creditsUsed`、一个请求 `id`，以及 `data.web[]`，每条含 `url`、`title`、`description`、`position` —— **只有标题和摘要，没有页面正文**。实测取 2 条约 15 秒，是这里最慢的搜索工具。按 Firecrawl credit 计费，约 `ceil(limit / 10) * 2`。在 AIsa 计量档位下只支持 web 源，`scrapeOptions`、企业模式和非 web 源都会被拒绝。什么时候该换：想在同一次调用里拿到正文 —— `post_tavily_search` 会返回，而且快三倍；已经知道 URL —— `post_firecrawl_scrape`；希望按语义而不是关键词判断相关性 —— `post_exa_search`。",
         "requestBody": {
           "required": true,
           "content": {
@@ -298,7 +299,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_firecrawl_search"
       }
     },
     "/firecrawl/map": {
@@ -307,7 +309,7 @@
           "https://docs.firecrawl.dev/api-reference/endpoint/map"
         ],
         "summary": "发现网站上的 URL。",
-        "description": "同步接口。给定一个起始 URL，发现并返回该站点上可达的链接。URL 必须是 HTTPS，limit 为必填（1 到 100000）。每发现一个链接/页面计 1 个 Firecrawl credit。",
+        "description": "列出从某个起始页可达的 URL，不抓取任何内容。`url` 和 `limit` 都必填（limit 1 到 100000）。返回 `success`、请求 `id` 和 `links[]`，每条含 `url` 和 `title` —— 注意这里是**带标题的对象**，而 `post_tavily_map` 返回的是裸字符串。实测约 9 秒。**每发现一个链接计 1 个 credit**，所以 `limit` 是成本控制而不只是数量控制。用它在付费爬取前先估算站点规模，再用 `post_firecrawl_scrape` 只取需要的。想一次同时拿到结构和内容，用 `post_firecrawl_crawl`。",
         "requestBody": {
           "required": true,
           "content": {
@@ -375,7 +377,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_firecrawl_map"
       }
     },
     "/firecrawl/parse": {
@@ -384,7 +387,7 @@
           "https://docs.firecrawl.dev/api-reference/endpoint/parse"
         ],
         "summary": "把上传的 HTML 文件解析成 markdown。",
-        "description": "同步接口。上传单个 HTML/HTM 文件并获得解析后的 markdown。该 endpoint 使用 multipart/form-data，包含两个字段：file（上传的 HTML）和 options（JSON 字符串）。在计量模式下，options 必须把 proxy 设为 \"basic\"，且最多只能额外把 formats 设为 [\"markdown\"]。options JSON 字符串限制为 64 KB。计费为 1 个 Firecrawl credit。",
+        "description": "解析你上传的 HTML 文件，返回 markdown。使用 `multipart/form-data`，两个字段：`file`（上传的 HTML，必须带 `text/html` content type 或 `.html`/`.htm` 文件名）和 `options`（JSON 字符串，必须设 `proxy` 为 `basic`，可另外设 `formats` 为 `[\"markdown\"]`，上限 64 KB）。返回 `success` 和 `data.markdown` 及 `metadata`。计 1 个 Firecrawl credit。⚠️ **不作为 MCP 工具提供。** 工具调用传的是 JSON，文件会变成一个没有文件名的普通表单字段，上游拒绝 —— 已实测。在 MCP 下请改用 `post_firecrawl_scrape` 传 URL。这个端点是给手里真有文件的 HTTP 客户端用的。",
         "requestBody": {
           "required": true,
           "content": {
@@ -441,7 +444,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_firecrawl_parse"
       }
     },
     "/firecrawl/crawl": {
@@ -450,7 +454,7 @@
           "https://docs.firecrawl.dev/api-reference/endpoint/crawl"
         ],
         "summary": "提交一个异步的抓取任务。",
-        "description": "异步接口。提交以 url 为根的整站抓取；整个遍历过程作为后台任务运行。\n\n生命周期：\n1. 提交 —— POST /firecrawl/crawl，带上抓取请求体和必填的 `Idempotency-Key` 请求头。成功时 API 返回 HTTP 202 Accepted、指向任务资源的 `Location` 响应头（`/apis/v1/firecrawl/crawl/{jobId}`），以及 `status` = queued 的 integration_async_job 响应体。\n2. 轮询 —— GET /apis/v1/firecrawl/crawl/{jobId} 获取任务。重复直到 `status` 进入终态（completed、failed 或 cancelled）。完成时，抓取到的页面位于 `output` 中。\n3. 列表 —— GET /apis/v1/firecrawl/crawl（可选 `limit`、`status`、`cursor` 查询参数）用于翻阅该 endpoint 下的任务。\n4. 取消 —— POST /apis/v1/firecrawl/crawl/{jobId}/cancel 请求取消。\n\nURL 必须是 HTTPS 且不能是 PDF，limit（1 到 1000）限制抓取页数。每抓取一页计 1 个 Firecrawl credit；总费用随实际处理的页数增长。",
+        "description": "从 `url` 出发爬整个站点，返回它保留的每个页面的内容。`url`、`limit` 和 `Idempotency-Key` 必填；可用 `includePaths`、`excludePaths`、`maxDiscoveryDepth`、`crawlEntireDomain`、`allowSubdomains`、`delay`、`maxConcurrency` 引导。异步。提交后返回 HTTP 202 和一个任务信封 —— `id`、`object`、`endpoint`、`status`、`createdAt`、`completedAt`、`pricing`、`output`、`error`，此时 `output` 还是 null。轮询 `get_firecrawl_crawl_job` 直到 `status` 变成 `completed`、`failed` 或 `cancelled`；届时 `output` 是一个页面数组，每项含 `markdown` 和 `metadata`。实测爬 3 个页面返回 43 KB、不到一分钟完成，而 `pricing.billingMode` 是 `metered_result`，也就是**成本随它找到多少而增长** —— 务必设 `limit`。每次不同的爬取都要换一个新的 `Idempotency-Key`；重复使用会返回之前那个任务而不是新建。只有几个已知 URL 时 `post_firecrawl_batch_scrape` 更便宜，只要结构不要内容时 `post_firecrawl_map` 便宜得多。",
         "parameters": [
           {
             "in": "header",
@@ -619,7 +623,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_firecrawl_crawl"
       }
     },
     "/firecrawl/crawl/{jobId}": {
@@ -628,7 +633,7 @@
           "https://docs.firecrawl.dev/api-reference/endpoint/crawl"
         ],
         "summary": "轮询抓取任务。",
-        "description": "获取此前提交的抓取任务。重复调用直到 `status` 进入终态（completed、failed 或 cancelled）。完成时，抓取到的页面位于 `output` 中。",
+        "description": "按 `jobId` 取回 `post_firecrawl_crawl` 提交的爬取任务。返回和提交时相同的信封 —— `id`、`status`、`createdAt`、`completedAt`、`pricing`、`output`、`error`。反复轮询直到 `status` 为 `completed`、`failed` 或 `cancelled`；成功时 `output` 是页面数组，每项含 `markdown` 和 `metadata`。轮询本身又快又便宜，实测不到 1 秒。它只读取任务，不能发起任务。",
         "parameters": [
           {
             "in": "path",
@@ -651,7 +656,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "get_firecrawl_crawl_job"
       }
     },
     "/firecrawl/batch-scrape": {
@@ -660,7 +666,7 @@
           "https://docs.firecrawl.dev/api-reference/endpoint/batch-scrape"
         ],
         "summary": "提交一个异步的批量抓取任务。",
-        "description": "异步接口。在一个后台任务中抓取多个 URL。\n\n生命周期：\n1. 提交 —— POST /firecrawl/batch-scrape，带上批量请求体和必填的 `Idempotency-Key` 请求头。成功时 API 返回 HTTP 202 Accepted、指向任务资源的 `Location` 响应头（`/apis/v1/firecrawl/batch-scrape/{jobId}`），以及 `status` = queued 的 integration_async_job 响应体。\n2. 轮询 —— GET /apis/v1/firecrawl/batch-scrape/{jobId}，直到 `status` 进入终态（completed、failed 或 cancelled）。完成时，抓取到的文档位于 `output` 中。\n3. 列表 —— GET /apis/v1/firecrawl/batch-scrape（可选 `limit`、`status`、`cursor` 查询参数）。\n4. 取消 —— POST /apis/v1/firecrawl/batch-scrape/{jobId}/cancel。\n\n每个 URL 都必须是唯一的 HTTPS URL 且不能是 PDF；单个任务 1 到 1000 个 URL。每抓取一页计 1 个 Firecrawl credit；总费用随实际处理的页数增长。",
+        "description": "把多个 URL 作为一个后台任务批量抓取。`urls` 和 `Idempotency-Key` 必填；`maxConcurrency`、`onlyMainContent`、`includeTags`、`excludeTags`、`maxAge`、`minAge`、`timeout` 用于调节。异步。提交后返回 HTTP 202 和一个任务信封 —— `id`、`object`、`endpoint`、`status`、`createdAt`、`completedAt`、`pricing`、`output`、`error`，此时 `output` 还是 null。轮询 `get_firecrawl_batch_scrape_job` 直到终态；届时 `output` 是文档数组，每项含 `markdown` 和 `metadata`。手上有一批 URL 且不急着要的时候用它。急着要就用 `post_tavily_extract`，它同步返回小批量，实测约 1 秒；单个页面用 `post_firecrawl_scrape`。每批换一个新的 `Idempotency-Key`。",
         "parameters": [
           {
             "in": "header",
@@ -768,7 +774,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "post_firecrawl_batch_scrape"
       }
     },
     "/firecrawl/batch-scrape/{jobId}": {
@@ -777,7 +784,7 @@
           "https://docs.firecrawl.dev/api-reference/endpoint/batch-scrape"
         ],
         "summary": "轮询批量抓取任务。",
-        "description": "获取此前提交的批量抓取任务。重复调用直到 `status` 进入终态（completed、failed 或 cancelled）。完成时，抓取到的文档位于 `output` 中。",
+        "description": "按 `jobId` 取回 `post_firecrawl_batch_scrape` 提交的批量抓取任务。返回同一个信封 —— `id`、`status`、`createdAt`、`completedAt`、`pricing`、`output`、`error`。反复轮询直到终态；成功时 `output` 是文档数组，每项含 `markdown` 和 `metadata`。只读取任务，不能发起任务。",
         "parameters": [
           {
             "in": "path",
@@ -800,7 +807,8 @@
               }
             }
           }
-        }
+        },
+        "operationId": "get_firecrawl_batch_scrape_job"
       }
     }
   }

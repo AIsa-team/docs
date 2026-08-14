@@ -1,18 +1,9 @@
 ---
 title: "Exa Agent Runs"
-description: "以异步任务方式向 Exa Agent 提交研究任务——先提交，然后轮询该任务的状态和结果。"
+description: "把一个研究任务交给后台的 agent。"
 openapi: "openapi/zh/exa.json POST /exa/agent/runs"
 ---
 
 {/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
 
-提交一个自然语言研究 `query`，Exa Agent 会在后台执行并返回结构化结果。由于深度研究耗时较长，Agent Runs 是一个**异步任务**：先提交任务，然后轮询获取状态和结果。
-
-**生命周期**
-
-1. **提交** —— `POST /apis/v1/exa/agent/runs`，带上研究请求体和必填的 `Idempotency-Key` 请求头。成功后返回 `202 Accepted`、指向任务资源的 `Location` 响应头（`/apis/v1/exa/agent/runs/{jobId}`），以及一个 `status` 初始为 `queued` 的任务对象。使用相同的 key 和相同的请求体重复提交会返回原任务；相同 key 但请求体不同则返回 `409 idempotency_conflict`。
-2. **轮询** —— `GET /apis/v1/exa/agent/runs/{jobId}`，重复直到 `status` 进入终态：`completed`、`failed` 或 `cancelled`。当为 `completed` 时，研究结果位于 `output` 中。该提供商仅支持轮询——没有 webhook 或 SSE 回调。
-3. **列表** —— `GET /apis/v1/exa/agent/runs`（可选 `status` 过滤，支持分页）用于翻阅你的任务。
-4. **取消** —— `POST /apis/v1/exa/agent/runs/{jobId}/cancel` 请求取消；已取消的任务不计费。
-
-可以提供 `outputSchema` 校验结构化输出，用 `effort` 在深度和延迟之间权衡，用 `previousRunId` 继续之前的任务，并用 `input`/`dataSources` 处理行数据和 Exa Connect 来源。按每次任务固定 **$0.10** 计费。如果只需要一次性的带引用答案，而不是多步任务，请使用 [`post_exa-answer`](/zh/api-reference/search/post_exa-answer)。
+把一个研究任务交给后台的 agent。`query` 和 `Idempotency-Key` 必填；`effort` 在深度与耗时之间取舍，`outputSchema` 约束产出结构，`dataSources` 限定检索范围，`previousRunId` 可以接着上一次继续。异步。提交后返回 HTTP 202 和一个任务信封 —— `id`、`object`、`endpoint`、`status`、`createdAt`、`completedAt`、`pricing`、`output`、`error`，此时 `output` 还是 null。轮询 [`get_exa_agent_run`](/zh/api-reference/search/get_exa-agent-run) 直到终态；届时 `output` 含 `text`、`structured` 和 `grounding`。一个单句问题实测远不到一分钟就完成。按次固定计费 $0.10 —— `pricing.billingMode` 是 `fixed_request`，也就是说和 Firecrawl 的爬取不同，**价格不随它找到多少而增长**。当交付物本身就是一份报告时用它。想要一口气读完的答案，[`post_exa_answer`](/zh/api-reference/search/post_exa-answer) 约 2 秒就返回。每个不同的任务换一个新的 `Idempotency-Key`。
