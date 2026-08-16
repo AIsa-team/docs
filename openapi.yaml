@@ -88008,6 +88008,204 @@ paths:
       x-x402:
         path: /apis/v2/waveinflu/similar
         source: https://github.com/AIsa-team/aisa-proxy
+  /anthropic-websearch/search:
+    post:
+      tags:
+      - Other
+      summary: Model-grounded web search (Anthropic).
+      operationId: post_anthropic_websearch_search
+      description: 'Ask a question and get an answer that Claude wrote after searching the live web. Send a normal Messages
+        request — a `messages` array plus `max_tokens` — and the endpoint injects a fixed, server-pinned model and the `web_search`
+        tool for you; you cannot override the model or add tools, which keeps cost bounded. Claude decides when to search
+        (up to `max_uses` searches, default 5), reads the results, and answers with inline citations. The response is a standard
+        Anthropic Messages object: `content[]` contains `server_tool_use` (the queries issued), `web_search_tool_result` (the
+        sources found) and `text` blocks (the answer with `citations`), and `usage.server_tool_use.web_search_requests` reports
+        how many searches were billed. Billing is pay-as-you-go at exact cost: `web_search_requests × $0.01` plus the model''s
+        own token cost, with no markup; a failed search (HTTP 200 `web_search_tool_result_error`) is not billed. Use this
+        when you want a written, cited answer grounded in current web content — for open-web research that returns ranked
+        links and page text in one call use [`post_tavily_search`](/api-reference/search/post_tavily-search) instead, and
+        for the OpenAI-model equivalent see [`post_openai_websearch_search`](/api-reference/search/post_openai-websearch-search).'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - messages
+              - max_tokens
+              properties:
+                messages:
+                  type: array
+                  description: Conversation messages, same format as the Anthropic Messages API. The user turn holds your
+                    question.
+                  items:
+                    type: object
+                    properties:
+                      role:
+                        type: string
+                        enum:
+                        - user
+                        - assistant
+                      content:
+                        type: string
+                        description: Message text. Structured content blocks are also accepted.
+                  example:
+                  - role: user
+                    content: What are the three biggest AI announcements this week? Give one sentence each with sources.
+                max_tokens:
+                  type: integer
+                  description: Maximum number of tokens to generate in the answer. Required by the upstream Messages API.
+                  default: 1024
+                  example: 1024
+                system:
+                  type: string
+                  description: Optional system prompt to steer the answer's tone or format.
+            example:
+              max_tokens: 1024
+              messages:
+              - role: user
+                content: What are the three biggest AI announcements this week? Give one sentence each with sources.
+      responses:
+        '200':
+          description: A standard Anthropic Messages response. `content[]` interleaves the searches performed and the cited
+            answer; `usage.server_tool_use.web_search_requests` is the billed search count.
+          headers:
+            X-AISA-Web-Search-Count:
+              description: Number of web searches billed for this request.
+              schema:
+                type: integer
+            X-AISA-Price-USD:
+              description: Amount charged to your account for this request, in USD.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  type:
+                    type: string
+                    example: message
+                  role:
+                    type: string
+                    example: assistant
+                  stop_reason:
+                    type: string
+                    example: end_turn
+                  content:
+                    type: array
+                    description: 'Ordered blocks: server_tool_use (search queries), web_search_tool_result (sources), and
+                      text (the cited answer).'
+                    items:
+                      type: object
+                  usage:
+                    type: object
+                    properties:
+                      input_tokens:
+                        type: integer
+                      output_tokens:
+                        type: integer
+                      cache_read_input_tokens:
+                        type: integer
+                      cache_creation_input_tokens:
+                        type: integer
+                      server_tool_use:
+                        type: object
+                        properties:
+                          web_search_requests:
+                            type: integer
+                            description: Billed web search count.
+      x-x402:
+        path: /apis/v2/anthropic-websearch/search
+        source: https://github.com/AIsa-team/aisa-proxy
+  /openai-websearch/search:
+    post:
+      tags:
+      - Other
+      summary: Model-grounded web search (OpenAI).
+      operationId: post_openai_websearch_search
+      description: 'Ask a question and get an answer that an OpenAI model wrote after searching the live web. Send a Responses
+        request — an `input` string (or message array) — and the endpoint injects a fixed, server-pinned model and the `web_search`
+        tool for you; the model, tool and per-request search cap are server-controlled to keep cost bounded. The reply is
+        a standard OpenAI Responses object: `output[]` contains `web_search_call` items (each a search that ran) and a `message`
+        item with the answer text and URL citations, and the billed search count equals the number of `web_search_call` items.
+        Billing is pay-as-you-go at exact cost: `web_search_calls × $0.01` plus the model''s own token cost (fresh input =
+        `input_tokens − cached`), with no markup. Use this when you want a written, cited answer grounded in current web content
+        from an OpenAI model — for the Anthropic-model equivalent see [`post_anthropic_websearch_search`](/api-reference/search/post_anthropic-websearch-search),
+        and for raw ranked links with extracted page text use [`post_tavily_search`](/api-reference/search/post_tavily-search).'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - input
+              properties:
+                input:
+                  type: string
+                  description: Your question or instruction, same format as the OpenAI Responses API `input`. A message array
+                    is also accepted.
+                  example: What are the three biggest AI announcements this week? Give one sentence each with sources.
+                max_output_tokens:
+                  type: integer
+                  description: Optional cap on the number of tokens generated in the answer.
+                  example: 1024
+                instructions:
+                  type: string
+                  description: Optional high-level instructions to steer the answer's tone or format.
+            example:
+              input: What are the three biggest AI announcements this week? Give one sentence each with sources.
+              max_output_tokens: 1024
+      responses:
+        '200':
+          description: A standard OpenAI Responses object. `output[]` interleaves web_search_call items and the cited answer
+            message; the number of web_search_call items is the billed search count.
+          headers:
+            X-AISA-Web-Search-Count:
+              description: Number of web searches billed for this request.
+              schema:
+                type: integer
+            X-AISA-Price-USD:
+              description: Amount charged to your account for this request, in USD.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  object:
+                    type: string
+                    example: response
+                  status:
+                    type: string
+                    example: completed
+                  output:
+                    type: array
+                    description: 'Ordered items: web_search_call (searches performed) and message (the cited answer).'
+                    items:
+                      type: object
+                  usage:
+                    type: object
+                    properties:
+                      input_tokens:
+                        type: integer
+                      output_tokens:
+                        type: integer
+                      input_tokens_details:
+                        type: object
+                        properties:
+                          cached_tokens:
+                            type: integer
+      x-x402:
+        path: /apis/v2/openai-websearch/search
+        source: https://github.com/AIsa-team/aisa-proxy
   /youtube/search:
     get:
       summary: YouTube Search
