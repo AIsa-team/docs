@@ -148,7 +148,7 @@
         ],
         "operationId": "get_reddit_search",
         "summary": "Search Reddit",
-        "description": "Searches across all of Reddit for posts matching a query. Each post includes title, author, selftext, subreddit, score, ups, upvote_ratio, num_comments, created_utc, url, permalink, and is_video. Supports sort (relevance, new, top, comment_count), timeframe filtering, pagination via the after token, and a trim parameter for lighter responses.",
+        "description": "Searches every public subreddit for posts matching a query and returns posts plus an after token to page. Each post carries title, author, selftext, selftext_html, subreddit, score, ups, downs, upvote_ratio, num_comments, created_utc, created_at_iso, url, permalink, subreddit_subscribers, is_video, over_18 and spoiler. sort accepts relevance, new, top and comment_count, and timeframe narrows the window. Measured at 8 to 16 seconds and 8 to 26 KB, the slowest endpoint here. To stay inside one community use get_reddit_subreddit_search, which is faster and pages with cursor rather than after; to read one post's discussion use get_reddit_post_comments.",
         "parameters": [
           {
             "name": "query",
@@ -259,7 +259,7 @@
         ],
         "operationId": "get_reddit_subreddit",
         "summary": "Subreddit Posts",
-        "description": "Fetches posts from a subreddit with sorting and filtering options. Each post includes title, author, selftext, score, ups, upvote_ratio, num_comments, created_utc, url, permalink, subreddit_subscribers, and is_video. Supports sort (best, hot, new, top, rising), timeframe filtering, pagination via the after token, and a trim parameter for lighter responses.",
+        "description": "Returns the post stream of one subreddit with an after token to page. Posts carry the same fields as get_reddit_search, including title, author, selftext, score, ups, upvote_ratio, num_comments, created_utc, created_at_iso, url, permalink and subreddit_subscribers. sort accepts best, hot, new, top and rising. Important: timeframe is only accepted together with sort=top, and any other combination returns 400 rather than ignoring the parameter. Subreddit names are case-sensitive. Measured at about 18 KB for 24 posts. To search inside the same subreddit use get_reddit_subreddit_search, and for its metadata use get_reddit_subreddit_details.",
         "parameters": [
           {
             "name": "subreddit",
@@ -378,7 +378,7 @@
         ],
         "operationId": "get_reddit_subreddit_details",
         "summary": "Subreddit Details",
-        "description": "Retrieves metadata about a subreddit by name or URL. The subreddit name must be case-sensitive. Returns display_name, description, subscribers, weekly_active_users, weekly_contributions, rules, icon_img, header_img, advertiser_category, submit_text, and created_at.",
+        "description": "Returns metadata about one subreddit, by name or by URL: subreddit_id, display_name, subscribers, weekly_active_users, weekly_contributions, description, rules, icon_img, header_img, advertiser_category, submit_text and created_at. Use it to size a community or read its rules before posting anything elsewhere. The name is case-sensitive, so AskReddit resolves and askreddit does not. Measured at about 5 KB, the smallest response here. It returns no posts at all: for those call get_reddit_subreddit, or get_reddit_subreddit_search to query within the community.",
         "parameters": [
           {
             "name": "subreddit",
@@ -438,7 +438,7 @@
         ],
         "operationId": "get_reddit_subreddit_search",
         "summary": "Search Within Subreddit",
-        "description": "Searches within a specific subreddit for posts, comments, and media matching a query. Returns posts with title, votes, num_comments, url, and created_at; comments with author, body, votes, and parent post info; and media with title, media_type, image dimensions, and gallery_count. Supports sort, timeframe filtering, and cursor-based pagination.",
+        "description": "Searches inside one subreddit and returns matching posts with a cursor token to page. Posts carry title, author, selftext, score, ups, upvote_ratio, num_comments, created_utc, created_at_iso, url, permalink and is_video. Despite what sort suggests, every sort value returns posts and only posts: comments and media were confirmed absent from all five. Measured at about 5 KB and 2 seconds, faster than get_reddit_search, which searches all of Reddit and pages with after instead of cursor. For the replies under a result, pass its url to get_reddit_post_comments.",
         "parameters": [
           {
             "name": "subreddit",
@@ -631,7 +631,7 @@
         ],
         "operationId": "get_reddit_post_comments",
         "summary": "Post Comments",
-        "description": "Retrieves comments and post details from a Reddit post by URL. Returns the post with title, author, score, ups, upvote_ratio, num_comments, and created_utc, plus a comments array where each comment includes author, body, body_html, score, created_utc, parent_id, permalink, and nested replies. Supports cursor-based pagination for loading more comments and a trim parameter for lighter responses.",
+        "description": "Returns one post and its discussion from a post URL: post with title, author, selftext, score, ups, upvote_ratio, num_comments, created_utc, permalink, archived and locked, then comments, each with author, body, score, ups, downs, created_utc, parent_id, permalink and a nested replies object holding items and more. Paging is a third shape again: the top level carries more.has_more and more.cursor rather than the after of get_reddit_search or the cursor of get_reddit_subreddit_search. Measured at about 21 KB for 19 top-level comments. To find posts worth opening, start from get_reddit_search or get_reddit_subreddit.",
         "parameters": [
           {
             "name": "url",
