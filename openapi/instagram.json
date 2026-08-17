@@ -339,7 +339,7 @@
         ],
         "operationId": "get_instagram_profile",
         "summary": "Profile",
-        "description": "Retrieves comprehensive public Instagram profile information including biography, bio links, follower and following counts, verification status, and profile picture URLs. Also returns recent timeline posts with engagement metrics such as likes, comments, and video view counts, plus a list of related profiles. Useful for account overview, audience analysis, or discovering similar creators.",
+        "description": "Returns the full public profile for an Instagram handle, forwarded from Instagram's own web API. Counts sit under data.user.edge_followed_by.count and data.user.edge_follow.count, alongside biography, bio_links, external_url, full_name, is_verified, is_private, highlight_reel_count, the numeric id, and the twelve most recent posts under data.user.edge_owner_to_timeline_media.edges. Measured at about 380 KB; trim=true saves under one percent, so do not rely on it to shrink the payload. When the numeric id is already known, get_instagram_basic_profile returns the same headline numbers in about 4 KB.",
         "parameters": [
           {
             "name": "handle",
@@ -568,7 +568,7 @@
         ],
         "operationId": "get_instagram_basic_profile",
         "summary": "Basic Profile",
-        "description": "Fetches a lightweight Instagram profile summary by user ID, returning username, full name, biography, profile picture URL, verification status, follower count, following count, media count, and account privacy and type. Ideal for quick lookups or enrichment when you already have the numeric user ID.",
+        "description": "Returns a compact public profile for a numeric Instagram user id, about 4 KB against the 380 KB of get_instagram_profile. Flat, already-normalised fields: username, full_name, biography, follower_count, following_count, is_verified, is_private, category, profile_pic_url, hd_profile_pic_url_info, bio_links, external_url and pk. Prefer this endpoint whenever the id is in hand; obtain it from data.user.id in get_instagram_profile, from id in get_instagram_search_profiles, or from the owner of any post. Use get_instagram_profile only when a handle is all that is available.",
         "parameters": [
           {
             "name": "userId",
@@ -664,7 +664,7 @@
         ],
         "operationId": "get_instagram_user_posts",
         "summary": "User Posts",
-        "description": "Returns a paginated feed of a user's public Instagram posts, including reels, photos, videos, and carousels. Each item includes media type, shortcode, caption text, like count, comment count, play count, video URLs, image URLs, and tagged users. Play counts reflect Instagram-only views and exclude cross-posted Facebook views. Supports cursor-based pagination via next_max_id for scrolling through the full timeline.",
+        "description": "Returns one page of a public account's timeline, reels and photos and carousels alike, as raw Instagram media objects under items. Page with next_max_id and stop on more_available; num_results reports the page size. Each item carries media_type, code, caption, like_count, comment_count, taken_at, image_versions2 and video_versions among roughly two hundred internal flags. Measured at 632 KB per page, the largest response in this API, and trim=true only reduces it to 523 KB. For reels alone use get_instagram_user_reels, and for one known post use get_instagram_post; both return the same raw shape, so neither is a way to get a smaller payload.",
         "parameters": [
           {
             "name": "handle",
@@ -936,7 +936,7 @@
         ],
         "operationId": "get_instagram_user_reels",
         "summary": "User Reels",
-        "description": "Returns a paginated list of a user's public Instagram reels (short-form videos). Each reel includes its shortcode, play count, like count, comment count, video versions with download URLs, thumbnail image, and owner info. Note that reel captions are not returned by this endpoint. Play counts are Instagram-only views and exclude cross-posted Facebook views. Supports cursor-based pagination via max_id; providing a user_id instead of a handle yields faster responses.",
+        "description": "Returns one page of a public account's reels as raw Instagram media objects under items[].media, with paging_info.max_id for the following page. Each reel carries code, caption, like_count, comment_count, video_versions, image_versions2 and clips_metadata, whose original_sound_info.audio_asset_id is exactly the id that get_instagram_song_reels expects. Pass user_id rather than handle for a faster response. Measured at 594 KB per page. Use get_instagram_user_posts for the whole timeline including photos and carousels.",
         "parameters": [
           {
             "name": "user_id",
@@ -1190,7 +1190,7 @@
         ],
         "operationId": "get_instagram_user_highlights",
         "summary": "User Highlights",
-        "description": "Lists all story highlight albums for an Instagram user. Each highlight includes its ID, title, cover thumbnail URL, and owner info with username and profile picture. Accepts either a user_id or handle; providing user_id yields faster responses.",
+        "description": "Lists the story highlight albums on a public profile. Returns highlights, each with the numeric id, title, cover_media.thumbnail_src, cover_media_cropped_thumbnail and owner. Small and quick at about 6 KB, which makes it a cheap way to see whether an account keeps highlights at all. This is the only source of a highlight id, and get_instagram_user_highlight_detail requires the bare numeric id exactly as returned here. Pass user_id rather than handle for a faster response.",
         "parameters": [
           {
             "name": "user_id",
@@ -1256,7 +1256,7 @@
         ],
         "operationId": "get_instagram_user_highlight_detail",
         "summary": "Highlight Detail",
-        "description": "Fetches the full contents of a specific Instagram story highlight album by its ID. Returns the highlight's cover image, title, user info, and an items array containing each story with its media type, image or video URLs, dimensions, timestamp, and sticker/interactive element data. Useful for archiving or analyzing individual highlight reels.",
+        "description": "Returns the stories inside one highlight album: reel_type, latest_reel_media, the owning user, and items, each a raw Instagram story media object. Pass the bare numeric id from get_instagram_user_highlights. The response echoes that id back in the prefixed form highlight:<id>, and feeding the prefixed form to this endpoint returns 404 with a message blaming deletion or a private account, which points at the wrong cause; send the bare number. Measured at 630 KB for an album of 38 stories, so size scales with the album.",
         "parameters": [
           {
             "name": "id",
@@ -1498,7 +1498,7 @@
         ],
         "operationId": "get_instagram_user_embed",
         "summary": "User Embed",
-        "description": "Returns the raw HTML embed snippet for an Instagram user's profile widget. The response contains a single html string that can be inserted into a webpage to render an embeddable Instagram profile card. Requires the user's handle as input.",
+        "description": "Returns Instagram's official profile embed widget for a handle as a single html string, ready to drop into a web page. Measured at about 206 KB, nearly all of it inlined markup and styling, so treat the result as something to store or render rather than something to read. It carries no structured profile data at all: for follower counts, biography or bio links use get_instagram_basic_profile when the numeric id is known, or get_instagram_profile when only the handle is.",
         "parameters": [
           {
             "name": "handle",
@@ -1536,7 +1536,7 @@
         ],
         "operationId": "get_instagram_post",
         "summary": "Post",
-        "description": "Fetches detailed metadata for a single Instagram post or reel by shortcode or URL. Returns caption text, like count, comment count, video URL, video play count, video duration, display images, owner info, tagged users, and carousel sidecar children when applicable. Play counts are Instagram-only views and exclude cross-posted Facebook views.",
+        "description": "Returns full metadata for one public post or reel identified by its URL, under data.xdt_shortcode_media: shortcode, is_video, video_url, video_duration, has_audio, display_url, dimensions, accessibility_caption, edge_media_to_caption for the caption text, and owner. Measured at about 197 KB. Setting download_media=true also mirrors the media to permanent storage and costs ten credits rather than one, so leave it off unless the files are needed. For the comment thread call get_instagram_post_comments with the same URL, and for the spoken words in a video call get_instagram_media_transcript.",
         "parameters": [
           {
             "name": "url",
@@ -1726,7 +1726,7 @@
         ],
         "operationId": "get_instagram_post_comments",
         "summary": "Post Comments",
-        "description": "Retrieves comments on a public Instagram post or reel. Each comment includes the comment text, creation timestamp, and commenter details such as username, user ID, verification status, and profile picture URL. Supports cursor-based pagination to load additional comment pages.",
+        "description": "Returns the comments on a public post or reel by URL in an already-normalised shape: comments, each with id, text, comment_like_count, child_comment_count, created_at and a nested user, plus cursor to page. Measured at about 10 KB, one of the few small responses in this API. Only top-level comments are returned; child_comment_count reports how many replies a comment has but the replies themselves are not included, and there is no endpoint that expands them. For the post itself, its caption, view counts and video URL, call get_instagram_post with the same URL.",
         "parameters": [
           {
             "name": "url",
@@ -1792,7 +1792,7 @@
         ],
         "operationId": "get_instagram_media_transcript",
         "summary": "Media Transcript",
-        "description": "Generates an AI-powered speech-to-text transcription for an Instagram video post or reel. The video must be under 2 minutes long. Returns a transcripts array with each item's shortcode and transcribed text; carousel posts produce one transcript per video slide. Expect 10-30 second response times, and null when no speech is detected.",
+        "description": "Transcribes the speech in a public Instagram video or reel and returns transcripts, each with id, shortcode and the transcribed text. The target must be a video under two minutes long: a photo post returns 400 bad_request, so when the URL's type is unknown check is_video with get_instagram_post first. Measured at 13 seconds, the slowest call in this API, for about 1 KB back. For the caption the author wrote rather than the words spoken in the video, read edge_media_to_caption from get_instagram_post.",
         "parameters": [
           {
             "name": "url",
@@ -1835,7 +1835,7 @@
         ],
         "operationId": "get_instagram_reels_trending",
         "summary": "Trending Reels",
-        "description": "Fetches trending reels from Instagram's public instagram.com/reels page. Instagram only gives a small batch at a time and the results can overlap, so call this endpoint over and over when you want more. Each call should return new-ish results, but expect some duplicates because that is how Instagram's reels page behaves too. Returns `reels`, an array of reel objects with shortcode, URL, caption, media URLs, engagement counts when Instagram exposes them, and user info.",
+        "description": "Returns the reels Instagram publishes on its public instagram.com/reels page, in a normalised shape: reels, each with shortcode, url, caption, like_count, comment_count, video_url, image_url, media_type, taken_at and the owning user. Instagram serves a small batch at a time and successive batches overlap, so call repeatedly and de-duplicate on shortcode. Measured at 30 reels and about 411 KB, where play_count and ig_play_count came back null on every item, unlike get_instagram_reels_search which populates them. Takes no parameters and cannot be filtered; to search by topic use get_instagram_reels_search.",
         "parameters": [],
         "responses": {
           "200": {
@@ -1912,7 +1912,7 @@
         ],
         "operationId": "get_instagram_reels_search",
         "summary": "Search Reels",
-        "description": "Searches for Instagram reels matching a keyword or phrase via Google Search, bypassing Instagram's login-gated search. Returns a list of reels with shortcode, caption, thumbnail, video URL, play count, like count, comment count, video duration, owner details, location, and audio attribution info. Play counts are Instagram-only views and exclude cross-posted Facebook views. Supports page-based pagination for browsing additional results.",
+        "description": "Searches reels by keyword through Google rather than Instagram's login-gated search, returning reels with shortcode, url, caption, video_url, video_duration, video_play_count, video_view_count, like_count, comment_count, owner, location and taken_at, plus next_page. Because the index is Google's, coverage is what Google has indexed publicly, not everything on Instagram, and date_posted narrows to a relative window. Measured at about 87 KB and 8 seconds, with all four engagement counts populated. Use get_instagram_search_hashtag to search a specific hashtag, and get_instagram_reels_trending for what is popular right now with no query at all.",
         "parameters": [
           {
             "name": "query",
@@ -2052,7 +2052,7 @@
         ],
         "operationId": "get_instagram_search_hashtag",
         "summary": "Search Hashtag",
-        "description": "Finds public Instagram posts for a hashtag using Google Search, then returns post details such as caption, play count when available, like count, comment count, owner, and post time. Results depend on what Google has indexed, so this is best-effort and not a complete Instagram-native hashtag search. Pass media_type=reels if you only want reels. Use date_posted for recent posts and pass the returned cursor to fetch the next page.",
+        "description": "Finds public posts carrying a hashtag through Google, returning hashtag, media_type, cursor and posts in the same normalised shape as get_instagram_reels_search: shortcode, url, caption, like_count, comment_count, video_play_count, video_view_count, owner, location and taken_at. The leading # is optional. Set media_type=reels to narrow to reels, or all for posts and reels together. Note that cursor here is the next Google results page number rather than an Instagram cursor. Measured at about 78 KB for ten posts. To search caption keywords rather than a hashtag, use get_instagram_reels_search.",
         "parameters": [
           {
             "name": "hashtag",
@@ -2193,7 +2193,7 @@
         ],
         "operationId": "get_instagram_search_profiles",
         "summary": "Search Profiles",
-        "description": "Searches Google for public Instagram results matching a keyword or phrase, then returns matching public profiles. Profile-page matches are marked matched_from=profile. Reel/post caption matches are enriched into the creator profile and marked matched_from=caption. This is best-effort and depends on what Google has indexed; it is not a complete native Instagram profile search.",
+        "description": "Searches Google for public Instagram profiles matching a keyword or bio phrase and returns profiles with username, full_name, biography, follower_count, following_count, media_count, is_verified, is_private, category_name, external_url, bio_links, url, the numeric id, and matched_from, which records whether the hit came from a profile page or from a post. google_title and google_description carry the underlying search result. Measured at about 18 KB and 13 seconds. The numeric id feeds get_instagram_basic_profile directly. To search posts rather than people, use get_instagram_search_hashtag or get_instagram_reels_search.",
         "parameters": [
           {
             "name": "query",
@@ -2273,7 +2273,7 @@
         ],
         "operationId": "get_instagram_song_reels",
         "summary": "Song Reels",
-        "description": "Fetches the reels Instagram exposes for an audio page like instagram.com/reels/audio/{audio_id}/. Pass the audio_id from that URL. Use cursor from the previous response to request the next page when Instagram returns one.",
+        "description": "Returns the reels that use one audio track, as raw Instagram media objects under reels, with cursor and has_more for paging. There are two confirmed ways to obtain audio_id: the number in an instagram.com/reels/audio/<id>/ URL, and clips_metadata.original_sound_info.audio_asset_id on any reel returned by get_instagram_user_reels. Measured at about 177 KB for five reels, in the same raw shape as get_instagram_user_reels rather than the normalised shape of the search endpoints. To find reels by keyword instead of by sound, use get_instagram_reels_search.",
         "parameters": [
           {
             "name": "audio_id",
