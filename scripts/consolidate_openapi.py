@@ -74,6 +74,7 @@ FILE_TAG_MAP = {
     "dataforseo.json": "SEO & Search Data",
     "agentmail.json": "Agent Email",
     "reddit.json": "Reddit",
+    "instagram.json": "Instagram",
 }
 
 TAG_DESCRIPTIONS = {
@@ -91,6 +92,7 @@ TAG_DESCRIPTIONS = {
     "SEO & Search Data": "SERP, keywords, backlinks, on-page, business listings, and AI optimization via DataForSEO",
     "Agent Email": "AI-agent email accounts, inboxes, threads, drafts, and message send/reply via AgentMail.to",
     "Reddit": "Read public Reddit data — search posts, browse subreddits, and fetch comments",
+    "Instagram": "Read public Instagram data — profiles, posts, reels, highlights, comments, and Google-backed search",
 }
 
 # Server URLs used by the unified spec — keep in sync with the
