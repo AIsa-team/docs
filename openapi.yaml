@@ -71,7 +71,7 @@ tags:
 - name: WaveInflu
   description: ''
 - name: Web & News Search
-  description: Search the web and news via Tavily
+  description: Search the web and news — Tavily search, Oxylabs AI-answer-engine queries, and model-grounded search
 - name: YouTube Search
   description: Search YouTube videos
 paths:
@@ -76517,11 +76517,15 @@ paths:
   /edinet/documents.json:
     get:
       summary: List EDINET documents
-      description: Query the EDINET filing list for a given file date. Returns metadata only when type=1, or metadata plus
-        filing results when type=2.
-      operationId: getEdinetDocuments
+      description: Lists every disclosure filed with Japan's EDINET on one date. date is required (YYYY-MM-DD). type=2 returns
+        the filings under results — docID, filerName, secCode, JCN, docTypeCode, docDescription, submitDateTime, periodStart
+        and periodEnd per filing — while type=1 returns metadata only, with the day's count under metadata.resultset.count
+        and no results array. Measured at 612 KB for a typical business day (648 filings), and there are no filter parameters,
+        so type=2 always returns the whole day; check the count with type=1 first when in doubt. About two thirds of filings
+        carry a secCode (listed companies), the rest are funds and unlisted filers. A filing's docID feeds get_edinet_document_download.
+      operationId: get_edinet_documents
       tags:
-      - Other
+      - Financial Data
       parameters:
       - name: date
         in: query
@@ -76588,11 +76592,14 @@ paths:
   /edinet/documents/{docID}:
     get:
       summary: Download an EDINET document
-      description: Download a specific EDINET document by docID. The returned file type is selected by the type query parameter
-        and the actual success payload must be interpreted from Content-Type.
-      operationId: getEdinetDocumentDownload
+      description: 'Downloads one filing by docID, taken from get_edinet_documents. The success response is a binary file,
+        not JSON: type=1 returns the filing body and audit report as a ZIP archive (measured 11.9 KB, content-type application/octet-stream),
+        type=2 the PDF (measured 15.0 KB, application/pdf). Errors still come back as JSON, so check the response content
+        type before parsing. Because a tool result cannot usefully carry a binary payload, this endpoint stays REST-only:
+        over MCP, stop at the docID from get_edinet_documents and fetch the file over REST.'
+      operationId: get_edinet_document_download
       tags:
-      - Other
+      - Financial Data
       parameters:
       - name: docID
         in: path
@@ -81340,7 +81347,7 @@ paths:
   /oxylabs/ai-search:
     post:
       tags:
-      - Other
+      - Web & News Search
       summary: Query an AI answer engine for GEO/AEO visibility.
       description: Synchronous passthrough to the upstream Oxylabs Realtime endpoint (POST /v1/queries). Pick an AI answer
         engine with `source` and send the parameters that source expects; the request body is passed through unchanged. The
@@ -81476,6 +81483,7 @@ paths:
                                               type: string
                                             url:
                                               type: string
+      operationId: post_oxylabs_ai_search
       x-x402:
         path: /apis/v2/oxylabs/ai-search
         source: https://github.com/AIsa-team/aisa-proxy
@@ -88061,7 +88069,7 @@ paths:
   /anthropic-websearch/search:
     post:
       tags:
-      - Other
+      - Web & News Search
       summary: Model-grounded web search (Anthropic).
       operationId: post_anthropic_websearch_search
       description: 'Ask a question and get an answer that Claude wrote after searching the live web. Send a normal Messages
@@ -88174,7 +88182,7 @@ paths:
   /openai-websearch/search:
     post:
       tags:
-      - Other
+      - Web & News Search
       summary: Model-grounded web search (OpenAI).
       operationId: post_openai_websearch_search
       description: 'Ask a question and get an answer that an OpenAI model wrote after searching the live web. Send a Responses
