@@ -76,6 +76,9 @@ FILE_TAG_MAP = {
     "reddit.json": "Reddit",
     "instagram.json": "Instagram",
     "pinterest.json": "Pinterest",
+    "oxylabs.json": "Web & News Search",
+    "websearch.json": "Web & News Search",
+    "edinet.json": "Financial Data",
 }
 
 TAG_DESCRIPTIONS = {
@@ -84,7 +87,7 @@ TAG_DESCRIPTIONS = {
     "Video Generation": "Generate videos using AI models (Wan family)",
     "Twitter / X": "Read, search, and interact with Twitter/X — profiles, tweets, communities, trends, and engagement",
     "YouTube Search": "Search YouTube videos",
-    "Web & News Search": "Search the web and news via Tavily",
+    "Web & News Search": "Search the web and news — Tavily search, Oxylabs AI-answer-engine queries, and model-grounded search",
     "Scholar Search": "Search academic papers and research",
     "Financial Data": "Stock prices, financials, analyst estimates, SEC filings, and macro data",
     "Crypto Data": "Cryptocurrency prices, markets, and exchange data via CoinGecko",

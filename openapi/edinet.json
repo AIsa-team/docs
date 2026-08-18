@@ -19,9 +19,11 @@
     "/edinet/documents.json": {
       "get": {
         "summary": "List EDINET documents",
-        "description": "Query the EDINET filing list for a given file date. Returns metadata only when type=1, or metadata plus filing results when type=2.",
-        "operationId": "getEdinetDocuments",
-        "tags": ["EDINET"],
+        "description": "Lists every disclosure filed with Japan's EDINET on one date. date is required (YYYY-MM-DD). type=2 returns the filings under results — docID, filerName, secCode, JCN, docTypeCode, docDescription, submitDateTime, periodStart and periodEnd per filing — while type=1 returns metadata only, with the day's count under metadata.resultset.count and no results array. Measured at 612 KB for a typical business day (648 filings), and there are no filter parameters, so type=2 always returns the whole day; check the count with type=1 first when in doubt. About two thirds of filings carry a secCode (listed companies), the rest are funds and unlisted filers. A filing's docID feeds get_edinet_document_download.",
+        "operationId": "get_edinet_documents",
+        "tags": [
+          "EDINET"
+        ],
         "parameters": [
           {
             "name": "date",
@@ -30,7 +32,9 @@
             "schema": {
               "type": "string",
               "format": "date",
-              "examples": ["2026-07-23"]
+              "examples": [
+                "2026-07-23"
+              ]
             },
             "description": "File date in YYYY-MM-DD format."
           },
@@ -40,7 +44,10 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "enum": [1, 2],
+              "enum": [
+                1,
+                2
+              ],
               "default": 1
             },
             "description": "Response mode: 1 for metadata only, 2 for metadata plus filing list."
@@ -64,11 +71,21 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "seqNumber": { "type": "integer" },
-                          "docID": { "type": "string" },
-                          "filerName": { "type": "string" },
-                          "docTypeCode": { "type": "string" },
-                          "submitDateTime": { "type": "string" }
+                          "seqNumber": {
+                            "type": "integer"
+                          },
+                          "docID": {
+                            "type": "string"
+                          },
+                          "filerName": {
+                            "type": "string"
+                          },
+                          "docTypeCode": {
+                            "type": "string"
+                          },
+                          "submitDateTime": {
+                            "type": "string"
+                          }
                         }
                       }
                     }
@@ -77,24 +94,34 @@
               }
             }
           },
-          "400": { "description": "Invalid request parameters." },
-          "401": { "description": "Invalid or missing AIsa API key." },
-          "429": { "description": "Rate limit exceeded." },
-          "500": { "description": "Gateway or upstream failure." }
+          "400": {
+            "description": "Invalid request parameters."
+          },
+          "401": {
+            "description": "Invalid or missing AIsa API key."
+          },
+          "429": {
+            "description": "Rate limit exceeded."
+          },
+          "500": {
+            "description": "Gateway or upstream failure."
+          }
         },
         "x-aisa-path": "/apis/v1/edinet/documents.json",
         "x-provider-cost-micros-usd": 0,
         "x-customer-pricing": {
-          "normal": 0.00001
+          "normal": 1e-05
         }
       }
     },
     "/edinet/documents/{docID}": {
       "get": {
         "summary": "Download an EDINET document",
-        "description": "Download a specific EDINET document by docID. The returned file type is selected by the type query parameter and the actual success payload must be interpreted from Content-Type.",
-        "operationId": "getEdinetDocumentDownload",
-        "tags": ["EDINET"],
+        "description": "Downloads one filing by docID, taken from get_edinet_documents. The success response is a binary file, not JSON: type=1 returns the filing body and audit report as a ZIP archive (measured 11.9 KB, content-type application/octet-stream), type=2 the PDF (measured 15.0 KB, application/pdf). Errors still come back as JSON, so check the response content type before parsing. Because a tool result cannot usefully carry a binary payload, this endpoint stays REST-only: over MCP, stop at the docID from get_edinet_documents and fetch the file over REST.",
+        "operationId": "get_edinet_document_download",
+        "tags": [
+          "EDINET"
+        ],
         "parameters": [
           {
             "name": "docID",
@@ -102,7 +129,9 @@
             "required": true,
             "schema": {
               "type": "string",
-              "examples": ["S1000000"]
+              "examples": [
+                "S1000000"
+              ]
             },
             "description": "Document management identifier from the document list API."
           },
@@ -112,7 +141,13 @@
             "required": true,
             "schema": {
               "type": "integer",
-              "enum": [1, 2, 3, 4, 5]
+              "enum": [
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
             },
             "description": "File type to download: 1 for filing body and audit report ZIP, 2 for PDF, 3 for alternate document and attachments ZIP, 4 for English document ZIP, 5 for CSV ZIP converted from XBRL."
           }
@@ -145,16 +180,26 @@
               }
             }
           },
-          "400": { "description": "Invalid request parameters." },
-          "401": { "description": "Invalid or missing AIsa API key." },
-          "404": { "description": "Document not found." },
-          "429": { "description": "Rate limit exceeded." },
-          "500": { "description": "Gateway or upstream failure." }
+          "400": {
+            "description": "Invalid request parameters."
+          },
+          "401": {
+            "description": "Invalid or missing AIsa API key."
+          },
+          "404": {
+            "description": "Document not found."
+          },
+          "429": {
+            "description": "Rate limit exceeded."
+          },
+          "500": {
+            "description": "Gateway or upstream failure."
+          }
         },
         "x-aisa-path": "/apis/v1/edinet/documents/{docID}",
         "x-provider-cost-micros-usd": 0,
         "x-customer-pricing": {
-          "normal": 0.00001
+          "normal": 1e-05
         }
       }
     }
