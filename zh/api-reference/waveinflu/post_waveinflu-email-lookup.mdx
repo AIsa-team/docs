@@ -1,5 +1,24 @@
 ---
 title: "电子邮件查询"
-description: "提交 TikTok、Instagram 或 YouTube 创作者个人资料 URL，以获取联系邮箱、标准化的创作者信息和剩余配额。"
+description: "由主页 URL 查询单个 TikTok、Instagram 或 YouTube 创作者的联系邮箱。"
 openapi: "openapi/zh/waveinflu.json POST /waveinflu/email-lookup"
 ---
+
+{/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
+
+根据 TikTok、Instagram 或 YouTube 创作者的主页 URL 查询联系邮箱。返回从 URL 解析出的 `platform`、`username`、`profileLink`、`platformUserId`、`region`，主邮箱 `email`，包含全部命中地址的 `emails` 数组，以及外部联系方式数组 `contacts`（每项形如 `{url, type}`，包括个人站点、WhatsApp 链接），另有以积分计的 `quota.cost` 和 `quota.remainingQuota`。
+
+实测单个 Instagram 创作者响应 **533 字节、约 2 秒**。
+
+创作者未公开邮箱时 `email` 为 null、`emails` 为空数组 —— 这是正常结果，不是错误。
+
+每次调用只处理一个创作者。若需要先获得一批创作者，请用 [`post_waveinflu_similar_creators`](/zh/api-reference/waveinflu/post_waveinflu-similar) —— 它对多数匹配已直接返回 `email`，本接口只需用于 `email` 为 null 的结果，以及相似创作者接口不覆盖的 Instagram 创作者。
+
+## 示例
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/waveinflu/email-lookup" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.instagram.com/onkimia/"}'
+```

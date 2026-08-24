@@ -72,7 +72,17 @@
           "contacts": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "description": "外部联系链接，例如个人站点或 WhatsApp 链接。"
+                },
+                "type": {
+                  "type": "string",
+                  "description": "链接分类，例如 website。"
+                }
+              }
             },
             "description": "查询过程中识别出的外部联系人链接。"
           },
@@ -129,10 +139,24 @@
             "type": "string"
           },
           "channelId": {
-            "type": "string"
+            "type": "string",
+            "description": "仅 YouTube。频道 ID。"
           },
           "channelTitle": {
-            "type": "string"
+            "type": "string",
+            "description": "仅 YouTube。频道展示名。"
+          },
+          "userId": {
+            "type": "string",
+            "description": "仅 TikTok。平台侧创作者 ID。"
+          },
+          "uniqueId": {
+            "type": "string",
+            "description": "仅 TikTok。不含前导 @ 的创作者 handle。"
+          },
+          "nickname": {
+            "type": "string",
+            "description": "仅 TikTok。创作者展示名。"
           },
           "description": {
             "type": "string"
@@ -158,7 +182,8 @@
             "type": "number"
           },
           "averageLikeCount": {
-            "type": "number"
+            "type": "number",
+            "description": "仅 TikTok。YouTube 结果不返回该字段。"
           },
           "lastPublishedTime": {
             "type": "number"
@@ -179,6 +204,19 @@
           },
           "usedQuota": {
             "type": "number"
+          },
+          "consumedQuota": {
+            "type": "number",
+            "description": "累计已消耗积分，与 usedQuota 相同。"
+          },
+          "status": {
+            "type": "string",
+            "description": "配额状态，例如 active。"
+          },
+          "expiresAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "配额过期时间，永不过期时为 null。"
           },
           "remainingQuota": {
             "type": "number"
@@ -256,8 +294,8 @@
     "/waveinflu/email-lookup": {
       "post": {
         "summary": "电子邮件查询",
-        "description": "提交 TikTok、Instagram 或 YouTube 创作者个人资料 URL，获取标准化的创作者信息、联系邮箱和剩余配额。",
-        "operationId": "waveinflu-email-lookup",
+        "description": "根据 TikTok、Instagram 或 YouTube 创作者的主页 URL 查询联系邮箱。返回从 URL 解析出的 `platform`、`username`、`profileLink`、`platformUserId`、`region`，主邮箱 `email`，包含全部命中地址的 `emails` 数组，以及外部联系方式数组 `contacts`（每项形如 `{url, type}`，包括个人站点、WhatsApp 链接），另有以积分计的 `quota.cost` 和 `quota.remainingQuota`。实测单个 Instagram 创作者响应 533 字节、约 2 秒。创作者未公开邮箱时 `email` 为 null、`emails` 为空数组，这是正常结果而非错误。每次调用只处理一个创作者。若需要先获得一批创作者，请用 `post_waveinflu_similar_creators`——它对多数匹配已直接返回 `email`，本接口只需用于 `email` 为 null 的结果，以及相似创作者接口不覆盖的 Instagram 创作者。",
+        "operationId": "post_waveinflu_email_lookup",
         "requestBody": {
           "required": true,
           "content": {
@@ -308,8 +346,8 @@
     "/waveinflu/similar": {
       "post": {
         "summary": "相似创作者",
-        "description": "提交种子创作者个人资料 URL 和/或内容方向。Wave AI 将返回匹配的 YouTube 或 TikTok 创作者及相似度评分。",
-        "operationId": "waveinflu-similar",
+        "description": "在 YouTube 或 TikTok 上按种子主页、自然语言内容方向或两者结合查找相似创作者。`platform` 为必填；`seedProfileUrl` 与 `contentDirection`（最长 800 字符）可任选其一或同时提供，另有 `limit`（1–100，默认 25）和可选的 `filters`（地区、语言、粉丝数与平均播放量区间）。响应回显系统判定的 `mode`——仅种子为 `homepage`、仅方向为 `direction`、两者兼有为 `homepage_direction`——且仅在种子解析成功时才有 `sourceUserId`。每条匹配包含 `username`、`platformHandle`、`description`、`email`、`profileUrl`、`avatar`、`similarityScore`（按降序排列）、`followerCount`、`averagePlayCount`、`lastPublishedTime`、`region` 和 `language`。字段结构随平台不同：YouTube 结果额外带 `channelId` 和 `channelTitle`；TikTok 结果额外带 `userId`、`uniqueId`、`nickname` 和 `averageLikeCount`，这几个字段 YouTube 一个都不返回。实测 5 条 YouTube 匹配 4.2 KB（约 8 秒）、3 条 TikTok 匹配 2.5 KB。多数匹配已自带 `email`；对 `email` 为 null 的结果，以及本接口不覆盖的 Instagram 创作者，请改用 `post_waveinflu_email_lookup`。",
+        "operationId": "post_waveinflu_similar_creators",
         "requestBody": {
           "required": true,
           "content": {

@@ -1,5 +1,32 @@
 ---
 title: "相似创作者"
-description: "提交种子创作者个人资料 URL 和/或内容方向。Wave AI 将返回匹配的 YouTube 或 TikTok 创作者，并按相似度得分排序。"
+description: "按种子主页、内容方向或两者结合，匹配 YouTube 或 TikTok 创作者。"
 openapi: "openapi/zh/waveinflu.json POST /waveinflu/similar"
 ---
+
+{/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
+
+在 YouTube 或 TikTok 上按种子主页、自然语言内容方向或两者结合查找相似创作者。`platform` 为必填；`seedProfileUrl` 与 `contentDirection`（最长 800 字符）可任选其一或同时提供，另有 `limit`（1–100，默认 25）和可选的 `filters`（地区、语言、粉丝数与平均播放量区间）。
+
+响应回显系统判定的 `mode` —— 仅种子为 `homepage`、仅方向为 `direction`、两者兼有为 `homepage_direction` —— 且仅在种子解析成功时才有 `sourceUserId`。
+
+每条匹配包含 `username`、`platformHandle`、`description`、`email`、`profileUrl`、`avatar`、`similarityScore`（按降序排列）、`followerCount`、`averagePlayCount`、`lastPublishedTime`、`region` 和 `language`。
+
+**字段结构随平台不同。** YouTube 结果额外带 `channelId` 和 `channelTitle`；TikTok 结果额外带 `userId`、`uniqueId`、`nickname` 和 `averageLikeCount`，这几个字段 YouTube 一个都不返回。
+
+实测 **5 条 YouTube 匹配 4.2 KB**（约 8 秒）、**3 条 TikTok 匹配 2.5 KB**。
+
+多数匹配已自带 `email`。对 `email` 为 null 的结果，以及本接口不覆盖的 Instagram 创作者，请改用 [`post_waveinflu_email_lookup`](/zh/api-reference/waveinflu/post_waveinflu-email-lookup)。
+
+## 示例
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/waveinflu/similar" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "platform": "youtube",
+        "limit": 10,
+        "seedProfileUrl": "https://www.youtube.com/@mkbhd"
+      }'
+```
