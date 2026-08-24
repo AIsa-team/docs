@@ -302,14 +302,12 @@
       "type_inboxes_UpdateMetadata": {
         "type": "object",
         "additionalProperties": {
-          "oneOf": [
+          "allOf": [
             {
               "$ref": "#/components/schemas/type_inboxes_MetadataValue"
-            },
-            {
-              "type": "null"
             }
-          ]
+          ],
+          "nullable": true
         },
         "description": "Custom key-value pairs to merge into the inbox's existing metadata. A\nvalue may be a string, number, boolean, or null. Setting a key to null\nremoves it. Up to 256 keys; keys and string values are each limited to\n256 characters.",
         "title": "UpdateMetadata"
@@ -321,15 +319,13 @@
             "$ref": "#/components/schemas/type_inboxes_DisplayName"
           },
           "metadata": {
-            "oneOf": [
+            "description": "Metadata to merge into the inbox's existing metadata. Keys you include\nare added or overwritten; keys you omit are left unchanged. To remove a\nsingle key, send it with a null value. To clear all metadata, send\n`metadata` as null. Sending an empty object is rejected; use null to\nclear. Each update must include at least one of `display_name` or\n`metadata`.",
+            "allOf": [
               {
                 "$ref": "#/components/schemas/type_inboxes_UpdateMetadata"
-              },
-              {
-                "type": "null"
               }
             ],
-            "description": "Metadata to merge into the inbox's existing metadata. Keys you include\nare added or overwritten; keys you omit are left unchanged. To remove a\nsingle key, send it with a null value. To clear all metadata, send\n`metadata` as null. Sending an empty object is rejected; use null to\nclear. Each update must include at least one of `display_name` or\n`metadata`."
+            "nullable": true
           }
         },
         "title": "UpdateInboxRequest"
@@ -5737,7 +5733,7 @@
       "get": {
         "operationId": "get_agentmail_metrics",
         "summary": "Query Account Metrics",
-        "description": "Returns aggregate counters for the whole account. The upstream response shape is not pinned in this spec, so treat the body as an open object and read the keys it actually returns. This is the organization-wide view spanning every inbox in the account. Every AIsa caller shares one AgentMail account, so this reaches inboxes other callers created; the inbox-scoped twin `get_agentmail_inbox_metrics` is the one to use when a single inbox is meant.",
+        "description": "Returns aggregate counters for the whole account as a flat map of counter name to an array of data points. Measured live on 2026-08-24 the keys are `message.received`, `message.received.spam`, `message.received.blocked`, `message.received.unauthenticated`, `message.sent`, `message.delivered`, `message.bounced`, `message.complained`, `message.rejected`, `message.opened` and `domain.verified`, each an empty array on an account with no traffic — an empty array means no activity, not an error. The shape is not pinned in this spec, so read the keys actually returned rather than assuming this list is closed. This is the organization-wide view spanning every inbox in the account. Every AIsa caller shares one AgentMail account, so this reaches inboxes other callers created; the inbox-scoped twin `get_agentmail_inbox_metrics` is the one to use when a single inbox is meant.",
         "tags": [
           "subpackage_metrics"
         ],
@@ -6043,7 +6039,7 @@
       "get": {
         "operationId": "get_agentmail_inbox_metrics",
         "summary": "Query Inbox Metrics",
-        "description": "Returns aggregate counters for one inbox. The upstream response shape is not pinned in this spec, so treat the body as an open object and read the keys it actually returns. For individual events use `get_agentmail_inbox_events`; for the account-wide totals, `get_agentmail_metrics`.",
+        "description": "Returns the same aggregate counters as `get_agentmail_metrics` but for one inbox: a flat map of counter name to an array of data points, keyed by `message.received`, `message.received.spam`, `message.received.blocked`, `message.received.unauthenticated`, `message.sent`, `message.delivered`, `message.bounced`, `message.complained`, `message.rejected`, `message.opened` and `domain.verified`. An empty array means no activity, not an error. The shape is not pinned in this spec, so read the keys actually returned. For individual events rather than counts use `get_agentmail_inbox_events`; for the account-wide totals, `get_agentmail_metrics`.",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/metrics"
         ],
