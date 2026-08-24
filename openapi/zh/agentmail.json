@@ -3652,9 +3652,9 @@
   "paths": {
     "/agentmail/threads/{thread_id}": {
       "get": {
-        "operationId": "get_agentmail_threads_thread_id",
-        "summary": "获取线程",
-        "description": "**CLI：**\n```bash\nagentmail threads get --thread-id <thread_id>\n```",
+        "operationId": "get_agentmail_thread",
+        "summary": "获取任意会话",
+        "description": "只按 id 获取一条会话，不指定收件箱：`thread_id`、`inbox_id`、`labels`、`timestamp`、`received_timestamp`、`sent_timestamp`、`senders`、`recipients`、`subject`、`preview`、附件与邮件。因为没有指定收件箱，它是在整个账号范围内解析的。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，所以不属于你的 thread id 一样能解析出来——请检查返回的 `inbox_id`。带范围的孪生工具是 `get_agentmail_inbox_thread`。",
         "tags": [
           "subpackage_threads"
         ],
@@ -3701,9 +3701,9 @@
         }
       },
       "patch": {
-        "operationId": "patch_agentmail_threads_thread_id",
-        "summary": "更新话题串",
-        "description": "更新会话标签。无法添加或移除系统标签（sent、received、bounced 等）。对于包含 100 条或更多消息的会话，请求将被拒绝并返回 `422`。",
+        "operationId": "patch_agentmail_thread",
+        "summary": "更新任意会话标签",
+        "description": "对只按 id 定位的会话增删标签，返回 `thread_id` 和结果 `labels`。未指定收件箱，作用范围是整个账号。写入的是共享 AgentMail 工作区：所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，你写进去的东西下一个调用方也看得到、改得动。 带范围的孪生工具是 `patch_agentmail_inbox_thread`。",
         "tags": [
           "subpackage_threads"
         ],
@@ -3779,9 +3779,9 @@
         }
       },
       "delete": {
-        "operationId": "delete_agentmail_threads_thread_id",
-        "summary": "删除线程",
-        "description": "通过为所有消息添加垃圾箱标签，将会话移至垃圾箱。如果会话已在垃圾箱中，则会被永久删除。使用 `permanent=true` 可强制永久删除。\n\n**CLI：**\n```bash\nagentmail threads delete --thread-id <thread_id>\n```",
+        "operationId": "delete_agentmail_thread",
+        "summary": "删除任意会话",
+        "description": "永久删除只按 id 定位的一条会话及其中每一封邮件，无响应体。**不可撤销、一次删掉不止一封、且没有指定收件箱**——所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，因此它可能销毁属于其他调用方的会话。先用 `get_agentmail_thread` 读一遍；带范围的孪生工具是 `delete_agentmail_inbox_thread`。",
         "tags": [
           "subpackage_threads"
         ],
@@ -3832,9 +3832,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/drafts/{draft_id}": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_drafts_draft_id",
+        "operationId": "get_agentmail_inbox_draft",
         "summary": "获取草稿",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:drafts get --inbox-id <inbox_id> --draft-id <draft_id>\n```",
+        "description": "获取单条未发送草稿全文：`draft_id`、`inbox_id`、`client_id`、`labels`、`reply_to`、`to`、`cc`、`bcc`、`subject`、`preview`、`text`、`html`、`attachments`、`in_reply_to` 和 `references`。编辑用 `patch_agentmail_inbox_draft`，发送用 `post_agentmail_inbox_draft_send`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/drafts"
         ],
@@ -3889,9 +3889,9 @@
         }
       },
       "patch": {
-        "operationId": "patch_agentmail_inboxes_inbox_id_drafts_draft_id",
+        "operationId": "patch_agentmail_inbox_draft",
         "summary": "更新草稿",
-        "description": "**CLI:**\n```bash\nagentmail inboxes:drafts update --inbox-id <inbox_id> --draft-id <draft_id> --subject \"Updated subject\"\n```",
+        "description": "改写未发送草稿的收件人、主题、正文或附件，返回改动后的完整草稿。仍然不发送任何东西——发送由 `post_agentmail_inbox_draft_send` 完成。写入的是共享 AgentMail 工作区：所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，你写进去的东西下一个调用方也看得到、改得动。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/drafts"
         ],
@@ -3955,9 +3955,9 @@
         }
       },
       "delete": {
-        "operationId": "delete_agentmail_inboxes_inbox_id_drafts_draft_id",
+        "operationId": "delete_agentmail_inbox_draft",
         "summary": "删除草稿",
-        "description": "**CLI:**\n```bash\nagentmail inboxes:drafts delete --inbox-id <inbox_id> --draft-id <draft_id>\n```",
+        "description": "永久删除一条未发送的草稿，无响应体。因为从未发出，这是本 API 里破坏性最小的删除——但仍不可撤销，且 所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱。不确定就先用 `get_agentmail_inbox_draft` 读一下。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/drafts"
         ],
@@ -4007,9 +4007,9 @@
     },
     "/agentmail/inboxes/{inbox_id}": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id",
+        "operationId": "get_agentmail_inbox",
         "summary": "获取收件箱",
-        "description": "**CLI：**\n```bash\nagentmail inboxes get --inbox-id <inbox_id>\n```",
+        "description": "按 `inbox_id` 获取单个收件箱，返回 `inbox_id`、`email`、`display_name`、`client_id`、`pod_id`、`metadata`、`created_at` 和 `updated_at`——只有设置，没有邮件。要邮件用 `get_agentmail_inbox_messages`，要会话用 `get_agentmail_inbox_threads`。id 从 `get_agentmail_inboxes` 获得。",
         "tags": [
           "subpackage_inboxes"
         ],
@@ -4056,9 +4056,9 @@
         }
       },
       "patch": {
-        "operationId": "patch_agentmail_inboxes_inbox_id",
+        "operationId": "patch_agentmail_inbox",
         "summary": "更新收件箱",
-        "description": "**CLI：**\n```bash\nagentmail inboxes update --inbox-id <inbox_id> --display-name \"Updated Name\"\n```",
+        "description": "更新单个收件箱的 `display_name` 和 `metadata`，地址本身不可改。返回更新后的完整收件箱。写入的是共享 AgentMail 工作区：所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，你写进去的东西下一个调用方也看得到、改得动。 只读不改用 `get_agentmail_inbox`。",
         "tags": [
           "subpackage_inboxes"
         ],
@@ -4125,9 +4125,9 @@
         }
       },
       "delete": {
-        "operationId": "delete_agentmail_inboxes_inbox_id",
+        "operationId": "delete_agentmail_inbox",
         "summary": "删除收件箱",
-        "description": "**CLI：**\n```bash\nagentmail inboxes delete --inbox-id <inbox_id>\n```",
+        "description": "永久删除一个收件箱及其中的邮件，无响应体。**不可撤销，而且这个收件箱可能不是你的**——所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，调用前请先用 `get_agentmail_inbox` 确认归属。只是不再使用的话，放着不动即可。",
         "tags": [
           "subpackage_inboxes"
         ],
@@ -4169,9 +4169,9 @@
     },
     "/agentmail/lists/{direction}/{type}": {
       "get": {
-        "operationId": "get_agentmail_lists_direction_type",
-        "summary": "列出条目",
-        "description": "**CLI：**\n```bash\nagentmail lists list --direction <direction> --type <type>\n```",
+        "operationId": "get_agentmail_list_entries",
+        "summary": "列出账号名单项",
+        "description": "列出作用于每一个收件箱的账号级放行/拦截名单项。`direction` 选入站或出站，`type` 选名单类型。返回 `count`、`limit`、`next_page_token` 和 `entries`，用 `next_page_token` 翻页。每项含 `entry`、`entry_type`、`reason`、`direction`、`list_type`、`created_at` 和 `read_only`。这是账号级视图，跨越账号下的每一个收件箱。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱；只针对单个收件箱时请用收件箱级的孪生工具 `get_agentmail_inbox_list_entries`。",
         "tags": [
           "subpackage_lists"
         ],
@@ -4232,9 +4232,9 @@
         }
       },
       "post": {
-        "operationId": "post_agentmail_lists_direction_type",
-        "summary": "创建列表条目",
-        "description": "**CLI：**\n```bash\nagentmail lists create --direction <direction> --type <type> --entry user@example.com\n```",
+        "operationId": "post_agentmail_list_entry",
+        "summary": "新增账号名单项",
+        "description": "把一个地址或域名加入**账号级**放行/拦截名单，返回创建的条目。🔴 这是一条长期生效的规则，会改变**账号下每一个收件箱、包括其他调用方的收件箱**的邮件处理方式——收件箱级的 `post_agentmail_inbox_list_entry` 只影响一个收件箱，几乎总是你真正想要的那个。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱。",
         "tags": [
           "subpackage_lists"
         ],
@@ -4300,9 +4300,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/messages/{message_id}/reply-all": {
       "post": {
-        "operationId": "post_agentmail_inboxes_inbox_id_messages_message_id_reply_all",
-        "summary": "回复全部消息",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:messages reply-all --inbox-id <inbox_id> --message-id <message_id> --text \"Reply text\"\n```",
+        "operationId": "post_agentmail_inbox_message_reply_all",
+        "summary": "回复全部",
+        "description": "回复单封邮件**以及邮件上的所有其他收件人**，返回 `message_id` 和 `thread_id`。🔴 **这会向会话中每一个人发出真实邮件，且发出去收不回。**只需回复发件人时请用 `post_agentmail_inbox_message_reply`——那是更安全的默认值，两者只差在收件人范围。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/messages"
         ],
@@ -4388,9 +4388,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/messages/send": {
       "post": {
-        "operationId": "post_agentmail_inboxes_inbox_id_messages_send",
-        "summary": "发送消息",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:messages send --inbox-id <inbox_id> --to recipient@example.com --subject \"Hello\" --text \"Body\"\n```",
+        "operationId": "post_agentmail_inbox_message_send",
+        "summary": "发送邮件",
+        "description": "从某个收件箱发出一封新邮件，返回 `message_id` 和 `thread_id`。接受 `to`、`cc`、`bcc`、`subject`、`text`、`html`、`labels` 和 `attachments`。🔴 **这会发出真实邮件，且发出去收不回。**所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，所以发件地址未必是你创建的——先用 `get_agentmail_inbox` 确认。回复既有邮件用 `post_agentmail_inbox_message_reply`；只写不发用 `post_agentmail_inbox_draft`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/messages"
         ],
@@ -4468,9 +4468,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/threads/{thread_id}": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_threads_thread_id",
-        "summary": "获取线程",
-        "description": "**CLI:**\n```bash\nagentmail inboxes:threads get --inbox-id <inbox_id> --thread-id <thread_id>\n```",
+        "operationId": "get_agentmail_inbox_thread",
+        "summary": "获取会话",
+        "description": "获取单条会话及其完整邮件列表：`thread_id`、`inbox_id`、`labels`、`timestamp`、`received_timestamp`、`sent_timestamp`、`senders`、`recipients`、`subject`、`preview`、附件以及邮件本身。要单封邮件用 `get_agentmail_inbox_message`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/threads"
         ],
@@ -4525,9 +4525,9 @@
         }
       },
       "patch": {
-        "operationId": "patch_agentmail_inboxes_inbox_id_threads_thread_id",
-        "summary": "更新话题串",
-        "description": "更新会话标签。无法添加或移除系统标签（sent、received、bounced 等）。对于包含 100 条或更多消息的会话，请求将被拒绝并返回 `422`。",
+        "operationId": "patch_agentmail_inbox_thread",
+        "summary": "更新会话标签",
+        "description": "增删整条会话的标签，返回 `thread_id` 和结果 `labels`，一次作用于会话内每一封邮件。单封邮件的孪生工具是 `patch_agentmail_inbox_message`。写入的是共享 AgentMail 工作区：所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，你写进去的东西下一个调用方也看得到、改得动。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/threads"
         ],
@@ -4611,9 +4611,9 @@
         }
       },
       "delete": {
-        "operationId": "delete_agentmail_inboxes_inbox_id_threads_thread_id",
-        "summary": "删除线程",
-        "description": "通过为所有消息添加垃圾箱标签，将该线程移至垃圾箱。如果线程已在垃圾箱中，则会被永久删除。使用 `permanent=true` 可强制永久删除。\n\n**CLI：**\n```bash\nagentmail inboxes:threads delete --inbox-id <inbox_id> --thread-id <thread_id>\n```",
+        "operationId": "delete_agentmail_inbox_thread",
+        "summary": "删除会话",
+        "description": "永久删除一条会话及其中每一封邮件，无响应体。**不可撤销，且一次删掉的不止一封**——所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，先用 `get_agentmail_inbox_thread` 读一遍。只想隐藏请改用 `patch_agentmail_inbox_thread` 打标签。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/threads"
         ],
@@ -4673,8 +4673,8 @@
     "/agentmail/threads": {
       "get": {
         "operationId": "get_agentmail_threads",
-        "summary": "列出会话线程",
-        "description": "**CLI：**\n```bash\nagentmail threads list\n```",
+        "summary": "列出全部会话",
+        "description": "列出**账号下每一个收件箱**的会话。返回 `count`、`limit`、`next_page_token` 和 `threads`，用 `next_page_token` 翻页。每条含 `thread_id`、`inbox_id`、`labels`、`timestamp`、`senders`、`recipients`、`subject`、`preview`、`message_count` 和 `last_message_id`。这是账号级视图，跨越账号下的每一个收件箱。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱；只针对单个收件箱时请用收件箱级的孪生工具 `get_agentmail_inbox_threads`。",
         "tags": [
           "subpackage_threads"
         ],
@@ -4795,9 +4795,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/threads": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_threads",
-        "summary": "列出会话线程",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:threads list --inbox-id <inbox_id>\n```",
+        "operationId": "get_agentmail_inbox_threads",
+        "summary": "列出会话",
+        "description": "按时间倒序列出单个收件箱内的会话。返回 `count`、`limit`、`next_page_token` 和 `threads`，用 `next_page_token` 翻页。每条含 `thread_id`、`labels`、`timestamp`、`senders`、`recipients`、`subject`、`preview`、`message_count`、`last_message_id`、`size` 及附件元数据。会话是邮件的归组；要单封邮件用 `get_agentmail_inbox_messages`。要检索而非翻页用 `get_agentmail_inbox_threads_search`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/threads"
         ],
@@ -4926,9 +4926,9 @@
     },
     "/agentmail/drafts/{draft_id}/attachments/{attachment_id}": {
       "get": {
-        "operationId": "get_agentmail_drafts_draft_id_attachments_attachment_id",
-        "summary": "获取附件",
-        "description": "**CLI：**\n```bash\nagentmail drafts get-attachment --draft-id <draft_id> --attachment-id <attachment_id>\n```",
+        "operationId": "get_agentmail_draft_attachment",
+        "summary": "获取任意草稿附件",
+        "description": "获取只按 id 定位的草稿上某个附件的元数据。返回 `attachment_id`、`filename`、`size`、`content_type`、`content_disposition`、`content_id`，以及一个短时效的 `download_url` 和 `expires_at`。字节内容不内联，需在过期前去取 `download_url`。这是账号级视图，跨越账号下的每一个收件箱。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱；只针对单个收件箱时请用收件箱级的孪生工具 `get_agentmail_inbox_draft_attachment`。",
         "tags": [
           "subpackage_drafts"
         ],
@@ -4985,9 +4985,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/events": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_events",
+        "operationId": "get_agentmail_inbox_events",
         "summary": "列出收件箱事件",
-        "description": "列出收件箱的标签变更事件。默认按时间倒序返回事件。可用于 IMAP UID 映射或审计日志记录。\n\n**CLI：**\n```bash\nagentmail inboxes:events list --inbox-id <inbox_id>\n```",
+        "description": "列出单个收件箱的投递与活动事件——发送和接收背后的审计轨迹。返回 `count`、`limit`、`next_page_token` 和 `events`，用 `next_page_token` 翻页。每条事件含 `event_id`、`event_type`、`message_id`、`label`、`event_at` 和 `inbox_id`。用它查 `post_agentmail_inbox_message_send` 返回之后邮件到底怎么了，那是发送调用本身给不出的信息。要聚合计数而非逐条事件，用 `get_agentmail_inbox_metrics`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/events"
         ],
@@ -5060,9 +5060,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/messages/{message_id}": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_messages_message_id",
-        "summary": "获取消息",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:messages get --inbox-id <inbox_id> --message-id <message_id>\n```",
+        "operationId": "get_agentmail_inbox_message",
+        "summary": "获取邮件",
+        "description": "获取单封邮件全文：`message_id`、`thread_id`、`labels`、`timestamp`、`from`、`reply_to`、`to`、`cc`、`bcc`、`subject`、`preview`、`text`、`html`、`extracted_text` 及附件元数据。要原始 MIME 源用 `get_agentmail_inbox_message_raw`，要附件下载地址用 `get_agentmail_inbox_message_attachment`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/messages"
         ],
@@ -5117,9 +5117,9 @@
         }
       },
       "patch": {
-        "operationId": "patch_agentmail_inboxes_inbox_id_messages_message_id",
-        "summary": "更新消息",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:messages update --inbox-id <inbox_id> --message-id <message_id> --add-label read --remove-label unread\n```",
+        "operationId": "patch_agentmail_inbox_message",
+        "summary": "更新邮件标签",
+        "description": "增删单封邮件的标签，返回 `message_id` 和结果 `labels`。标签是收到的邮件唯一可变的部分。写入的是共享 AgentMail 工作区：所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，你写进去的东西下一个调用方也看得到、改得动。 当前标签用 `get_agentmail_inbox_message` 读取。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/messages"
         ],
@@ -5193,9 +5193,9 @@
         }
       },
       "delete": {
-        "operationId": "delete_agentmail_inboxes_inbox_id_messages_message_id",
-        "summary": "删除消息",
-        "description": "永久删除一条消息。\n\n**CLI：**\n```bash\nagentmail inboxes:messages delete --inbox-id <inbox_id> --message-id <message_id>\n```",
+        "operationId": "delete_agentmail_inbox_message",
+        "summary": "删除邮件",
+        "description": "永久删除单封邮件，无响应体。**不可撤销**，且 所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，所以这封邮件可能不是你的。只是想在流程里隐藏而不销毁，请改用 `patch_agentmail_inbox_message` 打标签。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/messages"
         ],
@@ -5245,9 +5245,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/drafts": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_drafts",
+        "operationId": "get_agentmail_inbox_drafts",
         "summary": "列出草稿",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:drafts list --inbox-id <inbox_id>\n```",
+        "description": "列出单个收件箱内未发送的草稿。返回 `count`、`limit`、`next_page_token` 和 `drafts`，用 `next_page_token` 翻页。每条含 `draft_id`、`labels`、`to`、`cc`、`bcc`、`subject`、`preview`、`attachments`、`in_reply_to`、`send_status`、`send_at` 和 `updated_at`。列表项只带 `preview`——`text` 和 `html` 要从 `get_agentmail_inbox_draft` 取。草稿在调用 `post_agentmail_inbox_draft_send` 之前不会发出。账号级视图是 `get_agentmail_drafts`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/drafts"
         ],
@@ -5342,9 +5342,9 @@
         }
       },
       "post": {
-        "operationId": "post_agentmail_inboxes_inbox_id_drafts",
+        "operationId": "post_agentmail_inbox_draft",
         "summary": "创建草稿",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:drafts create --inbox-id <inbox_id> --to recipient@example.com --subject \"Draft subject\" --text \"Draft body\"\n```",
+        "description": "在某个收件箱里写一封草稿但不发送。接受 `to`、`cc`、`bcc`、`subject`、`text`、`html`、`labels`、`attachments`，以及用于挂会话的 `in_reply_to` / `references`。返回含 `draft_id` 的完整草稿。在调用 `post_agentmail_inbox_draft_send` 之前不会有任何东西离开账号，所以这是把待发邮件先摆出来给人审的安全做法。写入的是共享 AgentMail 工作区：所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，你写进去的东西下一个调用方也看得到、改得动。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/drafts"
         ],
@@ -5402,9 +5402,9 @@
     },
     "/agentmail/threads/{thread_id}/attachments/{attachment_id}": {
       "get": {
-        "operationId": "get_agentmail_threads_thread_id_attachments_attachment_id",
-        "summary": "获取附件",
-        "description": "**CLI：**\n```bash\nagentmail threads get-attachment --thread-id <thread_id> --attachment-id <attachment_id>\n```",
+        "operationId": "get_agentmail_thread_attachment",
+        "summary": "获取任意会话附件",
+        "description": "获取只按 id 定位的会话中某个附件的元数据。返回 `attachment_id`、`filename`、`size`、`content_type`、`content_disposition`、`content_id`，以及一个短时效的 `download_url` 和 `expires_at`。字节内容不内联，需在过期前去取 `download_url`。这是账号级视图，跨越账号下的每一个收件箱。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱；只针对单个收件箱时请用收件箱级的孪生工具 `get_agentmail_inbox_thread_attachment`。",
         "tags": [
           "subpackage_threads"
         ],
@@ -5461,9 +5461,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/messages": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_messages",
-        "summary": "列出消息",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:messages list --inbox-id <inbox_id>\n```",
+        "operationId": "get_agentmail_inbox_messages",
+        "summary": "列出邮件",
+        "description": "按时间倒序列出单个收件箱内的邮件。返回 `count`、`limit`、`next_page_token` 和 `messages`，用 `next_page_token` 翻页。每封含 `message_id`、`thread_id`、`labels`、`timestamp`、`from`、`to`、`cc`、`bcc`、`subject` 和 `preview`；正文全文来自 `get_agentmail_inbox_message`。要检索而非翻页用 `get_agentmail_inbox_messages_search`，要按会话归组用 `get_agentmail_inbox_threads`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/messages"
         ],
@@ -5592,9 +5592,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/lists/{direction}/{type}/{entry}": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_lists_direction_type_entry",
-        "summary": "获取列表条目",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:lists get --inbox-id <inbox_id> --direction <direction> --type <type> --entry <entry>\n```",
+        "operationId": "get_agentmail_inbox_list_entry",
+        "summary": "获取收件箱名单项",
+        "description": "获取收件箱上某一条放行/拦截名单项：`entry`、`entry_type`、`reason`、`direction`、`list_type`、`created_at`、`read_only`、`inbox_id`、`pod_id` 和 `organization_id`。`read_only` 为 true 表示平台托管、无法删除。列全部用 `get_agentmail_inbox_list_entries`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/lists"
         ],
@@ -5666,9 +5666,9 @@
         }
       },
       "delete": {
-        "operationId": "delete_agentmail_inboxes_inbox_id_lists_direction_type_entry",
-        "summary": "删除列表条目",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:lists delete --inbox-id <inbox_id> --direction <direction> --type <type> --entry <entry>\n```",
+        "operationId": "delete_agentmail_inbox_list_entry",
+        "summary": "删除收件箱名单项",
+        "description": "从某个收件箱的放行/拦截名单中移除一条，无响应体。它会从此改变该收件箱接收或发送哪些邮件。`read_only` 为 true 的条目由平台托管、无法移除——先用 `get_agentmail_inbox_list_entry` 确认。写入的是共享 AgentMail 工作区：所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，你写进去的东西下一个调用方也看得到、改得动。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/lists"
         ],
@@ -5736,8 +5736,8 @@
     "/agentmail/metrics": {
       "get": {
         "operationId": "get_agentmail_metrics",
-        "summary": "查询指标",
-        "description": "**CLI：**\n```bash\nagentmail metrics list\n```",
+        "summary": "查询账号指标",
+        "description": "返回整个账号的聚合计数。上游响应结构未在本 spec 中固定，请把响应体当作开放对象、读它实际返回的键。这是账号级视图，跨越账号下的每一个收件箱。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱；只针对单个收件箱时请用收件箱级的孪生工具 `get_agentmail_inbox_metrics`。",
         "tags": [
           "subpackage_metrics"
         ],
@@ -5826,9 +5826,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/drafts/{draft_id}/send": {
       "post": {
-        "operationId": "post_agentmail_inboxes_inbox_id_drafts_draft_id_send",
+        "operationId": "post_agentmail_inbox_draft_send",
         "summary": "发送草稿",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:drafts send --inbox-id <inbox_id> --draft-id <draft_id>\n```",
+        "description": "发送一条既有草稿，返回 `message_id` 和 `thread_id`。🔴 **这会发出真实邮件，且发出去收不回**——先用 `get_agentmail_inbox_draft` 复核，因为本调用不带任何内容，发的就是草稿当前的样子。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/drafts"
         ],
@@ -5914,9 +5914,9 @@
     },
     "/agentmail/lists/{direction}/{type}/{entry}": {
       "get": {
-        "operationId": "get_agentmail_lists_direction_type_entry",
-        "summary": "获取列表条目",
-        "description": "**CLI：**\n```bash\nagentmail lists get --direction <direction> --type <type> --entry <entry>\n```",
+        "operationId": "get_agentmail_list_entry",
+        "summary": "获取账号名单项",
+        "description": "获取一条账号级放行/拦截名单项：`entry`、`entry_type`、`reason`、`direction`、`list_type`、`created_at`、`read_only` 和 `organization_id`。`read_only` 为 true 表示平台托管、无法删除。这是账号级视图，跨越账号下的每一个收件箱。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱；只针对单个收件箱时请用收件箱级的孪生工具 `get_agentmail_inbox_list_entry`。",
         "tags": [
           "subpackage_lists"
         ],
@@ -5980,9 +5980,9 @@
         }
       },
       "delete": {
-        "operationId": "delete_agentmail_lists_direction_type_entry",
-        "summary": "删除列表条目",
-        "description": "**CLI：**\n```bash\nagentmail lists delete --direction <direction> --type <type> --entry <entry>\n```",
+        "operationId": "delete_agentmail_list_entry",
+        "summary": "删除账号名单项",
+        "description": "从**账号级**放行/拦截名单中移除一条，无响应体。🔴 这会改变**账号下每一个收件箱、包括其他调用方的收件箱**的邮件处理方式；收件箱级的 `delete_agentmail_inbox_list_entry` 是更窄的动作。`read_only` 为 true 的条目由平台托管、无法移除——先用 `get_agentmail_list_entry` 确认。",
         "tags": [
           "subpackage_lists"
         ],
@@ -6041,9 +6041,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/metrics": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_metrics",
-        "summary": "查询指标",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:metrics query --inbox-id <inbox_id>\n```",
+        "operationId": "get_agentmail_inbox_metrics",
+        "summary": "查询收件箱指标",
+        "description": "返回单个收件箱的聚合计数。上游响应结构未在本 spec 中固定，请把响应体当作开放对象、读它实际返回的键。要逐条事件用 `get_agentmail_inbox_events`；要账号级总计用 `get_agentmail_metrics`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/metrics"
         ],
@@ -6141,8 +6141,8 @@
     "/agentmail/drafts": {
       "get": {
         "operationId": "get_agentmail_drafts",
-        "summary": "列出草稿",
-        "description": "**CLI：**\n```bash\nagentmail drafts list\n```",
+        "summary": "列出全部草稿",
+        "description": "列出**账号下每一个收件箱**的未发送草稿。返回 `count`、`limit`、`next_page_token` 和 `drafts`，用 `next_page_token` 翻页。每条含 `draft_id`、`inbox_id`、`to`、`cc`、`bcc`、`subject`、`preview`、`attachments`、`send_status` 和 `send_at`。列表项只带 `preview`——`text` 和 `html` 要从 `get_agentmail_draft` 取。这是账号级视图，跨越账号下的每一个收件箱。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱；只针对单个收件箱时请用收件箱级的孪生工具 `get_agentmail_inbox_drafts`。",
         "tags": [
           "subpackage_drafts"
         ],
@@ -6231,9 +6231,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/messages/{message_id}/forward": {
       "post": {
-        "operationId": "post_agentmail_inboxes_inbox_id_messages_message_id_forward",
-        "summary": "转发消息",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:messages forward --inbox-id <inbox_id> --message-id <message_id> --to recipient@example.com\n```",
+        "operationId": "post_agentmail_inbox_message_forward",
+        "summary": "转发邮件",
+        "description": "把单封邮件转发给新的收件人，返回 `message_id` 和 `thread_id`。🔴 **这会发出真实邮件且收不回，并会连同原文和附件一起带走**——先用 `get_agentmail_inbox_message` 看清楚要转发什么。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱。要回复而非转发，用 `post_agentmail_inbox_message_reply`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/messages"
         ],
@@ -6319,9 +6319,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/messages/{message_id}/raw": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_messages_message_id_raw",
-        "summary": "获取原始消息",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:messages get-raw --inbox-id <inbox_id> --message-id <message_id>\n```",
+        "operationId": "get_agentmail_inbox_message_raw",
+        "summary": "获取邮件原始源",
+        "description": "返回单封邮件的 RFC 822 原始源，含 `message_id`、`size`、短时效 `download_url` 和 `expires_at`。字节内容不内联，需在过期前去取。用于看邮件头、DKIM 或精确 MIME 结构；要解析后的正文和 HTML 用 `get_agentmail_inbox_message`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/messages"
         ],
@@ -6378,9 +6378,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/messages/{message_id}/attachments/{attachment_id}": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_messages_message_id_attachments_attachment_id",
-        "summary": "获取附件",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:messages get-attachment --inbox-id <inbox_id> --message-id <message_id> --attachment-id <attachment_id>\n```",
+        "operationId": "get_agentmail_inbox_message_attachment",
+        "summary": "获取邮件附件",
+        "description": "获取单封邮件上某个附件的元数据。返回 `attachment_id`、`filename`、`size`、`content_type`、`content_disposition`、`content_id`，以及一个短时效的 `download_url` 和 `expires_at`。字节内容不内联，需在过期前去取 `download_url`。附件 id 来自 `get_agentmail_inbox_message` 返回的 `attachments` 数组。会话级和草稿级的孪生工具是 `get_agentmail_inbox_thread_attachment` 与 `get_agentmail_inbox_draft_attachment`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/messages"
         ],
@@ -6447,7 +6447,7 @@
       "get": {
         "operationId": "get_agentmail_inboxes",
         "summary": "列出收件箱",
-        "description": "**CLI：**\n```bash\nagentmail inboxes list\n```",
+        "description": "列出 AgentMail 账号下的全部收件箱。返回 `count`、`limit`、`next_page_token` 和 `inboxes`，用 `next_page_token` 翻页。每个收件箱含 `inbox_id`、`email`、`display_name`、`client_id`、`pod_id`、`metadata`、`created_at` 和 `updated_at`。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，所以这份列表并非按你隔离，返回的收件箱可能属于别人。已知 id 时用 `get_agentmail_inbox`，新建用 `post_agentmail_inbox`。",
         "tags": [
           "subpackage_inboxes"
         ],
@@ -6500,9 +6500,9 @@
         }
       },
       "post": {
-        "operationId": "post_agentmail_inboxes",
+        "operationId": "post_agentmail_inbox",
         "summary": "创建收件箱",
-        "description": "**CLI：**\n```bash\nagentmail inboxes create --display-name \"My Agent\" --username myagent --domain agentmail.to\n```",
+        "description": "创建一个新收件箱——一个真实可收发的地址。可选的 `username` 指定本地部分（`support@agentmail.to`），不传则自动生成（如 `livelyspirit481@agentmail.to`）。域名固定为 `agentmail.to`，因为 AIsa 不开放域名管理。返回 `inbox_id`、`email`、`display_name`、`client_id`、`pod_id`、`metadata` 和时间戳。写入的是共享 AgentMail 工作区：所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，你写进去的东西下一个调用方也看得到、改得动。 读回用 `get_agentmail_inbox`，列表用 `get_agentmail_inboxes`。",
         "tags": [
           "subpackage_inboxes"
         ],
@@ -6552,9 +6552,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/messages/{message_id}/reply": {
       "post": {
-        "operationId": "post_agentmail_inboxes_inbox_id_messages_message_id_reply",
-        "summary": "回复消息",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:messages reply --inbox-id <inbox_id> --message-id <message_id> --text \"Reply text\"\n```",
+        "operationId": "post_agentmail_inbox_message_reply",
+        "summary": "回复邮件",
+        "description": "回复单封邮件并正确挂到会话上，返回 `message_id` 和 `thread_id`。🔴 **这会发出真实邮件，且发出去收不回。**它只回复发件人——`post_agentmail_inbox_message_reply_all` 会回复所有收件人，波及范围完全不同，请刻意选择。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱。要发给一组新收件人用 `post_agentmail_inbox_message_send`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/messages"
         ],
@@ -6640,9 +6640,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/threads/{thread_id}/attachments/{attachment_id}": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_threads_thread_id_attachments_attachment_id",
-        "summary": "获取附件",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:threads get-attachment --inbox-id <inbox_id> --thread-id <thread_id> --attachment-id <attachment_id>\n```",
+        "operationId": "get_agentmail_inbox_thread_attachment",
+        "summary": "获取会话附件",
+        "description": "获取会话中任意位置一个附件的元数据。返回 `attachment_id`、`filename`、`size`、`content_type`、`content_disposition`、`content_id`，以及一个短时效的 `download_url` 和 `expires_at`。字节内容不内联，需在过期前去取 `download_url`。id 来自 `get_agentmail_inbox_thread` 返回的 `attachments` 数组。单封邮件级的孪生工具是 `get_agentmail_inbox_message_attachment`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/threads"
         ],
@@ -6707,9 +6707,9 @@
     },
     "/agentmail/drafts/{draft_id}": {
       "get": {
-        "operationId": "get_agentmail_drafts_draft_id",
-        "summary": "获取草稿",
-        "description": "**CLI：**\n```bash\nagentmail drafts get --draft-id <draft_id>\n```",
+        "operationId": "get_agentmail_draft",
+        "summary": "获取任意草稿",
+        "description": "只按 id 获取一条未发送草稿，不指定收件箱：`draft_id`、`inbox_id`、`client_id`、`labels`、`reply_to`、`to`、`cc`、`bcc`、`subject`、`preview`、`text`、`html`、`attachments`、`in_reply_to` 和 `references`。这是账号级视图，跨越账号下的每一个收件箱。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱；只针对单个收件箱时请用收件箱级的孪生工具 `get_agentmail_inbox_draft`。",
         "tags": [
           "subpackage_drafts"
         ],
@@ -6758,9 +6758,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/lists/{direction}/{type}": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_lists_direction_type",
-        "summary": "列出条目",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:lists list --inbox-id <inbox_id> --direction <direction> --type <type>\n```",
+        "operationId": "get_agentmail_inbox_list_entries",
+        "summary": "列出收件箱名单项",
+        "description": "列出单个收件箱的放行或拦截名单项。`direction` 选入站或出站，`type` 选名单类型。返回 `count`、`limit`、`next_page_token` 和 `entries`，用 `next_page_token` 翻页。每项含 `entry`、`entry_type`、`reason`、`direction`、`list_type`、`created_at`、`read_only`、`inbox_id` 和 `pod_id`。账号级孪生工具是 `get_agentmail_list_entries`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/lists"
         ],
@@ -6829,9 +6829,9 @@
         }
       },
       "post": {
-        "operationId": "post_agentmail_inboxes_inbox_id_lists_direction_type",
-        "summary": "创建列表条目",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:lists create --inbox-id <inbox_id> --direction <direction> --type <type> --entry user@example.com\n```",
+        "operationId": "post_agentmail_inbox_list_entry",
+        "summary": "新增收件箱名单项",
+        "description": "把一个地址或域名加入某个收件箱的放行/拦截名单，返回创建的条目。它会从此改变该收件箱接收或发送哪些邮件，属于长期生效的规则而非一次性动作。写入的是共享 AgentMail 工作区：所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，你写进去的东西下一个调用方也看得到、改得动。 删除用 `delete_agentmail_inbox_list_entry`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/lists"
         ],
@@ -6905,9 +6905,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/drafts/{draft_id}/attachments/{attachment_id}": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_drafts_draft_id_attachments_attachment_id",
-        "summary": "获取附件",
-        "description": "**CLI：**\n```bash\nagentmail inboxes:drafts get-attachment --inbox-id <inbox_id> --draft-id <draft_id> --attachment-id <attachment_id>\n```",
+        "operationId": "get_agentmail_inbox_draft_attachment",
+        "summary": "获取草稿附件",
+        "description": "获取未发送草稿上某个附件的元数据。返回 `attachment_id`、`filename`、`size`、`content_type`、`content_disposition`、`content_id`，以及一个短时效的 `download_url` 和 `expires_at`。字节内容不内联，需在过期前去取 `download_url`。id 来自 `get_agentmail_inbox_draft` 返回的 `attachments` 数组。已发送邮件的孪生工具是 `get_agentmail_inbox_message_attachment`。",
         "tags": [
           "subpackage_inboxes.subpackage_inboxes/drafts"
         ],
@@ -6973,8 +6973,8 @@
     "/agentmail/api-keys": {
       "get": {
         "operationId": "get_agentmail_api_keys",
-        "summary": "列出 API 密钥",
-        "description": "列出已认证账户的 AgentMail API 密钥元数据。",
+        "summary": "列出账号 API Key",
+        "description": "列出 AgentMail 账号的 API key 元数据：`count`、`next_page_token` 和 `api_keys`，每项含 `api_key_id`、`prefix`、`name`、`pod_id`、`inbox_id`、`used_at`、`permissions` 和 `created_at`。密钥本体永远不会返回，只有 `prefix`。🔴 **这是账号管理面，不是按调用方隔离的接口。**所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，所以列出的是 AIsa 平台自己的 key，不是你的。正常邮件流程用不到它——找收件箱用 `get_agentmail_inboxes`，读邮件用 `get_agentmail_inbox_messages`。",
         "tags": [
           "AgentMail"
         ],
@@ -7035,8 +7035,8 @@
     "/agentmail/domains": {
       "get": {
         "operationId": "get_agentmail_domains",
-        "summary": "列出域名",
-        "description": "列出已为通过身份验证的账户配置的 AgentMail 域名。",
+        "summary": "列出账号域名",
+        "description": "列出 AgentMail 账号上配置的自定义发信域名：`count`、`limit`、`next_page_token` 和 `domains`。🔴 **这是账号管理面，不是按调用方隔离的接口。**所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，所以列出的域名属于 AIsa 平台。通过 AIsa 创建的收件箱一律使用 `agentmail.to`，因此这份列表不会改变 `post_agentmail_inbox` 能做什么。",
         "tags": [
           "AgentMail"
         ],
@@ -7097,8 +7097,8 @@
     "/agentmail/threads/search": {
       "get": {
         "operationId": "get_agentmail_threads_search",
-        "summary": "搜索线程",
-        "description": "对组织中的会话串执行全文搜索，并按\n相关性排序。查询将与发件人、收件人和\n主题（子字符串）以及消息正文（词元化全文）进行匹配。垃圾邮件、\n已删除、已屏蔽和未经身份验证的会话串始终会被排除。\n`limit` 不能超过 100。",
+        "summary": "搜索全部会话",
+        "description": "在**账号下每一个收件箱**的会话中做全文检索。返回 `count`、`limit`、`next_page_token` 和 `threads`，用 `next_page_token` 翻页。字段与 `get_agentmail_threads` 相同，后者用于按时间顺序取全部。这是账号级视图，跨越账号下的每一个收件箱。所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱；只针对单个收件箱时请用收件箱级的孪生工具 `get_agentmail_inbox_threads_search`。",
         "tags": [
           "AgentMail"
         ],
@@ -7194,9 +7194,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/threads/search": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_threads_search",
-        "summary": "搜索线程",
-        "description": "对收件箱中的会话进行全文搜索，并按相关性排序。\n查询会与发件人、收件人和主题（子字符串）以及\n消息正文（词元化全文）进行匹配。垃圾邮件、已删除、已屏蔽和\n未经身份验证的会话始终会被排除。`limit` 不能超过 100。",
+        "operationId": "get_agentmail_inbox_threads_search",
+        "summary": "搜索会话",
+        "description": "在单个收件箱的会话中做全文检索。返回 `count`、`limit`、`next_page_token` 和 `threads`，用 `next_page_token` 翻页。字段与 `get_agentmail_inbox_threads` 相同，后者用于按时间顺序取全部。要检索单封邮件而非会话，用 `get_agentmail_inbox_messages_search`。",
         "tags": [
           "AgentMail"
         ],
@@ -7300,9 +7300,9 @@
     },
     "/agentmail/inboxes/{inbox_id}/messages/search": {
       "get": {
-        "operationId": "get_agentmail_inboxes_inbox_id_messages_search",
-        "summary": "搜索消息",
-        "description": "对收件箱中的消息执行全文搜索，并按相关性排序。查询将\n与发件人、收件人和主题（子字符串）\n以及消息正文（词元化全文）进行匹配。垃圾邮件、已删除、已屏蔽和\n未经身份验证的消息始终会被排除。`limit` 不能超过 100。",
+        "operationId": "get_agentmail_inbox_messages_search",
+        "summary": "搜索邮件",
+        "description": "在单个收件箱的邮件中做全文检索。返回 `count`、`limit`、`next_page_token` 和 `messages`，用 `next_page_token` 翻页。字段与 `get_agentmail_inbox_messages` 相同，后者用于按时间顺序取全部而非带条件查询。要检索会话而非单封邮件，用 `get_agentmail_inbox_threads_search`。",
         "tags": [
           "AgentMail"
         ],
