@@ -15809,7 +15809,7 @@
     "/dataforseo/domain_analytics/technologies/aggregation_technologies/live": {
       "post": {
         "summary": "聚合技术",
-        "description": "Aggregation Technologies 端点将提供一个列表，其中包含网站与您指定的技术搭配使用时最常见的技术。您也可以指定技术类别或技术组，以获取范围更广的统计数据。",
+        "description": "要的是数量而不是域名：符合某个技术条件的站点有多少，按 group、category、technology 分解。返回 `total_count`、`items_count`、`offset` 和 `items`，其中 `internal_groups_list_limit`、`internal_categories_list_limit`、`internal_technologies_list_limit` 和 `internal_list_limit` 各自限制一层嵌套——四个都要设，否则响应会迅速膨胀。四个全设为 1 时实测 680 字节，本家族最小的响应。响应包在 DataForSEO 的信封里：数据在 `tasks[0].result`，上游扣费在 `tasks[0].cost`，真正的成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍然是 200，所以要看这个字段而不是传输层状态。 要域名本身而不是计数，用 `post_dataforseo_domains_tech_domains_by_technology_live`。",
         "operationId": "post_dataforseo_domains_tech_aggregation_live",
         "responses": {
           "200": {
@@ -16035,7 +16035,7 @@
     "/dataforseo/domain_analytics/technologies/domain_technologies/live": {
       "post": {
         "summary": "域名技术",
-        "description": "使用此端点可获取特定域名所使用的技术列表。",
+        "description": "由单个 `target` 返回该域名被探测到的全部信息：`domain`、`title`、`description`、`meta_keywords`、`domain_rank`、`last_visited`、`country_iso_code`、`language_code`、`content_language_code`、`phone_numbers`、`emails`、`social_graph_urls` 和 `technologies`。stripe.com 实测 3.5 KB。响应包在 DataForSEO 的信封里：数据在 `tasks[0].result`，上游扣费在 `tasks[0].cost`，真正的成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍然是 200，所以要看这个字段而不是传输层状态。 这是「按域名查」的方向；要反过来找用了某项技术的域名，用 `post_dataforseo_domains_tech_domains_by_technology_live`。返回的 `emails` 和 `phone_numbers` 是从站点本身抓的，不是联系人数据库。",
         "operationId": "post_dataforseo_domains_tech_for_domain_live",
         "responses": {
           "200": {
@@ -16232,7 +16232,7 @@
     "/dataforseo/domain_analytics/technologies/domains_by_html_terms/live": {
       "post": {
         "summary": "按 HTML 术语分类的域名",
-        "description": "此端点根据域名主页上使用的 HTML 术语提供域名。除域名列表外，你还将获得其技术画像、所属国家和语言以及其他相关数据。",
+        "description": "按 HTML 里出现的 `search_terms` 原始字符串匹配域名，而 `post_dataforseo_domains_tech_domains_by_technology_live` 匹配的是被识别出的技术。用于追踪代码片段、联盟标识或模板特征这类没有检测器命名的东西。返回 `total_count`、`items_count`、`offset`、`offset_token` 和 `items`，item 结构与技术搜索相同。单条实测 1.8 KB，用 `limit` 收口。响应包在 DataForSEO 的信封里：数据在 `tasks[0].result`，上游扣费在 `tasks[0].cost`，真正的成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍然是 200，所以要看这个字段而不是传输层状态。",
         "operationId": "post_dataforseo_domains_tech_domains_by_html_terms_live",
         "responses": {
           "200": {
@@ -16492,7 +16492,7 @@
     "/dataforseo/domain_analytics/technologies/domains_by_technology/live": {
       "post": {
         "summary": "按技术分类的域名",
-        "description": "此端点根据域名使用的技术提供域名数据。除域名列表外，您还将获得其技术资料、所属国家和语言以及其他相关数据。",
+        "description": "找出使用某项技术的域名——`post_dataforseo_domains_tech_for_domain_live` 的反向。接受 `technologies`、`technology_paths`、`groups`、`categories` 和 `keywords`，`filters` 与 `order_by` 作用于 `get_dataforseo_domains_tech_available_filters` 列出的字段。返回 `total_count`、`items_count`、`offset`、`offset_token` 和 `items`，每项与按域名查的结构相同：`domain`、`title`、`description`、`meta_keywords`、`domain_rank`、`last_visited`、`country_iso_code`、`language_code`、`content_language_code`、`phone_numbers`、`emails`、`social_graph_urls` 和 `technologies`。单条实测 1.5 KB，务必用 `limit` 收口——item 结构很重，而热门平台的 `total_count` 是百万级。响应包在 DataForSEO 的信封里：数据在 `tasks[0].result`，上游扣费在 `tasks[0].cost`，真正的成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍然是 200，所以要看这个字段而不是传输层状态。",
         "operationId": "post_dataforseo_domains_tech_domains_by_technology_live",
         "responses": {
           "200": {
@@ -16777,7 +16777,7 @@
     "/dataforseo/domain_analytics/technologies/available_filters": {
       "get": {
         "summary": "Domain Analytics Technologies API 的筛选条件",
-        "description": "您可以在此找到可用于 Domain Analytics Technologies API 端点的筛选器所需的全部信息。",
+        "description": "各技术类端点各自可过滤的字段，按端点分组：`domains_by_technology`、`aggregation_technologies`、`technologies_summary` 和 `domains_by_html_terms`。前三个共用 `domain_rank`、`last_visited`、`country_iso_code`、`language_code`、`content_language_code`；`domains_by_html_terms` 多一个 `domain`。实测 2.1 KB。免费：上游成本为 0。构造 `filters` 前先读它——不认识的字段是被拒绝，不是被忽略。whois 的对应接口是 `get_dataforseo_domains_whois_available_filters`。",
         "operationId": "get_dataforseo_domains_tech_available_filters",
         "responses": {
           "200": {
@@ -16887,7 +16887,7 @@
     "/dataforseo/domain_analytics/technologies/languages": {
       "get": {
         "summary": "Domain Analytics Technologies API 的语言列表",
-        "description": "定价",
+        "description": "技术类端点接受的语言列表，字段为 `language_name` 和 `language_code`。127 行，实测 6.8 KB。免费：上游成本为 0。属参考数据，取一次复用即可。⚠️ 注意它与 content 家族的 71 种语言**不是同一份目录**，在那边有效的 code 在这里不保证有效。地区的对应接口是 `get_dataforseo_domains_tech_locations`。",
         "operationId": "get_dataforseo_domains_tech_languages",
         "responses": {
           "200": {
@@ -17005,7 +17005,7 @@
     "/dataforseo/domain_analytics/technologies/locations": {
       "get": {
         "summary": "Domain Analytics Technologies API 的位置列表",
-        "description": "定价",
+        "description": "技术类端点接受的地区列表，字段为 `location_name` 和 `country_iso_code`。217 行，实测 29.6 KB——对参考数据来说比看上去大，取一次复用，别每次请求都调。免费：上游成本为 0。⚠️ 注意它与 content 家族的 235 个地区**不是同一份目录**，在那边有效的名字在这里不保证有效。语言的对应接口是 `get_dataforseo_domains_tech_languages`。",
         "operationId": "get_dataforseo_domains_tech_locations",
         "responses": {
           "200": {
@@ -17123,7 +17123,7 @@
     "/dataforseo/domain_analytics/technologies/technologies": {
       "get": {
         "summary": "域名分析 Technologies API 的技术列表",
-        "description": "此端点将提供所有可用技术的完整列表，并按每项具体技术所属的技术组和类别进行组织。",
+        "description": "完整的技术分类树：`groups`，每个含 `id`、`title` 和 `categories`，每个 category 下再挂技术。这些正是搜索类端点里 `groups`、`categories`、`technologies` 能接受的取值。🔴 **实测 130 KB，且不接受任何 limit 或过滤参数**——本家族最大的响应，会明显吃掉 agent 的上下文。取一次、留下你需要的那一枝。免费：上游成本为 0。",
         "operationId": "get_dataforseo_domains_tech_list",
         "responses": {
           "200": {
@@ -17274,7 +17274,7 @@
     "/dataforseo/domain_analytics/technologies/technologies_summary/live": {
       "post": {
         "summary": "技术摘要",
-        "description": "Technologies Summary 端点将提供不同国家和语言中使用指定技术名称、技术组或技术类别的域名数量。",
+        "description": "某项技术用在哪里，而不是谁在用：对你指定的技术集返回 `countries`、`languages`、`content_languages` 和 `keywords`。实测 1.4 KB。响应包在 DataForSEO 的信封里：数据在 `tasks[0].result`，上游扣费在 `tasks[0].cost`，真正的成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍然是 200，所以要看这个字段而不是传输层状态。 用它在拉域名清单之前先估市场规模。要按 group 和 category 分解的计数用 `post_dataforseo_domains_tech_aggregation_live`；要随时间的采用曲线用 `post_dataforseo_domains_tech_technology_stats_live`。",
         "operationId": "post_dataforseo_domains_tech_summary_live",
         "responses": {
           "200": {
@@ -17473,7 +17473,7 @@
     "/dataforseo/domain_analytics/technologies/technology_stats/live": {
       "post": {
         "summary": "技术统计",
-        "description": "Technology Stats 端点将提供历史数据，展示不同国家和语言中使用指定技术的域名数量。",
+        "description": "单项 `technology` 随时间的采用情况。返回 `technology`、`date_from`、`date_to`、`items_count` 和 `items`。⚠️ **`date_from` 与 `date_to` 必须同时给或同时不给**——只给 `date_from` 会被拒，`status_code` 40501、`Invalid Field: 'date_from'`，而 HTTP 仍是 200。两个都不给则用默认窗口。实测 516 字节。响应包在 DataForSEO 的信封里：数据在 `tasks[0].result`，上游扣费在 `tasks[0].cost`，真正的成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍然是 200，所以要看这个字段而不是传输层状态。 只要某一个时间点用 `post_dataforseo_domains_tech_summary_live`。",
         "operationId": "post_dataforseo_domains_tech_technology_stats_live",
         "responses": {
           "200": {
@@ -17661,7 +17661,7 @@
     "/dataforseo/domain_analytics/whois/available_filters": {
       "get": {
         "summary": "Domain Analytics Whois API 的筛选条件",
-        "description": "您可在此处找到有关 Domain Analytics Whois API 可用过滤器的所有必要信息。",
+        "description": "`post_dataforseo_domains_whois_overview_live` 可过滤的字段，挂在 `overview` 键下：`domain`、`created_datetime`、`changed_datetime`、`expiration_datetime`、`updated_datetime`、`first_seen`、`epp_status_codes`、`tld`、`registered`、`registrar`，以及嵌套的 metrics 字段。实测 1.9 KB。免费：上游成本为 0。**这个比本家族其他参考接口更值得先读**，因为它服务的那个端点是最贵的。技术类的对应接口是 `get_dataforseo_domains_tech_available_filters`。",
         "operationId": "get_dataforseo_domains_whois_available_filters",
         "responses": {
           "200": {
@@ -17771,7 +17771,7 @@
     "/dataforseo/domain_analytics/whois/overview/live": {
       "post": {
         "summary": "域名 Whois 概览",
-        "description": "此端点将提供 Whois 数据，并补充反向链接统计信息以及自然搜索和付费搜索结果中的排名与流量信息。使用此端点，你可以获取与请求中指定参数相匹配的域名的所有这些数据。",
+        "description": "带 SEO 指标的 whois 记录。每项含 `domain`、`created_datetime`、`changed_datetime`、`expiration_datetime`、`updated_datetime`、`first_seen`、`epp_status_codes`、`tld`、`registered`、`registrar`，另有 `metrics` 和 `backlinks_info`。用 `limit`、`offset`、`offset_token` 翻页，过滤字段见 `get_dataforseo_domains_whois_available_filters`。单条实测 2.5 KB。响应包在 DataForSEO 的信封里：数据在 `tasks[0].result`，上游扣费在 `tasks[0].cost`，真正的成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍然是 200，所以要看这个字段而不是传输层状态。 🔴 **本家族最贵的端点，高出一个数量级：单条记录实测上游 $0.1212。**过滤条件收紧、`limit` 压低，绝对不要在域名清单上循环调用。",
         "operationId": "post_dataforseo_domains_whois_overview_live",
         "responses": {
           "200": {

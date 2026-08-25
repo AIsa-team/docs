@@ -15809,7 +15809,7 @@
     "/dataforseo/domain_analytics/technologies/aggregation_technologies/live": {
       "post": {
         "summary": "Aggregation Technologies",
-        "description": "The Aggregation Technologies endpoint will provide you with a list of the most popular technologies websites use alongside the technologies you specify. Alternatively, you can specify technology categories or groups to obtain wider stats.",
+        "description": "Counts rather than domains: how many sites match a technology query, broken down by group, category and technology. Returns `total_count`, `items_count`, `offset` and `items`, with `internal_groups_list_limit`, `internal_categories_list_limit`, `internal_technologies_list_limit` and `internal_list_limit` each capping a different nesting level - set all four or the response grows quickly. Measured at 680 bytes with every limit at 1, the smallest response in this family. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, upstream charge in `tasks[0].cost`, and the real outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200, so check that field rather than the transport status. For the domains themselves rather than their counts, use `post_dataforseo_domains_tech_domains_by_technology_live`.",
         "operationId": "post_dataforseo_domains_tech_aggregation_live",
         "responses": {
           "200": {
@@ -16035,7 +16035,7 @@
     "/dataforseo/domain_analytics/technologies/domain_technologies/live": {
       "post": {
         "summary": "Domain Technologies",
-        "description": "Using this endpoint you will get a list of technologies used in a particular domain.",
+        "description": "Everything detected about one domain from a single `target`. Returns `domain`, `title`, `description`, `meta_keywords`, `domain_rank`, `last_visited`, `country_iso_code`, `language_code`, `content_language_code`, `phone_numbers`, `emails`, `social_graph_urls` and `technologies`. Measured at 3.5 KB for stripe.com. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, upstream charge in `tasks[0].cost`, and the real outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200, so check that field rather than the transport status. This is the per-domain direction; to go the other way and find the domains using a given technology use `post_dataforseo_domains_tech_domains_by_technology_live`. The `emails` and `phone_numbers` it surfaces are scraped from the site itself, not a contact database.",
         "operationId": "post_dataforseo_domains_tech_for_domain_live",
         "responses": {
           "200": {
@@ -16232,7 +16232,7 @@
     "/dataforseo/domain_analytics/technologies/domains_by_html_terms/live": {
       "post": {
         "summary": "Domains by HTML Terms",
-        "description": "This endpoint provides domains based on the HTML terms they use on their homepage. In addition to the list of domains, you will also get their technology profiles, the country and language they belong to, and other related data.",
+        "description": "Finds domains whose HTML contains given `search_terms` - a raw string match where `post_dataforseo_domains_tech_domains_by_technology_live` matches a detected technology. Use it for a tracking snippet, an affiliate tag or a template signature that no detector names. Returns `total_count`, `items_count`, `offset`, `offset_token` and `items` carrying the same profile as the technology search. Measured at 1.8 KB for one item; cap with `limit`. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, upstream charge in `tasks[0].cost`, and the real outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200, so check that field rather than the transport status.",
         "operationId": "post_dataforseo_domains_tech_domains_by_html_terms_live",
         "responses": {
           "200": {
@@ -16492,7 +16492,7 @@
     "/dataforseo/domain_analytics/technologies/domains_by_technology/live": {
       "post": {
         "summary": "Domains by Technology",
-        "description": "This endpoint provides domains based on the technology they use. In addition to the list of domains, you will also get their technology profiles, the country and language they belong to, and other related data.",
+        "description": "Finds domains running a given technology - the reverse of `post_dataforseo_domains_tech_for_domain_live`. Accepts `technologies`, `technology_paths`, `groups`, `categories` and `keywords`, with `filters` and `order_by` over the fields named by `get_dataforseo_domains_tech_available_filters`. Returns `total_count`, `items_count`, `offset`, `offset_token` and `items`, each item the same profile as the per-domain call: `domain`, `title`, `description`, `meta_keywords`, `domain_rank`, `last_visited`, `country_iso_code`, `language_code`, `content_language_code`, `phone_numbers`, `emails`, `social_graph_urls` and `technologies`. Measured at 1.5 KB for one item, so cap it with `limit` - the item shape is heavy and `total_count` runs to millions for a popular platform. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, upstream charge in `tasks[0].cost`, and the real outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200, so check that field rather than the transport status.",
         "operationId": "post_dataforseo_domains_tech_domains_by_technology_live",
         "responses": {
           "200": {
@@ -16777,7 +16777,7 @@
     "/dataforseo/domain_analytics/technologies/available_filters": {
       "get": {
         "summary": "Filters for Domain Analytics Technologies API",
-        "description": "Here you will find all the necessary information about filters that can be used with Domain Analytics Technologies API endpoints.",
+        "description": "The filterable fields for each technology endpoint, keyed by endpoint: `domains_by_technology`, `aggregation_technologies`, `technologies_summary` and `domains_by_html_terms`. The first three share `domain_rank`, `last_visited`, `country_iso_code`, `language_code` and `content_language_code`; `domains_by_html_terms` adds `domain`. Measured at 2.1 KB. Free: upstream cost is 0. Read it before building a `filters` argument - an unknown field is rejected, not ignored. The whois equivalent is `get_dataforseo_domains_whois_available_filters`.",
         "operationId": "get_dataforseo_domains_tech_available_filters",
         "responses": {
           "200": {
@@ -16887,7 +16887,7 @@
     "/dataforseo/domain_analytics/technologies/languages": {
       "get": {
         "summary": "List of Languages for Domain Analytics Technologies API",
-        "description": "Pricing",
+        "description": "The languages the technology endpoints accept, as `language_name` and `language_code`. 127 rows, measured at 6.8 KB. Free: upstream cost is 0. Reference data - fetch once and reuse. Note this is not the same catalogue as the content family's 71 languages, so a code valid there is not guaranteed here. The location equivalent is `get_dataforseo_domains_tech_locations`.",
         "operationId": "get_dataforseo_domains_tech_languages",
         "responses": {
           "200": {
@@ -17005,7 +17005,7 @@
     "/dataforseo/domain_analytics/technologies/locations": {
       "get": {
         "summary": "List of Locations for Domain Analytics Technologies API",
-        "description": "Pricing",
+        "description": "The locations the technology endpoints accept, as `location_name` and `country_iso_code`. 217 rows, measured at 29.6 KB - larger than it looks for reference data, so fetch once and reuse rather than calling it per request. Free: upstream cost is 0. Note this list is not the same length as the content family's 235 locations; the two are separate catalogues and a name valid in one is not guaranteed in the other. The language equivalent is `get_dataforseo_domains_tech_languages`.",
         "operationId": "get_dataforseo_domains_tech_locations",
         "responses": {
           "200": {
@@ -17123,7 +17123,7 @@
     "/dataforseo/domain_analytics/technologies/technologies": {
       "get": {
         "summary": "List of Technologies for Domain Analytics Technologies API",
-        "description": "This endpoint will provide you with the full list of available technologies structured by technology groups and categories each particular technology belongs to.",
+        "description": "The full technology taxonomy as a tree: `groups`, each with `id`, `title` and `categories`, and each category with its technologies. These are the values `groups`, `categories` and `technologies` accept on the search endpoints. 🔴 **Measured at 130 KB, and it takes no limit or filter parameter** - by far the largest response here and a serious bite out of an agent's context. Fetch it once and keep the branch you need. Free: upstream cost is 0.",
         "operationId": "get_dataforseo_domains_tech_list",
         "responses": {
           "200": {
@@ -17274,7 +17274,7 @@
     "/dataforseo/domain_analytics/technologies/technologies_summary/live": {
       "post": {
         "summary": "Technologies Summary",
-        "description": "The Technologies Summary endpoint will provide you with the number of domains across different countries and languages that use the specified technology names, technology groups, or technology categories.",
+        "description": "Where a technology is used, rather than by whom: returns `countries`, `languages`, `content_languages` and `keywords` for the technology set you name. Measured at 1.4 KB. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, upstream charge in `tasks[0].cost`, and the real outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200, so check that field rather than the transport status. Use it to size a market before pulling domain lists. For counts broken down by group and category use `post_dataforseo_domains_tech_aggregation_live`; for adoption over time, `post_dataforseo_domains_tech_technology_stats_live`.",
         "operationId": "post_dataforseo_domains_tech_summary_live",
         "responses": {
           "200": {
@@ -17473,7 +17473,7 @@
     "/dataforseo/domain_analytics/technologies/technology_stats/live": {
       "post": {
         "summary": "Technology Stats",
-        "description": "The Technology Stats endpoint will provide you with historical data on the number of domains across different countries and languages that use the specified technology.",
+        "description": "Adoption of one `technology` over time. Returns `technology`, `date_from`, `date_to`, `items_count` and `items`. ⚠️ **`date_from` and `date_to` must both be present or both absent** - sending only `date_from` is rejected with `status_code` 40501, `Invalid Field: 'date_from'`, inside an HTTP 200. Omit both to get the default window. Measured at 516 bytes. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, upstream charge in `tasks[0].cost`, and the real outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200, so check that field rather than the transport status. For a single point in time use `post_dataforseo_domains_tech_summary_live`.",
         "operationId": "post_dataforseo_domains_tech_technology_stats_live",
         "responses": {
           "200": {
@@ -17661,7 +17661,7 @@
     "/dataforseo/domain_analytics/whois/available_filters": {
       "get": {
         "summary": "Filters for Domain Analytics Whois API",
-        "description": "Here you will find all the necessary information about filters that can be used with Domain Analytics Whois API.",
+        "description": "The filterable fields for `post_dataforseo_domains_whois_overview_live`, under an `overview` key: `domain`, `created_datetime`, `changed_datetime`, `expiration_datetime`, `updated_datetime`, `first_seen`, `epp_status_codes`, `tld`, `registered` and `registrar`, alongside the nested metrics fields. Measured at 1.9 KB. Free: upstream cost is 0. Worth reading first here more than anywhere else in this family, because the endpoint it filters is the expensive one. The technology equivalent is `get_dataforseo_domains_tech_available_filters`.",
         "operationId": "get_dataforseo_domains_whois_available_filters",
         "responses": {
           "200": {
@@ -17771,7 +17771,7 @@
     "/dataforseo/domain_analytics/whois/overview/live": {
       "post": {
         "summary": "Domain Whois Overview",
-        "description": "This endpoint will provide you with Whois data enriched with backlink stats, and ranking and traffic info from organic and paid search results. Using this endpoint you will be able to get all these data for the domains matching the parameters you specify in the request.",
+        "description": "Whois records enriched with SEO metrics. Each item carries `domain`, `created_datetime`, `changed_datetime`, `expiration_datetime`, `updated_datetime`, `first_seen`, `epp_status_codes`, `tld`, `registered`, `registrar`, plus `metrics` and `backlinks_info`. Paged with `limit`, `offset` and `offset_token`, filtered over the fields in `get_dataforseo_domains_whois_available_filters`. Measured at 2.5 KB for one item. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, upstream charge in `tasks[0].cost`, and the real outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200, so check that field rather than the transport status. 🔴 **The most expensive endpoint in this family by an order of magnitude: measured at $0.1212 upstream for a single record.** Filter hard and keep `limit` low; do not call it in a loop over a domain list.",
         "operationId": "post_dataforseo_domains_whois_overview_live",
         "responses": {
           "200": {
