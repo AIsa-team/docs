@@ -27,7 +27,7 @@
     "/dataforseo/ai_optimization/ai_keyword_data/keywords_search_volume/live": {
       "post": {
         "summary": "AI Keyword Data Keyword Search Volume",
-        "description": "This endpoint provides search volume data for your target keywords, reflecting their estimated usage in AI tools.",
+        "description": "Search volume for `keywords` as measured inside AI assistants rather than a search engine - how often people ask assistants about a term. Returns `location_code`, `language_code`, `items_count` and `items`. Measured at 1.2 KB and **$0.0101 upstream against $0.012 billed, a thin margin**, so batch keywords into one call rather than calling per keyword. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. For classical search volume use `post_dataforseo_keywords_gads_search_volume_live`; the two answer different questions and often disagree.",
         "operationId": "post_dataforseo_ai_keyword_volume_live",
         "responses": {
           "200": {
@@ -229,7 +229,7 @@
     "/dataforseo/ai_optimization/ai_keyword_data/locations_and_languages": {
       "get": {
         "summary": "List of Locations and Languages for AI Keyword Data API",
-        "description": "Using this endpoint you can get the full list of locations and languages supported in AI Keyword Data API.",
+        "description": "The locations and languages the AI keyword endpoint accepts, as `location_code`, `location_name` and `available_languages` nested per location. Measured at 13.1 KB. Free: upstream cost is 0. Reference data - fetch once and reuse.",
         "operationId": "get_dataforseo_ai_keyword_locales",
         "responses": {
           "200": {
@@ -362,7 +362,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_responses/live": {
       "post": {
         "summary": "Live ChatGPT LLM Responses",
-        "description": "Live ChatGPT LLM Responses endpoint allows you to retrieve structured responses from a specific ChatGPT AI model, based on the input parameters.",
+        "description": "Sends a `user_prompt` to a ChatGPT model and returns its reply, synchronously. `model_name` picks the model - see `get_dataforseo_ai_chat_gpt_llm_responses_models`, and an unlisted name is rejected outright. `max_output_tokens`, `temperature` and `top_p` behave as they do on the vendor's own API, and `web_search` or `force_web_search` let it browse. Returns `model_name`, `input_tokens`, `output_tokens`, `reasoning_tokens`, `web_search`, `money_spent`, `datetime`, `items` and `fan_out_queries`. 💰 **Priced by tokens upstream, not per call**: a sixteen-token reply measured $0.0006, but nothing caps a long one, and AIsa bills a flat $0.012 either way. Read `money_spent` on the response to see what a prompt actually cost. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. ⚠️ This is a general LLM call routed through a data provider, not an SEO measurement. If you want to know what ChatGPT tells users about a brand, `post_dataforseo_ai_chat_gpt_llm_scraper_live` reproduces the consumer experience instead.",
         "operationId": "post_dataforseo_ai_chat_gpt_llm_responses_live",
         "responses": {
           "200": {
@@ -642,7 +642,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_responses/models": {
       "get": {
         "summary": "List of ChatGPT models for LLM Responses",
-        "description": "Pricing",
+        "description": "The ChatGPT models available, each with `model_name`, `reasoning`, `web_search_supported` and `task_post_supported`. Measured at 5.2 KB, the largest of the four model lists. Free: upstream cost is 0. **Read it before calling** - an unlisted `model_name` is rejected with `status_code` 40501 inside an HTTP 200, and `task_post_supported` tells you whether the queued variant will work at all.",
         "operationId": "get_dataforseo_ai_chat_gpt_llm_responses_models",
         "responses": {
           "200": {
@@ -768,7 +768,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_responses/task_get/{id}": {
       "get": {
         "summary": "Get LLM Responses Chat GPT Results by id",
-        "description": "Chat GPT LLM Responses endpoint allows you to retrieve structured responses from a specific Chat GPT model, based on the input parameters.",
+        "description": "Retrieves a queued ChatGPT reply by `id`. Same shape as the live endpoint, including `money_spent`. Free - the charge was on the submit. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200.",
         "operationId": "get_dataforseo_ai_chat_gpt_llm_responses_fetch",
         "responses": {
           "200": {
@@ -816,7 +816,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_responses/task_post": {
       "post": {
         "summary": "Setting ‘LLM Responses ChatGPT’ Tasks",
-        "description": "ChatGPT LLM Responses endpoint allows you to retrieve structured responses from a specific ChatGPT model, based on the input parameters.",
+        "description": "Queues a ChatGPT prompt instead of waiting for the reply, returning a task `id`. Adds `system_message` and `message_chain` over the live endpoint, so a multi-turn conversation can be sent in one task. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. ⚠️ Not every model supports queuing - check `task_post_supported` in `get_dataforseo_ai_chat_gpt_llm_responses_models`. Retrieve with `get_dataforseo_ai_chat_gpt_llm_responses_fetch`.",
         "operationId": "post_dataforseo_ai_chat_gpt_llm_responses_submit",
         "responses": {
           "200": {
@@ -985,7 +985,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_responses/tasks_ready": {
       "get": {
         "summary": "Get LLM Responses ChatGPT Completed Tasks",
-        "description": "This endpoint is designed to provide you with a list of completed tasks, which haven’t been collected yet. If you use the Standard method without specifying the `postback_url`, you can receive the list of `id` for all completed tasks using this endpoint. Then, you can collect the results using the **‘Task GET’** endpoint.",
+        "description": "Lists finished ChatGPT response tasks awaiting collection. Free. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. A caller that holds its own task `id` can fetch directly and skip this.",
         "operationId": "get_dataforseo_ai_chat_gpt_llm_responses_ready",
         "responses": {
           "200": {
@@ -1119,7 +1119,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_scraper/live/advanced": {
       "post": {
         "summary": "Live ChatGPT LLM Scraper",
-        "description": "Live ChatGPT LLM Scraper endpoint provides results from ChatGPT searches. The results are specific to the selected location (see [the List of Locations](https://docs.dataforseo.com/v3/ai_optimization/chatgpt/llm_scraper/locations.md)) and language (see [the List of Languages](https://docs.dataforseo.com/v3/ai_optimization/chatgpt/llm_scraper/languages.md)) parameters.",
+        "description": "Asks ChatGPT a `keyword` as a user would and returns the answer parsed. Returns `keyword`, `location_code`, `language_code`, `model`, `datetime`, `markdown`, `sources`, `fan_out_queries` and `brand_entities` - `markdown` is the answer as the assistant rendered it, `sources` the pages it cited, and `brand_entities` the brands it named. Measured at $0.004. Measured at 11.3 KB. `force_web_search` makes it browse rather than answer from training. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. This is the endpoint for 'what does ChatGPT say about us'; for counting mentions across many answers use `post_dataforseo_ai_llm_mentions_aggregated_metrics_live` instead of scraping repeatedly. The raw form is `post_dataforseo_ai_chat_gpt_llm_scraper_live_html`.",
         "operationId": "post_dataforseo_ai_chat_gpt_llm_scraper_live",
         "responses": {
           "200": {
@@ -1968,7 +1968,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_scraper/live/html": {
       "post": {
         "summary": "Live ChatGPT LLM Scraper API HTML",
-        "description": "Live ChatGPT LLM Scraper API HTML provides a raw HTML page of the results for the specified keyword, language, and location.",
+        "description": "The same ChatGPT answer as `post_dataforseo_ai_chat_gpt_llm_scraper_live`, returned as raw HTML rather than parsed. `expand_citations` unfolds the source list. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. ⚠️ Larger than the 11.3 KB parsed form and harder for an agent to use - take it only when you need markup the parser dropped.",
         "operationId": "post_dataforseo_ai_chat_gpt_llm_scraper_live_html",
         "responses": {
           "200": {
@@ -2168,7 +2168,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_scraper/task_get/advanced/{id}": {
       "get": {
         "summary": "Get ChatGPT LLM Scraper Advanced Results by id",
-        "description": "![checked](https://docs.dataforseo.com/v3/wp-content/themes/dataforseo/assets/img/icons/checked-circle.svg) GET https://api.dataforseo.com/v3/ai\\_optimization/chat\\_gpt/llm\\_scraper/task\\_get/advanced/$id",
+        "description": "Retrieves a queued ChatGPT scrape by `id`. Same parsed shape as the live endpoint. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. Free - the charge was on the submit.",
         "operationId": "get_dataforseo_ai_chat_gpt_llm_scraper_fetch",
         "responses": {
           "200": {
@@ -2216,7 +2216,7 @@
     "/dataforseo/ai_optimization/claude/llm_responses/live": {
       "post": {
         "summary": "Live Claude LLM Responses",
-        "description": "Live Claude LLM Responses endpoint allows you to retrieve structured responses from a specific Claude model, based on the input parameters.",
+        "description": "Sends a `user_prompt` to a Claude model and returns its reply, synchronously. `model_name` must come from `get_dataforseo_ai_claude_llm_responses_models` - names look like `claude-sonnet-5`, and a plausible-looking guess is rejected. A sixteen-token reply measured $0.000744. Returns `model_name`, `input_tokens`, `output_tokens`, `reasoning_tokens`, `web_search`, `money_spent`, `datetime`, `items` and `fan_out_queries`. 💰 **Priced by tokens upstream, not per call**: a sixteen-token reply measured $0.0006, but nothing caps a long one, and AIsa bills a flat $0.012 either way. Read `money_spent` on the response to see what a prompt actually cost. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200.",
         "operationId": "post_dataforseo_ai_claude_llm_responses_live",
         "responses": {
           "200": {
@@ -2500,7 +2500,7 @@
     "/dataforseo/ai_optimization/claude/llm_responses/models": {
       "get": {
         "summary": "List of Claude Models for LLM Responses",
-        "description": "Pricing",
+        "description": "The Claude models available, each with `model_name`, `reasoning`, `web_search_supported` and `task_post_supported`. Measured at 1.8 KB. Free: upstream cost is 0. **Read it before calling** - `model_name` is matched exactly and an unlisted name is rejected with 40501 inside an HTTP 200.",
         "operationId": "get_dataforseo_ai_claude_llm_responses_models",
         "responses": {
           "200": {
@@ -2626,7 +2626,7 @@
     "/dataforseo/ai_optimization/claude/llm_responses/task_get/{id}": {
       "get": {
         "summary": "Get LLM Responses Claude Results by id",
-        "description": "Claude LLM Responses endpoint allows you to retrieve structured responses from a specific Claude model, based on the input parameters.",
+        "description": "Retrieves a queued Claude reply by `id`. Same shape as the live endpoint. Free - the charge was on the submit. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200.",
         "operationId": "get_dataforseo_ai_claude_llm_responses_fetch",
         "responses": {
           "200": {
@@ -2674,7 +2674,7 @@
     "/dataforseo/ai_optimization/claude/llm_responses/task_post": {
       "post": {
         "summary": "Setting LLM Responses Claude Tasks",
-        "description": "Claude LLM Responses endpoint allows you to retrieve structured responses from a specific Claude model, based on the input parameters.",
+        "description": "Queues a Claude prompt instead of waiting, returning a task `id`. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. Check `task_post_supported` in `get_dataforseo_ai_claude_llm_responses_models` first, and retrieve with `get_dataforseo_ai_claude_llm_responses_fetch`.",
         "operationId": "post_dataforseo_ai_claude_llm_responses_submit",
         "responses": {
           "200": {
@@ -2863,7 +2863,7 @@
     "/dataforseo/ai_optimization/claude/llm_responses/tasks_ready": {
       "get": {
         "summary": "Get LLM Responses Claude Completed Tasks",
-        "description": "This endpoint is designed to provide you with a list of completed tasks, which haven’t been collected yet. If you use the Standard method without specifying the `postback_url`, you can receive the list of `id` for all completed tasks using this endpoint. Then, you can collect the results using the **‘Task GET’** endpoint.",
+        "description": "Lists finished Claude response tasks awaiting collection. Free. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. A caller that holds its own task `id` can fetch directly and skip this.",
         "operationId": "get_dataforseo_ai_claude_llm_responses_ready",
         "responses": {
           "200": {
@@ -2997,7 +2997,7 @@
     "/dataforseo/ai_optimization/gemini/llm_responses/live": {
       "post": {
         "summary": "Live Gemini LLM Responses",
-        "description": "Live Gemini LLM Responses endpoint allows you to retrieve structured responses from a specific Gemini AI model, based on the input parameters.",
+        "description": "Sends a `user_prompt` to a Gemini model and returns its reply, synchronously. `model_name` must come from `get_dataforseo_ai_gemini_llm_responses_models`. `system_message` is accepted here, unlike on the Claude and ChatGPT live endpoints. Returns `model_name`, `input_tokens`, `output_tokens`, `reasoning_tokens`, `web_search`, `money_spent`, `datetime`, `items` and `fan_out_queries`. 💰 **Priced by tokens upstream, not per call**: a sixteen-token reply measured $0.0006, but nothing caps a long one, and AIsa bills a flat $0.012 either way. Read `money_spent` on the response to see what a prompt actually cost. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200.",
         "operationId": "post_dataforseo_ai_gemini_llm_responses_live",
         "responses": {
           "200": {
@@ -3269,7 +3269,7 @@
     "/dataforseo/ai_optimization/gemini/llm_responses/models": {
       "get": {
         "summary": "List of Gemini models for LLM Responses",
-        "description": "Pricing",
+        "description": "The Gemini models available, each with `model_name`, `reasoning`, `web_search_supported` and `task_post_supported`. Measured at 1.5 KB. Free: upstream cost is 0. Read it before calling; an unlisted `model_name` is rejected with 40501 inside an HTTP 200.",
         "operationId": "get_dataforseo_ai_gemini_llm_responses_models",
         "responses": {
           "200": {
@@ -3395,7 +3395,7 @@
     "/dataforseo/ai_optimization/gemini/llm_responses/task_get/{id}": {
       "get": {
         "summary": "Get LLM Responses Gemini Results by id",
-        "description": "Gemini LLM Responses endpoint allows you to retrieve structured responses from a specific Gemini model, based on the input parameters.",
+        "description": "Retrieves a queued Gemini reply by `id`. Same shape as the live endpoint. Free - the charge was on the submit. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200.",
         "operationId": "get_dataforseo_ai_gemini_llm_responses_fetch",
         "responses": {
           "200": {
@@ -3443,7 +3443,7 @@
     "/dataforseo/ai_optimization/gemini/llm_responses/task_post": {
       "post": {
         "summary": "Setting ‘LLM Responses Gemini’ Tasks",
-        "description": "Gemini LLM Responses endpoint allows you to retrieve structured responses from a specific Gemini model, based on the input parameters.",
+        "description": "Queues a Gemini prompt instead of waiting, returning a task `id`. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. Check `task_post_supported` in `get_dataforseo_ai_gemini_llm_responses_models`, and retrieve with `get_dataforseo_ai_gemini_llm_responses_fetch`.",
         "operationId": "post_dataforseo_ai_gemini_llm_responses_submit",
         "responses": {
           "200": {
@@ -3620,7 +3620,7 @@
     "/dataforseo/ai_optimization/gemini/llm_responses/tasks_ready": {
       "get": {
         "summary": "Get LLM Responses Gemini Completed Tasks",
-        "description": "This endpoint is designed to provide you with a list of completed tasks, which haven’t been collected yet. If you use the Standard method without specifying the `postback_url`, you can receive the list of `id` for all completed tasks using this endpoint. Then, you can collect the results using the **‘Task GET’** endpoint.",
+        "description": "Lists finished Gemini response tasks awaiting collection. Free. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. A caller that holds its own task `id` can fetch directly and skip this.",
         "operationId": "get_dataforseo_ai_gemini_llm_responses_ready",
         "responses": {
           "200": {
@@ -3754,7 +3754,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/languages": {
       "get": {
         "summary": "Gemini LLM Scraper Languages List",
-        "description": "Pricing",
+        "description": "The languages the Gemini scraper accepts, as `language_name` and `language_code`. Measured at 5.1 KB. Free: upstream cost is 0.",
         "operationId": "get_dataforseo_ai_gemini_llm_scraper_languages",
         "responses": {
           "200": {
@@ -3872,7 +3872,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/live/advanced": {
       "post": {
         "summary": "Live Gemini LLM Scraper Advanced",
-        "description": "Live Gemini LLM Scraper endpoint provides structured results from Gemini. The results are specific to the selected location (see [the List of Locations](https://docs.dataforseo.com/v3/ai_optimization/gemini/llm_scraper/locations.md)), language (see [the List of Languages](https://docs.dataforseo.com/v3/ai_optimization/gemini/llm_scraper/languages.md)), and keyword.",
+        "description": "Asks Gemini a `keyword` as a user would and returns the answer parsed. Returns `keyword`, `location_code`, `language_code`, `model`, `datetime`, `markdown`, `sources`, `se_results_count`, `item_types`, `items_count` and `items`. Measured at 26.1 KB and $0.004 - more than twice the ChatGPT equivalent's payload for the same question. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. The ChatGPT twin is `post_dataforseo_ai_chat_gpt_llm_scraper_live`; running both and comparing is the point of this family.",
         "operationId": "post_dataforseo_ai_gemini_llm_scraper_live",
         "responses": {
           "200": {
@@ -4270,7 +4270,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/live/html": {
       "post": {
         "summary": "Live Gemini LLM Scraper HTML",
-        "description": "Live Gemini LLM Scraper API HTML provides a raw HTML page of the results for the specified keyword, language (see [the List of Languages](https://docs.dataforseo.com/v3/ai_optimization/gemini/llm_scraper/languages.md)), and location (see [the List of Locations](https://docs.dataforseo.com/v3/ai_optimization/gemini/llm_scraper/locations.md)).",
+        "description": "The same Gemini answer as `post_dataforseo_ai_gemini_llm_scraper_live`, returned as raw HTML. `expand_citations` unfolds the source list. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. ⚠️ Larger than the 26.1 KB parsed form; take it only when you need markup the parser dropped.",
         "operationId": "post_dataforseo_ai_gemini_llm_scraper_live_html",
         "responses": {
           "200": {
@@ -4466,7 +4466,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/locations": {
       "get": {
         "summary": "Gemini LLM Scraper Locations List",
-        "description": "Pricing",
+        "description": "The locations the Gemini scraper accepts, as `location_code`, `location_name`, `location_code_parent`, `country_iso_code` and `location_type`. 🔴 **Measured at 42 MB** - every city and region worldwide, and the third Google-side location catalogue in this provider to measure over 40 MB. Do not call it from an agent: `location_code` 2840 is the United States, and other codes belong in DataForSEO's documentation. Free upstream, so nothing warns you.",
         "operationId": "get_dataforseo_ai_gemini_llm_scraper_locations",
         "responses": {
           "200": {
@@ -4596,7 +4596,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/task_get/advanced/{id}": {
       "get": {
         "summary": "Get Gemini LLM Scraper Advanced",
-        "description": "![checked](https://docs.dataforseo.com/v3/wp-content/themes/dataforseo/assets/img/icons/checked-circle.svg) GET https://api.dataforseo.com/v3/ai\\_optimization/gemini/llm\\_scraper/task\\_get/advanced/$id",
+        "description": "Retrieves a queued Gemini scrape by `id`, parsed. Same shape as `post_dataforseo_ai_gemini_llm_scraper_live`. Free - the charge was on the submit. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200.",
         "operationId": "get_dataforseo_ai_gemini_llm_scraper_fetch",
         "responses": {
           "200": {
@@ -4644,7 +4644,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/task_get/html/{id}": {
       "get": {
         "summary": "Get Gemini LLM Scraper HTML",
-        "description": "![checked](https://docs.dataforseo.com/v3/wp-content/themes/dataforseo/assets/img/icons/checked-circle.svg) GET https://api.dataforseo.com/v3/ai\\_optimization/gemini/llm\\_scraper/task\\_get/html/$id",
+        "description": "Retrieves a queued Gemini scrape by `id` as raw HTML. ⚠️ Larger than the parsed twin `get_dataforseo_ai_gemini_llm_scraper_fetch`. Free - the charge was on the submit. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200.",
         "operationId": "get_dataforseo_ai_gemini_llm_scraper_fetch_html",
         "responses": {
           "200": {
@@ -4692,7 +4692,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/task_post": {
       "post": {
         "summary": "Setting Gemini LLM Scraper",
-        "description": "Gemini LLM Scraper API provides structured results from Gemini. The results are specific to the selected location (see [the List of Locations](https://docs.dataforseo.com/v3/ai_optimization/gemini/llm_scraper/locations.md)) and language (see [the List of Languages](https://docs.dataforseo.com/v3/ai_optimization/gemini/llm_scraper/languages.md)), and keyword.",
+        "description": "Queues a Gemini scrape instead of waiting for one, returning a task `id`. `priority` moves it up the queue. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. Retrieve with `get_dataforseo_ai_gemini_llm_scraper_fetch`, or the HTML form with `get_dataforseo_ai_gemini_llm_scraper_fetch_html`. Use it when a batch of keywords would outlast a tool call's patience; the live endpoint is simpler for one.",
         "operationId": "post_dataforseo_ai_gemini_llm_scraper_submit",
         "responses": {
           "200": {
@@ -4866,7 +4866,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/tasks_ready": {
       "get": {
         "summary": "Get Gemini LLM Scraper Completed Tasks",
-        "description": "The **‘Tasks Ready’** endpoint is designed to provide you with the list of completed tasks, which haven’t been collected yet. If you use the Standard method without specifying the `postback_url`, you can receive the list of `id` for all completed tasks using this endpoint. Then, you can collect the results using the **‘Task GET’** endpoint.",
+        "description": "Lists finished Gemini scrape tasks awaiting collection. Free. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. A caller that holds its own task `id` can fetch directly and skip this.",
         "operationId": "get_dataforseo_ai_gemini_llm_scraper_ready",
         "responses": {
           "200": {
@@ -5004,7 +5004,7 @@
     "/dataforseo/ai_optimization/llm_mentions/aggregated_metrics/live": {
       "post": {
         "summary": "Live LLM Mentions Aggregated Metrics",
-        "description": "Live LLM Mentions endpoint provides aggregated metrics for mentions of the keywords or domains specified in the `target` array of the request. The results are specific to the selected platform (`google` for Google’s AI Overview or `chat_gpt` for ChatGPT), location and language parameters (see [the List of Locations & Languages](https://docs.dataforseo.com/v3/ai_optimization/llm_mentions/locations_and_languages.md)).",
+        "description": "How often assistants mention your target, as totals rather than individual answers: `total` and `items`. Measured at 7.0 KB. 🔴 **Measured at $0.101 upstream, roughly eight times the flat rate billed** - among the most expensive endpoints in this provider. ⚠️ `target` is an **array of objects**, each `{\"domain\": \"...\"}` or `{\"keyword\": \"...\"}`; a bare string is rejected as the wrong type and an array of strings as 'Each target item must be an object'. Filter fields come from `get_dataforseo_ai_llm_mentions_available_filters`. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. This is the headline visibility number; `post_dataforseo_ai_llm_mentions_search_live` shows the answers behind it, and `post_dataforseo_ai_llm_mentions_cross_metrics_live` compares several targets at once.",
         "operationId": "post_dataforseo_ai_llm_mentions_aggregated_metrics_live",
         "responses": {
           "200": {
@@ -5408,7 +5408,7 @@
     "/dataforseo/ai_optimization/llm_mentions/cross_aggregated_metrics/live": {
       "post": {
         "summary": "Live LLM Mentions Cross Aggregated Metrics",
-        "description": "Live LLM Mentions endpoint provides aggregated metrics grouped by custom keys for mentions of the keywords or domains specified in the `target` array of the request. Each item in the results array corresponds to the specified target. The results are specific to the selected platform (`google` for Google’s AI Overview or `chat_gpt` for ChatGPT), location and language parameters (see [the List of Locations & Languages](https://docs.dataforseo.com/v3/ai_optimization/llm_mentions/locations_and_languages.md)).",
+        "description": "Compares mention metrics across several targets in one call, grouped by `aggregation_key`. Takes `targets` as a list of target arrays rather than the single `target` its siblings take - the shapes differ, and mixing them up is rejected as an unknown field. 🔴 **Measured at $0.101 upstream, roughly eight times the flat rate billed** - among the most expensive endpoints in this provider. ⚠️ `target` is an **array of objects**, each `{\"domain\": \"...\"}` or `{\"keyword\": \"...\"}`; a bare string is rejected as the wrong type and an array of strings as 'Each target item must be an object'. Filter fields come from `get_dataforseo_ai_llm_mentions_available_filters`. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. Running `post_dataforseo_ai_llm_mentions_aggregated_metrics_live` once per target costs the same per call, so use this when the comparison itself is the point.",
         "operationId": "post_dataforseo_ai_llm_mentions_cross_metrics_live",
         "responses": {
           "200": {
@@ -6018,7 +6018,7 @@
     "/dataforseo/ai_optimization/llm_mentions/available_filters": {
       "get": {
         "summary": "Filters for AI Optimization LLM Mentions API",
-        "description": "Here you will find all the necessary information about filters that can be used with AI Optimization LLM Mentions API endpoints.",
+        "description": "The filterable fields for each mentions endpoint, keyed by endpoint: `search`, `search_mentions`, `target_metrics`, `multi_target_metrics`, `top_mentioned_domains`, `top_mentioned_pages`, `top_mentioned_brands`, `top_mentioned_brand_categories` and the `_lite` variants. Measured at 4.9 KB. Free: upstream cost is 0. Read it before building a `filters` argument - the mentions endpoints cost $0.101 each, so a rejected call is an expensive way to learn a field name.",
         "operationId": "get_dataforseo_ai_llm_mentions_available_filters",
         "responses": {
           "200": {
@@ -6128,7 +6128,7 @@
     "/dataforseo/ai_optimization/llm_mentions/locations_and_languages": {
       "get": {
         "summary": "List of Locations and Languages for AI Optimization LLM Mentions API",
-        "description": "Using this endpoint you can get the full list of locations and languages supported in AI Optimization LLM Mentions API.",
+        "description": "The locations and languages the mentions endpoints accept, as `location_code`, `location_name` and `available_languages` - languages are nested per location rather than listed separately. Measured at 58.6 KB. Free: upstream cost is 0. Reference data, so fetch once and reuse.",
         "operationId": "get_dataforseo_ai_llm_mentions_locales",
         "responses": {
           "200": {
@@ -6272,7 +6272,7 @@
     "/dataforseo/ai_optimization/llm_mentions/search/live": {
       "post": {
         "summary": "Live LLM Mentions",
-        "description": "Live LLM Mentions Search endpoint provides mention data and related metrics from AI searches. The results are specific to the selected platform (`google` for Google’s AI Overview or `chat_gpt` for ChatGPT), as well as location and language parameters (see [the List of Locations & Languages](https://docs.dataforseo.com/v3/ai_optimization/llm_mentions/locations_and_languages.md)).",
+        "description": "The individual answers in which an assistant mentioned your target. Returns `total_count`, `current_offset`, `search_after_token` and `items` - page with the token, not `offset`, past the first pages. Measured at 7.7 KB for one item. 🔴 **Measured at $0.101 upstream, roughly eight times the flat rate billed** - among the most expensive endpoints in this provider. ⚠️ `target` is an **array of objects**, each `{\"domain\": \"...\"}` or `{\"keyword\": \"...\"}`; a bare string is rejected as the wrong type and an array of strings as 'Each target item must be an object'. Filter fields come from `get_dataforseo_ai_llm_mentions_available_filters`. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. For counts rather than the mentions themselves use `post_dataforseo_ai_llm_mentions_aggregated_metrics_live`.",
         "operationId": "post_dataforseo_ai_llm_mentions_search_live",
         "responses": {
           "200": {
@@ -6673,7 +6673,7 @@
     "/dataforseo/ai_optimization/llm_mentions/top_domains/live": {
       "post": {
         "summary": "Live LLM Mentions Top Domains",
-        "description": "Live LLM Mentions Top Domains endpoint provides aggregated LLM mentions metrics grouped by the most frequently mentioned domains for the specified `target`. The results are specific to the selected platform (`google` for Google’s AI Overview or `chat_gpt` for ChatGPT), location and language parameters (see [the List of Locations & Languages](https://docs.dataforseo.com/v3/ai_optimization/llm_mentions/locations_and_languages.md)).",
+        "description": "The domains assistants cite most when answering about your target: `total` and `items`. Measured at 20.3 KB, the largest response in the mentions family. 🔴 **Measured at $0.101 upstream, roughly eight times the flat rate billed** - among the most expensive endpoints in this provider. ⚠️ `target` is an **array of objects**, each `{\"domain\": \"...\"}` or `{\"keyword\": \"...\"}`; a bare string is rejected as the wrong type and an array of strings as 'Each target item must be an object'. Filter fields come from `get_dataforseo_ai_llm_mentions_available_filters`. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. This is the list to pitch: these are the pages shaping what assistants say. For individual pages rather than domains use `post_dataforseo_ai_llm_mentions_top_pages_live`.",
         "operationId": "post_dataforseo_ai_llm_mentions_top_domains_live",
         "responses": {
           "200": {
@@ -7278,7 +7278,7 @@
     "/dataforseo/ai_optimization/llm_mentions/top_pages/live": {
       "post": {
         "summary": "Live LLM Mentions Top Pages",
-        "description": "Live LLM Mentions Top Pages endpoint provides aggregated LLM mentions metrics grouped by the most frequently mentioned pages for the specified `target`. The results are specific to the selected platform (`google` for Google’s AI Overview or `chat_gpt` for ChatGPT), location and language parameters (see [the List of Locations & Languages](https://docs.dataforseo.com/v3/ai_optimization/llm_mentions/locations_and_languages.md)).",
+        "description": "The individual pages assistants cite most when answering about your target: `total` and `items`. Measured at 13.1 KB. 🔴 **Measured at $0.101 upstream, roughly eight times the flat rate billed** - among the most expensive endpoints in this provider. ⚠️ `target` is an **array of objects**, each `{\"domain\": \"...\"}` or `{\"keyword\": \"...\"}`; a bare string is rejected as the wrong type and an array of strings as 'Each target item must be an object'. Filter fields come from `get_dataforseo_ai_llm_mentions_available_filters`. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. More actionable than its domain-level twin `post_dataforseo_ai_llm_mentions_top_domains_live` when you want to know which article to update or pitch, rather than which publisher.",
         "operationId": "post_dataforseo_ai_llm_mentions_top_pages_live",
         "responses": {
           "200": {
@@ -7883,7 +7883,7 @@
     "/dataforseo/ai_optimization/perplexity/llm_responses/live": {
       "post": {
         "summary": "Live Perplexity LLM Responses",
-        "description": "Live Perplexity LLM Responses endpoint allows you to retrieve structured responses from a specific Perplexity AI model, based on the input parameters.",
+        "description": "Sends a `user_prompt` to a Perplexity model and returns its reply, synchronously. `model_name` must come from `get_dataforseo_ai_perplexity_llm_responses_models` - `sonar`, `sonar-pro` and `sonar-reasoning-pro`. `web_search_country_iso_code` scopes the search, which the other three vendors do not offer. Returns `model_name`, `input_tokens`, `output_tokens`, `reasoning_tokens`, `web_search`, `money_spent`, `datetime`, `items` and `fan_out_queries`. 💰 **Priced by tokens upstream, not per call**: a sixteen-token reply measured $0.0006, but nothing caps a long one, and AIsa bills a flat $0.012 either way. Read `money_spent` on the response to see what a prompt actually cost. Wrapped in DataForSEO's envelope: data in `tasks[0].result`, outcome in `tasks[0].status_code` - a rejected request still returns HTTP 200. ⚠️ Perplexity searches by default, so its cost varies more with the question than the other vendors' do - `post_perplexity_sonar_deep_research` is the documented case of that going badly (CASEBOOK C5).",
         "operationId": "post_dataforseo_ai_perplexity_llm_responses_live",
         "responses": {
           "200": {
@@ -8120,7 +8120,7 @@
     "/dataforseo/ai_optimization/perplexity/llm_responses/models": {
       "get": {
         "summary": "List of Perplexity models for LLM Responses",
-        "description": "Pricing",
+        "description": "The Perplexity models available - `sonar`, `sonar-pro`, `sonar-reasoning-pro` - each with `model_name`, `reasoning`, `web_search_supported` and `task_post_supported`. Measured at 745 bytes, the smallest model list here. Free: upstream cost is 0. Note there is no queued variant for Perplexity; the live endpoint is the only one.",
         "operationId": "get_dataforseo_ai_perplexity_llm_responses_models",
         "responses": {
           "200": {

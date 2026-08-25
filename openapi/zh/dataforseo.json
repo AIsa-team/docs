@@ -27,7 +27,7 @@
     "/dataforseo/ai_optimization/ai_keyword_data/keywords_search_volume/live": {
       "post": {
         "summary": "AI 关键词数据关键词搜索量",
-        "description": "此端点提供目标关键词的搜索量数据，反映其在 AI 工具中的估算使用量。",
+        "description": "`keywords` 在 **AI 助手内部**而非搜索引擎里的搜索量——人们多常拿这个词去问助手。返回 `location_code`、`language_code`、`items_count` 和 `items`。实测 1.2 KB、**上游 $0.0101 对我们收的 $0.012，margin 很薄**，所以把关键词批量塞进一次调用，别一个词调一次。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 要传统搜索量用 `post_dataforseo_keywords_gads_search_volume_live`；两者回答的是不同问题，结论经常不一致。",
         "operationId": "post_dataforseo_ai_keyword_volume_live",
         "responses": {
           "200": {
@@ -229,7 +229,7 @@
     "/dataforseo/ai_optimization/ai_keyword_data/locations_and_languages": {
       "get": {
         "summary": "AI Keyword Data API 的位置和语言列表",
-        "description": "使用此端点，您可以获取 AI Keyword Data API 支持的完整位置和语言列表。",
+        "description": "AI 关键词端点接受的地区与语言，字段为 `location_code`、`location_name` 和嵌套的 `available_languages`。实测 13.1 KB。免费：上游成本为 0。属参考数据，取一次复用即可。",
         "operationId": "get_dataforseo_ai_keyword_locales",
         "responses": {
           "200": {
@@ -362,7 +362,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_responses/live": {
       "post": {
         "summary": "实时 ChatGPT LLM 响应",
-        "description": "实时 ChatGPT LLM Responses 端点允许您根据输入参数从特定 ChatGPT AI 模型获取结构化响应。",
+        "description": "把 `user_prompt` 发给某个 ChatGPT 模型并同步返回回复。`model_name` 选模型——见 `get_dataforseo_ai_chat_gpt_llm_responses_models`，不在列表里的名字会被直接拒绝。`max_output_tokens`、`temperature`、`top_p` 的行为与厂商自家 API 一致，`web_search` / `force_web_search` 允许它联网。返回 `model_name`、`input_tokens`、`output_tokens`、`reasoning_tokens`、`web_search`、`money_spent`、`datetime`、`items` 和 `fan_out_queries`。💰 **上游按 token 计费，不是按次**：十六个 token 的回复实测 $0.0006，但长回复没有上限，而 AIsa 两种情况都收固定 $0.012。看响应里的 `money_spent` 才知道一个 prompt 实际花了多少。 响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 ⚠️ **这是一次经数据商中转的通用 LLM 调用，不是 SEO 测量**。想知道 ChatGPT 对用户怎么讲某个品牌，请用 `post_dataforseo_ai_chat_gpt_llm_scraper_live`，那个复现的是消费者看到的体验。",
         "operationId": "post_dataforseo_ai_chat_gpt_llm_responses_live",
         "responses": {
           "200": {
@@ -642,7 +642,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_responses/models": {
       "get": {
         "summary": "用于 LLM Responses 的 ChatGPT 模型列表",
-        "description": "定价",
+        "description": "可用的 ChatGPT 模型，每项含 `model_name`、`reasoning`、`web_search_supported` 和 `task_post_supported`。实测 5.2 KB（四份模型列表里最大的一份）。免费：上游成本为 0。**调用前先读它**——不在列表里的 `model_name` 会以 `status_code` 40501 被拒，而 HTTP 仍是 200；`task_post_supported` 则告诉你排队版本能不能用。",
         "operationId": "get_dataforseo_ai_chat_gpt_llm_responses_models",
         "responses": {
           "200": {
@@ -768,7 +768,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_responses/task_get/{id}": {
       "get": {
         "summary": "按 id 获取 LLM Responses Chat GPT 结果",
-        "description": "Chat GPT LLM Responses 端点允许您根据输入参数，从指定 Chat GPT 模型获取结构化响应。",
+        "description": "按 `id` 取回排队的 ChatGPT 回复，结构与 live 端点相同，含 `money_spent`。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。",
         "operationId": "get_dataforseo_ai_chat_gpt_llm_responses_fetch",
         "responses": {
           "200": {
@@ -816,7 +816,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_responses/task_post": {
       "post": {
         "summary": "设置“LLM Responses ChatGPT”任务",
-        "description": "ChatGPT LLM Responses 端点允许你根据输入参数，从特定 ChatGPT 模型获取结构化响应。",
+        "description": "把 ChatGPT 的 prompt 排队而不是等回复，返回任务 `id`。相比 live 端点多了 `system_message` 和 `message_chain`，因此可以把多轮会话一次发过去。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 ⚠️ 不是每个模型都支持排队——先看 `get_dataforseo_ai_chat_gpt_llm_responses_models` 里的 `task_post_supported`。用 `get_dataforseo_ai_chat_gpt_llm_responses_fetch` 取结果。",
         "operationId": "post_dataforseo_ai_chat_gpt_llm_responses_submit",
         "responses": {
           "200": {
@@ -985,7 +985,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_responses/tasks_ready": {
       "get": {
         "summary": "获取 LLM Responses ChatGPT 已完成任务",
-        "description": "此端点用于提供尚未获取的已完成任务列表。如果使用 Standard 方法且未指定 `postback_url`，则可以通过此端点获取所有已完成任务的 `id` 列表。然后，您可以使用 **‘Task GET’** 端点获取结果。",
+        "description": "列出已完成、等待取回的 ChatGPT 回复 任务。免费。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 手里有自己任务 `id` 的调用方可以直接 fetch，跳过它。",
         "operationId": "get_dataforseo_ai_chat_gpt_llm_responses_ready",
         "responses": {
           "200": {
@@ -1119,7 +1119,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_scraper/live/advanced": {
       "post": {
         "summary": "实时 ChatGPT LLM 抓取器",
-        "description": "Live ChatGPT LLM Scraper 端点提供 ChatGPT 搜索结果。结果特定于所选位置（参见[位置列表](https://docs.dataforseo.com/v3/ai_optimization/chatgpt/llm_scraper/locations.md)）和语言（参见[语言列表](https://docs.dataforseo.com/v3/ai_optimization/chatgpt/llm_scraper/languages.md)）参数。",
+        "description": "像用户那样把 `keyword` 问给 ChatGPT，返回解析后的答案。返回 `keyword`、`location_code`、`language_code`、`model`、`datetime`、`markdown`、`sources`、`fan_out_queries` 和 `brand_entities`——`markdown` 是助手渲染出的答案，`sources` 是它引用的页面，`brand_entities` 是它点到的品牌。实测 $0.004。 实测 11.3 KB。`force_web_search` 让它去联网而不是凭训练数据回答。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 这是回答「ChatGPT 怎么说我们」的端点；要跨大量回答统计提及次数，请用 `post_dataforseo_ai_llm_mentions_aggregated_metrics_live`，别反复抓取。原始形式是 `post_dataforseo_ai_chat_gpt_llm_scraper_live_html`。",
         "operationId": "post_dataforseo_ai_chat_gpt_llm_scraper_live",
         "responses": {
           "200": {
@@ -1968,7 +1968,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_scraper/live/html": {
       "post": {
         "summary": "实时 ChatGPT LLM 抓取工具 API HTML",
-        "description": "Live ChatGPT LLM Scraper API HTML 为指定的关键词、语言和位置提供结果的原始 HTML 页面。",
+        "description": "与 `post_dataforseo_ai_chat_gpt_llm_scraper_live` 相同的 ChatGPT 答案，但返回原始 HTML 而非解析结果。`expand_citations` 展开来源列表。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 ⚠️ 比 11.3 KB 的解析版大，且 agent 更难用——只有需要解析器丢掉的标记时才取它。",
         "operationId": "post_dataforseo_ai_chat_gpt_llm_scraper_live_html",
         "responses": {
           "200": {
@@ -2168,7 +2168,7 @@
     "/dataforseo/ai_optimization/chat_gpt/llm_scraper/task_get/advanced/{id}": {
       "get": {
         "summary": "按 id 获取 ChatGPT LLM Scraper 高级结果",
-        "description": "![已检查](https://docs.dataforseo.com/v3/wp-content/themes/dataforseo/assets/img/icons/checked-circle.svg) GET https://api.dataforseo.com/v3/ai\\_optimization/chat\\_gpt/llm\\_scraper/task\\_get/advanced/$id",
+        "description": "按 `id` 取回排队的 ChatGPT 抓取，结构与 live 端点相同。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。",
         "operationId": "get_dataforseo_ai_chat_gpt_llm_scraper_fetch",
         "responses": {
           "200": {
@@ -2216,7 +2216,7 @@
     "/dataforseo/ai_optimization/claude/llm_responses/live": {
       "post": {
         "summary": "Claude LLM 实时响应",
-        "description": "Live Claude LLM Responses 端点允许您根据输入参数，从指定 Claude 模型获取结构化响应。",
+        "description": "把 `user_prompt` 发给某个 Claude 模型并同步返回回复。`model_name` 必须来自 `get_dataforseo_ai_claude_llm_responses_models`——名字形如 `claude-sonnet-5`，**看起来合理的猜测会被拒**。十六个 token 的回复实测 $0.000744。返回 `model_name`、`input_tokens`、`output_tokens`、`reasoning_tokens`、`web_search`、`money_spent`、`datetime`、`items` 和 `fan_out_queries`。💰 **上游按 token 计费，不是按次**：十六个 token 的回复实测 $0.0006，但长回复没有上限，而 AIsa 两种情况都收固定 $0.012。看响应里的 `money_spent` 才知道一个 prompt 实际花了多少。 响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。",
         "operationId": "post_dataforseo_ai_claude_llm_responses_live",
         "responses": {
           "200": {
@@ -2500,7 +2500,7 @@
     "/dataforseo/ai_optimization/claude/llm_responses/models": {
       "get": {
         "summary": "用于 LLM 响应的 Claude 模型列表",
-        "description": "定价",
+        "description": "可用的 Claude 模型，每项含 `model_name`、`reasoning`、`web_search_supported` 和 `task_post_supported`。实测 1.8 KB。免费：上游成本为 0。**调用前先读它**——不在列表里的 `model_name` 会以 `status_code` 40501 被拒，而 HTTP 仍是 200；`task_post_supported` 则告诉你排队版本能不能用。",
         "operationId": "get_dataforseo_ai_claude_llm_responses_models",
         "responses": {
           "200": {
@@ -2626,7 +2626,7 @@
     "/dataforseo/ai_optimization/claude/llm_responses/task_get/{id}": {
       "get": {
         "summary": "按 id 获取 LLM Responses Claude 结果",
-        "description": "Claude LLM Responses 端点允许你根据输入参数，从特定 Claude 模型获取结构化响应。",
+        "description": "按 `id` 取回排队的 Claude 回复，结构与 live 端点相同。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。",
         "operationId": "get_dataforseo_ai_claude_llm_responses_fetch",
         "responses": {
           "200": {
@@ -2674,7 +2674,7 @@
     "/dataforseo/ai_optimization/claude/llm_responses/task_post": {
       "post": {
         "summary": "设置 LLM Responses Claude 任务",
-        "description": "Claude LLM Responses 端点允许你根据输入参数，从特定 Claude 模型获取结构化响应。",
+        "description": "把 Claude 的 prompt 排队而不是等回复，返回任务 `id`。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 先看 `get_dataforseo_ai_claude_llm_responses_models` 里的 `task_post_supported`，再用 `get_dataforseo_ai_claude_llm_responses_fetch` 取结果。",
         "operationId": "post_dataforseo_ai_claude_llm_responses_submit",
         "responses": {
           "200": {
@@ -2863,7 +2863,7 @@
     "/dataforseo/ai_optimization/claude/llm_responses/tasks_ready": {
       "get": {
         "summary": "获取 LLM Responses Claude 已完成任务",
-        "description": "此端点用于提供尚未获取的已完成任务列表。如果使用 Standard 方法且未指定 `postback_url`，则可以通过此端点获取所有已完成任务的 `id` 列表。然后，您可以使用 **‘Task GET’** 端点获取结果。",
+        "description": "列出已完成、等待取回的 Claude 回复 任务。免费。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 手里有自己任务 `id` 的调用方可以直接 fetch，跳过它。",
         "operationId": "get_dataforseo_ai_claude_llm_responses_ready",
         "responses": {
           "200": {
@@ -2997,7 +2997,7 @@
     "/dataforseo/ai_optimization/gemini/llm_responses/live": {
       "post": {
         "summary": "实时 Gemini LLM 响应",
-        "description": "Live Gemini LLM Responses 端点允许您根据输入参数，从特定 Gemini AI 模型获取结构化响应。",
+        "description": "把 `user_prompt` 发给某个 Gemini 模型并同步返回回复。`model_name` 必须来自 `get_dataforseo_ai_gemini_llm_responses_models`。**这里接受 `system_message`**，而 Claude 和 ChatGPT 的 live 端点不接受。返回 `model_name`、`input_tokens`、`output_tokens`、`reasoning_tokens`、`web_search`、`money_spent`、`datetime`、`items` 和 `fan_out_queries`。💰 **上游按 token 计费，不是按次**：十六个 token 的回复实测 $0.0006，但长回复没有上限，而 AIsa 两种情况都收固定 $0.012。看响应里的 `money_spent` 才知道一个 prompt 实际花了多少。 响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。",
         "operationId": "post_dataforseo_ai_gemini_llm_responses_live",
         "responses": {
           "200": {
@@ -3269,7 +3269,7 @@
     "/dataforseo/ai_optimization/gemini/llm_responses/models": {
       "get": {
         "summary": "用于 LLM Responses 的 Gemini 模型列表",
-        "description": "定价",
+        "description": "可用的 Gemini 模型，每项含 `model_name`、`reasoning`、`web_search_supported` 和 `task_post_supported`。实测 1.5 KB。免费：上游成本为 0。**调用前先读它**——不在列表里的 `model_name` 会以 `status_code` 40501 被拒，而 HTTP 仍是 200；`task_post_supported` 则告诉你排队版本能不能用。",
         "operationId": "get_dataforseo_ai_gemini_llm_responses_models",
         "responses": {
           "200": {
@@ -3395,7 +3395,7 @@
     "/dataforseo/ai_optimization/gemini/llm_responses/task_get/{id}": {
       "get": {
         "summary": "按 id 获取 LLM Responses Gemini 结果",
-        "description": "Gemini LLM Responses 端点允许你根据输入参数，从指定的 Gemini 模型获取结构化响应。",
+        "description": "按 `id` 取回排队的 Gemini 回复，结构与 live 端点相同。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。",
         "operationId": "get_dataforseo_ai_gemini_llm_responses_fetch",
         "responses": {
           "200": {
@@ -3443,7 +3443,7 @@
     "/dataforseo/ai_optimization/gemini/llm_responses/task_post": {
       "post": {
         "summary": "设置“LLM Responses Gemini”任务",
-        "description": "Gemini LLM Responses 端点允许你根据输入参数，从指定的 Gemini 模型获取结构化响应。",
+        "description": "把 Gemini 的 prompt 排队而不是等回复，返回任务 `id`。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 先看 `get_dataforseo_ai_gemini_llm_responses_models` 里的 `task_post_supported`，再用 `get_dataforseo_ai_gemini_llm_responses_fetch` 取结果。",
         "operationId": "post_dataforseo_ai_gemini_llm_responses_submit",
         "responses": {
           "200": {
@@ -3620,7 +3620,7 @@
     "/dataforseo/ai_optimization/gemini/llm_responses/tasks_ready": {
       "get": {
         "summary": "获取已完成的 LLM Responses Gemini 任务",
-        "description": "此端点用于提供尚未获取的已完成任务列表。如果使用 Standard 方法且未指定 `postback_url`，则可以通过此端点获取所有已完成任务的 `id` 列表。然后，您可以使用 **‘Task GET’** 端点获取结果。",
+        "description": "列出已完成、等待取回的 Gemini 回复 任务。免费。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 手里有自己任务 `id` 的调用方可以直接 fetch，跳过它。",
         "operationId": "get_dataforseo_ai_gemini_llm_responses_ready",
         "responses": {
           "200": {
@@ -3754,7 +3754,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/languages": {
       "get": {
         "summary": "Gemini LLM 抓取器语言列表",
-        "description": "定价",
+        "description": "Gemini scraper 接受的语言，字段为 `language_name` 和 `language_code`。实测 5.1 KB。免费：上游成本为 0。",
         "operationId": "get_dataforseo_ai_gemini_llm_scraper_languages",
         "responses": {
           "200": {
@@ -3872,7 +3872,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/live/advanced": {
       "post": {
         "summary": "实时 Gemini LLM 抓取器高级版",
-        "description": "实时 Gemini LLM 抓取器端点提供来自 Gemini 的结构化结果。结果取决于所选位置（请参阅[位置列表](https://docs.dataforseo.com/v3/ai_optimization/gemini/llm_scraper/locations.md)）、语言（请参阅[语言列表](https://docs.dataforseo.com/v3/ai_optimization/gemini/llm_scraper/languages.md)）和关键词。",
+        "description": "像用户那样把 `keyword` 问给 Gemini，返回解析后的答案。返回 `keyword`、`location_code`、`language_code`、`model`、`datetime`、`markdown`、`sources`、`se_results_count`、`item_types`、`items_count` 和 `items`。实测 26.1 KB、$0.004——**同一个问题，负载是 ChatGPT 版的两倍多**。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 ChatGPT 孪生是 `post_dataforseo_ai_chat_gpt_llm_scraper_live`；两个都跑再对比，正是本家族的用法。",
         "operationId": "post_dataforseo_ai_gemini_llm_scraper_live",
         "responses": {
           "200": {
@@ -4270,7 +4270,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/live/html": {
       "post": {
         "summary": "实时 Gemini LLM 抓取工具 HTML",
-        "description": "Live Gemini LLM Scraper API HTML 为指定关键词、语言（请参阅[语言列表](https://docs.dataforseo.com/v3/ai_optimization/gemini/llm_scraper/languages.md)）和位置（请参阅[位置列表](https://docs.dataforseo.com/v3/ai_optimization/gemini/llm_scraper/locations.md)）提供原始 HTML 结果页面。",
+        "description": "与 `post_dataforseo_ai_gemini_llm_scraper_live` 相同的 Gemini 答案，返回原始 HTML。`expand_citations` 展开来源列表。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 ⚠️ 比 26.1 KB 的解析版大，只有需要解析器丢掉的标记时才取。",
         "operationId": "post_dataforseo_ai_gemini_llm_scraper_live_html",
         "responses": {
           "200": {
@@ -4466,7 +4466,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/locations": {
       "get": {
         "summary": "Gemini LLM 抓取工具位置列表",
-        "description": "定价",
+        "description": "Gemini scraper 接受的地区列表，字段为 `location_code`、`location_name`、`location_code_parent`、`country_iso_code`、`location_type`。🔴 **实测 42 MB**——全球每一个城市和大区，也是本 provider 里第三个超过 40 MB 的 Google 侧地区目录。不要从 agent 调用它：`location_code` 2840 是美国，其他代码请查 DataForSEO 的文档。上游免费，所以没有任何信号会警告你。",
         "operationId": "get_dataforseo_ai_gemini_llm_scraper_locations",
         "responses": {
           "200": {
@@ -4596,7 +4596,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/task_get/advanced/{id}": {
       "get": {
         "summary": "获取 Gemini LLM Scraper Advanced",
-        "description": "![已检查](https://docs.dataforseo.com/v3/wp-content/themes/dataforseo/assets/img/icons/checked-circle.svg) GET https://api.dataforseo.com/v3/ai\\_optimization/gemini/llm\\_scraper/task\\_get/advanced/$id",
+        "description": "按 `id` 取回排队的 Gemini 抓取（解析版），结构与 `post_dataforseo_ai_gemini_llm_scraper_live` 相同。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。",
         "operationId": "get_dataforseo_ai_gemini_llm_scraper_fetch",
         "responses": {
           "200": {
@@ -4644,7 +4644,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/task_get/html/{id}": {
       "get": {
         "summary": "获取 Gemini LLM 抓取器 HTML",
-        "description": "![已检查](https://docs.dataforseo.com/v3/wp-content/themes/dataforseo/assets/img/icons/checked-circle.svg) GET https://api.dataforseo.com/v3/ai\\_optimization/gemini/llm\\_scraper/task\\_get/html/$id",
+        "description": "按 `id` 取回排队的 Gemini 抓取的原始 HTML。⚠️ 比解析版孪生 `get_dataforseo_ai_gemini_llm_scraper_fetch` 大。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。",
         "operationId": "get_dataforseo_ai_gemini_llm_scraper_fetch_html",
         "responses": {
           "200": {
@@ -4692,7 +4692,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/task_post": {
       "post": {
         "summary": "设置 Gemini LLM 抓取器",
-        "description": "Gemini LLM Scraper API 提供来自 Gemini 的结构化结果。结果取决于所选位置（参见[位置列表](https://docs.dataforseo.com/v3/ai_optimization/gemini/llm_scraper/locations.md)）、语言（参见[语言列表](https://docs.dataforseo.com/v3/ai_optimization/gemini/llm_scraper/languages.md)）和关键词。",
+        "description": "把 Gemini 抓取排队而不是等它跑完，返回任务 `id`。`priority` 可以插队。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 用 `get_dataforseo_ai_gemini_llm_scraper_fetch` 取解析版、`get_dataforseo_ai_gemini_llm_scraper_fetch_html` 取 HTML 版。一批关键词会超出一次工具调用的耐心时用它；只有一个词时 live 端点更简单。",
         "operationId": "post_dataforseo_ai_gemini_llm_scraper_submit",
         "responses": {
           "200": {
@@ -4866,7 +4866,7 @@
     "/dataforseo/ai_optimization/gemini/llm_scraper/tasks_ready": {
       "get": {
         "summary": "获取已完成的 Gemini LLM Scraper 任务",
-        "description": "**‘Tasks Ready’** 端点用于提供尚未领取的已完成任务列表。如果使用 Standard 方法且未指定 `postback_url`，则可以通过此端点获取所有已完成任务的 `id` 列表。然后，可以使用 **‘Task GET’** 端点领取结果。",
+        "description": "列出已完成、等待取回的 Gemini 抓取 任务。免费。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 手里有自己任务 `id` 的调用方可以直接 fetch，跳过它。",
         "operationId": "get_dataforseo_ai_gemini_llm_scraper_ready",
         "responses": {
           "200": {
@@ -5004,7 +5004,7 @@
     "/dataforseo/ai_optimization/llm_mentions/aggregated_metrics/live": {
       "post": {
         "summary": "实时 LLM 提及聚合指标",
-        "description": "Live LLM Mentions 端点提供请求中 `target` 数组所指定关键词或域名的提及聚合指标。结果取决于所选平台（Google 的 AI Overview 对应 `google`，ChatGPT 对应 `chat_gpt`）、位置和语言参数（参见[位置和语言列表](https://docs.dataforseo.com/v3/ai_optimization/llm_mentions/locations_and_languages.md)）。",
+        "description": "助手提到你的目标的频次，给的是总量而非逐条回答：`total` 和 `items`。实测 7.0 KB。🔴 **实测上游 $0.101，约为我们收费的八倍**——本 provider 里最贵的一档。⚠️ `target` 是**对象数组**，每项形如 `{\"domain\": \"...\"}` 或 `{\"keyword\": \"...\"}`；传裸字符串会被判类型错，传字符串数组会报「Each target item must be an object」。过滤字段见 `get_dataforseo_ai_llm_mentions_available_filters`。 响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 这是可见度的核心数字；背后的回答在 `post_dataforseo_ai_llm_mentions_search_live`，要一次比较多个目标用 `post_dataforseo_ai_llm_mentions_cross_metrics_live`。",
         "operationId": "post_dataforseo_ai_llm_mentions_aggregated_metrics_live",
         "responses": {
           "200": {
@@ -5408,7 +5408,7 @@
     "/dataforseo/ai_optimization/llm_mentions/cross_aggregated_metrics/live": {
       "post": {
         "summary": "实时 LLM 提及交叉聚合指标",
-        "description": "Live LLM Mentions 端点针对请求的 `target` 数组中指定的关键词或域名提及，提供按自定义键分组的聚合指标。结果数组中的每一项对应一个指定目标。结果取决于所选平台（Google 的 AI Overview 使用 `google`，ChatGPT 使用 `chat_gpt`）、位置和语言参数（请参阅[位置和语言列表](https://docs.dataforseo.com/v3/ai_optimization/llm_mentions/locations_and_languages.md)）。",
+        "description": "一次调用里跨多个目标比较提及指标，按 `aggregation_key` 分组。它收的是 `targets`（目标数组的数组），而不是兄弟接口的单个 `target`——**两种结构不同，混用会被判未知字段**。🔴 **实测上游 $0.101，约为我们收费的八倍**——本 provider 里最贵的一档。⚠️ `target` 是**对象数组**，每项形如 `{\"domain\": \"...\"}` 或 `{\"keyword\": \"...\"}`；传裸字符串会被判类型错，传字符串数组会报「Each target item must be an object」。过滤字段见 `get_dataforseo_ai_llm_mentions_available_filters`。 响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 对每个目标各调一次 `post_dataforseo_ai_llm_mentions_aggregated_metrics_live` 单价相同，所以只有当「比较」本身是目的时才用这个。",
         "operationId": "post_dataforseo_ai_llm_mentions_cross_metrics_live",
         "responses": {
           "200": {
@@ -6018,7 +6018,7 @@
     "/dataforseo/ai_optimization/llm_mentions/available_filters": {
       "get": {
         "summary": "AI Optimization LLM Mentions API 的筛选条件",
-        "description": "您将在此处找到可用于 AI Optimization LLM Mentions API 端点的筛选器的所有必要信息。",
+        "description": "mentions 各端点各自可过滤的字段，按端点分组：`search`、`search_mentions`、`target_metrics`、`multi_target_metrics`、`top_mentioned_domains`、`top_mentioned_pages`、`top_mentioned_brands`、`top_mentioned_brand_categories` 及 `_lite` 变体。实测 4.9 KB。免费：上游成本为 0。**构造 `filters` 前先读它**——mentions 每次 $0.101，用一次被拒的调用去学字段名太贵了。",
         "operationId": "get_dataforseo_ai_llm_mentions_available_filters",
         "responses": {
           "200": {
@@ -6128,7 +6128,7 @@
     "/dataforseo/ai_optimization/llm_mentions/locations_and_languages": {
       "get": {
         "summary": "AI Optimization LLM Mentions API 的位置和语言列表",
-        "description": "使用此端点可获取 AI Optimization LLM Mentions API 支持的完整位置和语言列表。",
+        "description": "mentions 端点接受的地区与语言，字段为 `location_code`、`location_name` 和 `available_languages`——语言是嵌在每个地区下面的，不是单独一份列表。实测 58.6 KB。免费：上游成本为 0。属参考数据，取一次复用即可。",
         "operationId": "get_dataforseo_ai_llm_mentions_locales",
         "responses": {
           "200": {
@@ -6272,7 +6272,7 @@
     "/dataforseo/ai_optimization/llm_mentions/search/live": {
       "post": {
         "summary": "实时 LLM 提及",
-        "description": "Live LLM Mentions Search 端点提供 AI 搜索中的提及数据及相关指标。结果取决于所选平台（`google` 表示 Google 的 AI Overview，`chat_gpt` 表示 ChatGPT）以及位置和语言参数（请参阅[位置和语言列表](https://docs.dataforseo.com/v3/ai_optimization/llm_mentions/locations_and_languages.md)）。",
+        "description": "助手提到你的目标的那些**具体回答**。返回 `total_count`、`current_offset`、`search_after_token` 和 `items`——翻过前几页后用 token 翻页而不是 `offset`。单条实测 7.7 KB。🔴 **实测上游 $0.101，约为我们收费的八倍**——本 provider 里最贵的一档。⚠️ `target` 是**对象数组**，每项形如 `{\"domain\": \"...\"}` 或 `{\"keyword\": \"...\"}`；传裸字符串会被判类型错，传字符串数组会报「Each target item must be an object」。过滤字段见 `get_dataforseo_ai_llm_mentions_available_filters`。 响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 要计数而不是回答本身，用 `post_dataforseo_ai_llm_mentions_aggregated_metrics_live`。",
         "operationId": "post_dataforseo_ai_llm_mentions_search_live",
         "responses": {
           "200": {
@@ -6673,7 +6673,7 @@
     "/dataforseo/ai_optimization/llm_mentions/top_domains/live": {
       "post": {
         "summary": "实时 LLM 提及的热门域名",
-        "description": "Live LLM Mentions Top Domains 端点提供聚合的 LLM 提及指标，并按照指定 `target` 中提及频率最高的域名进行分组。结果取决于所选平台（Google 的 AI Overview 使用 `google`，ChatGPT 使用 `chat_gpt`）、位置和语言参数（请参阅[位置和语言列表](https://docs.dataforseo.com/v3/ai_optimization/llm_mentions/locations_and_languages.md)）。",
+        "description": "助手回答关于你的目标时最常引用的域名：`total` 和 `items`。实测 20.3 KB，mentions 家族最大的响应。🔴 **实测上游 $0.101，约为我们收费的八倍**——本 provider 里最贵的一档。⚠️ `target` 是**对象数组**，每项形如 `{\"domain\": \"...\"}` 或 `{\"keyword\": \"...\"}`；传裸字符串会被判类型错，传字符串数组会报「Each target item must be an object」。过滤字段见 `get_dataforseo_ai_llm_mentions_available_filters`。 响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 **这就是该去谈的名单**：这些页面在塑造助手怎么说你。要具体页面而不是域名，用 `post_dataforseo_ai_llm_mentions_top_pages_live`。",
         "operationId": "post_dataforseo_ai_llm_mentions_top_domains_live",
         "responses": {
           "200": {
@@ -7278,7 +7278,7 @@
     "/dataforseo/ai_optimization/llm_mentions/top_pages/live": {
       "post": {
         "summary": "实时 LLM 提及次数最多的页面",
-        "description": "Live LLM Mentions Top Pages 端点提供按指定 `target` 中最常被提及的页面分组的 LLM 提及汇总指标。结果取决于所选平台（Google AI Overview 使用 `google`，ChatGPT 使用 `chat_gpt`）、位置和语言参数（请参阅[位置和语言列表](https://docs.dataforseo.com/v3/ai_optimization/llm_mentions/locations_and_languages.md)）。",
+        "description": "助手回答关于你的目标时最常引用的**具体页面**：`total` 和 `items`。实测 13.1 KB。🔴 **实测上游 $0.101，约为我们收费的八倍**——本 provider 里最贵的一档。⚠️ `target` 是**对象数组**，每项形如 `{\"domain\": \"...\"}` 或 `{\"keyword\": \"...\"}`；传裸字符串会被判类型错，传字符串数组会报「Each target item must be an object」。过滤字段见 `get_dataforseo_ai_llm_mentions_available_filters`。 响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 想知道该改哪篇文章、该找谁投稿时，它比域名级的 `post_dataforseo_ai_llm_mentions_top_domains_live` 更可操作。",
         "operationId": "post_dataforseo_ai_llm_mentions_top_pages_live",
         "responses": {
           "200": {
@@ -7883,7 +7883,7 @@
     "/dataforseo/ai_optimization/perplexity/llm_responses/live": {
       "post": {
         "summary": "实时 Perplexity LLM 响应",
-        "description": "Live Perplexity LLM Responses 端点允许您根据输入参数，从指定的 Perplexity AI 模型检索结构化响应。",
+        "description": "把 `user_prompt` 发给某个 Perplexity 模型并同步返回回复。`model_name` 必须来自 `get_dataforseo_ai_perplexity_llm_responses_models`——`sonar`、`sonar-pro`、`sonar-reasoning-pro`。`web_search_country_iso_code` 限定搜索范围，另外三家没有这个参数。返回 `model_name`、`input_tokens`、`output_tokens`、`reasoning_tokens`、`web_search`、`money_spent`、`datetime`、`items` 和 `fan_out_queries`。💰 **上游按 token 计费，不是按次**：十六个 token 的回复实测 $0.0006，但长回复没有上限，而 AIsa 两种情况都收固定 $0.012。看响应里的 `money_spent` 才知道一个 prompt 实际花了多少。 响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 ⚠️ **Perplexity 默认就会搜索**，所以它的成本随问题波动比另外三家大得多——`post_perplexity_sonar_deep_research` 就是这件事出事的记录在案的案例（CASEBOOK C5）。",
         "operationId": "post_dataforseo_ai_perplexity_llm_responses_live",
         "responses": {
           "200": {
@@ -8120,7 +8120,7 @@
     "/dataforseo/ai_optimization/perplexity/llm_responses/models": {
       "get": {
         "summary": "用于 LLM Responses 的 Perplexity 模型列表",
-        "description": "定价",
+        "description": "可用的 Perplexity 模型——`sonar`、`sonar-pro`、`sonar-reasoning-pro`——每项含 `model_name`、`reasoning`、`web_search_supported` 和 `task_post_supported`。实测 745 字节，四份模型列表里最小的。免费：上游成本为 0。注意 **Perplexity 没有排队变体**，live 端点是唯一的。",
         "operationId": "get_dataforseo_ai_perplexity_llm_responses_models",
         "responses": {
           "200": {

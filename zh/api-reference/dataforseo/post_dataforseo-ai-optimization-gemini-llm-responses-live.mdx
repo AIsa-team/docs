@@ -1,5 +1,18 @@
 ---
 title: "实时 Gemini LLM 响应"
-description: "Live Gemini LLM Responses 端点允许您根据输入参数，从特定 Gemini AI 模型获取结构化响应。"
+description: "把 user_prompt 发给某个 Gemini 模型并同步返回回复。"
 openapi: "openapi/zh/dataforseo.json POST /dataforseo/ai_optimization/gemini/llm_responses/live"
 ---
+
+{/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
+
+把 `user_prompt` 发给某个 Gemini 模型并同步返回回复。`model_name` 必须来自 `get_dataforseo_ai_gemini_llm_responses_models`。**这里接受 `system_message`**，而 Claude 和 ChatGPT 的 live 端点不接受。返回 `model_name`、`input_tokens`、`output_tokens`、`reasoning_tokens`、`web_search`、`money_spent`、`datetime`、`items` 和 `fan_out_queries`。💰 **上游按 token 计费，不是按次**：十六个 token 的回复实测 $0.0006，但长回复没有上限，而 AIsa 两种情况都收固定 $0.012。看响应里的 `money_spent` 才知道一个 prompt 实际花了多少。 响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。
+
+## 示例
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/dataforseo/ai_optimization/gemini/llm_responses/live" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '[{"user_prompt": "...", "model_name": "...", "max_output_tokens": "..."}]'
+```
