@@ -37426,7 +37426,7 @@
     "/dataforseo/on_page/content_parsing/live": {
       "post": {
         "summary": "实时 OnPage API 内容解析",
-        "description": "此端点允许解析您指定的任意页面内容，并返回目标页面的结构化内容，包括链接 URL、锚文本、标题和文本内容。",
+        "description": "立即把任意 `url` 解析成结构化内容，不需要先爬取——本家族唯一独立可用的工具。`browser_preset`、`browser_screen_width`、`browser_screen_height`、`custom_user_agent` 控制渲染，`disable_cookie_popup` 去掉同意弹层，`store_raw_html` 保留源码。example.com 实测 1.2 KB、$0.00015。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 页面已在某次爬取里时改用 `post_dataforseo_on_page_content_parsing`，那个免费。",
         "operationId": "post_dataforseo_on_page_content_parsing_live",
         "responses": {
           "200": {
@@ -38097,7 +38097,7 @@
     "/dataforseo/on_page/content_parsing": {
       "post": {
         "summary": "OnPage API 内容解析",
-        "description": "此端点允许解析您指定的任意页面内容，并返回目标页面的结构化内容，包括链接 URL、锚文本、标题和文本内容。",
+        "description": "把某个已爬取 `url` 解析成结构化内容，`markdown_view` 可输出 markdown。实测 592 字节。读的是一次已完成的爬取，因此需要 `post_dataforseo_on_page_submit` 返回的 `id`，并会带回 `crawl_progress` 和 `crawl_status`（`max_crawl_pages`、`pages_in_queue`、`pages_crawled`）——结果偏少时先看这几个字段，爬取还在跑就是本来没那么多。 独立版孪生 `post_dataforseo_on_page_content_parsing_live` 不需要爬取就能解析任意 URL——页面不在爬取范围内时优先用那个。",
         "operationId": "post_dataforseo_on_page_content_parsing",
         "responses": {
           "200": {
@@ -38721,7 +38721,7 @@
     "/dataforseo/on_page/duplicate_content": {
       "post": {
         "summary": "OnPage API 重复内容",
-        "description": "此端点返回与请求中指定页面内容相似的页面列表。响应还包含页面性能相关数据，以及用于表示所比较页面相似程度的相似度指数。",
+        "description": "一次爬取中与给定 `url` 内容相似的页面，相似度阈值由 `similarity` 决定。实测 606 字节。读的是一次已完成的爬取，因此需要 `post_dataforseo_on_page_submit` 返回的 `id`，并会带回 `crawl_progress` 和 `crawl_status`（`max_crawl_pages`、`pages_in_queue`、`pages_crawled`）——结果偏少时先看这几个字段，爬取还在跑就是本来没那么多。 要找标题或 meta description 重复而不是正文重复，用 `post_dataforseo_on_page_duplicate_tags`。💰 上游免费：查询一次已完成的爬取不花钱，只有爬取本身花钱。本家族是整个 provider 里最便宜的。",
         "operationId": "post_dataforseo_on_page_duplicate_content",
         "responses": {
           "200": {
@@ -39543,7 +39543,7 @@
     "/dataforseo/on_page/duplicate_tags": {
       "post": {
         "summary": "OnPage API 重复标签",
-        "description": "此端点返回包含重复标题或描述标签的页面列表。响应还包含与页面性能相关的数据。",
+        "description": "一次爬取中标题或 meta description 重复的页面。⚠️ **`type` 只接受 `duplicate_title` 或 `duplicate_description`**——包括看起来最自然的 title 在内，其他任何值都会以 `status_code` 40501 被拒，而 HTTP 仍是 200。`accumulator` 可把结果收窄到带某个具体标签值的页面。返回 `total_pages_count`、`pages_count`、`items_count` 和 `items`。实测 850 字节。读的是一次已完成的爬取，因此需要 `post_dataforseo_on_page_submit` 返回的 `id`，并会带回 `crawl_progress` 和 `crawl_status`（`max_crawl_pages`、`pages_in_queue`、`pages_crawled`）——结果偏少时先看这几个字段，爬取还在跑就是本来没那么多。 要正文重复改用 `post_dataforseo_on_page_duplicate_content`。💰 上游免费：查询一次已完成的爬取不花钱，只有爬取本身花钱。本家族是整个 provider 里最便宜的。",
         "operationId": "post_dataforseo_on_page_duplicate_tags",
         "responses": {
           "200": {
@@ -40330,7 +40330,11 @@
                   },
                   "type": {
                     "type": "string",
-                    "description": "重复标签类型，必填字段，表示在页面上发现的重复元素类型。结果取决于您指定的类型。可选值：duplicate_title、duplicate_description"
+                    "description": "重复标签类型，必填字段，表示在页面上发现的重复元素类型。结果取决于您指定的类型。可选值：duplicate_title、duplicate_description",
+                    "enum": [
+                      "duplicate_title",
+                      "duplicate_description"
+                    ]
                   },
                   "accumulator": {
                     "type": "string",
@@ -40362,7 +40366,7 @@
     "/dataforseo/on_page/available_filters": {
       "get": {
         "summary": "DataForSEO OnPage API 中的筛选条件和可自定义阈值",
-        "description": "OnPage API 支持丰富的可自定义抓取参数，使您能够根据需求调整网站数据提取，并修改各项性能指标的阈值。",
+        "description": "本家族各端点各自可过滤的字段，按端点分组：`resources`、`pages`、`non_indexable`、`links`、`pages_by_resource`、`redirect_chains`、`keyword_density`、`uncrawlable_resources`。字段是点号路径，如 `meta.title`、`meta.description`。实测 10.5 KB，本家族最大的参考响应。免费：上游成本为 0。构造 `filters` 前先读它——不认识的字段是被拒绝，不是被忽略。",
         "operationId": "get_dataforseo_on_page_available_filters",
         "responses": {
           "200": {
@@ -40475,7 +40479,7 @@
     "/dataforseo/on_page/force_stop": {
       "post": {
         "summary": "强制停止 OnPage API",
-        "description": "此端点用于强制停止任务中指定网站的抓取过程。与请求中所示 ID 关联的所有任务都将停止执行。您仍然可以获取抓取过程停止前已扫描页面的数据。",
+        "description": "按 `id` 停掉一次正在跑的爬取，本身不返回结果。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 `max_crawl_pages` 设得太大、还在烧预算时用它；已经爬到的部分仍然可以通过 `get_dataforseo_on_page_summary` 和本家族其他端点查询。",
         "operationId": "post_dataforseo_on_page_force_stop",
         "responses": {
           "200": {
@@ -40604,7 +40608,7 @@
     "/dataforseo/on_page/keyword_density": {
       "post": {
         "summary": "关键词密度",
-        "description": "此端点将提供指定网站或网页中出现的词项的关键词密度和关键词频率数据。您可以筛选和排序通过此 API 调用检索的数据。",
+        "description": "一次爬取内的词与词组频次，`keyword_length` 选 n-gram 长度。返回 `total_items_count`、`items_count` 和 `items`。实测 611 字节。读的是一次已完成的爬取，因此需要 `post_dataforseo_on_page_submit` 返回的 `id`，并会带回 `crawl_progress` 和 `crawl_status`（`max_crawl_pages`、`pages_in_queue`、`pages_crawled`）——结果偏少时先看这几个字段，爬取还在跑就是本来没那么多。 它说的是**这个站怎么描述自己**；要看全网怎么描述它用 `post_dataforseo_backlinks_anchors_live`，要看人们实际搜什么用 `post_dataforseo_keywords_gads_search_volume_live`。💰 上游免费：查询一次已完成的爬取不花钱，只有爬取本身花钱。本家族是整个 provider 里最便宜的。",
         "operationId": "post_dataforseo_on_page_keyword_density",
         "responses": {
           "200": {
@@ -40811,7 +40815,7 @@
     "/dataforseo/on_page/lighthouse/audits": {
       "get": {
         "summary": "OnPage Lighthouse API 中的审计",
-        "description": "OnPage Lighthouse API 基于 Google 的开源 Lighthouse 项目，提供网页质量数据。",
+        "description": "Lighthouse 可以收窄到的审计项标识，挂在 `audits` 键下。实测 5.3 KB。免费：上游成本为 0。**跑审计之前读它，不是之后**——给 `post_dataforseo_on_page_lighthouse_live_json` 传 `audits`，就是 245 KB 的报告和一份精准报告之间的差别。",
         "operationId": "get_dataforseo_on_page_lighthouse_audits",
         "responses": {
           "200": {
@@ -40928,7 +40932,7 @@
     "/dataforseo/on_page/lighthouse/languages": {
       "get": {
         "summary": "OnPage Lighthouse API 的语言列表",
-        "description": "定价",
+        "description": "Lighthouse 报告可用的语言，字段为 `language_name` 和 `language_code`。实测 2.5 KB。免费：上游成本为 0。传给审计端点的 `language_name` 或 `language_code`——它改变的是结论的措辞，不是测量的内容。",
         "operationId": "get_dataforseo_on_page_lighthouse_languages",
         "responses": {
           "200": {
@@ -41046,7 +41050,7 @@
     "/dataforseo/on_page/lighthouse/live/json": {
       "post": {
         "summary": "实时 OnPage Lighthouse JSON",
-        "description": "OnPage Lighthouse API 基于 Google 的开源 Lighthouse 项目，用于衡量网页和 Web 应用的质量。",
+        "description": "对某个 `url` 跑一次 Google Lighthouse 审计并返回完整报告：`lighthouseVersion`、`requestedUrl`、`finalUrl`、`fetchTime`、`gatherMode`、`runWarnings`，以及全部审计项与分类得分。`for_mobile` 切换模拟设备，`categories` 和 `audits` 收窄范围。实测 $0.005。🔴 **example.com 一次审计实测 245 KB，是整个 provider 里最大的响应**——完整 Lighthouse 报告是一份JSON 文档而不是一个指标，会主导 agent 的上下文。传 `categories` 或 `audits` 压缩它；问题只是「页面为什么慢」时，用 `post_dataforseo_on_page_waterfall`。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。",
         "operationId": "post_dataforseo_on_page_lighthouse_live_json",
         "responses": {
           "200": {
@@ -41209,7 +41213,7 @@
     "/dataforseo/on_page/lighthouse/task_get/json/{id}": {
       "get": {
         "summary": "按 ID 获取 Lighthouse 结果",
-        "description": "OnPage Lighthouse API 基于 Google 的开源 Lighthouse 项目，用于衡量网页和 Web 应用的质量。此端点将提供 Lighthouse 审核结果。使用您的 [Task POST](https://docs.dataforseo.com/v3/on_page/lighthouse/task_post.md) 请求响应中收到的 `id` 获取结果。响应将包含 Task POST 中指定的所有类别和审核数据。默认情况下，响应将包含网页的所有可用数据，包括性能、无障碍功能、渐进式 Web 应用、SEO 以及最佳实践合规性。",
+        "description": "用 `post_dataforseo_on_page_lighthouse_submit` 返回的 `id` 取回已完成的 Lighthouse 审计。报告与 live 版相同，🔴 245 KB 也相同。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 审计还没完成时取不到有用内容，先看 `get_dataforseo_on_page_lighthouse_ready`。",
         "operationId": "get_dataforseo_on_page_lighthouse_task_get_json",
         "responses": {
           "200": {
@@ -41257,7 +41261,7 @@
     "/dataforseo/on_page/lighthouse/task_post": {
       "post": {
         "summary": "设置 Lighthouse 任务",
-        "description": "OnPage Lighthouse API 基于 Google 的开源 Lighthouse 项目，用于衡量网页和 Web 应用的质量。",
+        "description": "把 Lighthouse 审计排队而不是等它跑完，返回任务 `id`。审计耗时超出一次工具调用的耐心时用它；用 `get_dataforseo_on_page_lighthouse_task_get_json` 取结果，用 `get_dataforseo_on_page_lighthouse_ready` 看哪些好了。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 ⚠️ 最后拿到的仍是那份 245 KB 的报告，**上下文代价只是推迟了、没有消除**——要压缩就在这里传 `categories` / `audits`，不是等取结果时。",
         "operationId": "post_dataforseo_on_page_lighthouse_submit",
         "responses": {
           "200": {
@@ -41424,7 +41428,7 @@
     "/dataforseo/on_page/lighthouse/tasks_ready": {
       "get": {
         "summary": "获取已完成的 OnPage Lighthouse 任务",
-        "description": "**‘Tasks Ready’** 端点用于提供尚未领取的已完成任务列表。如果使用 Standard 方法且未指定 `postback_url`，则可以通过此端点获取所有已完成任务的 `id` 列表。然后，可以使用 **‘Task GET’** 端点领取结果。",
+        "description": "列出已完成、等待取回的 Lighthouse 审计。没有时返回 `null`、`status_code` 20000、`Ok.`——是队列为空，不是错误。实测 391 字节。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 用 `get_dataforseo_on_page_lighthouse_task_get_json` 取它列出的那些。",
         "operationId": "get_dataforseo_on_page_lighthouse_ready",
         "responses": {
           "200": {
@@ -41546,7 +41550,7 @@
     "/dataforseo/on_page/lighthouse/versions": {
       "get": {
         "summary": "OnPage API 支持的 Lighthouse 版本",
-        "description": "OnPage Lighthouse API 基于 Google 的开源 Lighthouse 项目，提供有关网页质量的数据。",
+        "description": "可用的 Lighthouse 版本，字段 `availible_versions` 含 `version` 和 `default`——注意上游把这个键拼错了。实测 1.4 KB。免费：上游成本为 0。需要可复现的审计时把版本号传给 `version`；否则默认值会随 Lighthouse 发版而变。",
         "operationId": "get_dataforseo_on_page_lighthouse_versions",
         "responses": {
           "200": {
@@ -41671,7 +41675,7 @@
     "/dataforseo/on_page/links": {
       "post": {
         "summary": "链接",
-        "description": "此端点将提供在目标网站上检测到的内部和外部链接列表。",
+        "description": "一次爬取中发现的全部链接。用 `page_from` / `page_to` 筛出某个页面的出链或入链。返回 `total_items_count`、`items_count`、`items`，以及用于翻页的 `search_after_token`——翻过前几页后请用它而不是 `offset`。单条实测 1.0 KB。读的是一次已完成的爬取，因此需要 `post_dataforseo_on_page_submit` 返回的 `id`，并会带回 `crawl_progress` 和 `crawl_status`（`max_crawl_pages`、`pages_in_queue`、`pages_crawled`）——结果偏少时先看这几个字段，爬取还在跑就是本来没那么多。 💰 上游免费：查询一次已完成的爬取不花钱，只有爬取本身花钱。本家族是整个 provider 里最便宜的。",
         "operationId": "post_dataforseo_on_page_links",
         "responses": {
           "200": {
@@ -41949,7 +41953,7 @@
     "/dataforseo/on_page/microdata": {
       "post": {
         "summary": "OnPage API 微数据",
-        "description": "此端点用于验证结构化 JSON-LD 数据和 Microdata。使用此功能可获取目标网站指定页面上的微数据及其详细验证结果。",
+        "description": "校验某个已爬取 `url` 上的结构化数据。实测 493 字节。读的是一次已完成的爬取，因此需要 `post_dataforseo_on_page_submit` 返回的 `id`，并会带回 `crawl_progress` 和 `crawl_status`（`max_crawl_pages`、`pages_in_queue`、`pages_crawled`）——结果偏少时先看这几个字段，爬取还在跑就是本来没那么多。 ⚠️ 该页必须在本次爬取范围内：请求一个没被爬到的 URL 会返回 `status_code` 40406、`Requested page was not submitted for crawling`，而 HTTP 仍是 200。想要的页面缺失时，在 submit 时放大 `max_crawl_pages` 或设置 `start_url`。💰 上游免费：查询一次已完成的爬取不花钱，只有爬取本身花钱。本家族是整个 provider 里最便宜的。",
         "operationId": "post_dataforseo_on_page_microdata",
         "responses": {
           "200": {
@@ -42197,7 +42201,7 @@
     "/dataforseo/on_page/non_indexable": {
       "post": {
         "summary": "OnPage API 不可索引页面",
-        "description": "此端点返回因 `robots.txt`、HTTP 标头或 meta 标签设置而被禁止由 Google 和其他搜索引擎编入索引的页面列表。",
+        "description": "爬取到但搜索引擎不会收录的页面，每条含 `reason` 和 `url`。实测 588 字节。读的是一次已完成的爬取，因此需要 `post_dataforseo_on_page_submit` 返回的 `id`，并会带回 `crawl_progress` 和 `crawl_status`（`max_crawl_pages`、`pages_in_queue`、`pages_crawled`）——结果偏少时先看这几个字段，爬取还在跑就是本来没那么多。 **`reason` 才是重点**——noindex、canonical 指向别处、被 robots 挡住，症状一样但完全是三个问题。💰 上游免费：查询一次已完成的爬取不花钱，只有爬取本身花钱。本家族是整个 provider 里最便宜的。",
         "operationId": "post_dataforseo_on_page_non_indexable",
         "responses": {
           "200": {
@@ -42384,7 +42388,7 @@
     "/dataforseo/on_page/page_screenshot": {
       "post": {
         "summary": "OnPage API 页面截图",
-        "description": "使用此端点，您可以获取任意网页的完整高质量截图。通过这种方式，您可以查看 DataForSEO 爬虫和 Googlebot 所看到的目标页面。",
+        "description": "渲染任意 `url` 并返回截图，`full_page_screenshot` 截整页，`browser_screen_width` 和 `browser_screen_height` 设置视口。独立可用，不需要先爬取。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 ⚠️ 图片即使 agent 还没法处理，本身也已经是很大的一份工具结果；**只有当「看起来什么样」就是问题本身时**才要截图，问的是文字就用 `post_dataforseo_on_page_content_parsing_live`。",
         "operationId": "post_dataforseo_on_page_page_screenshot",
         "responses": {
           "200": {
@@ -42576,7 +42580,7 @@
     "/dataforseo/on_page/raw_html": {
       "post": {
         "summary": "OnPage API 原始 HTML",
-        "description": "此端点返回您在请求中指定的页面 HTML。",
+        "description": "某个已爬取 `url` 存下来的 HTML。小页面实测 578 字节。读的是一次已完成的爬取，因此需要 `post_dataforseo_on_page_submit` 返回的 `id`，并会带回 `crawl_progress` 和 `crawl_status`（`max_crawl_pages`、`pages_in_queue`、`pages_crawled`）——结果偏少时先看这几个字段，爬取还在跑就是本来没那么多。 ⚠️ 只有 submit 时开了 `store_raw_html` 才有内容，而且**爬取完成后无法补救**。要解析后的内容而不是源码，用 `post_dataforseo_on_page_content_parsing`。💰 上游免费：查询一次已完成的爬取不花钱，只有爬取本身花钱。本家族是整个 provider 里最便宜的。",
         "operationId": "post_dataforseo_on_page_raw_html",
         "responses": {
           "200": {
@@ -42742,7 +42746,7 @@
     "/dataforseo/on_page/resources": {
       "post": {
         "summary": "OnPage API 资源",
-        "description": "此端点将提供资源列表，包括图像、脚本、样式表和损坏的元素。",
+        "description": "一次爬取里的非页面资源——图片、脚本、样式表，附状态码和大小。用 `search_after_token` 翻页。单条实测 625 字节。读的是一次已完成的爬取，因此需要 `post_dataforseo_on_page_submit` 返回的 `id`，并会带回 `crawl_progress` 和 `crawl_status`（`max_crawl_pages`、`pages_in_queue`、`pages_crawled`）——结果偏少时先看这几个字段，爬取还在跑就是本来没那么多。 完全抓不到的资源在 `post_dataforseo_on_page_uncrawlable_resources`。💰 上游免费：查询一次已完成的爬取不花钱，只有爬取本身花钱。本家族是整个 provider 里最便宜的。",
         "operationId": "post_dataforseo_on_page_resources",
         "responses": {
           "200": {
@@ -43177,7 +43181,7 @@
     "/dataforseo/on_page/summary/{id}": {
       "get": {
         "summary": "OnPage API 摘要",
-        "description": "使用此功能，您可以获取网站的整体信息，并深入查看已扫描网站的具体页面问题。因此，您将了解应使用哪些功能来获取每个已发现问题的详细数据。",
+        "description": "按 `id` 查一次爬取的状态与总体指标。返回 `crawl_progress`、`crawl_status`、`crawl_gateway_address`、`crawl_stop_reason`、`domain_info` 和 `page_metrics`。实测 3.1 KB。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 **这也是判断爬取是否完成的唯一途径**——先轮询到 `crawl_progress` 为 `finished` 再读本家族其他端点，否则读到的是半成品，而它看起来跟真结果一模一样。💰 上游免费：查询一次已完成的爬取不花钱，只有爬取本身花钱。本家族是整个 provider 里最便宜的。",
         "operationId": "get_dataforseo_on_page_summary",
         "responses": {
           "200": {
@@ -43225,7 +43229,7 @@
     "/dataforseo/on_page/task_post": {
       "post": {
         "summary": "设置 OnPage 任务",
-        "description": "OnPage API 根据 60 多项可自定义的页面参数检查网站，识别并显示发现的所有缺陷和优化机会，便于您修复。它会检查每个页面的 meta 标签、重复内容、图片标签、响应代码及其他参数。您可以在 [Pages](https://docs.dataforseo.com/v3/on_page/pages.md) 部分查看 OnPage API 的完整检查参数列表。",
+        "description": "对 `target` 启动一次爬取，在 `tasks[0].id` 返回任务 `id`——**这个 id 是本家族其余所有工具的把手**，务必留好。`max_crawl_pages` 限制规模，`start_url`、`max_crawl_depth`、`priority_urls`、`crawl_delay` 调整行为，`store_raw_html` 决定之后 `post_dataforseo_on_page_raw_html` 有没有东西可给。一页的爬取实测 $0.00015。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 ⚠️ 这不是常见的 submit/fetch 配对：爬取是一个**会话**，之后有十来个工具按 id 来查它。轮询 `get_dataforseo_on_page_summary` 直到 `crawl_progress` 变成 `finished`；example.com 一页的爬取实测不到一分钟。",
         "operationId": "post_dataforseo_on_page_submit",
         "responses": {
           "200": {
@@ -43541,7 +43545,7 @@
     "/dataforseo/on_page/tasks_ready": {
       "get": {
         "summary": "页面内任务已就绪",
-        "description": "“Tasks Ready”端点用于提供已完成但结果尚未被收集的任务列表。",
+        "description": "列出已完成的爬取。没有时返回 `null`、`status_code` 20000、`Ok.`——是队列为空，不是错误。实测 690 字节。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 ⚠️ 通常不是你要的工具：调用方手里就有自己 `post_dataforseo_on_page_submit` 返回的 `id`，而那次爬取完没完，`get_dataforseo_on_page_summary` 就能回答。",
         "operationId": "get_dataforseo_on_page_ready",
         "responses": {
           "200": {
@@ -43670,7 +43674,7 @@
     "/dataforseo/on_page/uncrawlable_resources": {
       "post": {
         "summary": "无法抓取的资源",
-        "description": "此端点返回目标网站上因内容类型不一致而无法抓取的资源列表。当服务器响应中返回的内容类型与根据页面 HTML 中资源引用方式所预期的内容类型不匹配时，该资源将被视为不可抓取。",
+        "description": "一次爬取中抓取失败的资源及原因。返回 `total_items_count`、`items_count` 和 `items`。实测 621 字节。读的是一次已完成的爬取，因此需要 `post_dataforseo_on_page_submit` 返回的 `id`，并会带回 `crawl_progress` 和 `crawl_status`（`max_crawl_pages`、`pages_in_queue`、`pages_crawled`）——结果偏少时先看这几个字段，爬取还在跑就是本来没那么多。 这些是站长最该先看的断链；成功加载的那些在 `post_dataforseo_on_page_resources`。💰 上游免费：查询一次已完成的爬取不花钱，只有爬取本身花钱。本家族是整个 provider 里最便宜的。",
         "operationId": "post_dataforseo_on_page_uncrawlable_resources",
         "responses": {
           "200": {
@@ -43887,7 +43891,7 @@
     "/dataforseo/on_page/waterfall": {
       "post": {
         "summary": "OnPage API 瀑布图",
-        "description": "此端点用于提供页面速度分析。使用此功能，可以获取有关页面加载时间、建立安全连接所需时间、加载页面资源所需时间等详细信息。",
+        "description": "某个已爬取 `url` 的加载时间线——请求了什么、按什么顺序、各花多久。实测 835 字节。读的是一次已完成的爬取，因此需要 `post_dataforseo_on_page_submit` 返回的 `id`，并会带回 `crawl_progress` 和 `crawl_status`（`max_crawl_pages`、`pages_in_queue`、`pages_crawled`）——结果偏少时先看这几个字段，爬取还在跑就是本来没那么多。 用它解释页面为什么慢；要带评分的性能审计改用 `post_dataforseo_on_page_lighthouse_live_json`。💰 上游免费：查询一次已完成的爬取不花钱，只有爬取本身花钱。本家族是整个 provider 里最便宜的。",
         "operationId": "post_dataforseo_on_page_waterfall",
         "responses": {
           "200": {
