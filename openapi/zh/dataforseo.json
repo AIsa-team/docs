@@ -46213,7 +46213,7 @@
     "/dataforseo/merchant/amazon/asin/task_get/advanced/{id}": {
       "get": {
         "summary": "按 id 获取 Amazon ASIN 结果",
-        "description": "此端点将为你提供有关该产品及其在 Amazon 上列出的[所有变体的 ASIN](https://sellercentral.amazon.com/gp/help/external/help.html?itemID=8831&language=en-US&ref=mpbc_200779220_cont_8831&) 的信息。",
+        "description": "取回单个 Amazon 商品页。返回 `asin`、`se_domain`、`location_code`、`language_code`、`check_url`、`datetime`、`item_types`、`items_count` 和 `items`，每项含 `title`、`details`、`image_url`、`author`、`data_asin`、`parent_asin` 和 `product_asins`——**最后那个是变体家族**，要找同款的其他尺寸或颜色就靠它。实测 38 KB。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 🔴 `_fetch_html` 孪生返回的是原始页面源码：同一个任务实测 2.6 MB，而解析版是 82 KB，相差 32 倍。只有当你能指出解析版漏了什么时才用它。",
         "operationId": "get_dataforseo_merchant_amazon_asin_fetch",
         "responses": {
           "200": {
@@ -46261,7 +46261,7 @@
     "/dataforseo/merchant/amazon/asin/task_get/html/{id}": {
       "get": {
         "summary": "按 id 获取 Amazon ASIN HTML 结果",
-        "description": "![已检查](https://docs.dataforseo.com/v3/wp-content/themes/dataforseo/assets/img/icons/checked-circle.svg) GET https://api.dataforseo.com/v3/merchant/amazon/asin/task\\_get/html/$id",
+        "description": "取回单个 Amazon 商品页的**原始 HTML**。🔴 远大于 38 KB 的解析版；对应的 Google 那对实测是 2.6 MB / 83 KB。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 解析版是 `get_dataforseo_merchant_amazon_asin_fetch`。",
         "operationId": "get_dataforseo_merchant_amazon_asin_fetch_html",
         "responses": {
           "200": {
@@ -46309,7 +46309,7 @@
     "/dataforseo/merchant/amazon/asin/task_post": {
       "post": {
         "summary": "设置 Amazon ASIN 任务",
-        "description": "此端点将提供分配给产品不同变体的完整 [ASINs](https://dataforseo.com/help-center/asin-in-amazon-api) 列表。",
+        "description": "按 `asin` 排队查询单个 Amazon 商品，返回任务 `id`。本家族全程异步：submit 在 `tasks[0].id` 返回任务 `id`，结果就绪后由 fetch 取回。💰 **费用发生在 submit**（实测 $0.001–0.0015），fetch 免费，重复 fetch 也不再收费。 ⚠️ Amazon 系列要求 **locale 形式**的语言——`en_US` 或 `English (United States)`，拒收 Google 系列接受的裸 `en`。完全不传也会报 `Invalid Field: 'language_name'`，所以这条消息的含义是「错了或没传」，不只是「错了」。27 个合法取值见 `get_dataforseo_merchant_amazon_languages`。 submit 实测 $0.0015。用 `get_dataforseo_merchant_amazon_asin_fetch` 取结果。",
         "operationId": "post_dataforseo_merchant_amazon_asin_submit",
         "responses": {
           "200": {
@@ -46488,7 +46488,7 @@
     "/dataforseo/merchant/amazon/asin/tasks_ready": {
       "get": {
         "summary": "获取已完成的 Amazon ASIN 任务",
-        "description": "**‘Tasks Ready’** 端点用于提供尚未收集的已完成任务列表。如果使用 Standard 方法且未指定 `postback_url`，可以通过此端点获取所有已完成任务的 `id` 列表。随后，可以使用 **‘Task GET’** 端点收集结果。",
+        "description": "列出已完成、等待取回的 Amazon ASIN 任务。免费。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 手里有自己任务 `id` 的调用方可以直接 fetch，跳过它。",
         "operationId": "get_dataforseo_merchant_amazon_asin_ready",
         "responses": {
           "200": {
@@ -46622,7 +46622,7 @@
     "/dataforseo/merchant/amazon/languages": {
       "get": {
         "summary": "Merchant API 的 Amazon 语言列表",
-        "description": "定价",
+        "description": "Amazon 系列接受的 27 种语言，字段为 `language_name` 和 `language_code`。实测 2.1 KB。免费：上游成本为 0。**提交 Amazon 任务前先读它。** 这里是 locale 对——`en_US` 配 `English (United States)`、`ar_SA` 配 `Arabic (Saudi Arabia)`——Google 接受的裸 `en` 在这里会被拒。Google 的对应接口是 `get_dataforseo_merchant_google_languages`。",
         "operationId": "get_dataforseo_merchant_amazon_languages",
         "responses": {
           "200": {
@@ -46740,7 +46740,7 @@
     "/dataforseo/merchant/amazon/locations": {
       "get": {
         "summary": "Merchant API 的 Amazon 地点列表",
-        "description": "定价",
+        "description": "Amazon 系列接受的地区列表。🔴 **实测 20 MB。** 这不是 agent 应该请求的响应：它大约是本 provider 其他参考端点最大值的八十倍，会直接耗尽任何上下文窗口。`location_code` 2840 是美国；其他代码请查 DataForSEO 自己的文档，别拉这份列表。上游免费——所以没有任何计费信号会预先警告你。",
         "operationId": "get_dataforseo_merchant_amazon_locations",
         "responses": {
           "200": {
@@ -46777,7 +46777,7 @@
     "/dataforseo/merchant/amazon/products/task_get/advanced/{id}": {
       "get": {
         "summary": "按 id 获取 Amazon 产品结果",
-        "description": "![已检查](https://docs.dataforseo.com/v3/wp-content/themes/dataforseo/assets/img/icons/checked-circle.svg) GET https://api.dataforseo.com/v3/merchant/amazon/products/task\\_get/advanced/$id",
+        "description": "取回 `post_dataforseo_merchant_amazon_products_submit` 排队的 Amazon 搜索解析结果：排名列表，每项含标题、价格、评分和 ASIN。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 把这里的 ASIN 喂给 `post_dataforseo_merchant_amazon_asin_submit` 可拿到完整商品页。🔴 `_fetch_html` 孪生返回的是原始页面源码：同一个任务实测 2.6 MB，而解析版是 82 KB，相差 32 倍。只有当你能指出解析版漏了什么时才用它。",
         "operationId": "get_dataforseo_merchant_amazon_products_fetch",
         "responses": {
           "200": {
@@ -46825,7 +46825,7 @@
     "/dataforseo/merchant/amazon/products/task_get/html/{id}": {
       "get": {
         "summary": "按 id 获取 Amazon Products HTML 结果",
-        "description": "![checked](https://docs.dataforseo.com/v3/wp-content/themes/dataforseo/assets/img/icons/checked-circle.svg) GET https://api.dataforseo.com/v3/merchant/amazon/products/task\\_get/html/$id",
+        "description": "取回 Amazon 搜索的**原始 HTML**。🔴 量级与 Google 那对实测的 2.6 MB / 83 KB 相当——只有核对解析器漏了什么时才用。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 解析版是 `get_dataforseo_merchant_amazon_products_fetch`。",
         "operationId": "get_dataforseo_merchant_amazon_products_fetch_html",
         "responses": {
           "200": {
@@ -46873,7 +46873,7 @@
     "/dataforseo/merchant/amazon/products/task_post": {
       "post": {
         "summary": "设置 Amazon 产品任务",
-        "description": "此端点根据指定的关键词（产品名称）、位置和语言参数返回 Amazon 产品列表结果。",
+        "description": "按 `keyword` 排队一次 Amazon 搜索，返回任务 `id`。`location_code`、`depth`、`se_domain` 调整搜索。本家族全程异步：submit 在 `tasks[0].id` 返回任务 `id`，结果就绪后由 fetch 取回。💰 **费用发生在 submit**（实测 $0.001–0.0015），fetch 免费，重复 fetch 也不再收费。 ⚠️ Amazon 系列要求 **locale 形式**的语言——`en_US` 或 `English (United States)`，拒收 Google 系列接受的裸 `en`。完全不传也会报 `Invalid Field: 'language_name'`，所以这条消息的含义是「错了或没传」，不只是「错了」。27 个合法取值见 `get_dataforseo_merchant_amazon_languages`。 用 `get_dataforseo_merchant_amazon_products_fetch` 取结果。",
         "operationId": "post_dataforseo_merchant_amazon_products_submit",
         "responses": {
           "200": {
@@ -47084,7 +47084,7 @@
     "/dataforseo/merchant/amazon/products/tasks_ready": {
       "get": {
         "summary": "获取已完成的 Amazon 产品任务",
-        "description": "**‘Tasks Ready’** 端点用于提供尚未领取的已完成任务列表。如果使用 Standard 方法且未指定 `postback_url`，则可以通过此端点获取所有已完成任务的 `id` 列表。然后，可以使用 **‘Task GET’** 端点领取结果。",
+        "description": "列出已完成、等待取回的 Amazon 搜索任务。免费。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 手里有自己任务 `id` 的调用方可以直接 fetch，跳过它。",
         "operationId": "get_dataforseo_merchant_amazon_products_ready",
         "responses": {
           "200": {
@@ -47222,7 +47222,7 @@
     "/dataforseo/merchant/amazon/sellers/task_get/advanced/{id}": {
       "get": {
         "summary": "按 id 获取 Amazon 卖家结果",
-        "description": "此端点提供 Amazon 上指定产品的卖家列表。为每位卖家提供的数据包括相关产品的成色、定价、配送和评分详情。",
+        "description": "取回某个 Amazon 商品的在售商家以及各自报价。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 它回答的是「购物车里还有谁」；商品本身是 `get_dataforseo_merchant_amazon_asin_fetch`。🔴 `_fetch_html` 孪生返回的是原始页面源码：同一个任务实测 2.6 MB，而解析版是 82 KB，相差 32 倍。只有当你能指出解析版漏了什么时才用它。",
         "operationId": "get_dataforseo_merchant_amazon_sellers_fetch",
         "responses": {
           "200": {
@@ -47270,7 +47270,7 @@
     "/dataforseo/merchant/amazon/sellers/task_get/html/{id}": {
       "get": {
         "summary": "按 id 获取 Amazon Sellers HTML 结果",
-        "description": "![checked](https://docs.dataforseo.com/v3/wp-content/themes/dataforseo/assets/img/icons/checked-circle.svg) GET https://api.dataforseo.com/v3/merchant/amazon/sellers/task\\_get/html/$id",
+        "description": "取回 Amazon 商家页的**原始 HTML**。🔴 远大于解析版，量级与 Google 那对实测的 2.6 MB / 83 KB 相当。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 解析版是 `get_dataforseo_merchant_amazon_sellers_fetch`。",
         "operationId": "get_dataforseo_merchant_amazon_sellers_fetch_html",
         "responses": {
           "200": {
@@ -47318,7 +47318,7 @@
     "/dataforseo/merchant/amazon/sellers/task_post": {
       "post": {
         "summary": "设置 Amazon 卖家任务",
-        "description": "此端点提供 Amazon 上指定产品的卖家列表。为每位卖家提供的数据包括相关产品的成色、定价、配送和评分详情。",
+        "description": "排队获取某个 Amazon 商品的在售商家列表，返回任务 `id`。本家族全程异步：submit 在 `tasks[0].id` 返回任务 `id`，结果就绪后由 fetch 取回。💰 **费用发生在 submit**（实测 $0.001–0.0015），fetch 免费，重复 fetch 也不再收费。 ⚠️ Amazon 系列要求 **locale 形式**的语言——`en_US` 或 `English (United States)`，拒收 Google 系列接受的裸 `en`。完全不传也会报 `Invalid Field: 'language_name'`，所以这条消息的含义是「错了或没传」，不只是「错了」。27 个合法取值见 `get_dataforseo_merchant_amazon_languages`。 用 `get_dataforseo_merchant_amazon_sellers_fetch` 取结果。",
         "operationId": "post_dataforseo_merchant_amazon_sellers_submit",
         "responses": {
           "200": {
@@ -47497,7 +47497,7 @@
     "/dataforseo/merchant/amazon/sellers/tasks_ready": {
       "get": {
         "summary": "获取已完成的 Amazon 卖家任务",
-        "description": "**‘Tasks Ready’** 端点用于提供尚未领取的已完成任务列表。如果使用 Standard 方法且未指定 `postback_url`，则可以通过此端点获取所有已完成任务的 `id` 列表。然后，可以使用 **‘Task GET’** 端点领取结果。",
+        "description": "列出已完成、等待取回的 Amazon 商家任务。免费。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 手里有自己任务 `id` 的调用方可以直接 fetch，跳过它。",
         "operationId": "get_dataforseo_merchant_amazon_sellers_ready",
         "responses": {
           "200": {
@@ -47635,7 +47635,7 @@
     "/dataforseo/merchant/google/languages": {
       "get": {
         "summary": "Merchant API 的 Google Shopping 语言列表",
-        "description": "定价",
+        "description": "Google Shopping 系列接受的语言，字段为 `language_name` 和 `language_code`。实测 6.7 KB。免费：上游成本为 0。这里是 `en` 这样的纯代码，与 Amazon 那份的 locale 对不同——见 `get_dataforseo_merchant_amazon_languages`，它会拒收这边接受的值。",
         "operationId": "get_dataforseo_merchant_google_languages",
         "responses": {
           "200": {
@@ -47753,7 +47753,7 @@
     "/dataforseo/merchant/google/locations": {
       "get": {
         "summary": "Merchant API 的 Google Shopping 地区列表",
-        "description": "您可以在[此页面](https://support.google.com/merchants/answer/160637?hl=en&ref_topic=7286989)查看可用的 Google Shopping 国家/地区列表。",
+        "description": "Google Shopping 系列接受的地区列表。🔴 **实测 43 MB——本 provider 里最大的响应，比第二名大两个数量级。** 不要从 agent 调用它。`location_code` 2840 是美国；其他代码请查 DataForSEO 的文档。上游免费，因此落地之前没有任何计费信号会警告你。",
         "operationId": "get_dataforseo_merchant_google_locations",
         "responses": {
           "200": {
@@ -47790,7 +47790,7 @@
     "/dataforseo/merchant/google/product_info/task_get/advanced/{id}": {
       "get": {
         "summary": "按 id 获取 Google Shopping Product Info 结果",
-        "description": "![已检查](https://docs.dataforseo.com/v3/wp-content/themes/dataforseo/assets/img/icons/checked-circle.svg) GET https://api.dataforseo.com/v3/merchant/google/product\\_info/task\\_get/advanced/$id",
+        "description": "取回单个 Google Shopping 商品的详情页：规格、描述、图片，以及在售的商家。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 通向这里的搜索结果是 `get_dataforseo_merchant_google_products_fetch`；买家评价是 `get_dataforseo_merchant_google_reviews_fetch`。",
         "operationId": "get_dataforseo_merchant_google_product_info_fetch",
         "responses": {
           "200": {
@@ -47838,7 +47838,7 @@
     "/dataforseo/merchant/google/product_info/task_post": {
       "post": {
         "summary": "设置 Google Shopping 产品信息任务",
-        "description": "此端点提供 Google Shopping 上所列产品的数据，包括产品描述、图片、评分、变体、规格和卖家。要设置任务，必须指定以下字段之一：`product_id`、`data_docid` 或 `gid`。",
+        "description": "排队查询某个具体 Google Shopping 商品，返回任务 `id`。用 `product_id` 加上从 `get_dataforseo_merchant_google_products_fetch` 结果里拿到的 `gid` 或 `data_docid` 定位商品。本家族全程异步：submit 在 `tasks[0].id` 返回任务 `id`，结果就绪后由 fetch 取回。💰 **费用发生在 submit**（实测 $0.001–0.0015），fetch 免费，重复 fetch 也不再收费。 用 `get_dataforseo_merchant_google_product_info_fetch` 取结果。",
         "operationId": "post_dataforseo_merchant_google_product_info_submit",
         "responses": {
           "200": {
@@ -48026,7 +48026,7 @@
     "/dataforseo/merchant/google/product_info/tasks_ready": {
       "get": {
         "summary": "获取 Google Shopping 产品信息已完成任务",
-        "description": "**‘Tasks Ready’** 端点用于提供尚未领取的已完成任务列表。如果使用 Standard 方法且未指定 `postback_url`，则可以通过此端点获取所有已完成任务的 `id` 列表。然后，可以使用 **‘Task GET’** 端点领取结果。",
+        "description": "列出已完成、等待取回的 Google Shopping 商品详情任务。免费。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 手里有自己任务 `id` 的调用方可以直接 fetch，跳过它。",
         "operationId": "get_dataforseo_merchant_google_product_info_ready",
         "responses": {
           "200": {
@@ -48160,7 +48160,7 @@
     "/dataforseo/merchant/google/products/task_get/advanced/{id}": {
       "get": {
         "summary": "按 id 获取 Google Shopping 产品结果",
-        "description": "![checked](https://docs.dataforseo.com/v3/wp-content/themes/dataforseo/assets/img/icons/checked-circle.svg) GET https://api.dataforseo.com/v3/merchant/google/products/task\\_get/advanced/$id",
+        "description": "取回 `post_dataforseo_merchant_google_products_submit` 排队的 Google Shopping 搜索解析结果。返回 `keyword`、`se_domain`、`location_code`、`language_code`、`check_url`、`datetime`、`spell`、`item_types`、`items_count` 和 `items`，每项含 `rank_group`、`rank_absolute`、`position`、`xpath`、`title` 及嵌套 `items`。十条结果实测 83 KB。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 🔴 `_fetch_html` 孪生返回的是原始页面源码：同一个任务实测 2.6 MB，而解析版是 82 KB，相差 32 倍。只有当你能指出解析版漏了什么时才用它。",
         "operationId": "get_dataforseo_merchant_google_products_fetch",
         "responses": {
           "200": {
@@ -48208,7 +48208,7 @@
     "/dataforseo/merchant/google/products/task_get/html/{id}": {
       "get": {
         "summary": "按 id 获取 Google Shopping 商品 HTML 结果",
-        "description": "![checked](https://docs.dataforseo.com/v3/wp-content/themes/dataforseo/assets/img/icons/checked-circle.svg) GET https://api.dataforseo.com/v3/merchant/google/products/task\\_get/html/$id",
+        "description": "取回 `post_dataforseo_merchant_google_products_submit` 排队的搜索的**原始 HTML**。🔴 **十条结果实测 2.6 MB，而解析版是 83 KB**——是本 provider 里最大的响应之一，且几乎从不是 agent 要的东西。除非要核对解析器漏了什么，否则用 `get_dataforseo_merchant_google_products_fetch`。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。",
         "operationId": "get_dataforseo_merchant_google_products_fetch_html",
         "responses": {
           "200": {
@@ -48256,7 +48256,7 @@
     "/dataforseo/merchant/google/products/task_post": {
       "post": {
         "summary": "设置 Google Shopping Products 任务",
-        "description": "Google Shopping Products 端点将为你提供 Google Shopping 中针对指定查询找到的产品列表。结果包括产品标题、Google Shopping SERP 中的产品描述、产品排名、价格、评论和评分，以及相关域名。",
+        "description": "按 `keyword` 排队一次 Google Shopping 搜索，返回任务 `id`。`location_code`、`language_code`、`se_domain`、`depth` 调整搜索。本家族全程异步：submit 在 `tasks[0].id` 返回任务 `id`，结果就绪后由 fetch 取回。💰 **费用发生在 submit**（实测 $0.001–0.0015），fetch 免费，重复 fetch 也不再收费。 用 `get_dataforseo_merchant_google_products_fetch` 取结果。submit 实测 $0.001。",
         "operationId": "post_dataforseo_merchant_google_products_submit",
         "responses": {
           "200": {
@@ -48463,7 +48463,7 @@
     "/dataforseo/merchant/google/products/tasks_ready": {
       "get": {
         "summary": "获取已完成的 Google Shopping 产品任务",
-        "description": "**‘Tasks Ready’** 端点用于提供尚未领取的已完成任务列表。如果使用 Standard 方法且未指定 `postback_url`，则可以通过此端点获取所有已完成任务的 `id` 列表。然后，可以使用 **‘Task GET’** 端点领取结果。",
+        "description": "列出已完成、等待取回的 Google Shopping 搜索任务。免费。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 ⚠️ 通常用不到：调用方手里就有自己 submit 返回的 `id`，可以直接 fetch。这个端点回答的是「整个账号里哪些好了」，是另一个问题。",
         "operationId": "get_dataforseo_merchant_google_products_ready",
         "responses": {
           "200": {
@@ -48601,7 +48601,7 @@
     "/dataforseo/merchant/google/reviews/task_get/advanced/{id}": {
       "get": {
         "summary": "按 id 获取 Google Shopping 评论结果",
-        "description": "此端点提供 Google Shopping 市场中所列商品的评论数据，包括最常提及的关键词、评论标题、图片、评分、评论内容、评论者信息、评论发布日期等。结果特定于 POST 请求中指定的 `product_id`。",
+        "description": "取回单个 Google Shopping 商品的买家评价：每条含评分、正文、作者和日期。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 要商品本身的规格和商家用 `get_dataforseo_merchant_google_product_info_fetch`。",
         "operationId": "get_dataforseo_merchant_google_reviews_fetch",
         "responses": {
           "200": {
@@ -48649,7 +48649,7 @@
     "/dataforseo/merchant/google/reviews/task_post": {
       "post": {
         "summary": "设置 Google Shopping Reviews 任务",
-        "description": "此端点将提供 Google Shopping 平台上所列任意产品的评论列表。",
+        "description": "排队获取某个 Google Shopping 商品的评价，返回任务 `id`。用 `product_id` 加 `gid` 或 `data_docid` 定位商品。本家族全程异步：submit 在 `tasks[0].id` 返回任务 `id`，结果就绪后由 fetch 取回。💰 **费用发生在 submit**（实测 $0.001–0.0015），fetch 免费，重复 fetch 也不再收费。 用 `get_dataforseo_merchant_google_reviews_fetch` 取结果。",
         "operationId": "post_dataforseo_merchant_google_reviews_submit",
         "responses": {
           "200": {
@@ -48839,7 +48839,7 @@
     "/dataforseo/merchant/google/reviews/tasks_ready": {
       "get": {
         "summary": "获取已完成的 Google 评论任务",
-        "description": "**‘Tasks Ready’** 端点用于提供尚未领取的已完成任务列表。如果使用 Standard 方法且未指定 `postback_url`，则可以通过此端点获取所有已完成任务的 `id` 列表。然后，可以使用 **‘Task GET’** 端点领取结果。",
+        "description": "列出已完成、等待取回的 Google Shopping 评价任务。免费。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 手里有自己任务 `id` 的调用方可以直接 fetch，跳过它。",
         "operationId": "get_dataforseo_merchant_google_reviews_ready",
         "responses": {
           "200": {
@@ -48973,7 +48973,7 @@
     "/dataforseo/merchant/google/sellers/ad_url": {
       "get": {
         "summary": "获取 Google Shopping 卖家广告 URL",
-        "description": "Google Shopping Sellers Ad URL 旨在提供广告的完整 URL，其中包含卖家设置的所有附加参数。",
+        "description": "本意是返回某个商家广告的完整 URL，含商家附加的全部参数。⚠️ **按本规格无法使用**：spec 里没有声明任何参数，照写调用会返回 `status_code` 40400、`Not Found.`，`tasks` 为 null。上游需要的标识符这份文档没有描述。**因此已从 MCP server 排除**——一个必然失败的端点比不存在更糟。改用 `get_dataforseo_merchant_google_sellers_fetch` 结果里的 `check_url`。",
         "operationId": "get_dataforseo_merchant_google_sellers_ad_url",
         "responses": {
           "200": {
@@ -49010,7 +49010,7 @@
     "/dataforseo/merchant/google/sellers/task_get/advanced/{id}": {
       "get": {
         "summary": "按 id 获取 Google Shopping 卖家结果",
-        "description": "![已检查](https://docs.dataforseo.com/v3/wp-content/themes/dataforseo/assets/img/icons/checked-circle.svg) GET https://api.dataforseo.com/v3/merchant/google/sellers/task\\_get/advanced/$id",
+        "description": "取回某个 Google Shopping 商品的在售商家以及各自报价。免费——费用在 submit。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 这是比价视图；商品本身是 `get_dataforseo_merchant_google_product_info_fetch`。",
         "operationId": "get_dataforseo_merchant_google_sellers_fetch",
         "responses": {
           "200": {
@@ -49058,7 +49058,7 @@
     "/dataforseo/merchant/google/sellers/task_post": {
       "post": {
         "summary": "设置 Google Shopping Sellers 任务",
-        "description": "Google Shopping Sellers 端点将提供在 Google Shopping 上架指定商品的卖家列表。为每位卖家提供的数据包括相关商品的基础价格和总价、配送和购买详情以及特别优惠。结果取决于所选的位置（请参阅[位置列表](https://docs.dataforseo.com/v3/merchant/google/locations.md)）和语言（请参阅[语言列表](https://docs.dataforseo.com/v3/merchant/google/languages.md)）设置。",
+        "description": "排队获取某个 Google Shopping 商品的在售商家列表，返回任务 `id`。本家族全程异步：submit 在 `tasks[0].id` 返回任务 `id`，结果就绪后由 fetch 取回。💰 **费用发生在 submit**（实测 $0.001–0.0015），fetch 免费，重复 fetch 也不再收费。 用 `get_dataforseo_merchant_google_sellers_fetch` 取结果。",
         "operationId": "post_dataforseo_merchant_google_sellers_submit",
         "responses": {
           "200": {
@@ -49258,7 +49258,7 @@
     "/dataforseo/merchant/google/sellers/tasks_ready": {
       "get": {
         "summary": "获取已完成的 Google Shopping Sellers 任务",
-        "description": "**‘Tasks Ready’** 端点用于提供尚未领取的已完成任务列表。如果使用 Standard 方法且未指定 `postback_url`，则可以通过此端点获取所有已完成任务的 `id` 列表。然后，可以使用 **‘Task GET’** 端点领取结果。",
+        "description": "列出已完成、等待取回的 Google Shopping 商家任务。免费。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 手里有自己任务 `id` 的调用方可以直接 fetch，跳过它。",
         "operationId": "get_dataforseo_merchant_google_sellers_ready",
         "responses": {
           "200": {

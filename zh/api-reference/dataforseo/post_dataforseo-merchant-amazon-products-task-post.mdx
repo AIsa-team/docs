@@ -1,5 +1,18 @@
 ---
 title: "设置 Amazon 产品任务"
-description: "此端点根据指定的关键词（产品名称）、位置和语言参数返回 Amazon 产品列表结果。"
+description: "按 keyword 排队一次 Amazon 搜索，返回任务 id。"
 openapi: "openapi/zh/dataforseo.json POST /dataforseo/merchant/amazon/products/task_post"
 ---
+
+{/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
+
+按 `keyword` 排队一次 Amazon 搜索，返回任务 `id`。`location_code`、`depth`、`se_domain` 调整搜索。本家族全程异步：submit 在 `tasks[0].id` 返回任务 `id`，结果就绪后由 fetch 取回。💰 **费用发生在 submit**（实测 $0.001–0.0015），fetch 免费，重复 fetch 也不再收费。 ⚠️ Amazon 系列要求 **locale 形式**的语言——`en_US` 或 `English (United States)`，拒收 Google 系列接受的裸 `en`。完全不传也会报 `Invalid Field: 'language_name'`，所以这条消息的含义是「错了或没传」，不只是「错了」。27 个合法取值见 `get_dataforseo_merchant_amazon_languages`。 用 `get_dataforseo_merchant_amazon_products_fetch` 取结果。
+
+## 示例
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/dataforseo/merchant/amazon/products/task_post" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '[{"keyword": "...", "url": "...", "priority": "..."}]'
+```
