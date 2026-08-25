@@ -1,5 +1,18 @@
 ---
 title: "实时 Google 应用列表搜索结果"
-description: "此端点将提供 Google Play 上发布的应用列表及其他信息：应用 ID、图标、评论数、评分、价格以及..."
+description: "同步搜索 DataForSEO 自建的 Google Play 商店页索引，不需要提交任务。"
 openapi: "openapi/zh/dataforseo.json POST /dataforseo/app_data/google/app_listings/search/live"
 ---
+
+{/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
+
+同步搜索 DataForSEO 自建的 Google Play 商店页索引，不需要提交任务。用 `categories`、`title`、`description` 匹配，用 `filters` 和 `order_by` 收窄，用 `limit`、`offset`、`offset_token` 翻页。返回 `total_count`、`count`、`offset`、`offset_token` 和 `items`，每项含 `app_id`、`se_domain`、`location_code`、`language_code`、`check_url`、`time_update` 和嵌套的 `item`。单条结果实测 8.8 KB。响应包在信封里：数据在 `tasks[0].result`，成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍是 200。 🔴 **单条结果实测上游 $0.101——约为我们收费的八倍，是本 provider 第二贵的端点。**价格不随 `limit` 下降，所以**一次多要几条远比多次各要几条划算**。类目名取自 `get_dataforseo_app_google_app_listings_categories`。
+
+## 示例
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/dataforseo/app_data/google/app_listings/search/live" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '[{"categories": "...", "description": "...", "title": "..."}]'
+```
