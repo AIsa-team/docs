@@ -1,5 +1,18 @@
 ---
 title: "内容分析 – 评分分布 API"
-description: "此端点将提供请求中指定的关键词及其他参数对应的评分分布数据。"
+description: "把某关键词的引用按评分分桶，每个桶给出完整指标集。"
 openapi: "openapi/zh/dataforseo.json POST /dataforseo/content_analysis/rating_distribution/live"
 ---
+
+{/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
+
+把某关键词的引用按评分分桶，每个桶给出完整指标集。每项含 `min`、`max` 和一个 `metrics` 对象，其中是 `total_count`、`rank`、`top_domains`（每项含 `domain` 和 `count`）、`sentiment_connotations`（anger / happiness / love / sadness / share / fun）、`connotation_types`（positive / negative / neutral）、`text_categories`、`page_categories`、`page_types`、`countries` 和 `languages`。10 个桶实测 6.1 KB——本家族最大的响应，因为每个桶都把整套指标重复一遍。响应统一包在 DataForSEO 的信封里——数据在 `tasks[0].result`，上游扣费在 `tasks[0].cost`。 `rank_scale` 决定分桶方式。要不分桶的同一套指标用 `post_dataforseo_content_summary_live`；只要情感用 `post_dataforseo_content_sentiment_analysis_live`。
+
+## 示例
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/dataforseo/content_analysis/rating_distribution/live" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '[{"keyword": "...", "keyword_fields": "...", "page_type": "..."}]'
+```

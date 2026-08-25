@@ -44151,7 +44151,7 @@
     "/dataforseo/content_analysis/categories": {
       "get": {
         "summary": "Content Analysis API 的类别列表",
-        "description": "我们使用 Google 产品和服务类别。此端点将为您提供所有可用类别的完整列表。",
+        "description": "`post_dataforseo_content_category_trends_live` 使用的 Google 商品与服务品类树。每行含 `category_code`、`category_name` 和 `category_code_parent`——最后这个字段使它成为一棵树。🔴 **实测 290 KB / 3182 行，且本接口不接受任何 limit 或过滤参数**——比 content 家族其他响应大两个数量级，会吃掉 agent 相当一部分上下文。取一次、留下你要的 code，别每次请求都调。免费：上游成本为 0。",
         "operationId": "get_dataforseo_content_categories",
         "responses": {
           "200": {
@@ -44273,7 +44273,7 @@
     "/dataforseo/content_analysis/category_trends/live": {
       "post": {
         "summary": "内容分析 – 类别趋势 API",
-        "description": "此端点将为您提供指定日期范围内目标类别中所有引用的数据。",
+        "description": "与 `post_dataforseo_content_phrase_trends_live` 相同的分时段指标，但针对整个商品品类而不是单个关键词。`category_code` 取自 `get_dataforseo_content_categories`，`date_from`、`date_to`、`date_group` 决定区间和粒度，每段返回一个 `date` 加上 `total_count`、`rank`、`top_domains`（每项含 `domain` 和 `count`）、`sentiment_connotations`（anger / happiness / love / sadness / share / fun）、`connotation_types`（positive / negative / neutral）、`text_categories`、`page_categories`、`page_types`、`countries` 和 `languages`。响应统一包在 DataForSEO 的信封里——数据在 `tasks[0].result`，上游扣费在 `tasks[0].cost`。 用它看一个市场怎么动，而不是一个词；已经确定了具体措辞时改用 phrase 那个。",
         "operationId": "post_dataforseo_content_category_trends_live",
         "responses": {
           "200": {
@@ -44502,7 +44502,7 @@
     "/dataforseo/content_analysis/available_filters": {
       "get": {
         "summary": "Content Analysis API 的筛选条件",
-        "description": "此处提供可与 Content Analysis API 端点配合使用的筛选器所需的全部信息。",
+        "description": "`post_dataforseo_content_search_live` 的 `filters` 参数能接受哪些字段：`url`、`domain`、`main_domain`、`url_rank`、`spam_score`、`domain_rank`、`fetch_time`、`country`、`language`、`score`、`page_category` 和 `page_types`。实测 1.8 KB。免费：上游成本为 0。构造过滤条件前先读这个，别猜字段名——不认识的字段是被拒绝，不是被忽略。",
         "operationId": "get_dataforseo_content_available_filters",
         "responses": {
           "200": {
@@ -44612,7 +44612,7 @@
     "/dataforseo/content_analysis/languages": {
       "get": {
         "summary": "Content Analysis API 支持的语言列表",
-        "description": "定价",
+        "description": "content 系列接口接受的语言列表，字段为 `language_name` 和 `language_code`，例如 `Afrikaans` 配 `af`。71 行，code 是两位形式而非 locale：是 `en`，不是 `en-US`。实测 3.9 KB。免费：上游成本为 0。属参考数据，取一次复用即可。地区的对应接口是 `get_dataforseo_content_locations`；体积大得多的品类树是 `get_dataforseo_content_categories`。",
         "operationId": "get_dataforseo_content_languages",
         "responses": {
           "200": {
@@ -44730,7 +44730,7 @@
     "/dataforseo/content_analysis/locations": {
       "get": {
         "summary": "内容分析 API 的位置列表",
-        "description": "定价",
+        "description": "content 系列接口接受的地区列表，字段为 `location_name` 和 `country_iso_code`，例如 `Afghanistan` 配 `AF`。235 行全是国家，没有城市或大区；`country_iso_code` 只用于辨认，**接口实际匹配的是完整的 `location_name` 字符串**。实测 13 KB。免费：上游成本为 0。属参考数据，取一次复用即可，别每次请求都调。语言的对应接口是 `get_dataforseo_content_languages`；体积大得多的品类树是 `get_dataforseo_content_categories`。",
         "operationId": "get_dataforseo_content_locations",
         "responses": {
           "200": {
@@ -44848,7 +44848,7 @@
     "/dataforseo/content_analysis/phrase_trends/live": {
       "post": {
         "summary": "内容分析 – 短语趋势 API",
-        "description": "此端点将提供指定日期范围内目标关键词的所有引用数据。",
+        "description": "把 summary 的指标按时间段逐段重复。每项含一个 `date` 加上 `total_count`、`rank`、`top_domains`（每项含 `domain` 和 `count`）、`sentiment_connotations`（anger / happiness / love / sadness / share / fun）、`connotation_types`（positive / negative / neutral）、`text_categories`、`page_categories`、`page_types`、`countries` 和 `languages`。`date_from`、`date_to` 和 `date_group`（day / week / month）决定区间和粒度。两个月度点实测 1.6 KB。响应统一包在 DataForSEO 的信封里——数据在 `tasks[0].result`，上游扣费在 `tasks[0].cost`。 用它看某个说法的提及量在涨还是在跌；只要某一个时间点用 `post_dataforseo_content_summary_live`。要跟踪整个品类而不是一个词，用 `post_dataforseo_content_category_trends_live`。",
         "operationId": "post_dataforseo_content_phrase_trends_live",
         "responses": {
           "200": {
@@ -45081,7 +45081,7 @@
     "/dataforseo/content_analysis/rating_distribution/live": {
       "post": {
         "summary": "内容分析 – 评分分布 API",
-        "description": "此端点将提供请求中指定的关键词及其他参数对应的评分分布数据。",
+        "description": "把某关键词的引用按评分分桶，每个桶给出完整指标集。每项含 `min`、`max` 和一个 `metrics` 对象，其中是 `total_count`、`rank`、`top_domains`（每项含 `domain` 和 `count`）、`sentiment_connotations`（anger / happiness / love / sadness / share / fun）、`connotation_types`（positive / negative / neutral）、`text_categories`、`page_categories`、`page_types`、`countries` 和 `languages`。10 个桶实测 6.1 KB——本家族最大的响应，因为每个桶都把整套指标重复一遍。响应统一包在 DataForSEO 的信封里——数据在 `tasks[0].result`，上游扣费在 `tasks[0].cost`。 `rank_scale` 决定分桶方式。要不分桶的同一套指标用 `post_dataforseo_content_summary_live`；只要情感用 `post_dataforseo_content_sentiment_analysis_live`。",
         "operationId": "post_dataforseo_content_rating_distribution_live",
         "responses": {
           "200": {
@@ -45321,7 +45321,7 @@
     "/dataforseo/content_analysis/search/live": {
       "post": {
         "summary": "内容分析 – 搜索 API",
-        "description": "此端点将提供目标关键词可用的详细引用数据。",
+        "description": "列出引用某关键词的具体页面，而不是总数。每项含 `url`、`domain`、`main_domain`、`url_rank`、`domain_rank`、`spam_score`、`fetch_time`、`country`、`language`、`score` 和 `page_category`，另有 `total_count` 和 `items_count`。用上一次响应里的 `offset_token` 翻页，用 `limit` 控制体积——单条实测 2.2 KB。响应统一包在 DataForSEO 的信封里——数据在 `tasks[0].result`，上游扣费在 `tasks[0].cost`。 `filters` 接受的字段由 `get_dataforseo_content_available_filters` 列出。要计数和分布而不是页面，用 `post_dataforseo_content_summary_live`。",
         "operationId": "post_dataforseo_content_search_live",
         "responses": {
           "200": {
@@ -45696,7 +45696,7 @@
     "/dataforseo/content_analysis/sentiment_analysis/live": {
       "post": {
         "summary": "内容分析 – 情感分析 API",
-        "description": "此端点将为您提供目标关键词可用引用的情感分析数据。",
+        "description": "某关键词全部引用的情感分布：`positive_connotation_distribution`（positive / negative / neutral）和 `sentiment_connotation_distribution`（anger / happiness / love / sadness / share / fun）。`positive_connotation_threshold` 和 `sentiments_connotation_threshold` 决定判定要多高置信度才算数。实测 5.7 KB。响应统一包在 DataForSEO 的信封里——数据在 `tasks[0].result`，上游扣费在 `tasks[0].cost`。 ⚠️ 这两个块 `post_dataforseo_content_summary_live` 里都有，价格相同还多给域名、类目、国家和语言——除非小响应体对你有意义，否则优先用它。要看情感按星级拆开，用 `post_dataforseo_content_rating_distribution_live`。",
         "operationId": "post_dataforseo_content_sentiment_analysis_live",
         "responses": {
           "200": {
@@ -45989,7 +45989,7 @@
     "/dataforseo/content_analysis/summary/live": {
       "post": {
         "summary": "内容分析 – 摘要 API",
-        "description": "此端点将提供目标关键词的可用引用数据概览。",
+        "description": "某个关键词在全网被引用情况的聚合视图。返回 `total_count`、`rank`、`top_domains`（每项含 `domain` 和 `count`）、`sentiment_connotations`（anger / happiness / love / sadness / share / fun）、`connotation_types`（positive / negative / neutral）、`text_categories`、`page_categories`、`page_types`、`countries` 和 `languages`。单个关键词实测 1.1 KB。响应统一包在 DataForSEO 的信封里——数据在 `tasks[0].result`，上游扣费在 `tasks[0].cost`。 这是 content 家族的中枢：`post_dataforseo_content_sentiment_analysis_live` 返回的两个 connotation 块本接口已经包含，除非你就是要更小的响应体，否则直接用这个。要逐个引用页面而非总数，用 `post_dataforseo_content_search_live`；要同样的聚合按时间展开，用 `post_dataforseo_content_phrase_trends_live`。",
         "operationId": "post_dataforseo_content_summary_live",
         "responses": {
           "200": {
