@@ -1,10 +1,12 @@
 # ------------------------------------------------------------------
-# Sync consolidated OpenAPI spec to two destinations:
+# Sync consolidated OpenAPI spec to downstream consumers:
 #
 #   1. This repo's root (openapi.yaml) — public download URL
 #      https://raw.githubusercontent.com/AIsa-team/docs/main/openapi.yaml
 #   2. The aisa-one website repo (client/public/openapi.yaml) —
 #      served at https://aisa.one/openapi.yaml
+#   3. The aisa-tool-router repo — receives a repository_dispatch after
+#      the generated docs commit is available on main.
 #
 # Triggers:
 #   - Push to main that touches any file in openapi/
@@ -17,6 +19,8 @@
 # Required secrets:
 #   LANDING_PAGE_PAT — a GitHub Personal Access Token with repo scope
 #   for AIsa-team/new-style-landing-page
+#   TOOL_ROUTER_DISPATCH_TOKEN — a fine-grained PAT or GitHub App token
+#   with access to dispatch events to AIsa-team/aisa-tool-router
 #   SLACK_WEBHOOK_URL — Slack incoming webhook for notifications
 # ------------------------------------------------------------------
 
@@ -28,6 +32,12 @@ on:
     paths:
       - "openapi/**"
   workflow_dispatch:
+    inputs:
+      dispatch_tool_router:
+        description: Re-dispatch the current generated OpenAPI revision to Tool Router
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -94,6 +104,12 @@ jobs:
           Triggered by: ${{ github.event_name }} on ${{ github.sha }}"
           git push
 
+      - name: Capture published docs revision
+        id: docs_revision
+        run: |
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "openapi_sha256=$(sha256sum /tmp/openapi.yaml | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
       # ── 5. Checkout website repo ───────────────────────────────────
       - name: Checkout website repo
         uses: actions/checkout@v4
@@ -138,7 +154,43 @@ jobs:
             echo "ℹ️ website/client/public/openapi.yaml already up to date"
           fi
 
-      # ── 7. Slack notifications ─────────────────────────────────────
+      # ── 7. Notify Tool Router of the immutable docs revision ───────
+      - name: Dispatch OpenAPI update to Tool Router
+        if: steps.docs_diff.outputs.changed == 'true' || inputs.dispatch_tool_router
+        env:
+          GH_TOKEN: ${{ secrets.TOOL_ROUTER_DISPATCH_TOKEN }}
+          DOCS_COMMIT: ${{ steps.docs_revision.outputs.commit }}
+          OPENAPI_SHA256: ${{ steps.docs_revision.outputs.openapi_sha256 }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::TOOL_ROUTER_DISPATCH_TOKEN is not configured"
+            exit 1
+          fi
+          jq -n \
+            --arg event_type "docs_openapi_updated" \
+            --arg docs_repository "${{ github.repository }}" \
+            --arg docs_commit "$DOCS_COMMIT" \
+            --arg openapi_sha256 "$OPENAPI_SHA256" \
+            --arg source_commit "${{ github.sha }}" \
+            --arg source_ref "${{ github.ref_name }}" \
+            --arg workflow_run_id "${{ github.run_id }}" \
+            '{
+              event_type: $event_type,
+              client_payload: {
+                docs_repository: $docs_repository,
+                docs_commit: $docs_commit,
+                openapi_sha256: $openapi_sha256,
+                source_commit: $source_commit,
+                source_ref: $source_ref,
+                workflow_run_id: $workflow_run_id
+              }
+            }' > /tmp/tool-router-dispatch.json
+          gh api \
+            --method POST \
+            repos/AIsa-team/aisa-tool-router/dispatches \
+            --input /tmp/tool-router-dispatch.json
+
+      # ── 8. Slack notifications ─────────────────────────────────────
       - name: Notify Slack (spec updated)
         if: steps.diff.outputs.changed == 'true' || steps.docs_diff.outputs.changed == 'true'
         uses: slackapi/slack-github-action@v2.1.0
@@ -160,7 +212,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "The consolidated *openapi.yaml* has been regenerated.\n\n• *Trigger:* `${{ github.event_name }}`\n• *Commit:* <https://github.com/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>\n• *Stats:* ${{ steps.consolidate.outputs.stats }}\n• *Docs repo:* `${{ steps.docs_diff.outputs.changed == 'true' && 'pushed' || 'no change' }}`\n• *Website repo:* `${{ steps.diff.outputs.changed == 'true' && 'pushed' || 'no change' }}`\n• *Workflow run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+                    "text": "The consolidated *openapi.yaml* has been regenerated.\n\n• *Trigger:* `${{ github.event_name }}`\n• *Published commit:* <https://github.com/${{ github.repository }}/commit/${{ steps.docs_revision.outputs.commit }}|`${{ steps.docs_revision.outputs.commit }}`>\n• *Stats:* ${{ steps.consolidate.outputs.stats }}\n• *Docs repo:* `${{ steps.docs_diff.outputs.changed == 'true' && 'pushed' || 'no change' }}`\n• *Website repo:* `${{ steps.diff.outputs.changed == 'true' && 'pushed' || 'no change' }}`\n• *Workflow run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
                   }
                 }
               ]
