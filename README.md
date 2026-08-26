@@ -88,7 +88,7 @@ the consolidated spec SHA-256, the source commit/ref, and the workflow run ID.
 The workflow requires a `TOOL_ROUTER_DISPATCH_TOKEN` repository secret with
 permission to send repository dispatch events to the private Tool Router repo.
 If delivery must be retried after the generated file is already current, run
-the workflow manually with `dispatch_tool_router` enabled.
+the workflow manually from `main` with `dispatch_tool_router` enabled.
 
 ## Contribution Principles
 
