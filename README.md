@@ -85,8 +85,11 @@ After the generated `openapi.yaml` commit is pushed to `main`, the workflow
 sends a `docs_openapi_updated` repository dispatch to
 `AIsa-team/aisa-tool-router`. Its payload contains the immutable docs commit,
 the consolidated spec SHA-256, the source commit/ref, and the workflow run ID.
-The workflow requires a `TOOL_ROUTER_DISPATCH_TOKEN` repository secret with
-permission to send repository dispatch events to the private Tool Router repo.
+The workflow uses the installed `AIsa-team/aisa-release-bot` GitHub App to mint
+a short-lived installation token scoped to the private Tool Router repo. The
+docs repository must define `TOOL_ROUTER_DISPATCH_APP_ID` as an Actions
+variable and store the App PEM in the
+`TOOL_ROUTER_DISPATCH_APP_PRIVATE_KEY` Actions secret.
 If delivery must be retried after the generated file is already current, run
 the workflow manually from `main` with `dispatch_tool_router` enabled.
 

@@ -19,9 +19,11 @@
 # Required secrets:
 #   LANDING_PAGE_PAT — a GitHub Personal Access Token with repo scope
 #   for AIsa-team/new-style-landing-page
-#   TOOL_ROUTER_DISPATCH_TOKEN — a fine-grained PAT or GitHub App token
-#   with access to dispatch events to AIsa-team/aisa-tool-router
+#   TOOL_ROUTER_DISPATCH_APP_PRIVATE_KEY — PEM private key for the installed
+#   AIsa-team/aisa-release-bot GitHub App
 #   SLACK_WEBHOOK_URL — Slack incoming webhook for notifications
+# Required variables:
+#   TOOL_ROUTER_DISPATCH_APP_ID — App ID for AIsa-team/aisa-release-bot
 # ------------------------------------------------------------------
 
 name: Sync OpenAPI Spec
@@ -111,15 +113,25 @@ jobs:
           echo "openapi_sha256=$(sha256sum /tmp/openapi.yaml | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
 
       # ── 5. Notify Tool Router of the immutable docs revision ───────
+      - name: Generate Tool Router App token
+        id: tool_router_app_token
+        if: github.ref == 'refs/heads/main' && (steps.docs_diff.outputs.changed == 'true' || inputs.dispatch_tool_router)
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.TOOL_ROUTER_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.TOOL_ROUTER_DISPATCH_APP_PRIVATE_KEY }}
+          owner: AIsa-team
+          repositories: aisa-tool-router
+
       - name: Dispatch OpenAPI update to Tool Router
         if: github.ref == 'refs/heads/main' && (steps.docs_diff.outputs.changed == 'true' || inputs.dispatch_tool_router)
         env:
-          GH_TOKEN: ${{ secrets.TOOL_ROUTER_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ steps.tool_router_app_token.outputs.token }}
           DOCS_COMMIT: ${{ steps.docs_revision.outputs.commit }}
           OPENAPI_SHA256: ${{ steps.docs_revision.outputs.openapi_sha256 }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "::error::TOOL_ROUTER_DISPATCH_TOKEN is not configured"
+            echo "::error::aisa-release-bot did not issue an installation token"
             exit 1
           fi
           jq -n \
