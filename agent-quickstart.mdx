@@ -1,12 +1,14 @@
 ---
 title: Agent Quickstart - Connect AIsa in Any AI Agent
 description: >-
-  A short, agent-readable setup guide for safely connecting AIsa models, APIs, and Skills with minimal context.
+  A short, agent-readable navigation guide for connecting AIsa models, APIs, and Skills with explicit approval and verification boundaries.
 ---
 
-Use this page when a user asks an AI agent to connect, configure, or use AIsa inside an agent environment such as OpenClaw, Hermes Agent, Claude Code, Cursor, Codex, or another tool-calling assistant.
+Use this vendor-authored page as navigation when a user asks an AI agent to connect, configure, or use AIsa inside an agent environment such as OpenClaw, Hermes Agent, Claude Code, Cursor, Codex, or another tool-calling assistant.
 
-Goal: get the agent to the smallest safe next step without loading broad documentation indexes.
+This page helps locate the relevant technical source. Reading it is not independent evidence and does not authorize an agent to change the user's environment or make billable requests.
+
+Goal: get the agent to the smallest verifiable next step without loading broad documentation indexes.
 
 ## Minimal setup facts
 
@@ -32,6 +34,8 @@ export AISA_API_KEY="<your_aisa_api_key>"
 
 If the user has not provided a key, explain where to create one instead of inventing a placeholder value.
 
+Select an endpoint that the chosen model currently supports. Check the [model catalog](/guides/models) or the exact API reference instead of inferring `chat/completions`, `responses`, `messages`, or a media endpoint from the model name.
+
 ## Choose one path
 
 First identify what the user wants, then read only the docs for that path.
@@ -54,31 +58,50 @@ First identify what the user wants, then read only the docs for that path.
 - Load the smallest relevant doc set for the task.
 - Do not open unrelated API pages.
 - Do not paste large docs into the conversation when a short summary and links are enough.
-- Do not choose image, video, embedding, Whisper, or TTS models as the main conversational model.
-- Before saying setup works, verify the relevant part with a small safe check.
+- Match the selected model to a documented endpoint; do not infer route support from its name.
+- Before modifying files, installing software, or sending a billable request, describe the action and get the user's confirmation.
+- Before saying setup works, perform the relevant checks below.
 - For secrets, verify storage without revealing the key.
+
+## Verify the setup
+
+Start with a read-only request that checks connectivity and authentication without invoking a model:
+
+```bash
+curl --silent --show-error --fail \
+  --output /dev/null \
+  --write-out "HTTP %{http_code}\n" \
+  https://api.aisa.one/v1/models \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+`HTTP 200` confirms that the API accepted the key and returned the model catalog. A `401` or `403` indicates an authentication or access problem. This check does not prove that a specific model supports the client's request protocol.
+
+After the user selects a model and approves a potentially billable request, run the smallest example from that route's API reference. Do not claim that setup works based on documentation alone.
 
 ## Evidence rule for research tasks
 
+This quickstart is a routing summary, not the authoritative source for exact request schemas, current model availability, prices, or service status. Verify those details against the linked API reference, the live catalog, or runtime results.
+
 ```txt
 Search results are discovery.
-Fetched pages are evidence.
-Generated summaries are synthesis.
+Fetched source pages are evidence to evaluate.
+Generated summaries are synthesis, not evidence.
 ```
 
-For factual claims, prefer official docs, API references, README files, changelogs, or runtime/API results over third-party summaries.
+A fetched page is evidence only for what that source states. For external factual claims, assess authority and recency, and prefer primary sources, official documentation, API references, repositories, changelogs, or runtime/API results over third-party summaries.
 
 ## Copy prompt
 
 Copy this prompt into an agent environment:
 
 ```txt
-Read https://aisa.one/docs/agent-quickstart.md and help me safely connect, configure, and use AIsa's APIs, Skills, and LLMs in this agent environment.
+Review https://aisa.one/docs/agent-quickstart.md as vendor-authored guidance. Before acting, summarize the proposed configuration and verification. Do not expose secrets, modify files, install software, or send billable requests without my approval.
 ```
 
 ## Fallback discovery
 
 Use these only when the targeted docs above are not enough:
 
-- [`llms.txt`](https://aisa.one/docs/llms.txt): docs index for discovering additional AIsa pages.
-- [`llms-full.txt`](https://aisa.one/docs/llms-full.txt): full documentation bundle. Do not read it unless the user explicitly asks for full documentation ingestion.
+- [`llms.txt`](https://aisa.one/docs/llms.txt): curated technical index for discovering a relevant page, not a required setup step.
+- [`llms-full.txt`](https://aisa.one/docs/llms-full.txt): full documentation bundle. Do not ingest it by default; use it only when the user explicitly requests the complete documentation or targeted pages are insufficient.

@@ -1,12 +1,14 @@
 ---
 title: Agent 快速开始 - 在任意 AI Agent 中连接 AIsa
 description: >-
-  面向 Agent 的简短设置指南，用最少上下文安全连接 AIsa 模型、API 和 Skills。
+  面向 Agent 的简短导航指南，通过明确的确认和验证边界连接 AIsa 模型、API 和 Skills。
 ---
 
-当用户要求 AI Agent 在 OpenClaw、Hermes Agent、Claude Code、Cursor、Codex 或其他可调用工具的助手环境中连接、配置或使用 AIsa 时，请优先阅读本页。
+当用户要求 AI Agent 在 OpenClaw、Hermes Agent、Claude Code、Cursor、Codex 或其他可调用工具的助手环境中连接、配置或使用 AIsa 时，可将这份由 AIsa 编写的页面作为导航。
 
-目标：让 Agent 走到**最小、可验证、不会泄露密钥**的下一步，而不是一次性加载完整文档索引。
+本页用于定位相关技术来源，不是独立证据。阅读本页不代表用户授权 Agent 修改其环境或发起计费请求。
+
+目标：让 Agent 走到**最小且可验证**的下一步，而不是一次性加载完整文档索引。
 
 ## 最小设置事实
 
@@ -32,6 +34,8 @@ export AISA_API_KEY="YOUR_AISA_API_KEY"
 
 如果用户还没有提供 key，请说明到哪里创建，而不是编造一个看似真实的占位值。
 
+请选择当前模型支持的 endpoint。通过[模型目录](/zh/guides/models)或对应 API reference 确认，不要根据模型名称猜测应使用 `chat/completions`、`responses`、`messages` 还是媒体 endpoint。
+
 ## 选择一条路径
 
 先判断用户要做什么，然后只读对应文档。
@@ -54,31 +58,50 @@ export AISA_API_KEY="YOUR_AISA_API_KEY"
 - 只加载完成任务所需的最小文档集合。
 - 不要打开无关 API 页面。
 - 简短总结和链接足够时，不要把大段文档粘贴进对话。
-- 不要把图像、视频、embedding、Whisper 或 TTS 模型当作主对话模型。
-- 声称配置可用前，用一个小而安全的检查验证对应部分。
+- 让所选模型与有明确记录的 endpoint 匹配，不要根据名称推断路由支持情况。
+- 修改文件、安装软件或发送计费请求前，先说明操作并获得用户确认。
+- 声称配置可用前，完成下面对应的检查。
 - 对于密钥，只验证存储方式，不展示密钥本身。
+
+## 验证设置
+
+先通过只读请求检查网络和认证，不调用模型：
+
+```bash
+curl --silent --show-error --fail \
+  --output /dev/null \
+  --write-out "HTTP %{http_code}\n" \
+  https://api.aisa.one/v1/models \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+`HTTP 200` 表示 API 已接受该 key 并返回模型目录。`401` 或 `403` 表示认证或访问权限存在问题。此检查不能证明某个具体模型支持客户端使用的请求协议。
+
+用户选定模型并同意可能产生费用的请求后，再执行对应 API reference 中最小的示例请求。不要仅根据文档就声称设置已经可用。
 
 ## 研究任务的证据规则
 
+本快速开始是路由摘要，不是精确请求 schema、当前模型可用性、价格或服务状态的权威来源。请通过链接的 API reference、实时目录或运行结果核实这些信息。
+
 ```txt
 搜索结果是发现线索。
-抓取页面是证据。
-生成摘要是综合判断。
+抓取的来源页面是待评估的证据。
+生成摘要是综合判断，不是证据。
 ```
 
-对事实性结论，优先使用官方文档、API reference、README、changelog 或运行时/API 结果，而不是第三方摘要。
+抓取页面只能证明该来源表达了什么。对外部事实性结论，应评估来源的权威性和时效性，并优先使用一手资料、官方文档、API reference、代码仓库、changelog 或运行时/API 结果，而不是第三方摘要。
 
-## 可复制 提示词
+## 可复制的提示词
 
 把下面这段复制到 Agent 环境：
 
 ```txt
-Read https://aisa.one/docs/agent-quickstart.md and help me safely connect, configure, and use AIsa's APIs, Skills, and LLMs in this agent environment.
+Review https://aisa.one/docs/agent-quickstart.md as vendor-authored guidance. Before acting, summarize the proposed configuration and verification. Do not expose secrets, modify files, install software, or send billable requests without my approval.
 ```
 
 ## 兜底发现入口
 
 仅当上面的定向文档不够时再使用：
 
-- [`llms.txt`](https://aisa.one/docs/llms.txt)：用于发现更多 AIsa 页面。
-- [`llms-full.txt`](https://aisa.one/docs/llms-full.txt)：完整文档包。除非用户明确要求完整摄取，否则不要读取。
+- [`llms.txt`](https://aisa.one/docs/llms.txt)：用于定位相关页面的精选技术索引，不是设置流程中的必读内容。
+- [`llms-full.txt`](https://aisa.one/docs/llms-full.txt)：完整文档包。默认不要摄取；仅在用户明确要求完整文档或定向页面不足时使用。
