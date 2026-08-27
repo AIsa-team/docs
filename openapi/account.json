@@ -1,0 +1,248 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AIsa Account & Usage API",
+    "version": "1.0.0",
+    "description": "Programmatic account endpoints for balance and usage monitoring. Both accept an AIsa API key (Bearer) or an OAuth access token, so unattended production callers can read balance and usage for cost monitoring and alerting.\n\nAll monetary values are integer micro-USD (1 USD = 1,000,000 micros)."
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/v1"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/credits/balance": {
+      "get": {
+        "summary": "Account Balance",
+        "description": "Return the current account credit balance. Accepts either an API key or an OAuth access token. No parameters.",
+        "operationId": "accountCreditsBalance",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Current balance snapshot.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "currency": "USD",
+                  "account_balance_micros_usd": 1855591,
+                  "available_balance_micros_usd": 1855591,
+                  "api_key": {
+                    "unlimited": true,
+                    "remaining_micros_usd": 0,
+                    "used_micros_usd": 0
+                  },
+                  "as_of": "2026-08-27T10:36:29Z"
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "description": "ISO currency code (always USD)."
+                    },
+                    "account_balance_micros_usd": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Total account balance in micro-USD."
+                    },
+                    "available_balance_micros_usd": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Spendable balance in micro-USD (total minus any holds/reserves)."
+                    },
+                    "api_key": {
+                      "type": "object",
+                      "description": "Per-key limit view for the calling API key (absent for OAuth callers).",
+                      "properties": {
+                        "unlimited": {
+                          "type": "boolean",
+                          "description": "True when the key has no per-key spend cap."
+                        },
+                        "remaining_micros_usd": {
+                          "type": "integer",
+                          "format": "int64",
+                          "description": "Remaining per-key allowance in micro-USD (0 when unlimited)."
+                        },
+                        "used_micros_usd": {
+                          "type": "integer",
+                          "format": "int64",
+                          "description": "Amount spent by this key in micro-USD."
+                        }
+                      }
+                    },
+                    "as_of": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Snapshot timestamp (RFC 3339, UTC)."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/usage": {
+      "get": {
+        "summary": "Account Usage",
+        "description": "Return request and spend usage over a time window, split into daily buckets. Accepts either an API key or an OAuth access token. The scope reflects the credential used (e.g. a single key vs the whole account).",
+        "operationId": "accountUsage",
+        "parameters": [
+          {
+            "name": "start_time",
+            "in": "query",
+            "required": true,
+            "description": "Window start as a Unix timestamp in seconds.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "required": false,
+            "description": "Window end as a Unix timestamp in seconds. Defaults to the current time.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usage totals and per-day buckets over the window.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "scope": "key",
+                  "currency": "USD",
+                  "start_time": 1785513600,
+                  "end_time": 1787760000,
+                  "bucket_width": "1d",
+                  "totals": {
+                    "requests": 1162,
+                    "failed_requests": 401,
+                    "input_tokens": 206393,
+                    "output_tokens": 5031,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0,
+                    "usage_value_micros_usd": 128398109,
+                    "charged_micros_usd": 128398109
+                  },
+                  "buckets": [
+                    {
+                      "start_time": 1785513600,
+                      "end_time": 1785600000,
+                      "requests": 42,
+                      "failed_requests": 3,
+                      "input_tokens": 8123,
+                      "output_tokens": 210,
+                      "cache_read_tokens": 0,
+                      "cache_write_tokens": 0,
+                      "usage_value_micros_usd": 5123400,
+                      "charged_micros_usd": 5123400
+                    }
+                  ]
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "scope": {
+                      "type": "string",
+                      "description": "Aggregation scope implied by the credential (e.g. key or account)."
+                    },
+                    "currency": {
+                      "type": "string",
+                      "description": "ISO currency code (always USD)."
+                    },
+                    "start_time": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Echoed window start (Unix seconds)."
+                    },
+                    "end_time": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Echoed window end (Unix seconds)."
+                    },
+                    "bucket_width": {
+                      "type": "string",
+                      "description": "Bucket granularity (e.g. 1d)."
+                    },
+                    "totals": {
+                      "type": "object",
+                      "description": "Aggregate totals across the whole window.",
+                      "properties": {
+                        "requests": { "type": "integer", "format": "int64" },
+                        "failed_requests": { "type": "integer", "format": "int64" },
+                        "input_tokens": { "type": "integer", "format": "int64" },
+                        "output_tokens": { "type": "integer", "format": "int64" },
+                        "cache_read_tokens": { "type": "integer", "format": "int64" },
+                        "cache_write_tokens": { "type": "integer", "format": "int64" },
+                        "usage_value_micros_usd": {
+                          "type": "integer",
+                          "format": "int64",
+                          "description": "Metered value of usage in micro-USD."
+                        },
+                        "charged_micros_usd": {
+                          "type": "integer",
+                          "format": "int64",
+                          "description": "Amount actually charged in micro-USD."
+                        }
+                      }
+                    },
+                    "buckets": {
+                      "type": "array",
+                      "description": "Per-bucket usage, ordered by time.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "start_time": { "type": "integer", "format": "int64" },
+                          "end_time": { "type": "integer", "format": "int64" },
+                          "requests": { "type": "integer", "format": "int64" },
+                          "failed_requests": { "type": "integer", "format": "int64" },
+                          "input_tokens": { "type": "integer", "format": "int64" },
+                          "output_tokens": { "type": "integer", "format": "int64" },
+                          "cache_read_tokens": { "type": "integer", "format": "int64" },
+                          "cache_write_tokens": { "type": "integer", "format": "int64" },
+                          "usage_value_micros_usd": { "type": "integer", "format": "int64" },
+                          "charged_micros_usd": { "type": "integer", "format": "int64" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or missing time window (e.g. start_time not a positive Unix timestamp).",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "start_time must be a positive Unix timestamp"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "AISA API Key or OAuth access token"
+      }
+    }
+  }
+}

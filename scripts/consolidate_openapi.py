@@ -81,6 +81,7 @@ FILE_TAG_MAP = {
     "oxylabs.json": "Web & News Search",
     "websearch.json": "Web & News Search",
     "edinet.json": "Financial Data",
+    "account.json": "Account & Usage",
 }
 
 TAG_DESCRIPTIONS = {
@@ -100,6 +101,7 @@ TAG_DESCRIPTIONS = {
     "Reddit": "Read public Reddit data — search posts, browse subreddits, and fetch comments",
     "Instagram": "Read public Instagram data — profiles, posts, reels, highlights, comments, and Google-backed search",
     "Pinterest": "Read public Pinterest data — search pins, fetch pin details, and browse boards",
+    "Account & Usage": "Programmatic account balance and usage endpoints for cost monitoring and alerting",
 }
 
 # Server URLs used by the unified spec — keep in sync with the
