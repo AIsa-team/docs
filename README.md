@@ -90,9 +90,10 @@ a short-lived installation token scoped to the private Tool Router repo. The
 docs repository must define `TOOL_ROUTER_DISPATCH_APP_ID` as an Actions
 variable and store the App PEM in the
 `TOOL_ROUTER_DISPATCH_APP_PRIVATE_KEY` Actions secret.
-Dispatch runs in a sibling job after the docs revision is captured, so a Tool
-Router delivery failure cannot block the independent landing-page copy (and a
-landing-page failure cannot suppress Tool Router delivery).
+Dispatch runs in a sibling job after the docs revision is captured. Its
+`always()` guard lets Tool Router delivery proceed when a later notification
+step fails, while a delivery failure cannot roll back the published docs
+revision.
 If delivery must be retried after the generated file is already current, run
 the workflow manually from `main` with `dispatch_tool_router` enabled.
 
