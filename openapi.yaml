@@ -42,6 +42,8 @@ security:
 tags:
 - name: AI Models
   description: Access 50+ LLMs via OpenAI-compatible, Anthropic, and Google Gemini interfaces
+- name: Account & Usage
+  description: Programmatic account balance and usage endpoints for cost monitoring and alerting
 - name: Agent Email
   description: AI-agent email accounts, inboxes, threads, drafts, and message send/reply via AgentMail.to
 - name: Crypto Data
@@ -75,6 +77,211 @@ tags:
 - name: YouTube Search
   description: Search YouTube videos
 paths:
+  /credits/balance:
+    get:
+      summary: Account Balance
+      description: Return the current account credit balance. Accepts either an API key or an OAuth access token. No parameters.
+      operationId: accountCreditsBalance
+      parameters: []
+      responses:
+        '200':
+          description: Current balance snapshot.
+          content:
+            application/json:
+              example:
+                currency: USD
+                account_balance_micros_usd: 1855591
+                available_balance_micros_usd: 1855591
+                api_key:
+                  unlimited: true
+                  remaining_micros_usd: 0
+                  used_micros_usd: 0
+                as_of: '2026-08-27T10:36:29Z'
+              schema:
+                type: object
+                properties:
+                  currency:
+                    type: string
+                    description: ISO currency code (always USD).
+                  account_balance_micros_usd:
+                    type: integer
+                    format: int64
+                    description: Total account balance in micro-USD.
+                  available_balance_micros_usd:
+                    type: integer
+                    format: int64
+                    description: Spendable balance in micro-USD (total minus any holds/reserves).
+                  api_key:
+                    type: object
+                    description: Per-key limit view for the calling API key (absent for OAuth callers).
+                    properties:
+                      unlimited:
+                        type: boolean
+                        description: True when the key has no per-key spend cap.
+                      remaining_micros_usd:
+                        type: integer
+                        format: int64
+                        description: Remaining per-key allowance in micro-USD (0 when unlimited).
+                      used_micros_usd:
+                        type: integer
+                        format: int64
+                        description: Amount spent by this key in micro-USD.
+                  as_of:
+                    type: string
+                    format: date-time
+                    description: Snapshot timestamp (RFC 3339, UTC).
+      tags:
+      - Account & Usage
+      servers:
+      - url: https://api.aisa.one/v1
+  /usage:
+    get:
+      summary: Account Usage
+      description: Return request and spend usage over a time window, split into daily buckets. Accepts either an API key
+        or an OAuth access token. The scope reflects the credential used (e.g. a single key vs the whole account).
+      operationId: accountUsage
+      parameters:
+      - name: start_time
+        in: query
+        required: true
+        description: Window start as a Unix timestamp in seconds.
+        schema:
+          type: integer
+          format: int64
+      - name: end_time
+        in: query
+        required: false
+        description: Window end as a Unix timestamp in seconds. Defaults to the current time.
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Usage totals and per-day buckets over the window.
+          content:
+            application/json:
+              example:
+                scope: key
+                currency: USD
+                start_time: 1785513600
+                end_time: 1787760000
+                bucket_width: 1d
+                totals:
+                  requests: 1162
+                  failed_requests: 401
+                  input_tokens: 206393
+                  output_tokens: 5031
+                  cache_read_tokens: 0
+                  cache_write_tokens: 0
+                  usage_value_micros_usd: 128398109
+                  charged_micros_usd: 128398109
+                buckets:
+                - start_time: 1785513600
+                  end_time: 1785600000
+                  requests: 42
+                  failed_requests: 3
+                  input_tokens: 8123
+                  output_tokens: 210
+                  cache_read_tokens: 0
+                  cache_write_tokens: 0
+                  usage_value_micros_usd: 5123400
+                  charged_micros_usd: 5123400
+              schema:
+                type: object
+                properties:
+                  scope:
+                    type: string
+                    description: Aggregation scope implied by the credential (e.g. key or account).
+                  currency:
+                    type: string
+                    description: ISO currency code (always USD).
+                  start_time:
+                    type: integer
+                    format: int64
+                    description: Echoed window start (Unix seconds).
+                  end_time:
+                    type: integer
+                    format: int64
+                    description: Echoed window end (Unix seconds).
+                  bucket_width:
+                    type: string
+                    description: Bucket granularity (e.g. 1d).
+                  totals:
+                    type: object
+                    description: Aggregate totals across the whole window.
+                    properties:
+                      requests:
+                        type: integer
+                        format: int64
+                      failed_requests:
+                        type: integer
+                        format: int64
+                      input_tokens:
+                        type: integer
+                        format: int64
+                      output_tokens:
+                        type: integer
+                        format: int64
+                      cache_read_tokens:
+                        type: integer
+                        format: int64
+                      cache_write_tokens:
+                        type: integer
+                        format: int64
+                      usage_value_micros_usd:
+                        type: integer
+                        format: int64
+                        description: Metered value of usage in micro-USD.
+                      charged_micros_usd:
+                        type: integer
+                        format: int64
+                        description: Amount actually charged in micro-USD.
+                  buckets:
+                    type: array
+                    description: Per-bucket usage, ordered by time.
+                    items:
+                      type: object
+                      properties:
+                        start_time:
+                          type: integer
+                          format: int64
+                        end_time:
+                          type: integer
+                          format: int64
+                        requests:
+                          type: integer
+                          format: int64
+                        failed_requests:
+                          type: integer
+                          format: int64
+                        input_tokens:
+                          type: integer
+                          format: int64
+                        output_tokens:
+                          type: integer
+                          format: int64
+                        cache_read_tokens:
+                          type: integer
+                          format: int64
+                        cache_write_tokens:
+                          type: integer
+                          format: int64
+                        usage_value_micros_usd:
+                          type: integer
+                          format: int64
+                        charged_micros_usd:
+                          type: integer
+                          format: int64
+        '400':
+          description: Invalid or missing time window (e.g. start_time not a positive Unix timestamp).
+          content:
+            application/json:
+              example:
+                error: start_time must be a positive Unix timestamp
+      tags:
+      - Account & Usage
+      servers:
+      - url: https://api.aisa.one/v1
   /agentmail/threads/{thread_id}:
     get:
       operationId: get_agentmail_thread
@@ -85238,7 +85445,8 @@ paths:
     get:
       summary: Traffic & Engagement
       description: 'Traffic & Engagement. Billing: 1 credit(s)/call base (billed by metrics x countries x time buckets; charged
-        only on success). Response follows the SimilarWeb v5 envelope (meta + data).'
+        only on success). Response follows the SimilarWeb v5 envelope (meta + data). Date constraint: the start_date-end_date
+        span must cover between 1 and 120 monthly buckets.'
       operationId: similarwebTrafficEngagement
       parameters:
       - name: domain
@@ -85247,40 +85455,65 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: start_date
         in: query
-        required: false
-        description: Start date (YYYY-MM).
+        required: true
+        description: Start month, format YYYY-MM.
         schema:
           type: string
       - name: end_date
         in: query
-        required: false
-        description: End date (YYYY-MM).
+        required: true
+        description: End month, format YYYY-MM.
         schema:
           type: string
       - name: granularity
         in: query
         required: false
-        description: 'Granularity: monthly / weekly / daily.'
+        description: 'Time granularity. Allowed: monthly. Default: monthly.'
         schema:
           type: string
+          enum:
+          - monthly
+          default: monthly
       - name: metrics
         in: query
-        required: false
-        description: Comma-separated metrics, e.g. visits,average_visit_duration.
+        required: true
+        description: Comma-separated metrics, e.g. visits,pages_per_visit.
         schema:
           type: string
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: desktop, mobile_web, total.'
+        schema:
+          type: string
+          enum:
+          - desktop
+          - mobile_web
+          - total
       - name: main_domain_only
         in: query
         required: false
-        description: Main domain only (true/false).
+        description: 'Restrict to the main domain only (true/false). Default: True.'
+        schema:
+          type: boolean
+          default: true
+      - name: mtd
+        in: query
+        required: false
+        description: Month-to-date flag (true/false).
         schema:
           type: boolean
       responses:
@@ -85291,20 +85524,65 @@ paths:
               example:
                 meta:
                   request:
-                    domain: example.com
-                  status: Success
+                    format: json
+                    domain: cnn.com
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    web_source: total
+                    metrics:
+                    - visits
+                    - pages_per_visit
+                    - average_visit_duration
+                    - bounce_rate
+                    - new_users
+                    - page_views
+                    - returning_users
+                    - unique_visitors
+                    state: null
+                    mtd: false
+                    main_domain_only: true
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - date: '2026-06-01'
+                  visits: 182538329.78179574
+                  bounce_rate: 0.6402229356798581
+                  average_visit_duration: 194.8333714917004
+                  pages_per_visit: 1.9970684926970637
+                  page_views: 364541547.1167704
+                  unique_visitors: 32705292.619999997
+                  new_users: 10074246.080150243
+                  returning_users: 22631046.540221456
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        date:
+                          type: string
+                        visits:
+                          type: number
+                        bounce_rate:
+                          type: number
+                        average_visit_duration:
+                          type: number
+                        pages_per_visit:
+                          type: number
+                        page_views:
+                          type: number
+                        unique_visitors:
+                          type: number
+                        new_users:
+                          type: number
+                        returning_users:
+                          type: number
       tags:
       - Other
       x-x402:
@@ -85314,7 +85592,8 @@ paths:
     get:
       summary: Website Ranking
       description: 'Website Ranking. Billing: 1 credit(s)/call base (billed by metrics x countries x time buckets; charged
-        only on success). Response follows the SimilarWeb v5 envelope (meta + data).'
+        only on success). Response follows the SimilarWeb v5 envelope (meta + data). Date constraint: the start_date-end_date
+        span must cover between 1 and 120 monthly buckets.'
       operationId: similarwebRanking
       parameters:
       - name: domain
@@ -85323,30 +85602,55 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: start_date
         in: query
-        required: false
-        description: Start date (YYYY-MM).
+        required: true
+        description: Start month, format YYYY-MM.
         schema:
           type: string
       - name: end_date
         in: query
-        required: false
-        description: End date (YYYY-MM).
+        required: true
+        description: End month, format YYYY-MM.
         schema:
           type: string
       - name: granularity
         in: query
         required: false
-        description: 'Granularity: monthly / weekly / daily.'
+        description: 'Time granularity. Allowed: monthly. Default: monthly.'
         schema:
           type: string
+          enum:
+          - monthly
+          default: monthly
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: desktop, mobile_web, total.'
+        schema:
+          type: string
+          enum:
+          - desktop
+          - mobile_web
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: 'Restrict to the main domain only (true/false). Default: True.'
+        schema:
+          type: boolean
+          default: true
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -85355,20 +85659,42 @@ paths:
               example:
                 meta:
                   request:
-                    domain: example.com
-                  status: Success
+                    format: json
+                    domain: cnn.com
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    web_source: total
+                    metrics:
+                    - country_rank
+                    - category_rank
+                    - category
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - date: '2026-06-01'
+                  country_rank: 69
+                  category: News_and_Media
+                  category_rank: 5
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        date:
+                          type: string
+                        country_rank:
+                          type: integer
+                        category:
+                          type: string
+                        category_rank:
+                          type: integer
       tags:
       - Other
       x-x402:
@@ -85378,7 +85704,8 @@ paths:
     get:
       summary: PPC Spend
       description: 'PPC Spend. Billing: 5 credit(s)/call base (billed by metrics x countries x time buckets; charged only
-        on success). Response follows the SimilarWeb v5 envelope (meta + data).'
+        on success). Response follows the SimilarWeb v5 envelope (meta + data). Date constraint: the start_date-end_date span
+        must cover between 1 and 120 monthly buckets.'
       operationId: similarwebPpcSpend
       parameters:
       - name: domain
@@ -85387,30 +85714,55 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: start_date
         in: query
-        required: false
-        description: Start date (YYYY-MM).
+        required: true
+        description: Start month, format YYYY-MM.
         schema:
           type: string
       - name: end_date
         in: query
-        required: false
-        description: End date (YYYY-MM).
+        required: true
+        description: End month, format YYYY-MM.
         schema:
           type: string
       - name: granularity
         in: query
         required: false
-        description: 'Granularity: monthly / weekly / daily.'
+        description: 'Time granularity. Allowed: monthly. Default: monthly.'
         schema:
           type: string
+          enum:
+          - monthly
+          default: monthly
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: desktop, mobile_web, total.'
+        schema:
+          type: string
+          enum:
+          - desktop
+          - mobile_web
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: 'Restrict to the main domain only (true/false). Default: True.'
+        schema:
+          type: boolean
+          default: true
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -85419,20 +85771,38 @@ paths:
               example:
                 meta:
                   request:
-                    domain: example.com
-                  status: Success
+                    currency: usd
+                    format: json
+                    domain: cnn.com
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    web_source: total
+                    data_version: null
+                    main_domain_only: true
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - date: '2026-06-01'
+                  currency: usd
+                  ppc_spend: 136064.05
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        date:
+                          type: string
+                        currency:
+                          type: string
+                        ppc_spend:
+                          type: number
       tags:
       - Other
       x-x402:
@@ -85451,20 +85821,31 @@ paths:
         description: Industry category, e.g. Finance.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: limit
         in: query
         required: false
         description: Number of rows to return; max 20, billed as 20 if exceeded.
         schema:
           type: integer
-          maximum: 20
           default: 20
+          maximum: 20
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: offset
+        in: query
+        required: false
+        description: Row offset for pagination.
+        schema:
+          type: integer
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -85472,21 +85853,39 @@ paths:
             application/json:
               example:
                 meta:
+                  query:
+                    limit: 5
+                    offset: 0
+                    asc: null
+                    sort: null
                   request:
-                    domain: example.com
-                  status: Success
+                    channel: total
+                    format: json
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-05-01'
+                    end_date: '2026-07-31'
+                    category: News_and_Media
+                    web_source: total
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - domain: yahoo.com
+                  rank: 1
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        domain:
+                          type: string
+                        rank:
+                          type: integer
       tags:
       - Other
       x-x402:
@@ -85496,7 +85895,8 @@ paths:
     get:
       summary: Marketing Channel Sources
       description: 'Marketing Channel Sources. Billing: 7 credit(s)/call base (billed by metrics x countries x time buckets;
-        charged only on success). Response follows the SimilarWeb v5 envelope (meta + data).'
+        charged only on success). Response follows the SimilarWeb v5 envelope (meta + data). Date constraint: the start_date-end_date
+        span must cover between 1 and 120 monthly buckets.'
       operationId: similarwebMarketingChannelSourcesLegacy
       parameters:
       - name: domain
@@ -85505,30 +85905,55 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: start_date
         in: query
-        required: false
-        description: Start date (YYYY-MM).
+        required: true
+        description: Start month, format YYYY-MM.
         schema:
           type: string
       - name: end_date
         in: query
-        required: false
-        description: End date (YYYY-MM).
+        required: true
+        description: End month, format YYYY-MM.
         schema:
           type: string
       - name: granularity
         in: query
         required: false
-        description: 'Granularity: monthly / weekly / daily.'
+        description: 'Time granularity. Allowed: monthly. Default: monthly.'
         schema:
           type: string
+          enum:
+          - monthly
+          default: monthly
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: desktop, mobile_web, total.'
+        schema:
+          type: string
+          enum:
+          - desktop
+          - mobile_web
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: 'Restrict to the main domain only (true/false). Default: True.'
+        schema:
+          type: boolean
+          default: true
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -85537,20 +85962,48 @@ paths:
               example:
                 meta:
                   request:
-                    domain: example.com
-                  status: Success
+                    format: json
+                    domain: cnn.com
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    web_source: total
+                    metrics:
+                    - visits
+                    mtd: false
+                    main_domain_only: true
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - date: '2026-06-01'
+                  source_type: Direct
+                  visits: 122433065.2298491
+                  bounce_rate: null
+                  average_visit_duration: null
+                  pages_per_visit: null
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        date:
+                          type: string
+                        source_type:
+                          type: string
+                        visits:
+                          type: number
+                        bounce_rate:
+                          type: string
+                        average_visit_duration:
+                          type: string
+                        pages_per_visit:
+                          type: string
       tags:
       - Other
       x-x402:
@@ -85569,20 +86022,73 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
-      - name: country
+      - name: start_date
         in: query
         required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
+        description: Start month, format YYYY-MM.
         schema:
           type: string
+      - name: end_date
+        in: query
+        required: false
+        description: End month, format YYYY-MM.
+        schema:
+          type: string
+      - name: granularity
+        in: query
+        required: false
+        description: 'Time granularity. Allowed: monthly.'
+        schema:
+          type: string
+          enum:
+          - monthly
       - name: limit
         in: query
         required: false
         description: Number of rows to return; max 20, billed as 20 if exceeded.
         schema:
           type: integer
-          maximum: 20
           default: 20
+          maximum: 20
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: desktop, mobile_web, total.'
+        schema:
+          type: string
+          enum:
+          - desktop
+          - mobile_web
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: Restrict to the main domain only (true/false).
+        schema:
+          type: boolean
+      - name: offset
+        in: query
+        required: false
+        description: Row offset for pagination.
+        schema:
+          type: integer
+      - name: traffic_source
+        in: query
+        required: false
+        description: Traffic-source filter.
+        schema:
+          type: string
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -85590,21 +86096,46 @@ paths:
             application/json:
               example:
                 meta:
+                  query:
+                    limit: 5
+                    offset: 0
+                    asc: null
+                    sort: null
                   request:
-                    domain: example.com
-                  status: Success
+                    referral_type: incoming
+                    format: json
+                    domain: cnn.com
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    web_source: total
+                    main_domain_only: false
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - domain: citizenfreepress.com
+                  share: 0.1664343819749612
+                  change: 0.44941053996464486
+                  visits: 1083633.5339702675
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        domain:
+                          type: string
+                        share:
+                          type: number
+                        change:
+                          type: number
+                        visits:
+                          type: number
       tags:
       - Other
       x-x402:
@@ -85613,8 +86144,9 @@ paths:
   /similarweb/website/traffic-geography:
     get:
       summary: Traffic Geography
-      description: 'Traffic Geography. Billing: 7 credit(s)/row (per returned row, capped at 20 rows; charged only on success).
-        Response follows the SimilarWeb v5 envelope (meta + data).'
+      description: '(Temporarily unavailable — endpoint disabled in production.) Traffic Geography. Billing: 7 credit(s)/row
+        (per returned row, capped at 20 rows; charged only on success). Response follows the SimilarWeb v5 envelope (meta
+        + data).'
       operationId: similarwebTrafficGeography
       parameters:
       - name: domain
@@ -85645,26 +86177,40 @@ paths:
           default: 20
       responses:
         '200':
-          description: SimilarWeb v5 envelope (meta + data).
+          description: 'SimilarWeb v5 envelope (meta + data). Field types are best-effort: this endpoint could not be live-captured
+            (disabled or insufficient credit at audit time); fields are derived from the 2026-08-27 alignment audit.'
           content:
             application/json:
               example:
                 meta:
+                  status: success
+                  last_updated: '2026-06-30'
                   request:
-                    domain: example.com
-                  status: Success
+                    domain: cnn.com
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - country: us
+                  country_code: 840
+                  share: 0.41
+                  visits: 5500000
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        country:
+                          type: string
+                        country_code:
+                          type: integer
+                        share:
+                          type: number
+                        visits:
+                          type: integer
+      deprecated: true
       tags:
       - Other
       x-x402:
@@ -85683,32 +86229,73 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: start_date
         in: query
         required: false
-        description: Start date (YYYY-MM).
+        description: Start month, format YYYY-MM.
         schema:
           type: string
       - name: end_date
         in: query
         required: false
-        description: End date (YYYY-MM).
+        description: End month, format YYYY-MM.
         schema:
           type: string
+      - name: granularity
+        in: query
+        required: false
+        description: 'Time granularity. Allowed: monthly.'
+        schema:
+          type: string
+          enum:
+          - monthly
       - name: limit
         in: query
         required: false
         description: Number of rows to return; max 20, billed as 20 if exceeded.
         schema:
           type: integer
-          maximum: 20
           default: 20
+          maximum: 20
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: desktop, mobile_web, total.'
+        schema:
+          type: string
+          enum:
+          - desktop
+          - mobile_web
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: Restrict to the main domain only (true/false).
+        schema:
+          type: boolean
+      - name: offset
+        in: query
+        required: false
+        description: Row offset for pagination.
+        schema:
+          type: integer
+      - name: traffic_source
+        in: query
+        required: false
+        description: Traffic-source filter.
+        schema:
+          type: string
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -85716,21 +86303,47 @@ paths:
             application/json:
               example:
                 meta:
+                  query:
+                    limit: 5
+                    offset: 0
+                    asc: null
+                    sort: null
                   request:
-                    domain: example.com
-                  status: Success
+                    ad_network_type: incoming
+                    metrics:
+                    - share
+                    - change
+                    format: json
+                    domain: cnn.com
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    web_source: desktop
+                    data_version: null
+                    main_domain_only: false
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - ad_network: Zeta Global
+                  share: 1.0
+                  change: 0.4053466348518069
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        ad_network:
+                          type: string
+                        share:
+                          type: number
+                        change:
+                          type: number
       tags:
       - Other
       x-x402:
@@ -85740,7 +86353,9 @@ paths:
     get:
       summary: SimilarSites
       description: 'SimilarSites. Billing: 2 credit(s)/row (per returned row, capped at 20 rows; charged only on success).
-        Response follows the SimilarWeb v5 envelope (meta + data).'
+        Response follows the SimilarWeb v5 envelope (meta + data). Note: SimilarWeb (upstream) only returns data for a recent,
+        roughly three-month window; requests outside the supported recent range may return an upstream error even though the
+        parameters are accepted.'
       operationId: similarwebSimilarSites
       parameters:
       - name: domain
@@ -85749,14 +86364,73 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
+      - name: start_date
+        in: query
+        required: false
+        description: Start month, format YYYY-MM.
+        schema:
+          type: string
+      - name: end_date
+        in: query
+        required: false
+        description: End month, format YYYY-MM.
+        schema:
+          type: string
+      - name: granularity
+        in: query
+        required: false
+        description: 'Time granularity. Allowed: monthly.'
+        schema:
+          type: string
+          enum:
+          - monthly
       - name: limit
         in: query
         required: false
         description: Number of rows to return; max 20, billed as 20 if exceeded.
         schema:
           type: integer
-          maximum: 20
           default: 20
+          maximum: 20
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: desktop, mobile_web, total.'
+        schema:
+          type: string
+          enum:
+          - desktop
+          - mobile_web
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: Restrict to the main domain only (true/false).
+        schema:
+          type: boolean
+      - name: offset
+        in: query
+        required: false
+        description: Row offset for pagination.
+        schema:
+          type: integer
+      - name: traffic_source
+        in: query
+        required: false
+        description: Traffic-source filter.
+        schema:
+          type: string
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -85764,21 +86438,50 @@ paths:
             application/json:
               example:
                 meta:
+                  query:
+                    limit: 5
+                    offset: 0
+                    asc: null
+                    sort: null
                   request:
-                    domain: example.com
-                  status: Success
+                    format: json
+                    domain: cnn.com
+                    granularity: monthly
+                    start_date: '2026-05-01'
+                    end_date: '2026-07-31'
+                    metrics:
+                    - rank
+                    - affinity
+                    - has_adsense
+                    category: null
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - domain: bbc.com
+                  category: News_and_Media
+                  rank: 95
+                  affinity: 1.0
+                  has_adsense: true
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        domain:
+                          type: string
+                        category:
+                          type: string
+                        rank:
+                          type: integer
+                        affinity:
+                          type: number
+                        has_adsense:
+                          type: boolean
       tags:
       - Other
       x-x402:
@@ -85788,7 +86491,8 @@ paths:
     get:
       summary: Demographics
       description: 'Demographics. Billing: 8 credits/call (fixed; charged only on success). Response follows the SimilarWeb
-        v5 envelope (meta + data).'
+        v5 envelope (meta + data). Date constraint: start_date and end_date must fall in the SAME month (exactly one monthly
+        bucket).'
       operationId: similarwebDemographics
       parameters:
       - name: domain
@@ -85797,24 +86501,59 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: start_date
         in: query
-        required: false
-        description: Start date (YYYY-MM).
+        required: true
+        description: Start month, format YYYY-MM.
         schema:
           type: string
       - name: end_date
         in: query
-        required: false
-        description: End date (YYYY-MM).
+        required: true
+        description: End month, format YYYY-MM.
         schema:
           type: string
+      - name: granularity
+        in: query
+        required: true
+        description: 'Time granularity. Allowed: monthly.'
+        schema:
+          type: string
+          enum:
+          - monthly
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: total.'
+        schema:
+          type: string
+          enum:
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: Restrict to the main domain only (true/false).
+        schema:
+          type: boolean
+      - name: format
+        in: query
+        required: false
+        description: 'Response format. Allowed: json.'
+        schema:
+          type: string
+          enum:
+          - json
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -85823,20 +86562,58 @@ paths:
               example:
                 meta:
                   request:
-                    domain: example.com
-                  status: Success
+                    format: json
+                    domain: cnn.com
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    metrics:
+                    - age_18_to_24_share
+                    - age_25_to_34_share
+                    - age_35_to_44_share
+                    - age_45_to_54_share
+                    - age_55_to_64_share
+                    - age_65_plus_share
+                    - male_share
+                    - female_share
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - age_18_to_24_share: 0.0684928856109901
+                  age_25_to_34_share: 0.16978297333160164
+                  age_35_to_44_share: 0.202684431962113
+                  age_45_to_54_share: 0.2104190356035189
+                  age_55_to_64_share: 0.21167119791609917
+                  age_65_plus_share: 0.1369494755756772
+                  male_share: 0.5816619373492008
+                  female_share: 0.4183380626507992
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        age_18_to_24_share:
+                          type: number
+                        age_25_to_34_share:
+                          type: number
+                        age_35_to_44_share:
+                          type: number
+                        age_45_to_54_share:
+                          type: number
+                        age_55_to_64_share:
+                          type: number
+                        age_65_plus_share:
+                          type: number
+                        male_share:
+                          type: number
+                        female_share:
+                          type: number
       tags:
       - Other
       x-x402:
@@ -85846,7 +86623,8 @@ paths:
     get:
       summary: Deduplicated Audience
       description: 'Deduplicated Audience. Billing: 7 credit(s)/call base (billed by metrics x countries x time buckets; charged
-        only on success). Response follows the SimilarWeb v5 envelope (meta + data).'
+        only on success). Response follows the SimilarWeb v5 envelope (meta + data). Date constraint: the start_date-end_date
+        span must cover between 1 and 120 monthly buckets.'
       operationId: similarwebDeduplicatedAudience
       parameters:
       - name: domain
@@ -85855,30 +86633,55 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: start_date
         in: query
-        required: false
-        description: Start date (YYYY-MM).
+        required: true
+        description: Start month, format YYYY-MM.
         schema:
           type: string
       - name: end_date
         in: query
-        required: false
-        description: End date (YYYY-MM).
+        required: true
+        description: End month, format YYYY-MM.
         schema:
           type: string
       - name: granularity
         in: query
         required: false
-        description: 'Granularity: monthly / weekly / daily.'
+        description: 'Time granularity. Allowed: monthly. Default: monthly.'
         schema:
           type: string
+          enum:
+          - monthly
+          default: monthly
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: desktop, mobile_web, total.'
+        schema:
+          type: string
+          enum:
+          - desktop
+          - mobile_web
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: 'Restrict to the main domain only (true/false). Default: True.'
+        schema:
+          type: boolean
+          default: true
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -85887,20 +86690,58 @@ paths:
               example:
                 meta:
                   request:
-                    domain: example.com
-                  status: Success
+                    format: json
+                    domain: cnn.com
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    metrics:
+                    - total_deduplicated_audience
+                    - desktop_only_audience_share
+                    - desktop_only_audience_visitors
+                    - mobile_web_only_audience_share
+                    - mobile_web_only_audience_visitors
+                    - desktop_and_mobile_web_audience_share
+                    - desktop_and_mobile_web_audience_visitors
+                    main_domain_only: true
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - date: '2026-06-01'
+                  total_deduplicated_audience: 23727616.32935698
+                  desktop_only_audience_share: 0.12370405221553608
+                  desktop_only_audience_visitors: 2935202.2893569823
+                  mobile_web_only_audience_share: 0.4979319281532382
+                  mobile_web_only_audience_visitors: 11814737.749356981
+                  desktop_and_mobile_web_audience_share: 0.3783640196312258
+                  desktop_and_mobile_web_audience_visitors: 8977676.290643018
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        date:
+                          type: string
+                        total_deduplicated_audience:
+                          type: number
+                        desktop_only_audience_share:
+                          type: number
+                        desktop_only_audience_visitors:
+                          type: number
+                        mobile_web_only_audience_share:
+                          type: number
+                        mobile_web_only_audience_visitors:
+                          type: number
+                        desktop_and_mobile_web_audience_share:
+                          type: number
+                        desktop_and_mobile_web_audience_visitors:
+                          type: number
       tags:
       - Other
       x-x402:
@@ -85919,20 +86760,73 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
-      - name: country
+      - name: start_date
         in: query
         required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
+        description: Start month, format YYYY-MM.
         schema:
           type: string
+      - name: end_date
+        in: query
+        required: false
+        description: End month, format YYYY-MM.
+        schema:
+          type: string
+      - name: granularity
+        in: query
+        required: false
+        description: 'Time granularity. Allowed: monthly.'
+        schema:
+          type: string
+          enum:
+          - monthly
       - name: limit
         in: query
         required: false
         description: Number of rows to return; max 20, billed as 20 if exceeded.
         schema:
           type: integer
-          maximum: 20
           default: 20
+          maximum: 20
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: desktop, mobile_web, total.'
+        schema:
+          type: string
+          enum:
+          - desktop
+          - mobile_web
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: Restrict to the main domain only (true/false).
+        schema:
+          type: boolean
+      - name: offset
+        in: query
+        required: false
+        description: Row offset for pagination.
+        schema:
+          type: integer
+      - name: traffic_source
+        in: query
+        required: false
+        description: Traffic-source filter.
+        schema:
+          type: string
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -85940,21 +86834,54 @@ paths:
             application/json:
               example:
                 meta:
+                  query:
+                    limit: 5
+                    offset: 0
+                    asc: null
+                    sort: null
                   request:
-                    domain: example.com
-                  status: Success
+                    format: json
+                    domain: cnn.com
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    web_source: total
+                    metrics:
+                    - affinity
+                    - overlap
+                    - pop_change
+                    - has_adsense
+                    - domain
+                    main_domain_only: false
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - domain: bbc.com
+                  affinity: 100.0
+                  overlap: 0.09255490176393671
+                  has_adsense: true
+                  pop_change: 0.01894630277754676
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        domain:
+                          type: string
+                        affinity:
+                          type: number
+                        overlap:
+                          type: number
+                        has_adsense:
+                          type: boolean
+                        pop_change:
+                          type: number
       tags:
       - Other
       x-x402:
@@ -85970,23 +86897,41 @@ paths:
       - name: domains
         in: query
         required: true
-        description: Multiple target domains, comma-separated.
+        description: Two to five target domains, comma-separated (e.g. cnn.com,bbc.com).
         schema:
           type: string
+      - name: start_date
+        in: query
+        required: true
+        description: Start month, format YYYY-MM.
+        schema:
+          type: string
+      - name: end_date
+        in: query
+        required: true
+        description: End month, format YYYY-MM.
+        schema:
+          type: string
+      - name: granularity
+        in: query
+        required: false
+        description: 'Time granularity. Allowed: monthly. Default: monthly.'
+        schema:
+          type: string
+          enum:
+          - monthly
+          default: monthly
       - name: country
         in: query
         required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
         schema:
           type: string
-      - name: limit
-        in: query
-        required: false
-        description: Number of rows to return; max 20, billed as 20 if exceeded.
-        schema:
-          type: integer
-          maximum: 20
-          default: 20
+          enum:
+          - us
+          - ww
+          default: ww
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -85995,20 +86940,38 @@ paths:
               example:
                 meta:
                   request:
-                    domain: example.com
-                  status: Success
+                    metrics:
+                    - overlap
+                    - union
+                    format: json
+                    domains: cnn.com,bbc.com
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    web_source: total
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - domains: bbc.com,cnn.com
+                  overlap_unique_visitors: 12918459.191519193
+                  union_unique_users: 61619561.028480805
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        domains:
+                          type: string
+                        overlap_unique_visitors:
+                          type: number
+                        union_unique_users:
+                          type: number
       tags:
       - Other
       x-x402:
@@ -86018,7 +86981,8 @@ paths:
     get:
       summary: Website Technologies
       description: 'Website Technologies. Billing: 10 credits/call (fixed; charged only on success). Response follows the
-        SimilarWeb v5 envelope (meta + data).'
+        SimilarWeb v5 envelope (meta + data). Date constraint: start_date and end_date must fall in the SAME month (exactly
+        one monthly bucket).'
       operationId: similarwebTechnologies
       parameters:
       - name: domain
@@ -86027,6 +86991,67 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
+      - name: start_date
+        in: query
+        required: true
+        description: Start month, format YYYY-MM.
+        schema:
+          type: string
+      - name: end_date
+        in: query
+        required: true
+        description: End month, format YYYY-MM.
+        schema:
+          type: string
+      - name: granularity
+        in: query
+        required: true
+        description: 'Time granularity. Allowed: monthly.'
+        schema:
+          type: string
+          enum:
+          - monthly
+      - name: limit
+        in: query
+        required: true
+        description: Number of rows to return; max 20, billed as 20 if exceeded.
+        schema:
+          type: integer
+          maximum: 20
+          default: 20
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: total.'
+        schema:
+          type: string
+          enum:
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: Restrict to the main domain only (true/false).
+        schema:
+          type: boolean
+      - name: format
+        in: query
+        required: false
+        description: 'Response format. Allowed: json.'
+        schema:
+          type: string
+          enum:
+          - json
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -86034,21 +87059,59 @@ paths:
             application/json:
               example:
                 meta:
+                  query:
+                    limit: 5
+                    offset: 0
+                    asc: null
+                    sort: null
                   request:
-                    domain: example.com
-                  status: Success
+                    status: installed_and_removed
+                    format: json
+                    domain: cnn.com
+                    granularity: monthly
+                    start_date: '2026-07-01'
+                    end_date: '2026-07-31'
+                    metrics:
+                    - sub_category
+                    - pricing_model
+                    - description
+                    - first_seen_date
+                    main_domain_only: false
+                    category: null
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - technology: 24 7 Media
+                  category: Advertising
+                  sub_category: Publisher Ad Server
+                  pricing_model: Free
+                  description: 24/7 Media creates the tools for business advantage in the digital world.
+                  status: removed
+                  first_seen_date: '2018-04-21'
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        technology:
+                          type: string
+                        category:
+                          type: string
+                        sub_category:
+                          type: string
+                        pricing_model:
+                          type: string
+                        description:
+                          type: string
+                        status:
+                          type: string
+                        first_seen_date:
+                          type: string
       tags:
       - Other
       x-x402:
@@ -86057,8 +87120,9 @@ paths:
   /similarweb/website/folders:
     get:
       summary: Website Folders
-      description: 'Website Folders. Billing: 3 credit(s)/row (per returned row, capped at 20 rows; charged only on success).
-        Response follows the SimilarWeb v5 envelope (meta + data).'
+      description: '(Temporarily unavailable — endpoint disabled in production.) Website Folders. Billing: 3 credit(s)/row
+        (per returned row, capped at 20 rows; charged only on success). Response follows the SimilarWeb v5 envelope (meta
+        + data). Date constraint: the start_date-end_date span must cover between 1 and 12 monthly buckets.'
       operationId: similarwebFolders
       parameters:
       - name: domain
@@ -86067,54 +87131,105 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: start_date
         in: query
-        required: false
-        description: Start date (YYYY-MM).
+        required: true
+        description: Start month, format YYYY-MM.
         schema:
           type: string
       - name: end_date
         in: query
-        required: false
-        description: End date (YYYY-MM).
+        required: true
+        description: End month, format YYYY-MM.
         schema:
           type: string
+      - name: granularity
+        in: query
+        required: true
+        description: 'Time granularity. Allowed: monthly.'
+        schema:
+          type: string
+          enum:
+          - monthly
       - name: limit
         in: query
-        required: false
+        required: true
         description: Number of rows to return; max 20, billed as 20 if exceeded.
         schema:
           type: integer
           maximum: 20
           default: 20
+      - name: country
+        in: query
+        required: true
+        description: 'Two-letter country code. Allowed: ww. Coverage is limited to ww and us on the current plan.'
+        schema:
+          type: string
+          enum:
+          - ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: total.'
+        schema:
+          type: string
+          enum:
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: Restrict to the main domain only (true/false).
+        schema:
+          type: boolean
+      - name: format
+        in: query
+        required: false
+        description: 'Response format. Allowed: json.'
+        schema:
+          type: string
+          enum:
+          - json
       responses:
         '200':
-          description: SimilarWeb v5 envelope (meta + data).
+          description: 'SimilarWeb v5 envelope (meta + data). Field types are best-effort: this endpoint could not be live-captured
+            (disabled or insufficient credit at audit time); fields are derived from the 2026-08-27 alignment audit.'
           content:
             application/json:
               example:
                 meta:
+                  status: success
+                  last_updated: '2026-06-30'
                   request:
-                    domain: example.com
-                  status: Success
+                    domain: cnn.com
+                    start_date: 2026-06
+                    end_date: 2026-06
+                    granularity: monthly
+                    limit: 1
+                    country: us
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - folder: /news/
+                  date: '2026-06-01'
+                  visits: 1200000
+                  share: 0.14
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        folder:
+                          type: string
+                        date:
+                          type: string
+                        visits:
+                          type: integer
+                        share:
+                          type: number
+      deprecated: true
       tags:
       - Other
       x-x402:
@@ -86133,32 +87248,73 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: start_date
         in: query
         required: false
-        description: Start date (YYYY-MM).
+        description: Start month, format YYYY-MM.
         schema:
           type: string
       - name: end_date
         in: query
         required: false
-        description: End date (YYYY-MM).
+        description: End month, format YYYY-MM.
         schema:
           type: string
+      - name: granularity
+        in: query
+        required: false
+        description: 'Time granularity. Allowed: monthly.'
+        schema:
+          type: string
+          enum:
+          - monthly
       - name: limit
         in: query
         required: false
         description: Number of rows to return; max 20, billed as 20 if exceeded.
         schema:
           type: integer
-          maximum: 20
           default: 20
+          maximum: 20
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: desktop, mobile_web, total.'
+        schema:
+          type: string
+          enum:
+          - desktop
+          - mobile_web
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: Restrict to the main domain only (true/false).
+        schema:
+          type: boolean
+      - name: offset
+        in: query
+        required: false
+        description: Row offset for pagination.
+        schema:
+          type: integer
+      - name: traffic_source
+        in: query
+        required: false
+        description: Traffic-source filter.
+        schema:
+          type: string
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -86166,21 +87322,47 @@ paths:
             application/json:
               example:
                 meta:
+                  query:
+                    limit: 5
+                    offset: 0
+                    asc: null
+                    sort: null
                   request:
-                    domain: example.com
-                  status: Success
+                    classify: all
+                    utm: false
+                    page: null
+                    format: json
+                    domain: cnn.com
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    web_source: total
+                    metrics:
+                    - share
+                    - change
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - page: cnn.com
+                  share: 0.5037170076541321
+                  change: -0.6326814889385246
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        page:
+                          type: string
+                        share:
+                          type: number
+                        change:
+                          type: number
       tags:
       - Other
       x-x402:
@@ -86199,32 +87381,73 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: start_date
         in: query
         required: false
-        description: Start date (YYYY-MM).
+        description: Start month, format YYYY-MM.
         schema:
           type: string
       - name: end_date
         in: query
         required: false
-        description: End date (YYYY-MM).
+        description: End month, format YYYY-MM.
         schema:
           type: string
+      - name: granularity
+        in: query
+        required: false
+        description: 'Time granularity. Allowed: monthly.'
+        schema:
+          type: string
+          enum:
+          - monthly
       - name: limit
         in: query
         required: false
         description: Number of rows to return; max 20, billed as 20 if exceeded.
         schema:
           type: integer
-          maximum: 20
           default: 20
+          maximum: 20
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: desktop, mobile_web, total.'
+        schema:
+          type: string
+          enum:
+          - desktop
+          - mobile_web
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: Restrict to the main domain only (true/false).
+        schema:
+          type: boolean
+      - name: offset
+        in: query
+        required: false
+        description: Row offset for pagination.
+        schema:
+          type: integer
+      - name: traffic_source
+        in: query
+        required: false
+        description: Traffic-source filter.
+        schema:
+          type: string
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -86232,21 +87455,39 @@ paths:
             application/json:
               example:
                 meta:
+                  query:
+                    limit: 5
+                    offset: 0
+                    asc: null
+                    sort: null
                   request:
-                    domain: example.com
-                  status: Success
+                    format: json
+                    domain: cnn.com
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    web_source: desktop
+                    main_domain_only: false
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - subdomain: cnn.com
+                  share: 0.9567702368880975
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        subdomain:
+                          type: string
+                        share:
+                          type: number
       tags:
       - Other
       x-x402:
@@ -86265,32 +87506,73 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: start_date
         in: query
         required: false
-        description: Start date (YYYY-MM).
+        description: Start month, format YYYY-MM.
         schema:
           type: string
       - name: end_date
         in: query
         required: false
-        description: End date (YYYY-MM).
+        description: End month, format YYYY-MM.
         schema:
           type: string
+      - name: granularity
+        in: query
+        required: false
+        description: 'Time granularity. Allowed: monthly.'
+        schema:
+          type: string
+          enum:
+          - monthly
       - name: limit
         in: query
         required: false
         description: Number of rows to return; max 20, billed as 20 if exceeded.
         schema:
           type: integer
-          maximum: 20
           default: 20
+          maximum: 20
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: desktop, mobile_web, total.'
+        schema:
+          type: string
+          enum:
+          - desktop
+          - mobile_web
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: Restrict to the main domain only (true/false).
+        schema:
+          type: boolean
+      - name: offset
+        in: query
+        required: false
+        description: Row offset for pagination.
+        schema:
+          type: integer
+      - name: traffic_source
+        in: query
+        required: false
+        description: Traffic-source filter.
+        schema:
+          type: string
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -86298,21 +87580,46 @@ paths:
             application/json:
               example:
                 meta:
+                  query:
+                    limit: 5
+                    offset: 0
+                    asc: null
+                    sort: null
                   request:
-                    domain: example.com
-                  status: Success
+                    traffic_source: organic
+                    format: json
+                    domain: cnn.com
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    web_source: desktop
+                    metrics:
+                    - score
+                    - shared_keywords
+                    main_domain_only: false
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - url: robinhood.com
+                  score: 19.105918884277344
+                  shared_keywords: 0.42673856019973755
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        url:
+                          type: string
+                        score:
+                          type: number
+                        shared_keywords:
+                          type: number
       tags:
       - Other
       x-x402:
@@ -86322,7 +87629,8 @@ paths:
     get:
       summary: Website Keywords
       description: 'Website Keywords. Billing: 0.13 credit(s)/row (per returned row, capped at 20 rows; charged only on success).
-        Response follows the SimilarWeb v5 envelope (meta + data).'
+        Response follows the SimilarWeb v5 envelope (meta + data). Date constraint: the start_date-end_date span must cover
+        between 1 and 3 monthly buckets.'
       operationId: similarwebKeywords
       parameters:
       - name: domain
@@ -86331,32 +87639,67 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: start_date
         in: query
-        required: false
-        description: Start date (YYYY-MM).
+        required: true
+        description: Start month, format YYYY-MM.
         schema:
           type: string
       - name: end_date
         in: query
-        required: false
-        description: End date (YYYY-MM).
+        required: true
+        description: End month, format YYYY-MM.
         schema:
           type: string
+      - name: granularity
+        in: query
+        required: true
+        description: 'Time granularity. Allowed: monthly.'
+        schema:
+          type: string
+          enum:
+          - monthly
       - name: limit
         in: query
-        required: false
+        required: true
         description: Number of rows to return; max 20, billed as 20 if exceeded.
         schema:
           type: integer
           maximum: 20
           default: 20
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: total.'
+        schema:
+          type: string
+          enum:
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: Restrict to the main domain only (true/false).
+        schema:
+          type: boolean
+      - name: format
+        in: query
+        required: false
+        description: 'Response format. Allowed: json.'
+        schema:
+          type: string
+          enum:
+          - json
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -86364,21 +87707,89 @@ paths:
             application/json:
               example:
                 meta:
+                  query:
+                    limit: 5
+                    offset: 0
+                    asc: null
+                    sort: null
                   request:
-                    domain: example.com
-                  status: Success
+                    branded_type: all
+                    keywords_filter_rules: []
+                    format: json
+                    domain: nike.com
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    traffic_source: all
+                    web_source: total
+                    metrics:
+                    - clicks
+                    - traffic_share
+                    - competition
+                    - primary_intent
+                    - secondary_intent
+                    - position
+                    - serp_features
+                    - top_url
+                    - url_count
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - keyword: nike
+                  clicks: 1001887.5658500849
+                  traffic_share: 0.15853772273003125
+                  competition: 100
+                  primary_intent: Navigational
+                  secondary_intent: null
+                  position: 1
+                  serp_features:
+                  - organic_sitelinks
+                  - organic_expanded_sitelinks
+                  - apps
+                  - pla
+                  - images
+                  - related_searches
+                  - popular_products
+                  - paid_sitelinks
+                  - paid
+                  - news
+                  - video
+                  - organic
+                  - local_pack
+                  - related_questions
+                  top_url: nike.com
+                  url_count: 1581
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        keyword:
+                          type: string
+                        clicks:
+                          type: number
+                        traffic_share:
+                          type: number
+                        competition:
+                          type: integer
+                        primary_intent:
+                          type: string
+                        secondary_intent:
+                          type: string
+                        position:
+                          type: integer
+                        serp_features:
+                          type: string
+                        top_url:
+                          type: string
+                        url_count:
+                          type: integer
       tags:
       - Other
       x-x402:
@@ -86397,32 +87808,51 @@ paths:
         description: Target keyword.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: start_date
         in: query
         required: false
-        description: Start date (YYYY-MM).
+        description: Start month, format YYYY-MM.
         schema:
           type: string
       - name: end_date
         in: query
         required: false
-        description: End date (YYYY-MM).
+        description: End month, format YYYY-MM.
         schema:
           type: string
+      - name: granularity
+        in: query
+        required: false
+        description: 'Time granularity. Allowed: monthly.'
+        schema:
+          type: string
+          enum:
+          - monthly
       - name: limit
         in: query
         required: false
         description: Number of rows to return; max 20, billed as 20 if exceeded.
         schema:
           type: integer
-          maximum: 20
           default: 20
+          maximum: 20
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: offset
+        in: query
+        required: false
+        description: Row offset for pagination.
+        schema:
+          type: integer
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -86430,21 +87860,43 @@ paths:
             application/json:
               example:
                 meta:
+                  query:
+                    limit: 5
+                    offset: 0
+                    asc: null
+                    sort: null
                   request:
-                    domain: example.com
-                  status: Success
+                    format: json
+                    keyword: nike
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    traffic_source: all
+                    web_source: total
+                    is_keyword_group: false
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - date: '2026-06-01'
+                  clicks: 1001887
+                  domain: nike.com
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        date:
+                          type: string
+                        clicks:
+                          type: integer
+                        domain:
+                          type: string
       tags:
       - Other
       x-x402:
@@ -86463,32 +87915,51 @@ paths:
         description: Target keyword.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: start_date
         in: query
         required: false
-        description: Start date (YYYY-MM).
+        description: Start month, format YYYY-MM.
         schema:
           type: string
       - name: end_date
         in: query
         required: false
-        description: End date (YYYY-MM).
+        description: End month, format YYYY-MM.
         schema:
           type: string
+      - name: granularity
+        in: query
+        required: false
+        description: 'Time granularity. Allowed: monthly.'
+        schema:
+          type: string
+          enum:
+          - monthly
       - name: limit
         in: query
         required: false
         description: Number of rows to return; max 20, billed as 20 if exceeded.
         schema:
           type: integer
-          maximum: 20
           default: 20
+          maximum: 20
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: offset
+        in: query
+        required: false
+        description: Row offset for pagination.
+        schema:
+          type: integer
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -86496,21 +87967,67 @@ paths:
             application/json:
               example:
                 meta:
+                  query:
+                    limit: 5
+                    offset: 0
+                    asc: null
+                    sort: null
                   request:
-                    domain: example.com
-                  status: Success
+                    format: json
+                    keyword: nike
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    traffic_source: all
+                    web_source: total
+                    metrics:
+                    - clicks
+                    - traffic_share
+                    - serp_features
+                    - top_url
+                    - top_url_position
+                    is_keyword_group: false
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - site: nike.com
+                  domain: nike.com
+                  clicks: 995980.9211660791
+                  traffic_share: 0.9220950172205099
+                  serp_features:
+                  - pla
+                  - paid
+                  - paid_sitelinks
+                  - organic_expanded_sitelinks
+                  - organic_sitelinks
+                  - organic
+                  top_url_position: 1
+                  top_url: nike.com
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        site:
+                          type: string
+                        domain:
+                          type: string
+                        clicks:
+                          type: number
+                        traffic_share:
+                          type: number
+                        serp_features:
+                          type: string
+                        top_url_position:
+                          type: integer
+                        top_url:
+                          type: string
       tags:
       - Other
       x-x402:
@@ -86529,32 +88046,73 @@ paths:
         description: Target domain, e.g. example.com.
         schema:
           type: string
-      - name: country
-        in: query
-        required: false
-        description: 'Country code, e.g. us; world/global normalized to world (default: world).'
-        schema:
-          type: string
       - name: start_date
         in: query
         required: false
-        description: Start date (YYYY-MM).
+        description: Start month, format YYYY-MM.
         schema:
           type: string
       - name: end_date
         in: query
         required: false
-        description: End date (YYYY-MM).
+        description: End month, format YYYY-MM.
         schema:
           type: string
+      - name: granularity
+        in: query
+        required: false
+        description: 'Time granularity. Allowed: monthly.'
+        schema:
+          type: string
+          enum:
+          - monthly
       - name: limit
         in: query
         required: false
         description: Number of rows to return; max 20, billed as 20 if exceeded.
         schema:
           type: integer
-          maximum: 20
           default: 20
+          maximum: 20
+      - name: country
+        in: query
+        required: false
+        description: 'Two-letter country code. Allowed: us, ww. Default: ww. Coverage is limited to ww and us on the current
+          plan.'
+        schema:
+          type: string
+          enum:
+          - us
+          - ww
+          default: ww
+      - name: web_source
+        in: query
+        required: false
+        description: 'Traffic source device split. Allowed: desktop, mobile_web, total.'
+        schema:
+          type: string
+          enum:
+          - desktop
+          - mobile_web
+          - total
+      - name: main_domain_only
+        in: query
+        required: false
+        description: Restrict to the main domain only (true/false).
+        schema:
+          type: boolean
+      - name: offset
+        in: query
+        required: false
+        description: Row offset for pagination.
+        schema:
+          type: integer
+      - name: traffic_source
+        in: query
+        required: false
+        description: Traffic-source filter.
+        schema:
+          type: string
       responses:
         '200':
           description: SimilarWeb v5 envelope (meta + data).
@@ -86562,21 +88120,66 @@ paths:
             application/json:
               example:
                 meta:
+                  query:
+                    limit: 5
+                    offset: 0
+                    asc: null
+                    sort: null
                   request:
-                    domain: example.com
-                  status: Success
+                    traffic_source: organic
+                    format: json
+                    domain: nike.com
+                    granularity: monthly
+                    country: us
+                    start_date: '2026-06-01'
+                    end_date: '2026-06-30'
+                    web_source: total
+                  status: success
+                  last_updated: '2026-07-31'
                 data:
-                - date: '2026-05-01'
-                  value: 123456
+                - url: nike.com
+                  clicks: 347144.3535507277
+                  traffic_share: 0.07918893200800411
+                  desktop_share: 0.8394896572520231
+                  mobile_share: 0.16051034274797696
+                  keywords: 749
+                  top_keyword: nike
+                  serp_features:
+                  - organic
+                  - local_pack
+                  - related_questions
+                  spend: null
+                  ads: null
               schema:
                 type: object
                 properties:
                   meta:
-                    type: object
+                    $ref: '#/components/schemas/SimilarWebMeta'
                   data:
                     type: array
                     items:
                       type: object
+                      properties:
+                        url:
+                          type: string
+                        clicks:
+                          type: number
+                        traffic_share:
+                          type: number
+                        desktop_share:
+                          type: number
+                        mobile_share:
+                          type: number
+                        keywords:
+                          type: integer
+                        top_keyword:
+                          type: string
+                        serp_features:
+                          type: string
+                        spend:
+                          type: string
+                        ads:
+                          type: string
       tags:
       - Other
       x-x402:
@@ -88315,7 +89918,6 @@ paths:
       x-x402:
         path: /apis/v2/twitter/spaces/detail
         source: https://github.com/AIsa-team/aisa-proxy
-  /oapi/my/info: {}
   /twitter/tweets:
     get:
       tags:
@@ -89571,6 +91173,10 @@ components:
       type: http
       scheme: bearer
       description: AIsa API key. Get yours at https://aisa.one
+    Account_BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: AISA API Key or OAuth access token
     Bearer:
       type: http
       scheme: bearer
@@ -97729,6 +99335,26 @@ components:
             type: object
             additionalProperties: true
       additionalProperties: true
+    SimilarWebMeta:
+      type: object
+      description: SimilarWeb v5 response envelope metadata.
+      properties:
+        status:
+          type: string
+          description: Upstream status; 'success' on a successful call.
+          example: success
+        last_updated:
+          type: string
+          description: Date of the most recent data point available upstream (YYYY-MM-DD).
+          example: '2026-06-30'
+        request:
+          type: object
+          description: Full echo of the normalized upstream request (parameters as received).
+        query:
+          type: object
+          description: Pagination/sort echo when applicable (limit, offset, asc, sort).
+      required:
+      - status
     CommunityInfo:
       type: object
       properties:
