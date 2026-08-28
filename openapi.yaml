@@ -86278,9 +86278,12 @@ paths:
     get:
       summary: SimilarSites
       description: 'SimilarSites. Billing: 2 credit(s)/row (per returned row, capped at 20 rows; charged only on success).
-        Response follows the SimilarWeb v5 envelope (meta + data). Note: SimilarWeb (upstream) only returns data for a recent,
-        roughly three-month window; requests outside the supported recent range may return an upstream error even though the
-        parameters are accepted.'
+        Response follows the SimilarWeb v5 envelope (meta + data). Date window (upstream SimilarWeb constraint): start_date
+        and end_date must span EXACTLY 3 consecutive months — a 1- or 2-month span is rejected with upstream error 120 (''must
+        span exactly 3 month(s)''). That span must also be SimilarWeb''s most recent supported window, which advances forward
+        each month; an older or out-of-range span is rejected with error 101 (''Dates not in range''). In practice, request
+        the three most recent completed months (e.g. if the latest published month is 2026-07, use start_date=2026-05 and
+        end_date=2026-07). To read the exact currently-supported range, call SimilarWeb''s /describe endpoint for this API.'
       operationId: similarwebSimilarSites
       parameters:
       - name: domain
@@ -86292,13 +86295,15 @@ paths:
       - name: start_date
         in: query
         required: true
-        description: Start month, format YYYY-MM.
+        description: 'Start month, format YYYY-MM. Must be exactly 2 months before end_date: the window has to span exactly
+          3 consecutive months within SimilarWeb''s latest supported range (see the endpoint description).'
         schema:
           type: string
       - name: end_date
         in: query
         required: true
-        description: End month, format YYYY-MM.
+        description: End month, format YYYY-MM. Together with start_date must span exactly 3 consecutive months, and must
+          be the most recent supported month (the window rolls forward monthly; see the endpoint description).
         schema:
           type: string
       - name: granularity
