@@ -2,11 +2,11 @@
 """Validate the generated SimilarWeb documentation in a minimal Mintlify site.
 
 The full repository currently contains unrelated historical MDX parse warnings.
-This script copies only the generated pricing guides, all SimilarWeb endpoint
-pages, and their OpenAPI source into a temporary Mintlify project, then runs the
-same strict ``mint validate`` command used in CI. It validates the surfaces this
-pricing contract owns without mutating or suppressing diagnostics in the source
-repository.
+This script copies only the generated pricing guides, agent-quickstart policy
+pages, all SimilarWeb endpoint pages, and their OpenAPI source into a temporary
+Mintlify project, then runs the same strict ``mint validate`` command used in
+CI. It validates the surfaces this pricing contract owns without mutating or
+suppressing diagnostics in the source repository.
 """
 
 from __future__ import annotations
@@ -24,6 +24,10 @@ GUIDE_PATHS = (
     ROOT / "guides" / "pricing" / "similarweb.mdx",
     ROOT / "zh" / "guides" / "pricing" / "similarweb.mdx",
 )
+POLICY_PATHS = (
+    ROOT / "agent-quickstart.mdx",
+    ROOT / "zh" / "agent-quickstart.mdx",
+)
 API_REFERENCE_DIR = ROOT / "api-reference" / "similarweb"
 OPENAPI_PATH = ROOT / "openapi" / "similarweb.json"
 
@@ -39,12 +43,14 @@ def build_fixture(fixture_root: Path) -> int:
     if not endpoint_pages:
         raise SystemExit("Mintlify fixture has no SimilarWeb endpoint pages")
 
-    for path in (*GUIDE_PATHS, *endpoint_pages, OPENAPI_PATH):
+    for path in (*GUIDE_PATHS, *POLICY_PATHS, *endpoint_pages, OPENAPI_PATH):
         if not path.exists():
             raise SystemExit(f"Mintlify fixture input is missing: {path.relative_to(ROOT)}")
         copy_into_fixture(path, fixture_root)
 
     pages = [
+        "agent-quickstart",
+        "zh/agent-quickstart",
         "guides/pricing/similarweb",
         "zh/guides/pricing/similarweb",
         *(path.relative_to(ROOT).with_suffix("").as_posix() for path in endpoint_pages),

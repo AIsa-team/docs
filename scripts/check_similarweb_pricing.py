@@ -27,6 +27,8 @@ from generate_similarweb_pricing_docs import (
 
 LLMS_PATH = ROOT / "llms.txt"
 NAV_PATH = ROOT / "docs.json"
+AGENT_QUICKSTART_PATH = ROOT / "agent-quickstart.mdx"
+ZH_AGENT_QUICKSTART_PATH = ROOT / "zh" / "agent-quickstart.mdx"
 PRICING_OVERVIEW_PATH = ROOT / "guides" / "pricing.mdx"
 PER_CALL_PATH = ROOT / "guides" / "pricing" / "per-call-api-pricing.mdx"
 ZH_PRICING_OVERVIEW_PATH = ROOT / "zh" / "guides" / "pricing.mdx"
@@ -82,6 +84,17 @@ def check_checked_in_surfaces(source: dict[str, Any]) -> None:
     llms = LLMS_PATH.read_text(encoding="utf-8")
     if "guides/pricing/similarweb" not in llms or "SimilarWeb Pricing & Cost Control" not in llms:
         fail("llms.txt does not route agents to SimilarWeb pricing guidance")
+    for marker in ("<IMPORTANT id=\"similarweb-approval-first\">", "explicit approval", "price discovery", "x-aisa-pricing", "/v1/models", "MCP discovery"):
+        if marker not in llms:
+            fail(f"llms.txt lacks SimilarWeb approval-first marker: {marker}")
+    for path, markers in (
+        (AGENT_QUICKSTART_PATH, ("<IMPORTANT id=\"similarweb-approval-first\">", "explicit approval", "price discovery", "x-aisa-pricing", "/v1/models", "MCP discovery")),
+        (ZH_AGENT_QUICKSTART_PATH, ("<IMPORTANT id=\"similarweb-approval-first\">", "明确批准", "价格发现", "x-aisa-pricing", "/v1/models", "MCP discovery")),
+    ):
+        content = path.read_text(encoding="utf-8")
+        for marker in markers:
+            if marker not in content:
+                fail(f"{path.relative_to(ROOT)} lacks SimilarWeb approval-first marker: {marker}")
     similar_sites = next(operation for operation in operations if operation.operation_id == "get_similarweb_similar_sites")
     endpoint_url = f"https://aisa.one/docs{similar_sites.endpoint_url}"
     if endpoint_url not in llms:
