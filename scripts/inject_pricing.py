@@ -3,84 +3,74 @@
 Inject machine-readable `x-aisa-pricing` into every paid data-API operation
 in the per-provider OpenAPI specs under openapi/*.json.
 
-WHY
----
-Agents calling AIsa data APIs previously had NO way to see per-call cost from
-the spec — the OpenAPI documents carried zero price fields across ~700+
-operations. This generator stamps each operation with an `x-aisa-pricing`
-block sourced from the LIVE AIsa catalog API (the metering-v2-resolved price
-the backend actually serves), so downstream agents/tooling can budget and
-route by cost.
+WHY (audit correction — PR #92 rework)
+--------------------------------------
+The first version of this generator trusted the public catalog `/info/apis`
+scalar (`pricing.normal`). An audit found that scalar is a STATIC FLOOR for
+DYNAMIC endpoints (customer_pricing_kind == provider_cost_multiplier): the real
+per-call charge scales with the provider response size (rows/results/tweets),
+so a flat `per_request` price understated cost by up to ~1000x (e.g. semrush
+domain-vs-domain floors at $0.72 but really bills up to $14.40). Several
+SimilarWeb credit rates were also wrong versus the metering contract.
+
+This version re-derives EVERY value from DB ground truth (see
+scripts/build_pricing_map.py) and branches on the endpoint's customer pricing
+kind, emitting one of three models.
 
 PRICE SOURCE
 ------------
-openapi/_pricing_map.json — a committed snapshot of the public catalog API:
-
-    https://api.aisa.one/info/apis/category   -> list of api_ids
-    https://api.aisa.one/info/apis/<id>       -> endpoint_groups[].endpoints[]
-                                                 each with method/path/pricing
-
-`_pricing_map.json` is regenerable; see build_pricing_map() below (or the
-one-shot fetch loop documented there). It is NOT sourced from the legacy
-`integration_api_endpoints.pricing_json` field.
+openapi/_pricing_map.json — now CONTRACT-SOURCED (not the /info/apis catalog):
+  * integration_customer_pricing_profile_revisions -> kind + tier/multiplier
+  * integration_metering_profile_revisions         -> SimilarWeb credit rates
+  * usage_logs                                      -> real cost distribution
+Keyed by provider-relative gateway path (endpoint inner_uri minus /apis/v1|v2).
+Rebuild with scripts/build_pricing_map.py.
 
 MATCHING
 --------
-Each spec file's operations resolve to an absolute provider-relative path the
-SAME way scripts/consolidate_openapi.py derives it: the file's servers[0].url
-delta below the /apis/v1 default server is prepended to each path key (e.g.
-openapi-financial.json's server `…/apis/v1/financial` turns
-`/financials/search/line-items` into `/financial/financials/search/line-items`).
-
-The catalog normalizes almost every gateway route to GET (the AIsa relay
-accepts GET/POST interchangeably), while the source specs use the provider's
-native method (often POST). No catalog path carries divergent prices across
-methods, so we match on (METHOD, path) first and fall back to path-only.
+Each spec file's operations resolve to a provider-relative path the SAME way
+scripts/consolidate_openapi.py derives it: the file's servers[0].url delta
+below the /apis/v1 default server is prepended to each path key. We match the
+map by that path (the map is keyed by path, method-agnostic — the gateway
+accepts GET/POST interchangeably and no path carries divergent prices).
 
 SKIPPED FILES
 -------------
-Pure-LLM / token-priced specs are skipped — their cost is per-token, not
-per-call, so a flat per_request scalar would misrepresent them. Detection is
-identical to consolidate's LLM test: the file's server is /v1 or /v1beta.
-(account.json, openai-chat.json, claude-messages.json, gemini-openapi.json,
-chat-image-generation.json, openai-images-generations.json, jina.json.)
-The consolidated output file (openapi.json — Mintlify placeholder) is skipped.
+Pure-LLM / token-priced specs are skipped (server /v1 or /v1beta). The
+consolidated output file (openapi.json) is skipped.
 
-SCHEMA — x-aisa-pricing
------------------------
-Flat per-request (default):
-    {"model":"per_request","currency":"USD","price_usd":<normal>,
-     "cost_tier":"<low|med|high>"}
+SCHEMA — x-aisa-pricing (branched on customer_pricing_kind)
+-----------------------------------------------------------
+1. fixed_success -> flat:
+   {"model":"per_request","currency":"USD","price_usd":<tier>,"cost_tier":..}
 
-  Cost tiers (documented cutoffs):
-    low  : price_usd <= $0.01
-    med  : price_usd <= $1.00
-    high : price_usd  > $1.00
+2. provider_cost_multiplier (DYNAMIC) / firecrawl metered_result:
+   {"model":"dynamic","currency":"USD","basis":"provider_cost x <mult>",
+    "floor_usd":<pricing_json.normal or min observed>,
+    "typical_usd":{"p50":..,"p95":..},"max_observed_usd":..,
+    "cost_drivers":[{"param":..,"effect":..}],"cost_tier":"variable",
+    "note":"floor is the minimum per-call charge; actual cost scales with
+            provider response size"}
+   (typical_usd/max_observed_usd omitted when usage is too sparse.)
 
-SimilarWeb (credit-metered, parameter-driven):
-    {"model":"per_credit","currency":"USD","credit_price_usd":0.10,
-     "credit_formula":"<per-endpoint>","cost_drivers":[...],
-     "cost_tier":"<...>","example":"<...>"}
+3. SimilarWeb credit-metered -> per_credit:
+   {"model":"per_credit","currency":"USD","credit_price_usd":0.10,
+    "credit_formula":..,"credit_rate":..,"cost_drivers":[..],
+    "cost_tier":..,"example":..}
 
-  SimilarWeb is billed in credits at $0.10/credit; a flat scalar hides the
-  real, parameter-driven cost. Per-endpoint credit rates/formulas/examples
-  come from the SimilarWeb rate model (vault/similarweb/*). cost_tier for SW
-  uses the SAME cutoffs applied to a TYPICAL-call USD cost (typical credits ×
-  $0.10). SW endpoints the catalog prices at $0 (snapshot/trend aggregators)
-  are stamped per_credit with a note.
+Cost tiers (USD/call): low <= $0.01, med <= $1.00, high > $1.00. Dynamic ops
+use "variable".
 
-Idempotent: re-running overwrites any prior x-aisa-pricing.
+Idempotent: re-running strips any prior x-aisa-pricing before re-injecting.
 
 Usage:
     python scripts/inject_pricing.py            # stamp specs in place
-    python scripts/inject_pricing.py --rebuild-map   # refetch catalog first
 """
 
 import argparse
 import json
 import os
 import sys
-import urllib.request
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -99,8 +89,7 @@ LLM_SERVER_URLS = {
 
 HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 
-CATALOG_CATEGORY_URL = "https://api.aisa.one/info/apis/category"
-CATALOG_DETAIL_URL = "https://api.aisa.one/info/apis/{id}"
+SW_CREDIT_PRICE_USD = 0.10
 
 # ── Cost-tier cutoffs (USD per call) ─────────────────────────────────────
 #   low  <= $0.01
@@ -119,263 +108,25 @@ def cost_tier(price_usd):
     return "high"
 
 
-# ── SimilarWeb per-endpoint credit model ─────────────────────────────────
+# ── Contract-sourced pricing map ─────────────────────────────────────────
 #
-# $0.10 per credit. Rates/formulas/examples sourced from:
-#   vault/similarweb/per-endpoint-rates-20260814.md   (official-doc rates)
-#   vault/similarweb/sw-user-consumption-guide-20260817.md (examples + the
-#     96cr-naked vs 1cr-narrowed timeseries anchor)
-#
-# Keyed by provider-relative OpenAPI path. `typical_usd` drives cost_tier and
-# reflects a representative (not worst-case) call so the tier is honest for
-# ordinary usage; the `example` string carries the naked-vs-narrowed range.
-SW_CREDIT_PRICE_USD = 0.10
-
-SW_DRIVER_TIMESERIES = [
-    {"param": "metrics",
-     "effect": "timeseries: default returns all ~8 metrics; specify only needed metrics"},
-    {"param": "start_date/end_date",
-     "effect": "timeseries: default full ~12 months; narrow the window"},
-]
-SW_DRIVER_LIST = [
-    {"param": "limit",
-     "effect": "list endpoints: credits = rate x rows; default 20 rows — lower it"},
-]
-
-
-def _sw(model_formula, drivers, typical_usd, example, credit_rate=None):
-    block = {
-        "model": "per_credit",
-        "currency": "USD",
-        "credit_price_usd": SW_CREDIT_PRICE_USD,
-        "credit_formula": model_formula,
-        "cost_drivers": drivers,
-        "cost_tier": cost_tier(typical_usd),
-        "example": example,
-    }
-    if credit_rate is not None:
-        block["credit_rate"] = credit_rate
-    return block
-
-
-# path -> x-aisa-pricing block. Only SW paths that exist in the spec need entries.
-SW_PRICING = {
-    # ── Tier B: time-series (metrics x time-buckets) ──────────────────────
-    "/similarweb/website/traffic-engagement": _sw(
-        "credits = metrics_selected x time_buckets (1 credit / metric / month); default = all metrics x full window",
-        SW_DRIVER_TIMESERIES, typical_usd=0.30,
-        example="metrics=[visits] + 1 month = 1 credit ($0.10); naked call (all ~8 metrics x ~12 months) = up to 96 credits ($9.60). Always pass metrics + a date window.",
-        credit_rate="1 credit / metric / month"),
-    "/similarweb/website/ranking": _sw(
-        "credits = months_in_window (1 credit / month)",
-        SW_DRIVER_TIMESERIES, typical_usd=0.10,
-        example="1 month = 1 credit ($0.10); 12 months = 12 credits ($1.20).",
-        credit_rate="1 credit / month"),
-    "/similarweb/website/ppc-spend": _sw(
-        "credits = 5 x months_in_window (5 credits / month)",
-        SW_DRIVER_TIMESERIES, typical_usd=0.50,
-        example="1 month = 5 credits ($0.50); 12 months = 60 credits ($6.00). Narrow the date window.",
-        credit_rate="5 credits / month"),
-    "/similarweb/website/deduplicated-audience": _sw(
-        "credits = months_in_window (1 credit / month)",
-        SW_DRIVER_TIMESERIES, typical_usd=0.10,
-        example="1 month = 1 credit ($0.10); 12 months = 12 credits ($1.20).",
-        credit_rate="1 credit / month"),
-    "/similarweb/website/marketing-channel-sources-legacy": _sw(
-        "credits = 7 x results (time-series traffic-sources; reclassified from list)",
-        SW_DRIVER_TIMESERIES, typical_usd=0.70,
-        example="Traffic Sources ~7 credits/result ($0.70+). Legacy endpoint — reconciliation note: upstream may consume more than metered; prefer the non-legacy variant when possible.",
-        credit_rate="7 credits / result"),
-
-    # ── Tier A: row-billed lists (rate x rows, default 20 rows) ────────────
-    "/similarweb/website/top-sites-ranking": _sw(
-        "credits = ceil(1 x rows); default 20 rows",
-        SW_DRIVER_LIST, typical_usd=2.00,
-        example="20 rows = 20 credits ($2.00); limit=5 = 5 credits ($0.50).",
-        credit_rate="1 credit / row"),
-    "/similarweb/website/referrals": _sw(
-        "credits = ceil(3 x rows); default 20 rows",
-        SW_DRIVER_LIST, typical_usd=6.00,
-        example="20 rows = 60 credits ($6.00); limit=5 = 15 credits ($1.50).",
-        credit_rate="3 credits / row"),
-    "/similarweb/website/ad-networks": _sw(
-        "credits = ceil(3 x rows); default 20 rows",
-        SW_DRIVER_LIST, typical_usd=6.00,
-        example="20 rows = 60 credits ($6.00); limit=5 = 15 credits ($1.50).",
-        credit_rate="3 credits / row"),
-    "/similarweb/website/similar-sites": _sw(
-        "credits = ceil(2 x rows); default 20 rows (SW hard cap 40)",
-        SW_DRIVER_LIST, typical_usd=4.00,
-        example="20 rows = 40 credits ($4.00); limit=5 = 10 credits ($1.00).",
-        credit_rate="2 credits / row"),
-    "/similarweb/website/audience-interest": _sw(
-        "credits = ceil(5 x rows); default 20 rows",
-        SW_DRIVER_LIST, typical_usd=10.00,
-        example="20 rows = 100 credits ($10.00); limit=5 = 25 credits ($2.50). Expensive — clamp limit.",
-        credit_rate="5 credits / row"),
-    "/similarweb/website/popular-pages": _sw(
-        "credits = ceil(3 x rows); default 20 rows",
-        SW_DRIVER_LIST, typical_usd=6.00,
-        example="20 rows = 60 credits ($6.00); limit=5 = 15 credits ($1.50).",
-        credit_rate="3 credits / row"),
-    "/similarweb/website/subdomains": _sw(
-        "credits = ceil(2 x rows); default 20 rows",
-        SW_DRIVER_LIST, typical_usd=4.00,
-        example="20 rows = 40 credits ($4.00); limit=5 = 10 credits ($1.00).",
-        credit_rate="2 credits / row"),
-    "/similarweb/search/website-keywords": _sw(
-        "credits = ceil(0.13 x rows); default 20 rows",
-        SW_DRIVER_LIST, typical_usd=0.30,
-        example="20 rows = 3 credits ($0.30); cheap keyword-family endpoint.",
-        credit_rate="0.13 credits / row"),
-    "/similarweb/search/keyword-competitors": _sw(
-        "credits = ceil(0.07 x rows); default 20 rows",
-        SW_DRIVER_LIST, typical_usd=0.20,
-        example="20 rows = 2 credits ($0.20); cheap keyword-family endpoint.",
-        credit_rate="0.07 credits / row"),
-    "/similarweb/search/serp-players-aggregated": _sw(
-        "credits = ceil(0.07 x rows); default 20 rows",
-        SW_DRIVER_LIST, typical_usd=0.20,
-        example="20 rows = 2 credits ($0.20).",
-        credit_rate="0.07 credits / row"),
-    "/similarweb/search/serp-players-timeseries": _sw(
-        "credits = ceil(0.07 x rows) x time-buckets (SERP players over time)",
-        SW_DRIVER_LIST + SW_DRIVER_TIMESERIES, typical_usd=0.20,
-        example="20 rows x 1 bucket = 2 credits ($0.20); widening the date window multiplies by bucket count.",
-        credit_rate="0.07 credits / row / bucket"),
-    "/similarweb/search/landing-pages": _sw(
-        "credits = ceil(0.10 x rows); default 20 rows",
-        SW_DRIVER_LIST, typical_usd=0.20,
-        example="20 rows = 2 credits ($0.20).",
-        credit_rate="0.10 credits / row"),
-
-    # ── Tier C: fixed / custom per request ────────────────────────────────
-    "/similarweb/website/technologies": _sw(
-        "credits = 10 (fixed per request; confirm multi-domain multiplier)",
-        [{"param": "domains", "effect": "fixed 10 credits/request; multi-domain may multiply"}],
-        typical_usd=1.00,
-        example="1 request = 10 credits ($1.00).",
-        credit_rate="10 credits / request (fixed)"),
-    "/similarweb/website/demographics": _sw(
-        "credits = 6 (fixed per request; aggregated merges age+gender)",
-        [{"param": "domains", "effect": "fixed 6 credits/request"}],
-        typical_usd=0.60,
-        example="1 request = 6 credits ($0.60).",
-        credit_rate="6 credits / request (fixed)"),
-    "/similarweb/website/audience-overlap": _sw(
-        "credits = domains - 1 (2 domains=1, 3=2, 4=3, 5=4)",
-        [{"param": "domains", "effect": "credits = number_of_domains - 1"}],
-        typical_usd=0.20,
-        example="2 domains = 1 credit ($0.10); 5 domains = 4 credits ($0.40).",
-        credit_rate="(domains - 1) credits / request"),
-
-    # ── Catalog priced these at $0 (aggregator/snapshot views). Metered in ─
-    #    credits like the rest; treat as low until a rate is published.
-    "/similarweb/website-traffic-snapshot": _sw(
-        "credits per underlying data pulled (catalog lists $0; treat as light aggregate)",
-        SW_DRIVER_TIMESERIES, typical_usd=0.30,
-        example="Aggregate snapshot view; catalog scalar is $0. Prefer explicit metrics + date window; cost tracks the underlying traffic-and-engagement pulls.",
-        credit_rate="see traffic-and-engagement"),
-    "/similarweb/website-traffic-trend": _sw(
-        "credits per underlying data pulled (catalog lists $0; treat as light aggregate)",
-        SW_DRIVER_TIMESERIES, typical_usd=0.30,
-        example="Aggregate trend view; catalog scalar is $0. Prefer explicit metrics + date window; cost tracks the underlying traffic-and-engagement pulls.",
-        credit_rate="see traffic-and-engagement"),
-    "/similarweb/website-top-geographies": _sw(
-        "credits = ceil(8 x rows) (traffic-geography family; default 20 rows)",
-        SW_DRIVER_LIST, typical_usd=16.00,
-        example="20 rows = 160 credits ($16.00) — the most expensive SW view; clamp limit and country filters hard.",
-        credit_rate="8 credits / row"),
-}
-
-
-def is_similarweb_path(path):
-    return path.startswith("/similarweb/")
-
-
-# ── Catalog fetch / price-map build ──────────────────────────────────────
-
-def _http_get_json(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "aisa-docs-pricing/1.0"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
-
-
-def build_pricing_map():
-    """Fetch the live catalog and build the (METHOD path)->entry price map.
-
-    Regenerates openapi/_pricing_map.json. Key = "METHOD <rel-path>" where
-    rel-path is the catalog gateway path with the leading /apis/v1 (or v2)
-    stripped, so it matches the per-file OpenAPI provider-relative path.
-    """
-    from datetime import datetime, timezone
-
-    cat = _http_get_json(CATALOG_CATEGORY_URL)
-    ids = [a["id"] for a in cat.get("apis", [])]
-    entries = {}
-    gaps = []
-    for api_id in ids:
-        try:
-            detail = _http_get_json(CATALOG_DETAIL_URL.format(id=api_id))
-        except Exception as e:  # noqa: BLE001
-            gaps.append(f"{api_id}: fetch failed ({e})")
-            continue
-        api = detail.get("api", {})
-        groups = api.get("endpoint_groups")
-        if not groups:
-            gaps.append(f"{api_id}: no endpoint_groups")
-            continue
-        for g in groups:
-            for e in g.get("endpoints") or []:
-                method = e["method"].upper()
-                full = e["path"]
-                rel = full
-                for pref in ("/apis/v1", "/apis/v2"):
-                    if rel.startswith(pref):
-                        rel = rel[len(pref):]
-                        break
-                entries[f"{method} {rel}"] = {
-                    "method": method,
-                    "path": rel,
-                    "gateway_path": full,
-                    "api_id": api_id,
-                    "pricing": e.get("pricing") or {},
-                }
-    out = {
-        "_note": (
-            "Machine-readable price map for AIsa data-API operations. Keyed by "
-            "'METHOD <provider-relative-path>' (catalog gateway path with the "
-            "leading /apis/v1 or /apis/v2 stripped). Source: "
-            "https://api.aisa.one/info/apis (metering-v2-resolved prices the "
-            "backend serves). Regenerate: python scripts/inject_pricing.py "
-            "--rebuild-map. Prices in USD."
-        ),
-        "_generated_at": datetime.now(timezone.utc).isoformat(),
-        "_source": "https://api.aisa.one/info/apis",
-        "_entry_count": len(entries),
-        "prices": dict(sorted(entries.items())),
-    }
-    if gaps:
-        out["_gaps"] = gaps
-    with open(PRICING_MAP_PATH, "w") as fh:
-        json.dump(out, fh, indent=2, ensure_ascii=False)
-        fh.write("\n")
-    print(f"Rebuilt {PRICING_MAP_PATH}: {len(entries)} entries, "
-          f"{len(gaps)} gaps", file=sys.stderr)
-    return out
+# openapi/_pricing_map.json is produced by scripts/build_pricing_map.py from DB
+# ground truth. Each entry (keyed by provider-relative gateway path) carries a
+# `kind` we branch on:
+#   fixed_success            -> flat per_request
+#   provider_cost_multiplier -> dynamic (floor + multiplier + observed range)
+#   metered_result           -> dynamic (firecrawl crawl/batch; provider-metered)
+#   credit_based             -> SimilarWeb per_credit
 
 
 def load_pricing_map():
     with open(PRICING_MAP_PATH) as fh:
         data = json.load(fh)
-    prices = data["prices"]
-    by_key = prices
-    by_path = {}
-    for entry in prices.values():
-        by_path.setdefault(entry["path"], entry)
-    return by_key, by_path
+    return data["prices"]
 
 
+DYNAMIC_NOTE = ("floor is the minimum per-call charge; actual cost scales with "
+                "provider response size")
 # ── Format-preserving injection ──────────────────────────────────────────
 #
 # We add exactly ONE key (`x-aisa-pricing`) to each priced operation object.
@@ -486,44 +237,80 @@ def path_prefix_for(spec):
     return ""
 
 
-def build_pricing_block(method, rel_path, by_key, by_path):
-    """Return (block, source_note) or (None, reason) if no price."""
-    if is_similarweb_path(rel_path):
-        block = SW_PRICING.get(rel_path)
-        if block is not None:
-            return dict(block), "similarweb-rate-model"
-        # SW op with no rate-table match: fall back to catalog scalar.
-        entry = by_key.get(f"{method} {rel_path}") or by_path.get(rel_path)
-        if entry and entry["pricing"].get("normal") is not None:
-            price = float(entry["pricing"]["normal"])
-            return ({
-                "model": "per_request",
-                "currency": "USD",
-                "price_usd": price,
-                "cost_tier": cost_tier(price),
-            }, "similarweb-no-rate-match-catalog-scalar")
-        return None, "similarweb-unmatched"
+def build_pricing_block(rel_path, prices):
+    """Return (block, note) or (None, reason) from the contract-sourced map.
 
-    entry = by_key.get(f"{method} {rel_path}")
-    match_kind = "exact"
+    Branches on the map entry's `kind` (== customer_pricing_kind, sourced from
+    the customer pricing / metering contracts) to emit one of the three
+    x-aisa-pricing models.
+    """
+    entry = prices.get(rel_path)
     if entry is None:
-        entry = by_path.get(rel_path)
-        match_kind = "path-only"
-    if entry is None:
-        return None, "no-catalog-price"
-    normal = entry["pricing"].get("normal")
-    if normal is None:
-        return None, "catalog-price-null"
-    price = float(normal)
-    return ({
-        "model": "per_request",
-        "currency": "USD",
-        "price_usd": price,
-        "cost_tier": cost_tier(price),
-    }, match_kind)
+        return None, "no-contract-price"
+    kind = entry["kind"]
+
+    if kind == "fixed_success":
+        price = float(entry["price_usd"])
+        block = {
+            "model": "per_request",
+            "currency": "USD",
+            "price_usd": price,
+            "cost_tier": entry.get("cost_tier", cost_tier(price)),
+        }
+        if entry.get("note"):
+            block["note"] = entry["note"]
+        return block, "fixed_success"
+
+    if kind == "credit_based":  # SimilarWeb
+        block = {
+            "model": "per_credit",
+            "currency": "USD",
+            "credit_price_usd": SW_CREDIT_PRICE_USD,
+            "credit_formula": entry["credit_formula"],
+            "credit_rate": entry["credit_rate"],
+            "cost_drivers": entry["cost_drivers"],
+            "cost_tier": entry["cost_tier"],
+            "example": entry["example"],
+        }
+        return block, "credit_based"
+
+    if kind in ("provider_cost_multiplier", "metered_result"):
+        mult = entry.get("multiplier")
+        if mult is not None:
+            basis = f"provider_cost x {mult:g}"
+        else:  # firecrawl metered_result: provider-reported units
+            basis = "provider_cost (metered per result unit)"
+        block = {
+            "model": "dynamic",
+            "currency": "USD",
+            "basis": basis,
+            "floor_usd": entry.get("floor_usd"),
+            "cost_drivers": entry["cost_drivers"],
+            "cost_tier": "variable",
+            "note": DYNAMIC_NOTE,
+        }
+        if "typical_usd" in entry:
+            block["typical_usd"] = entry["typical_usd"]
+        if "max_observed_usd" in entry:
+            block["max_observed_usd"] = entry["max_observed_usd"]
+        # Order keys so floor/typical/max read together after basis.
+        ordered = {
+            "model": block["model"], "currency": block["currency"],
+            "basis": block["basis"], "floor_usd": block["floor_usd"],
+        }
+        if "typical_usd" in block:
+            ordered["typical_usd"] = block["typical_usd"]
+        if "max_observed_usd" in block:
+            ordered["max_observed_usd"] = block["max_observed_usd"]
+        ordered["cost_drivers"] = block["cost_drivers"]
+        ordered["cost_tier"] = block["cost_tier"]
+        ordered["note"] = block["note"]
+        return ordered, ("metered_result" if mult is None else "provider_cost_multiplier")
+
+    return None, f"unknown-kind:{kind}"
 
 
-def process_file(filename, by_key, by_path, report):
+def process_file(filename, prices, report):
     filepath = os.path.join(OPENAPI_DIR, filename)
     with open(filepath) as fh:
         raw_text = fh.read()
@@ -561,8 +348,7 @@ def process_file(filename, by_key, by_path, report):
             method_cursor = op_open
             if method not in HTTP_METHODS:
                 continue
-            block, note = build_pricing_block(
-                method.upper(), rel_path, by_key, by_path)
+            block, note = build_pricing_block(rel_path, prices)
             if block is None:
                 report["unmatched"].append(
                     {"file": filename, "method": method.upper(),
@@ -573,6 +359,8 @@ def process_file(filename, by_key, by_path, report):
             report["by_note"][note] = report["by_note"].get(note, 0) + 1
             if block["model"] == "per_credit":
                 report["similarweb"] += 1
+            elif block["model"] == "dynamic":
+                report["dynamic"] += 1
 
     if not insertions:
         return False
@@ -589,16 +377,20 @@ def process_file(filename, by_key, by_path, report):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rebuild-map", action="store_true",
-                        help="Refetch the live catalog into openapi/_pricing_map.json first")
+                        help="Rebuild openapi/_pricing_map.json from DB dumps first "
+                             "(runs scripts/build_pricing_map.py)")
     args = parser.parse_args()
 
     if args.rebuild_map:
-        build_pricing_map()
+        import subprocess
+        subprocess.run([sys.executable,
+                        os.path.join(SCRIPT_DIR, "build_pricing_map.py")], check=True)
 
-    by_key, by_path = load_pricing_map()
+    prices = load_pricing_map()
 
     report = {
         "matched": 0,
+        "dynamic": 0,
         "similarweb": 0,
         "unmatched": [],
         "skipped_llm_files": [],
@@ -610,16 +402,16 @@ def main():
                    and not f.startswith("_"))
     touched = []
     for filename in files:
-        if process_file(filename, by_key, by_path, report):
+        if process_file(filename, prices, report):
             touched.append(filename)
 
     print(f"Stamped x-aisa-pricing on {report['matched']} operations "
-          f"({report['similarweb']} SimilarWeb per_credit) across "
-          f"{len(touched)} files.", file=sys.stderr)
-    print(f"  match kinds: {report['by_note']}", file=sys.stderr)
+          f"({report['dynamic']} dynamic, {report['similarweb']} SimilarWeb "
+          f"per_credit) across {len(touched)} files.", file=sys.stderr)
+    print(f"  model kinds: {report['by_note']}", file=sys.stderr)
     print(f"  skipped LLM/token-priced files: {report['skipped_llm_files']}",
           file=sys.stderr)
-    print(f"  unmatched operations (no catalog price): {len(report['unmatched'])}",
+    print(f"  unmatched operations (no contract price): {len(report['unmatched'])}",
           file=sys.stderr)
     for u in report["unmatched"]:
         print(f"    - {u['file']} {u['method']} {u['path']} ({u['reason']})",
