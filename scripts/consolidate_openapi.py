@@ -78,6 +78,7 @@ FILE_TAG_MAP = {
     "reddit.json": "Reddit",
     "instagram.json": "Instagram",
     "pinterest.json": "Pinterest",
+    "similarweb.json": "Market Intelligence",
     "oxylabs.json": "Web & News Search",
     "websearch.json": "Web & News Search",
     "edinet.json": "Financial Data",
