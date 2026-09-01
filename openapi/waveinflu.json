@@ -209,10 +209,24 @@
     "/waveinflu/email-lookup": {
       "post": {
         "x-aisa-pricing": {
-          "model": "per_request",
+          "model": "dynamic",
           "currency": "USD",
-          "price_usd": 0.005,
-          "cost_tier": "low"
+          "basis": "provider_cost x 2",
+          "nominal_usd": 0.005,
+          "observed_usd": {
+            "min": 0.009092,
+            "p50": 0.009092,
+            "p95": 0.009092,
+            "max": 0.009092
+          },
+          "cost_drivers": [
+            {
+              "param": "records returned",
+              "effect": "charge scales with number of records/creators returned"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
         },
         "summary": "Email Lookup",
         "description": "Looks up contact emails for one TikTok, Instagram or YouTube creator from a profile URL. Returns `platform` parsed from the URL, `username`, `profileLink`, `platformUserId`, `region`, a primary `email`, an `emails` array of every address found, and a `contacts` array of external links each shaped `{url, type}` (personal sites, WhatsApp links), plus `quota.cost` in credits and `quota.remainingQuota`. Measured at 533 bytes and about 2 seconds for one Instagram creator. `email` is null and `emails` empty when the creator publishes no address \u2014 a normal result, not an error. Handles one creator per call. To assemble a creator list first use `post_waveinflu_similar_creators`, which already returns an `email` for most matches; call this endpoint for the ones that come back null, and for Instagram creators, which the similar-creators endpoint does not cover.",
@@ -265,10 +279,24 @@
     "/waveinflu/similar": {
       "post": {
         "x-aisa-pricing": {
-          "model": "per_request",
+          "model": "dynamic",
           "currency": "USD",
-          "price_usd": 0.02,
-          "cost_tier": "med"
+          "basis": "provider_cost x 1.5",
+          "nominal_usd": 0.02,
+          "observed_usd": {
+            "min": 0.0,
+            "p50": 0.020456,
+            "p95": 0.306833,
+            "max": 0.695487
+          },
+          "cost_drivers": [
+            {
+              "param": "records returned",
+              "effect": "charge scales with number of records/creators returned"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
         },
         "summary": "Similar Creators",
         "description": "Finds creators similar to a seed profile, a natural-language content direction, or both, on YouTube or TikTok. `platform` is required; supply `seedProfileUrl`, `contentDirection` (max 800 characters) or both, with `limit` (1\u2013100, default 25) and optional `filters` for regions, languages, follower and average-view ranges. The response echoes the resolved `mode` \u2014 `homepage` for a seed alone, `direction` for a direction alone, `homepage_direction` for both \u2014 and sets `sourceUserId` only when a seed resolved. Each match carries `username`, `platformHandle`, `description`, `email`, `profileUrl`, `avatar`, `similarityScore` (sorted descending), `followerCount`, `averagePlayCount`, `lastPublishedTime`, `region` and `language`. Field shape differs by platform: YouTube matches add `channelId` and `channelTitle`; TikTok matches add `userId`, `uniqueId`, `nickname` and `averageLikeCount`, none of which YouTube returns. Measured at 4.2 KB for 5 YouTube matches (about 8 seconds) and 2.5 KB for 3 TikTok matches. Most matches already include an `email`; use `post_waveinflu_email_lookup` for the ones that come back null and for Instagram creators, which this endpoint does not match.",

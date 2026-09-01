@@ -46,12 +46,13 @@ SCHEMA — x-aisa-pricing (branched on customer_pricing_kind)
 
 2. provider_cost_multiplier (DYNAMIC) / firecrawl metered_result:
    {"model":"dynamic","currency":"USD","basis":"provider_cost x <mult>",
-    "floor_usd":<pricing_json.normal or min observed>,
-    "typical_usd":{"p50":..,"p95":..},"max_observed_usd":..,
+    "nominal_usd":<pricing_json.normal or min observed>,
+    "observed_usd":{"min":..,"p50":..,"p95":..,"max":..},
     "cost_drivers":[{"param":..,"effect":..}],"cost_tier":"variable",
-    "note":"floor is the minimum per-call charge; actual cost scales with
-            provider response size"}
-   (typical_usd/max_observed_usd omitted when usage is too sparse.)
+    "note":"nominal_usd is a static reference, NOT a guaranteed minimum; actual
+            charge = provider_cost x multiplier and can be higher or lower"}
+   (observed_usd carries min+max whenever >=1 successful charge exists; p50/p95
+    only when >=20 samples; observed_usd omitted entirely when 0 samples.)
 
 3. SimilarWeb credit-metered -> per_credit:
    {"model":"per_credit","currency":"USD","credit_price_usd":0.10,
@@ -125,8 +126,9 @@ def load_pricing_map():
     return data["prices"]
 
 
-DYNAMIC_NOTE = ("floor is the minimum per-call charge; actual cost scales with "
-                "provider response size")
+DYNAMIC_NOTE = ("nominal_usd is a static reference, NOT a guaranteed minimum; "
+                "actual charge = provider_cost x multiplier and can be higher "
+                "or lower")
 # ── Format-preserving injection ──────────────────────────────────────────
 #
 # We add exactly ONE key (`x-aisa-pricing`) to each priced operation object.
@@ -280,31 +282,20 @@ def build_pricing_block(rel_path, prices):
             basis = f"provider_cost x {mult:g}"
         else:  # firecrawl metered_result: provider-reported units
             basis = "provider_cost (metered per result unit)"
-        block = {
+        # Ordered so nominal_usd / observed_usd read together after basis.
+        ordered = {
             "model": "dynamic",
             "currency": "USD",
             "basis": basis,
-            "floor_usd": entry.get("floor_usd"),
-            "cost_drivers": entry["cost_drivers"],
-            "cost_tier": "variable",
-            "note": DYNAMIC_NOTE,
+            "nominal_usd": entry.get("nominal_usd"),
         }
-        if "typical_usd" in entry:
-            block["typical_usd"] = entry["typical_usd"]
-        if "max_observed_usd" in entry:
-            block["max_observed_usd"] = entry["max_observed_usd"]
-        # Order keys so floor/typical/max read together after basis.
-        ordered = {
-            "model": block["model"], "currency": block["currency"],
-            "basis": block["basis"], "floor_usd": block["floor_usd"],
-        }
-        if "typical_usd" in block:
-            ordered["typical_usd"] = block["typical_usd"]
-        if "max_observed_usd" in block:
-            ordered["max_observed_usd"] = block["max_observed_usd"]
-        ordered["cost_drivers"] = block["cost_drivers"]
-        ordered["cost_tier"] = block["cost_tier"]
-        ordered["note"] = block["note"]
+        # observed_usd: min/max always present when >=1 charge; p50/p95 only
+        # when >=20 samples (both shapes produced by build_pricing_map.py).
+        if "observed_usd" in entry:
+            ordered["observed_usd"] = entry["observed_usd"]
+        ordered["cost_drivers"] = entry["cost_drivers"]
+        ordered["cost_tier"] = "variable"
+        ordered["note"] = DYNAMIC_NOTE
         return ordered, ("metered_result" if mult is None else "provider_cost_multiplier")
 
     return None, f"unknown-kind:{kind}"

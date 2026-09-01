@@ -7,11 +7,28 @@ WHY (audit correction)
 ----------------------
 The prior map trusted the catalog `/info/apis` scalar (`pricing.normal`). For
 dynamic endpoints (customer_pricing_kind == provider_cost_multiplier) that
-scalar is a STATIC FLOOR, not the real per-call charge — the true cost scales
-with the provider response size (rows/results/tweets). And several SimilarWeb
-credit rates in the catalog disagreed with the metering contract. This builder
-re-derives every value from the contract tables so the docs match what the
-backend actually bills.
+scalar is a STATIC NOMINAL reference, not the real per-call charge — the true
+cost scales with the provider response size (rows/results/tweets). And several
+SimilarWeb credit rates in the catalog disagreed with the metering contract.
+This builder re-derives every value from the contract tables so the docs match
+what the backend actually bills.
+
+CLASSIFICATION (PR #92 defect fix)
+----------------------------------
+An independent audit found ~478 provider_cost_multiplier (dynamic) endpoints
+were wrongly stamped flat per_request $0.012. Root cause: the generator derived
+each endpoint's KIND by whether a customer-pricing contract row was found in an
+INCOMPLETE dump; a lookup miss fell back to fixed_success. The largest provider
+(DataForSEO, ~362 billing ops) was affected — advertised flat $0.012 but really
+billed up to $1.48 (123x).
+
+FIX: kind is resolved from the customer-pricing CONTRACT (contract_json.kind)
+keyed by each endpoint's config_json customer_pricing_profile/-revision, from a
+COMPLETE contract index covering every (profile,revision) pair any endpoint
+references. The contract table is used ONLY to fetch numeric values (the
+multiplier for provider_cost_multiplier, the tier price for fixed_success) —
+never to decide kind by presence/absence. A missing contract row is a HARD
+ERROR (see the assert at the end of build()), never a silent flat fallback.
 
 SOURCES (all DB 34, MySQL)
 --------------------------
@@ -39,6 +56,7 @@ leading /apis/v1 or /apis/v2 stripped) — this matches the per-file OpenAPI pat
 """
 import json
 import os
+import sys
 from datetime import datetime, timezone
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -55,9 +73,22 @@ USAGE_HIST = os.path.join(DUMP_DIR, "usage_hist.json")    # cost histogram per e
 
 CREDIT_PRICE_USD = 0.10  # SimilarWeb: provider $0.075/credit x 1.333 customer mult.
 
-PROV = {51: "twitter", 58: "tavily", 63: "firecrawl", 65: "coingecko",
-        67: "agentmail", 74: "apollo", 80: "similarweb", 81: "exa",
-        84: "edinet", 87: "oxylabs", 88: "ahrefs", 89: "semrush"}
+# provider_id -> short name (integration_api_providers, DB 34).
+PROV = {51: "twitter", 52: "search", 53: "financial", 55: "youtube",
+        56: "scholar", 57: "querit", 58: "tavily", 59: "perplexity",
+        60: "aisa_twitter", 62: "polymarket", 63: "firecrawl",
+        64: "scrape_creators", 65: "coingecko", 66: "parallel",
+        67: "agentmail", 68: "dataforseo", 69: "polymarket", 70: "polymarket",
+        71: "polymarket", 72: "polymarket", 73: "kalshi", 74: "apollo",
+        78: "brave_answer", 79: "brave_search", 80: "similarweb", 81: "exa",
+        82: "waveinflu", 83: "fred", 84: "edinet", 87: "oxylabs",
+        88: "ahrefs", 89: "semrush", 90: "anthropic_web_search",
+        91: "openai_web_search"}
+
+# SimilarWeb provider_id — billed per_credit from the metering contract,
+# not from the customer pricing contract (which carries a nominal
+# provider_cost_multiplier kind that does not apply to the credit surface).
+SIMILARWEB_PID = 80
 
 
 def gw(inner):
@@ -162,8 +193,12 @@ def cost_tier(usd):
 DYNAMIC_DRIVER = {
     "twitter": {"param": "result count",
                 "effect": "charge scales with number of tweets/users returned"},
+    "aisa_twitter": {"param": "result count",
+                     "effect": "charge scales with number of tweets/users returned"},
     "semrush": {"param": "display_limit (rows)",
                 "effect": "charge scales with number of rows returned (up to display_limit)"},
+    "dataforseo": {"param": "result/task count",
+                   "effect": "charge scales with number of results/tasks the provider returns"},
     "firecrawl": {"param": "pages/results scraped",
                   "effect": "charge scales with number of pages/results the provider returns"},
     "exa": {"param": "numResults / contents",
@@ -172,6 +207,22 @@ DYNAMIC_DRIVER = {
                "effect": "charge scales with number of results (search) or pages (crawl/extract) returned"},
     "apollo": {"param": "records returned",
                "effect": "charge scales with number of records enriched/returned"},
+    "waveinflu": {"param": "records returned",
+                  "effect": "charge scales with number of records/creators returned"},
+    "parallel": {"param": "results returned",
+                 "effect": "charge scales with number of results returned"},
+    "perplexity": {"param": "response size",
+                   "effect": "charge scales with provider response size"},
+    "scrape_creators": {"param": "records returned",
+                        "effect": "charge scales with number of records returned"},
+    "brave_search": {"param": "results returned",
+                     "effect": "charge scales with number of results returned"},
+    "brave_answer": {"param": "response size",
+                     "effect": "charge scales with provider response size"},
+    "openai_web_search": {"param": "response size",
+                          "effect": "charge scales with provider search response size"},
+    "anthropic_web_search": {"param": "response size",
+                             "effect": "charge scales with provider search response size"},
 }
 
 
@@ -192,12 +243,23 @@ def build():
     swmet = load_json(SW_MET)
     usage = load_json(USAGE_HIST) if os.path.exists(USAGE_HIST) else []
 
+    # COMPLETE customer-pricing contract index, keyed by
+    # (customer_pricing_profile, customer_pricing_revision). This MUST cover
+    # every (cpp, cpr) pair referenced by any endpoint — the builder resolves
+    # each endpoint's kind from contract_json.kind and never guesses. An
+    # incomplete index is exactly the audit defect (PR #92): a missing row used
+    # to fall back to fixed_success, mislabelling ~478 dynamic ops as flat.
     cidx = {}
     for c in cpp:
         cidx[(c["pricing_profile_key"], c["revision"])] = json.loads(c["contract_json"])
     midx = {}
     for m in swmet:
         midx[(m["profile_key"], m["revision"])] = json.loads(m["contract_json"])
+
+    # Offenders the HARD ASSERT collects: endpoints that carry a customer
+    # pricing profile but whose kind (or, for pcm, multiplier) can't be
+    # resolved from the contract index. Any non-empty list => exit non-zero.
+    unresolved = []
 
     # usage histogram -> per gateway-path {floor,p50,p95,max,distinct}
     hist = {}
@@ -223,6 +285,51 @@ def build():
             "distinct": len(vals), "n": total,
         }
 
+    def observed(g):
+        """Return the observed_usd block for a gateway path, or None.
+
+        Always surfaces min+max when >=1 successful charge exists (this exposes
+        e.g. semrush/domain-vs-domain's $14.40 tail that the old n>=20 gate
+        hid); p50/p95 only when >=20 samples. Returns (block, stats) so callers
+        can also read n / fill a nominal from the observed min when needed.
+        """
+        u = ustats.get(g)
+        if not u or u["n"] < 1:
+            return None, u
+        block = {"min": u["min"], "max": u["max"]}
+        if u["n"] >= 20:
+            # order: min, p50, p95, max
+            block = {"min": u["min"], "p50": u["p50"],
+                     "p95": u["p95"], "max": u["max"]}
+        return block, u
+
+    def dynamic_entry(pid, g, floor, mult, source, driver=None):
+        """Assemble a `provider_cost_multiplier` (dynamic) map entry.
+
+        `nominal_usd` is the static pricing_json.normal reference (falls back to
+        the observed min only when no static floor exists). observed_usd carries
+        min/max always (p50/p95 when >=20 samples). This is NOT a floor: the
+        real charge = provider_cost x multiplier and can be higher or lower.
+        """
+        entry = {
+            "kind": "provider_cost_multiplier",
+            "customer_pricing_kind": "provider_cost_multiplier",
+            "multiplier": round(mult, 6) if mult is not None else None,
+            "nominal_usd": floor,
+            "cost_drivers": [driver or DYNAMIC_DRIVER.get(
+                PROV.get(pid, ""),
+                {"param": "response size",
+                 "effect": "charge scales with provider response size"})],
+            "contract_source": source,
+        }
+        obs, u = observed(g)
+        if obs is not None:
+            entry["observed_usd"] = obs
+            entry["usage_n"] = u["n"]
+            if entry["nominal_usd"] is None:
+                entry["nominal_usd"] = obs["min"]
+        return entry
+
     prices = {}
     for x in eprows:
         pid = x["pid"]
@@ -233,19 +340,25 @@ def build():
         pj = pj or {}
         floor = pj.get("normal")
 
-        # firecrawl metered_result endpoints (crawl/batch-scrape): dynamic by
-        # provider-reported unit cost; no customer multiplier contract.
         cbm = x.get("cbm")
-        cj = cidx.get((x.get("cpp"), x.get("cpr")))
-        kind = cj["kind"] if cj else (cbm or None)
+        cpp_key = x.get("cpp")
+        cj = cidx.get((cpp_key, x.get("cpr")))
 
-        if pid == 80:  # SimilarWeb -> per_credit from metering contract
+        # ── SimilarWeb: per_credit from the metering cost_contract ──────────
+        # SW carries a provider_cost_multiplier customer contract but is billed
+        # in credits; its real rate comes from the metering contract.
+        if pid == SIMILARWEB_PID:
             m = midx.get((x["pk"], x["pr"]))
             if not m:
+                if cpp_key:
+                    unresolved.append((x["id"], g, cpp_key, x.get("cpr"),
+                                       "similarweb: no metering contract"))
                 continue
             cc = m.get("cost_contract", {})
             rate_str, formula, drivers, example, typ_usd = sw_credit_model(cc)
             if rate_str is None:
+                unresolved.append((x["id"], g, x["pk"], x.get("pr"),
+                                   "similarweb: unrecognised metering kind"))
                 continue
             prices[g] = {
                 "kind": "credit_based",
@@ -260,74 +373,103 @@ def build():
             }
             continue
 
-        if kind == "fixed_success":
-            tier = cj["tiers"]["normal"] / 1e6
-            e = {
-                "kind": "fixed_success",
-                "customer_pricing_kind": "fixed_success",
-                "price_usd": tier,
-                "cost_tier": cost_tier(tier),
-                "contract_source": f"integration_customer_pricing_profile_revisions {x['cpp']} rev{x['cpr']} (tier normal={cj['tiers']['normal']} micros)",
-            }
-            note = FIXED_NOTE.get(g)
-            if note:
-                e["note"] = note
-            prices[g] = e
+        # ── firecrawl metered_result (crawl / batch-scrape) ─────────────────
+        # No customer pricing profile; kind comes from config_json's
+        # customer_billing_mode. Dynamic, provider-metered per result unit.
+        if cbm == "metered_result":
+            prices[g] = dynamic_entry(
+                pid, g, floor, None,
+                "integration_api_endpoints.config_json (customer_billing_mode=metered_result, provider_unit_cost); nominal from pricing_json.normal",
+                driver={"param": "pages/results returned",
+                        "effect": "charge scales with provider-reported units (pages/results); metered_result billing"})
             continue
 
-        if kind == "provider_cost_multiplier":
-            mult = cj["tiers"]["normal"] / 1e6
-            entry = {
-                "kind": "provider_cost_multiplier",
-                "customer_pricing_kind": "provider_cost_multiplier",
-                "multiplier": round(mult, 6),
-                "floor_usd": floor,
-                "cost_drivers": [DYNAMIC_DRIVER.get(PROV.get(pid, ""),
-                                 {"param": "response size",
-                                  "effect": "charge scales with provider response size"})],
-                "contract_source": f"integration_customer_pricing_profile_revisions {x['cpp']} rev{x['cpr']} (multiplier={cj['tiers']['normal']}/1e6); floor from pricing_json.normal",
-            }
-            u = ustats.get(g)
-            if u and u["n"] >= 20:
-                entry["typical_usd"] = {"p50": u["p50"], "p95": u["p95"]}
-                entry["max_observed_usd"] = u["max"]
-                entry["min_observed_usd"] = u["min"]
-                entry["usage_n"] = u["n"]
-                if floor is None:
-                    entry["floor_usd"] = u["min"]
-            prices[g] = entry
+        # ── every endpoint WITH a customer pricing profile ──────────────────
+        # KIND IS RESOLVED FROM THE CONTRACT, not guessed. A missing contract
+        # row is a hard error (recorded and asserted below) — never a silent
+        # fixed_success fallback.
+        if cpp_key:
+            if cj is None:
+                unresolved.append((x["id"], g, cpp_key, x.get("cpr"),
+                                   "no contract row for (cpp,cpr)"))
+                continue
+            kind = cj.get("kind")
+
+            if kind == "fixed_success":
+                tier = cj["tiers"]["normal"] / 1e6
+                e = {
+                    "kind": "fixed_success",
+                    "customer_pricing_kind": "fixed_success",
+                    "price_usd": tier,
+                    "cost_tier": cost_tier(tier),
+                    "contract_source": f"integration_customer_pricing_profile_revisions {cpp_key} rev{x['cpr']} (tier normal={cj['tiers']['normal']} micros)",
+                }
+                note = FIXED_NOTE.get(g)
+                if note:
+                    e["note"] = note
+                prices[g] = e
+                continue
+
+            if kind == "provider_cost_multiplier":
+                tiers = cj.get("tiers") or {}
+                if "normal" not in tiers:
+                    unresolved.append((x["id"], g, cpp_key, x.get("cpr"),
+                                       "pcm contract missing tiers.normal multiplier"))
+                    continue
+                mult = tiers["normal"] / 1e6
+                prices[g] = dynamic_entry(
+                    pid, g, floor, mult,
+                    f"integration_customer_pricing_profile_revisions {cpp_key} rev{x['cpr']} (multiplier={tiers['normal']}/1e6); nominal from pricing_json.normal")
+                continue
+
+            # Contract resolved but to an unexpected kind -> offender.
+            unresolved.append((x["id"], g, cpp_key, x.get("cpr"),
+                               f"unexpected contract kind: {kind}"))
             continue
 
-        if cbm == "metered_result":  # firecrawl crawl / batch-scrape
-            entry = {
-                "kind": "provider_cost_multiplier",
-                "customer_pricing_kind": "metered_result",
-                "multiplier": None,
-                "floor_usd": floor,
-                "cost_drivers": [{"param": "pages/results returned",
-                                  "effect": "charge scales with provider-reported units (pages/results); metered_result billing"}],
-                "contract_source": f"integration_api_endpoints.config_json (customer_billing_mode=metered_result, provider_unit_cost); floor from pricing_json.normal",
-            }
-            u = ustats.get(g)
-            if u and u["n"] >= 20:
-                entry["typical_usd"] = {"p50": u["p50"], "p95": u["p95"]}
-                entry["max_observed_usd"] = u["max"]
-                entry["min_observed_usd"] = u["min"]
-                entry["usage_n"] = u["n"]
-                if floor is None:
-                    entry["floor_usd"] = u["min"]
-            prices[g] = entry
-            continue
-
-        # otherwise: no resolvable contract -> record floor only if present.
+        # ── endpoints with NO customer pricing profile ──────────────────────
+        # Not covered by the assert (no profile to resolve). Record a
+        # floor-only fixed_success entry if pricing_json carries a scalar.
         if floor is not None:
             prices[g] = {
                 "kind": "fixed_success",
-                "customer_pricing_kind": kind or "unknown",
+                "customer_pricing_kind": "fixed_success",
                 "price_usd": floor,
                 "cost_tier": cost_tier(floor),
-                "contract_source": "pricing_json.normal (no customer-pricing contract row resolved)",
+                "contract_source": "pricing_json.normal (endpoint carries no customer-pricing profile)",
             }
+
+    # ── HARD ASSERT ─────────────────────────────────────────────────────────
+    # Every endpoint that carries a non-empty customer_pricing_profile MUST
+    # have resolved to a concrete kind (and, for provider_cost_multiplier, a
+    # numeric multiplier). If ANY is left unresolved, fail loudly — this is the
+    # guard that would have caught the ~478-op mislabelling. `unresolved` also
+    # collects SW / firecrawl resolution failures.
+    from collections import Counter
+    kind_counts = Counter(v["kind"] for v in prices.values())
+    cpk_counts = Counter(v.get("customer_pricing_kind") for v in prices.values())
+    print("Kind summary (map entries):", file=sys.stderr)
+    for k, n in sorted(kind_counts.items()):
+        print(f"  {k}: {n}", file=sys.stderr)
+    print("customer_pricing_kind summary:", file=sys.stderr)
+    for k, n in sorted(cpk_counts.items(), key=lambda kv: str(kv[0])):
+        print(f"  {k}: {n}", file=sys.stderr)
+
+    n_unknown = cpk_counts.get("unknown", 0) + cpk_counts.get(None, 0)
+    if unresolved:
+        print(f"\nERROR: {len(unresolved)} endpoint(s) with a customer pricing "
+              f"profile could not be resolved to a kind/multiplier:",
+              file=sys.stderr)
+        for eid, g, key, rev, why in unresolved:
+            print(f"  - id={eid} {g} profile={key} rev={rev}: {why}",
+                  file=sys.stderr)
+        sys.exit(1)
+    if n_unknown:
+        print(f"\nERROR: {n_unknown} map entr(y/ies) left with unknown "
+              f"customer_pricing_kind.", file=sys.stderr)
+        sys.exit(1)
+    print(f"\nAssert OK: unresolved==0, unknown==0 "
+          f"(map covers {len(prices)} gateway paths).", file=sys.stderr)
 
     out = {
         "_note": (

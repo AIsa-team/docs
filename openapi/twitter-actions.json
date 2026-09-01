@@ -300,10 +300,24 @@
     "/twitter/post_twitter": {
       "post": {
         "x-aisa-pricing": {
-          "model": "per_request",
+          "model": "dynamic",
           "currency": "USD",
-          "price_usd": 0.01,
-          "cost_tier": "low"
+          "basis": "provider_cost x 1",
+          "nominal_usd": 0.01,
+          "observed_usd": {
+            "min": 0.01,
+            "p50": 0.01,
+            "p95": 0.01,
+            "max": 0.2
+          },
+          "cost_drivers": [
+            {
+              "param": "result count",
+              "effect": "charge scales with number of tweets/users returned"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
         },
         "summary": "Post or edit a tweet",
         "description": "Publish a new tweet on behalf of the authenticated source user, or edit an existing tweet. Mirrors the [official X v2 `POST /2/tweets` endpoint](https://docs.x.com/x-api/posts/create-post), routed through the AIsa gateway.\n\n**Authentication.** Requires an OAuth session for the source user, attached to your AIsa API key. Link the account once via `POST /apis/v1/twitter/auth_twitter`.\n\n**Scopes.** The underlying X session must hold `tweet.read`, `tweet.write`, and `users.read`.\n\n**Mutually exclusive fields.** `media`, `poll`, `quote_tweet_id`, and `card_uri` cannot be combined in the same request. At most one of them may be set.",
