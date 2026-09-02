@@ -14,6 +14,7 @@ from generate_similarweb_pricing_docs import (
     EXPECTED_OPERATION_IDS,
     GUIDE_PATH,
     ROOT,
+    SETTLEMENT_RESPONSE_HEADERS,
     SOURCE_PATH,
     ZH_GUIDE_PATH,
     check_outputs,
@@ -33,6 +34,8 @@ PRICING_OVERVIEW_PATH = ROOT / "guides" / "pricing.mdx"
 PER_CALL_PATH = ROOT / "guides" / "pricing" / "per-call-api-pricing.mdx"
 ZH_PRICING_OVERVIEW_PATH = ROOT / "zh" / "guides" / "pricing.mdx"
 ZH_PER_CALL_PATH = ROOT / "zh" / "guides" / "pricing" / "per-call-api-pricing.mdx"
+EVALUATE_PRICING_PATH = ROOT / "evaluate" / "pricing.mdx"
+ZH_EVALUATE_PRICING_PATH = ROOT / "zh" / "evaluate" / "pricing.mdx"
 
 
 def fail(message: str) -> None:
@@ -70,7 +73,11 @@ def check_checked_in_surfaces(source: dict[str, Any]) -> None:
             if f'<span id="{operation.anchor}"></span>' not in content:
                 fail(f"{guide.relative_to(ROOT)} has no anchor for {operation.operation_id}")
 
-        description = source["paths"][operation.path]["get"]["description"]
+        source_operation = source["paths"][operation.path][operation.method]
+        description = source_operation["description"]
+        response = source_operation.get("responses", {}).get("200")
+        if not isinstance(response, dict) or response.get("headers") != SETTLEMENT_RESPONSE_HEADERS:
+            fail(f"{operation.operation_id} lacks the generated settlement response headers")
         uncontrolled = provider_controlled_drivers(operation)
         if category(operation) == "rows" and uncontrolled:
             if "does not accept `limit`" not in description:
@@ -80,6 +87,8 @@ def check_checked_in_surfaces(source: dict[str, Any]) -> None:
         if category(operation) == "dimensions" and uncontrolled and not operation.parameter_names.intersection({"metrics", "start_date", "end_date"}):
             if "provider-controlled dimensions" not in description:
                 fail(f"{operation.operation_id} does not disclose provider-controlled pricing dimensions")
+            if "documentation does not publish an upper bound" not in description or "not an approval cap" not in description:
+                fail(f"{operation.operation_id} presents a provider-controlled lower bound as an approval cap")
 
     llms = LLMS_PATH.read_text(encoding="utf-8")
     if "guides/pricing/similarweb" not in llms or "SimilarWeb Pricing & Cost Control" not in llms:
@@ -116,6 +125,15 @@ def check_checked_in_surfaces(source: dict[str, Any]) -> None:
         if "similarweb" not in path.read_text(encoding="utf-8").lower():
             fail(f"{path.relative_to(ROOT)} does not link to SimilarWeb pricing guidance")
 
+    for path, markers in (
+        (EVALUATE_PRICING_PATH, ("do not run a SimilarWeb request to discover price", "explicit approval")),
+        (ZH_EVALUATE_PRICING_PATH, ("不得通过 SimilarWeb 请求发现价格", "明确批准")),
+    ):
+        content = path.read_text(encoding="utf-8")
+        for marker in markers:
+            if marker not in content:
+                fail(f"{path.relative_to(ROOT)} lacks the SimilarWeb no-probe exception: {marker}")
+
 
 def check_consolidated_openapi(source: dict[str, Any], generated_path: Path) -> None:
     with generated_path.open(encoding="utf-8") as stream:
@@ -125,9 +143,13 @@ def check_consolidated_openapi(source: dict[str, Any], generated_path: Path) -> 
 
     for operation in collect_operations(source):
         expected = operation.pricing
-        actual = generated["paths"].get(operation.path, {}).get("get", {}).get("x-aisa-pricing")
+        generated_operation = generated["paths"].get(operation.path, {}).get(operation.method, {})
+        actual = generated_operation.get("x-aisa-pricing")
         if actual != expected:
             fail(f"generated OpenAPI did not preserve x-aisa-pricing for {operation.path}")
+        response = generated_operation.get("responses", {}).get("200")
+        if not isinstance(response, dict) or response.get("headers") != SETTLEMENT_RESPONSE_HEADERS:
+            fail(f"generated OpenAPI did not preserve settlement headers for {operation.path}")
 
 
 def main() -> None:

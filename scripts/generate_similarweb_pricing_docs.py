@@ -15,6 +15,7 @@ import copy
 import json
 import re
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -60,9 +61,25 @@ DISCLOSURE_PATTERN = re.compile(
     re.DOTALL,
 )
 OPENAPI_REFERENCE_PATTERN = re.compile(
-    r'^openapi:\s+"openapi/similarweb\.json GET (?P<path>[^"]+)"$',
+    r'^openapi:\s+"openapi/similarweb\.json (?P<method>[A-Z]+) (?P<path>[^"]+)"$',
     re.MULTILINE,
 )
+HTTP_METHODS = frozenset({"get", "put", "post", "delete", "options", "head", "patch", "trace"})
+SETTLEMENT_RESPONSE_HEADERS: dict[str, dict[str, Any]] = {
+    "X-AISA-Estimated-Credits": {
+        "description": "Pre-authorization credit estimate for this accepted request. It is an estimate, not a quote or authorization to make a request.",
+        "schema": {"type": "number", "format": "float"},
+    },
+    "X-AISA-Accounted-Credits": {
+        "description": "Credits settled for the completed response. Present only when the gateway records settled usage.",
+        "schema": {"type": "number", "format": "float"},
+    },
+    "X-AISA-Price-USD": {
+        "description": "USD amount settled for the completed response. Present only when the gateway records settled usage.",
+        "schema": {"type": "number", "format": "float"},
+    },
+}
+CREDIT_EXAMPLE_RE = re.compile(r"(?P<credits>\d+(?:\.\d+)?) credits? \(\$(?P<usd>\d+(?:\.\d+)?)\)")
 
 
 @dataclass(frozen=True)
@@ -70,6 +87,7 @@ class Operation:
     """A SimilarWeb operation together with its #92 pricing contract."""
 
     path: str
+    method: str
     operation_id: str
     endpoint_slug: str
     summary: str
@@ -78,7 +96,8 @@ class Operation:
 
     @property
     def anchor(self) -> str:
-        return self.path.rsplit("/", 1)[-1]
+        endpoint = self.path.rsplit("/", 1)[-1]
+        return endpoint if self.method == "get" else f"{self.method}-{endpoint}"
 
     @property
     def endpoint_url(self) -> str:
@@ -131,19 +150,37 @@ def validate_pricing(path: str, pricing: Any) -> dict[str, Any]:
         for field in ("param", "effect"):
             if not isinstance(driver.get(field), str) or not driver[field].strip():
                 fail(f"{path} has an invalid cost driver {field}")
+    examples = list(CREDIT_EXAMPLE_RE.finditer(pricing["example"]))
+    if not examples:
+        fail(f"{path} example has no parseable credits-to-USD amount")
+    credit_price = Decimal(str(pricing["credit_price_usd"]))
+    for match in examples:
+        try:
+            credits = Decimal(match.group("credits"))
+            documented_usd = Decimal(match.group("usd"))
+        except InvalidOperation as error:
+            raise AssertionError("credit example regex must only capture decimals") from error
+        expected_usd = credits * credit_price
+        if documented_usd != expected_usd:
+            fail(
+                f"{path} example has ${documented_usd} for {credits} credits; "
+                f"expected ${expected_usd} at ${credit_price} per credit"
+            )
     return pricing
 
 
-def api_reference_pages() -> dict[str, str]:
-    pages: dict[str, str] = {}
+def api_reference_pages() -> dict[tuple[str, str], str]:
+    pages: dict[tuple[str, str], str] = {}
     for page in API_REFERENCE_DIR.glob("*.mdx"):
         match = OPENAPI_REFERENCE_PATTERN.search(page.read_text(encoding="utf-8"))
         if not match:
             continue
         path = match.group("path")
-        if path in pages:
-            fail(f"duplicate endpoint page for {path}")
-        pages[path] = page.stem
+        method = match.group("method").lower()
+        key = (path, method)
+        if key in pages:
+            fail(f"duplicate endpoint page for {method.upper()} {path}")
+        pages[key] = page.stem
     return pages
 
 
@@ -158,44 +195,49 @@ def collect_operations(source: dict[str, Any]) -> list[Operation]:
     for path, item in paths.items():
         if not isinstance(item, dict):
             continue
-        operation = item.get("get")
-        if not isinstance(operation, dict) or "x-aisa-pricing" not in operation:
-            continue
+        for method, operation in item.items():
+            if method not in HTTP_METHODS:
+                continue
+            if not isinstance(operation, dict):
+                fail(f"{method.upper()} {path} is not an operation object")
+            if "x-aisa-pricing" not in operation:
+                fail(f"{method.upper()} {path} has no x-aisa-pricing object")
 
-        operation_id = operation.get("operationId")
-        summary = operation.get("summary")
-        description = operation.get("description")
-        if not isinstance(operation_id, str) or not operation_id:
-            fail(f"{path} has no operationId")
-        if not isinstance(summary, str) or not summary:
-            fail(f"{path} has no summary")
-        if not isinstance(description, str) or not description:
-            fail(f"{path} has no description")
-        if operation_id in seen_ids:
-            fail(f"duplicate operationId {operation_id}")
-        seen_ids.add(operation_id)
-        endpoint_slug = reference_pages.get(path)
-        if not endpoint_slug:
-            fail(f"{path} has no API reference page")
+            operation_id = operation.get("operationId")
+            summary = operation.get("summary")
+            description = operation.get("description")
+            if not isinstance(operation_id, str) or not operation_id:
+                fail(f"{method.upper()} {path} has no operationId")
+            if not isinstance(summary, str) or not summary:
+                fail(f"{method.upper()} {path} has no summary")
+            if not isinstance(description, str) or not description:
+                fail(f"{method.upper()} {path} has no description")
+            if operation_id in seen_ids:
+                fail(f"duplicate operationId {operation_id}")
+            seen_ids.add(operation_id)
+            endpoint_slug = reference_pages.get((path, method))
+            if not endpoint_slug:
+                fail(f"{method.upper()} {path} has no API reference page")
 
-        parameters = operation.get("parameters", [])
-        if not isinstance(parameters, list):
-            fail(f"{path} has invalid parameters")
-        parameter_names = frozenset(
-            parameter["name"]
-            for parameter in parameters
-            if isinstance(parameter, dict) and isinstance(parameter.get("name"), str)
-        )
-        operations.append(
-            Operation(
-                path=path,
-                operation_id=operation_id,
-                endpoint_slug=endpoint_slug,
-                summary=summary,
-                pricing=validate_pricing(path, operation["x-aisa-pricing"]),
-                parameter_names=parameter_names,
+            parameters = operation.get("parameters", [])
+            if not isinstance(parameters, list):
+                fail(f"{method.upper()} {path} has invalid parameters")
+            parameter_names = frozenset(
+                parameter["name"]
+                for parameter in parameters
+                if isinstance(parameter, dict) and isinstance(parameter.get("name"), str)
             )
-        )
+            operations.append(
+                Operation(
+                    path=path,
+                    method=method,
+                    operation_id=operation_id,
+                    endpoint_slug=endpoint_slug,
+                    summary=summary,
+                    pricing=validate_pricing(f"{method.upper()} {path}", operation["x-aisa-pricing"]),
+                    parameter_names=parameter_names,
+                )
+            )
 
     found_ids = {operation.operation_id for operation in operations}
     missing = sorted(EXPECTED_OPERATION_IDS - found_ids)
@@ -291,7 +333,7 @@ def display_example_en(operation: Operation) -> tuple[str, str]:
     if category(operation) == "dimensions" and uncontrolled:
         names = ", ".join(f"`{name}`" for name in uncontrolled)
         return (
-            "Provider-controlled schedule example",
+            "Provider-controlled lower-bound example",
             f"`{raw_example.rstrip('.')}`. {names} are provider-controlled for this endpoint, not caller-selectable request parameters.",
         )
     return "Current schedule example", f"`{raw_example}`"
@@ -309,7 +351,7 @@ def display_example_zh(operation: Operation) -> tuple[str, str]:
     if category(operation) == "dimensions" and uncontrolled:
         names = "、".join(f"`{name}`" for name in uncontrolled)
         return (
-            "Provider 控制的计价表示例",
+            "Provider 控制的最低示例",
             f"`{raw_example.rstrip('.')}`。对于该端点，{names} 由 provider 控制，不能由调用方作为请求参数选择。",
         )
     return "当前公开示例", f"`{raw_example}`"
@@ -332,7 +374,8 @@ def control_en(operation: Operation) -> str:
         names = ", ".join(f"`{name}`" for name in uncontrolled)
         return (
             f"The formula includes provider-controlled dimensions ({names}) that are not accepted request parameters. "
-            "Treat the published example as the documented exposure and obtain a budget decision before execution."
+            "The documentation does not publish an upper bound, so the example is a lower bound, not an approval cap. "
+            "Do not execute this operation under the approval-first contract until a documented maximum is available."
         )
     control_names = ", ".join(
         "the `start_date`/`end_date` range" if name == "periods" else f"`{name}`"
@@ -362,7 +405,8 @@ def control_zh(operation: Operation) -> str:
         names = "、".join(f"`{name}`" for name in uncontrolled)
         return (
             f"公式包含由 provider 控制且不能作为请求参数传入的维度（{names}）。"
-            "请把公开示例视为已记录的成本暴露，并在执行前取得预算确认。"
+            "文档没有公开上限，因此示例只是最低值，不能作为批准上限。"
+            "在有已记录的最大上限前，不得按先批准后执行合同调用该端点。"
         )
     control_names = "、".join(
         "`start_date`/`end_date` 日期范围" if name == "periods" else f"`{name}`"
@@ -420,15 +464,19 @@ def strip_generated_disclosure(description: str) -> str:
 def render_source(source: dict[str, Any], operations: list[Operation]) -> str:
     rendered = copy.deepcopy(source)
     for operation in operations:
-        target = rendered["paths"][operation.path]["get"]
+        target = rendered["paths"][operation.path][operation.method]
         base_description = strip_generated_disclosure(target["description"])
         target["description"] = f"{base_description}\n\n{generated_disclosure(operation)}\n"
+        responses = target.get("responses")
+        if not isinstance(responses, dict) or not isinstance(responses.get("200"), dict):
+            fail(f"{operation.method.upper()} {operation.path} has no 200 response for settlement headers")
+        responses["200"]["headers"] = copy.deepcopy(SETTLEMENT_RESPONSE_HEADERS)
 
     source_metadata = {
-        operation.path: operation.pricing for operation in collect_operations(source)
+        (operation.path, operation.method): operation.pricing for operation in collect_operations(source)
     }
     rendered_metadata = {
-        operation.path: rendered["paths"][operation.path]["get"]["x-aisa-pricing"]
+        (operation.path, operation.method): rendered["paths"][operation.path][operation.method]["x-aisa-pricing"]
         for operation in operations
     }
     if rendered_metadata != source_metadata:
