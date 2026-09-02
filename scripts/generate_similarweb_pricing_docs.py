@@ -47,8 +47,9 @@ def notice(pricing: dict[str, Any], location: str) -> str:
         f"`{required_text(pricing, 'credit_rate', location)}` at "
         f"`{price_usd(pricing.get('credit_price_usd'), location)}` per credit. "
         f"Formula: `{required_text(pricing, 'credit_formula', location)}`. "
-        "Before a paid data call, follow "
-        "[Agent Quickstart](/agent-quickstart#paid-api-approval-first) and obtain explicit approval."
+        "**IMPORTANT:** a request to gather data is not approval. Before a paid data call, "
+        "present scope and documented maximum, then wait for a separate explicit approval message; "
+        "follow [Agent Quickstart](/agent-quickstart#paid-api-approval-first)."
     )
 
 
