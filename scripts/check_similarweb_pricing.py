@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 from typing import Any
 
@@ -12,11 +11,9 @@ import yaml
 
 from generate_similarweb_pricing_docs import (
     EXPECTED_OPERATION_IDS,
-    GUIDE_PATH,
     ROOT,
     SETTLEMENT_RESPONSE_HEADERS,
     SOURCE_PATH,
-    ZH_GUIDE_PATH,
     check_outputs,
     category,
     collect_operations,
@@ -27,7 +24,6 @@ from generate_similarweb_pricing_docs import (
 
 
 LLMS_PATH = ROOT / "llms.txt"
-NAV_PATH = ROOT / "docs.json"
 AGENT_QUICKSTART_PATH = ROOT / "agent-quickstart.mdx"
 ZH_AGENT_QUICKSTART_PATH = ROOT / "zh" / "agent-quickstart.mdx"
 PRICING_OVERVIEW_PATH = ROOT / "guides" / "pricing.mdx"
@@ -42,42 +38,24 @@ def fail(message: str) -> None:
     raise SystemExit(f"pricing contract check failed: {message}")
 
 
-def contains(value: Any, wanted: str) -> bool:
-    if value == wanted:
-        return True
-    if isinstance(value, list):
-        return any(contains(item, wanted) for item in value)
-    if isinstance(value, dict):
-        return any(contains(item, wanted) for item in value.values())
-    return False
-
-
 def check_checked_in_surfaces(source: dict[str, Any]) -> None:
     stale = check_outputs(expected_outputs(source))
     if stale:
         paths = ", ".join(str(path.relative_to(ROOT)) for path in stale)
         fail(f"generated surfaces are stale: {paths}; run generate_similarweb_pricing_docs.py --write")
 
-    for guide in (GUIDE_PATH, ZH_GUIDE_PATH):
-        content = guide.read_text(encoding="utf-8")
-        if "IMPORTANT" not in content or "x-aisa-pricing" not in content:
-            fail(f"{guide.relative_to(ROOT)} lacks the required machine-derived warning")
-
     operations = collect_operations(source)
     for operation in operations:
         endpoint = ROOT / "api-reference" / "similarweb" / f"{operation.endpoint_slug}.mdx"
         if not endpoint.exists():
             fail(f"{operation.operation_id} has no endpoint documentation page")
-        for guide in (GUIDE_PATH, ZH_GUIDE_PATH):
-            content = guide.read_text(encoding="utf-8")
-            if f'<span id="{operation.anchor}"></span>' not in content:
-                fail(f"{guide.relative_to(ROOT)} has no anchor for {operation.operation_id}")
-
         source_operation = source["paths"][operation.path][operation.method]
         description = source_operation["description"]
         response = source_operation.get("responses", {}).get("200")
         if not isinstance(response, dict) or response.get("headers") != SETTLEMENT_RESPONSE_HEADERS:
             fail(f"{operation.operation_id} lacks the generated settlement response headers")
+        if "/agent-quickstart#paid-api-approval-first" not in description:
+            fail(f"{operation.operation_id} does not route agents to the paid-API approval-first contract")
         uncontrolled = provider_controlled_drivers(operation)
         if category(operation) == "rows" and uncontrolled:
             if "does not accept `limit`" not in description:
@@ -91,28 +69,21 @@ def check_checked_in_surfaces(source: dict[str, Any]) -> None:
                 fail(f"{operation.operation_id} presents a provider-controlled lower bound as an approval cap")
 
     llms = LLMS_PATH.read_text(encoding="utf-8")
-    if "guides/pricing/similarweb" not in llms or "SimilarWeb Pricing & Cost Control" not in llms:
-        fail("llms.txt does not route agents to SimilarWeb pricing guidance")
-    for marker in ("<IMPORTANT id=\"similarweb-approval-first\">", "explicit approval", "price discovery", "x-aisa-pricing", "/v1/models", "MCP discovery"):
+    for marker in ("<IMPORTANT id=\"paid-api-approval-first\">", "explicit approval", "price discovery", "x-aisa-pricing", "/v1/models", "MCP discovery", "SimilarWeb is a classic"):
         if marker not in llms:
-            fail(f"llms.txt lacks SimilarWeb approval-first marker: {marker}")
+            fail(f"llms.txt lacks paid-API approval-first marker: {marker}")
     for path, markers in (
-        (AGENT_QUICKSTART_PATH, ("<IMPORTANT id=\"similarweb-approval-first\">", "explicit approval", "price discovery", "x-aisa-pricing", "/v1/models", "MCP discovery")),
-        (ZH_AGENT_QUICKSTART_PATH, ("<IMPORTANT id=\"similarweb-approval-first\">", "明确批准", "价格发现", "x-aisa-pricing", "/v1/models", "MCP discovery")),
+        (AGENT_QUICKSTART_PATH, ("<IMPORTANT id=\"paid-api-approval-first\">", "explicit approval", "price discovery", "published pricing source", "/v1/models", "MCP discovery", "Classic example — SimilarWeb")),
+        (ZH_AGENT_QUICKSTART_PATH, ("<IMPORTANT id=\"paid-api-approval-first\">", "明确批准", "价格发现", "公开计价来源", "/v1/models", "MCP discovery", "典型场景 — SimilarWeb")),
     ):
         content = path.read_text(encoding="utf-8")
         for marker in markers:
             if marker not in content:
                 fail(f"{path.relative_to(ROOT)} lacks SimilarWeb approval-first marker: {marker}")
     similar_sites = next(operation for operation in operations if operation.operation_id == "get_similarweb_similar_sites")
-    endpoint_url = f"https://aisa.one/docs{similar_sites.endpoint_url}"
+    endpoint_url = f"https://aisa.one/docs/api-reference/similarweb/{similar_sites.endpoint_slug}"
     if endpoint_url not in llms:
         fail("llms.txt SimilarWeb API family link does not resolve to the SimilarSites endpoint page")
-
-    navigation = json.loads(NAV_PATH.read_text(encoding="utf-8"))
-    for slug in ("guides/pricing/similarweb", "zh/guides/pricing/similarweb"):
-        if not contains(navigation, slug):
-            fail(f"docs navigation does not include {slug}")
 
     english_overview = PRICING_OVERVIEW_PATH.read_text(encoding="utf-8")
     chinese_overview = ZH_PRICING_OVERVIEW_PATH.read_text(encoding="utf-8")
@@ -122,12 +93,13 @@ def check_checked_in_surfaces(source: dict[str, Any]) -> None:
         fail("Chinese pricing overview still classifies every non-LLM API as fixed-price")
 
     for path in (PRICING_OVERVIEW_PATH, PER_CALL_PATH, ZH_PRICING_OVERVIEW_PATH, ZH_PER_CALL_PATH):
-        if "similarweb" not in path.read_text(encoding="utf-8").lower():
-            fail(f"{path.relative_to(ROOT)} does not link to SimilarWeb pricing guidance")
+        content = path.read_text(encoding="utf-8").lower()
+        if "similarweb" not in content or "endpoint" not in content:
+            fail(f"{path.relative_to(ROOT)} does not route formula-priced APIs to endpoint documentation")
 
     for path, markers in (
-        (EVALUATE_PRICING_PATH, ("do not run a SimilarWeb request to discover price", "explicit approval")),
-        (ZH_EVALUATE_PRICING_PATH, ("不得通过 SimilarWeb 请求发现价格", "明确批准")),
+        (EVALUATE_PRICING_PATH, ("any paid or potentially high-cost API", "explicit approval", "SimilarWeb is a classic")),
+        (ZH_EVALUATE_PRICING_PATH, ("任何付费或可能高成本的 API", "明确批准", "SimilarWeb 是动态成本的典型场景")),
     ):
         content = path.read_text(encoding="utf-8")
         for marker in markers:

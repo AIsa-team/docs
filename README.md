@@ -89,9 +89,9 @@ python3 scripts/generate_similarweb_pricing_docs.py --write
 python3 scripts/generate_similarweb_pricing_docs.py --check
 ```
 
-The generator deliberately derives the endpoint copy and English/Chinese
-guides from the OpenAPI metadata so no second hand-authored rate schedule can
-drift from the agent-facing contract.
+The generator deliberately derives the endpoint copy from the OpenAPI metadata
+so no second hand-authored rate schedule can drift from the agent-facing
+contract.
 
 After the generated `openapi.yaml` commit is pushed to `main`, the workflow
 sends a `docs_openapi_updated` repository dispatch to

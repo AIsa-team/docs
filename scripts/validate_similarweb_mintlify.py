@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Validate the generated SimilarWeb documentation in a minimal Mintlify site.
+"""Validate the SimilarWeb endpoint disclosure and approval contract in Mintlify.
 
 The full repository currently contains unrelated historical MDX parse warnings.
-This script copies only the generated pricing guides, agent-quickstart policy
-pages, all SimilarWeb endpoint pages, and their OpenAPI source into a temporary
+This script copies the agent-quickstart policy pages, all SimilarWeb endpoint
+pages, and their OpenAPI source into a temporary
 Mintlify project, then runs the same strict ``mint validate`` command used in
 CI. It validates the surfaces this pricing contract owns without mutating or
 suppressing diagnostics in the source repository.
@@ -20,10 +20,6 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-GUIDE_PATHS = (
-    ROOT / "guides" / "pricing" / "similarweb.mdx",
-    ROOT / "zh" / "guides" / "pricing" / "similarweb.mdx",
-)
 POLICY_PATHS = (
     ROOT / "agent-quickstart.mdx",
     ROOT / "zh" / "agent-quickstart.mdx",
@@ -43,7 +39,7 @@ def build_fixture(fixture_root: Path) -> int:
     if not endpoint_pages:
         raise SystemExit("Mintlify fixture has no SimilarWeb endpoint pages")
 
-    for path in (*GUIDE_PATHS, *POLICY_PATHS, *endpoint_pages, OPENAPI_PATH):
+    for path in (*POLICY_PATHS, *endpoint_pages, OPENAPI_PATH):
         if not path.exists():
             raise SystemExit(f"Mintlify fixture input is missing: {path.relative_to(ROOT)}")
         copy_into_fixture(path, fixture_root)
@@ -51,8 +47,6 @@ def build_fixture(fixture_root: Path) -> int:
     pages = [
         "agent-quickstart",
         "zh/agent-quickstart",
-        "guides/pricing/similarweb",
-        "zh/guides/pricing/similarweb",
         *(path.relative_to(ROOT).with_suffix("").as_posix() for path in endpoint_pages),
     ]
     config = {
@@ -62,7 +56,7 @@ def build_fixture(fixture_root: Path) -> int:
         "navigation": {
             "groups": [
                 {
-                    "group": "SimilarWeb pricing",
+                    "group": "Paid API approval and SimilarWeb endpoints",
                     "pages": pages,
                 }
             ]
