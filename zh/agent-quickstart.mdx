@@ -24,6 +24,7 @@ description: >-
     quote 返回 object=cost_estimate。USD = estimated_cost_micros_usd / 1000000。
     若存在 max_cost_micros_usd，那才是已记录的最高费用。
     停止：用户要求收集、调研或输出数据，不等于批准。必须说出精确 endpoint 与 scope、quote 得到的 USD、以及 may_exceed_estimate 是否为 true，然后等待用户在下一条消息中明确批准该 scope 与上限。
+    预批准的有界请求：若用户当前消息已明确批准单个数据项并给出明确的 USD 上限，则对该请求原样 quote；若 quote 的 USD 不超过该上限，无需再次询问，直接执行这一笔，之后任何付费数据仍需先问。若 quote 超过上限或 scope 不明确，不得执行；泛泛的“帮我查一下”不构成预批准。
     若 may_exceed_estimate 为 true 且没有 max_cost_micros_usd，即没有已记录上限：不得执行该请求，必须说明没有已记录的最大费用。有界替代方案是新的 scope，需要新的批准。示例或用户给出的预算都不是可执行上限。
     若 quote 的 USD 超过用户给出的预算，不得执行；说明报价超出预算并等待。
   </before-paid-data-call>
@@ -36,7 +37,7 @@ description: >-
 </IMPORTANT>
 ```
 
-**典型场景 — SimilarWeb：** 对准备执行的请求加 `X-AISA-Cost-Mode: quote` 拿到 USD，再据此请求批准。不要自己根据 [`x-aisa-pricing`](https://aisa.one/openapi.yaml) 心算。若用户只要 0.10 美元的单月 visits 预览，应 quote Traffic & Engagement（`metrics=visits`、一个月），不要用 snapshot。若 snapshot 的 quote 没有 `max_cost_micros_usd`，不得执行。
+**典型场景 — SimilarWeb：** 对准备执行的请求加 `X-AISA-Cost-Mode: quote` 拿到 USD，再据此请求批准。不要自己根据 [`x-aisa-pricing`](https://aisa.one/openapi.yaml) 心算。若用户已批准 0.10 美元的单月 visits 预览：quote Traffic & Engagement（`metrics=visits`、一个月），quote 不超过 0.10 美元就直接执行这一笔，之后再问。不要用 snapshot。若 snapshot 的 quote 没有 `max_cost_micros_usd`，不得执行。
 
 ## 最小设置事实
 
