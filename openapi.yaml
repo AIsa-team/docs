@@ -7924,39 +7924,48 @@ paths:
               properties:
                 Query:
                   type: string
-                  description: The search query. Required.
+                  description: The search query. Required. Max 400 characters; the upstream engine also effectively caps around
+                    50 words.
                   example: OpenAI news
+                  maxLength: 400
                 Count:
                   type: integer
-                  description: Number of results to return. Optional; maximum 20.
+                  description: Number of results to return. Optional; default 10, maximum 20.
                   maximum: 20
                   example: 10
+                  default: 10
                 Filter:
                   type: object
-                  description: Optional result filter.
+                  description: Optional result filter. Both fields are pipe-separated strings of full domains (max 5 each).
                   properties:
                     Sites:
-                      type: array
-                      description: Restrict results to these sites/hosts.
-                      items:
-                        type: string
-                      example:
-                      - openai.com
+                      type: string
+                      description: Restrict results to these full domains. Pipe-separated, max 5, e.g. "bytedance.com|byteplus.com".
+                        (Sending an array returns 10400 Invalid Parameter.)
+                      example: bytedance.com|byteplus.com
                     BlockHosts:
-                      type: array
-                      description: Exclude results from these hosts.
-                      items:
-                        type: string
-                      example:
-                      - example.com
+                      type: string
+                      description: Exclude results from these full domains. Pipe-separated, max 5, e.g. "reddit.com|quora.com".
+                      example: reddit.com|quora.com
                 Language:
                   type: string
-                  description: Optional language hint for results, e.g. "en".
-                  example: en
+                  description: Optional language hint in the upstream format, e.g. EN, ZH-HANS, ZH-HANT.
+                  example: EN
                 TimeRange:
-                  type: string
-                  description: Optional recency window for results, e.g. "week" or "month".
-                  example: week
+                  description: 'Optional recency window. One of the named windows OneDay / OneWeek / OneMonth / OneYear, or
+                    a custom range "YYYY-MM-DD..YYYY-MM-DD". Omit for no time filter. NOTE: values like "week"/"month" are
+                    silently ignored upstream.'
+                  oneOf:
+                  - type: string
+                    enum:
+                    - OneDay
+                    - OneWeek
+                    - OneMonth
+                    - OneYear
+                  - type: string
+                    pattern: ^\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2}$
+                    description: Custom range, e.g. 2026-08-01..2026-09-01.
+                  example: OneWeek
               required:
               - Query
             examples:
@@ -7965,15 +7974,15 @@ paths:
                 value:
                   Query: OpenAI news
               filtered:
-                summary: Query with count and filter
+                summary: Query with count, domain filter, language and time window
                 value:
-                  Query: OpenAI news
+                  Query: OpenAI product launch
                   Count: 10
                   Filter:
-                    Sites:
-                    - openai.com
-                  Language: en
-                  TimeRange: week
+                    Sites: openai.com|bytedance.com
+                    BlockHosts: reddit.com
+                  Language: EN
+                  TimeRange: OneWeek
       responses:
         '200':
           description: Search completed successfully. `Result` holds the ranked web results.
@@ -8064,33 +8073,38 @@ paths:
                         type: object
                         nullable: true
                         description: Reserved; null unless applicable.
-              example:
-                ResponseMetadata:
-                  RequestId: 20260904155503A787EC832774768DC56F
-                  Action: ''
-                  Version: ''
-                  Service: ''
-                  Region: ''
-                Result:
-                  ResultCount: 3
-                  WebResults:
-                  - Id: 19b903d59c017bbb04c7832574500d49
-                    SortId: 1
-                    Title: OpenAI News | OpenAI
-                    SiteName: OpenAI
-                    Url: https://openai.com/news/
-                    Snippet: Stay up to speed on the rapid advancement of AI technology and the benefits it offers to humanity.
-                    Summary: Stay up to speed on the rapid advancement of AI technology and the benefits it offers to humanity.
-                    PublishTime: '2026-09-03T07:50:20+08:00'
-                    PublishTimeUnix: 1788393020
-                    LogoUrl: https://p16-bpsearch-sign.ibyteimg.com/...<signed>
-                  SearchContext:
-                    OriginQuery: OpenAI latest news
-                    SearchType: web
-                  TimeCost: 935
-                  LogId: 20260904155503A787EC832774768DC56F
-                  Choices: null
-                  Usage: null
+              examples:
+                success:
+                  summary: Live gateway 200 response
+                  value:
+                    ResponseMetadata:
+                      RequestId: 20260904155503A787EC832774768DC56F
+                      Action: ''
+                      Version: ''
+                      Service: ''
+                      Region: ''
+                    Result:
+                      ResultCount: 3
+                      WebResults:
+                      - Id: 19b903d59c017bbb04c7832574500d49
+                        SortId: 1
+                        Title: OpenAI News | OpenAI
+                        SiteName: OpenAI
+                        Url: https://openai.com/news/
+                        Snippet: Stay up to speed on the rapid advancement of AI technology and the benefits it offers to
+                          humanity.
+                        Summary: Stay up to speed on the rapid advancement of AI technology and the benefits it offers to
+                          humanity.
+                        PublishTime: '2026-09-03T07:50:20+08:00'
+                        PublishTimeUnix: 1788393020
+                        LogoUrl: https://p16-bpsearch-sign.ibyteimg.com/...<signed>
+                      SearchContext:
+                        OriginQuery: OpenAI latest news
+                        SearchType: web
+                      TimeCost: 935
+                      LogId: 20260904155503A787EC832774768DC56F
+                      Choices: null
+                      Usage: null
       operationId: post_byteplus_web_search
       x-x402:
         path: /apis/v2/byteplus/web-search
@@ -8176,23 +8190,26 @@ paths:
                       LogId:
                         type: string
                         description: Upstream log id (equals ResponseMetadata.RequestId).
-              example:
-                ResponseMetadata:
-                  RequestId: 20260904155514D7EA140BFD77348BC3FC
-                  Action: ''
-                  Version: ''
-                  Service: ''
-                  Region: ''
-                Result:
-                  Data:
-                    StatusCode: 200
-                    Url: https://example.com
-                    Title: Example Domain
-                    PublishTime: 0
-                    ContentText: |-
-                      This domain is for use in documentation examples without needing permission. Avoid use in operations.
-                      Learn more
-                  LogId: 20260904155514D7EA140BFD77348BC3FC
+              examples:
+                success:
+                  summary: Live gateway 200 response
+                  value:
+                    ResponseMetadata:
+                      RequestId: 20260904155514D7EA140BFD77348BC3FC
+                      Action: ''
+                      Version: ''
+                      Service: ''
+                      Region: ''
+                    Result:
+                      Data:
+                        StatusCode: 200
+                        Url: https://example.com
+                        Title: Example Domain
+                        PublishTime: 0
+                        ContentText: |-
+                          This domain is for use in documentation examples without needing permission. Avoid use in operations.
+                          Learn more
+                      LogId: 20260904155514D7EA140BFD77348BC3FC
       operationId: post_byteplus_fetch
       x-x402:
         path: /apis/v2/byteplus/fetch
