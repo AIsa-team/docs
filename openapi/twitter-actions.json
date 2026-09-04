@@ -23,129 +23,6 @@
         "bearerFormat": "AISA API Key",
         "description": "Your AIsa API key. The authenticated source user (the account doing the follow) is determined by the OAuth session attached to your key."
       }
-    },
-    "schemas": {
-      "CostEstimate": {
-        "type": "object",
-        "description": "Read-only cost quote for the exact request. No Provider call, billing reservation, durable job, or price lock is created.",
-        "required": [
-          "object",
-          "currency",
-          "estimate_kind",
-          "estimated_cost_micros_usd",
-          "may_exceed_estimate",
-          "estimated_at"
-        ],
-        "properties": {
-          "object": {
-            "type": "string",
-            "const": "cost_estimate",
-            "description": "Always `cost_estimate`."
-          },
-          "currency": {
-            "type": "string",
-            "const": "USD",
-            "description": "Quote currency. Always USD in this version."
-          },
-          "estimate_kind": {
-            "type": "string",
-            "enum": [
-              "exact",
-              "upper_bound",
-              "estimate"
-            ],
-            "description": "`exact` is a fully determined customer price; `upper_bound` has a locally enforceable ceiling in `max_cost_micros_usd`; `estimate` depends on terminal usage and may exceed the quoted amount."
-          },
-          "estimated_cost_micros_usd": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0,
-            "description": "Quoted customer cost in micro-USD (1 USD = 1,000,000 micros)."
-          },
-          "max_cost_micros_usd": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0,
-            "description": "Optional hard customer-cost ceiling in micro-USD. Present for `exact` and `upper_bound`; omitted for `estimate`."
-          },
-          "may_exceed_estimate": {
-            "type": "boolean",
-            "description": "True only when `estimate_kind` is `estimate`."
-          },
-          "pricing_version": {
-            "type": "string",
-            "description": "Optional immutable or compiled pricing version."
-          },
-          "estimated_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "UTC timestamp when the quote was produced."
-          },
-          "metadata": {
-            "type": "object",
-            "additionalProperties": true,
-            "description": "Bounded non-sensitive quote metadata, such as a canonical model or profile key."
-          }
-        },
-        "example": {
-          "object": "cost_estimate",
-          "currency": "USD",
-          "estimate_kind": "estimate",
-          "estimated_cost_micros_usd": 425,
-          "may_exceed_estimate": true,
-          "estimated_at": "2026-09-01T08:00:00Z"
-        }
-      }
-    },
-    "parameters": {
-      "XAISACostMode": {
-        "name": "X-AISA-Cost-Mode",
-        "in": "header",
-        "required": false,
-        "description": "Set to `quote` to estimate this exact request without executing data, creating a job, or authorizing spend. A successful quote is HTTP 200 with a `cost_estimate` body; it is not a reservation or price lock. Omit the header for normal execution. Any other value returns `400 invalid_cost_mode`. Quote mode requires an API key and cannot use MPP or x402.",
-        "schema": {
-          "type": "string",
-          "enum": [
-            "quote"
-          ]
-        }
-      }
-    },
-    "responses": {
-      "CostEstimate": {
-        "description": "Read-only cost quote. The intended request is validated but not executed, billed, reserved, or locked.",
-        "headers": {
-          "Cache-Control": {
-            "schema": {
-              "type": "string",
-              "example": "private, no-store"
-            },
-            "description": "Quotes are never stored by shared caches."
-          },
-          "Vary": {
-            "schema": {
-              "type": "string",
-              "example": "X-AISA-Cost-Mode"
-            },
-            "description": "Response body depends on the cost-mode header."
-          }
-        },
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/CostEstimate"
-            },
-            "example": {
-              "object": "cost_estimate",
-              "currency": "USD",
-              "estimate_kind": "estimate",
-              "estimated_cost_micros_usd": 425,
-              "may_exceed_estimate": true,
-              "estimated_at": "2026-09-01T08:00:00Z"
-            }
-          }
-        }
-      }
     }
   },
   "paths": {
@@ -178,43 +55,25 @@
                   },
                   "scopes": {
                     "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
+                    "items": { "type": "string" },
                     "description": "Optional list of X OAuth 2.0 scopes to request. Defaults to the set required by AIsa's Twitter write endpoints: `follows.write`, `tweet.read`, `users.read`, `tweet.write`, `like.write`, `dm.read`, `dm.write`.",
-                    "example": [
-                      "follows.write",
-                      "tweet.read",
-                      "users.read"
-                    ]
+                    "example": ["follows.write", "tweet.read", "users.read"]
                   }
                 },
-                "required": [
-                  "aisa_api_key"
-                ]
+                "required": ["aisa_api_key"]
               },
-              "example": {
-                "aisa_api_key": "sk-aisa-...",
-                "scopes": [
-                  "follows.write",
-                  "tweet.read",
-                  "users.read"
-                ]
-              }
+              "example": { "aisa_api_key": "sk-aisa-...", "scopes": ["follows.write", "tweet.read", "users.read"] }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Authorization URL generated. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
+            "description": "Authorization URL generated.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "auth_url",
-                    "state"
-                  ],
+                  "required": ["auth_url", "state"],
                   "properties": {
                     "auth_url": {
                       "type": "string",
@@ -252,12 +111,7 @@
           "500": {
             "description": "Internal error generating the OAuth URL."
           }
-        },
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/XAISACostMode"
-          }
-        ]
+        }
       }
     },
     "/twitter/unlike_twitter": {
@@ -282,9 +136,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "tweet_id"
-                ],
+                "required": ["tweet_id"],
                 "properties": {
                   "tweet_id": {
                     "type": "string",
@@ -307,7 +159,7 @@
         },
         "responses": {
           "200": {
-            "description": "Unlike succeeded (or the source user hadn't liked the tweet to begin with). When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
+            "description": "Unlike succeeded (or the source user hadn't liked the tweet to begin with).",
             "content": {
               "application/json": {
                 "schema": {
@@ -353,12 +205,7 @@
           "502": {
             "description": "Upstream X API unreachable. Safe to retry with exponential backoff."
           }
-        },
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/XAISACostMode"
-          }
-        ]
+        }
       }
     },
     "/twitter/like_twitter": {
@@ -383,9 +230,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "tweet_id"
-                ],
+                "required": ["tweet_id"],
                 "properties": {
                   "tweet_id": {
                     "type": "string",
@@ -408,7 +253,7 @@
         },
         "responses": {
           "200": {
-            "description": "Like succeeded (or was already in place). When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
+            "description": "Like succeeded (or was already in place).",
             "content": {
               "application/json": {
                 "schema": {
@@ -454,12 +299,7 @@
           "502": {
             "description": "Upstream X API unreachable. Safe to retry with exponential backoff."
           }
-        },
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/XAISACostMode"
-          }
-        ]
+        }
       }
     },
     "/twitter/post_twitter": {
@@ -507,9 +347,7 @@
                   "reply": {
                     "type": "object",
                     "description": "Post as a reply to another tweet.",
-                    "required": [
-                      "in_reply_to_tweet_id"
-                    ],
+                    "required": ["in_reply_to_tweet_id"],
                     "properties": {
                       "in_reply_to_tweet_id": {
                         "type": "string",
@@ -522,10 +360,7 @@
                       },
                       "exclude_reply_user_ids": {
                         "type": "array",
-                        "items": {
-                          "type": "string",
-                          "pattern": "^[0-9]{1,19}$"
-                        },
+                        "items": { "type": "string", "pattern": "^[0-9]{1,19}$" },
                         "maxItems": 10,
                         "description": "User IDs to exclude from reply auto-mentions (max 10)."
                       }
@@ -539,25 +374,18 @@
                   "media": {
                     "type": "object",
                     "description": "Attach media. Mutually exclusive with `poll`, `quote_tweet_id`, and `card_uri`.",
-                    "required": [
-                      "media_ids"
-                    ],
+                    "required": ["media_ids"],
                     "properties": {
                       "media_ids": {
                         "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
+                        "items": { "type": "string" },
                         "minItems": 1,
                         "maxItems": 4,
                         "description": "1–4 media IDs from the X media-upload API."
                       },
                       "tagged_user_ids": {
                         "type": "array",
-                        "items": {
-                          "type": "string",
-                          "pattern": "^[0-9]{1,19}$"
-                        },
+                        "items": { "type": "string", "pattern": "^[0-9]{1,19}$" },
                         "maxItems": 10,
                         "description": "User IDs tagged in the media (max 10)."
                       }
@@ -566,17 +394,11 @@
                   "poll": {
                     "type": "object",
                     "description": "Attach a poll. Mutually exclusive with `media`, `quote_tweet_id`, and `card_uri`.",
-                    "required": [
-                      "options",
-                      "duration_minutes"
-                    ],
+                    "required": ["options", "duration_minutes"],
                     "properties": {
                       "options": {
                         "type": "array",
-                        "items": {
-                          "type": "string",
-                          "maxLength": 25
-                        },
+                        "items": { "type": "string", "maxLength": 25 },
                         "minItems": 2,
                         "maxItems": 4,
                         "description": "2–4 poll choices, each 1–25 characters."
@@ -589,12 +411,7 @@
                       },
                       "reply_settings": {
                         "type": "string",
-                        "enum": [
-                          "following",
-                          "mentionedUsers",
-                          "subscribers",
-                          "verified"
-                        ]
+                        "enum": ["following", "mentionedUsers", "subscribers", "verified"]
                       }
                     }
                   },
@@ -618,12 +435,7 @@
                   },
                   "reply_settings": {
                     "type": "string",
-                    "enum": [
-                      "following",
-                      "mentionedUsers",
-                      "subscribers",
-                      "verified"
-                    ],
+                    "enum": ["following", "mentionedUsers", "subscribers", "verified"],
                     "description": "Who is allowed to reply."
                   },
                   "for_super_followers_only": {
@@ -657,9 +469,7 @@
                   "edit_options": {
                     "type": "object",
                     "description": "Edit an existing tweet instead of creating a new one (subject to X's edit window).",
-                    "required": [
-                      "previous_post_id"
-                    ],
+                    "required": ["previous_post_id"],
                     "properties": {
                       "previous_post_id": {
                         "type": "string",
@@ -692,11 +502,7 @@
                   "value": {
                     "text": "Pick your favorite:",
                     "poll": {
-                      "options": [
-                        "Option A",
-                        "Option B",
-                        "Option C"
-                      ],
+                      "options": ["Option A", "Option B", "Option C"],
                       "duration_minutes": 60
                     }
                   }
@@ -706,12 +512,8 @@
                   "value": {
                     "text": "Ship log 📸",
                     "media": {
-                      "media_ids": [
-                        "1146654567674912769"
-                      ],
-                      "tagged_user_ids": [
-                        "2244994945"
-                      ]
+                      "media_ids": ["1146654567674912769"],
+                      "tagged_user_ids": ["2244994945"]
                     }
                   }
                 },
@@ -791,16 +593,8 @@
           },
           "502": {
             "description": "Upstream X API unreachable."
-          },
-          "200": {
-            "$ref": "#/components/responses/CostEstimate"
           }
-        },
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/XAISACostMode"
-          }
-        ]
+        }
       }
     },
     "/twitter/unfollow_twitter": {
@@ -825,9 +619,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "target_user_id"
-                ],
+                "required": ["target_user_id"],
                 "properties": {
                   "target_user_id": {
                     "type": "string",
@@ -850,7 +642,7 @@
         },
         "responses": {
           "200": {
-            "description": "Unfollow succeeded (or the source user wasn't following the target to begin with). When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
+            "description": "Unfollow succeeded (or the source user wasn't following the target to begin with).",
             "content": {
               "application/json": {
                 "schema": {
@@ -893,12 +685,7 @@
           "502": {
             "description": "Upstream X API unreachable or returned an error. Safe to retry with exponential backoff."
           }
-        },
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/XAISACostMode"
-          }
-        ]
+        }
       }
     },
     "/twitter/follow_twitter": {
@@ -923,9 +710,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "target_user_id"
-                ],
+                "required": ["target_user_id"],
                 "properties": {
                   "target_user_id": {
                     "type": "string",
@@ -948,7 +733,7 @@
         },
         "responses": {
           "200": {
-            "description": "Follow succeeded (or was already in place). When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
+            "description": "Follow succeeded (or was already in place).",
             "content": {
               "application/json": {
                 "schema": {
@@ -996,12 +781,7 @@
           "502": {
             "description": "Upstream X API unreachable or returned an error. Safe to retry with exponential backoff."
           }
-        },
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/XAISACostMode"
-          }
-        ]
+        }
       }
     }
   }
