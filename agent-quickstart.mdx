@@ -19,33 +19,17 @@ This contract applies to every paid, dynamically priced, or potentially high-cos
 <IMPORTANT id="paid-api-approval-first">
   <before-paid-data-call>
     Docs, /v1/models, capability or MCP discovery, and cost quotes are allowed
-    before approval. To estimate cost, send the exact intended method, path,
-    query, and body with header X-AISA-Cost-Mode: quote. Do not execute data.
-    Do not calculate USD from x-aisa-pricing yourself.
-    Quote returns object=cost_estimate. USD = estimated_cost_micros_usd / 1000000.
-    If max_cost_micros_usd is present, that is the documented maximum.
-    STOP: a request to collect, research, or report data is not approval. State
-    the exact endpoint and scope, the quoted USD, and whether
-    may_exceed_estimate is true; then wait for a separate user message
-    explicitly approving that scope and cap.
-    Pre-approved bounded request: if the user's current message already names
-    one data item and an explicit USD cap as approved, quote exactly that
-    request. If the quoted USD is at or below that cap, execute that single
-    request without asking again, then ask before any further paid data. If the
-    quote exceeds the cap or the scope is not explicit, do not execute; a
-    generic request to look something up is not pre-approval.
-    may_exceed_estimate true with no max_cost_micros_usd means settlement
-    can vary; it is not by itself a ban. Check the cost drivers instead: when
-    every priced dimension is one you set in the request (metrics count,
-    months, limit), the quote is the expected charge for that exact request,
-    and an explicit user cap at or above it authorizes executing that single
-    request. When a priced dimension is provider-controlled with no documented
-    cap (for example SimilarWeb snapshot or trend metric sets), there is no
-    documented upper bound: do not execute that request; say it has no
-    documented maximum. A bounded alternative is a new scope and needs new
-    approval. An example or user-stated budget is not an enforceable cap.
-    If the quoted USD exceeds a user-stated budget, do not execute; say the
-    quote exceeds the budget and wait.
+    before approval. Quote the exact intended method, path, query, and body
+    with X-AISA-Cost-Mode: quote; it estimates cost without executing data. Do
+    not calculate USD from x-aisa-pricing yourself.
+    A request to research or collect data is not approval. Show the exact scope
+    and quoted USD, then wait for approval.
+    Exception: if the current message explicitly approves one named data item
+    and a USD cap, run only that item when its quote is at or below the cap.
+    Otherwise, do not execute.
+    If the scope changes or the quote exceeds the budget, quote the new scope
+    and wait. If a provider-controlled price has no documented maximum, do not
+    execute it; offer a bounded alternative instead.
   </before-paid-data-call>
   <prohibited>
     Do not run a paid data call in the planning turn, use the initial request as
@@ -58,7 +42,7 @@ This contract applies to every paid, dynamically priced, or potentially high-cos
 </IMPORTANT>
 ```
 
-**Classic example — SimilarWeb:** quote the intended request with `X-AISA-Cost-Mode: quote`, then ask for approval using that USD. Do not self-calculate from [`x-aisa-pricing`](https://aisa.one/openapi.yaml). For a $0.10 one-month visits preview that the user already approved, quote Traffic & Engagement (`metrics=visits`, one month); if the quote is at or below $0.10, run that single request and then ask before more data. Do not use snapshot. If snapshot quote has no `max_cost_micros_usd`, do not execute it.
+**Classic example — SimilarWeb:** quote the intended request with `X-AISA-Cost-Mode: quote`; do not self-calculate from [`x-aisa-pricing`](https://aisa.one/openapi.yaml). For an already approved $0.10 one-month visits preview, run only Traffic & Engagement (`metrics=visits`, one month) when its quote is at or below $0.10. If a snapshot quote has no documented maximum, offer a bounded request instead.
 
 ## Minimal setup facts
 
