@@ -7899,6 +7899,321 @@ paths:
       x-x402:
         path: /apis/v2/apollo/notes
         source: https://github.com/AIsa-team/aisa-proxy
+  /byteplus/web-search:
+    post:
+      x-aisa-pricing:
+        model: per_request
+        currency: USD
+        price_usd: 0.00528
+        cost_tier: low
+      tags:
+      - Web & News Search
+      summary: AI-oriented real-time web search.
+      description: Run a real-time web search built for AI agents and return a ranked list of titled results with links and
+        snippets. `Query` is required; narrow the result set with `Count` (≤ 20), `Filter` (restrict to `Sites` or exclude
+        `BlockHosts`), `Language`, and `TimeRange`. The response wraps `ResponseMetadata.RequestId` and a `Result` list of
+        web results. Use it for RAG retrieval augmentation, competitive/PR monitoring, fact-checking, and content sourcing;
+        pair each result URL with `post_byteplus_fetch` to pull full page content. Billed at a flat $0.00528 per successful
+        call; failed requests are not charged.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Query:
+                  type: string
+                  description: The search query. Required. Max 400 characters; the upstream engine also effectively caps around
+                    50 words.
+                  example: OpenAI news
+                  maxLength: 400
+                Count:
+                  type: integer
+                  description: Number of results to return. Optional; default 10, maximum 20.
+                  maximum: 20
+                  example: 10
+                  default: 10
+                Filter:
+                  type: object
+                  description: Optional result filter. Both fields are pipe-separated strings of full domains (max 5 each).
+                  properties:
+                    Sites:
+                      type: string
+                      description: Restrict results to these full domains. Pipe-separated, max 5, e.g. "bytedance.com|byteplus.com".
+                        (Sending an array returns 10400 Invalid Parameter.)
+                      example: bytedance.com|byteplus.com
+                    BlockHosts:
+                      type: string
+                      description: Exclude results from these full domains. Pipe-separated, max 5, e.g. "reddit.com|quora.com".
+                      example: reddit.com|quora.com
+                Language:
+                  type: string
+                  description: Optional language hint in the upstream format, e.g. EN, ZH-HANS, ZH-HANT.
+                  example: EN
+                TimeRange:
+                  description: 'Optional recency window. One of the named windows OneDay / OneWeek / OneMonth / OneYear, or
+                    a custom range "YYYY-MM-DD..YYYY-MM-DD". Omit for no time filter. NOTE: values like "week"/"month" are
+                    silently ignored upstream.'
+                  oneOf:
+                  - type: string
+                    enum:
+                    - OneDay
+                    - OneWeek
+                    - OneMonth
+                    - OneYear
+                  - type: string
+                    pattern: ^\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2}$
+                    description: Custom range, e.g. 2026-08-01..2026-09-01.
+                  example: OneWeek
+              required:
+              - Query
+            examples:
+              basic:
+                summary: Minimal query
+                value:
+                  Query: OpenAI news
+              filtered:
+                summary: Query with count, domain filter, language and time window
+                value:
+                  Query: OpenAI product launch
+                  Count: 10
+                  Filter:
+                    Sites: openai.com|bytedance.com
+                    BlockHosts: reddit.com
+                  Language: EN
+                  TimeRange: OneWeek
+      responses:
+        '200':
+          description: Search completed successfully. `Result` holds the ranked web results.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ResponseMetadata:
+                    type: object
+                    description: Upstream request metadata.
+                    properties:
+                      RequestId:
+                        type: string
+                        description: Unique identifier for this request.
+                      Action:
+                        type: string
+                      Version:
+                        type: string
+                      Service:
+                        type: string
+                      Region:
+                        type: string
+                  Result:
+                    type: object
+                    description: Search result payload.
+                    properties:
+                      ResultCount:
+                        type: integer
+                        description: Number of web results returned.
+                      WebResults:
+                        type: array
+                        description: Ranked list of web results.
+                        items:
+                          type: object
+                          properties:
+                            Id:
+                              type: string
+                              description: Opaque result id.
+                            SortId:
+                              type: integer
+                              description: 1-based rank of the result.
+                            Title:
+                              type: string
+                              description: Result title.
+                            SiteName:
+                              type: string
+                              description: Source site name (may be empty).
+                            Url:
+                              type: string
+                              description: Result URL.
+                            Snippet:
+                              type: string
+                              description: Short text snippet from the page.
+                            Summary:
+                              type: string
+                              description: Longer summary of the page content.
+                            PublishTime:
+                              type: string
+                              description: Publish time in ISO 8601 (may be empty).
+                            PublishTimeUnix:
+                              type: integer
+                              description: Publish time as Unix seconds (0 if unknown).
+                            LogoUrl:
+                              type: string
+                              description: Signed site logo URL (time-limited).
+                      SearchContext:
+                        type: object
+                        description: Echo of the resolved query context.
+                        properties:
+                          OriginQuery:
+                            type: string
+                          SearchType:
+                            type: string
+                      TimeCost:
+                        type: integer
+                        description: Upstream processing time in milliseconds.
+                      LogId:
+                        type: string
+                        description: Upstream log id (equals ResponseMetadata.RequestId).
+                      Choices:
+                        type: array
+                        nullable: true
+                        description: Reserved; null unless applicable.
+                        items:
+                          type: object
+                      Usage:
+                        type: object
+                        nullable: true
+                        description: Reserved; null unless applicable.
+              examples:
+                success:
+                  summary: Live gateway 200 response
+                  value:
+                    ResponseMetadata:
+                      RequestId: 20260904155503A787EC832774768DC56F
+                      Action: ''
+                      Version: ''
+                      Service: ''
+                      Region: ''
+                    Result:
+                      ResultCount: 3
+                      WebResults:
+                      - Id: 19b903d59c017bbb04c7832574500d49
+                        SortId: 1
+                        Title: OpenAI News | OpenAI
+                        SiteName: OpenAI
+                        Url: https://openai.com/news/
+                        Snippet: Stay up to speed on the rapid advancement of AI technology and the benefits it offers to
+                          humanity.
+                        Summary: Stay up to speed on the rapid advancement of AI technology and the benefits it offers to
+                          humanity.
+                        PublishTime: '2026-09-03T07:50:20+08:00'
+                        PublishTimeUnix: 1788393020
+                        LogoUrl: https://p16-bpsearch-sign.ibyteimg.com/...<signed>
+                      SearchContext:
+                        OriginQuery: OpenAI latest news
+                        SearchType: web
+                      TimeCost: 935
+                      LogId: 20260904155503A787EC832774768DC56F
+                      Choices: null
+                      Usage: null
+      operationId: post_byteplus_web_search
+      x-x402:
+        path: /apis/v2/byteplus/web-search
+        source: https://github.com/AIsa-team/aisa-proxy
+  /byteplus/fetch:
+    post:
+      x-aisa-pricing:
+        model: per_request
+        currency: USD
+        price_usd: 0.00088
+        cost_tier: low
+      tags:
+      - Web & News Search
+      summary: Fetch clean, structured content for a URL.
+      description: Fetch a single URL and return clean, structured page content — title, body text, and publish time. `Url`
+        is required. The response wraps `ResponseMetadata.RequestId` and a `Result` object with the parsed content. Use it
+        to extract full page content for URLs you already have, typically pairing it with `post_byteplus_web_search` results.
+        Billed at a flat $0.00088 per successful call; failed requests are not charged.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Url:
+                  type: string
+                  description: The URL to fetch. Required.
+                  example: https://example.com
+              required:
+              - Url
+            examples:
+              basic:
+                summary: Fetch a page
+                value:
+                  Url: https://example.com
+      responses:
+        '200':
+          description: Fetch completed successfully. `Result` holds the structured page content.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ResponseMetadata:
+                    type: object
+                    description: Upstream request metadata.
+                    properties:
+                      RequestId:
+                        type: string
+                        description: Unique identifier for this request.
+                      Action:
+                        type: string
+                      Version:
+                        type: string
+                      Service:
+                        type: string
+                      Region:
+                        type: string
+                  Result:
+                    type: object
+                    description: Fetch result payload.
+                    properties:
+                      Data:
+                        type: object
+                        description: Structured page content.
+                        properties:
+                          StatusCode:
+                            type: integer
+                            description: HTTP status code of the fetched page.
+                          Url:
+                            type: string
+                            description: The fetched URL.
+                          Title:
+                            type: string
+                            description: Page title.
+                          PublishTime:
+                            type: integer
+                            description: Detected publish time as Unix seconds (0 if unknown).
+                          ContentText:
+                            type: string
+                            description: Clean body text extracted from the page.
+                      LogId:
+                        type: string
+                        description: Upstream log id (equals ResponseMetadata.RequestId).
+              examples:
+                success:
+                  summary: Live gateway 200 response
+                  value:
+                    ResponseMetadata:
+                      RequestId: 20260904155514D7EA140BFD77348BC3FC
+                      Action: ''
+                      Version: ''
+                      Service: ''
+                      Region: ''
+                    Result:
+                      Data:
+                        StatusCode: 200
+                        Url: https://example.com
+                        Title: Example Domain
+                        PublishTime: 0
+                        ContentText: |-
+                          This domain is for use in documentation examples without needing permission. Avoid use in operations.
+                          Learn more
+                      LogId: 20260904155514D7EA140BFD77348BC3FC
+      operationId: post_byteplus_fetch
+      x-x402:
+        path: /apis/v2/byteplus/fetch
+        source: https://github.com/AIsa-team/aisa-proxy
   /chat/completions:
     post:
       summary: Generate images via Chat Completions

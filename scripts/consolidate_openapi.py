@@ -80,6 +80,7 @@ FILE_TAG_MAP = {
     "pinterest.json": "Pinterest",
     "similarweb.json": "Market Intelligence",
     "oxylabs.json": "Web & News Search",
+    "byteplus-search.json": "Web & News Search",
     "websearch.json": "Web & News Search",
     "edinet.json": "Financial Data",
     "account.json": "Account & Usage",
