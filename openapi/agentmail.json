@@ -3636,12 +3636,133 @@
         },
         "description": "Matched fragments per field on a message search result, with matched terms\nwrapped in `**`. A field key is present only when the query matched that\nfield, so the present keys also tell you which fields produced the hit.",
         "title": "SearchMessageHighlights"
+      },
+      "CostEstimate": {
+        "type": "object",
+        "description": "Read-only cost quote for the exact request. No Provider call, billing reservation, durable job, or price lock is created.",
+        "required": [
+          "object",
+          "currency",
+          "estimate_kind",
+          "estimated_cost_micros_usd",
+          "may_exceed_estimate",
+          "estimated_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "const": "cost_estimate",
+            "description": "Always `cost_estimate`."
+          },
+          "currency": {
+            "type": "string",
+            "const": "USD",
+            "description": "Quote currency. Always USD in this version."
+          },
+          "estimate_kind": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "upper_bound",
+              "estimate"
+            ],
+            "description": "`exact` is a fully determined customer price; `upper_bound` has a locally enforceable ceiling in `max_cost_micros_usd`; `estimate` depends on terminal usage and may exceed the quoted amount."
+          },
+          "estimated_cost_micros_usd": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Quoted customer cost in micro-USD (1 USD = 1,000,000 micros)."
+          },
+          "max_cost_micros_usd": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Optional hard customer-cost ceiling in micro-USD. Present for `exact` and `upper_bound`; omitted for `estimate`."
+          },
+          "may_exceed_estimate": {
+            "type": "boolean",
+            "description": "True only when `estimate_kind` is `estimate`."
+          },
+          "pricing_version": {
+            "type": "string",
+            "description": "Optional immutable or compiled pricing version."
+          },
+          "estimated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp when the quote was produced."
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Bounded non-sensitive quote metadata, such as a canonical model or profile key."
+          }
+        },
+        "example": {
+          "object": "cost_estimate",
+          "currency": "USD",
+          "estimate_kind": "estimate",
+          "estimated_cost_micros_usd": 425,
+          "may_exceed_estimate": true,
+          "estimated_at": "2026-09-01T08:00:00Z"
+        }
       }
     },
     "securitySchemes": {
       "Bearer": {
         "type": "http",
         "scheme": "bearer"
+      }
+    },
+    "parameters": {
+      "XAISACostMode": {
+        "name": "X-AISA-Cost-Mode",
+        "in": "header",
+        "required": false,
+        "description": "Set to `quote` to estimate this exact request without executing data, creating a job, or authorizing spend. A successful quote is HTTP 200 with a `cost_estimate` body; it is not a reservation or price lock. Omit the header for normal execution. Any other value returns `400 invalid_cost_mode`. Quote mode requires an API key and cannot use MPP or x402.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "quote"
+          ]
+        }
+      }
+    },
+    "responses": {
+      "CostEstimate": {
+        "description": "Read-only cost quote. The intended request is validated but not executed, billed, reserved, or locked.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "example": "private, no-store"
+            },
+            "description": "Quotes are never stored by shared caches."
+          },
+          "Vary": {
+            "schema": {
+              "type": "string",
+              "example": "X-AISA-Cost-Mode"
+            },
+            "description": "Response body depends on the cost-mode header."
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CostEstimate"
+            },
+            "example": {
+              "object": "cost_estimate",
+              "currency": "USD",
+              "estimate_kind": "estimate",
+              "estimated_cost_micros_usd": 425,
+              "may_exceed_estimate": true,
+              "estimated_at": "2026-09-01T08:00:00Z"
+            }
+          }
+        }
       }
     }
   },
@@ -3677,11 +3798,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3732,11 +3856,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3825,11 +3952,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock."
           },
           "404": {
             "description": "Error response with status 404",
@@ -3883,11 +4013,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3946,11 +4079,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4018,11 +4154,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock."
           },
           "404": {
             "description": "Error response with status 404",
@@ -4068,11 +4207,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4123,11 +4265,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4198,11 +4343,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock."
           },
           "404": {
             "description": "Error response with status 404",
@@ -4272,11 +4420,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4325,11 +4476,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4399,11 +4553,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4485,11 +4642,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4579,11 +4739,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4642,11 +4805,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4743,11 +4909,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock."
           },
           "404": {
             "description": "Error response with status 404",
@@ -4865,11 +5034,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5002,11 +5174,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5067,11 +5242,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5148,11 +5326,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5213,11 +5394,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5276,11 +5460,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5358,11 +5545,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock."
           },
           "404": {
             "description": "Error response with status 404",
@@ -5456,11 +5646,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5511,11 +5704,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5585,11 +5781,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5722,11 +5921,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5804,11 +6006,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5884,11 +6089,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock."
           },
           "404": {
             "description": "Error response with status 404",
@@ -5974,11 +6182,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6039,11 +6250,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6142,11 +6356,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6214,11 +6431,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock."
           },
           "404": {
             "description": "Error response with status 404",
@@ -6312,11 +6532,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6409,11 +6632,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6474,11 +6700,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6568,11 +6797,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6641,11 +6873,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6714,11 +6949,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6751,11 +6989,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6825,11 +7066,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6927,11 +7171,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6984,11 +7231,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7073,11 +7323,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7134,11 +7387,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7216,11 +7472,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7289,11 +7548,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7357,11 +7619,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Response with status 200",
+            "description": "Response with status 200. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {

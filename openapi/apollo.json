@@ -21,6 +21,129 @@
         "type": "http",
         "scheme": "bearer"
       }
+    },
+    "schemas": {
+      "CostEstimate": {
+        "type": "object",
+        "description": "Read-only cost quote for the exact request. No Provider call, billing reservation, durable job, or price lock is created.",
+        "required": [
+          "object",
+          "currency",
+          "estimate_kind",
+          "estimated_cost_micros_usd",
+          "may_exceed_estimate",
+          "estimated_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "const": "cost_estimate",
+            "description": "Always `cost_estimate`."
+          },
+          "currency": {
+            "type": "string",
+            "const": "USD",
+            "description": "Quote currency. Always USD in this version."
+          },
+          "estimate_kind": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "upper_bound",
+              "estimate"
+            ],
+            "description": "`exact` is a fully determined customer price; `upper_bound` has a locally enforceable ceiling in `max_cost_micros_usd`; `estimate` depends on terminal usage and may exceed the quoted amount."
+          },
+          "estimated_cost_micros_usd": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Quoted customer cost in micro-USD (1 USD = 1,000,000 micros)."
+          },
+          "max_cost_micros_usd": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Optional hard customer-cost ceiling in micro-USD. Present for `exact` and `upper_bound`; omitted for `estimate`."
+          },
+          "may_exceed_estimate": {
+            "type": "boolean",
+            "description": "True only when `estimate_kind` is `estimate`."
+          },
+          "pricing_version": {
+            "type": "string",
+            "description": "Optional immutable or compiled pricing version."
+          },
+          "estimated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp when the quote was produced."
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Bounded non-sensitive quote metadata, such as a canonical model or profile key."
+          }
+        },
+        "example": {
+          "object": "cost_estimate",
+          "currency": "USD",
+          "estimate_kind": "estimate",
+          "estimated_cost_micros_usd": 425,
+          "may_exceed_estimate": true,
+          "estimated_at": "2026-09-01T08:00:00Z"
+        }
+      }
+    },
+    "parameters": {
+      "XAISACostMode": {
+        "name": "X-AISA-Cost-Mode",
+        "in": "header",
+        "required": false,
+        "description": "Set to `quote` to estimate this exact request without executing data, creating a job, or authorizing spend. A successful quote is HTTP 200 with a `cost_estimate` body; it is not a reservation or price lock. Omit the header for normal execution. Any other value returns `400 invalid_cost_mode`. Quote mode requires an API key and cannot use MPP or x402.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "quote"
+          ]
+        }
+      }
+    },
+    "responses": {
+      "CostEstimate": {
+        "description": "Read-only cost quote. The intended request is validated but not executed, billed, reserved, or locked.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "example": "private, no-store"
+            },
+            "description": "Quotes are never stored by shared caches."
+          },
+          "Vary": {
+            "schema": {
+              "type": "string",
+              "example": "X-AISA-Cost-Mode"
+            },
+            "description": "Response body depends on the cost-mode header."
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CostEstimate"
+            },
+            "example": {
+              "object": "cost_estimate",
+              "currency": "USD",
+              "estimate_kind": "estimate",
+              "estimated_cost_micros_usd": 425,
+              "may_exceed_estimate": true,
+              "estimated_at": "2026-09-01T08:00:00Z"
+            }
+          }
+        }
+      }
     }
   },
   "paths": {
@@ -175,11 +298,14 @@
               "type": "string"
             },
             "description": "If you set the reveal_phone_number parameter to true, this parameter becomes mandatory. Otherwise, do not use this parameter. Enter the webhook URL that specifies where Apollo should send a JSON response that includes the phone number you requested. Apollo suggests testing this flow to ensure you receive the separate response with the phone number. If phone numbers are not revealed delivered to the webhook URL, try applying UTF-8 encoding to the webhook URL. Example: https://webhook.site/cc4cf44e-e047-4774-8dac-473d28474e40; https%3A%2F%2Fwebhook.site%2Fcc4cf44e-e047-4774-8dac-473d28474e40"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -283,11 +409,14 @@
               "type": "string"
             },
             "description": "If you set the reveal_phone_number parameter to true, this parameter becomes mandatory. Otherwise, do not use this parameter. Enter the webhook URL that specifies where Apollo should send a JSON response that includes the phone number you requested. Apollo suggests testing this flow to ensure you receive the separate response with the phone number. If phone numbers are not revealed delivered to the webhook URL, try applying UTF-8 encoding to the webhook URL. Example: https://webhook.site/cc4cf44e-e047-4774-8dac-473d28474e40; https%3A%2F%2Fwebhook.site%2Fcc4cf44e-e047-4774-8dac-473d28474e40"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -447,11 +576,14 @@
               "type": "string"
             },
             "description": "The domain of the company that you want to enrich. Do not include www., the @ symbol, or similar. Example: apollo.io or microsoft.com"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -518,11 +650,14 @@
               }
             },
             "description": "The domain of each company that you want to enrich. Do not include www., the @ symbol, or similar. Example: apollo.io and microsoft.com"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -840,11 +975,14 @@
               "type": "integer"
             },
             "description": "The number of search results that should be returned for each page. Limiting the number of results per page improves the endpoint's performance. Use the page parameter to search the different pages of data. Example: 10"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1149,11 +1287,14 @@
               "type": "integer"
             },
             "description": "The number of search results that should be returned for each page. Limiting the number of results per page improves the endpoint's performance. Use the page parameter to search the different pages of data. Example: 10"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1285,11 +1426,14 @@
               "type": "integer"
             },
             "description": "The number of search results that should be returned for each page. Limiting the number of results per page improves the endpoint's performance. Use the page parameter to search the different pages of data. Example: 10"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1354,11 +1498,14 @@
               "type": "string"
             },
             "description": "The Apollo ID for the organization that you want to research. To find organization IDs, call the Organization Search endpoint and identify the organizaton_id value for the organization. Example: 5e66b6381e05b4008c8331b8"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1471,11 +1618,14 @@
               "type": "integer"
             },
             "description": "The number of search results that should be returned for each page. Limiting the number of results per page improves the endpoint's performance. Use the page parameter to search the different pages of data. Example: 10"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1525,7 +1675,7 @@
         "operationId": "post_apollo_accounts",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1585,7 +1735,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/accounts/{account_id}": {
@@ -1608,11 +1763,14 @@
               "type": "string"
             },
             "description": "Account ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1696,7 +1854,7 @@
         "operationId": "post_apollo_accounts_bulk_create",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1826,7 +1984,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/accounts/bulk_update": {
@@ -1842,7 +2005,7 @@
         "operationId": "post_apollo_accounts_bulk_update",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1917,7 +2080,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/accounts/search": {
@@ -1933,7 +2101,7 @@
         "operationId": "post_apollo_accounts_search",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2041,7 +2209,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/accounts/{id}": {
@@ -2064,11 +2237,14 @@
               "type": "string"
             },
             "description": "Account ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2128,11 +2304,14 @@
               "type": "string"
             },
             "description": "New owner ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2187,7 +2366,7 @@
         "operationId": "get_apollo_account_stages",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2246,7 +2425,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/contacts": {
@@ -2262,7 +2446,7 @@
         "operationId": "post_apollo_contacts",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2370,7 +2554,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/contacts/{contact_id}": {
@@ -2393,11 +2582,14 @@
               "type": "string"
             },
             "description": "Contact ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2501,11 +2693,14 @@
               "type": "string"
             },
             "description": "Contact ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2660,7 +2855,7 @@
         "operationId": "post_apollo_contacts_bulk_create",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2806,7 +3001,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/contacts/bulk_update": {
@@ -2822,7 +3022,7 @@
         "operationId": "post_apollo_contacts_bulk_update",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2893,7 +3093,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/contacts/search": {
@@ -2909,7 +3114,7 @@
         "operationId": "post_apollo_contacts_search",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3017,7 +3222,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/contacts/update_stages": {
@@ -3049,11 +3259,14 @@
               "type": "string"
             },
             "description": "New contact stage ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3140,11 +3353,14 @@
               "type": "string"
             },
             "description": "New owner ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3199,7 +3415,7 @@
         "operationId": "get_apollo_contact_stages",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3258,7 +3474,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/opportunities": {
@@ -3274,7 +3495,7 @@
         "operationId": "post_apollo_opportunities",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3345,7 +3566,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/opportunities/search": {
@@ -3386,11 +3612,14 @@
               "type": "integer"
             },
             "description": "Items per page"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3496,11 +3725,14 @@
               "type": "string"
             },
             "description": "Opportunity ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3584,11 +3816,14 @@
               "type": "string"
             },
             "description": "Opportunity ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3668,7 +3903,7 @@
         "operationId": "get_apollo_opportunity_stages",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3739,7 +3974,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/emailer_campaigns/search": {
@@ -3780,11 +4020,14 @@
               "type": "integer"
             },
             "description": "Results per page."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3937,11 +4180,14 @@
               "type": "boolean"
             },
             "description": "Allow contacts finished in other sequences."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4015,11 +4261,14 @@
               "type": "string"
             },
             "description": "One of: mark_as_finished, remove, stop."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4069,11 +4318,14 @@
               "type": "string"
             },
             "description": "Sequence ID."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4130,11 +4382,14 @@
               "type": "string"
             },
             "description": "Sequence ID."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4184,11 +4439,14 @@
               "type": "string"
             },
             "description": "Sequence ID."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4316,11 +4574,14 @@
               "type": "integer"
             },
             "description": "Results per page."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4377,11 +4638,14 @@
               "type": "string"
             },
             "description": "Emailer message ID."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4431,7 +4695,7 @@
         "operationId": "post_apollo_tasks",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4505,7 +4769,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/tasks/bulk_create": {
@@ -4521,7 +4790,7 @@
         "operationId": "post_apollo_tasks_bulk_create",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4601,7 +4870,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/tasks/search": {
@@ -4654,11 +4928,14 @@
               "type": "integer"
             },
             "description": "Results per page."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4708,7 +4985,7 @@
         "operationId": "post_apollo_reports_sync_report",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4783,7 +5060,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/phone_calls": {
@@ -4908,11 +5190,14 @@
               "type": "string"
             },
             "description": "Outcome ID."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5073,11 +5358,14 @@
               "type": "integer"
             },
             "description": "Results per page."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5245,11 +5533,14 @@
               "type": "string"
             },
             "description": "Outcome ID."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5292,7 +5583,7 @@
         "operationId": "post_apollo_usage_stats_api_usage_stats",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5319,7 +5610,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/users/search": {
@@ -5351,11 +5647,14 @@
               "type": "integer"
             },
             "description": "Results per page."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5405,7 +5704,7 @@
         "operationId": "get_apollo_email_accounts",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5435,7 +5734,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/labels": {
@@ -5451,7 +5755,7 @@
         "operationId": "get_apollo_labels",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5481,7 +5785,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/typed_custom_fields": {
@@ -5497,7 +5806,7 @@
         "operationId": "get_apollo_typed_custom_fields",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5527,7 +5836,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/fields": {
@@ -5543,7 +5857,7 @@
         "operationId": "get_apollo_fields",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5573,7 +5887,12 @@
           "500": {
             "description": "Internal server error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       },
       "post": {
         "x-aisa-pricing": {
@@ -5587,7 +5906,7 @@
         "operationId": "post_apollo_fields",
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5645,7 +5964,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/notes": {
@@ -5755,11 +6079,14 @@
               "type": "integer"
             },
             "description": "Results per page (when supported). At least one filter is required on this endpoint; calling it with none returns HTTP 400 \"At least one argument is required\"."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {

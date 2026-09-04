@@ -6,10 +6,14 @@
     "description": "Model-grounded web search endpoints that run a real web search inside a fixed frontier model and return the model's answer together with the underlying search results and citations. Billed pay-as-you-go at exact provider cost (no markup)."
   },
   "servers": [
-    { "url": "https://api.aisa.one/apis/v1" }
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
   ],
   "security": [
-    { "bearerAuth": [] }
+    {
+      "bearerAuth": []
+    }
   ],
   "paths": {
     "/anthropic-websearch/search": {
@@ -34,7 +38,9 @@
           "cost_tier": "variable",
           "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
         },
-        "tags": ["https://docs.anthropic.com/en/docs/build-with-claude/tool-use/web-search-tool"],
+        "tags": [
+          "https://docs.anthropic.com/en/docs/build-with-claude/tool-use/web-search-tool"
+        ],
         "summary": "Model-grounded web search (Anthropic).",
         "operationId": "post_anthropic_websearch_search",
         "description": "Ask a question and get an answer that Claude wrote after searching the live web. Send a normal Messages request — a `messages` array plus `max_tokens` — and the endpoint injects a fixed, server-pinned model and the `web_search` tool for you; you cannot override the model or add tools, which keeps cost bounded. Claude decides when to search (up to `max_uses` searches, default 5), reads the results, and answers with inline citations. The response is a standard Anthropic Messages object: `content[]` contains `server_tool_use` (the queries issued), `web_search_tool_result` (the sources found) and `text` blocks (the answer with `citations`), and `usage.server_tool_use.web_search_requests` reports how many searches were billed. Billing is pay-as-you-go at exact cost: `web_search_requests × $0.01` plus the model's own token cost, with no markup; a failed search (HTTP 200 `web_search_tool_result_error`) is not billed. Use this when you want a written, cited answer grounded in current web content — for open-web research that returns ranked links and page text in one call use [`post_tavily_search`](/api-reference/search/post_tavily-search) instead, and for the OpenAI-model equivalent see [`post_openai_websearch_search`](/api-reference/search/post_openai-websearch-search).",
@@ -44,7 +50,10 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["messages", "max_tokens"],
+                "required": [
+                  "messages",
+                  "max_tokens"
+                ],
                 "properties": {
                   "messages": {
                     "type": "array",
@@ -52,12 +61,24 @@
                     "items": {
                       "type": "object",
                       "properties": {
-                        "role": { "type": "string", "enum": ["user", "assistant"] },
-                        "content": { "type": "string", "description": "Message text. Structured content blocks are also accepted." }
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "assistant"
+                          ]
+                        },
+                        "content": {
+                          "type": "string",
+                          "description": "Message text. Structured content blocks are also accepted."
+                        }
                       }
                     },
                     "example": [
-                      { "role": "user", "content": "What are the three biggest AI announcements this week? Give one sentence each with sources." }
+                      {
+                        "role": "user",
+                        "content": "What are the three biggest AI announcements this week? Give one sentence each with sources."
+                      }
                     ]
                   },
                   "max_tokens": {
@@ -75,7 +96,10 @@
               "example": {
                 "max_tokens": 1024,
                 "messages": [
-                  { "role": "user", "content": "What are the three biggest AI announcements this week? Give one sentence each with sources." }
+                  {
+                    "role": "user",
+                    "content": "What are the three biggest AI announcements this week? Give one sentence each with sources."
+                  }
                 ]
               }
             }
@@ -83,15 +107,19 @@
         },
         "responses": {
           "200": {
-            "description": "A standard Anthropic Messages response. `content[]` interleaves the searches performed and the cited answer; `usage.server_tool_use.web_search_requests` is the billed search count.",
+            "description": "A standard Anthropic Messages response. `content[]` interleaves the searches performed and the cited answer; `usage.server_tool_use.web_search_requests` is the billed search count. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "headers": {
               "X-AISA-Web-Search-Count": {
                 "description": "Number of web searches billed for this request.",
-                "schema": { "type": "integer" }
+                "schema": {
+                  "type": "integer"
+                }
               },
               "X-AISA-Price-USD": {
                 "description": "Amount charged to your account for this request, in USD.",
-                "schema": { "type": "string" }
+                "schema": {
+                  "type": "string"
+                }
               }
             },
             "content": {
@@ -99,26 +127,50 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "id": { "type": "string" },
-                    "type": { "type": "string", "example": "message" },
-                    "role": { "type": "string", "example": "assistant" },
-                    "stop_reason": { "type": "string", "example": "end_turn" },
+                    "id": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "example": "message"
+                    },
+                    "role": {
+                      "type": "string",
+                      "example": "assistant"
+                    },
+                    "stop_reason": {
+                      "type": "string",
+                      "example": "end_turn"
+                    },
                     "content": {
                       "type": "array",
                       "description": "Ordered blocks: server_tool_use (search queries), web_search_tool_result (sources), and text (the cited answer).",
-                      "items": { "type": "object" }
+                      "items": {
+                        "type": "object"
+                      }
                     },
                     "usage": {
                       "type": "object",
                       "properties": {
-                        "input_tokens": { "type": "integer" },
-                        "output_tokens": { "type": "integer" },
-                        "cache_read_input_tokens": { "type": "integer" },
-                        "cache_creation_input_tokens": { "type": "integer" },
+                        "input_tokens": {
+                          "type": "integer"
+                        },
+                        "output_tokens": {
+                          "type": "integer"
+                        },
+                        "cache_read_input_tokens": {
+                          "type": "integer"
+                        },
+                        "cache_creation_input_tokens": {
+                          "type": "integer"
+                        },
                         "server_tool_use": {
                           "type": "object",
                           "properties": {
-                            "web_search_requests": { "type": "integer", "description": "Billed web search count." }
+                            "web_search_requests": {
+                              "type": "integer",
+                              "description": "Billed web search count."
+                            }
                           }
                         }
                       }
@@ -128,7 +180,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/openai-websearch/search": {
@@ -153,7 +210,9 @@
           "cost_tier": "variable",
           "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
         },
-        "tags": ["https://platform.openai.com/docs/guides/tools-web-search"],
+        "tags": [
+          "https://platform.openai.com/docs/guides/tools-web-search"
+        ],
         "summary": "Model-grounded web search (OpenAI).",
         "operationId": "post_openai_websearch_search",
         "description": "Ask a question and get an answer that an OpenAI model wrote after searching the live web. Send a Responses request — an `input` string (or message array) — and the endpoint injects a fixed, server-pinned model and the `web_search` tool for you; the model, tool and per-request search cap are server-controlled to keep cost bounded. The reply is a standard OpenAI Responses object: `output[]` contains `web_search_call` items (each a search that ran) and a `message` item with the answer text and URL citations, and the billed search count equals the number of `web_search_call` items. Billing is pay-as-you-go at exact cost: `web_search_calls × $0.01` plus the model's own token cost (fresh input = `input_tokens − cached`), with no markup. Use this when you want a written, cited answer grounded in current web content from an OpenAI model — for the Anthropic-model equivalent see [`post_anthropic_websearch_search`](/api-reference/search/post_anthropic-websearch-search), and for raw ranked links with extracted page text use [`post_tavily_search`](/api-reference/search/post_tavily-search).",
@@ -163,7 +222,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["input"],
+                "required": [
+                  "input"
+                ],
                 "properties": {
                   "input": {
                     "type": "string",
@@ -190,15 +251,19 @@
         },
         "responses": {
           "200": {
-            "description": "A standard OpenAI Responses object. `output[]` interleaves web_search_call items and the cited answer message; the number of web_search_call items is the billed search count.",
+            "description": "A standard OpenAI Responses object. `output[]` interleaves web_search_call items and the cited answer message; the number of web_search_call items is the billed search count. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "headers": {
               "X-AISA-Web-Search-Count": {
                 "description": "Number of web searches billed for this request.",
-                "schema": { "type": "integer" }
+                "schema": {
+                  "type": "integer"
+                }
               },
               "X-AISA-Price-USD": {
                 "description": "Amount charged to your account for this request, in USD.",
-                "schema": { "type": "string" }
+                "schema": {
+                  "type": "string"
+                }
               }
             },
             "content": {
@@ -206,23 +271,39 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "id": { "type": "string" },
-                    "object": { "type": "string", "example": "response" },
-                    "status": { "type": "string", "example": "completed" },
+                    "id": {
+                      "type": "string"
+                    },
+                    "object": {
+                      "type": "string",
+                      "example": "response"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "completed"
+                    },
                     "output": {
                       "type": "array",
                       "description": "Ordered items: web_search_call (searches performed) and message (the cited answer).",
-                      "items": { "type": "object" }
+                      "items": {
+                        "type": "object"
+                      }
                     },
                     "usage": {
                       "type": "object",
                       "properties": {
-                        "input_tokens": { "type": "integer" },
-                        "output_tokens": { "type": "integer" },
+                        "input_tokens": {
+                          "type": "integer"
+                        },
+                        "output_tokens": {
+                          "type": "integer"
+                        },
                         "input_tokens_details": {
                           "type": "object",
                           "properties": {
-                            "cached_tokens": { "type": "integer" }
+                            "cached_tokens": {
+                              "type": "integer"
+                            }
                           }
                         }
                       }
@@ -232,13 +313,144 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     }
   },
   "components": {
     "securitySchemes": {
-      "bearerAuth": { "type": "http", "scheme": "bearer" }
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "CostEstimate": {
+        "type": "object",
+        "description": "Read-only cost quote for the exact request. No Provider call, billing reservation, durable job, or price lock is created.",
+        "required": [
+          "object",
+          "currency",
+          "estimate_kind",
+          "estimated_cost_micros_usd",
+          "may_exceed_estimate",
+          "estimated_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "const": "cost_estimate",
+            "description": "Always `cost_estimate`."
+          },
+          "currency": {
+            "type": "string",
+            "const": "USD",
+            "description": "Quote currency. Always USD in this version."
+          },
+          "estimate_kind": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "upper_bound",
+              "estimate"
+            ],
+            "description": "`exact` is a fully determined customer price; `upper_bound` has a locally enforceable ceiling in `max_cost_micros_usd`; `estimate` depends on terminal usage and may exceed the quoted amount."
+          },
+          "estimated_cost_micros_usd": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Quoted customer cost in micro-USD (1 USD = 1,000,000 micros)."
+          },
+          "max_cost_micros_usd": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Optional hard customer-cost ceiling in micro-USD. Present for `exact` and `upper_bound`; omitted for `estimate`."
+          },
+          "may_exceed_estimate": {
+            "type": "boolean",
+            "description": "True only when `estimate_kind` is `estimate`."
+          },
+          "pricing_version": {
+            "type": "string",
+            "description": "Optional immutable or compiled pricing version."
+          },
+          "estimated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp when the quote was produced."
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Bounded non-sensitive quote metadata, such as a canonical model or profile key."
+          }
+        },
+        "example": {
+          "object": "cost_estimate",
+          "currency": "USD",
+          "estimate_kind": "estimate",
+          "estimated_cost_micros_usd": 425,
+          "may_exceed_estimate": true,
+          "estimated_at": "2026-09-01T08:00:00Z"
+        }
+      }
+    },
+    "parameters": {
+      "XAISACostMode": {
+        "name": "X-AISA-Cost-Mode",
+        "in": "header",
+        "required": false,
+        "description": "Set to `quote` to estimate this exact request without executing data, creating a job, or authorizing spend. A successful quote is HTTP 200 with a `cost_estimate` body; it is not a reservation or price lock. Omit the header for normal execution. Any other value returns `400 invalid_cost_mode`. Quote mode requires an API key and cannot use MPP or x402.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "quote"
+          ]
+        }
+      }
+    },
+    "responses": {
+      "CostEstimate": {
+        "description": "Read-only cost quote. The intended request is validated but not executed, billed, reserved, or locked.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "example": "private, no-store"
+            },
+            "description": "Quotes are never stored by shared caches."
+          },
+          "Vary": {
+            "schema": {
+              "type": "string",
+              "example": "X-AISA-Cost-Mode"
+            },
+            "description": "Response body depends on the cost-mode header."
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CostEstimate"
+            },
+            "example": {
+              "object": "cost_estimate",
+              "currency": "USD",
+              "estimate_kind": "estimate",
+              "estimated_cost_micros_usd": 425,
+              "may_exceed_estimate": true,
+              "estimated_at": "2026-09-01T08:00:00Z"
+            }
+          }
+        }
+      }
     }
   }
 }

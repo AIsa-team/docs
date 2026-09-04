@@ -63,6 +63,18 @@
           "type": "string"
         },
         "example": "7"
+      },
+      "XAISACostMode": {
+        "name": "X-AISA-Cost-Mode",
+        "in": "header",
+        "required": false,
+        "description": "设为 `quote` 可对该精确请求估价，而不会执行数据、创建任务或授权扣费。成功报价的 HTTP 状态为 200，响应体为 `cost_estimate`；它不是预留或锁价。省略该请求头则正常执行。其他值返回 `400 invalid_cost_mode`。报价模式需要 API key，不能使用 MPP 或 x402。",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "quote"
+          ]
+        }
       }
     },
     "schemas": {
@@ -2958,6 +2970,113 @@
           }
         },
         "additionalProperties": true
+      },
+      "CostEstimate": {
+        "type": "object",
+        "description": "针对该精确请求的只读成本报价。不会发起 Provider 调用、账单预留、持久任务或锁价。",
+        "required": [
+          "object",
+          "currency",
+          "estimate_kind",
+          "estimated_cost_micros_usd",
+          "may_exceed_estimate",
+          "estimated_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "const": "cost_estimate",
+            "description": "始终为 `cost_estimate`。"
+          },
+          "currency": {
+            "type": "string",
+            "const": "USD",
+            "description": "报价币种。此版本始终为 USD。"
+          },
+          "estimate_kind": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "upper_bound",
+              "estimate"
+            ],
+            "description": "`exact` 表示客户价格已由当前请求完全确定；`upper_bound` 具有本地可执行上限（见 `max_cost_micros_usd`）；`estimate` 取决于终态用量，最终费用可能高于报价。"
+          },
+          "estimated_cost_micros_usd": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "报价的客户成本，单位为 micro-USD（1 USD = 1,000,000 micros）。"
+          },
+          "max_cost_micros_usd": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "可选的客户成本硬上限，单位为 micro-USD。`exact` 与 `upper_bound` 会返回；`estimate` 省略。"
+          },
+          "may_exceed_estimate": {
+            "type": "boolean",
+            "description": "仅当 `estimate_kind` 为 `estimate` 时为 true。"
+          },
+          "pricing_version": {
+            "type": "string",
+            "description": "可选的不可变或已编译定价版本。"
+          },
+          "estimated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "生成该报价的 UTC 时间戳。"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "有界且非敏感的报价元数据，例如规范模型名或 profile key。"
+          }
+        },
+        "example": {
+          "object": "cost_estimate",
+          "currency": "USD",
+          "estimate_kind": "estimate",
+          "estimated_cost_micros_usd": 425,
+          "may_exceed_estimate": true,
+          "estimated_at": "2026-09-01T08:00:00Z"
+        }
+      }
+    },
+    "responses": {
+      "CostEstimate": {
+        "description": "只读成本报价。目标请求会经过校验，但不会被执行、计费、预留或锁价。",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "example": "private, no-store"
+            },
+            "description": "报价响应不可被共享缓存存储。"
+          },
+          "Vary": {
+            "schema": {
+              "type": "string",
+              "example": "X-AISA-Cost-Mode"
+            },
+            "description": "响应体取决于成本模式请求头。"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CostEstimate"
+            },
+            "example": {
+              "object": "cost_estimate",
+              "currency": "USD",
+              "estimate_kind": "estimate",
+              "estimated_cost_micros_usd": 425,
+              "may_exceed_estimate": true,
+              "estimated_at": "2026-09-01T08:00:00Z"
+            }
+          }
+        }
       }
     }
   },
@@ -2976,11 +3095,14 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "币种数组。",
+            "description": "币种数组。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "example": [
@@ -3011,7 +3133,7 @@
         "operationId": "get_coingecko_simple_supported_vs_currencies",
         "responses": {
           "200": {
-            "description": "货币代码数组。",
+            "description": "货币代码数组。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "example": [
@@ -3028,7 +3150,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/coingecko/coins/markets": {
@@ -3134,11 +3261,14 @@
               "default": false
             },
             "description": "在 CoinGecko 支持时，将再质押词元纳入市场数据。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "加密货币市场条目数组。",
+            "description": "加密货币市场条目数组。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3206,11 +3336,14 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "币种对象。",
+            "description": "币种对象。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3286,11 +3419,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "以 coin id 为键的映射。",
+            "description": "以 coin id 为键的映射。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "example": {
@@ -3347,11 +3483,14 @@
             },
             "description": "使用 `full` 或 `0` 到 `18` 之间的值指定货币价格值的小数位数。",
             "example": "2"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "三个时间序列数组。",
+            "description": "三个时间序列数组。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "example": {
@@ -3409,11 +3548,14 @@
               "type": "integer",
               "default": 1
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "交易所对象数组。",
+            "description": "交易所对象数组。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3432,7 +3574,7 @@
         "operationId": "get_coingecko_search_trending",
         "responses": {
           "200": {
-            "description": "热门代币、NFT 和类别。",
+            "description": "热门代币、NFT 和类别。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "example": {
@@ -3453,7 +3595,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/coingecko/coins/categories/list": {
@@ -3463,7 +3610,7 @@
         "operationId": "get_coingecko_coins_categories_list",
         "responses": {
           "200": {
-            "description": "类别数组。",
+            "description": "类别数组。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "example": [
@@ -3482,7 +3629,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/coingecko/coins/{id}/tickers": {
@@ -3538,11 +3690,14 @@
               "default": false
             },
             "description": "在 ticker 结果中显示交易所徽标。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "股票代码数组。",
+            "description": "股票代码数组。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3580,11 +3735,14 @@
               "type": "boolean",
               "default": true
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "给定日期的快照对象。",
+            "description": "给定日期的快照对象。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3636,11 +3794,14 @@
             },
             "description": "使用 `full` 或 `0` 到 `18` 之间的值指定货币价格值的小数位数。",
             "example": "2"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "OHLC 行数组：`[timestamp, open, high, low, close]`。",
+            "description": "OHLC 行数组：`[timestamp, open, high, low, close]`。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "example": [
@@ -3668,7 +3829,7 @@
         "operationId": "get_coingecko_exchanges_list",
         "responses": {
           "200": {
-            "description": "`{id, name}` 数组。",
+            "description": "`{id, name}` 数组。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "example": [
@@ -3687,7 +3848,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/coingecko/exchanges/{id}": {
@@ -3698,11 +3864,14 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/ExchangeId"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "交易所对象。",
+            "description": "交易所对象。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3734,11 +3903,14 @@
                 "market_cap_change_24h_asc"
               ]
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "包含市场数据的类别数组。",
+            "description": "包含市场数据的类别数组。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3757,7 +3929,7 @@
         "operationId": "get_coingecko_news",
         "responses": {
           "200": {
-            "description": "新闻文章数组。",
+            "description": "新闻文章数组。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "example": {
@@ -3835,6 +4007,9 @@
               "default": 100
             },
             "description": "每页结果总数。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ]
       }
@@ -3892,11 +4067,14 @@
               "default": false
             },
             "description": "在 ticker 结果中显示交易所徽标。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "股票代码数组。",
+            "description": "股票代码数组。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3980,11 +4158,14 @@
             },
             "description": "使用 `full` 或 `0` 到 `18` 之间的值指定货币价格值的小数位数。",
             "example": "2"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "以合约地址为键的映射。",
+            "description": "以合约地址为键的映射。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -4026,11 +4207,14 @@
               "default": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
             },
             "example": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "获取某个加密货币的当前数据。",
+            "description": "获取某个加密货币的当前数据。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -4081,11 +4265,14 @@
             },
             "description": "使用 `full` 或 `0` 到 `18` 之间的值指定货币价格值的小数位数。",
             "example": "2"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "数据结构与 `/coins/{id}/market_chart` 相同。",
+            "description": "数据结构与 `/coins/{id}/market_chart` 相同。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -4137,11 +4324,14 @@
             },
             "description": "使用 `full` 或 `0` 到 `18` 之间的值指定货币价格值的小数位数。",
             "example": "2"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "数据结构与 `/coins/{id}/market_chart` 相同。",
+            "description": "数据结构与 `/coins/{id}/market_chart` 相同。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -4220,11 +4410,14 @@
               "type": "string"
             },
             "example": "2"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "结构与 `/coins/{id}/market_chart/range` 相同。",
+            "description": "结构与 `/coins/{id}/market_chart/range` 相同。 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {

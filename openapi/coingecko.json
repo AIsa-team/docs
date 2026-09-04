@@ -63,6 +63,18 @@
           "type": "string"
         },
         "example": "7"
+      },
+      "XAISACostMode": {
+        "name": "X-AISA-Cost-Mode",
+        "in": "header",
+        "required": false,
+        "description": "Set to `quote` to estimate this exact request without executing data, creating a job, or authorizing spend. A successful quote is HTTP 200 with a `cost_estimate` body; it is not a reservation or price lock. Omit the header for normal execution. Any other value returns `400 invalid_cost_mode`. Quote mode requires an API key and cannot use MPP or x402.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "quote"
+          ]
+        }
       }
     },
     "schemas": {
@@ -2958,6 +2970,113 @@
           }
         },
         "additionalProperties": true
+      },
+      "CostEstimate": {
+        "type": "object",
+        "description": "Read-only cost quote for the exact request. No Provider call, billing reservation, durable job, or price lock is created.",
+        "required": [
+          "object",
+          "currency",
+          "estimate_kind",
+          "estimated_cost_micros_usd",
+          "may_exceed_estimate",
+          "estimated_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "const": "cost_estimate",
+            "description": "Always `cost_estimate`."
+          },
+          "currency": {
+            "type": "string",
+            "const": "USD",
+            "description": "Quote currency. Always USD in this version."
+          },
+          "estimate_kind": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "upper_bound",
+              "estimate"
+            ],
+            "description": "`exact` is a fully determined customer price; `upper_bound` has a locally enforceable ceiling in `max_cost_micros_usd`; `estimate` depends on terminal usage and may exceed the quoted amount."
+          },
+          "estimated_cost_micros_usd": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Quoted customer cost in micro-USD (1 USD = 1,000,000 micros)."
+          },
+          "max_cost_micros_usd": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Optional hard customer-cost ceiling in micro-USD. Present for `exact` and `upper_bound`; omitted for `estimate`."
+          },
+          "may_exceed_estimate": {
+            "type": "boolean",
+            "description": "True only when `estimate_kind` is `estimate`."
+          },
+          "pricing_version": {
+            "type": "string",
+            "description": "Optional immutable or compiled pricing version."
+          },
+          "estimated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp when the quote was produced."
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Bounded non-sensitive quote metadata, such as a canonical model or profile key."
+          }
+        },
+        "example": {
+          "object": "cost_estimate",
+          "currency": "USD",
+          "estimate_kind": "estimate",
+          "estimated_cost_micros_usd": 425,
+          "may_exceed_estimate": true,
+          "estimated_at": "2026-09-01T08:00:00Z"
+        }
+      }
+    },
+    "responses": {
+      "CostEstimate": {
+        "description": "Read-only cost quote. The intended request is validated but not executed, billed, reserved, or locked.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "example": "private, no-store"
+            },
+            "description": "Quotes are never stored by shared caches."
+          },
+          "Vary": {
+            "schema": {
+              "type": "string",
+              "example": "X-AISA-Cost-Mode"
+            },
+            "description": "Response body depends on the cost-mode header."
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CostEstimate"
+            },
+            "example": {
+              "object": "cost_estimate",
+              "currency": "USD",
+              "estimate_kind": "estimate",
+              "estimated_cost_micros_usd": 425,
+              "may_exceed_estimate": true,
+              "estimated_at": "2026-09-01T08:00:00Z"
+            }
+          }
+        }
       }
     }
   },
@@ -2982,11 +3101,14 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Array of coins.",
+            "description": "Array of coins. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "example": [
@@ -3023,7 +3145,7 @@
         "operationId": "get_coingecko_simple_supported_vs_currencies",
         "responses": {
           "200": {
-            "description": "Array of currency codes.",
+            "description": "Array of currency codes. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "example": [
@@ -3040,7 +3162,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/coingecko/coins/markets": {
@@ -3152,11 +3279,14 @@
               "default": false
             },
             "description": "Include rehypothecated tokens in market data when supported by CoinGecko."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Array of coin market entries.",
+            "description": "Array of coin market entries. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3230,11 +3360,14 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Coin object.",
+            "description": "Coin object. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3316,11 +3449,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Map keyed by coin id.",
+            "description": "Map keyed by coin id. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "example": {
@@ -3383,11 +3519,14 @@
             },
             "description": "`full` or a value from `0` to `18` to specify decimal places for currency price values.",
             "example": "2"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Three time-series arrays.",
+            "description": "Three time-series arrays. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "example": {
@@ -3451,11 +3590,14 @@
               "type": "integer",
               "default": 1
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Array of exchange objects.",
+            "description": "Array of exchange objects. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3480,7 +3622,7 @@
         "operationId": "get_coingecko_search_trending",
         "responses": {
           "200": {
-            "description": "Trending coins, nfts, and categories.",
+            "description": "Trending coins, nfts, and categories. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "example": {
@@ -3501,7 +3643,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/coingecko/coins/categories/list": {
@@ -3517,7 +3664,7 @@
         "operationId": "get_coingecko_coins_categories_list",
         "responses": {
           "200": {
-            "description": "Array of categories.",
+            "description": "Array of categories. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "example": [
@@ -3536,7 +3683,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/coingecko/coins/{id}/tickers": {
@@ -3598,11 +3750,14 @@
               "default": false
             },
             "description": "Show exchange logos in ticker results."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Tickers array.",
+            "description": "Tickers array. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3646,11 +3801,14 @@
               "type": "boolean",
               "default": true
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Snapshot object for the given date.",
+            "description": "Snapshot object for the given date. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3708,11 +3866,14 @@
             },
             "description": "`full` or a value from `0` to `18` to specify decimal places for currency price values.",
             "example": "2"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Array of OHLC rows: `[timestamp, open, high, low, close]`.",
+            "description": "Array of OHLC rows: `[timestamp, open, high, low, close]`. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "example": [
@@ -3746,7 +3907,7 @@
         "operationId": "get_coingecko_exchanges_list",
         "responses": {
           "200": {
-            "description": "Array of `{id, name}`.",
+            "description": "Array of `{id, name}`. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "example": [
@@ -3765,7 +3926,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/coingecko/exchanges/{id}": {
@@ -3782,11 +3948,14 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/ExchangeId"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Exchange object.",
+            "description": "Exchange object. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3824,11 +3993,14 @@
                 "market_cap_change_24h_asc"
               ]
             }
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Array of categories with market data.",
+            "description": "Array of categories with market data. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3853,7 +4025,7 @@
         "operationId": "get_coingecko_news",
         "responses": {
           "200": {
-            "description": "Array of news articles.",
+            "description": "Array of news articles. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "example": {
@@ -3931,6 +4103,9 @@
               "default": 100
             },
             "description": "Total results per page."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ]
       }
@@ -3994,11 +4169,14 @@
               "default": false
             },
             "description": "Show exchange logos in ticker results."
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Tickers array.",
+            "description": "Tickers array. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4088,11 +4266,14 @@
             },
             "description": "`full` or a value from `0` to `18` to specify decimal places for currency price values.",
             "example": "2"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Map keyed by contract address.",
+            "description": "Map keyed by contract address. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4140,11 +4321,14 @@
               "default": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
             },
             "example": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Get current data for a coin.",
+            "description": "Get current data for a coin. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4201,11 +4385,14 @@
             },
             "description": "`full` or a value from `0` to `18` to specify decimal places for currency price values.",
             "example": "2"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Same shape as `/coins/{id}/market_chart`.",
+            "description": "Same shape as `/coins/{id}/market_chart`. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4263,11 +4450,14 @@
             },
             "description": "`full` or a value from `0` to `18` to specify decimal places for currency price values.",
             "example": "2"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Same shape as `/coins/{id}/market_chart`.",
+            "description": "Same shape as `/coins/{id}/market_chart`. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4352,11 +4542,14 @@
               "type": "string"
             },
             "example": "2"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "Same shape as `/coins/{id}/market_chart/range`.",
+            "description": "Same shape as `/coins/{id}/market_chart/range`. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {

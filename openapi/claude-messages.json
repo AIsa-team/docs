@@ -23,6 +23,129 @@
         "bearerFormat": "AISA API Key",
         "description": "Your AIsa API key as a Bearer token."
       }
+    },
+    "schemas": {
+      "CostEstimate": {
+        "type": "object",
+        "description": "Read-only cost quote for the exact request. No Provider call, billing reservation, durable job, or price lock is created.",
+        "required": [
+          "object",
+          "currency",
+          "estimate_kind",
+          "estimated_cost_micros_usd",
+          "may_exceed_estimate",
+          "estimated_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "const": "cost_estimate",
+            "description": "Always `cost_estimate`."
+          },
+          "currency": {
+            "type": "string",
+            "const": "USD",
+            "description": "Quote currency. Always USD in this version."
+          },
+          "estimate_kind": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "upper_bound",
+              "estimate"
+            ],
+            "description": "`exact` is a fully determined customer price; `upper_bound` has a locally enforceable ceiling in `max_cost_micros_usd`; `estimate` depends on terminal usage and may exceed the quoted amount."
+          },
+          "estimated_cost_micros_usd": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Quoted customer cost in micro-USD (1 USD = 1,000,000 micros)."
+          },
+          "max_cost_micros_usd": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Optional hard customer-cost ceiling in micro-USD. Present for `exact` and `upper_bound`; omitted for `estimate`."
+          },
+          "may_exceed_estimate": {
+            "type": "boolean",
+            "description": "True only when `estimate_kind` is `estimate`."
+          },
+          "pricing_version": {
+            "type": "string",
+            "description": "Optional immutable or compiled pricing version."
+          },
+          "estimated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC timestamp when the quote was produced."
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Bounded non-sensitive quote metadata, such as a canonical model or profile key."
+          }
+        },
+        "example": {
+          "object": "cost_estimate",
+          "currency": "USD",
+          "estimate_kind": "estimate",
+          "estimated_cost_micros_usd": 425,
+          "may_exceed_estimate": true,
+          "estimated_at": "2026-09-01T08:00:00Z"
+        }
+      }
+    },
+    "parameters": {
+      "XAISACostMode": {
+        "name": "X-AISA-Cost-Mode",
+        "in": "header",
+        "required": false,
+        "description": "Set to `quote` to estimate this exact request without executing data, creating a job, or authorizing spend. A successful quote is HTTP 200 with a `cost_estimate` body; it is not a reservation or price lock. Omit the header for normal execution. Any other value returns `400 invalid_cost_mode`. Quote mode requires an API key and cannot use MPP or x402.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "quote"
+          ]
+        }
+      }
+    },
+    "responses": {
+      "CostEstimate": {
+        "description": "Read-only cost quote. The intended request is validated but not executed, billed, reserved, or locked.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "example": "private, no-store"
+            },
+            "description": "Quotes are never stored by shared caches."
+          },
+          "Vary": {
+            "schema": {
+              "type": "string",
+              "example": "X-AISA-Cost-Mode"
+            },
+            "description": "Response body depends on the cost-mode header."
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CostEstimate"
+            },
+            "example": {
+              "object": "cost_estimate",
+              "currency": "USD",
+              "estimate_kind": "estimate",
+              "estimated_cost_micros_usd": 425,
+              "may_exceed_estimate": true,
+              "estimated_at": "2026-09-01T08:00:00Z"
+            }
+          }
+        }
+      }
     }
   },
   "paths": {
@@ -42,7 +165,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["model", "max_tokens", "messages"],
+                "required": [
+                  "model",
+                  "max_tokens",
+                  "messages"
+                ],
                 "properties": {
                   "model": {
                     "type": "string",
@@ -59,30 +186,53 @@
                     "description": "Conversation turns.",
                     "items": {
                       "type": "object",
-                      "required": ["role", "content"],
+                      "required": [
+                        "role",
+                        "content"
+                      ],
                       "properties": {
                         "role": {
                           "type": "string",
-                          "enum": ["user", "assistant"]
+                          "enum": [
+                            "user",
+                            "assistant"
+                          ]
                         },
                         "content": {
                           "description": "String or array of content blocks.",
                           "oneOf": [
-                            { "type": "string" },
-                            { "type": "array", "items": { "type": "object" } }
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "object"
+                              }
+                            }
                           ]
                         }
                       }
                     },
                     "example": [
-                      { "role": "user", "content": "Hello, Claude" }
+                      {
+                        "role": "user",
+                        "content": "Hello, Claude"
+                      }
                     ]
                   },
                   "system": {
                     "description": "System prompt. String or array of text blocks.",
                     "oneOf": [
-                      { "type": "string" },
-                      { "type": "array", "items": { "type": "object" } }
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "object"
+                        }
+                      }
                     ]
                   },
                   "temperature": {
@@ -104,7 +254,9 @@
                   },
                   "stop_sequences": {
                     "type": "array",
-                    "items": { "type": "string" },
+                    "items": {
+                      "type": "string"
+                    },
                     "description": "Custom sequences that stop generation."
                   },
                   "stream": {
@@ -117,12 +269,24 @@
                     "description": "Tools the model may use.",
                     "items": {
                       "type": "object",
-                      "required": ["name", "input_schema"],
+                      "required": [
+                        "name",
+                        "input_schema"
+                      ],
                       "properties": {
-                        "name": { "type": "string" },
-                        "description": { "type": "string" },
-                        "input_schema": { "type": "object" },
-                        "type": { "type": "string", "example": "custom" }
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "input_schema": {
+                          "type": "object"
+                        },
+                        "type": {
+                          "type": "string",
+                          "example": "custom"
+                        }
                       }
                     }
                   },
@@ -132,7 +296,12 @@
                     "properties": {
                       "type": {
                         "type": "string",
-                        "enum": ["auto", "any", "tool", "none"]
+                        "enum": [
+                          "auto",
+                          "any",
+                          "tool",
+                          "none"
+                        ]
                       },
                       "name": {
                         "type": "string",
@@ -148,9 +317,23 @@
                     "type": "object",
                     "description": "Enable extended thinking for complex reasoning.",
                     "properties": {
-                      "type": { "type": "string", "enum": ["enabled"] },
-                      "budget_tokens": { "type": "integer", "example": 10000 },
-                      "display": { "type": "string", "enum": ["summarized", "omitted"] }
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "enabled"
+                        ]
+                      },
+                      "budget_tokens": {
+                        "type": "integer",
+                        "example": 10000
+                      },
+                      "display": {
+                        "type": "string",
+                        "enum": [
+                          "summarized",
+                          "omitted"
+                        ]
+                      }
                     }
                   },
                   "metadata": {
@@ -164,7 +347,10 @@
                   },
                   "service_tier": {
                     "type": "string",
-                    "enum": ["auto", "standard_only"],
+                    "enum": [
+                      "auto",
+                      "standard_only"
+                    ],
                     "default": "auto"
                   }
                 }
@@ -174,33 +360,63 @@
         },
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Successful response. When `X-AISA-Cost-Mode` is `quote`, HTTP 200 returns a `cost_estimate` instead of executing this operation. The quote is not a reservation, authorization, or price lock.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "id": { "type": "string", "example": "msg_024e7cf42f5d47cfa6982b5ff8b55642" },
-                    "type": { "type": "string", "example": "message" },
-                    "role": { "type": "string", "example": "assistant" },
+                    "id": {
+                      "type": "string",
+                      "example": "msg_024e7cf42f5d47cfa6982b5ff8b55642"
+                    },
+                    "type": {
+                      "type": "string",
+                      "example": "message"
+                    },
+                    "role": {
+                      "type": "string",
+                      "example": "assistant"
+                    },
                     "content": {
                       "type": "array",
                       "description": "Response content blocks (text, tool_use, thinking, etc.).",
-                      "items": { "type": "object" }
+                      "items": {
+                        "type": "object"
+                      }
                     },
-                    "model": { "type": "string", "example": "claude-sonnet-4-6" },
+                    "model": {
+                      "type": "string",
+                      "example": "claude-sonnet-4-6"
+                    },
                     "stop_reason": {
                       "type": "string",
-                      "enum": ["end_turn", "stop_sequence", "max_tokens", "tool_use"]
+                      "enum": [
+                        "end_turn",
+                        "stop_sequence",
+                        "max_tokens",
+                        "tool_use"
+                      ]
                     },
-                    "stop_sequence": { "type": "string", "nullable": true },
+                    "stop_sequence": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "usage": {
                       "type": "object",
                       "properties": {
-                        "input_tokens": { "type": "integer" },
-                        "output_tokens": { "type": "integer" },
-                        "cache_creation_input_tokens": { "type": "integer" },
-                        "cache_read_input_tokens": { "type": "integer" }
+                        "input_tokens": {
+                          "type": "integer"
+                        },
+                        "output_tokens": {
+                          "type": "integer"
+                        },
+                        "cache_creation_input_tokens": {
+                          "type": "integer"
+                        },
+                        "cache_read_input_tokens": {
+                          "type": "integer"
+                        }
                       }
                     }
                   }
@@ -208,11 +424,24 @@
               }
             }
           },
-          "400": { "description": "Invalid request parameters" },
-          "401": { "description": "Missing or invalid API key" },
-          "429": { "description": "Rate limit exceeded" },
-          "500": { "description": "Internal server error" }
-        }
+          "400": {
+            "description": "Invalid request parameters"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     }
   }

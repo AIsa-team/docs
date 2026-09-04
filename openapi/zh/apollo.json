@@ -21,6 +21,129 @@
         "type": "http",
         "scheme": "bearer"
       }
+    },
+    "schemas": {
+      "CostEstimate": {
+        "type": "object",
+        "description": "针对该精确请求的只读成本报价。不会发起 Provider 调用、账单预留、持久任务或锁价。",
+        "required": [
+          "object",
+          "currency",
+          "estimate_kind",
+          "estimated_cost_micros_usd",
+          "may_exceed_estimate",
+          "estimated_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "const": "cost_estimate",
+            "description": "始终为 `cost_estimate`。"
+          },
+          "currency": {
+            "type": "string",
+            "const": "USD",
+            "description": "报价币种。此版本始终为 USD。"
+          },
+          "estimate_kind": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "upper_bound",
+              "estimate"
+            ],
+            "description": "`exact` 表示客户价格已由当前请求完全确定；`upper_bound` 具有本地可执行上限（见 `max_cost_micros_usd`）；`estimate` 取决于终态用量，最终费用可能高于报价。"
+          },
+          "estimated_cost_micros_usd": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "报价的客户成本，单位为 micro-USD（1 USD = 1,000,000 micros）。"
+          },
+          "max_cost_micros_usd": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "可选的客户成本硬上限，单位为 micro-USD。`exact` 与 `upper_bound` 会返回；`estimate` 省略。"
+          },
+          "may_exceed_estimate": {
+            "type": "boolean",
+            "description": "仅当 `estimate_kind` 为 `estimate` 时为 true。"
+          },
+          "pricing_version": {
+            "type": "string",
+            "description": "可选的不可变或已编译定价版本。"
+          },
+          "estimated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "生成该报价的 UTC 时间戳。"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "有界且非敏感的报价元数据，例如规范模型名或 profile key。"
+          }
+        },
+        "example": {
+          "object": "cost_estimate",
+          "currency": "USD",
+          "estimate_kind": "estimate",
+          "estimated_cost_micros_usd": 425,
+          "may_exceed_estimate": true,
+          "estimated_at": "2026-09-01T08:00:00Z"
+        }
+      }
+    },
+    "parameters": {
+      "XAISACostMode": {
+        "name": "X-AISA-Cost-Mode",
+        "in": "header",
+        "required": false,
+        "description": "设为 `quote` 可对该精确请求估价，而不会执行数据、创建任务或授权扣费。成功报价的 HTTP 状态为 200，响应体为 `cost_estimate`；它不是预留或锁价。省略该请求头则正常执行。其他值返回 `400 invalid_cost_mode`。报价模式需要 API key，不能使用 MPP 或 x402。",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "quote"
+          ]
+        }
+      }
+    },
+    "responses": {
+      "CostEstimate": {
+        "description": "只读成本报价。目标请求会经过校验，但不会被执行、计费、预留或锁价。",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "example": "private, no-store"
+            },
+            "description": "报价响应不可被共享缓存存储。"
+          },
+          "Vary": {
+            "schema": {
+              "type": "string",
+              "example": "X-AISA-Cost-Mode"
+            },
+            "description": "响应体取决于成本模式请求头。"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CostEstimate"
+            },
+            "example": {
+              "object": "cost_estimate",
+              "currency": "USD",
+              "estimate_kind": "estimate",
+              "estimated_cost_micros_usd": 425,
+              "may_exceed_estimate": true,
+              "estimated_at": "2026-09-01T08:00:00Z"
+            }
+          }
+        }
+      }
     }
   },
   "paths": {
@@ -155,11 +278,14 @@
               "type": "string"
             },
             "description": "如果将 reveal_phone_number 参数设置为 true，则此参数为必填项。否则，请勿使用此参数。输入 Webhook URL，以指定 Apollo 应将包含所请求电话号码的 JSON 响应发送到何处。Apollo 建议测试此流程，确保你能够收到包含电话号码的单独响应。如果电话号码未发送到 Webhook URL，请尝试对 Webhook URL 应用 UTF-8 编码。示例：https://webhook.site/cc4cf44e-e047-4774-8dac-473d28474e40；https%3A%2F%2Fwebhook.site%2Fcc4cf44e-e047-4774-8dac-473d28474e40"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -243,11 +369,14 @@
               "type": "string"
             },
             "description": "如果将 reveal_phone_number 参数设置为 true，则此参数为必填项。否则，请勿使用此参数。输入 Webhook URL，以指定 Apollo 应将包含所请求电话号码的 JSON 响应发送到何处。Apollo 建议测试此流程，确保你能够收到包含电话号码的单独响应。如果电话号码未发送到 Webhook URL，请尝试对 Webhook URL 应用 UTF-8 编码。示例：https://webhook.site/cc4cf44e-e047-4774-8dac-473d28474e40；https%3A%2F%2Fwebhook.site%2Fcc4cf44e-e047-4774-8dac-473d28474e40"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -387,11 +516,14 @@
               "type": "string"
             },
             "description": "要进行信息补充的公司域名。请勿包含 www.、@ 符号或类似内容。示例：apollo.io 或 microsoft.com"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -438,11 +570,14 @@
               }
             },
             "description": "要扩充信息的每家公司的域名。请勿包含 www.、@ 符号或类似内容。示例：apollo.io 和 microsoft.com"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -754,11 +889,14 @@
               "type": "integer"
             },
             "description": "每页应返回的搜索结果数量。限制每页的结果数量可提高端点性能。使用 page 参数搜索不同的数据页。示例：10"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -1043,11 +1181,14 @@
               "type": "integer"
             },
             "description": "每页应返回的搜索结果数量。限制每页的结果数量可提高端点性能。使用 page 参数搜索不同的数据页。示例：10"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -1161,11 +1302,14 @@
               "type": "integer"
             },
             "description": "每页应返回的搜索结果数量。限制每页的结果数量可提高端点性能。使用 page 参数搜索不同的数据页。示例：10"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -1212,11 +1356,14 @@
               "type": "string"
             },
             "description": "要研究的组织的 Apollo ID。要查找组织 ID，请调用 Organization Search 端点，并确定该组织的 organizaton_id 值。示例：5e66b6381e05b4008c8331b8"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -1311,11 +1458,14 @@
               "type": "integer"
             },
             "description": "每页应返回的搜索结果数量。限制每页的结果数量可提高端点性能。使用 page 参数搜索不同的数据页。示例：10"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -1359,7 +1509,7 @@
         "operationId": "post_apollo_accounts",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -1419,7 +1569,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/accounts/{account_id}": {
@@ -1436,11 +1591,14 @@
               "type": "string"
             },
             "description": "账户 ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -1518,7 +1676,7 @@
         "operationId": "post_apollo_accounts_bulk_create",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -1648,7 +1806,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/accounts/bulk_update": {
@@ -1658,7 +1821,7 @@
         "operationId": "post_apollo_accounts_bulk_update",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -1733,7 +1896,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/accounts/search": {
@@ -1743,7 +1911,7 @@
         "operationId": "post_apollo_accounts_search",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -1851,7 +2019,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/accounts/{id}": {
@@ -1868,11 +2041,14 @@
               "type": "string"
             },
             "description": "账户 ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -1926,11 +2102,14 @@
               "type": "string"
             },
             "description": "新所有者 ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -1979,7 +2158,7 @@
         "operationId": "get_apollo_account_stages",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -2038,7 +2217,12 @@
           "500": {
             "description": "内部服务器错误"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/contacts": {
@@ -2048,7 +2232,7 @@
         "operationId": "post_apollo_contacts",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -2156,7 +2340,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/contacts/{contact_id}": {
@@ -2173,11 +2362,14 @@
               "type": "string"
             },
             "description": "联系人 ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -2275,11 +2467,14 @@
               "type": "string"
             },
             "description": "联系人 ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -2428,7 +2623,7 @@
         "operationId": "post_apollo_contacts_bulk_create",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -2574,7 +2769,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/contacts/bulk_update": {
@@ -2584,7 +2784,7 @@
         "operationId": "post_apollo_contacts_bulk_update",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -2655,7 +2855,12 @@
           "500": {
             "description": "内部服务器错误"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/contacts/search": {
@@ -2665,7 +2870,7 @@
         "operationId": "post_apollo_contacts_search",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -2773,7 +2978,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/contacts/update_stages": {
@@ -2799,11 +3009,14 @@
               "type": "string"
             },
             "description": "新联系人阶段 ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -2884,11 +3097,14 @@
               "type": "string"
             },
             "description": "新所有者 ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -2937,7 +3153,7 @@
         "operationId": "get_apollo_contact_stages",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -2996,7 +3212,12 @@
           "500": {
             "description": "内部服务器错误"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/opportunities": {
@@ -3006,7 +3227,7 @@
         "operationId": "post_apollo_opportunities",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3077,7 +3298,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/opportunities/search": {
@@ -3112,11 +3338,14 @@
               "type": "integer"
             },
             "description": "每页条目数"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3216,11 +3445,14 @@
               "type": "string"
             },
             "description": "商机 ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3298,11 +3530,14 @@
               "type": "string"
             },
             "description": "商机 ID"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3376,7 +3611,7 @@
         "operationId": "get_apollo_opportunity_stages",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3447,7 +3682,12 @@
           "500": {
             "description": "内部服务器错误"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/emailer_campaigns/search": {
@@ -3482,11 +3722,14 @@
               "type": "integer"
             },
             "description": "每页结果数。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3633,11 +3876,14 @@
               "type": "boolean"
             },
             "description": "允许已在其他序列中完成的联系人。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3705,11 +3951,14 @@
               "type": "string"
             },
             "description": "以下值之一：mark_as_finished、remove、stop。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3753,11 +4002,14 @@
               "type": "string"
             },
             "description": "序列 ID。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3808,11 +4060,14 @@
               "type": "string"
             },
             "description": "序列 ID。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3856,11 +4111,14 @@
               "type": "string"
             },
             "description": "序列 ID。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3982,11 +4240,14 @@
               "type": "integer"
             },
             "description": "每页结果数。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -4037,11 +4298,14 @@
               "type": "string"
             },
             "description": "邮件发送器消息 ID。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -4085,7 +4349,7 @@
         "operationId": "post_apollo_tasks",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -4159,7 +4423,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/tasks/bulk_create": {
@@ -4169,7 +4438,7 @@
         "operationId": "post_apollo_tasks_bulk_create",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -4249,7 +4518,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/tasks/search": {
@@ -4296,11 +4570,14 @@
               "type": "integer"
             },
             "description": "每页结果数。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -4344,7 +4621,7 @@
         "operationId": "post_apollo_reports_sync_report",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -4419,7 +4696,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/phone_calls": {
@@ -4538,11 +4820,14 @@
               "type": "string"
             },
             "description": "结果 ID。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -4697,11 +4982,14 @@
               "type": "integer"
             },
             "description": "每页结果数。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -4863,11 +5151,14 @@
               "type": "string"
             },
             "description": "结果 ID。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -4904,7 +5195,7 @@
         "operationId": "post_apollo_usage_stats_api_usage_stats",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -4931,7 +5222,12 @@
           "500": {
             "description": "内部服务器错误"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/users/search": {
@@ -4957,11 +5253,14 @@
               "type": "integer"
             },
             "description": "每页结果数。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -5005,7 +5304,7 @@
         "operationId": "get_apollo_email_accounts",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -5035,7 +5334,12 @@
           "500": {
             "description": "内部服务器错误"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/labels": {
@@ -5045,7 +5349,7 @@
         "operationId": "get_apollo_labels",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -5075,7 +5379,12 @@
           "500": {
             "description": "内部服务器错误"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/typed_custom_fields": {
@@ -5085,7 +5394,7 @@
         "operationId": "get_apollo_typed_custom_fields",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -5115,7 +5424,12 @@
           "500": {
             "description": "内部服务器错误"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/fields": {
@@ -5125,7 +5439,7 @@
         "operationId": "get_apollo_fields",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -5155,7 +5469,12 @@
           "500": {
             "description": "内部服务器错误"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       },
       "post": {
         "summary": "创建自定义字段",
@@ -5163,7 +5482,7 @@
         "operationId": "post_apollo_fields",
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
@@ -5221,7 +5540,12 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
+          }
+        ]
       }
     },
     "/apollo/notes": {
@@ -5325,11 +5649,14 @@
               "type": "integer"
             },
             "description": "每页结果数（如支持）。"
+          },
+          {
+            "$ref": "#/components/parameters/XAISACostMode"
           }
         ],
         "responses": {
           "200": {
-            "description": "成功响应",
+            "description": "成功响应. 当请求带有 `X-AISA-Cost-Mode: quote` 时，HTTP 200 返回 `cost_estimate`，不会执行该操作。该报价不是预留、授权或锁价。",
             "content": {
               "application/json": {
                 "schema": {
