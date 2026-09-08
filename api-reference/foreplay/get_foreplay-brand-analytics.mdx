@@ -6,10 +6,20 @@ openapi: "openapi/foreplay.json GET /foreplay/brand/analytics"
 
 {/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
 
-Get analytics for a brand — running-ads distribution and creative velocity — returned as a series of analytics rows in `data[]`. Optionally scope with `start_date` / `end_date` and `order`.
+Get analytics for a brand — running-ads distribution and creative velocity. A successful call returns **one row per day** in `data[]` (`date`, `active_count`, `inactive_count`, and per-format counts). Optionally scope with `start_date` / `end_date` and `order`.
 
 ⚠️ **The `id` parameter must be a page_id / `ad_library_id`, NOT a Foreplay `brand_id`.** Passing a `brand_id` returns **HTTP 406**. Get the `ad_library_id` from [`get_foreplay-getbrandsbydomain`](/api-reference/foreplay/get_foreplay-getbrandsbydomain) first. Flow: `getBrandsByDomain(domain)` → `ad_library_id` → `brand/analytics(id=ad_library_id)`.
 
-**Billing: $0.02625 per item returned in `data[]`; empty results and errors are not charged.** One credit per analytics row; a `406` (brand_id passed) is not charged.
+⚠️ **Date window: the range between `start_date` and `end_date` must be ≤ 30 days.** A larger range returns **HTTP 406** `Date range too large`:
+
+```json
+{"metadata":{"success":false,"status_code":406},"error":{"message":"Date range too large","max_allowed_days":"30 days"},"data":[]}
+```
+
+So this endpoint has **two** `406` cases: (1) a `brand_id` was passed instead of a page_id / `ad_library_id`, and (2) the date window exceeds 30 days.
+
+**Billing: $0.02625 per item returned in `data[]`; empty results and errors are not charged.** Because the response is one row per day, **each returned row is 1 billed item ($0.02625)** — a 30-day window can bill up to ~30 items, which matters for cost estimation. A `406` (either case) is not charged.
+
+Example: resolve a domain first (e.g. `getBrandsByDomain?domain=nike.com` → `ad_library_id: "15087023444"`), then query analytics with that id: `GET /foreplay/brand/analytics?id=15087023444&start_date=2025-01-01&end_date=2025-01-30`.
 
 Related: [`get_foreplay-getbrandsbydomain`](/api-reference/foreplay/get_foreplay-getbrandsbydomain), [`get_foreplay-getadsbybrandid`](/api-reference/foreplay/get_foreplay-getadsbybrandid), [`get_foreplay-discovery-ads`](/api-reference/foreplay/get_foreplay-discovery-ads).
