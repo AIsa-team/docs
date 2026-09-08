@@ -87951,6 +87951,584 @@ paths:
       x-x402:
         path: /apis/v2/firecrawl/batch-scrape/{jobId}
         source: https://github.com/AIsa-team/aisa-proxy
+  /foreplay/discovery/ads:
+    get:
+      x-aisa-pricing:
+        model: per_item
+        currency: USD
+        price_usd: 0.02625
+        cost_tier: low
+        note: $0.02625 per item returned in data[]; empty results and 4xx/5xx errors are not charged.
+      summary: Search & Filter Ads
+      description: |-
+        Search across the Foreplay ad index (100M+ ads) with a text query plus filters. Each result in `data[]` is a full ad object (image/video URLs, transcription, brand metadata, targeting, and more).
+
+        Billed $0.02625 per item returned in `data[]` (1 credit per item); empty results and 4xx/5xx errors are not charged.
+      operationId: search_discovery_ads
+      parameters:
+      - name: query
+        in: query
+        required: false
+        description: Search text for ad name or description. Leave empty to search all ads with filters only.
+        schema:
+          type: string
+      - name: start_date
+        in: query
+        required: false
+        description: 'Start date (inclusive). Format: ''YYYY-MM-DD'', ''YYYY-MM-DDTHH:MM:SS'', or ''YYYY-MM-DD HH:MM:SS''.
+          If you provide only the date (e.g. ''2024-11-12''), it will be interpreted as ''2024-11-12 00:00:00''. To get all
+          ads from a specific day, set end_date to ''YYYY-MM-DD 23:59:59'' or to the next day at ''00:00:00''. Examples: start_date=2024-11-12
+          00:00:00, end_date=2024-11-12 23:59:59.'
+        schema:
+          type: string
+      - name: end_date
+        in: query
+        required: false
+        description: 'End date (inclusive). Format: ''YYYY-MM-DD'', ''YYYY-MM-DDTHH:MM:SS'', or ''YYYY-MM-DD HH:MM:SS''. If
+          you provide only the date (e.g. ''2024-11-12''), it will be interpreted as ''2024-11-12 00:00:00''. To include all
+          results for a given day, set end_date to ''YYYY-MM-DD 23:59:59'' or to the next day at ''00:00:00''. Examples: start_date=2024-11-12
+          00:00:00, end_date=2024-11-12 23:59:59.'
+        schema:
+          type: string
+      - name: live
+        in: query
+        required: false
+        description: Filter ads by live status. `true` means currently active ads, `false` means inactive ads. Leave empty
+          to include both.
+        schema:
+          type: string
+      - name: display_format
+        in: query
+        required: false
+        description: |+
+          Filter by one or more display formats.
+          Available formats (11): carousel, dco, dpa, event, image, multi_images, multi_medias, multi_videos, page_like, text, video
+          Example: `?display_format=video&display_format=carousel`
+
+        schema:
+          type: string
+          enum:
+          - carousel
+          - dco
+          - dpa
+          - event
+          - image
+          - multi_images
+          - multi_medias
+          - multi_videos
+          - page_like
+          - text
+          - video
+      - name: publisher_platform
+        in: query
+        required: false
+        description: |+
+          Filter by one or more publisher platforms.
+          Available platforms: facebook, instagram, audience_network, messenger, tiktok, youtube, linkedin, threads, whatsapp
+          Example: `?publisher_platform=facebook&publisher_platform=instagram`
+
+        schema:
+          type: string
+          enum:
+          - facebook
+          - instagram
+          - audience_network
+          - messenger
+          - tiktok
+          - youtube
+          - linkedin
+          - threads
+          - whatsapp
+      - name: niches
+        in: query
+        required: false
+        description: |+
+          Filter by one or more niches.
+          Available niches: accessories, app/software, beauty, business/professional, education, entertainment, fashion, food/drink, health/wellness, home/garden, jewelry/watches, other, parenting, pets, real estate, service business, medical, charity/nfp, kids/baby
+          Example: `?niches=travel&niches=fashion`
+
+        schema:
+          type: string
+      - name: market_target
+        in: query
+        required: false
+        description: |+
+          Filter by market target.
+          Available targets: b2b (business-to-business), b2c (business-to-consumer)
+          Example: `?market_target=b2b`
+
+        schema:
+          type: string
+      - name: languages
+        in: query
+        required: false
+        description: |+
+          Filter by languages.
+          Accepts various language formats: 'french', 'FR', 'romanian', 'ro', 'english', 'en', etc.
+          Example: `?languages=en&languages=fr`
+
+        schema:
+          type: string
+      - name: video_duration_min
+        in: query
+        required: false
+        description: Filter ads by minimum video duration in seconds. Only applies to video ads.
+        schema:
+          type: string
+      - name: video_duration_max
+        in: query
+        required: false
+        description: Filter ads by maximum video duration in seconds. Only applies to video ads.
+        schema:
+          type: string
+      - name: running_duration_min_days
+        in: query
+        required: false
+        description: Filter ads by minimum running duration in days. Must be a positive integer.
+        schema:
+          type: string
+      - name: running_duration_max_days
+        in: query
+        required: false
+        description: Filter ads by maximum running duration in days. Must be a positive integer.
+        schema:
+          type: string
+      - name: cursor
+        in: query
+        required: false
+        description: Cursor for pagination. Use the cursor value from the previous response's metadata to get the next page
+          of results.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        description: Pagination limit (max 250). Controls the number of ads returned per request.
+        schema:
+          type: integer
+          default: 10
+          maximum: 250
+      - name: order
+        in: query
+        required: false
+        description: 'Order of results: ''newest'' (default), ''oldest'', ''longest_running'', or ''most_relevant''. Sorts
+          ads by creation date, longest running duration, or relevance to the search query.'
+        schema:
+          type: string
+          default: newest
+          enum:
+          - newest
+          - oldest
+          - longest_running
+          - most_relevant
+      responses:
+        '200':
+          description: JSON envelope with `metadata` and a `data[]` array of ad objects. Each ad in `data[]` counts as one
+            billed item.
+          content:
+            application/json:
+              schema:
+                type: object
+              example:
+                metadata:
+                  success: true
+                  status_code: 200
+                  count: 1
+                  cursor: null
+                data:
+                - id: abc123
+                  brand_id: bYeKOahyGopmGKMHiWit
+                  brand_name: Nike
+                  display_format: video
+                  publisher_platform: facebook
+                  live: true
+                error: null
+      tags:
+      - Other
+      x-x402:
+        path: /apis/v2/foreplay/discovery/ads
+        source: https://github.com/AIsa-team/aisa-proxy
+  /foreplay/brand/getAdsByBrandId:
+    get:
+      x-aisa-pricing:
+        model: per_item
+        currency: USD
+        price_usd: 0.02625
+        cost_tier: low
+        note: $0.02625 per item returned in data[]; empty results and 4xx/5xx errors are not charged.
+      summary: Get Ads by Brand IDs
+      description: |-
+        Retrieve ads for one or more Foreplay brand IDs, applying the supplied filters. Each result in `data[]` is a full ad object.
+
+        **Accepts `brand_ids` only.** `page_id` lookup is NOT supported on the AIsa gateway — resolve a domain to its `ad_library_id` / brand id via `getBrandsByDomain` first. Passing a page id in `brand_ids` returns HTTP 200 with `count: 0` (silently treated as an unknown brand). This is intentional P0 scoping, documented as a known limitation.
+
+        Billed $0.02625 per item returned in `data[]` (1 credit per item); empty results and 4xx/5xx errors are not charged.
+      operationId: get_ads_by_brand_ids
+      parameters:
+      - name: brand_ids
+        in: query
+        required: true
+        description: Brand ID(s) to search for. Can be a single ID or multiple IDs separated by commas.
+        schema:
+          type: array
+      - name: live
+        in: query
+        required: false
+        description: Filter ads by live status. `true` means currently active ads, `false` means inactive ads. Leave empty
+          to include both.
+        schema:
+          type: string
+      - name: display_format
+        in: query
+        required: false
+        description: |+
+          Filter by one or more display formats.
+          Available formats (11): carousel, dco, dpa, event, image, multi_images, multi_medias, multi_videos, page_like, text, video
+          Example: `?display_format=video&display_format=carousel`
+
+        schema:
+          type: string
+          enum:
+          - carousel
+          - dco
+          - dpa
+          - event
+          - image
+          - multi_images
+          - multi_medias
+          - multi_videos
+          - page_like
+          - text
+          - video
+      - name: publisher_platform
+        in: query
+        required: false
+        description: |+
+          Filter by one or more publisher platforms.
+          Available platforms: facebook, instagram, audience_network, messenger, tiktok, youtube, linkedin, threads, whatsapp
+          Example: `?publisher_platform=facebook&publisher_platform=instagram`
+
+        schema:
+          type: string
+          enum:
+          - facebook
+          - instagram
+          - audience_network
+          - messenger
+          - tiktok
+          - youtube
+          - linkedin
+          - threads
+          - whatsapp
+      - name: niches
+        in: query
+        required: false
+        description: |+
+          Filter by one or more niches.
+          Available niches: travel, food, fashion, beauty, health, technology, automotive, finance, education, entertainment, sports, home, pets, business, other
+          Example: `?niches=travel&niches=fashion`
+
+        schema:
+          type: string
+      - name: market_target
+        in: query
+        required: false
+        description: |+
+          Filter by market target.
+          Available targets: b2b (business-to-business), b2c (business-to-consumer)
+          Example: `?market_target=b2b`
+
+        schema:
+          type: string
+      - name: languages
+        in: query
+        required: false
+        description: |+
+          Filter by languages.
+          Accepts various language formats: 'french', 'FR', 'romanian', 'ro', 'english', 'en', etc.
+          Example: `?languages=en&languages=fr`
+
+        schema:
+          type: string
+      - name: video_duration_min
+        in: query
+        required: false
+        description: Filter ads by minimum video duration in seconds. Only applies to video ads.
+        schema:
+          type: string
+      - name: video_duration_max
+        in: query
+        required: false
+        description: Filter ads by maximum video duration in seconds. Only applies to video ads.
+        schema:
+          type: string
+      - name: running_duration_min_days
+        in: query
+        required: false
+        description: Filter ads by minimum running duration in days. Must be a positive integer.
+        schema:
+          type: string
+      - name: running_duration_max_days
+        in: query
+        required: false
+        description: Filter ads by maximum running duration in days. Must be a positive integer.
+        schema:
+          type: string
+      - name: start_date
+        in: query
+        required: false
+        description: 'Start date (inclusive). Format: ''YYYY-MM-DD'', ''YYYY-MM-DDTHH:MM:SS'', or ''YYYY-MM-DD HH:MM:SS''.
+          If you provide only the date (e.g. ''2024-11-12''), it will be interpreted as ''2024-11-12 00:00:00''. To get all
+          ads from a specific day, set end_date to ''YYYY-MM-DD 23:59:59'' or to the next day at ''00:00:00''. Examples: start_date=2024-11-12
+          00:00:00, end_date=2024-11-12 23:59:59.'
+        schema:
+          type: string
+      - name: end_date
+        in: query
+        required: false
+        description: 'End date (inclusive). Format: ''YYYY-MM-DD'', ''YYYY-MM-DDTHH:MM:SS'', or ''YYYY-MM-DD HH:MM:SS''. If
+          you provide only the date (e.g. ''2024-11-12''), it will be interpreted as ''2024-11-12 00:00:00''. To include all
+          results for a given day, set end_date to ''YYYY-MM-DD 23:59:59'' or to the next day at ''00:00:00''. Examples: start_date=2024-11-12
+          00:00:00, end_date=2024-11-12 23:59:59.'
+        schema:
+          type: string
+      - name: order
+        in: query
+        required: false
+        description: 'Order of results: ''newest'' (default), ''oldest'', ''longest_running'', or ''most_relevant''. Sorts
+          ads by creation date, longest running duration, or relevance to the search query.'
+        schema:
+          type: string
+          default: newest
+          enum:
+          - newest
+          - oldest
+          - longest_running
+          - most_relevant
+      - name: cursor
+        in: query
+        required: false
+        description: Cursor for pagination. Use the cursor value from the previous response's metadata to get the next page
+          of results.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        description: Pagination limit (max 250). Controls the number of ads returned per request.
+        schema:
+          type: integer
+          default: 10
+          maximum: 250
+      - name: collect
+        in: query
+        required: false
+        description: Best-effort live fallback. If the cached results are empty and `collect=true`, the API translates each
+          brand id to its Meta page id (`adlibraryid`), kicks off a live fetch through our Spyder pipeline, and polls for
+          ~30 seconds. Returns whatever is available at the end of the window — may still be empty if a brand has no Meta
+          page on file, the page is restricted, deleted, or simply isn't running ads. Not perfect — use it as a fallback when
+          the regular response is empty, not as a default.
+        schema:
+          type: string
+          default: false
+      responses:
+        '200':
+          description: JSON envelope with `metadata` and a `data[]` array of ad objects. Each ad in `data[]` counts as one
+            billed item.
+          content:
+            application/json:
+              schema:
+                type: object
+              example:
+                metadata:
+                  success: true
+                  status_code: 200
+                  count: 1
+                  cursor: null
+                data:
+                - id: abc123
+                  brand_id: bYeKOahyGopmGKMHiWit
+                  brand_name: Nike
+                  display_format: video
+                  publisher_platform: facebook
+                  live: true
+                error: null
+      tags:
+      - Other
+      x-x402:
+        path: /apis/v2/foreplay/brand/getAdsByBrandId
+        source: https://github.com/AIsa-team/aisa-proxy
+  /foreplay/brand/getBrandsByDomain:
+    get:
+      x-aisa-pricing:
+        model: per_item
+        currency: USD
+        price_usd: 0.02625
+        cost_tier: low
+        note: $0.02625 per item returned in data[]; empty results and 4xx/5xx errors are not charged.
+      summary: Get Brands by Domain
+      description: |-
+        Discover brands that advertise from a given domain. Returns brand records including the Foreplay `brand_id` and the `ad_library_id` (page_id). Use the returned `ad_library_id` as the `id` input to `brand/analytics`.
+
+        Billed $0.02625 per item returned in `data[]` (1 credit per item); empty results and 4xx/5xx errors are not charged.
+      operationId: get_brands_by_domain
+      parameters:
+      - name: domain
+        in: query
+        required: true
+        description: Domain name to search for. This can be a full URL (e.g., 'https://example.com') or just the domain (e.g.,
+          'example.com'). The system will automatically format and clean the domain. This endpoint looks up candidate brands
+          based on the provided domain. The returned brands are potential matches and are not guaranteed to be definitively
+          associated with the domain.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        description: Pagination limit (max 10). Controls the number of brands returned per request.
+        schema:
+          type: integer
+          default: 10
+          maximum: 10
+      - name: order
+        in: query
+        required: false
+        description: 'Order of results: ''most_ranked'' (default) or ''least_ranked''. Sorts brands by relevance ranking.'
+        schema:
+          type: string
+          default: most_ranked
+      responses:
+        '200':
+          description: JSON envelope with `metadata` and a `data[]` array of brand objects (each includes `brand_id` and `ad_library_id`).
+            Each brand in `data[]` counts as one billed item.
+          content:
+            application/json:
+              schema:
+                type: object
+              example:
+                metadata:
+                  success: true
+                  status_code: 200
+                  count: 1
+                  cursor: null
+                data:
+                - brand_id: bYeKOahyGopmGKMHiWit
+                  ad_library_id: '15087023444'
+                  name: Nike
+                error: null
+      tags:
+      - Other
+      x-x402:
+        path: /apis/v2/foreplay/brand/getBrandsByDomain
+        source: https://github.com/AIsa-team/aisa-proxy
+  /foreplay/brand/analytics:
+    get:
+      x-aisa-pricing:
+        model: per_item
+        currency: USD
+        price_usd: 0.02625
+        cost_tier: low
+        note: $0.02625 per item returned in data[]; empty results and 4xx/5xx errors are not charged.
+      summary: Get Brand Analytics
+      description: |-
+        Get analytics for a brand (running-ads distribution, creative velocity) as a series of analytics rows. A successful call returns **one row per day** (`date`, `active_count`, `inactive_count`, and per-format counts).
+
+        **Important:** the `id` parameter must be a page_id / `ad_library_id` (obtained from the `getBrandsByDomain` response), NOT a Foreplay `brand_id`. Passing a `brand_id` returns HTTP 406. Flow: `getBrandsByDomain(domain)` -> `ad_library_id` -> `brand/analytics(id=ad_library_id)`.
+
+        **Date window:** the window between `start_date` and `end_date` must be ≤ 30 days. A larger range returns HTTP 406 `Date range too large`.
+
+        **Cost estimation:** each returned row is 1 billed item ($0.02625). Because the response is one row per day, a 30-day window can bill up to ~30 items.
+
+        Billed $0.02625 per item returned in `data[]` (1 credit per item); empty results and 4xx/5xx errors are not charged.
+      operationId: get_brands_analytics
+      parameters:
+      - name: id
+        in: query
+        required: true
+        description: Page ID or Brand ID. Brand IDs are 20-25 character alphanumeric strings with mixed case. Page IDs are
+          numeric Facebook page identifiers.
+        schema:
+          type: string
+      - name: start_date
+        in: query
+        required: false
+        description: 'Start date (inclusive). Format: ''YYYY-MM-DD'', ''YYYY-MM-DDTHH:MM:SS'', or ''YYYY-MM-DD HH:MM:SS''.
+          If you provide only the date (e.g. ''2024-11-12''), it will be interpreted as ''2024-11-12 00:00:00''. To get all
+          ads from a specific day, set end_date to ''YYYY-MM-DD 23:59:59'' or to the next day at ''00:00:00''. Examples: start_date=2024-11-12
+          00:00:00, end_date=2024-11-12 23:59:59. The window between start_date and end_date must be ≤ 30 days. A larger range
+          returns HTTP 406 `Date range too large`.'
+        schema:
+          type: string
+      - name: end_date
+        in: query
+        required: false
+        description: 'End date (inclusive). Format: ''YYYY-MM-DD'', ''YYYY-MM-DDTHH:MM:SS'', or ''YYYY-MM-DD HH:MM:SS''. If
+          you provide only the date (e.g. ''2024-11-12''), it will be interpreted as ''2024-11-12 00:00:00''. To include all
+          results for a given day, set end_date to ''YYYY-MM-DD 23:59:59'' or to the next day at ''00:00:00''. Examples: start_date=2024-11-12
+          00:00:00, end_date=2024-11-12 23:59:59. The window between start_date and end_date must be ≤ 30 days. A larger range
+          returns HTTP 406 `Date range too large`.'
+        schema:
+          type: string
+      - name: order
+        in: query
+        required: false
+        description: 'Order of results: ''newest'' (default), ''oldest'', ''longest_running'', or ''most_relevant''. Sorts
+          ads by creation date, longest running duration, or relevance to the search query.'
+        schema:
+          type: string
+          default: newest
+          enum:
+          - newest
+          - oldest
+          - longest_running
+          - most_relevant
+      responses:
+        '200':
+          description: JSON envelope with `metadata` and a `data[]` array of analytics rows (one row per day, each with `date`,
+            `active_count`, `inactive_count`, and per-format counts). Each row in `data[]` counts as one billed item.
+          content:
+            application/json:
+              schema:
+                type: object
+              example:
+                metadata:
+                  success: true
+                  status_code: 200
+                  count: 2
+                  cursor: null
+                data:
+                - date: '2025-01-01'
+                  active_count: 12
+                  inactive_count: 3
+                  video: 7
+                  image: 5
+                - date: '2025-01-02'
+                  active_count: 14
+                  inactive_count: 2
+                  video: 8
+                  image: 6
+                error: null
+        '406':
+          description: 'Not Acceptable. Returned in two cases: (1) the `start_date`–`end_date` window exceeds 30 days (`Date
+            range too large`); or (2) a Foreplay `brand_id` was passed to `id` instead of a page_id / `ad_library_id`. Not
+            charged.'
+          content:
+            application/json:
+              schema:
+                type: object
+              example:
+                metadata:
+                  success: false
+                  status_code: 406
+                error:
+                  message: Date range too large
+                  max_allowed_days: 30 days
+                data: []
+      tags:
+      - Other
+      x-x402:
+        path: /apis/v2/foreplay/brand/analytics
+        source: https://github.com/AIsa-team/aisa-proxy
   /models/{model}:generateContent:
     post:
       summary: Generate content using a Gemini-compatible AIsa model
@@ -102127,6 +102705,10 @@ components:
     Dataforseo_BearerAuth:
       type: http
       scheme: bearer
+    Foreplay_BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: AISA API Key
     GeminiOpenapi_BearerAuth:
       type: http
       scheme: bearer
