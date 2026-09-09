@@ -6,10 +6,12 @@ openapi: "openapi/cnpja.json GET /cnpja/office/{taxId}"
 
 {/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
 
-Resolve the full registered profile of a Brazilian company office (establishment) from its 14-digit CNPJ tax ID. The response includes the legal name (razão social) via `company.name`, the trade name (`alias`), registration `status`, `founded` date, the full registered `address`, and the primary/secondary economic activities (`mainActivity` / `sideActivities`).
+Resolve the full registered profile of a Brazilian company office (establishment) from its 14-digit CNPJ tax ID. The response includes the legal name (razão social) via `company.name`, the trade name (`alias`, which may be `null`), registration `status`, `founded` date, the full registered `address`, the shareholder/partner structure (`company.members`), registered `phones` / `emails`, and the primary/secondary economic activities (`mainActivity` / `sideActivities`).
 
 Pass the CNPJ as the `taxId` path parameter (digits only, no punctuation) and authenticate with your AIsa API key as a bearer token — the same key used across every AIsa `/apis/*` endpoint.
 
-Example: `GET /apis/v1/cnpja/office/06990590000123` returns the office registered under that CNPJ, including `company.name`, `alias`, `status`, `address`, and `mainActivity`.
+Example: `GET /apis/v1/cnpja/office/06990590000123` returns the office registered under that CNPJ, including `company.name`, `alias`, `status`, `address`, `company.members`, and `mainActivity`.
 
-**Billing: $0.00528 per call (1 credit per lookup).** A "company not found" result returns **HTTP 404** with a valid JSON body and is still billed 1 credit; only 429, 5xx, and network errors are not billed.
+**Error responses:** a malformed CNPJ that fails the check-digit (checksum) algorithm returns **HTTP 400** (`request validation failed`) — a client-side input error. A well-formed CNPJ that is simply not registered returns **HTTP 404** (`tax id not registered at revenue service`).
+
+**Billing: $0.00528 per call (1 credit per lookup).** The "not registered" **HTTP 404** result returns a valid JSON body and is still billed 1 credit; only 429, 5xx, and network errors are not billed. (A **400** validation error is a client-side rejection.)

@@ -3,7 +3,7 @@
   "info": {
     "title": "CNPJá API",
     "version": "1.0.0",
-    "description": "Brazilian company registry (CNPJ) lookup routed through the AIsa gateway. Resolve the full registered profile of a Brazilian company office (establishment) from its 14-digit CNPJ tax ID: legal name, trade name, registration status, address, and economic activities. Flat pricing at $0.00528 per call (1 credit per lookup). A \"company not found\" (HTTP 404) still returns a valid API response and is billed 1 credit; only 429, 5xx, and network errors are not billed."
+    "description": "Brazilian company registry (CNPJ) lookup routed through the AIsa gateway. Resolve the full registered profile of a Brazilian company office (establishment) from its 14-digit CNPJ tax ID: legal name, trade name, registration status, address, shareholder structure, and economic activities. Flat pricing at $0.00528 per call (1 credit per lookup). A \"company not found\" (HTTP 404) still returns a valid API response and is billed 1 credit; only 429, 5xx, and network errors are not billed."
   },
   "servers": [
     {
@@ -19,21 +19,21 @@
     "/cnpja/office/{taxId}": {
       "get": {
         "x-aisa-pricing": {
-          "model": "per_call",
+          "model": "per_request",
           "currency": "USD",
           "price_usd": 0.00528,
           "cost_tier": "low",
           "note": "$0.00528 per call (1 credit per lookup). HTTP 404 (company not found) returns a valid response and is billed 1 credit; only 429/5xx/network errors are not billed."
         },
         "summary": "CNPJ Office Lookup",
-        "description": "Look up the registered profile of a Brazilian company office (establishment) by its 14-digit CNPJ tax ID. Returns the office's legal/company name, trade name (`alias`), registration status, founding date, full address, and primary/secondary economic activities (CNAE).\n\nBilled $0.00528 per call (1 credit per lookup). A \"company not found\" result returns HTTP 404 with a valid JSON body and is still billed 1 credit; only 429, 5xx, and network errors are not billed.",
+        "description": "Look up the registered profile of a Brazilian company office (establishment) by its 14-digit CNPJ tax ID. Returns the office's legal/company name, trade name (`alias`), registration status, founding date, full address, shareholder/member structure, and primary/secondary economic activities (CNAE).\n\nBilled $0.00528 per call (1 credit per lookup). A \"company not found\" result returns HTTP 404 with a valid JSON body and is still billed 1 credit; only 429, 5xx, and network errors are not billed.",
         "operationId": "get_cnpja_office_lookup",
         "parameters": [
           {
             "name": "taxId",
             "in": "path",
             "required": true,
-            "description": "The 14-digit Brazilian CNPJ number of the office to look up (digits only, no punctuation). Example: `06990590000123`.",
+            "description": "The 14-digit Brazilian CNPJ number of the office to look up (digits only, no punctuation). Punctuated input fails routing. Example: `06990590000123`.",
             "schema": {
               "type": "string",
               "example": "06990590000123"
@@ -48,13 +48,18 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "updated": {
+                      "type": "string",
+                      "description": "Timestamp of the last update of this record at the revenue service (ISO 8601)."
+                    },
                     "taxId": {
                       "type": "string",
                       "description": "The 14-digit CNPJ of this office."
                     },
                     "alias": {
                       "type": "string",
-                      "description": "Trade name (nome fantasia) of the office, when registered."
+                      "nullable": true,
+                      "description": "Trade name (nome fantasia) of the office, when registered. Returns `null` for offices without a registered trade name."
                     },
                     "founded": {
                       "type": "string",
@@ -80,7 +85,10 @@
                       "type": "object",
                       "description": "The parent legal entity.",
                       "properties": {
-                        "id": { "type": "integer" },
+                        "id": {
+                          "type": "string",
+                          "description": "Company identifier (8 digits, may include leading zeros)."
+                        },
                         "name": {
                           "type": "string",
                           "description": "Legal name (razão social) of the company."
@@ -88,6 +96,88 @@
                         "equity": {
                           "type": "number",
                           "description": "Registered share capital."
+                        },
+                        "nature": {
+                          "type": "object",
+                          "description": "Legal nature (natureza jurídica) of the company.",
+                          "properties": {
+                            "id": { "type": "integer" },
+                            "text": { "type": "string" }
+                          }
+                        },
+                        "size": {
+                          "type": "object",
+                          "description": "Company size classification (porte).",
+                          "properties": {
+                            "id": { "type": "integer" },
+                            "acronym": { "type": "string" },
+                            "text": { "type": "string" }
+                          }
+                        },
+                        "members": {
+                          "type": "array",
+                          "description": "Shareholder / partner structure (quadro societário). Each entry describes a member and, when applicable, their legal representative (agent).",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "since": { "type": "string", "description": "Date the member joined (YYYY-MM-DD)." },
+                              "role": {
+                                "type": "object",
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "text": { "type": "string" }
+                                }
+                              },
+                              "person": {
+                                "type": "object",
+                                "properties": {
+                                  "id": { "type": "string" },
+                                  "name": { "type": "string" },
+                                  "type": { "type": "string", "description": "LEGAL or NATURAL." },
+                                  "taxId": { "type": "string", "description": "Partially masked for natural persons." },
+                                  "age": { "type": "string", "description": "Age band for natural persons.", "nullable": true },
+                                  "country": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": { "type": "integer" },
+                                      "name": { "type": "string" }
+                                    }
+                                  }
+                                }
+                              },
+                              "agent": {
+                                "type": "object",
+                                "nullable": true,
+                                "description": "Legal representative of the member, when the member is a foreign or legal entity.",
+                                "properties": {
+                                  "role": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": { "type": "integer" },
+                                      "text": { "type": "string" }
+                                    }
+                                  },
+                                  "person": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": { "type": "string" },
+                                      "name": { "type": "string" },
+                                      "type": { "type": "string" },
+                                      "taxId": { "type": "string" },
+                                      "age": { "type": "string", "nullable": true },
+                                      "country": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": { "type": "integer" },
+                                          "name": { "type": "string" }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
                         }
                       }
                     },
@@ -95,8 +185,10 @@
                       "type": "object",
                       "description": "Registered address of the office.",
                       "properties": {
+                        "municipality": { "type": "integer", "description": "IBGE municipality code." },
                         "street": { "type": "string" },
                         "number": { "type": "string" },
+                        "details": { "type": "string", "description": "Address complement (complemento).", "nullable": true },
                         "district": { "type": "string" },
                         "city": { "type": "string" },
                         "state": { "type": "string" },
@@ -107,6 +199,30 @@
                             "id": { "type": "integer" },
                             "name": { "type": "string" }
                           }
+                        }
+                      }
+                    },
+                    "phones": {
+                      "type": "array",
+                      "description": "Registered phone numbers.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": { "type": "string", "description": "e.g. LANDLINE / MOBILE." },
+                          "area": { "type": "string", "description": "Area code (DDD)." },
+                          "number": { "type": "string" }
+                        }
+                      }
+                    },
+                    "emails": {
+                      "type": "array",
+                      "description": "Registered email addresses.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ownership": { "type": "string", "description": "e.g. CORPORATE / PERSONAL." },
+                          "domain": { "type": "string" },
+                          "address": { "type": "string" }
                         }
                       }
                     },
@@ -132,25 +248,91 @@
                   }
                 },
                 "example": {
+                  "updated": "2026-09-08T20:11:15.000Z",
                   "taxId": "06990590000123",
-                  "alias": "GOOGLE BRASIL",
-                  "founded": "2004-08-26",
+                  "company": {
+                    "id": "06990590",
+                    "name": "GOOGLE BRASIL INTERNET LTDA.",
+                    "equity": 200000000,
+                    "nature": {
+                      "id": 2062,
+                      "text": "Sociedade Empresária Limitada"
+                    },
+                    "size": {
+                      "id": 5,
+                      "acronym": "DEMAIS",
+                      "text": "Demais"
+                    },
+                    "members": [
+                      {
+                        "since": "2004-09-01",
+                        "role": {
+                          "id": 37,
+                          "text": "Sócio Pessoa Jurídica Domiciliado no Exterior"
+                        },
+                        "person": {
+                          "id": "f172f1f6-46f5-5a10-9fb9-8d7c2dbdc2f9",
+                          "name": "GOOGLE LLC",
+                          "type": "LEGAL",
+                          "taxId": "06947284000104",
+                          "country": {
+                            "id": 840,
+                            "name": "Estados Unidos"
+                          }
+                        },
+                        "agent": {
+                          "role": {
+                            "id": 17,
+                            "text": "Procurador"
+                          },
+                          "person": {
+                            "id": "1cf6c284-8400-5c85-89e3-b20e0093be5a",
+                            "name": "Yun Ki Lee",
+                            "type": "NATURAL",
+                            "taxId": "***746608**",
+                            "age": "51-60",
+                            "country": {
+                              "id": 76,
+                              "name": "Brasil"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "since": "2014-08-26",
+                        "role": {
+                          "id": 5,
+                          "text": "Administrador"
+                        },
+                        "person": {
+                          "id": "dc20e638-a27c-547c-bb7d-5ee7cbd917b7",
+                          "name": "Fabio Jose Silva Coelho",
+                          "type": "NATURAL",
+                          "taxId": "***133807**",
+                          "age": "61-70",
+                          "country": {
+                            "id": 76,
+                            "name": "Brasil"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "alias": null,
+                  "founded": "2004-09-01",
                   "head": true,
-                  "statusDate": "2005-11-03",
+                  "statusDate": "2004-09-01",
                   "status": {
                     "id": 2,
                     "text": "Ativa"
                   },
-                  "company": {
-                    "id": 6990590,
-                    "name": "GOOGLE BRASIL INTERNET LTDA.",
-                    "equity": 1500000000
-                  },
                   "address": {
-                    "street": "AVENIDA BRIGADEIRO FARIA LIMA",
+                    "municipality": 3550308,
+                    "street": "Avenida Brig Faria Lima",
                     "number": "3477",
-                    "district": "ITAIM BIBI",
-                    "city": "SAO PAULO",
+                    "details": "Andar 17A20 Tsul 2 17A20",
+                    "district": "Itaim Bibi",
+                    "city": "São Paulo",
                     "state": "SP",
                     "zip": "04538133",
                     "country": {
@@ -158,22 +340,64 @@
                       "name": "Brasil"
                     }
                   },
+                  "phones": [
+                    {
+                      "type": "LANDLINE",
+                      "area": "11",
+                      "number": "23958400"
+                    }
+                  ],
+                  "emails": [
+                    {
+                      "ownership": "CORPORATE",
+                      "domain": "google.com",
+                      "address": "googlebrasil@google.com"
+                    }
+                  ],
                   "mainActivity": {
                     "id": 6319400,
-                    "text": "Portais, provedores de conteudo e outros servicos de informacao na internet"
+                    "text": "Portais, provedores de conteúdo e outros serviços de informação na Internet"
                   },
                   "sideActivities": [
-                    {
-                      "id": 7020400,
-                      "text": "Atividades de consultoria em gestao empresarial"
+                    { "id": 4751201, "text": "Comércio varejista especializado de equipamentos e suprimentos de informática" },
+                    { "id": 6201501, "text": "Desenvolvimento de programas de computador sob encomenda" },
+                    { "id": 6202300, "text": "Desenvolvimento e licenciamento de programas de computador customizáveis" },
+                    { "id": 6311900, "text": "Tratamento de dados, provedores de serviços de aplicação e serviços de hospedagem na Internet" },
+                    { "id": 6462000, "text": "Holdings de instituições não financeiras" },
+                    { "id": 7319004, "text": "Consultoria em publicidade" },
+                    { "id": 8299799, "text": "Outras atividades de serviços prestados principalmente às empresas não especificadas anteriormente" }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The supplied taxId failed the CNPJ verification (checksum) algorithm — a malformed number that is not a valid CNPJ. Distinct from 404 (a well-formed CNPJ that is simply not registered). A 400 indicates a client-side input error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "integer" },
+                    "message": { "type": "string" },
+                    "constraints": {
+                      "type": "array",
+                      "items": { "type": "string" }
                     }
+                  }
+                },
+                "example": {
+                  "code": 400,
+                  "message": "request validation failed",
+                  "constraints": [
+                    "taxId must be a string that obeys cnpj verification algorithm"
                   ]
                 }
               }
             }
           },
           "404": {
-            "description": "Company not found for the given CNPJ. Returns a valid JSON error body and is still billed 1 credit ($0.00528).",
+            "description": "A well-formed CNPJ that is not registered at the revenue service. Returns a valid JSON error body and is still billed 1 credit ($0.00528).",
             "content": {
               "application/json": {
                 "schema": {
@@ -185,7 +409,7 @@
                 },
                 "example": {
                   "code": 404,
-                  "message": "No record found for the given tax id."
+                  "message": "tax id not registered at revenue service"
                 }
               }
             }
