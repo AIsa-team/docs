@@ -1,0 +1,206 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "CNPJá API",
+    "version": "1.0.0",
+    "description": "Brazilian company registry (CNPJ) lookup routed through the AIsa gateway. Resolve the full registered profile of a Brazilian company office (establishment) from its 14-digit CNPJ tax ID: legal name, trade name, registration status, address, and economic activities. Flat pricing at $0.00528 per call (1 credit per lookup). A \"company not found\" (HTTP 404) still returns a valid API response and is billed 1 credit; only 429, 5xx, and network errors are not billed."
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/cnpja/office/{taxId}": {
+      "get": {
+        "x-aisa-pricing": {
+          "model": "per_call",
+          "currency": "USD",
+          "price_usd": 0.00528,
+          "cost_tier": "low",
+          "note": "$0.00528 per call (1 credit per lookup). HTTP 404 (company not found) returns a valid response and is billed 1 credit; only 429/5xx/network errors are not billed."
+        },
+        "summary": "CNPJ Office Lookup",
+        "description": "Look up the registered profile of a Brazilian company office (establishment) by its 14-digit CNPJ tax ID. Returns the office's legal/company name, trade name (`alias`), registration status, founding date, full address, and primary/secondary economic activities (CNAE).\n\nBilled $0.00528 per call (1 credit per lookup). A \"company not found\" result returns HTTP 404 with a valid JSON body and is still billed 1 credit; only 429, 5xx, and network errors are not billed.",
+        "operationId": "get_cnpja_office_lookup",
+        "parameters": [
+          {
+            "name": "taxId",
+            "in": "path",
+            "required": true,
+            "description": "The 14-digit Brazilian CNPJ number of the office to look up (digits only, no punctuation). Example: `06990590000123`.",
+            "schema": {
+              "type": "string",
+              "example": "06990590000123"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The registered office profile for the given CNPJ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "taxId": {
+                      "type": "string",
+                      "description": "The 14-digit CNPJ of this office."
+                    },
+                    "alias": {
+                      "type": "string",
+                      "description": "Trade name (nome fantasia) of the office, when registered."
+                    },
+                    "founded": {
+                      "type": "string",
+                      "description": "Registration/opening date of the office (YYYY-MM-DD)."
+                    },
+                    "head": {
+                      "type": "boolean",
+                      "description": "Whether this office is the company headquarters (matriz)."
+                    },
+                    "statusDate": {
+                      "type": "string",
+                      "description": "Date of the current registration status (YYYY-MM-DD)."
+                    },
+                    "status": {
+                      "type": "object",
+                      "description": "Registration status of the office (e.g. Ativa / Baixada).",
+                      "properties": {
+                        "id": { "type": "integer" },
+                        "text": { "type": "string" }
+                      }
+                    },
+                    "company": {
+                      "type": "object",
+                      "description": "The parent legal entity.",
+                      "properties": {
+                        "id": { "type": "integer" },
+                        "name": {
+                          "type": "string",
+                          "description": "Legal name (razão social) of the company."
+                        },
+                        "equity": {
+                          "type": "number",
+                          "description": "Registered share capital."
+                        }
+                      }
+                    },
+                    "address": {
+                      "type": "object",
+                      "description": "Registered address of the office.",
+                      "properties": {
+                        "street": { "type": "string" },
+                        "number": { "type": "string" },
+                        "district": { "type": "string" },
+                        "city": { "type": "string" },
+                        "state": { "type": "string" },
+                        "zip": { "type": "string" },
+                        "country": {
+                          "type": "object",
+                          "properties": {
+                            "id": { "type": "integer" },
+                            "name": { "type": "string" }
+                          }
+                        }
+                      }
+                    },
+                    "mainActivity": {
+                      "type": "object",
+                      "description": "Primary economic activity (CNAE) of the office.",
+                      "properties": {
+                        "id": { "type": "integer" },
+                        "text": { "type": "string" }
+                      }
+                    },
+                    "sideActivities": {
+                      "type": "array",
+                      "description": "Secondary economic activities (CNAE).",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "integer" },
+                          "text": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "taxId": "06990590000123",
+                  "alias": "GOOGLE BRASIL",
+                  "founded": "2004-08-26",
+                  "head": true,
+                  "statusDate": "2005-11-03",
+                  "status": {
+                    "id": 2,
+                    "text": "Ativa"
+                  },
+                  "company": {
+                    "id": 6990590,
+                    "name": "GOOGLE BRASIL INTERNET LTDA.",
+                    "equity": 1500000000
+                  },
+                  "address": {
+                    "street": "AVENIDA BRIGADEIRO FARIA LIMA",
+                    "number": "3477",
+                    "district": "ITAIM BIBI",
+                    "city": "SAO PAULO",
+                    "state": "SP",
+                    "zip": "04538133",
+                    "country": {
+                      "id": 76,
+                      "name": "Brasil"
+                    }
+                  },
+                  "mainActivity": {
+                    "id": 6319400,
+                    "text": "Portais, provedores de conteudo e outros servicos de informacao na internet"
+                  },
+                  "sideActivities": [
+                    {
+                      "id": 7020400,
+                      "text": "Atividades de consultoria em gestao empresarial"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Company not found for the given CNPJ. Returns a valid JSON error body and is still billed 1 credit ($0.00528).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "integer" },
+                    "message": { "type": "string" }
+                  }
+                },
+                "example": {
+                  "code": 404,
+                  "message": "No record found for the given tax id."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "AISA API Key"
+      }
+    }
+  }
+}
