@@ -15,6 +15,15 @@ If there is no usable command execution, or the user explicitly prefers MCP, use
 
 Install only the official `aisa` skill for this harness. Do not change the user's default model or unrelated client settings.
 
+If a step cannot run, do not jump to HTTP:
+
+1. Skill installer unavailable, but CLI works — continue with CLI/help in this session and say the skill is **not persistently installed**.
+2. CLI unavailable — native MCP OAuth.
+3. CLI and MCP both unavailable, HTTP requests are supported, **and** a valid existing AIsa API key or secret is already available — direct HTTP API fallback below.
+4. No working API credentials — explain and recover auth (browser `aisa login` when a terminal exists). Do not invent a key or make unauthenticated calls.
+
+Auth rejection, exhausted credit, or a service outage is not fixed by switching transport. Do not extract or reuse client-owned MCP OAuth tokens. Browser `aisa login` remains the primary way to obtain credentials. Do not default to asking the user to create or paste a key.
+
 ## 2. CLI path
 
 Source: [AIsa-team/agent-skills](https://github.com/AIsa-team/agent-skills). Slug: `aisa`. File: `search-research/aisa/SKILL.md`.
@@ -78,9 +87,7 @@ If the user already named a task, continue it. Otherwise ask **What would you li
 
 Follow the `aisa` skill for search → schema when needed → quote → call. Runtime help, schema, and quote are authoritative. Inline JSON is supported with `--input`.
 
-## Paid API approval first
-
-Setup is not spending approval. Before `call` / `AISA_BATCH_USE`, use a matching quote and an authorization that covers that scope and cost. Reuse a still-valid explicit authorization. A missing, failed, or partial quote is not free and is not a full-batch total. Estimated cost is not a guaranteed cap.
+Setup is not spending approval. For ordinary CLI `quote`/`call` and MCP `AISA_BATCH_QUOTE`/`AISA_BATCH_USE`, use a matching quote and an authorization that covers that scope and cost. Reuse a still-valid explicit authorization. A missing, failed, or partial quote is not free and is not a full-batch total. Estimated cost is not a guaranteed cap. Switching transport never grants permission.
 
 ## 5. If something fails
 
@@ -93,6 +100,49 @@ Setup is not spending approval. Before `call` / `AISA_BATCH_USE`, use a matching
 | `AISA_API_KEY` conflicts with the stored key | Explain both sources |
 | MCP tools missing after OAuth | Refresh/reconnect; confirm the four tools |
 | Skill already installed | Reuse |
+| Skill installer unavailable, CLI works | Continue via CLI/help; say no persistent Skill |
+| CLI unavailable | MCP OAuth |
+| CLI and MCP unavailable, existing key present | Direct HTTP API fallback |
+| CLI and MCP unavailable, no key | Recover auth; do not invent a key |
+
+## Direct HTTP API fallback
+
+Use this only when CLI and MCP are both unavailable, HTTP requests are supported, and a valid existing AIsa API key or secret is already available. Do not treat auth rejection, exhausted credit, or an outage as a reason to switch here.
+
+Use the matching endpoint reference and published pricing. [API Reference](/api-reference). [Authentication](/guides/authentication). Data APIs: `https://api.aisa.one/apis/v1`. Model catalog: `https://api.aisa.one/v1/models`. Read [pricing](/guides/pricing) before any paid data request.
+
+Reuse `AISA_API_KEY` or the runtime secret store as a Bearer token. Never print it. Do not send a paid example request from this page. Success on `/v1/models` or other discovery does not prove authenticated business access. If there is no documented maximum or provider bound, or no auth, stop at that limitation. A changed endpoint, scope, or maximum needs new details and approval.
+
+<a id="paid-api-approval-first"></a>
+
+## Paid API approval first
+
+This contract applies **only** to direct HTTP paid or data API fallback. It does not add a separate subsequent-message requirement to ordinary CLI or MCP quote/call.
+
+```xml
+<IMPORTANT id="paid-api-approval-first">
+  <before-paid-data-call>
+    Read the matching endpoint documentation and published pricing declaration.
+    Docs, /v1/models, and capability or MCP discovery are allowed before approval.
+    STOP: a request to collect, research, or report data is not approval. State
+    the exact endpoint and scope, formula or rate, and documented maximum USD
+    exposure; then wait for a separate user message explicitly approving that
+    scope and cap.
+    If a provider-controlled dimension has no documented upper bound, do not
+    execute: an example or user-stated budget is not an enforceable cap.
+  </before-paid-data-call>
+  <prohibited>
+    Do not run a paid data call in the planning turn, use the initial request as
+    consent, or use a paid call to discover price, probe, test, or "just check".
+  </prohibited>
+  <after-approval>
+    Execute only the approved request. If its endpoint, scope, or maximum
+    changes, present the new details and obtain new approval.
+  </after-approval>
+</IMPORTANT>
+```
+
+The original task, or an "I approve" in the same planning turn, is not that subsequent approval.
 
 ## Other surfaces
 

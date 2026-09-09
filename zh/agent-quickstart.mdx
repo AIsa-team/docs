@@ -15,6 +15,15 @@ description: "安装 AIsa Skill，登录，然后开始使用工具。"
 
 只为当前 harness 安装官方 `aisa` Skill。不要改用户的默认模型或其他无关客户端设置。
 
+某一步跑不起来时，不要直接跳到 HTTP：
+
+1. Skill 安装器不可用，但 CLI 能用 — 本次会话用 CLI/help 继续，并说明 Skill **并未持久安装**。
+2. CLI 不可用 — 走原生 MCP OAuth。
+3. CLI 和 MCP 都不可用，当前环境能发 HTTP，**且** 已有有效的 AIsa API key/秘密 — 走下方直接 HTTP API 回退。
+4. 没有可用的 API 凭证 — 说明并恢复认证（有终端时用浏览器 `aisa login`）。不要编造 Key，也不要发未认证调用。
+
+认证被拒、额度用尽或服务中断，不能靠换传输方式绕过。不要提取或复用客户端持有的 MCP OAuth token。获取凭证仍以浏览器 `aisa login` 为主。不要默认要用户去领取或粘贴 Key。
+
 ## 2. CLI 路径
 
 来源：[AIsa-team/agent-skills](https://github.com/AIsa-team/agent-skills)。Slug：`aisa`。文件：`search-research/aisa/SKILL.md`。
@@ -78,11 +87,7 @@ codex mcp login aisa --scopes openid,profile,email
 
 按 `aisa` Skill 执行 search → 必要时 schema → quote → call。实时 help、schema 和 quote 是权威来源。`--input` 支持内联 JSON。
 
-<a id="paid-api-approval-first"></a>
-
-## 付费 API 授权
-
-接入不是消费批准。在 `call` / `AISA_BATCH_USE` 之前，需要匹配的 quote，以及覆盖该范围和费用的授权。复用仍然有效的明确授权。缺少、失败或部分的 quote 不是免费，也不是整批合计。估算费用不是保证上限。
+接入不是消费批准。普通 CLI `quote`/`call` 和 MCP `AISA_BATCH_QUOTE`/`AISA_BATCH_USE` 仍要匹配的 quote，以及覆盖该范围和费用的授权。复用仍然有效的明确授权。缺少、失败或部分的 quote 不是免费，也不是整批合计。估算费用不是保证上限。换传输方式不等于授予权限。
 
 ## 5. 失败时怎么做
 
@@ -95,6 +100,43 @@ codex mcp login aisa --scopes openid,profile,email
 | `AISA_API_KEY` 与已存储密钥冲突 | 说明两个来源 |
 | OAuth 后看不到 MCP 工具 | 刷新/重连；确认四个工具 |
 | Skill 已安装 | 复用 |
+| Skill 安装器不可用但 CLI 能用 | 用 CLI/help 继续；说明未持久安装 Skill |
+| CLI 不可用 | 走 MCP OAuth |
+| CLI 与 MCP 都不可用，且已有 Key | 直接 HTTP API 回退 |
+| CLI 与 MCP 都不可用，且没有 Key | 恢复认证；不要编造 Key |
+
+## 直接 HTTP API 回退
+
+仅当 CLI 和 MCP 都不可用、能发 HTTP、且已有有效的 AIsa API key 或秘密时使用。认证被拒、额度用尽或故障，不能当成换到这里的理由。
+
+使用匹配的 endpoint 文档和公开计价。[API 参考](/zh/api-reference)。[认证](/zh/guides/authentication)。数据 API：`https://api.aisa.one/apis/v1`。模型目录：`https://api.aisa.one/v1/models`。任何付费数据请求前先读 [计价](/zh/guides/pricing)。
+
+复用 `AISA_API_KEY` 或 runtime secret store 作为 Bearer。永远不要打印它。不要从本页发起付费示例请求。`/v1/models` 或其他 discovery 成功不能证明已通过受保护的业务访问。没有已记录的最高上限 / provider 边界，或没有认证时，停在该限制。endpoint、scope 或最高费用变化时，需要新的明细与批准。
+
+<a id="paid-api-approval-first"></a>
+
+## 付费 API 授权
+
+该合同**仅**适用于直接 HTTP 付费或数据 API 回退。不会给普通 CLI 或 MCP 的 quote/call 增加“必须另一条消息批准”。
+
+```xml
+<IMPORTANT id="paid-api-approval-first">
+  <before-paid-data-call>
+    先阅读匹配的 endpoint 文档和公开计价说明。docs、/v1/models 以及 capability 或 MCP
+    discovery 可在批准前查看。停止：用户要求收集、调研或输出数据，不等于批准。明确 endpoint
+    和 scope、公式或费率、已记录的最高 USD 暴露后，必须等待用户在下一条消息中明确批准该 scope 与上限。
+    如果 provider 控制的维度没有已记录的最大上限，不得执行：示例或用户给出的预算都不是可执行的上限。
+  </before-paid-data-call>
+  <prohibited>
+    不得在规划的同一轮调用付费数据 API，不得把初始请求当作同意，也不得为了价格发现、"probe"、"test" 或“先探一下”而调用付费 endpoint。
+  </prohibited>
+  <after-approval>
+    只能执行已批准的请求；如果 endpoint、scope 或最高费用变化，必须重新展示细节并取得新的明确批准。
+  </after-approval>
+</IMPORTANT>
+```
+
+初始任务，或同一规划轮中的“我批准”，都不是那条后续批准消息。
 
 ## 其他入口
 
