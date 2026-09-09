@@ -1,173 +1,109 @@
 ---
 title: "Agent Skills 快速入门"
-description: "安装 AIsa CLI，使用 API Key 完成身份认证，并将可复用的 Agent Skills 添加到 Claude Code、Cursor、Codex、OpenClaw 和其他受支持的智能体。"
+description: "安装官方 AIsa Skill，登录，然后在你的 Agent 里开始使用 AIsa。"
 privacy:
   view: "public"
 ---
 
-本指南将带你在大约五分钟内从零开始安装并使用一个 Skill。
+默认路径是 **一个官方 AIsa Skill** 加上 CLI。把下面这句英文交给你正在使用的 Agent。你不需要先准备 API Key，也不需要先填写任务占位符。
 
-## 前置条件
+```txt
+Set up AIsa using https://aisa.one/docs/agent-quickstart.md.
+```
 
-- Node.js 18 或更高版本
-- AIsa 账户和 API Key——[在 aisa.one 注册](https://console.aisa.one/)（新账户包含 2 美元免费额度）
-- 至少安装一个受支持的 AI 编程智能体：Claude Code、Cursor、GitHub Copilot、Windsurf、Codex、Gemini CLI 或 OpenClaw
+完整的 Agent bootstrap——环境识别、登录复用、验证、消费授权和失败处理——见 [Agent 快速开始](/zh/agent-quickstart)。本页与该安装方式和无终端 MCP 分支保持一致，避免两个入口互相矛盾。
 
----
+<Note>
+如果你已经在执行这些步骤，不要再抓取 Quickstart URL，也不要重复安装同一个 `aisa` Skill。
+</Note>
 
-## 第 1 步：安装 AIsa CLI
+## 安装官方 AIsa Skill
 
-```bash
+来源：[AIsa-team/agent-skills](https://github.com/AIsa-team/agent-skills)。Slug：`aisa`。权威文件：`search-research/aisa/SKILL.md`。
+
+如果当前环境可以运行终端或 CLI 命令（任意 shell，不限于 Bash），用 Vercel 安装器把 **一个** Skill 装到 **当前** harness：
+
+```sh
+npx skills add AIsa-team/agent-skills --skill aisa --agent codex --global
+```
+
+把 `--agent` 改成当前 harness（例如 `codex`、`claude-code`、`cursor`）。个人通用接入建议 `--global`。只有用户要求限制在当前仓库时，才用 project scope。
+
+- 不要使用 `--all`、`--agent '*'` 或 `--skill '*'`。
+- 仅在本次安装已被授权、且来源/目标清楚时使用 `--yes`。
+- 如果官方 `aisa` Skill 已经存在，就复用。不要覆盖用户的同名自定义 Skill。
+- **不要**把 `aisa skills install` 当作连接 AIsa 的默认方式。
+- 文件落盘后，**在当前会话读取并继续**。不要仅仅因为“需要重启”就停住。
+
+## 安装或复用 CLI，然后登录
+
+```sh
 npm install -g @aisa-one/cli
-```
-
-验证是否可用：
-
-```bash
 aisa --version
+aisa login
 ```
 
----
+如果已经安装了 `@aisa-one/cli`，直接复用。已验证基线：**0.5.0 或更高**。不要降级。
 
-## 第 2 步：身份认证
+`aisa login` 会打开浏览器 OAuth，并签发保存到本地的 CLI 密钥。用户不必从控制台复制 Key。`--key` / `AISA_API_KEY` 用于自动化，不是这条路径。
 
-```bash
-aisa login --key YOUR_AISA_API_KEY
-```
+- 永远不要打印原始密钥。
+- `AISA_API_KEY` 优先于已存储密钥。两者冲突时说明两个来源，不要盲目取消环境变量。
+- `aisa whoami` 只检查本地。在报告 **AIsa is connected.** 之前，用真实的已认证读取验证，例如 `aisa balance`。
+- 接入不等于批准消费。
 
-也可以设置环境变量，它的优先级高于已存储的密钥：
+随后在有效范围和消费授权内使用 `aisa search` → 必要时 `aisa schema` → `aisa quote` → `aisa call`。参数和价格来自 help/schema/quote，而不是本页。`--input` 支持内联 JSON。
 
-```bash
-export AISA_API_KEY="YOUR_AISA_API_KEY"
-```
+## 没有终端，或你更想用 MCP
 
-随时检查身份认证状态：
+如果当前 Agent 无法运行 CLI 命令，或用户要求 MCP，不要先要求 `npx`。把 AIsa 统一 Router 添加为远程 Streamable HTTP MCP 服务器：
 
-```bash
-aisa whoami
-```
+| 字段 | 值 |
+| --- | --- |
+| 名称 | AIsa |
+| 服务器 URL | `https://tools.aisa.one/mcp` |
+| 传输 | Streamable HTTP |
+| 认证 | OAuth |
 
----
+打开当前客户端的 MCP 设置，添加该服务器，完成浏览器登录，必要时返回后刷新/重连。由客户端发现端点并保存/刷新 token。不需要手工 Key。
 
-## 第 3 步：浏览可用 Skills
+**不要**把 `https://mcp.aisa.one/servers` 或默认 `aisa connect` 的 web-search 服务器当成这个 Router。
 
-```bash
+如果客户端支持原生安装 Skill，安装同一个 canonical `aisa` Skill。如果不支持，继续用 MCP，并说明 Skill **并未持久安装**。
+
+只有 OAuth 已完成，**并且**这些工具都已出现，才算连接成功：`AISA_SEARCH_TOOL`、`AISA_BATCH_GET_SCHEMA`、`AISA_BATCH_QUOTE`、`AISA_BATCH_USE`。仅完成发现不等于受保护的业务调用已成功。
+
+## 连接成功之后
+
+除非用户已经说了任务，否则询问 **What would you like to do first?** 可选例子：`Find three recent public updates about a company and include source links.` 不要承诺免费。
+
+之后的会话应加载同一个 `aisa` Skill，不要重新跑 setup。
+
+## 可选：从目录安装更多 Skill
+
+AIsa 连接成功后，可以浏览额外的领域 Skill。这不是默认接入路径。
+
+```sh
 aisa skills list
-```
-
-该命令会从 [agent-skills](https://github.com/AIsa-team/agent-skills) 技能仓库拉取实时目录，并打印每个 Skill 的名称、Slug 和说明。
-
-按关键词搜索：
-
-```bash
 aisa skills search "finance"
-aisa skills search "search"
-```
-
-安装前查看某个 Skill 的完整详情：
-
-```bash
 aisa skills show market
-```
-
----
-
-## 第 4 步：安装 Skill
-
-```bash
-aisa skills install search
-```
-
-CLI 会自动检测你机器上的每个受支持智能体，并将 Skill 写入各自的 Skills 目录。你会看到每个智能体对应的一行确认信息：
-
-```text
-✓ ~/.claude/skills/ (claude)
-✓ ~/.cursor/skills/ (cursor)
-Skill 'search' installed to 2 agent(s)
-```
-
-如果只想为特定智能体安装：
-
-```bash
-aisa skills install search --agent claude
-```
-
-如果想忽略自动检测结果，为所有受支持的智能体安装：
-
-```bash
-aisa skills install search --agent all
-```
-
----
-
-## 第 5 步：使用 Skill
-
-在智能体中打开一个**新会话**。Skills 会在会话启动时加载，而不是在会话进行途中加载。然后让智能体执行该 Skill 能处理的任务：
-
-```text
-Search the web for the latest news on AI agent frameworks and summarise the top three stories.
-```
-
-智能体会读取 `search` Skill 的 `description`，加载完整的 `SKILL.md` 指令，并使用你的密钥调用 AIsa 搜索 API。
-
----
-
-## 第 6 步：安装多个 Skills
-
-```bash
-aisa skills install market
-aisa skills install twitter
-aisa skills install media-gen
-```
-
-安装多个 Skills 后，智能体可以根据具体任务自动选择合适的 Skill，无需你指定使用哪一个。
-
----
-
-## 管理已安装的 Skills
-
-```bash
-# List skills available in the registry
-aisa skills list
-
-# Remove a skill from all agent directories
-aisa skills remove market
-
-# Remove from a specific agent only
+aisa skills install market --agent cursor
 aisa skills remove market --agent cursor
 ```
 
----
+不要安装目录里的全部 Skill，也不要在用户未要求时对所有 Agent 安装。
 
 ## 创建自己的 Skill
 
-使用模板搭建一个新 Skill：
-
-```bash
-# Default blank template
+```sh
 aisa skills init my-skill
-
-# Start from a specific template
-aisa skills init my-skill --template finance    # finance template
-aisa skills init my-skill --template search     # search template
-aisa skills init my-skill --template llm        # LLM gateway template
-aisa skills init my-skill --template twitter    # Twitter template
-aisa skills init my-skill --template video      # video generation template
+aisa skills install ./my-skill
 ```
 
-这会创建一个 `my-skill/` 文件夹，其中包含预填充的 `SKILL.md`。编辑 `name`、`description` 和正文，描述该 Skill 的能力。然后像安装其他 Skill 一样安装它：
-
-```bash
-aisa skills install ./my-skill    # install from local path
-```
-
-如需与社区分享你的 Skill，请向 [AIsa-team/agent-skills](https://github.com/AIsa-team/agent-skills) 提交 Pull Request。
-
----
+编辑 `SKILL.md`，然后从本地路径安装。如需分享，向 [AIsa-team/agent-skills](https://github.com/AIsa-team/agent-skills) 提交 Pull Request。编写规则见 [标准](/zh/agent-skills/standards)。
 
 ## 下一步
 
-- [Agent Skills](/zh/agent-skills)：浏览包含说明和 GitHub 链接的完整 Skill 目录
-- [标准](/zh/agent-skills/standards)：了解 `SKILL.md` 文件的工作方式，以及如何编写自己的 Skill
-- [预构建 Skills 与自定义 Skills](/zh/guides/learn/agent-skills-vs-tools)：了解什么时候使用技能仓库中的 Skill，什么时候构建自己的 Skill
-- 有问题？[联系我们](mailto:developer@aisa.one)
+- [Agent 快速开始](/zh/agent-quickstart) — 完整接入、登录、MCP 和消费规则
+- [Agent Skills](/zh/agent-skills) — 目录
+- [标准](/zh/agent-skills/standards) — `SKILL.md` 如何工作

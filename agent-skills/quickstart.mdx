@@ -1,173 +1,109 @@
 ---
 title: "Agent Skills Quickstart"
-description: "Install the AIsa CLI, authenticate with your API key, and add reusable agent skills to Claude Code, Cursor, Codex, OpenClaw, and other supported agents."
+description: "Install the official AIsa skill, sign in, and start using AIsa from your agent."
 privacy:
   view: "public"
 ---
 
-This guide takes you from zero to a working skill in about five minutes.
+The default path is **one official AIsa skill** plus the CLI. Copy this into the agent you already use. You do not need an API key or a task placeholder.
 
-## Prerequisites
+```txt
+Set up AIsa using https://aisa.one/docs/agent-quickstart.md.
+```
 
-- Node.js 18 or later
-- An AIsa account and API key — [sign up at aisa.one](https://console.aisa.one/) (new accounts start with \$2 free credit)
-- At least one supported AI coding agent installed: Claude Code, Cursor, GitHub Copilot, Windsurf, Codex, Gemini CLI, or OpenClaw
+The complete agent bootstrap — environment detection, login reuse, validation, spend authorization, and failure handling — is in [Agent Quickstart](/agent-quickstart). This page matches that installer and the no-terminal MCP branch so the two entries stay consistent.
 
----
+<Note>
+Do not fetch the Quickstart URL again if you are already following these steps. Do not reinstall the same `aisa` skill.
+</Note>
 
-## Step 1: Install the AIsa CLI
+## Install the official AIsa skill
 
-```bash
+Source: [AIsa-team/agent-skills](https://github.com/AIsa-team/agent-skills). Slug: `aisa`. Canonical file: `search-research/aisa/SKILL.md`.
+
+If this environment can run terminal or CLI commands (any shell, not only Bash), install **one** skill into the **current** harness with the Vercel installer:
+
+```sh
+npx skills add AIsa-team/agent-skills --skill aisa --agent codex --global
+```
+
+Adapt `--agent` to this harness (for example `codex`, `claude-code`, `cursor`). Prefer `--global` for personal use. Use project scope only when the user asked to limit the install to this repo.
+
+- Do not use `--all`, `--agent '*'`, or `--skill '*'`.
+- Use `--yes` only when this install is already authorized and the source/target are clear.
+- If the official `aisa` skill is already present, reuse it. Do not overwrite a same-named custom skill.
+- Do **not** use `aisa skills install` as the default way to connect AIsa.
+- After the file is on disk, **read it in this session and continue**. Do not stop only to wait for a restart.
+
+## Install or reuse the CLI, then sign in
+
+```sh
 npm install -g @aisa-one/cli
-```
-
-Verify it's working:
-
-```bash
 aisa --version
+aisa login
 ```
 
----
+Reuse `@aisa-one/cli` if it is already installed. Verified baseline: **0.5.0 or later**. Do not downgrade.
 
-## Step 2: Authenticate
+`aisa login` opens browser OAuth and mints a stored CLI key. The user should not copy a key from the dashboard. `--key` / `AISA_API_KEY` are for automation, not this path.
 
-```bash
-aisa login --key YOUR_AISA_API_KEY
-```
+- Never print the raw key.
+- `AISA_API_KEY` overrides the stored key. If they conflict, explain both sources; do not blindly unset the environment variable.
+- `aisa whoami` is local only. Validate with a real authenticated read such as `aisa balance` before saying **AIsa is connected.**
+- Setup is not approval to spend.
 
-Or set the environment variable — it takes precedence over the stored key:
+Then use `aisa search` → `aisa schema` when needed → `aisa quote` → `aisa call` inside a valid scope and spending authorization. Parameters and prices come from help/schema/quote, not from this page. Inline JSON works with `--input`.
 
-```bash
-export AISA_API_KEY="YOUR_AISA_API_KEY"
-```
+## No terminal, or you prefer MCP
 
-Check your auth status at any time:
+If this agent cannot run CLI commands, or the user asked for MCP, do not require `npx`. Add the unified AIsa router as a remote Streamable HTTP MCP server:
 
-```bash
-aisa whoami
-```
+| Field | Value |
+| --- | --- |
+| Name | AIsa |
+| Server URL | `https://tools.aisa.one/mcp` |
+| Transport | Streamable HTTP |
+| Auth | OAuth |
 
----
+Open this client's MCP settings, add that server, complete browser sign-in, then return and refresh/reconnect if needed. The client discovers endpoints and stores/refreshes tokens. No manual keys.
 
-## Step 3: Browse available skills
+Do **not** use `https://mcp.aisa.one/servers` or the default `aisa connect` web-search server as this router.
 
-```bash
+If the client can install skills natively, install the same canonical `aisa` skill. If it cannot, continue with MCP and say the skill was **not persistently installed**.
+
+Connection succeeds only after OAuth completed **and** these tools are present: `AISA_SEARCH_TOOL`, `AISA_BATCH_GET_SCHEMA`, `AISA_BATCH_QUOTE`, `AISA_BATCH_USE`. Discovery alone is not a protected business call.
+
+## After AIsa is connected
+
+Ask **What would you like to do first?** unless the user already named a task. Optional example: `Find three recent public updates about a company and include source links.` Do not promise it is free.
+
+Later sessions should load the same `aisa` skill. Do not rerun setup.
+
+## Optional: more skills from the catalog
+
+After AIsa is connected, you can browse extra domain skills. This is not the default connect path.
+
+```sh
 aisa skills list
-```
-
-This fetches the live catalogue from the [agent-skills](https://github.com/AIsa-team/agent-skills) registry and prints each skill's name, slug, and description.
-
-Search by keyword:
-
-```bash
 aisa skills search "finance"
-aisa skills search "search"
-```
-
-See the full details for a specific skill before installing:
-
-```bash
 aisa skills show market
-```
-
----
-
-## Step 4: Install a skill
-
-```bash
-aisa skills install search
-```
-
-The CLI automatically detects every supported agent on your machine and writes the skill to each agent's skills directory. You'll see a confirmation line per agent:
-
-```text
-✓ ~/.claude/skills/ (claude)
-✓ ~/.cursor/skills/ (cursor)
-Skill 'search' installed to 2 agent(s)
-```
-
-To install only for a specific agent:
-
-```bash
-aisa skills install search --agent claude
-```
-
-To install for all supported agents regardless of what's detected:
-
-```bash
-aisa skills install search --agent all
-```
-
----
-
-## Step 5: Use the skill
-
-Open a **new session** in your agent (skills are loaded at session start, not mid-session). Then ask it to do something the skill handles:
-
-```text
-Search the web for the latest news on AI agent frameworks and summarise the top three stories.
-```
-
-The agent reads the `search` skill description, loads the full `SKILL.md` instructions, and calls the AIsa search API using your key.
-
----
-
-## Step 6: Install multiple skills
-
-```bash
-aisa skills install market
-aisa skills install twitter
-aisa skills install media-gen
-```
-
-Once multiple skills are installed, your agent can use whichever is appropriate for any given task — without you specifying which skill to use.
-
----
-
-## Managing installed skills
-
-```bash
-# List skills available in the registry
-aisa skills list
-
-# Remove a skill from all agent directories
-aisa skills remove market
-
-# Remove from a specific agent only
+aisa skills install market --agent cursor
 aisa skills remove market --agent cursor
 ```
 
----
+Do not install every catalog skill, and do not target all agents unless the user asked.
 
 ## Create your own skill
 
-Scaffold a new skill from a template:
-
-```bash
-# Default blank template
+```sh
 aisa skills init my-skill
-
-# Start from a specific template
-aisa skills init my-skill --template finance    # finance template
-aisa skills init my-skill --template search     # search template
-aisa skills init my-skill --template llm        # LLM gateway template
-aisa skills init my-skill --template twitter    # Twitter template
-aisa skills init my-skill --template video      # video generation template
+aisa skills install ./my-skill
 ```
 
-This creates a `my-skill/` folder with a pre-filled `SKILL.md`. Edit the `name`, `description`, and body to describe your capability. Then install it like any other skill:
-
-```bash
-aisa skills install ./my-skill    # install from local path
-```
-
-To share your skill with the community, submit a pull request to [AIsa-team/agent-skills](https://github.com/AIsa-team/agent-skills).
-
----
+Edit `SKILL.md`, then install from the local path. To share it, open a pull request on [AIsa-team/agent-skills](https://github.com/AIsa-team/agent-skills). Authoring rules: [Standards](/agent-skills/standards).
 
 ## What's next
 
-- [Agent Skills](/agent-skills) — full catalogue with descriptions and GitHub links
-- [Standards](/agent-skills/standards) — how SKILL.md files work and how to author your own
-- [Agent Skills vs custom skills](/guides/learn/agent-skills-vs-tools) — when to use a registry skill vs. building your own
-- Questions? [contact us](mailto:developer@aisa.one)
+- [Agent Quickstart](/agent-quickstart) — full connect, login, MCP, and spend rules
+- [Agent Skills](/agent-skills) — catalog
+- [Standards](/agent-skills/standards) — how `SKILL.md` works
