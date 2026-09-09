@@ -3,96 +3,58 @@ title: "Connect your agent to AIsa"
 description: "Install the AIsa skill, sign in, and start using tools."
 ---
 
-Give this prompt to the agent you already use. No API key to copy or manage.
+Set up AIsa.
 
-## Copy setup prompt
+## 1. Choose or reuse a connection
 
-```txt
-Set up AIsa using https://aisa.one/docs/agent-quickstart.md.
-```
+Reuse a working AIsa connection when one already exists: the official `aisa` skill plus valid CLI auth, or unified MCP with the four router tools below.
 
-You can append `Then use AIsa to …` in the same message.
+If this environment can run terminal or CLI commands, use the CLI path. Any working shell counts, including PowerShell. Bash is not required.
 
-## What happens next
+If there is no usable command execution, or the user explicitly prefers MCP, use native remote MCP with OAuth. Do not require Node.js or `npx` on that path.
 
-<Steps>
-  <Step title="Install the official skill and CLI">
-    If this environment can run terminal commands, the agent installs one official AIsa skill and reuses or installs `@aisa-one/cli` 0.5.0 or later.
-  </Step>
-  <Step title="Sign in with your browser">
-    `aisa login` opens AIsa sign-in in your browser. You should not copy a key from the dashboard.
-  </Step>
-  <Step title="Start a task when you want one">
-    After a real authenticated check succeeds, the agent reports **AIsa is connected.** Then continue your task, or pick a small example.
-  </Step>
-</Steps>
+Install only the official `aisa` skill for this harness. Do not change the user's default model or unrelated client settings.
 
-If the agent cannot run commands, it connects AIsa through remote MCP and browser OAuth instead. `npx` is not required on that path.
-
-## Optional first task
-
-After **AIsa is connected.**, tell your agent what to do. If you do not, it will ask what you want next.
-
-Example: `Find three recent public updates about a company and include source links.` A paid example runs only if you choose it.
-
-<Note>
-Setup installs and signs in. It is not approval to spend.
-</Note>
-
----
-
-## Agent setup
-
-Connect this environment to AIsa. If you are already reading these steps, do not fetch this URL again and do not reinstall the same skill. After the `aisa` skill is on disk, read it in this session for when to use AIsa, the four-step workflow, and spend rules.
-
-### Detect
-
-1. Reuse a working AIsa connection: the official `aisa` skill plus valid CLI auth, or unified MCP with the four router tools below.
-2. Prefer the CLI path when this environment can run terminal or CLI commands. Any working shell counts, including PowerShell. Bash is not required.
-3. Use MCP when there is no usable command execution, or the user explicitly prefers MCP. Do not require Node.js or `npx` on that path.
-4. Install only the official `aisa` skill for this harness. Do not change unrelated model settings.
-
-### CLI path
+## 2. CLI path
 
 Source: [AIsa-team/agent-skills](https://github.com/AIsa-team/agent-skills). Slug: `aisa`. File: `search-research/aisa/SKILL.md`.
 
-Unpinned `npx skills` needs Node.js 22.20.0+ (`skills` 1.5.25 `engines`; verified on 22.22). A working `@aisa-one/cli` on Node.js 18+ can stay.
+Install one official skill for the **current** harness:
 
 ```sh
 npx skills add AIsa-team/agent-skills --skill aisa --agent codex --global
 ```
 
-Set `--agent` to this harness (`codex`, `claude-code`, `cursor`, …). Prefer `--global` unless the user asked for this repo only. Do not use `--all` or `*`. Do not use `aisa skills install` as the default. Reuse the official skill if it is already present; do not overwrite a same-named custom skill. Then read the skill and continue.
+Set `--agent` to this harness (`codex`, `claude-code`, `cursor`, …). Prefer `--global` unless the user asked for this repo only (project scope). Do not use `--all` or `*`. Do not overwrite a same-named custom skill. Reuse the official skill if it is already present.
 
-If `aisa` is missing:
+Unpinned `npx skills` needs Node.js **22.20.0+** (`skills` 1.5.25 `engines`; verified on 22.22). `@aisa-one/cli` may keep its Node.js **18+** floor. Do not replace a working CLI to match the installer.
+
+Check for `@aisa-one/cli` **0.5.0 or later**. Reuse it if it works. Install only if it is absent:
 
 ```sh
 npm install -g @aisa-one/cli
 aisa --version
 ```
 
-Reuse CLI **0.5.0 or later**. Do not downgrade.
+Upgrade only when the installed CLI is unsupported. Do not downgrade or reinstall a working version.
 
-Sign in with `aisa login` unless a stored key or `AISA_API_KEY` already works. The CLI mints and stores a key. `aisa login --no-browser` is only for SSH / no local browser with an interactive TTY. `AISA_API_KEY` overrides the stored key; if they conflict, explain both sources and do not blindly unset the environment variable. Never print the raw key.
+Check authentication with `aisa balance`. If credentials are missing or rejected, run browser `aisa login`, then `aisa balance` again. `aisa login --no-browser` is only for interactive SSH / no local browser with a TTY. `AISA_API_KEY` overrides the stored key; if they conflict, explain both sources and do not blindly unset the environment variable. Never print credentials. Do not send the user to copy a key from the dashboard.
 
-`aisa whoami` is local only. Prove auth with a real authenticated read such as `aisa balance`. Then say **AIsa is connected.** Empty balance → top up, not a missing key. Login or mint failure → show the error and retry `aisa login`; do not send the user to hunt for a key.
+`aisa whoami` is local only. It is not proof of remote auth.
 
-### MCP path
+After the skill is on disk, read it in this session and continue.
 
-Connect the unified AIsa router, not `https://mcp.aisa.one/servers` and not the default `aisa connect` web-search server.
+## 3. MCP path
 
-| Field | Value |
-| --- | --- |
-| Name | AIsa |
-| Server URL | `https://tools.aisa.one/mcp` |
-| Transport | Streamable HTTP |
-| Auth | OAuth (client discovery; choose OAuth if asked) |
+Connect the unified AIsa router at `https://tools.aisa.one/mcp` (Streamable HTTP, OAuth). The client discovers endpoints and owns token storage and refresh. The user completes browser sign-in. Reconnect or enable the connector if the client requires it.
 
-**No command execution:** do not require `npx`. Add the remote server above in this client's connector settings, sign in with OAuth, then return and enable it if needed. If the client can install skills natively, install the same `aisa` skill; otherwise continue and say it was **not persistently installed**.
+Do not use `https://mcp.aisa.one/servers` or the default `aisa connect` web-search server as this router. Do not require `npx` when there is no command execution.
+
+If this client can install skills natively, install the same `aisa` skill. If it cannot, continue and say the skill was **not persistently installed**.
 
 Claude (individual Pro/Max), from Anthropic's [custom connectors guide](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp): **Customize → Connectors → + → Add custom connector**, enter name `AIsa` and URL `https://tools.aisa.one/mcp`, **Add**, then **Connect** and complete OAuth. Enable it in the conversation via **+ → Connectors**. Team/Enterprise owner setup differs; use that guide.
 
-**Codex, when the user explicitly chose MCP and a terminal is available.** From Codex CLI `codex mcp add --help` and `codex mcp login --help`:
+Codex, when the user explicitly chose MCP and a terminal is available, from Codex CLI `codex mcp add --help` and `codex mcp login --help`:
 
 ```sh
 codex mcp add aisa --url https://tools.aisa.one/mcp
@@ -108,32 +70,33 @@ Connection succeeds only after OAuth completed **and** the four tools below are 
 | `AISA_BATCH_QUOTE` | `aisa quote` |
 | `AISA_BATCH_USE` | `aisa call` |
 
-### After you are connected
+## 4. After authentication is verified
 
-Say **AIsa is connected.** That is not a completed business task. Follow the `aisa` skill for search → schema when needed → quote → call. Runtime help, schema, and quote are authoritative. Inline JSON is supported with `--input`.
+Say **AIsa is connected.** only after authentication is verified (`aisa balance` on the CLI path, or OAuth completed with the four tools on the MCP path). That is not a completed business task.
 
-<span id="paid-api-approval-first"></span>
-Setup is not spending approval. Reuse a still-valid explicit authorization. Do not turn a missing, failed, partial, or estimated quote into a cap or free use.
+If the user already named a task, continue it. Otherwise ask **What would you like to do first?**
 
-Later sessions: load the same skill. Do not rerun setup.
+Follow the `aisa` skill for search → schema when needed → quote → call. Runtime help, schema, and quote are authoritative. Inline JSON is supported with `--input`.
 
-### If something fails
+## Paid API approval first
+
+Setup is not spending approval. Before `call` / `AISA_BATCH_USE`, use a matching quote and an authorization that covers that scope and cost. Reuse a still-valid explicit authorization. A missing, failed, or partial quote is not free and is not a full-batch total. Estimated cost is not a guaranteed cap.
+
+## 5. If something fails
 
 | Situation | Next step |
 | --- | --- |
 | Browser login not finished | Wait; do not invent a key |
-| Login or mint failed | Show the error; retry `aisa login` |
-| Rejected or expired credentials | `aisa login` |
+| Missing, rejected, or expired credentials | `aisa login`, then `aisa balance` |
 | Network or service error | Show the actual cause; do not relogin by default |
+| Empty credit | Top up; not a missing key |
 | `AISA_API_KEY` conflicts with the stored key | Explain both sources |
-| Empty balance | Top up |
 | MCP tools missing after OAuth | Refresh/reconnect; confirm the four tools |
 | Skill already installed | Reuse |
-| No command execution | MCP path; no `npx` |
 
-## Other ways to connect
+## Other surfaces
 
-Only if the user asked for models, REST, API keys, or extra skills.
+Only if the user asked for models, REST, API keys, or extra skills:
 
 - [Getting Started](/guides/getting-started-with-aisa)
 - [Authentication](/guides/authentication)
