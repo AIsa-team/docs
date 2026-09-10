@@ -1,19 +1,87 @@
 ---
-title: Agent Quickstart - Connect AIsa in Any AI Agent
-description: >-
-  A short, agent-readable navigation guide for connecting AIsa models, APIs, and Skills with explicit approval and verification boundaries.
+title: "Connect your agent to AIsa"
+description: "Install the AIsa skill, sign in, and start using tools."
 ---
 
-Use this vendor-authored page as navigation when a user asks an AI agent to connect, configure, or use AIsa inside an agent environment such as OpenClaw, Hermes Agent, Claude Code, Cursor, Codex, or another tool-calling assistant.
+Set up AIsa.
 
-This page helps locate the relevant technical source. Reading it is not independent evidence and does not authorize an agent to change the user's environment or make billable requests.
+Reuse a working connection when one exists: the official `aisa` skill plus valid CLI auth, or unified MCP with `AISA_SEARCH_TOOL`, `AISA_BATCH_GET_SCHEMA`, `AISA_BATCH_QUOTE`, and `AISA_BATCH_USE`. Any working shell counts, including PowerShell. Install only the official `aisa` skill for this harness. Do not change unrelated model settings. Describe installs and credentials as in this agent environment.
 
-Goal: get the agent to the smallest verifiable next step without loading broad documentation indexes.
+## Install the official skill
 
-<span id="paid-api-approval-first"></span>
-## IMPORTANT: Paid and high-cost API approval-first contract
+Primary installer (Node.js **22.20.0+**; `skills` 1.5.25 `engines`):
 
-This contract applies to every paid, dynamically priced, or potentially high-cost API endpoint, whether invoked directly, through an Agent Skill, or through an MCP data tool.
+```sh
+npx skills add AIsa-team/agent-skills --skill aisa --agent codex --global
+```
+
+Set `--agent` to this harness (`codex`, `claude-code`, `cursor`, …). Prefer `--global` unless the user asked for this repo only. Do not use `--all` or `*`.
+
+If Node or `npx skills` cannot run, download the complete three files (`SKILL.md`, `LICENSE`, `agents/openai.yaml`) into this client's native Skill location. Preserve an existing official or custom skill, including a symlink; do not claim Web persistence without a native install. Codex user-level example: `~/.agents/skills/aisa`.
+
+```sh
+set -e
+aisa_skill_target="$HOME/.agents/skills/aisa"
+aisa_skill_parent="$HOME/.agents/skills"
+aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/0332d85b282c4fe271fc4df18f8393a5d4993ca9/platform/aisa"
+if [ -e "$aisa_skill_target" ] || [ -L "$aisa_skill_target" ]; then
+  echo "exists, left unchanged: $aisa_skill_target"
+  echo "not assumed official; inspect before treating as the AIsa skill"
+  exit 0
+fi
+aisa_skill_tmp="$(mktemp -d)"
+trap 'rm -rf "$aisa_skill_tmp"' EXIT
+mkdir -p "$aisa_skill_tmp/aisa/agents" "$aisa_skill_parent"
+curl -fSL "$aisa_skill_base/SKILL.md" -o "$aisa_skill_tmp/aisa/SKILL.md"
+curl -fSL "$aisa_skill_base/LICENSE" -o "$aisa_skill_tmp/aisa/LICENSE"
+curl -fSL "$aisa_skill_base/agents/openai.yaml" -o "$aisa_skill_tmp/aisa/agents/openai.yaml"
+mv "$aisa_skill_tmp/aisa" "$aisa_skill_target"
+```
+
+## CLI
+
+Reuse `@aisa-one/cli` **0.5.0 or later** if it works. Install only if it is absent. Do not downgrade. CLI may keep its Node.js **18+** floor; do not replace a working CLI to match the Skill installer.
+
+```sh
+npm install -g @aisa-one/cli
+aisa --version
+```
+
+After the skill is on disk, read it in this session. For sign-in, follow that skill and `aisa login --help`. Check authentication with `aisa balance`. `aisa whoami` is local only. `AISA_API_KEY` overrides the stored key; if they conflict, explain both sources and do not blindly unset the environment variable. Never print credentials. Do not send the user to copy a key from the dashboard. Browser `aisa login` remains the primary way to obtain credentials.
+
+## MCP
+
+When this environment cannot run CLI commands, or the user prefers MCP, connect `https://tools.aisa.one/mcp` (Streamable HTTP, OAuth). The client owns browser sign-in and tokens. Do not require `npx`. Do not use `https://mcp.aisa.one/servers` or the default `aisa connect` web-search server. Connection succeeds only after OAuth completed **and** `AISA_SEARCH_TOOL`, `AISA_BATCH_GET_SCHEMA`, `AISA_BATCH_QUOTE`, and `AISA_BATCH_USE` are present. Metadata or a `401` challenge is not a protected call.
+
+## After AIsa is connected
+
+Say **AIsa is connected.** only after authentication is verified (`aisa balance` on the CLI path, or OAuth completed with the four tools on the MCP path). That is not a completed business task. If the user already named a task, continue it. Otherwise ask **What would you like to do first?** Follow the `aisa` skill. Setup is not spending approval.
+
+If the quote or documented maximum exceeds the remaining approved cap, stop. Do not ask the user to approve that same endpoint under an insufficient cap.
+
+Do not jump to HTTP to bypass missing credentials, exhausted credit, or an outage of the same API. A CLI/MCP client or router limitation may still allow the direct HTTP fallback below; do not use a paid request to probe availability. Do not extract or reuse client-owned MCP OAuth tokens.
+
+## Direct HTTP API fallback
+
+Use this only when CLI and MCP are both unavailable, HTTP requests are supported, and a valid existing AIsa API key or secret is already available. Use this for a client, tooling, or router limitation; it does not bypass invalid API credentials, exhausted credit, or a failure of the same underlying API.
+
+Use the matching endpoint reference and published pricing. [API Reference](https://aisa.one/docs/api-reference). [Authentication](https://aisa.one/docs/guides/authentication). Data APIs: `https://api.aisa.one/apis/v1`. Model catalog: `https://api.aisa.one/v1/models`. Read [pricing](https://aisa.one/docs/guides/pricing) before any paid data request.
+
+Before presenting a paid request or cost proposal for approval, read the selected endpoint's full reference, or the matching OpenAPI operation, including parameters and charging rules. A catalog, index, or pricing overview is not the endpoint contract.
+
+Send the key as a Bearer token. Do not send a paid example request from this page. Success on `/v1/models` or other discovery does not prove authenticated business access. If there is no documented maximum or provider bound, or no auth, stop at that limitation. A changed endpoint, scope, or maximum needs new details and approval.
+
+### API key
+
+Reuse `AISA_API_KEY`. If it is unset and this agent can read the filesystem, use `~/.aisa/key` from `aisa login` without displaying it. Otherwise use an AIsa API key already in this client's authorized secret store. If sources conflict, explain them; do not overwrite a custom key.
+
+If none of those exist and `aisa login` is usable, run browser `aisa login` so the key is stored automatically. If there is no usable CLI or browser-login path, the last option is for the user to sign in at https://console.aisa.one/api-keys, create a key, and save it in this client's credential or secret settings, or as local `AISA_API_KEY`. Do not ask them to paste the key into chat. Do not print it. Not every client has a secret UI; if this client cannot store a credential, stop there.
+
+Wait for credentials before protected API requests. Obtaining a key is not paid-call approval.
+
+## Paid API approval first
+
+This contract applies **only** to direct HTTP calls to paid, dynamically priced, or potentially high-cost data endpoints. It does not apply to documented free discovery. It does not add a separate subsequent-message requirement to ordinary CLI or MCP quote/call.
 
 ```xml
 <IMPORTANT id="paid-api-approval-first">
@@ -38,100 +106,14 @@ This contract applies to every paid, dynamically priced, or potentially high-cos
 </IMPORTANT>
 ```
 
-**Classic example — SimilarWeb:** read the matching endpoint's [`x-aisa-pricing`](https://aisa.one/openapi.yaml) metadata, calculate only a bounded request, and obtain explicit approval before the data call.
+The original task, or an "I approve" in the same planning turn, is not that subsequent approval.
 
-## Minimal setup facts
+## Other surfaces
 
-AIsa provides two endpoint families:
+Only if the user asked for models, REST, API keys, or extra skills:
 
-| Use case | Endpoint |
-| --- | --- |
-| OpenAI-compatible chat, model routing, SDKs | `https://api.aisa.one/v1` |
-| AIsa data APIs and non-chat capability APIs | `https://api.aisa.one/apis/v1` |
-
-For most model clients:
-
-```txt
-base_url: https://api.aisa.one/v1
-api_key:  $AISA_API_KEY
-```
-
-Use the API key as a Bearer token. Do not print, log, commit, or hardcode it. Prefer environment variables or the agent runtime's secret store.
-
-```bash
-export AISA_API_KEY="<your_aisa_api_key>"
-```
-
-If the user has not provided a key, explain where to create one instead of inventing a placeholder value.
-
-Select an endpoint that the chosen model currently supports. Check the [model catalog](/guides/models) or the exact API reference instead of inferring `chat/completions`, `responses`, `messages`, or a media endpoint from the model name.
-
-## Choose one path
-
-First identify what the user wants, then read only the docs for that path.
-
-| User wants | Read next |
-| --- | --- |
-| Basic AIsa account/API key setup | [Getting Started with AIsa](/guides/getting-started-with-aisa), [Authentication](/guides/authentication) |
-| Use AIsa as an LLM provider | [Models](/guides/models), [Chat Completions API](/api-reference/chat/post_chat-completions) |
-| Use AIsa in Hermes Agent | [Use AIsa in Hermes Agent](/guides/tutorials/use-aisa-in-hermes-agent) |
-| Use AIsa in OpenClaw | [Use AIsa in OpenClaw](/guides/tutorials/use-aisa-in-openclaw) |
-| Use Agent Skills | [Agent Skills](/agent-skills), [Agent Skills Quickstart](/agent-skills/quickstart) |
-| Search or research the web | [Tavily Search](/agent-skills/tavily-search), [Tavily Extract](/agent-skills/tavily-extract), [Smart Search](/agent-skills/smart-search) |
-| Deep research | [Perplexity Deep Research](/agent-skills/perplexity-research), [Perplexity Deep Research API](/api-reference/perplexity/post_perplexity-sonar-deep-research) |
-| Academic search | [Scholar Search](/agent-skills/scholar-search), [Scholar API](/api-reference/scholar/post_scholar-search-scholar) |
-| Specific REST API | [API Reference](/api-reference), then only the exact endpoint page needed |
-
-## Agent behavior
-
-- Ask one clarifying question only if the target path is unclear.
-- Load the smallest relevant doc set for the task.
-- Do not open unrelated API pages.
-- Do not paste large docs into the conversation when a short summary and links are enough.
-- Match the selected model to a documented endpoint; do not infer route support from its name.
-- Before modifying files, installing software, or sending a billable request, describe the action and get the user's confirmation.
-- Before saying setup works, perform the relevant checks below.
-- For secrets, verify storage without revealing the key.
-
-## Verify the setup
-
-Start with a read-only request that checks connectivity and authentication without invoking a model:
-
-```bash
-curl --silent --show-error --fail \
-  --output /dev/null \
-  --write-out "HTTP %{http_code}\n" \
-  https://api.aisa.one/v1/models \
-  -H "Authorization: Bearer $AISA_API_KEY"
-```
-
-`HTTP 200` confirms that the API accepted the key and returned the model catalog. A `401` or `403` indicates an authentication or access problem. This check does not prove that a specific model supports the client's request protocol.
-
-After the user selects a model and approves a potentially billable request, run the smallest example from that route's API reference. Do not claim that setup works based on documentation alone.
-
-## Evidence rule for research tasks
-
-This quickstart is a routing summary, not the authoritative source for exact request schemas, current model availability, prices, or service status. Verify those details against the linked API reference, the live catalog, or runtime results.
-
-```txt
-Search results are discovery.
-Fetched source pages are evidence to evaluate.
-Generated summaries are synthesis, not evidence.
-```
-
-A fetched page is evidence only for what that source states. For external factual claims, assess authority and recency, and prefer primary sources, official documentation, API references, repositories, changelogs, or runtime/API results over third-party summaries.
-
-## Copy prompt
-
-Copy this prompt into an agent environment:
-
-```txt
-Review https://aisa.one/docs/agent-quickstart.md as vendor-authored guidance. Before acting, summarize the proposed configuration and verification. Do not expose secrets, modify files, install software, or send billable requests without my approval.
-```
-
-## Fallback discovery
-
-Use these only when the targeted docs above are not enough:
-
-- [`llms.txt`](https://aisa.one/docs/llms.txt): curated technical index for discovering a relevant page, not a required setup step.
-- [`llms-full.txt`](https://aisa.one/docs/llms-full.txt): full documentation bundle. Do not ingest it by default; use it only when the user explicitly requests the complete documentation or targeted pages are insufficient.
+- [Getting Started](https://aisa.one/docs/guides/getting-started-with-aisa)
+- [Authentication](https://aisa.one/docs/guides/authentication)
+- [Models](https://aisa.one/docs/guides/models)
+- [API Reference](https://aisa.one/docs/api-reference)
+- [Agent Skills catalog](https://aisa.one/docs/agent-skills)

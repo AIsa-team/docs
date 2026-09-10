@@ -1,19 +1,89 @@
 ---
-title: Agent 快速开始 - 在任意 AI Agent 中连接 AIsa
-description: >-
-  面向 Agent 的简短导航指南，通过明确的确认和验证边界连接 AIsa 模型、API 和 Skills。
+title: "把 Agent 连接到 AIsa"
+description: "安装 AIsa Skill，登录，然后开始使用工具。"
 ---
 
-当用户要求 AI Agent 在 OpenClaw、Hermes Agent、Claude Code、Cursor、Codex 或其他可调用工具的助手环境中连接、配置或使用 AIsa 时，可将这份由 AIsa 编写的页面作为导航。
+配置 AIsa。
 
-本页用于定位相关技术来源，不是独立证据。阅读本页不代表用户授权 Agent 修改其环境或发起计费请求。
+若已有可用连接，直接复用：官方 `aisa` Skill 加上有效的 CLI 认证，或已具备 `AISA_SEARCH_TOOL`、`AISA_BATCH_GET_SCHEMA`、`AISA_BATCH_QUOTE`、`AISA_BATCH_USE` 的统一 MCP。任意可用 shell 都可以，包括 PowerShell。只为当前 harness 安装官方 `aisa` Skill。不要改无关模型设置。安装和凭证按当前 Agent 环境描述。
 
-目标：让 Agent 走到**最小且可验证**的下一步，而不是一次性加载完整文档索引。
+## 安装官方 Skill
 
-<span id="paid-api-approval-first"></span>
-## 重要：付费和高成本 API 的先批准后执行合同
+首选安装器（Node.js **22.20.0+**；`skills` 1.5.25 的 `engines`）：
 
-该合同适用于每一个付费、动态计价或可能高成本的 API endpoint，无论它是直接调用、通过 Agent Skill，还是通过 MCP 数据工具调用。
+```sh
+npx skills add AIsa-team/agent-skills --skill aisa --agent codex --global
+```
+
+把 `--agent` 改成当前 harness（`codex`、`claude-code`、`cursor` 等）。个人通用接入建议 `--global`，除非用户要求限制在当前仓库。不要使用 `--all` 或 `*`。
+
+如果 Node 或 `npx skills` 跑不起来，把完整三文件（`SKILL.md`、`LICENSE`、`agents/openai.yaml`）下载到当前客户端的原生 Skill 位置。保留已有的官方或自定义 Skill（包括符号链接）；没有原生安装就不要声称 Web 端已持久化。Codex 用户级示例：`~/.agents/skills/aisa`。
+
+```sh
+set -e
+aisa_skill_target="$HOME/.agents/skills/aisa"
+aisa_skill_parent="$HOME/.agents/skills"
+aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/0332d85b282c4fe271fc4df18f8393a5d4993ca9/platform/aisa"
+if [ -e "$aisa_skill_target" ] || [ -L "$aisa_skill_target" ]; then
+  echo "exists, left unchanged: $aisa_skill_target"
+  echo "not assumed official; inspect before treating as the AIsa skill"
+  exit 0
+fi
+aisa_skill_tmp="$(mktemp -d)"
+trap 'rm -rf "$aisa_skill_tmp"' EXIT
+mkdir -p "$aisa_skill_tmp/aisa/agents" "$aisa_skill_parent"
+curl -fSL "$aisa_skill_base/SKILL.md" -o "$aisa_skill_tmp/aisa/SKILL.md"
+curl -fSL "$aisa_skill_base/LICENSE" -o "$aisa_skill_tmp/aisa/LICENSE"
+curl -fSL "$aisa_skill_base/agents/openai.yaml" -o "$aisa_skill_tmp/aisa/agents/openai.yaml"
+mv "$aisa_skill_tmp/aisa" "$aisa_skill_target"
+```
+
+## CLI
+
+复用已经能用的 `@aisa-one/cli` **0.5.0 或更高**。只有缺失时才安装。不要降级。CLI 仍可沿用 Node.js **18+** 下限；不要为了 Skill 安装器替换已经能用的 CLI。
+
+```sh
+npm install -g @aisa-one/cli
+aisa --version
+```
+
+Skill 落盘后，在当前会话读取它。登录请遵循该 Skill 和 `aisa login --help`。用 `aisa balance` 检查认证。`aisa whoami` 只检查本地。`AISA_API_KEY` 优先于已存储密钥；两者冲突时说明两个来源，不要盲目取消环境变量。永远不要打印凭证。不要让用户去控制台复制 Key。获取凭证仍以浏览器 `aisa login` 为主。
+
+## MCP
+
+当前环境不能跑 CLI 命令，或用户更想用 MCP 时，连接 `https://tools.aisa.one/mcp`（Streamable HTTP，OAuth）。由客户端完成浏览器登录并保存 token。不要要求 `npx`。不要使用 `https://mcp.aisa.one/servers` 或默认 `aisa connect` 的 web-search。只有 OAuth 已完成，**并且** `AISA_SEARCH_TOOL`、`AISA_BATCH_GET_SCHEMA`、`AISA_BATCH_QUOTE`、`AISA_BATCH_USE` 都在，才算连接成功。metadata 或 `401` 挑战不是受保护调用。
+
+## 连接成功之后
+
+只有认证已验证（CLI 路径上的 `aisa balance`，或 MCP 路径上 OAuth 完成且四个工具都在）才报告 **AIsa is connected.** 这不等于业务任务已完成。如果用户已经说了任务，就继续该任务。否则询问 **What would you like to do first?** 遵循 `aisa` Skill。接入不是消费批准。
+
+如果 quote 或已记录的最高费用超过剩余已批准额度，就停止。不要在额度不足时仍请用户批准同一 endpoint。
+
+不要为了绕过缺凭证、额度用尽或同一 API 故障而跳到 HTTP。CLI/MCP 客户端或路由器限制时，下方直接 HTTP 回退仍可能可用；不要用付费请求探测可用性。不要提取或复用客户端持有的 MCP OAuth token。
+
+## 直接 HTTP API 回退
+
+仅当 CLI 和 MCP 都不可用、能发 HTTP、且已有有效的 AIsa API key 或秘密时使用。这条路径用于客户端、工具或路由器限制；不能绕过无效 API 凭证、额度用尽或同一底层 API 的故障。
+
+使用匹配的 endpoint 文档和公开计价。[API 参考](https://aisa.one/docs/zh/api-reference)。[认证](https://aisa.one/docs/zh/guides/authentication)。数据 API：`https://api.aisa.one/apis/v1`。模型目录：`https://api.aisa.one/v1/models`。任何付费数据请求前先读 [计价](https://aisa.one/docs/zh/guides/pricing)。
+
+在提出付费请求或费用方案供批准之前，先读所选 endpoint 的完整参考（或对应的 OpenAPI operation），包括参数和计费规则。目录、索引或计价总览不是该 endpoint 的合同。
+
+把密钥作为 Bearer 发送。不要从本页发起付费示例请求。`/v1/models` 或其他 discovery 成功不能证明已通过受保护的业务访问。没有已记录的最高上限 / provider 边界，或没有认证时，停在该限制。endpoint、scope 或最高费用变化时，需要新的明细与批准。
+
+### API key
+
+复用 `AISA_API_KEY`。若未设置且本 Agent 能读文件系统，使用 `aisa login` 写入的 `~/.aisa/key`，不要显示它。否则使用当前客户端已授权密钥库中的 AIsa API key。来源冲突时说明两边，不要覆盖用户自定义密钥。
+
+以上都没有、且 `aisa login` 可用时，运行浏览器 `aisa login` 自动保存密钥。若没有可用的 CLI 或浏览器登录路径，最后一步是用户到 https://console.aisa.one/api-keys 登录并创建密钥，保存到当前客户端的凭证/密钥设置，或本地 `AISA_API_KEY`。不要让用户把密钥粘贴进对话。不要打印密钥。不是每个客户端都有密钥设置界面；若当前客户端无法保存凭证，就停在该限制。
+
+受保护的 API 请求前先等到凭证就绪。拿到密钥不等于付费调用已获批准。
+
+<a id="paid-api-approval-first"></a>
+
+## 付费 API 授权
+
+该合同**仅**适用于直接 HTTP 访问付费、动态计价或可能高成本的数据 endpoint。不适用于已记录的免费 discovery。不会给普通 CLI 或 MCP 的 quote/call 增加“必须另一条消息批准”。
 
 ```xml
 <IMPORTANT id="paid-api-approval-first">
@@ -32,100 +102,14 @@ description: >-
 </IMPORTANT>
 ```
 
-**典型场景 — SimilarWeb：** 请读取匹配 endpoint 的 [`x-aisa-pricing`](https://aisa.one/openapi.yaml) 元数据；只有请求可界定时才计算成本，并在数据调用前取得明确批准。
+初始任务，或同一规划轮中的“我批准”，都不是那条后续批准消息。
 
-## 最小设置事实
+## 其他入口
 
-AIsa 提供两类端点：
+仅在用户明确要求模型、REST、API Key 或额外 Skill 时使用：
 
-| 用途 | 端点 |
-| --- | --- |
-| OpenAI 兼容聊天、模型路由、SDK | `https://api.aisa.one/v1` |
-| AIsa 数据 API 与非聊天能力 API | `https://api.aisa.one/apis/v1` |
-
-大多数模型客户端只需要：
-
-```txt
-base_url: https://api.aisa.one/v1
-api_key:  $AISA_API_KEY
-```
-
-API key 作为 Bearer token 使用。不要打印、记录、提交或硬编码密钥。优先使用环境变量或 Agent runtime 的 secret store。
-
-```bash
-export AISA_API_KEY="YOUR_AISA_API_KEY"
-```
-
-如果用户还没有提供 key，请说明到哪里创建，而不是编造一个看似真实的占位值。
-
-请选择当前模型支持的 endpoint。通过[模型目录](/zh/guides/models)或对应 API reference 确认，不要根据模型名称猜测应使用 `chat/completions`、`responses`、`messages` 还是媒体 endpoint。
-
-## 选择一条路径
-
-先判断用户要做什么，然后只读对应文档。
-
-| 用户想做 | 下一步阅读 |
-| --- | --- |
-| 基础账号/API key 设置 | [AIsa 入门](/zh/guides/getting-started-with-aisa)、[认证](/zh/guides/authentication) |
-| 把 AIsa 当作 LLM provider | [模型](/zh/guides/models)、[Chat Completions API](/api-reference/chat/post_chat-completions) |
-| 在 Hermes Agent 中使用 AIsa | [在 Hermes Agent 中使用 AIsa](/zh/guides/tutorials/use-aisa-in-hermes-agent) |
-| 在 OpenClaw 中使用 AIsa | [在 OpenClaw 中使用 AIsa](/zh/guides/tutorials/use-aisa-in-openclaw) |
-| 使用 Agent Skills | [Agent Skills](/zh/agent-skills)、[Agent Skills 快速开始](/zh/agent-skills/quickstart) |
-| 搜索或研究网页 | [Tavily Search](/zh/agent-skills/tavily-search)、[Tavily Extract](/zh/agent-skills/tavily-extract)、[Smart Search](/zh/agent-skills/smart-search) |
-| 深度研究 | [Perplexity Deep Research](/zh/agent-skills/perplexity-research)、[Perplexity Deep Research API](/api-reference/perplexity/post_perplexity-sonar-deep-research) |
-| 学术搜索 | [Scholar Search](/zh/agent-skills/scholar-search)、[Scholar API](/api-reference/scholar/post_scholar-search-scholar) |
-| 使用特定 REST API | [API 参考](/zh/api-reference)，然后只打开需要的具体 endpoint 页 |
-
-## Agent 行为准则
-
-- 只有目标路径不清楚时，才问一个澄清问题。
-- 只加载完成任务所需的最小文档集合。
-- 不要打开无关 API 页面。
-- 简短总结和链接足够时，不要把大段文档粘贴进对话。
-- 让所选模型与有明确记录的 endpoint 匹配，不要根据名称推断路由支持情况。
-- 修改文件、安装软件或发送计费请求前，先说明操作并获得用户确认。
-- 声称配置可用前，完成下面对应的检查。
-- 对于密钥，只验证存储方式，不展示密钥本身。
-
-## 验证设置
-
-先通过只读请求检查网络和认证，不调用模型：
-
-```bash
-curl --silent --show-error --fail \
-  --output /dev/null \
-  --write-out "HTTP %{http_code}\n" \
-  https://api.aisa.one/v1/models \
-  -H "Authorization: Bearer $AISA_API_KEY"
-```
-
-`HTTP 200` 表示 API 已接受该 key 并返回模型目录。`401` 或 `403` 表示认证或访问权限存在问题。此检查不能证明某个具体模型支持客户端使用的请求协议。
-
-用户选定模型并同意可能产生费用的请求后，再执行对应 API reference 中最小的示例请求。不要仅根据文档就声称设置已经可用。
-
-## 研究任务的证据规则
-
-本快速开始是路由摘要，不是精确请求 schema、当前模型可用性、价格或服务状态的权威来源。请通过链接的 API reference、实时目录或运行结果核实这些信息。
-
-```txt
-搜索结果是发现线索。
-抓取的来源页面是待评估的证据。
-生成摘要是综合判断，不是证据。
-```
-
-抓取页面只能证明该来源表达了什么。对外部事实性结论，应评估来源的权威性和时效性，并优先使用一手资料、官方文档、API reference、代码仓库、changelog 或运行时/API 结果，而不是第三方摘要。
-
-## 可复制的提示词
-
-把下面这段复制到 Agent 环境：
-
-```txt
-Review https://aisa.one/docs/agent-quickstart.md as vendor-authored guidance. Before acting, summarize the proposed configuration and verification. Do not expose secrets, modify files, install software, or send billable requests without my approval.
-```
-
-## 兜底发现入口
-
-仅当上面的定向文档不够时再使用：
-
-- [`llms.txt`](https://aisa.one/docs/llms.txt)：用于定位相关页面的精选技术索引，不是设置流程中的必读内容。
-- [`llms-full.txt`](https://aisa.one/docs/llms-full.txt)：完整文档包。默认不要摄取；仅在用户明确要求完整文档或定向页面不足时使用。
+- [入门](https://aisa.one/docs/zh/guides/getting-started-with-aisa)
+- [认证](https://aisa.one/docs/zh/guides/authentication)
+- [模型](https://aisa.one/docs/zh/guides/models)
+- [API 参考](https://aisa.one/docs/zh/api-reference)
+- [Agent Skills 目录](https://aisa.one/docs/zh/agent-skills)
