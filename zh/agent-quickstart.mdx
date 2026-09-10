@@ -17,7 +17,7 @@ description: "安装 AIsa Skill，登录，然后开始使用工具。"
 
 某一步跑不起来时，不要直接跳到 HTTP：
 
-1. Skill 安装器不可用，但 CLI 能用 — 本次会话用 CLI/help 继续，并说明 Skill **并未持久安装**。
+1. Skill 安装器不可用 — 若当前环境能写入该 harness 的 Skill 目录，用 curl 安装官方 `aisa` 文件夹（见下）。若仍无法持久安装 Skill，本次会话用 CLI/help 继续，并说明 **并未持久安装**。
 2. CLI 不可用 — 走原生 MCP OAuth。
 3. CLI 和 MCP 都不可用，当前环境能发 HTTP，**且** 已有有效的 AIsa API key/秘密 — 走下方直接 HTTP API 回退。
 4. 没有可用的 API 凭证 — 说明并恢复认证（有终端时用浏览器 `aisa login`）。不要编造 Key，也不要发未认证的业务调用。已记录的公开 docs、`/v1/models` 和 discovery 仍可读取。
@@ -38,6 +38,29 @@ npx skills add AIsa-team/agent-skills --skill aisa --agent codex --global
 
 未固定版本的 `npx skills` 需要 Node.js **22.20.0+**（`skills` 1.5.25 的 `engines`；已在 22.22 验证）。`@aisa-one/cli` 仍可沿用 Node.js **18+** 下限。不要为了安装器替换已经能用的 CLI。
 
+如果 Node 或 `npx skills` 跑不起来，只把官方 `platform/aisa` 文件夹下载到当前 harness 文档中的 skills 目录。复制 Markdown 不需要 Node。Curl 不会安装 CLI 或凭证。读取 URL 不等于已安装。若目标已存在（包括符号链接），保持不动，打印 exists/left unchanged，检查后再继续；不要把它报成官方 Skill 已安装。其他客户端：用它们文档中的原生目录；PowerShell 或客户端自带的下载方式都可以。不要求必须是 Bash。在 ChatGPT Work 云里复制文件不是 Web 端原生持久 Skill；用宿主提供的 Skill 安装/加载器，或说明本会话已下载/读取。如果没有文件系统或原生 Skill 加载，说明 Skill **并未持久安装**，并继续用 CLI/help 或 MCP。
+
+Codex 用户级示例（`~/.agents/skills/aisa`；一般不是 ChatGPT Web 的 Skill 路径）。完整文件夹：`SKILL.md`、`LICENSE`、`agents/openai.yaml`（`display_name: AIsa`）。来源：Skill `6dcb21159a551e8c6cb0c509ca67627c5b69324a`。
+
+```sh
+set -e
+aisa_skill_target="$HOME/.agents/skills/aisa"
+aisa_skill_parent="$HOME/.agents/skills"
+aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/6dcb21159a551e8c6cb0c509ca67627c5b69324a/platform/aisa"
+if [ -e "$aisa_skill_target" ] || [ -L "$aisa_skill_target" ]; then
+  echo "exists, left unchanged: $aisa_skill_target"
+  echo "not assumed official; inspect before treating as the AIsa skill"
+  exit 0
+fi
+aisa_skill_tmp="$(mktemp -d)"
+trap 'rm -rf "$aisa_skill_tmp"' EXIT
+mkdir -p "$aisa_skill_tmp/aisa/agents" "$aisa_skill_parent"
+curl -fSL "$aisa_skill_base/SKILL.md" -o "$aisa_skill_tmp/aisa/SKILL.md"
+curl -fSL "$aisa_skill_base/LICENSE" -o "$aisa_skill_tmp/aisa/LICENSE"
+curl -fSL "$aisa_skill_base/agents/openai.yaml" -o "$aisa_skill_tmp/aisa/agents/openai.yaml"
+mv "$aisa_skill_tmp/aisa" "$aisa_skill_target"
+```
+
 检查 `@aisa-one/cli` **0.5.0 或更高**。能用就复用。只有缺失时才安装：
 
 ```sh
@@ -48,6 +71,14 @@ aisa --version
 仅在已安装的 CLI 不受支持时升级。不要降级或重装已经能用的版本。
 
 用 `aisa balance` 检查认证。凭证缺失或被拒绝时，运行浏览器 `aisa login`，然后再跑 `aisa balance`。`aisa login --no-browser` 仅用于有交互 TTY 的 SSH / 本机无浏览器。`AISA_API_KEY` 优先于已存储密钥；两者冲突时说明两个来源，不要盲目取消环境变量。永远不要打印凭证。不要让用户去控制台复制 Key。
+
+### 远程或无界面登录
+
+- 根据实际能力和 CLI 输出判断本机还是云端。能执行命令不等于能打开用户的浏览器。除非本机确有可访问的浏览器，否则不要声称已打开浏览器。
+- 若观察到没有可访问的浏览器，**且**跨轮次仍有持久交互 TTY（`stdin` 是 TTY）：运行 `aisa login --no-browser`。第一次交接就打印 CLI **刚刚发出的**完整授权 URL。用户打开它，完成 AIsa 登录，把一次性 code 或 redirect 粘贴回**同一个仍在运行的进程**。如果用户没法在那个终端里输入，请他们把一次性 redirect/code 粘贴到这里；只写入同一个仍在运行的 PTY 一次。不要另开一次登录。
+- 只回复“好了”不能满足粘贴提示。永远不要索要 API key、access token 或 refresh token。不要编造 URL，也不要声称先前的登录还在等。
+- 登录过期：重新跑 `aisa login --no-browser`，只用新 URL。stdin 不是 TTY 时，`--no-browser` 会拒绝；改走原生 MCP OAuth，不要空等。当前客户端是 ChatGPT 时：[Connect ChatGPT](https://developers.openai.com/plugins/deploy/connect-chatgpt) — Settings > Security and login > Developer mode，然后 Plugins +，添加 `https://tools.aisa.one/mcp`，OAuth，在对话中启用（并非每个账号/工作区都有）。
+- 只有本进程登录成功且 `aisa balance` 通过后，才说 **AIsa is connected.** 安装和凭证按当前 Agent 环境描述，不要说装到了用户电脑，或在客户端不能原生持久化时仍会跨会话保留。
 
 `aisa whoami` 只检查本地，不能证明远端认证。
 

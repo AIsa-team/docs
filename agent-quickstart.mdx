@@ -17,7 +17,7 @@ Install only the official `aisa` skill for this harness. Do not change the user'
 
 If a step cannot run, do not jump to HTTP:
 
-1. Skill installer unavailable, but CLI works — continue with CLI/help in this session and say the skill is **not persistently installed**.
+1. Skill installer unavailable — if this environment can write the harness skill directory, install the official `aisa` folder with curl (below). If a Skill still cannot be persisted, continue with CLI/help in this session and say it is **not persistently installed**.
 2. CLI unavailable — native MCP OAuth.
 3. CLI and MCP both unavailable, HTTP requests are supported, **and** a valid existing AIsa API key or secret is already available — direct HTTP API fallback below.
 4. No working API credentials — explain and recover auth (browser `aisa login` when a terminal exists). Do not invent a key or make unauthenticated business calls. Documented public docs, `/v1/models`, and discovery reads remain allowed.
@@ -38,6 +38,29 @@ Set `--agent` to this harness (`codex`, `claude-code`, `cursor`, …). Prefer `-
 
 Unpinned `npx skills` needs Node.js **22.20.0+** (`skills` 1.5.25 `engines`; verified on 22.22). `@aisa-one/cli` may keep its Node.js **18+** floor. Do not replace a working CLI to match the installer.
 
+If Node or `npx skills` cannot run, download only the official `platform/aisa` folder into this harness's documented skills directory. Node is not required to copy Markdown. Curl does not install the CLI or credentials. Reading a URL is not an install. If the target already exists (including a symlink), leave it unchanged, print that it exists, inspect it, and continue; do not report it as the official Skill. Other clients: use their documented native directory; PowerShell or another client-native download is fine. Bash is not required. Copying files in ChatGPT Work cloud is not a native persistent Web Skill; use the host's skill installer/loader, or say the files were downloaded or read for this session. If there is no filesystem or native Skill loading, say the skill was **not persistently installed** and continue with CLI/help or MCP.
+
+Codex user-level example (`~/.agents/skills/aisa`; not generally a ChatGPT Web skill path). Complete folder: `SKILL.md`, `LICENSE`, `agents/openai.yaml` (`display_name: AIsa`). Source: Skill `6dcb21159a551e8c6cb0c509ca67627c5b69324a`.
+
+```sh
+set -e
+aisa_skill_target="$HOME/.agents/skills/aisa"
+aisa_skill_parent="$HOME/.agents/skills"
+aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/6dcb21159a551e8c6cb0c509ca67627c5b69324a/platform/aisa"
+if [ -e "$aisa_skill_target" ] || [ -L "$aisa_skill_target" ]; then
+  echo "exists, left unchanged: $aisa_skill_target"
+  echo "not assumed official; inspect before treating as the AIsa skill"
+  exit 0
+fi
+aisa_skill_tmp="$(mktemp -d)"
+trap 'rm -rf "$aisa_skill_tmp"' EXIT
+mkdir -p "$aisa_skill_tmp/aisa/agents" "$aisa_skill_parent"
+curl -fSL "$aisa_skill_base/SKILL.md" -o "$aisa_skill_tmp/aisa/SKILL.md"
+curl -fSL "$aisa_skill_base/LICENSE" -o "$aisa_skill_tmp/aisa/LICENSE"
+curl -fSL "$aisa_skill_base/agents/openai.yaml" -o "$aisa_skill_tmp/aisa/agents/openai.yaml"
+mv "$aisa_skill_tmp/aisa" "$aisa_skill_target"
+```
+
 Check for `@aisa-one/cli` **0.5.0 or later**. Reuse it if it works. Install only if it is absent:
 
 ```sh
@@ -48,6 +71,14 @@ aisa --version
 Upgrade only when the installed CLI is unsupported. Do not downgrade or reinstall a working version.
 
 Check authentication with `aisa balance`. If credentials are missing or rejected, run browser `aisa login`, then `aisa balance` again. `aisa login --no-browser` is only for interactive SSH / no local browser with a TTY. `AISA_API_KEY` overrides the stored key; if they conflict, explain both sources and do not blindly unset the environment variable. Never print credentials. Do not send the user to copy a key from the dashboard.
+
+### Remote or headless sign-in
+
+- Decide local vs cloud from actual capabilities and CLI output. Running commands does not mean you can open the user's browser. Do not say a browser opened unless this host has an accessible browser.
+- If you observe no accessible browser **and** a persistent interactive TTY (`stdin` is a TTY) across turns: run `aisa login --no-browser`. In the first handoff, print the **exact live** URL the CLI just emitted. The user opens it, finishes AIsa sign-in, and pastes the one-time code or redirect into the **same still-live process**. If the user cannot type in that terminal, ask them to paste the one-time redirect/code here; write it once to the same still-live PTY. Do not start another login.
+- Replying "done" does not feed a paste-back prompt. Never ask for an API key, access token, or refresh token. Do not invent a URL or claim an earlier login is still waiting.
+- If that login expired, start a new `aisa login --no-browser` and use only the new URL. If stdin is not a TTY, `--no-browser` refuses; use native MCP OAuth instead of waiting. ChatGPT, when that is the client: [Connect ChatGPT](https://developers.openai.com/plugins/deploy/connect-chatgpt) — Settings > Security and login > Developer mode, then Plugins +, add `https://tools.aisa.one/mcp`, OAuth, enable in the conversation (not every account/workspace has this).
+- Say **AIsa is connected.** only after this process's login succeeds and `aisa balance` works. Describe installs and credentials as in this agent environment, not as installed on the user's PC or kept across sessions unless this client natively persists them.
 
 `aisa whoami` is local only. It is not proof of remote auth.
 
