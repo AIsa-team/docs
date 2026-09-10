@@ -5,48 +5,25 @@ description: "安装 AIsa Skill，登录，然后开始使用工具。"
 
 配置 AIsa。
 
-## 1. 选择或复用连接
+若已有可用连接，直接复用：官方 `aisa` Skill 加上有效的 CLI 认证，或已具备 `AISA_SEARCH_TOOL`、`AISA_BATCH_GET_SCHEMA`、`AISA_BATCH_QUOTE`、`AISA_BATCH_USE` 的统一 MCP。任意可用 shell 都可以，包括 PowerShell。只为当前 harness 安装官方 `aisa` Skill。不要改无关模型设置。安装和凭证按当前 Agent 环境描述。
 
-若已有可用的 AIsa 连接，直接复用：官方 `aisa` Skill 加上有效的 CLI 认证，或已列出下方四个 Router 工具的统一 MCP。
+## 安装官方 Skill
 
-只要当前环境能运行终端或 CLI 命令，就走 CLI。任意可用 shell 都可以，包括 PowerShell。不要求必须是 Bash。
-
-没有可用的命令执行能力，或用户明确选择 MCP 时，走原生远程 MCP + OAuth。这条路径不要求 Node.js 或 `npx`。
-
-只为当前 harness 安装官方 `aisa` Skill。不要改用户的默认模型或其他无关客户端设置。
-
-某一步跑不起来时，不要直接跳到 HTTP：
-
-1. Skill 安装器不可用 — 若当前环境能写入该 harness 的 Skill 目录，用 curl 安装官方 `aisa` 文件夹（见下）。若仍无法持久安装 Skill，本次会话用 CLI/help 继续，并说明 **并未持久安装**。
-2. CLI 不可用 — 走原生 MCP OAuth。
-3. CLI 和 MCP 都不可用，当前环境能发 HTTP，**且** 已有有效的 AIsa API key/秘密 — 走下方直接 HTTP API 回退。
-4. 没有可用的 API 凭证 — 说明并恢复认证（有终端时用浏览器 `aisa login`）。不要编造 Key，也不要发未认证的业务调用。已记录的公开 docs、`/v1/models` 和 discovery 仍可读取。
-
-换传输方式不能修复无效的 API 凭证、额度用尽，或同样影响直接 API 的故障。如果失败仅限于 CLI/MCP 客户端或路由器，下方直接 HTTP 回退仍可能可用；不要用付费请求探测可用性。不要提取或复用客户端持有的 MCP OAuth token。获取凭证仍以浏览器 `aisa login` 为主。不要默认要用户去领取或粘贴 Key。
-
-## 2. CLI 路径
-
-来源：[AIsa-team/agent-skills](https://github.com/AIsa-team/agent-skills)。Slug：`aisa`。文件：`platform/aisa/SKILL.md`。
-
-为**当前** harness 安装一个官方 Skill：
+首选安装器（Node.js **22.20.0+**；`skills` 1.5.25 的 `engines`）：
 
 ```sh
 npx skills add AIsa-team/agent-skills --skill aisa --agent codex --global
 ```
 
-把 `--agent` 改成当前 harness（`codex`、`claude-code`、`cursor` 等）。个人通用接入建议 `--global`，用户要求限制在当前仓库时用 project scope。不要使用 `--all` 或 `*`。不要覆盖同名自定义 Skill。官方 Skill 已存在就复用。
+把 `--agent` 改成当前 harness（`codex`、`claude-code`、`cursor` 等）。个人通用接入建议 `--global`，除非用户要求限制在当前仓库。不要使用 `--all` 或 `*`。
 
-未固定版本的 `npx skills` 需要 Node.js **22.20.0+**（`skills` 1.5.25 的 `engines`；已在 22.22 验证）。`@aisa-one/cli` 仍可沿用 Node.js **18+** 下限。不要为了安装器替换已经能用的 CLI。
-
-如果 Node 或 `npx skills` 跑不起来，只把官方 `platform/aisa` 文件夹下载到当前 harness 文档中的 skills 目录。复制 Markdown 不需要 Node。Curl 不会安装 CLI 或凭证。读取 URL 不等于已安装。若目标已存在（包括符号链接），保持不动，打印 exists/left unchanged，检查后再继续；不要把它报成官方 Skill 已安装。其他客户端：用它们文档中的原生目录；PowerShell 或客户端自带的下载方式都可以。不要求必须是 Bash。在 ChatGPT Work 云里复制文件不是 Web 端原生持久 Skill；用宿主提供的 Skill 安装/加载器，或说明本会话已下载/读取。如果没有文件系统或原生 Skill 加载，说明 Skill **并未持久安装**，并继续用 CLI/help 或 MCP。
-
-Codex 用户级示例（`~/.agents/skills/aisa`；一般不是 ChatGPT Web 的 Skill 路径）。完整文件夹：`SKILL.md`、`LICENSE`、`agents/openai.yaml`（`display_name: AIsa`）。来源：Skill `6dcb21159a551e8c6cb0c509ca67627c5b69324a`。
+如果 Node 或 `npx skills` 跑不起来，把完整三文件（`SKILL.md`、`LICENSE`、`agents/openai.yaml`）下载到当前客户端的原生 Skill 位置。保留已有的官方或自定义 Skill（包括符号链接）；没有原生安装就不要声称 Web 端已持久化。Codex 用户级示例：`~/.agents/skills/aisa`。
 
 ```sh
 set -e
 aisa_skill_target="$HOME/.agents/skills/aisa"
 aisa_skill_parent="$HOME/.agents/skills"
-aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/6dcb21159a551e8c6cb0c509ca67627c5b69324a/platform/aisa"
+aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/0332d85b282c4fe271fc4df18f8393a5d4993ca9/platform/aisa"
 if [ -e "$aisa_skill_target" ] || [ -L "$aisa_skill_target" ]; then
   echo "exists, left unchanged: $aisa_skill_target"
   echo "not assumed official; inspect before treating as the AIsa skill"
@@ -61,80 +38,28 @@ curl -fSL "$aisa_skill_base/agents/openai.yaml" -o "$aisa_skill_tmp/aisa/agents/
 mv "$aisa_skill_tmp/aisa" "$aisa_skill_target"
 ```
 
-检查 `@aisa-one/cli` **0.5.0 或更高**。能用就复用。只有缺失时才安装：
+## CLI
+
+复用已经能用的 `@aisa-one/cli` **0.5.0 或更高**。只有缺失时才安装。不要降级。CLI 仍可沿用 Node.js **18+** 下限；不要为了 Skill 安装器替换已经能用的 CLI。
 
 ```sh
 npm install -g @aisa-one/cli
 aisa --version
 ```
 
-仅在已安装的 CLI 不受支持时升级。不要降级或重装已经能用的版本。
+Skill 落盘后，在当前会话读取它。登录请遵循该 Skill 和 `aisa login --help`。用 `aisa balance` 检查认证。`aisa whoami` 只检查本地。`AISA_API_KEY` 优先于已存储密钥；两者冲突时说明两个来源，不要盲目取消环境变量。永远不要打印凭证。不要让用户去控制台复制 Key。获取凭证仍以浏览器 `aisa login` 为主。
 
-用 `aisa balance` 检查认证。凭证缺失或被拒绝时，运行浏览器 `aisa login`，然后再跑 `aisa balance`。`aisa login --no-browser` 仅用于有交互 TTY 的 SSH / 本机无浏览器。`AISA_API_KEY` 优先于已存储密钥；两者冲突时说明两个来源，不要盲目取消环境变量。永远不要打印凭证。不要让用户去控制台复制 Key。
+## MCP
 
-### 远程或无界面登录
+当前环境不能跑 CLI 命令，或用户更想用 MCP 时，连接 `https://tools.aisa.one/mcp`（Streamable HTTP，OAuth）。由客户端完成浏览器登录并保存 token。不要要求 `npx`。不要使用 `https://mcp.aisa.one/servers` 或默认 `aisa connect` 的 web-search。只有 OAuth 已完成，**并且** `AISA_SEARCH_TOOL`、`AISA_BATCH_GET_SCHEMA`、`AISA_BATCH_QUOTE`、`AISA_BATCH_USE` 都在，才算连接成功。metadata 或 `401` 挑战不是受保护调用。
 
-- 根据实际能力和 CLI 输出判断本机还是云端。能执行命令不等于能打开用户的浏览器。除非本机确有可访问的浏览器，否则不要声称已打开浏览器。
-- 若观察到没有可访问的浏览器，**且**跨轮次仍有持久交互 TTY（`stdin` 是 TTY）：运行 `aisa login --no-browser`。第一次交接就打印 CLI **刚刚发出的**完整授权 URL。用户打开它，完成 AIsa 登录，把一次性 code 或 redirect 粘贴回**同一个仍在运行的进程**。如果用户没法在那个终端里输入，请他们把一次性 redirect/code 粘贴到这里；只写入同一个仍在运行的 PTY 一次。不要另开一次登录。
-- 只回复“好了”不能满足粘贴提示。永远不要索要 API key、access token 或 refresh token。不要编造 URL，也不要声称先前的登录还在等。
-- 登录过期：重新跑 `aisa login --no-browser`，只用新 URL。stdin 不是 TTY 时，`--no-browser` 会拒绝；改走原生 MCP OAuth，不要空等。当前客户端是 ChatGPT 时：[Connect ChatGPT](https://developers.openai.com/plugins/deploy/connect-chatgpt) — Settings > Security and login > Developer mode，然后 Plugins +，添加 `https://tools.aisa.one/mcp`，OAuth，在对话中启用（并非每个账号/工作区都有）。
-- 只有本进程登录成功且 `aisa balance` 通过后，才说 **AIsa is connected.** 安装和凭证按当前 Agent 环境描述，不要说装到了用户电脑，或在客户端不能原生持久化时仍会跨会话保留。
+## 连接成功之后
 
-`aisa whoami` 只检查本地，不能证明远端认证。
+只有认证已验证（CLI 路径上的 `aisa balance`，或 MCP 路径上 OAuth 完成且四个工具都在）才报告 **AIsa is connected.** 这不等于业务任务已完成。如果用户已经说了任务，就继续该任务。否则询问 **What would you like to do first?** 遵循 `aisa` Skill。接入不是消费批准。
 
-Skill 落盘后，在当前会话读取并继续。
+如果 quote 或已记录的最高费用超过剩余已批准额度，就停止。不要在额度不足时仍请用户批准同一 endpoint。
 
-## 3. MCP 路径
-
-连接统一 AIsa Router：`https://tools.aisa.one/mcp`（Streamable HTTP，OAuth）。由客户端发现端点并保存/刷新 token。用户在浏览器完成登录。如果客户端要求，重新连接或启用 connector。
-
-不要使用 `https://mcp.aisa.one/servers`，也不要把默认 `aisa connect` 的 web-search 服务器当成这个 Router。没有命令执行能力时不要要求 `npx`。
-
-如果客户端能原生安装 Skill，安装同一个 `aisa` Skill。如果不能，继续并说明 Skill **并未持久安装**。
-
-Claude（个人 Pro/Max）按 Anthropic 的 [custom connectors 指南](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp)：**Customize → Connectors → + → Add custom connector**，填入名称 `AIsa` 和 URL `https://tools.aisa.one/mcp`，**Add**，然后 **Connect** 并完成 OAuth。在对话里通过 **+ → Connectors** 启用。Team/Enterprise 由所有者配置，路径不同；以该指南为准。
-
-用户明确选择 MCP、且有终端可用时的 Codex 示例，来自 Codex CLI `codex mcp add --help` 和 `codex mcp login --help`：
-
-```sh
-codex mcp add aisa --url https://tools.aisa.one/mcp
-codex mcp login aisa --scopes openid,profile,email
-```
-
-只有 OAuth 已完成，**并且**下表四个工具都已出现，才算连接成功。metadata 或 `401` 挑战不等于受保护调用。
-
-| MCP 工具 | CLI 命令 |
-| --- | --- |
-| `AISA_SEARCH_TOOL` | `aisa search` |
-| `AISA_BATCH_GET_SCHEMA` | `aisa schema` |
-| `AISA_BATCH_QUOTE` | `aisa quote` |
-| `AISA_BATCH_USE` | `aisa call` |
-
-## 4. 认证通过之后
-
-只有认证已验证（CLI 路径上的 `aisa balance`，或 MCP 路径上 OAuth 完成且四个工具都在）才报告 **AIsa is connected.** 这不等于业务任务已完成。
-
-如果用户已经说了任务，就继续该任务。否则询问 **What would you like to do first?**
-
-按 `aisa` Skill 执行 search → 必要时 schema → quote → call。实时 help、schema 和 quote 是权威来源。`--input` 支持内联 JSON。
-
-接入不是消费批准。普通 CLI `quote`/`call` 和 MCP `AISA_BATCH_QUOTE`/`AISA_BATCH_USE` 仍要匹配的 quote，以及覆盖该范围和费用的授权。复用仍然有效的明确授权。缺少、失败或部分的 quote 不是免费，也不是整批合计。估算费用不是保证上限。换传输方式不等于授予权限。
-
-如果 quote 或已记录的最高费用超过剩余已批准额度，就停止。不要在额度不足时仍请用户批准同一 endpoint。说明差额，并提出可行的已记录范围或足够的追加预算；任何变更仍需批准。该规则适用于付费的 CLI、MCP 和 HTTP 调用。
-
-## 5. 失败时怎么做
-
-| 情况 | 下一步 |
-| --- | --- |
-| 浏览器登录未完成 | 等待；不要编造 Key |
-| 凭证缺失、被拒绝或已过期 | `aisa login`，然后 `aisa balance` |
-| 网络或服务错误 | 展示实际原因；不要默认重新登录 |
-| 余额为 0 | 去充值；不是缺 Key |
-| `AISA_API_KEY` 与已存储密钥冲突 | 说明两个来源 |
-| OAuth 后看不到 MCP 工具 | 刷新/重连；确认四个工具 |
-| Skill 已安装 | 复用 |
-
-传输方式回退请按第 1 节处理。
+不要为了绕过缺凭证、额度用尽或同一 API 故障而跳到 HTTP。CLI/MCP 客户端或路由器限制时，下方直接 HTTP 回退仍可能可用；不要用付费请求探测可用性。不要提取或复用客户端持有的 MCP OAuth token。
 
 ## 直接 HTTP API 回退
 

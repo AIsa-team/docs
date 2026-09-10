@@ -5,48 +5,25 @@ description: "Install the AIsa skill, sign in, and start using tools."
 
 Set up AIsa.
 
-## 1. Choose or reuse a connection
+Reuse a working connection when one exists: the official `aisa` skill plus valid CLI auth, or unified MCP with `AISA_SEARCH_TOOL`, `AISA_BATCH_GET_SCHEMA`, `AISA_BATCH_QUOTE`, and `AISA_BATCH_USE`. Any working shell counts, including PowerShell. Install only the official `aisa` skill for this harness. Do not change unrelated model settings. Describe installs and credentials as in this agent environment.
 
-Reuse a working AIsa connection when one already exists: the official `aisa` skill plus valid CLI auth, or unified MCP with the four router tools below.
+## Install the official skill
 
-If this environment can run terminal or CLI commands, use the CLI path. Any working shell counts, including PowerShell. Bash is not required.
-
-If there is no usable command execution, or the user explicitly prefers MCP, use native remote MCP with OAuth. Do not require Node.js or `npx` on that path.
-
-Install only the official `aisa` skill for this harness. Do not change the user's default model or unrelated client settings.
-
-If a step cannot run, do not jump to HTTP:
-
-1. Skill installer unavailable — if this environment can write the harness skill directory, install the official `aisa` folder with curl (below). If a Skill still cannot be persisted, continue with CLI/help in this session and say it is **not persistently installed**.
-2. CLI unavailable — native MCP OAuth.
-3. CLI and MCP both unavailable, HTTP requests are supported, **and** a valid existing AIsa API key or secret is already available — direct HTTP API fallback below.
-4. No working API credentials — explain and recover auth (browser `aisa login` when a terminal exists). Do not invent a key or make unauthenticated business calls. Documented public docs, `/v1/models`, and discovery reads remain allowed.
-
-Switching transport does not repair invalid API credentials, exhausted credit, or an outage affecting the direct API too. A failure specific to the CLI/MCP client or router may still allow the direct HTTP fallback below; do not use a paid request to probe availability. Do not extract or reuse client-owned MCP OAuth tokens. Browser `aisa login` remains the primary way to obtain credentials. Do not default to asking the user to create or paste a key.
-
-## 2. CLI path
-
-Source: [AIsa-team/agent-skills](https://github.com/AIsa-team/agent-skills). Slug: `aisa`. File: `platform/aisa/SKILL.md`.
-
-Install one official skill for the **current** harness:
+Primary installer (Node.js **22.20.0+**; `skills` 1.5.25 `engines`):
 
 ```sh
 npx skills add AIsa-team/agent-skills --skill aisa --agent codex --global
 ```
 
-Set `--agent` to this harness (`codex`, `claude-code`, `cursor`, …). Prefer `--global` unless the user asked for this repo only (project scope). Do not use `--all` or `*`. Do not overwrite a same-named custom skill. Reuse the official skill if it is already present.
+Set `--agent` to this harness (`codex`, `claude-code`, `cursor`, …). Prefer `--global` unless the user asked for this repo only. Do not use `--all` or `*`.
 
-Unpinned `npx skills` needs Node.js **22.20.0+** (`skills` 1.5.25 `engines`; verified on 22.22). `@aisa-one/cli` may keep its Node.js **18+** floor. Do not replace a working CLI to match the installer.
-
-If Node or `npx skills` cannot run, download only the official `platform/aisa` folder into this harness's documented skills directory. Node is not required to copy Markdown. Curl does not install the CLI or credentials. Reading a URL is not an install. If the target already exists (including a symlink), leave it unchanged, print that it exists, inspect it, and continue; do not report it as the official Skill. Other clients: use their documented native directory; PowerShell or another client-native download is fine. Bash is not required. Copying files in ChatGPT Work cloud is not a native persistent Web Skill; use the host's skill installer/loader, or say the files were downloaded or read for this session. If there is no filesystem or native Skill loading, say the skill was **not persistently installed** and continue with CLI/help or MCP.
-
-Codex user-level example (`~/.agents/skills/aisa`; not generally a ChatGPT Web skill path). Complete folder: `SKILL.md`, `LICENSE`, `agents/openai.yaml` (`display_name: AIsa`). Source: Skill `6dcb21159a551e8c6cb0c509ca67627c5b69324a`.
+If Node or `npx skills` cannot run, download the complete three files (`SKILL.md`, `LICENSE`, `agents/openai.yaml`) into this client's native Skill location. Preserve an existing official or custom skill, including a symlink; do not claim Web persistence without a native install. Codex user-level example: `~/.agents/skills/aisa`.
 
 ```sh
 set -e
 aisa_skill_target="$HOME/.agents/skills/aisa"
 aisa_skill_parent="$HOME/.agents/skills"
-aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/6dcb21159a551e8c6cb0c509ca67627c5b69324a/platform/aisa"
+aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/0332d85b282c4fe271fc4df18f8393a5d4993ca9/platform/aisa"
 if [ -e "$aisa_skill_target" ] || [ -L "$aisa_skill_target" ]; then
   echo "exists, left unchanged: $aisa_skill_target"
   echo "not assumed official; inspect before treating as the AIsa skill"
@@ -61,80 +38,28 @@ curl -fSL "$aisa_skill_base/agents/openai.yaml" -o "$aisa_skill_tmp/aisa/agents/
 mv "$aisa_skill_tmp/aisa" "$aisa_skill_target"
 ```
 
-Check for `@aisa-one/cli` **0.5.0 or later**. Reuse it if it works. Install only if it is absent:
+## CLI
+
+Reuse `@aisa-one/cli` **0.5.0 or later** if it works. Install only if it is absent. Do not downgrade. CLI may keep its Node.js **18+** floor; do not replace a working CLI to match the Skill installer.
 
 ```sh
 npm install -g @aisa-one/cli
 aisa --version
 ```
 
-Upgrade only when the installed CLI is unsupported. Do not downgrade or reinstall a working version.
+After the skill is on disk, read it in this session. For sign-in, follow that skill and `aisa login --help`. Check authentication with `aisa balance`. `aisa whoami` is local only. `AISA_API_KEY` overrides the stored key; if they conflict, explain both sources and do not blindly unset the environment variable. Never print credentials. Do not send the user to copy a key from the dashboard. Browser `aisa login` remains the primary way to obtain credentials.
 
-Check authentication with `aisa balance`. If credentials are missing or rejected, run browser `aisa login`, then `aisa balance` again. `aisa login --no-browser` is only for interactive SSH / no local browser with a TTY. `AISA_API_KEY` overrides the stored key; if they conflict, explain both sources and do not blindly unset the environment variable. Never print credentials. Do not send the user to copy a key from the dashboard.
+## MCP
 
-### Remote or headless sign-in
+When this environment cannot run CLI commands, or the user prefers MCP, connect `https://tools.aisa.one/mcp` (Streamable HTTP, OAuth). The client owns browser sign-in and tokens. Do not require `npx`. Do not use `https://mcp.aisa.one/servers` or the default `aisa connect` web-search server. Connection succeeds only after OAuth completed **and** `AISA_SEARCH_TOOL`, `AISA_BATCH_GET_SCHEMA`, `AISA_BATCH_QUOTE`, and `AISA_BATCH_USE` are present. Metadata or a `401` challenge is not a protected call.
 
-- Decide local vs cloud from actual capabilities and CLI output. Running commands does not mean you can open the user's browser. Do not say a browser opened unless this host has an accessible browser.
-- If you observe no accessible browser **and** a persistent interactive TTY (`stdin` is a TTY) across turns: run `aisa login --no-browser`. In the first handoff, print the **exact live** URL the CLI just emitted. The user opens it, finishes AIsa sign-in, and pastes the one-time code or redirect into the **same still-live process**. If the user cannot type in that terminal, ask them to paste the one-time redirect/code here; write it once to the same still-live PTY. Do not start another login.
-- Replying "done" does not feed a paste-back prompt. Never ask for an API key, access token, or refresh token. Do not invent a URL or claim an earlier login is still waiting.
-- If that login expired, start a new `aisa login --no-browser` and use only the new URL. If stdin is not a TTY, `--no-browser` refuses; use native MCP OAuth instead of waiting. ChatGPT, when that is the client: [Connect ChatGPT](https://developers.openai.com/plugins/deploy/connect-chatgpt) — Settings > Security and login > Developer mode, then Plugins +, add `https://tools.aisa.one/mcp`, OAuth, enable in the conversation (not every account/workspace has this).
-- Say **AIsa is connected.** only after this process's login succeeds and `aisa balance` works. Describe installs and credentials as in this agent environment, not as installed on the user's PC or kept across sessions unless this client natively persists them.
+## After AIsa is connected
 
-`aisa whoami` is local only. It is not proof of remote auth.
+Say **AIsa is connected.** only after authentication is verified (`aisa balance` on the CLI path, or OAuth completed with the four tools on the MCP path). That is not a completed business task. If the user already named a task, continue it. Otherwise ask **What would you like to do first?** Follow the `aisa` skill. Setup is not spending approval.
 
-After the skill is on disk, read it in this session and continue.
+If the quote or documented maximum exceeds the remaining approved cap, stop. Do not ask the user to approve that same endpoint under an insufficient cap.
 
-## 3. MCP path
-
-Connect the unified AIsa router at `https://tools.aisa.one/mcp` (Streamable HTTP, OAuth). The client discovers endpoints and owns token storage and refresh. The user completes browser sign-in. Reconnect or enable the connector if the client requires it.
-
-Do not use `https://mcp.aisa.one/servers` or the default `aisa connect` web-search server as this router. Do not require `npx` when there is no command execution.
-
-If this client can install skills natively, install the same `aisa` skill. If it cannot, continue and say the skill was **not persistently installed**.
-
-Claude (individual Pro/Max), from Anthropic's [custom connectors guide](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp): **Customize → Connectors → + → Add custom connector**, enter name `AIsa` and URL `https://tools.aisa.one/mcp`, **Add**, then **Connect** and complete OAuth. Enable it in the conversation via **+ → Connectors**. Team/Enterprise owner setup differs; use that guide.
-
-Codex, when the user explicitly chose MCP and a terminal is available, from Codex CLI `codex mcp add --help` and `codex mcp login --help`:
-
-```sh
-codex mcp add aisa --url https://tools.aisa.one/mcp
-codex mcp login aisa --scopes openid,profile,email
-```
-
-Connection succeeds only after OAuth completed **and** the four tools below are present. Metadata or a `401` challenge is not a protected call.
-
-| MCP tool | CLI command |
-| --- | --- |
-| `AISA_SEARCH_TOOL` | `aisa search` |
-| `AISA_BATCH_GET_SCHEMA` | `aisa schema` |
-| `AISA_BATCH_QUOTE` | `aisa quote` |
-| `AISA_BATCH_USE` | `aisa call` |
-
-## 4. After authentication is verified
-
-Say **AIsa is connected.** only after authentication is verified (`aisa balance` on the CLI path, or OAuth completed with the four tools on the MCP path). That is not a completed business task.
-
-If the user already named a task, continue it. Otherwise ask **What would you like to do first?**
-
-Follow the `aisa` skill for search → schema when needed → quote → call. Runtime help, schema, and quote are authoritative. Inline JSON is supported with `--input`.
-
-Setup is not spending approval. For ordinary CLI `quote`/`call` and MCP `AISA_BATCH_QUOTE`/`AISA_BATCH_USE`, use a matching quote and an authorization that covers that scope and cost. Reuse a still-valid explicit authorization. A missing, failed, or partial quote is not free and is not a full-batch total. Estimated cost is not a guaranteed cap. Switching transport never grants permission.
-
-If the quote or documented maximum exceeds the remaining approved cap, stop. Do not ask the user to approve that same endpoint under an insufficient cap. Explain the shortfall and propose a feasible documented scope or enough additional budget; any change still needs approval. This applies to paid CLI, MCP, and HTTP calls.
-
-## 5. If something fails
-
-| Situation | Next step |
-| --- | --- |
-| Browser login not finished | Wait; do not invent a key |
-| Missing, rejected, or expired credentials | `aisa login`, then `aisa balance` |
-| Network or service error | Show the actual cause; do not relogin by default |
-| Empty credit | Top up; not a missing key |
-| `AISA_API_KEY` conflicts with the stored key | Explain both sources |
-| MCP tools missing after OAuth | Refresh/reconnect; confirm the four tools |
-| Skill already installed | Reuse |
-
-For transport fallback, follow section 1.
+Do not jump to HTTP to bypass missing credentials, exhausted credit, or an outage of the same API. A CLI/MCP client or router limitation may still allow the direct HTTP fallback below; do not use a paid request to probe availability. Do not extract or reuse client-owned MCP OAuth tokens.
 
 ## Direct HTTP API fallback
 
