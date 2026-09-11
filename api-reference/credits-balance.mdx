@@ -21,8 +21,17 @@ does not accept MPP payment authorization.
 ```json
 {
   "currency": "USD",
-  "account_balance_micros_usd": 2500000,
-  "available_balance_micros_usd": 1000000,
+  "account_balance_micros_usd": 3250000,
+  "available_balance_micros_usd": 1750000,
+  "go_to_market_balance_micros_usd": 750000,
+  "gtm": {
+    "active": true,
+    "balance_micros_usd": 750000,
+    "trial_balance_micros_usd": 250000,
+    "trial_expires_at": "2026-09-30T12:00:00Z",
+    "subscription_balance_micros_usd": 500000,
+    "expires_at": "2026-10-31T12:00:00Z"
+  },
   "api_key": {
     "unlimited": false,
     "remaining_micros_usd": 1000000,
@@ -40,20 +49,41 @@ microdollars. This avoids floating-point rounding in automated clients.
 | Field | Type | Description |
 |---|---|---|
 | `currency` | string | The balance currency. Currently always `USD`. |
-| `account_balance_micros_usd` | integer | Effective total wallet balance. |
-| `available_balance_micros_usd` | integer | Amount available to the authenticated API key. |
+| `account_balance_micros_usd` | integer | Effective PAYG balance plus the GTM balance. |
+| `available_balance_micros_usd` | integer | PAYG balance available to the authenticated API key plus the GTM balance. |
+| `go_to_market_balance_micros_usd` | integer | Total GTM balance. This equals `gtm.balance_micros_usd`. |
+| `gtm` | object | GTM balance details, including trial and subscription balances. |
 | `api_key` | object | Remaining and used balance for this API key. |
 | `as_of` | string | UTC timestamp for the balance snapshot. |
 
+### GTM fields
+
+| Field | Type | Description |
+|---|---|---|
+| `active` | boolean | Whether GTM funds are available or a GTM subscription period exists. |
+| `balance_micros_usd` | integer | Total GTM balance. |
+| `trial_balance_micros_usd` | integer | Unexpired GTM trial balance. |
+| `trial_expires_at` | string | UTC expiry of the GTM trial balance. Omitted when no trial expiry applies. |
+| `subscription_balance_micros_usd` | integer | GTM subscription balance. |
+| `expires_at` | string | UTC expiry of the current GTM subscription period. Omitted when no period applies. |
+
 ### Balance calculation
 
-`account_balance_micros_usd` is the sum of the effective cash, Trial, promo, and
-credit buckets. An expired Trial balance is excluded.
+The PAYG balance is the sum of the effective cash, Trial, promo, and credit
+buckets. An expired Trial balance is excluded.
 
-For a limited API key, `available_balance_micros_usd` is the lower of the
-account balance and `api_key.remaining_micros_usd`. For an unlimited API key,
-it equals the account balance. The available balance is clamped at zero when
-the account or key balance is negative.
+`go_to_market_balance_micros_usd` is the GTM balance. It is also exposed as
+`gtm.balance_micros_usd`, with its trial and subscription components in the
+`gtm` object.
+
+`account_balance_micros_usd` is the PAYG balance plus
+`go_to_market_balance_micros_usd`.
+
+For a limited API key, `available_balance_micros_usd` is the lower of the PAYG
+balance and `api_key.remaining_micros_usd`, plus the GTM balance. For an
+unlimited API key, it equals the PAYG balance plus the GTM balance. The PAYG
+portion available to the key is clamped at zero when the PAYG or key balance is
+negative.
 
 Expired Trial credit is not included in the effective balance.
 
