@@ -374,7 +374,7 @@
                         },
                         "minItems": 1,
                         "maxItems": 4,
-                        "description": "来自 X media-upload API 的 1–4 个媒体 ID。"
+                        "description": "1–4 个媒体 ID，来自 `POST /apis/v1/twitter/upload_media`（或通过 `media_files` 直接内联上传 —— 见该端点）。"
                       },
                       "tagged_user_ids": {
                         "type": "array",
@@ -615,6 +615,93 @@
           },
           "502": {
             "description": "无法连接上游 X API。"
+          }
+        }
+      }
+    },
+    "/twitter/upload_media": {
+      "post": {
+        "summary": "上传媒体（发推前预上传）",
+        "description": "上传单个图片、GIF 或视频，返回一个 `media_id`，随后可在 [`post_twitter`](/zh/api-reference/twitter/post_twitter-post-twitter) 里通过 `media.media_ids` 附加到推文。经网关代理，地址 `https://api.aisa.one/apis/v1/twitter/upload_media`。\n\n**Content-Type 只支持 `multipart/form-data`。** 请以 multipart 表单部件上传文件。**不要发送 JSON 请求体** —— JSON 请求会返回 `400 \"upload_media requires multipart/form-data with a single media file field\"`。\n\n**两步媒体流程：**\n1. `POST /apis/v1/twitter/upload_media` 上传文件 → 返回 `media_id`。\n2. `POST /apis/v1/twitter/post_twitter` 传入 `{ \"media\": { \"media_ids\": [\"<media_id>\"] } }`。\n\n或者，`post_twitter` 也支持在单次 multipart 请求里通过 `media_files` 内联文件，跳过预上传步骤。\n\n**鉴权：** 需要源用户的 OAuth 会话并绑定到你的 AIsa API Key。首次通过 [`POST /apis/v1/twitter/auth_twitter`](/zh/api-reference/twitter/post_twitter-auth-twitter) 授权账号。\n\n**权限范围：** 底层 X 会话需持有 `media.write`（以及 `tweet.read`、`users.read`）。\n\n媒体上传是前置步骤，不单独计费 —— 发推（`post_twitter`）时才计费。",
+        "operationId": "uploadTwitterMedia",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "media_files"
+                ],
+                "properties": {
+                  "media_files": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "要上传的媒体文件（`image/*`、`image/gif` 或 `video/*`）。字段名也可用 `media` 或 `file`。≤8MB 的图片走单次上传；更大文件与视频自动走分片上传。"
+                  },
+                  "aisa_api_key": {
+                    "type": "string",
+                    "description": "可选。通常无需填写 —— 网关会从 `Authorization: Bearer` 头解析你的账号。"
+                  }
+                }
+              },
+              "encoding": {
+                "media_files": {
+                  "contentType": "image/png, image/jpeg, image/gif, video/mp4"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "上传成功；返回可在 `post_twitter` 中引用的 `media_id`。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "media_id": {
+                          "type": "string",
+                          "description": "上传媒体的 ID。在 `post_twitter` 的 `media.media_ids` 中传入。未挂载的媒体约 24 小时后过期。"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "media_id": "2099415764780605440"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "非 `multipart/form-data`、缺少文件部件、文件为空或不支持的类型。JSON 请求体会返回 `\"upload_media requires multipart/form-data with a single media file field\"`。"
+          },
+          "401": {
+            "description": "缺少或无效的 AIsa API Key。"
+          },
+          "403": {
+            "description": "OAuth 会话缺失、过期或缺少 `media.write`。请通过 `POST /apis/v1/twitter/auth_twitter` 重新授权。"
+          },
+          "429": {
+            "description": "触发限流 —— 你的 AIsa Key RPM 上限或上游 X 限流。"
+          },
+          "500": {
+            "description": "内部错误。"
+          },
+          "502": {
+            "description": "上游 X API 不可达。可用指数退避重试。"
           }
         }
       }
