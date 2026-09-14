@@ -1,0 +1,70 @@
+---
+title: "上传媒体"
+description: "上传图片、GIF 或视频，获取可附加到推文的 media_id。仅支持 multipart/form-data。"
+openapi: "openapi/zh/twitter-actions.json POST /twitter/upload_media"
+---
+
+上传单个图片、GIF 或视频，返回一个 `media_id`，随后可在 [`post_twitter`](/zh/api-reference/twitter/post_twitter-post-twitter) 里附加到推文。经 AIsa 网关代理，地址 `https://api.aisa.one/apis/v1/twitter/upload_media`。
+
+<Warning>
+  本端点**仅支持 `multipart/form-data`** —— 请以表单部件上传文件。发送 JSON 请求体会返回 `400 "upload_media requires multipart/form-data with a single media file field"`。
+</Warning>
+
+## 前置条件
+
+- 一个 **AIsa API Key**（每次请求作为 Bearer 令牌）。
+- 源用户的一次性 **OAuth 授权**。通过 [`POST /apis/v1/twitter/auth_twitter`](/zh/api-reference/twitter/post_twitter-auth-twitter) 绑定你的 X 账号。
+- X 会话需持有 `media.write`、`tweet.read`、`users.read`。
+
+## 两步媒体流程
+
+1. **上传** —— `POST /apis/v1/twitter/upload_media` 上传文件 → 返回 `media_id`。
+2. **发布** —— `POST /apis/v1/twitter/post_twitter` 传入 `{ "media": { "media_ids": ["<media_id>"] } }`。
+
+<Note>
+  `post_twitter` 也支持在单次 multipart 请求里通过 `media_files` 内联文件，从而跳过预上传步骤。当你想把同一素材复用到多条推文，或把大文件上传与发推解耦时，使用 `upload_media`。
+</Note>
+
+## 示例
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/twitter/upload_media" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -F "media_files=@./cat.png;type=image/png"
+```
+
+```json 响应
+{ "code": 200, "msg": "Media uploaded successfully", "data": { "media_id": "2099415764780605440" } }
+```
+
+随后附加：
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/twitter/post_twitter" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"看这只猫","media":{"media_ids":["2099415764780605440"]}}'
+```
+
+## 说明
+
+- 文件字段名可用 `media_files`、`media` 或 `file`。
+- ≤8MB 的图片走单次上传；更大文件与视频自动分片上传。
+- 未挂载的媒体约 24 小时后过期。
+- 媒体上传是前置步骤，**不单独计费** —— 发推（`post_twitter`）时才计费。
+
+更多见[错误码](/zh/api-reference/errors)与[限流](/zh/api-reference/rate-limits)。
+
+## 相关
+
+<CardGroup cols={3}>
+  <Card title="发布推文" icon="pen" href="/zh/api-reference/twitter/post_twitter-post-twitter">
+    通过 `media.media_ids` 附加 media_id。
+  </Card>
+  <Card title="绑定 X 账号" icon="key" href="/zh/api-reference/twitter/post_twitter-auth-twitter">
+    启动本端点所需的 OAuth 流程。
+  </Card>
+  <Card title="点赞推文" icon="heart" href="/zh/api-reference/twitter/post_twitter-like-twitter">
+    使用同一 OAuth 会话的另一个写端点。
+  </Card>
+</CardGroup>

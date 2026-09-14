@@ -381,7 +381,7 @@
                         "items": { "type": "string" },
                         "minItems": 1,
                         "maxItems": 4,
-                        "description": "1–4 media IDs from the X media-upload API."
+                        "description": "1–4 media IDs returned by `POST /apis/v1/twitter/upload_media` (or attach files inline via `media_files` — see that endpoint)."
                       },
                       "tagged_user_ids": {
                         "type": "array",
@@ -593,6 +593,93 @@
           },
           "502": {
             "description": "Upstream X API unreachable."
+          }
+        }
+      }
+    },
+    "/twitter/upload_media": {
+      "post": {
+        "summary": "Upload media (pre-upload for tweets)",
+        "description": "Upload a single image, GIF, or video and receive a `media_id` you can attach to a tweet via [`post_twitter`](/api-reference/twitter/post_twitter-post-twitter) (`media.media_ids`). Routed through the AIsa gateway at `https://api.aisa.one/apis/v1/twitter/upload_media`.\n\n**Content type — `multipart/form-data` only.** Send the file as a multipart form part. **Do not send a JSON body** — a JSON request is rejected with `400 \"upload_media requires multipart/form-data with a single media file field\"`.\n\n**Two-step media flow.**\n1. `POST /apis/v1/twitter/upload_media` with the file → returns `media_id`.\n2. `POST /apis/v1/twitter/post_twitter` with `{ \"media\": { \"media_ids\": [\"<media_id>\"] } }`.\n\nAlternatively, `post_twitter` accepts inline file parts via `media_files` in a single multipart request, skipping this pre-upload step.\n\n**Authentication.** Requires an OAuth session for the source user, attached to your AIsa API key. Link the account once via [`POST /apis/v1/twitter/auth_twitter`](/api-reference/twitter/post_twitter-auth-twitter).\n\n**Scopes.** The underlying X session must hold `media.write` (plus `tweet.read`, `users.read`).\n\nMedia upload is a prerequisite step and is not separately metered — you are billed when you publish the tweet via `post_twitter`.",
+        "operationId": "uploadTwitterMedia",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "media_files"
+                ],
+                "properties": {
+                  "media_files": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The media file to upload (`image/*`, `image/gif`, or `video/*`). The field may also be named `media` or `file`. Images up to 8 MB use a single-shot upload; larger files and video use chunked upload automatically."
+                  },
+                  "aisa_api_key": {
+                    "type": "string",
+                    "description": "Optional. Normally unnecessary — the gateway resolves your account from the `Authorization: Bearer` header."
+                  }
+                }
+              },
+              "encoding": {
+                "media_files": {
+                  "contentType": "image/png, image/jpeg, image/gif, video/mp4"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload succeeded; returns the `media_id` to reference in `post_twitter`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "media_id": {
+                          "type": "string",
+                          "description": "The uploaded media's ID. Pass it in `post_twitter` `media.media_ids`. Unattached media expires after ~24h."
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "media_id": "2099415764780605440"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not `multipart/form-data`, missing file part, empty file, or unsupported content type. A JSON body returns `\"upload_media requires multipart/form-data with a single media file field\"`."
+          },
+          "401": {
+            "description": "Missing or invalid AIsa API key."
+          },
+          "403": {
+            "description": "OAuth session missing, expired, or lacking `media.write`. Re-authorize via `POST /apis/v1/twitter/auth_twitter`."
+          },
+          "429": {
+            "description": "Rate limit hit — your AIsa key's RPM cap or the upstream X rate limit."
+          },
+          "500": {
+            "description": "Internal error."
+          },
+          "502": {
+            "description": "Upstream X API unreachable. Safe to retry with exponential backoff."
           }
         }
       }

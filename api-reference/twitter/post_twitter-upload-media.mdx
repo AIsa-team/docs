@@ -1,0 +1,70 @@
+---
+title: "Upload Media"
+description: "Upload an image, GIF, or video and get a media_id to attach to a tweet. Multipart/form-data only."
+openapi: "openapi/twitter-actions.json POST /twitter/upload_media"
+---
+
+Upload a single image, GIF, or video and receive a `media_id` you can attach to a tweet via [`post_twitter`](/api-reference/twitter/post_twitter-post-twitter), routed through the AIsa gateway at `https://api.aisa.one/apis/v1/twitter/upload_media`.
+
+<Warning>
+  This endpoint accepts **`multipart/form-data` only** — send the file as a form part. Sending a JSON body returns `400 "upload_media requires multipart/form-data with a single media file field"`.
+</Warning>
+
+## Prerequisites
+
+- An **AIsa API key** (Bearer token for every request).
+- A one-time **OAuth authorization** for the source user. Link your X account via [`POST /apis/v1/twitter/auth_twitter`](/api-reference/twitter/post_twitter-auth-twitter).
+- The X session must hold `media.write`, `tweet.read`, `users.read`.
+
+## Two-step media flow
+
+1. **Upload** — `POST /apis/v1/twitter/upload_media` with the file → returns `media_id`.
+2. **Publish** — `POST /apis/v1/twitter/post_twitter` with `{ "media": { "media_ids": ["<media_id>"] } }`.
+
+<Note>
+  `post_twitter` also accepts inline file parts via `media_files` in a single multipart request, letting you skip the pre-upload step. Use `upload_media` when you want to reuse one asset across several tweets, or decouple a large upload from the publish call.
+</Note>
+
+## Example
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/twitter/upload_media" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -F "media_files=@./cat.png;type=image/png"
+```
+
+```json Response
+{ "code": 200, "msg": "Media uploaded successfully", "data": { "media_id": "2099415764780605440" } }
+```
+
+Then attach it:
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/twitter/post_twitter" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Look at this cat","media":{"media_ids":["2099415764780605440"]}}'
+```
+
+## Notes
+
+- The file field may be named `media_files`, `media`, or `file`.
+- Images up to 8 MB use a single-shot upload; larger files and video are chunked automatically.
+- Unattached media expires after ~24h.
+- Media upload is a prerequisite step and is **not separately metered** — you are billed when you publish the tweet via `post_twitter`.
+
+See [Error Codes](/api-reference/errors) and [Rate Limits](/api-reference/rate-limits) for more.
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Post a Tweet" icon="pen" href="/api-reference/twitter/post_twitter-post-twitter">
+    Attach the media_id via `media.media_ids`.
+  </Card>
+  <Card title="Link an X Account" icon="key" href="/api-reference/twitter/post_twitter-auth-twitter">
+    Start the OAuth flow this endpoint requires.
+  </Card>
+  <Card title="Like a Tweet" icon="heart" href="/api-reference/twitter/post_twitter-like-twitter">
+    Another write endpoint using the same OAuth session.
+  </Card>
+</CardGroup>
