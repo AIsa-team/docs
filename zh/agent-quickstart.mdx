@@ -3,113 +3,44 @@ title: "把 Agent 连接到 AIsa"
 description: "安装 AIsa Skill，登录，然后开始使用工具。"
 ---
 
-配置 AIsa。
+配置 AIsa。匹配的命令由你自己执行，不要让用户去跑。
 
-若已有可用连接，直接复用：官方 `aisa` Skill 加上有效的 CLI 认证，或已具备 `AISA_SEARCH_TOOL`、`AISA_BATCH_GET_SCHEMA`、`AISA_BATCH_QUOTE`、`AISA_BATCH_USE` 的统一 MCP。任意可用 shell 都可以，包括 PowerShell。只为当前 harness 安装官方 `aisa` Skill。不要改无关模型设置。安装和凭证按当前 Agent 环境描述。
+若已有可用连接，直接复用：官方 `aisa` Skill 加上有效的 CLI 认证，或已具备 `AISA_SEARCH_TOOL`、`AISA_BATCH_GET_SCHEMA`、`AISA_BATCH_QUOTE`、`AISA_BATCH_USE` 的统一 MCP。用户明确的传输选择或仍有效的已授权连接优先；不要自动迁移或重装。不要改无关模型设置。安装和凭证按当前 Agent 环境描述。
 
-## 安装官方 Skill
+按 Agent **实际执行位置**选择路径，不要只看产品名，也不要只看有没有终端。
 
-首选安装器（Node.js **22.20.0+**；`skills` 1.5.25 的 `engines`）：
+- 用户本机：优先一个官方 `aisa` Skill 加上 CLI。本机任意可用 shell 都可以，包括 PowerShell。
+- Grok Bot 或其他云端沙箱，即使有终端：优先原生远程 MCP `https://tools.aisa.one/mcp`。云端终端不是用户本机。
+
+## 本机
 
 ```sh
 npx skills add AIsa-team/agent-skills --skill aisa --agent codex --global
 ```
 
-把 `--agent` 改成当前 harness（`codex`、`claude-code`、`cursor` 等）。个人通用接入建议 `--global`，除非用户要求限制在当前仓库。不要使用 `--all` 或 `*`。
+把 `--agent` 改成当前 harness（`codex`、`claude-code`、`cursor` 等）。个人通用接入建议 `--global`，除非用户要求限制在当前仓库。不要使用 `--all` 或 `*`。需要 Node.js **22.20.0+**（`skills` 1.5.25 的 `engines`）。
 
-如果 Node 或 `npx skills` 跑不起来，把完整三文件（`SKILL.md`、`LICENSE`、`agents/openai.yaml`）下载到当前客户端的原生 Skill 位置。保留已有的官方或自定义 Skill（包括符号链接）；没有原生安装就不要声称 Web 端已持久化。Codex 用户级示例：`~/.agents/skills/aisa`。
-
-```sh
-set -e
-aisa_skill_target="$HOME/.agents/skills/aisa"
-aisa_skill_parent="$HOME/.agents/skills"
-aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/0332d85b282c4fe271fc4df18f8393a5d4993ca9/platform/aisa"
-if [ -e "$aisa_skill_target" ] || [ -L "$aisa_skill_target" ]; then
-  echo "exists, left unchanged: $aisa_skill_target"
-  echo "not assumed official; inspect before treating as the AIsa skill"
-  exit 0
-fi
-aisa_skill_tmp="$(mktemp -d)"
-trap 'rm -rf "$aisa_skill_tmp"' EXIT
-mkdir -p "$aisa_skill_tmp/aisa/agents" "$aisa_skill_parent"
-curl -fSL "$aisa_skill_base/SKILL.md" -o "$aisa_skill_tmp/aisa/SKILL.md"
-curl -fSL "$aisa_skill_base/LICENSE" -o "$aisa_skill_tmp/aisa/LICENSE"
-curl -fSL "$aisa_skill_base/agents/openai.yaml" -o "$aisa_skill_tmp/aisa/agents/openai.yaml"
-mv "$aisa_skill_tmp/aisa" "$aisa_skill_target"
-```
-
-## CLI
-
-复用已经能用的 `@aisa-one/cli` **0.5.0 或更高**。只有缺失时才安装。不要降级。CLI 仍可沿用 Node.js **18+** 下限；不要为了 Skill 安装器替换已经能用的 CLI。
+如果 Node 或 `npx skills` 跑不起来，且当前是用户本机，**或**用户在此环境明确要求 CLI/Skill（包括云端沙箱），先阅读 [Agent 快速开始回退](https://aisa.one/docs/zh/agent-quickstart-fallbacks.md) 的 Skill 下载节，再执行该节。
 
 ```sh
 npm install -g @aisa-one/cli
 aisa --version
 ```
 
-Skill 落盘后，在当前会话读取它。登录请遵循该 Skill 和 `aisa login --help`。用 `aisa balance` 检查认证。`aisa whoami` 只检查本地。`AISA_API_KEY` 优先于已存储密钥；两者冲突时说明两个来源，不要盲目取消环境变量。永远不要打印凭证。不要让用户去控制台复制 Key。获取凭证仍以浏览器 `aisa login` 为主。
+复用已经能用的 `@aisa-one/cli` **0.5.0 或更高**；只有缺失时才安装；不要降级。CLI 仍可沿用 Node.js **18+**。Skill 落盘后读取它。登录遵循该 Skill 和 `aisa login --help`。用 `aisa balance` 证明认证。`aisa whoami` 只检查本地。`AISA_API_KEY` 优先于已存储密钥；冲突时说明两个来源。不要打印凭证，也不要让用户去控制台复制 Key。获取凭证仍以浏览器 `aisa login` 为主。
 
-## MCP
+## 云端
 
-当前环境不能跑 CLI 命令，或用户更想用 MCP 时，连接 `https://tools.aisa.one/mcp`（Streamable HTTP，OAuth）。由客户端完成浏览器登录并保存 token。不要要求 `npx`。不要使用 `https://mcp.aisa.one/servers` 或默认 `aisa connect` 的 web-search。只有 OAuth 已完成，**并且** `AISA_SEARCH_TOOL`、`AISA_BATCH_GET_SCHEMA`、`AISA_BATCH_QUOTE`、`AISA_BATCH_USE` 都在，才算连接成功。metadata 或 `401` 挑战不是受保护调用。
+连接 `https://tools.aisa.one/mcp`（Streamable HTTP，OAuth）。不需要安装 CLI、npm、npx 或 Skill；已安装的指引仍可使用。由客户端完成浏览器登录并保存 token。不要使用 `https://mcp.aisa.one/servers` 或默认 `aisa connect` 的 web-search。
 
-## 连接成功之后
+Grok Bot + Plugins：Settings → Plugins → Add → 如需则认证 → `@` 附加。若有原生自定义 MCP 设置，填入该 URL 并完成 OAuth。两者都不可用时，请用户启用或添加该连接器。grok.com（`grok.com/connectors`）是另一款产品。
 
-只有认证已验证（CLI 路径上的 `aisa balance`，或 MCP 路径上 OAuth 完成且四个工具都在）才报告 **AIsa is connected.** 这不等于业务任务已完成。如果用户已经说了任务，就继续该任务。否则询问 **What would you like to do first?** 遵循 `aisa` Skill。接入不是消费批准。
+随后使用上面四个工具：search → `has_full_schema` 为 false 时 schema → quote → use，且须在已授权范围和额度内。工具 ID 和参数来自 search/schema；不要编造 ID 或价格。Quote 不执行，也不等于批准执行。缺失、失败或部分 quote 不是免费，也不是整批总额或上限。预估费用不是上限。工具、参数或范围变化时重新 quote。如果 quote 或已记录的最高费用超过剩余已批准额度，就停止。
 
-如果 quote 或已记录的最高费用超过剩余已批准额度，就停止。不要在额度不足时仍请用户批准同一 endpoint。
+## 收口
 
-不要为了绕过缺凭证、额度用尽或同一 API 故障而跳到 HTTP。CLI/MCP 客户端或路由器限制时，下方直接 HTTP 回退仍可能可用；不要用付费请求探测可用性。不要提取或复用客户端持有的 MCP OAuth token。
+只有 CLI 路径上的 `aisa balance`，或 MCP 路径上 OAuth 完成且上面四个工具都在，才报告 **AIsa is connected.** metadata 或 `401` 不是受保护调用。连接器加不上就不是已连接。用户已点名任务就继续，否则询问 **What would you like to do first?** CLI 路径遵循 `aisa` Skill；MCP 路径使用上面四个工具。接入不是消费批准。
 
-## 直接 HTTP API 回退
+不要为了绕过缺凭证、额度用尽或同一 API 故障而跳到 HTTP。不要用付费请求探测可用性。不要提取客户端持有的 MCP OAuth token。
 
-仅当 CLI 和 MCP 都不可用、能发 HTTP、且已有有效的 AIsa API key 或秘密时使用。这条路径用于客户端、工具或路由器限制；不能绕过无效 API 凭证、额度用尽或同一底层 API 的故障。
-
-使用匹配的 endpoint 文档和公开计价。[API 参考](https://aisa.one/docs/zh/api-reference)。[认证](https://aisa.one/docs/zh/guides/authentication)。数据 API：`https://api.aisa.one/apis/v1`。模型目录：`https://api.aisa.one/v1/models`。任何付费数据请求前先读 [计价](https://aisa.one/docs/zh/guides/pricing)。
-
-在提出付费请求或费用方案供批准之前，先读所选 endpoint 的完整参考（或对应的 OpenAPI operation），包括参数和计费规则。目录、索引或计价总览不是该 endpoint 的合同。
-
-把密钥作为 Bearer 发送。不要从本页发起付费示例请求。`/v1/models` 或其他 discovery 成功不能证明已通过受保护的业务访问。没有已记录的最高上限 / provider 边界，或没有认证时，停在该限制。endpoint、scope 或最高费用变化时，需要新的明细与批准。
-
-### API key
-
-复用 `AISA_API_KEY`。若未设置且本 Agent 能读文件系统，使用 `aisa login` 写入的 `~/.aisa/key`，不要显示它。否则使用当前客户端已授权密钥库中的 AIsa API key。来源冲突时说明两边，不要覆盖用户自定义密钥。
-
-以上都没有、且 `aisa login` 可用时，运行浏览器 `aisa login` 自动保存密钥。若没有可用的 CLI 或浏览器登录路径，最后一步是用户到 https://console.aisa.one/api-keys 登录并创建密钥，保存到当前客户端的凭证/密钥设置，或本地 `AISA_API_KEY`。不要让用户把密钥粘贴进对话。不要打印密钥。不是每个客户端都有密钥设置界面；若当前客户端无法保存凭证，就停在该限制。
-
-受保护的 API 请求前先等到凭证就绪。拿到密钥不等于付费调用已获批准。
-
-<a id="paid-api-approval-first"></a>
-
-## 付费 API 授权
-
-该合同**仅**适用于直接 HTTP 访问付费、动态计价或可能高成本的数据 endpoint。不适用于已记录的免费 discovery。不会给普通 CLI 或 MCP 的 quote/call 增加“必须另一条消息批准”。
-
-```xml
-<IMPORTANT id="paid-api-approval-first">
-  <before-paid-data-call>
-    先阅读匹配的 endpoint 文档和公开计价说明。docs、/v1/models 以及 capability 或 MCP
-    discovery 可在批准前查看。停止：用户要求收集、调研或输出数据，不等于批准。明确 endpoint
-    和 scope、公式或费率、已记录的最高 USD 暴露后，必须等待用户在下一条消息中明确批准该 scope 与上限。
-    如果 provider 控制的维度没有已记录的最大上限，不得执行：示例或用户给出的预算都不是可执行的上限。
-  </before-paid-data-call>
-  <prohibited>
-    不得在规划的同一轮调用付费数据 API，不得把初始请求当作同意，也不得为了价格发现、"probe"、"test" 或“先探一下”而调用付费 endpoint。
-  </prohibited>
-  <after-approval>
-    只能执行已批准的请求；如果 endpoint、scope 或最高费用变化，必须重新展示细节并取得新的明确批准。
-  </after-approval>
-</IMPORTANT>
-```
-
-初始任务，或同一规划轮中的“我批准”，都不是那条后续批准消息。
-
-## 其他入口
-
-仅在用户明确要求模型、REST、API Key 或额外 Skill 时使用：
-
-- [入门](https://aisa.one/docs/zh/guides/getting-started-with-aisa)
-- [认证](https://aisa.one/docs/zh/guides/authentication)
-- [模型](https://aisa.one/docs/zh/guides/models)
-- [API 参考](https://aisa.one/docs/zh/api-reference)
-- [Agent Skills 目录](https://aisa.one/docs/zh/agent-skills)
+仅当 CLI 和 MCP 都不可用、能发 HTTP、且已有有效的 AIsa key 时：先读完 [Agent 快速开始回退](https://aisa.one/docs/zh/agent-quickstart-fallbacks.md) 的直接 HTTP 节（含 endpoint 文档、计价和批准 XML），再提出付费方案或费用批准，也再发起任何付费请求。模型、REST、Key 或额外 Skill：[AIsa 文档](https://aisa.one/docs/zh/guides)。
