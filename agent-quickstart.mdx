@@ -5,9 +5,16 @@ description: "Install the AIsa skill, sign in, and start using tools."
 
 Set up AIsa.
 
-Reuse a working connection when one exists: the official `aisa` skill plus valid CLI auth, or unified MCP with `AISA_SEARCH_TOOL`, `AISA_BATCH_GET_SCHEMA`, `AISA_BATCH_QUOTE`, and `AISA_BATCH_USE`. Any working shell counts, including PowerShell. Install only the official `aisa` skill for this harness. Do not change unrelated model settings. Describe installs and credentials as in this agent environment.
+Reuse a working connection when one exists: the official `aisa` skill plus valid CLI auth, or unified MCP with `AISA_SEARCH_TOOL`, `AISA_BATCH_GET_SCHEMA`, `AISA_BATCH_QUOTE`, and `AISA_BATCH_USE`. An explicit user preference or a still-authorized connection wins; do not migrate or reinstall automatically. Do not change unrelated model settings. Describe installs and credentials as in this agent environment.
+
+Choose the path by where this agent actually executes, not by product name and not by whether a terminal exists.
+
+- User-local machine (the computer in front of the user): prefer one official `aisa` skill plus the CLI. Any working local shell counts, including PowerShell. Install only that skill for this harness.
+- Grok Bot or another cloud sandbox, including one with a working terminal: prefer native remote MCP at `https://tools.aisa.one/mcp`. A cloud terminal is not a user-local machine.
 
 ## Install the official skill
+
+Prefer this section on a user-local machine, or when the user explicitly asked for the Skill/CLI path.
 
 Primary installer (Node.js **22.20.0+**; `skills` 1.5.25 `engines`):
 
@@ -23,7 +30,7 @@ If Node or `npx skills` cannot run, download the complete three files (`SKILL.md
 set -e
 aisa_skill_target="$HOME/.agents/skills/aisa"
 aisa_skill_parent="$HOME/.agents/skills"
-aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/0332d85b282c4fe271fc4df18f8393a5d4993ca9/platform/aisa"
+aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/7d7b1267f4363d894528f5c5b8d895214211cb84/platform/aisa"
 if [ -e "$aisa_skill_target" ] || [ -L "$aisa_skill_target" ]; then
   echo "exists, left unchanged: $aisa_skill_target"
   echo "not assumed official; inspect before treating as the AIsa skill"
@@ -40,7 +47,7 @@ mv "$aisa_skill_tmp/aisa" "$aisa_skill_target"
 
 ## CLI
 
-Reuse `@aisa-one/cli` **0.5.0 or later** if it works. Install only if it is absent. Do not downgrade. CLI may keep its Node.js **18+** floor; do not replace a working CLI to match the Skill installer.
+Prefer this section on a user-local machine, or when the user explicitly asked for CLI. Reuse `@aisa-one/cli` **0.5.0 or later** if it works. Install only if it is absent. Do not downgrade. CLI may keep its Node.js **18+** floor; do not replace a working CLI to match the Skill installer.
 
 ```sh
 npm install -g @aisa-one/cli
@@ -51,11 +58,17 @@ After the skill is on disk, read it in this session. For sign-in, follow that sk
 
 ## MCP
 
-When this environment cannot run CLI commands, or the user prefers MCP, connect `https://tools.aisa.one/mcp` (Streamable HTTP, OAuth). The client owns browser sign-in and tokens. Do not require `npx`. Do not use `https://mcp.aisa.one/servers` or the default `aisa connect` web-search server. Connection succeeds only after OAuth completed **and** `AISA_SEARCH_TOOL`, `AISA_BATCH_GET_SCHEMA`, `AISA_BATCH_QUOTE`, and `AISA_BATCH_USE` are present. Metadata or a `401` challenge is not a protected call.
+Prefer this path for Grok Bot and other cloud sandboxes even when a terminal exists, when this environment cannot run user-local CLI commands, or when the user prefers MCP.
+
+Connect `https://tools.aisa.one/mcp` (Streamable HTTP, OAuth). The client owns browser sign-in and tokens. No CLI, npm, npx, or Skill installation is required; already-installed Skill guidance may be used. Do not use `https://mcp.aisa.one/servers` or the default `aisa connect` web-search server.
+
+On Grok Bot ([computer and apps](https://docs.x.ai/grok-bot/computer-and-apps)): Settings → Plugins → Add → complete browser authentication if asked → in chat type `@` to attach. Connectors appear as Plugins. If this client also offers a native custom MCP setup, enter `https://tools.aisa.one/mcp` and complete OAuth. If Add and a custom setup are both unavailable, ask the user to enable or add that connector. Do not say **AIsa is connected.** grok.com (`grok.com/connectors`) is a different product.
+
+Connection succeeds only after OAuth completed **and** `AISA_SEARCH_TOOL`, `AISA_BATCH_GET_SCHEMA`, `AISA_BATCH_QUOTE`, and `AISA_BATCH_USE` are present. Metadata or a `401` challenge is not a protected call. Then `AISA_SEARCH_TOOL` → `AISA_BATCH_GET_SCHEMA` when `has_full_schema` is false → `AISA_BATCH_QUOTE` → `AISA_BATCH_USE` inside authorized scope and spend. Take IDs and arguments from search/schema; do not invent IDs or prices. Quote does not execute and is not approval to execute. A missing, failed, or partial quote is not free and is not a full-batch total or cap. Estimated cost is not a cap. Re-quote if tools, arguments, or scope change.
 
 ## After AIsa is connected
 
-Say **AIsa is connected.** only after authentication is verified (`aisa balance` on the CLI path, or OAuth completed with the four tools on the MCP path). That is not a completed business task. If the user already named a task, continue it. Otherwise ask **What would you like to do first?** Follow the `aisa` skill. Setup is not spending approval.
+Say **AIsa is connected.** only after authentication is verified (`aisa balance` on the CLI path, or OAuth completed with the four tools on the MCP path). That is not a completed business task. If the user already named a task, continue it. Otherwise ask **What would you like to do first?** On the CLI path, follow the `aisa` skill. On the MCP path, use the four tools in MCP above. Setup is not spending approval.
 
 If the quote or documented maximum exceeds the remaining approved cap, stop. Do not ask the user to approve that same endpoint under an insufficient cap.
 

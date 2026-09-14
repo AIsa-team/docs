@@ -5,9 +5,16 @@ description: "安装 AIsa Skill，登录，然后开始使用工具。"
 
 配置 AIsa。
 
-若已有可用连接，直接复用：官方 `aisa` Skill 加上有效的 CLI 认证，或已具备 `AISA_SEARCH_TOOL`、`AISA_BATCH_GET_SCHEMA`、`AISA_BATCH_QUOTE`、`AISA_BATCH_USE` 的统一 MCP。任意可用 shell 都可以，包括 PowerShell。只为当前 harness 安装官方 `aisa` Skill。不要改无关模型设置。安装和凭证按当前 Agent 环境描述。
+若已有可用连接，直接复用：官方 `aisa` Skill 加上有效的 CLI 认证，或已具备 `AISA_SEARCH_TOOL`、`AISA_BATCH_GET_SCHEMA`、`AISA_BATCH_QUOTE`、`AISA_BATCH_USE` 的统一 MCP。用户的明确偏好或仍有效的已授权连接优先；不要自动迁移或重装。不要改无关模型设置。安装和凭证按当前 Agent 环境描述。
+
+按 Agent **实际执行位置**选择路径，不要只看产品名，也不要只看有没有终端。
+
+- 用户本机（用户面前的那台电脑）：优先一个官方 `aisa` Skill 加上 CLI。本机任意可用 shell 都可以，包括 PowerShell。只为当前 harness 安装该 Skill。
+- Grok Bot 或其他云端沙箱，**即使有可用终端**：优先原生远程 MCP `https://tools.aisa.one/mcp`。云端终端不是用户本机。
 
 ## 安装官方 Skill
+
+优先在用户本机使用本节，或用户明确要求 Skill/CLI 路径时使用。
 
 首选安装器（Node.js **22.20.0+**；`skills` 1.5.25 的 `engines`）：
 
@@ -23,7 +30,7 @@ npx skills add AIsa-team/agent-skills --skill aisa --agent codex --global
 set -e
 aisa_skill_target="$HOME/.agents/skills/aisa"
 aisa_skill_parent="$HOME/.agents/skills"
-aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/0332d85b282c4fe271fc4df18f8393a5d4993ca9/platform/aisa"
+aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/7d7b1267f4363d894528f5c5b8d895214211cb84/platform/aisa"
 if [ -e "$aisa_skill_target" ] || [ -L "$aisa_skill_target" ]; then
   echo "exists, left unchanged: $aisa_skill_target"
   echo "not assumed official; inspect before treating as the AIsa skill"
@@ -40,7 +47,7 @@ mv "$aisa_skill_tmp/aisa" "$aisa_skill_target"
 
 ## CLI
 
-复用已经能用的 `@aisa-one/cli` **0.5.0 或更高**。只有缺失时才安装。不要降级。CLI 仍可沿用 Node.js **18+** 下限；不要为了 Skill 安装器替换已经能用的 CLI。
+优先在用户本机使用本节，或用户明确要求 CLI。复用已经能用的 `@aisa-one/cli` **0.5.0 或更高**。只有缺失时才安装。不要降级。CLI 仍可沿用 Node.js **18+** 下限；不要为了 Skill 安装器替换已经能用的 CLI。
 
 ```sh
 npm install -g @aisa-one/cli
@@ -51,11 +58,17 @@ Skill 落盘后，在当前会话读取它。登录请遵循该 Skill 和 `aisa 
 
 ## MCP
 
-当前环境不能跑 CLI 命令，或用户更想用 MCP 时，连接 `https://tools.aisa.one/mcp`（Streamable HTTP，OAuth）。由客户端完成浏览器登录并保存 token。不要要求 `npx`。不要使用 `https://mcp.aisa.one/servers` 或默认 `aisa connect` 的 web-search。只有 OAuth 已完成，**并且** `AISA_SEARCH_TOOL`、`AISA_BATCH_GET_SCHEMA`、`AISA_BATCH_QUOTE`、`AISA_BATCH_USE` 都在，才算连接成功。metadata 或 `401` 挑战不是受保护调用。
+Grok Bot 和其他云端沙箱即使有终端也优先这条路径；当前环境不能跑用户本机 CLI，或用户更想用 MCP 时也走这条路径。
+
+连接 `https://tools.aisa.one/mcp`（Streamable HTTP，OAuth）。由客户端完成浏览器登录并保存 token。不需要安装 CLI、npm、npx 或 Skill；已安装的 Skill 指引仍可使用。不要使用 `https://mcp.aisa.one/servers` 或默认 `aisa connect` 的 web-search。
+
+Grok Bot（[computer and apps](https://docs.x.ai/grok-bot/computer-and-apps)）：Settings → Plugins → Add → 如需则完成浏览器认证 → 在对话里用 `@` 附加。Connectors 显示为 Plugins。如果当前客户端还有原生自定义 MCP 设置，就填入 `https://tools.aisa.one/mcp` 并完成 OAuth。如果 Add 和自定义设置都不可用，请用户启用或添加该连接器。不要声称 **AIsa is connected.** grok.com（`grok.com/connectors`）是另一款产品。
+
+只有 OAuth 已完成，**并且** `AISA_SEARCH_TOOL`、`AISA_BATCH_GET_SCHEMA`、`AISA_BATCH_QUOTE`、`AISA_BATCH_USE` 都在，才算连接成功。metadata 或 `401` 挑战不是受保护调用。随后按 `AISA_SEARCH_TOOL` → `has_full_schema` 为 false 时 `AISA_BATCH_GET_SCHEMA` → `AISA_BATCH_QUOTE` → `AISA_BATCH_USE`，且须在已授权范围和额度内。工具 ID 和参数来自 search/schema；不要编造 ID 或价格。Quote 不执行，也不等于批准执行。缺失、失败或部分 quote 不是免费，也不是整批总额或上限。预估费用不是上限。工具、参数或范围变化时重新 quote。
 
 ## 连接成功之后
 
-只有认证已验证（CLI 路径上的 `aisa balance`，或 MCP 路径上 OAuth 完成且四个工具都在）才报告 **AIsa is connected.** 这不等于业务任务已完成。如果用户已经说了任务，就继续该任务。否则询问 **What would you like to do first?** 遵循 `aisa` Skill。接入不是消费批准。
+只有认证已验证（CLI 路径上的 `aisa balance`，或 MCP 路径上 OAuth 完成且四个工具都在）才报告 **AIsa is connected.** 这不等于业务任务已完成。如果用户已经说了任务，就继续该任务。否则询问 **What would you like to do first?** CLI 路径遵循 `aisa` Skill。MCP 路径使用上面 MCP 节的四个工具。接入不是消费批准。
 
 如果 quote 或已记录的最高费用超过剩余已批准额度，就停止。不要在额度不足时仍请用户批准同一 endpoint。
 
