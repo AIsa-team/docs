@@ -2,8 +2,9 @@
 """Export AIsa-team/agent-skills platform/aisa into the Mintlify root skill.md.
 
 Mintlify overrides the auto-generated Docs skill with a repo-root skill.md.
-This copies a pinned canonical SKILL.md and inlines LICENSE so the published
-file has no missing relative targets. Merge the Skill commit before this pin.
+The one documented transform rewrites the relative LICENSE link to the pinned
+raw GitHub URL so the license stays at the official source. Merge the Skill
+commit before this pin.
 """
 from __future__ import annotations
 
@@ -14,39 +15,20 @@ from pathlib import Path
 
 SOURCE_SHA = "e7809490a186af77c4b96a5c1cfeea1ee39ce4f9"
 SOURCE_SKILL = "platform/aisa/SKILL.md"
-SOURCE_LICENSE = "platform/aisa/LICENSE"
 EXPORTED = "skill.md"
-EXPORTED_SHA256 = "5d46448dee7901c1a687d4b1f49716d3d87555bbfb87ed022823e5afa9e4f15a"
-LICENSE_LINK = "MIT — see [LICENSE](LICENSE)."
-
-STALE_GUIDANCE = (
-    ("agent-quickstart.mdx", "whoami` is local only"),
-    ("zh/agent-quickstart.mdx", "whoami` 只检查本地"),
-    ("agent-quickstart-fallbacks.mdx", "~/.aisa/key"),
-    ("zh/agent-quickstart-fallbacks.mdx", "~/.aisa/key"),
+EXPORTED_SHA256 = "8ccb3903800b3b97a093d36e1c90bee4d70ca705ada6d2a2dc59ef132d0b636f"
+LICENSE_RELATIVE = "MIT — see [LICENSE](LICENSE)."
+LICENSE_CANONICAL_URL = (
+    f"https://raw.githubusercontent.com/AIsa-team/agent-skills/"
+    f"{SOURCE_SHA}/platform/aisa/LICENSE"
 )
+LICENSE_ABSOLUTE = f"MIT — see [LICENSE]({LICENSE_CANONICAL_URL})."
 
 
-def export_text(skill: str, license_text: str) -> str:
-    if LICENSE_LINK not in skill:
-        raise SystemExit(f"{SOURCE_SKILL} is missing the LICENSE relative link")
-    inlined = "MIT. Full license text:\n\n" + license_text.strip() + "\n"
-    return skill.replace(LICENSE_LINK, inlined)
-
-
-def write_export(root: Path, text: str) -> Path:
-    path = root / EXPORTED
-    path.write_text(text, encoding="utf-8")
-    return path
-
-
-def check_guidance(root: Path) -> list[str]:
-    errors: list[str] = []
-    for rel, stale in STALE_GUIDANCE:
-        text = (root / rel).read_text(encoding="utf-8")
-        if stale in text:
-            errors.append(f"{rel}: still contains {stale!r}")
-    return errors
+def export_text(skill: str) -> str:
+    if LICENSE_RELATIVE not in skill:
+        raise SystemExit(f"{SOURCE_SKILL} is missing the relative LICENSE link")
+    return skill.replace(LICENSE_RELATIVE, LICENSE_ABSOLUTE)
 
 
 def main() -> int:
@@ -57,11 +39,10 @@ def main() -> int:
     args = parser.parse_args()
     root = args.root.resolve()
     source_dir = args.source_dir.resolve() if args.source_dir else None
-
-    errors = check_guidance(root)
     exported = root / EXPORTED
 
     if args.check:
+        errors: list[str] = []
         if not exported.is_file():
             errors.append(f"missing {EXPORTED}")
         else:
@@ -69,13 +50,12 @@ def main() -> int:
             digest = hashlib.sha256(actual.encode()).hexdigest()
             if digest != EXPORTED_SHA256:
                 errors.append(f"{EXPORTED} sha256 {digest} != pinned {EXPORTED_SHA256}")
-            if LICENSE_LINK in actual:
+            if LICENSE_RELATIVE in actual:
                 errors.append(f"{EXPORTED} still has a relative LICENSE link")
+            if LICENSE_CANONICAL_URL not in actual:
+                errors.append(f"{EXPORTED} is missing the pinned LICENSE URL")
             if source_dir is not None:
-                expected = export_text(
-                    (source_dir / "SKILL.md").read_text(encoding="utf-8"),
-                    (source_dir / "LICENSE").read_text(encoding="utf-8"),
-                )
+                expected = export_text((source_dir / "SKILL.md").read_text(encoding="utf-8"))
                 if actual != expected:
                     errors.append(f"{EXPORTED} drifted from source-dir at {SOURCE_SHA}")
         if errors:
@@ -83,23 +63,15 @@ def main() -> int:
             for error in errors:
                 print(f"- {error}", file=sys.stderr)
             return 1
-        print(f"{EXPORTED} matches {SOURCE_SHA}; guidance stale strings absent")
+        print(f"{EXPORTED} matches {SOURCE_SHA}")
         return 0
 
     if source_dir is None:
         raise SystemExit("--source-dir is required to write the export")
-    text = export_text(
-        (source_dir / "SKILL.md").read_text(encoding="utf-8"),
-        (source_dir / "LICENSE").read_text(encoding="utf-8"),
-    )
-    path = write_export(root, text)
+    text = export_text((source_dir / "SKILL.md").read_text(encoding="utf-8"))
+    exported.write_text(text, encoding="utf-8")
     digest = hashlib.sha256(text.encode()).hexdigest()
-    print(f"wrote {path.relative_to(root)} from {SOURCE_SHA} sha256={digest}")
-    if errors:
-        print("guidance still has stale strings:", file=sys.stderr)
-        for error in errors:
-            print(f"- {error}", file=sys.stderr)
-        return 1
+    print(f"wrote {exported.relative_to(root)} from {SOURCE_SHA} sha256={digest}")
     return 0
 
 
