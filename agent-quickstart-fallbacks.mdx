@@ -1,0 +1,88 @@
+---
+title: "Agent Quickstart fallbacks"
+description: "Curl skill download and direct HTTP paid-approval fallback. Follow the applicable section."
+---
+
+Do not use this page as the default setup. Return to [Agent Quickstart](https://aisa.one/docs/agent-quickstart.md) for CLI and MCP. Follow the applicable section. Paid HTTP still requires that section's approval gates. These paths do not bypass missing credentials, exhausted credit, or an outage of the same API. Do not use a paid request to probe availability. Do not extract or reuse client-owned MCP OAuth tokens.
+
+## Skill download (curl)
+
+**Gate:** Node or `npx skills` cannot run, you need the official `aisa` skill on disk, and either this is a user-local machine **or** the user explicitly prefers CLI/Skill in this environment (including a cloud sandbox). Download the complete three files (`SKILL.md`, `LICENSE`, `agents/openai.yaml`) into this client's native Skill location. Preserve an existing official or custom skill, including a symlink; do not claim Web persistence without a native install. Codex user-level example: `~/.agents/skills/aisa`. The primary installer remains Node.js **22.20.0+** and `skills` 1.5.25 `engines`; this curl path does not change those floors.
+
+```sh
+set -e
+aisa_skill_target="$HOME/.agents/skills/aisa"
+aisa_skill_parent="$HOME/.agents/skills"
+aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/7d7b1267f4363d894528f5c5b8d895214211cb84/platform/aisa"
+if [ -e "$aisa_skill_target" ] || [ -L "$aisa_skill_target" ]; then
+  echo "exists, left unchanged: $aisa_skill_target"
+  echo "not assumed official; inspect before treating as the AIsa skill"
+  exit 0
+fi
+aisa_skill_tmp="$(mktemp -d)"
+trap 'rm -rf "$aisa_skill_tmp"' EXIT
+mkdir -p "$aisa_skill_tmp/aisa/agents" "$aisa_skill_parent"
+curl -fSL "$aisa_skill_base/SKILL.md" -o "$aisa_skill_tmp/aisa/SKILL.md"
+curl -fSL "$aisa_skill_base/LICENSE" -o "$aisa_skill_tmp/aisa/LICENSE"
+curl -fSL "$aisa_skill_base/agents/openai.yaml" -o "$aisa_skill_tmp/aisa/agents/openai.yaml"
+mv "$aisa_skill_tmp/aisa" "$aisa_skill_target"
+```
+
+## Direct HTTP API fallback
+
+**Gate:** CLI and MCP are both unavailable, HTTP requests are supported, and a valid existing AIsa API key or secret is already available. Read this entire section — endpoint docs, pricing, and the approval XML — before presenting a paid proposal or cost approval, and before any paid request.
+
+Use this only when CLI and MCP are both unavailable, HTTP requests are supported, and a valid existing AIsa API key or secret is already available. Use this for a client, tooling, or router limitation; it does not bypass invalid API credentials, exhausted credit, or a failure of the same underlying API.
+
+Use the matching endpoint reference and published pricing. [API Reference](https://aisa.one/docs/api-reference). [Authentication](https://aisa.one/docs/guides/authentication). Data APIs: `https://api.aisa.one/apis/v1`. Model catalog: `https://api.aisa.one/v1/models`. Read [pricing](https://aisa.one/docs/guides/pricing) before any paid data request.
+
+Before presenting a paid request or cost proposal for approval, read the selected endpoint's full reference, or the matching OpenAPI operation, including parameters and charging rules. A catalog, index, or pricing overview is not the endpoint contract.
+
+Send the key as a Bearer token. Do not send a paid example request from this page. Success on `/v1/models` or other discovery does not prove authenticated business access. If there is no documented maximum or provider bound, or no auth, stop at that limitation. A changed endpoint, scope, or maximum needs new details and approval.
+
+### API key
+
+Reuse `AISA_API_KEY`. If it is unset and this agent can read the filesystem, use `~/.aisa/key` from `aisa login` without displaying it. Otherwise use an AIsa API key already in this client's authorized secret store. If sources conflict, explain them; do not overwrite a custom key.
+
+If none of those exist and `aisa login` is usable, run browser `aisa login` so the key is stored automatically. If there is no usable CLI or browser-login path, the last option is for the user to sign in at https://console.aisa.one/api-keys, create a key, and save it in this client's credential or secret settings, or as local `AISA_API_KEY`. Do not ask them to paste the key into chat. Do not print it. Not every client has a secret UI; if this client cannot store a credential, stop there.
+
+Wait for credentials before protected API requests. Obtaining a key is not paid-call approval.
+
+## Paid API approval first
+
+This contract applies **only** to direct HTTP calls to paid, dynamically priced, or potentially high-cost data endpoints. It does not apply to documented free discovery. It does not add a separate subsequent-message requirement to ordinary CLI or MCP quote/call.
+
+```xml
+<IMPORTANT id="paid-api-approval-first">
+  <before-paid-data-call>
+    Read the matching endpoint documentation and published pricing declaration.
+    Docs, /v1/models, and capability or MCP discovery are allowed before approval.
+    STOP: a request to collect, research, or report data is not approval. State
+    the exact endpoint and scope, formula or rate, and documented maximum USD
+    exposure; then wait for a separate user message explicitly approving that
+    scope and cap.
+    If a provider-controlled dimension has no documented upper bound, do not
+    execute: an example or user-stated budget is not an enforceable cap.
+  </before-paid-data-call>
+  <prohibited>
+    Do not run a paid data call in the planning turn, use the initial request as
+    consent, or use a paid call to discover price, probe, test, or "just check".
+  </prohibited>
+  <after-approval>
+    Execute only the approved request. If its endpoint, scope, or maximum
+    changes, present the new details and obtain new approval.
+  </after-approval>
+</IMPORTANT>
+```
+
+The original task, or an "I approve" in the same planning turn, is not that subsequent approval.
+
+## Other docs
+
+Only if the user asked for models, REST, API keys, or extra skills:
+
+- [Getting Started](https://aisa.one/docs/guides/getting-started-with-aisa)
+- [Authentication](https://aisa.one/docs/guides/authentication)
+- [Models](https://aisa.one/docs/guides/models)
+- [API Reference](https://aisa.one/docs/api-reference)
+- [Agent Skills catalog](https://aisa.one/docs/agent-skills)
