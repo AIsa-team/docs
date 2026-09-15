@@ -3,7 +3,7 @@
   "info": {
     "title": "Oxylabs AI Search API",
     "version": "1.0.0",
-    "description": "Oxylabs AI Search for GEO/AEO (Generative / Answer Engine Optimization) exposed through the AIsa gateway. A single passthrough endpoint queries the major AI answer engines — ChatGPT, Gemini, Perplexity, Google AI Overviews, and Google AI Mode — and returns the AI-generated answer text together with the cited source URLs, so you can monitor brand/product visibility and citations across AI answers.\n\nBilled at a flat $0.001 per successful result (a Realtime single query returns 1 result = $0.001). All three tiers (normal, VIP, SVIP) are priced identically at $0.001 — cost pass-through with zero profit. Only successful 2xx responses are billed; 400, 429, 5xx, and 6xx responses are not billed, and upstream 4xx responses are not billed. AI sources (chatgpt, gemini, perplexity) typically take ~40–60s; Google-type sources take ~4–8s — set your client timeout to at least 90s."
+    "description": "Oxylabs answer-engine access for GEO/AEO (Generative / Answer Engine Optimization) exposed through the AIsa gateway.\n\nOxylabs splits answer engines across two integration styles:\n- **LLM sources — ChatGPT, Gemini, Perplexity** — are asynchronous (Oxylabs Push-Pull). Submit a job with `POST /oxylabs/llm`, then poll `GET /oxylabs/llm/{jobId}` until it is terminal. These sources take ~40–90s, so they cannot be served synchronously.\n- **Google sources — Google AI Overviews (`google_search`) and Google AI Mode (`google_ai_mode`)** — are synchronous: call `POST /oxylabs/ai-search` and get the parsed answer back in the same response (~4–8s).\n\nBoth return the AI-generated answer text together with the cited source URLs, so you can monitor how a brand or product is surfaced and cited across AI answers. The async LLM job is billed a flat $0.00145 per successful job; the synchronous Google endpoint is billed a flat $0.001 per successful result. Only successful responses are billed; 400/429/5xx/6xx and upstream 4xx are not billed."
   },
   "servers": [
     {
@@ -15,6 +15,109 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "AsyncJob": {
+        "type": "object",
+        "description": "An asynchronous Oxylabs LLM job. Returned by the submit call (HTTP 202) and by the poll call. Poll the job by its id until status is terminal (completed, failed, or cancelled).",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique AIsa job identifier. Use it to poll or cancel the job.",
+            "example": "async_job_351d6f429fb6fbe8f505f7d12bfe56b30739a210"
+          },
+          "object": {
+            "type": "string",
+            "description": "Always \"integration_async_job\".",
+            "example": "integration_async_job"
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "The submit endpoint this job belongs to.",
+            "example": "/apis/v1/oxylabs/llm"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "description": "Customer-facing lifecycle status. queued and running are non-terminal; completed, failed, and cancelled are terminal."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the job was accepted."
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the job reached a terminal status. Null while queued or running."
+          },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "example": "USD"
+              },
+              "authorizedMicrosUSD": {
+                "type": "integer",
+                "description": "Amount authorized (held) when the job was admitted, in micro-USD."
+              },
+              "finalMicrosUSD": {
+                "type": "integer",
+                "nullable": true,
+                "description": "Final settled cost in micro-USD once the job is terminal. Null until settlement. Settles at the flat $0.00145 per successful job (1450 micro-USD, normal tier)."
+              },
+              "billingMode": {
+                "type": "string",
+                "description": "Billing mode for the job.",
+                "example": "fixed_request"
+              }
+            }
+          },
+          "output": {
+            "nullable": true,
+            "type": "object",
+            "description": "Job result payload. Present only once status is completed. Carries `results[]`; the parsed shape inside each entry's `content` varies by source — `chatgpt`/`gemini` return `response_text` plus `citations[]`, and `perplexity` returns `top_sources[]` / `sources_results[]`.",
+            "properties": {
+              "results": {
+                "type": "array",
+                "description": "One entry per query. A single query returns exactly one result, which is the billed unit.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "content": {
+                      "type": "object",
+                      "description": "Parsed answer payload; structure varies by source (see above)."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "error": {
+            "type": "object",
+            "nullable": true,
+            "description": "Present when status is failed. Null otherwise.",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Machine-readable error code."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable error message."
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -35,43 +138,30 @@
         "tags": [
           "https://developers.oxylabs.io/scraper-apis/web-scraper-api"
         ],
-        "summary": "Query an AI answer engine for GEO/AEO visibility.",
-        "description": "Synchronous passthrough to the upstream Oxylabs Realtime endpoint (POST /v1/queries). Pick an AI answer engine with `source` and send the parameters that source expects; the request body is passed through unchanged. The response returns the AI-generated answer text and the cited source URLs, letting you track how a brand or product is surfaced and cited across AI answers. Billed at a flat $0.001 per successful result; 400/429/5xx/6xx and upstream 4xx responses are not billed. AI sources (chatgpt, gemini, perplexity) take ~40–60s and Google-type sources ~4–8s, so use a client timeout of at least 90s.",
+        "summary": "Query a Google AI answer engine (AI Overviews / AI Mode) for GEO/AEO visibility.",
+        "description": "Synchronous passthrough to the upstream Oxylabs Realtime endpoint (POST /v1/queries) for the **Google answer engines** — Google AI Overviews (`source: google_search`) and Google AI Mode (`source: google_ai_mode`). Send `query` with `render: \"html\"`, `parse: true`, and a country-level `geo_location`; the request body is passed through unchanged. The response returns the AI-generated answer text and the cited source URLs. Billed a flat $0.001 per successful result; 400/429/5xx/6xx and upstream 4xx responses are not billed. Google-type sources take ~4–8s, so use a client timeout of at least 30s.\n\n**LLM sources (ChatGPT, Gemini, Perplexity) are no longer served here** — Oxylabs moved them to an asynchronous Push-Pull flow. Use `post_oxylabs_llm` (`POST /oxylabs/llm`) plus `get_oxylabs_llm_job` for those sources; calling this endpoint with `source: chatgpt|gemini|perplexity` returns HTTP 422 \"Realtime integration is not supported for LLM sources. Please use Push-Pull.\"",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "description": "Passthrough body. `source` selects the AI answer engine; the remaining fields are the parameters that source expects (see per-source notes on each property). Additional upstream parameters are passed through as-is.",
+                "description": "Passthrough body for the Google answer engines. `source` selects the engine; `query`, `render`, `parse`, and `geo_location` are the parameters Google sources expect. Additional upstream parameters are passed through as-is.",
                 "additionalProperties": true,
                 "properties": {
                   "source": {
                     "type": "string",
                     "enum": [
-                      "chatgpt",
-                      "gemini",
-                      "perplexity",
                       "google_search",
                       "google_ai_mode"
                     ],
-                    "description": "The AI answer engine to query. `google_search` returns Google AI Overviews. Each source expects a specific subset of the parameters below.",
+                    "description": "The Google AI answer engine to query. `google_search` returns Google AI Overviews; `google_ai_mode` returns Google AI Mode. For ChatGPT/Gemini/Perplexity use the async endpoint `post_oxylabs_llm` instead.",
                     "example": "google_search"
-                  },
-                  "prompt": {
-                    "type": "string",
-                    "description": "The natural-language prompt. Used by `chatgpt` (max 4000 chars), `gemini` (max 8000 chars), and `perplexity`. Use `query` instead for the Google-type sources.",
-                    "example": "best noise cancelling headphones 2026"
                   },
                   "query": {
                     "type": "string",
-                    "description": "The search query. Used by `google_search` and `google_ai_mode`. Use `prompt` instead for chatgpt/gemini/perplexity.",
+                    "description": "The search query. Required for `google_search` and `google_ai_mode`.",
                     "example": "best noise cancelling headphones 2026"
-                  },
-                  "search": {
-                    "type": "boolean",
-                    "description": "For `chatgpt`, set to true to have ChatGPT browse the web before answering.",
-                    "example": true
                   },
                   "render": {
                     "type": "string",
@@ -107,13 +197,13 @@
                     "geo_location": "United States"
                   }
                 },
-                "chatgpt": {
-                  "summary": "ChatGPT answer with web browsing",
+                "google_ai_mode": {
+                  "summary": "Google AI Mode (google_ai_mode)",
                   "value": {
-                    "source": "chatgpt",
-                    "prompt": "best noise cancelling headphones 2026",
-                    "search": true,
+                    "source": "google_ai_mode",
+                    "query": "best noise cancelling headphones 2026",
                     "parse": true,
+                    "render": "html",
                     "geo_location": "United States"
                   }
                 }
@@ -202,6 +292,194 @@
           }
         },
         "operationId": "post_oxylabs_ai_search"
+      }
+    },
+    "/oxylabs/llm": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "per_request",
+          "currency": "USD",
+          "price_usd": 0.00145,
+          "cost_tier": "low"
+        },
+        "tags": [
+          "https://developers.oxylabs.io/scraper-apis/web-scraper-api/ai-sources"
+        ],
+        "summary": "Submit an asynchronous LLM answer-engine query (ChatGPT / Gemini / Perplexity).",
+        "description": "Submit an asynchronous query to a major LLM answer engine — ChatGPT, Gemini, or Perplexity — via Oxylabs Push-Pull. Pick the engine with `source`, send the `prompt` (required), and a unique `Idempotency-Key` header (required). These sources take ~40–90s, so they run as background jobs. Submitting returns HTTP 202 and a job envelope — `id`, `object`, `endpoint`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error` — with `output` still null. Poll `get_oxylabs_llm_job` until terminal; `output` then carries `results[]` with the parsed answer text and cited sources. Billed a flat $0.00145 per successful job — `pricing.billingMode` is `fixed_request`. A queued job can be cancelled with `POST /oxylabs/llm/{jobId}/cancel`, which releases the hold; failed and cancelled jobs are never billed. Google sources (`google_search`, `google_ai_mode`) are synchronous and stay on `post_oxylabs_ai_search`. Send a fresh `Idempotency-Key` per distinct query.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 191
+            },
+            "description": "Unique key (1 to 191 characters) that makes the submit idempotent. Re-submitting with the same key and request fingerprint returns the original job."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "chatgpt",
+                      "gemini",
+                      "perplexity"
+                    ],
+                    "description": "The LLM answer engine to query.",
+                    "example": "chatgpt"
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "description": "The natural-language prompt. Max length per source: chatgpt 4000, gemini 8000, perplexity 8000 characters.",
+                    "example": "best noise cancelling headphones 2026"
+                  },
+                  "geo_location": {
+                    "type": "string",
+                    "description": "Country-level geo-location for the query, e.g. \"United States\".",
+                    "example": "United States"
+                  },
+                  "locale": {
+                    "type": "string",
+                    "description": "Optional locale for the query, e.g. \"en-US\"."
+                  },
+                  "user_agent_type": {
+                    "type": "string",
+                    "description": "Optional Oxylabs user-agent type."
+                  },
+                  "render": {
+                    "type": "string",
+                    "description": "Optional rendering mode passed through to Oxylabs."
+                  },
+                  "parse": {
+                    "type": "boolean",
+                    "description": "Return structured, parsed results instead of raw output. Recommended.",
+                    "example": true
+                  },
+                  "context": {
+                    "type": "object",
+                    "description": "Optional source-specific context object passed through to Oxylabs."
+                  }
+                },
+                "required": [
+                  "source",
+                  "prompt"
+                ]
+              },
+              "examples": {
+                "chatgpt": {
+                  "summary": "ChatGPT answer",
+                  "value": {
+                    "source": "chatgpt",
+                    "prompt": "best noise cancelling headphones 2026",
+                    "parse": true,
+                    "geo_location": "United States"
+                  }
+                },
+                "perplexity": {
+                  "summary": "Perplexity answer",
+                  "value": {
+                    "source": "perplexity",
+                    "prompt": "best noise cancelling headphones 2026",
+                    "parse": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Job accepted. Poll the returned job id until terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJob"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "idempotency_conflict — the same Idempotency-Key was reused with a different request body."
+          },
+          "422": {
+            "description": "Invalid request — e.g. an unsupported `source` or a missing/oversized `prompt`."
+          }
+        },
+        "operationId": "post_oxylabs_llm"
+      }
+    },
+    "/oxylabs/llm/{jobId}": {
+      "get": {
+        "tags": [
+          "https://developers.oxylabs.io/scraper-apis/web-scraper-api/ai-sources"
+        ],
+        "summary": "Poll an asynchronous Oxylabs LLM job.",
+        "description": "Fetch an Oxylabs LLM job submitted by `post_oxylabs_llm`, by its `jobId`. Returns the same envelope — `id`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error`. Repeat until `status` is `completed`, `failed`, or `cancelled`; on success `output` carries `results[]` with the parsed answer text and cited sources. Reads a job only; it cannot start one.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The job id returned by the submit call."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The current state of the LLM job.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJob"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "get_oxylabs_llm_job"
+      }
+    },
+    "/oxylabs/llm/{jobId}/cancel": {
+      "post": {
+        "tags": [
+          "https://developers.oxylabs.io/scraper-apis/web-scraper-api/ai-sources"
+        ],
+        "summary": "Cancel a queued Oxylabs LLM job.",
+        "description": "Cancel an Oxylabs LLM job submitted by `post_oxylabs_llm` while it is still queued, by its `jobId`. Returns the job envelope with `status: cancelled`. Cancelling releases the authorized hold; a cancelled job is never billed. A job that has already reached a terminal state cannot be cancelled.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The job id returned by the submit call."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The job after cancellation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJob"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "post_oxylabs_llm_cancel"
       }
     }
   }
