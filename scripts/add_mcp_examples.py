@@ -222,23 +222,39 @@ def mcp_block(operation_id: str, args: dict, doc_path: str, lang: str) -> str:
 SNIPPET = {"en": "/snippets/mcp-setup.mdx", "zh": "/snippets/zh/mcp-setup.mdx"}
 SNIPPET_TAG = "<McpSetup"
 
+#: The one line that cannot live in the snippet.
+#:
+#: Two reasons, both measured. A snippet prop is substituted in markdown text
+#: and nowhere else, so `?from={page}` inside a URL stays literal. And the
+#: referrer cannot stand in for it: Mintlify renders an external markdown link
+#: as `target="_blank" rel="noreferrer"`, and noreferrer empties
+#: document.referrer, so the page being linked to learns nothing. The
+#: parameter has to be in the href, and the href has to be written per page.
+LINK = {
+    "en": "[Set this endpoint up in your agent →]({url})",
+    "zh": "[在你的 agent 里把这个端点跑起来 →]({url})",
+}
 
 
-def with_snippet(text: str, lang: str) -> str:
-    """Import the shared connection note and place it once.
 
-    Two lines per page and no third: the note links to aisa.one/mcp without a
-    parameter, and that page reads the referrer to learn which endpoint the
-    reader came from. Same origin, no Referrer-Policy either side, so the full
-    path arrives on its own — a generated per-page link here would be the same
-    destination written a thousand more times.
+def with_snippet(text: str, lang: str, doc_path: str) -> str:
+    """Import the shared note, place it once, and follow it with this page's link.
+
+    The prose is shared so it has one source; the link is generated because it
+    cannot be shared — see LINK for why neither a snippet prop nor the referrer
+    can carry the page identity.
     """
     line = f'import McpSetup from "{SNIPPET[lang]}";'
+    link = LINK[lang].format(url=f"https://aisa.one/mcp?from=/{doc_path}")
+    block = f"{SNIPPET_TAG} />\n\n{link}"
     if line not in text:
         end = text.index("---", 3) + 4
         text = text[:end] + "\n" + line + "\n" + text[end:]
-    if SNIPPET_TAG not in text:
-        text = text.rstrip("\n") + "\n\n" + SNIPPET_TAG + " />\n"
+    if SNIPPET_TAG in text:
+        # Replace whatever a previous run left, link line included.
+        text = re.sub(r"<McpSetup[^>]*/>(\n\n\[[^\]]*\]\([^)]*\))?", block, text)
+    else:
+        text = text.rstrip("\n") + "\n\n" + block + "\n"
     return text
 
 
@@ -294,7 +310,7 @@ def main() -> int:
         out = rewrite(text, op, doc_path, lang)
         if args.snippet:
             base = text if out in (None, "current") else out
-            snipped = with_snippet(base, lang)
+            snipped = with_snippet(base, lang, doc_path)
             if snipped != base:
                 out = snipped
         if out is None:
