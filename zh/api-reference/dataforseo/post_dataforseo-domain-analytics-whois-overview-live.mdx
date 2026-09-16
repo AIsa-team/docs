@@ -4,15 +4,51 @@ description: "带 SEO 指标的 whois 记录。"
 openapi: "openapi/zh/dataforseo.json POST /dataforseo/domain_analytics/whois/overview/live"
 ---
 
+import McpSetup from "/snippets/zh/mcp-setup.mdx";
+
 {/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
 
 带 SEO 指标的 whois 记录。每项含 `domain`、`created_datetime`、`changed_datetime`、`expiration_datetime`、`updated_datetime`、`first_seen`、`epp_status_codes`、`tld`、`registered`、`registrar`，另有 `metrics` 和 `backlinks_info`。用 `limit`、`offset`、`offset_token` 翻页，过滤字段见 `get_dataforseo_domains_whois_available_filters`。单条实测 2.5 KB。响应包在 DataForSEO 的信封里：数据在 `tasks[0].result`，上游扣费在 `tasks[0].cost`，真正的成败在 `tasks[0].status_code`——请求被拒时 HTTP 仍然是 200，所以要看这个字段而不是传输层状态。 🔴 **本家族最贵的端点，高出一个数量级：单条记录实测上游 $0.1212。**过滤条件收紧、`limit` 压低，绝对不要在域名清单上循环调用。
 
 ## 示例
 
-```bash
+<CodeGroup>
+```bash REST
 curl -X POST "https://api.aisa.one/apis/v1/dataforseo/domain_analytics/whois/overview/live" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '[{"limit": "...", "offset": "...", "offset_token": "..."}]'
 ```
+
+```jsonc MCP
+// 把整段复制给 Claude Code、Codex、Cursor 或任意 coding agent。
+// 连接、授权、跑通这个例子需要的东西都在里面 ——
+// 不用粘贴任何 key，浏览器里点一次 Allow 就好。
+{
+  "operation_id": "post_dataforseo_domains_whois_overview_live",
+  "arguments": {},
+  "max_price_usd": 0.05
+}
+// ── for the agent ─────────────────────────────────────────────────────────
+// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+//   name       aisa
+//   endpoint   https://mcp.aisa.one/mcp
+//   transport  streamable-http
+//   auth       OAuth. The server publishes RFC 9728 metadata, so open a
+//              browser and the user clicks Allow once — nothing to paste.
+//              If AISA_API_KEY is set, send it as a bearer header instead.
+// Use your own MCP mechanism, not a hand-edited config file:
+//   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
+//   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
+//   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
+// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
+// search, get_details, use, batch_use, list_categories. search and
+// get_details are free; use is billed per call and max_price_usd refuses
+// anything above the cap before spending. This operation's full contract —
+// every argument, the response shape, the price and the pitfalls — is at
+//   https://aisa.one/docs/zh/api-reference/dataforseo/post_dataforseo-domain-analytics-whois-overview-live.md
+// Then run the call and show me the result.
+```
+</CodeGroup>
+
+<McpSetup />
