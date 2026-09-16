@@ -4,13 +4,16 @@ description: "Ask a question and get a written answer with web citations, rather
 openapi: "openapi/perplexity-openapi.json POST /perplexity/sonar"
 ---
 
+import McpSetup from "/snippets/mcp-setup.mdx";
+
 {/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
 
 Ask a question and get a written answer with web citations, rather than a list of links to read yourself. Body is OpenAI chat-completions shaped: `model` (required, `sonar`) and `messages`. Returns `choices[0].message.content` as prose, plus `citations` (an array of URL strings) and `search_results[]` with `title`, `url`, `snippet`, `date` and `source`, and a `usage` block. Measured at about 3 seconds. Billed at a flat \$0.012 per request. This is the cheapest and fastest of the four Perplexity endpoints — use it for a single factual question. Step up to [`post_perplexity_sonar_pro`](/api-reference/perplexity/post_perplexity-sonar-pro) for multi-part questions, or [`post_perplexity_sonar_reasoning_pro`](/api-reference/perplexity/post_perplexity-sonar-reasoning-pro) when the answer requires working through steps. If you need results you can iterate over rather than prose, use [`post_tavily_search`](/api-reference/search/post_tavily-search); `post_exa_answer` answers the same shape of question with semantic retrieval, at \$0.08.
 
 ## Example
 
-```bash
+<CodeGroup>
+```bash REST
 curl -X POST "https://api.aisa.one/apis/v1/perplexity/sonar" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
@@ -21,3 +24,44 @@ curl -X POST "https://api.aisa.one/apis/v1/perplexity/sonar" \
     ]
   }'
 ```
+
+```jsonc MCP
+// Copy this whole block into Claude Code, Codex, Cursor or any coding agent.
+// It carries everything needed to connect, authorize and run this example —
+// no key to paste, one click of Allow in the browser.
+{
+  "operation_id": "post_perplexity_sonar",
+  "arguments": {
+    "model": "sonar",
+    "messages": [
+      {
+        "role": "user",
+        "content": "What are the latest developments in quantum computing?"
+      }
+    ]
+  },
+  "max_price_usd": 0.05
+}
+// ── for the agent ─────────────────────────────────────────────────────────
+// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+//   name       aisa
+//   endpoint   https://mcp.aisa.one/mcp
+//   transport  streamable-http
+//   auth       OAuth. The server publishes RFC 9728 metadata, so open a
+//              browser and the user clicks Allow once — nothing to paste.
+//              If AISA_API_KEY is set, send it as a bearer header instead.
+// Use your own MCP mechanism, not a hand-edited config file:
+//   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
+//   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
+//   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
+// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
+// search, get_details, use, batch_use, list_categories. search and
+// get_details are free; use is billed per call and max_price_usd refuses
+// anything above the cap before spending. This operation's full contract —
+// every argument, the response shape, the price and the pitfalls — is at
+//   https://aisa.one/docs/api-reference/perplexity/post_perplexity-sonar.md
+// Then run the call and show me the result.
+```
+</CodeGroup>
+
+<McpSetup />

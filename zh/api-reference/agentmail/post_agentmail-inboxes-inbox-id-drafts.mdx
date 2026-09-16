@@ -4,14 +4,50 @@ description: "在某个收件箱里写一封草稿但不发送。"
 openapi: "openapi/zh/agentmail.json POST /agentmail/inboxes/{inbox_id}/drafts"
 ---
 
+import McpSetup from "/snippets/zh/mcp-setup.mdx";
+
 {/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
 
 在某个收件箱里写一封草稿但不发送。接受 `to`、`cc`、`bcc`、`subject`、`text`、`html`、`labels`、`attachments`，以及用于挂会话的 `in_reply_to` / `references`。返回含 `draft_id` 的完整草稿。在调用 `post_agentmail_inbox_draft_send` 之前不会有任何东西离开账号，所以这是把待发邮件先摆出来给人审的安全做法。写入的是共享 AgentMail 工作区：所有 AIsa 调用方共用同一个 AgentMail 账号，因此这里会触及其他调用方创建的收件箱，你写进去的东西下一个调用方也看得到、改得动。
 
 ## 示例
 
-```bash
+<CodeGroup>
+```bash REST
 curl -X POST "https://api.aisa.one/apis/v1/agentmail/inboxes/{inbox_id}/drafts" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
+
+```jsonc MCP
+// 把整段复制给 Claude Code、Codex、Cursor 或任意 coding agent。
+// 连接、授权、跑通这个例子需要的东西都在里面 ——
+// 不用粘贴任何 key，浏览器里点一次 Allow 就好。
+{
+  "operation_id": "post_agentmail_inbox_draft",
+  "arguments": {},
+  "max_price_usd": 0.05
+}
+// ── for the agent ─────────────────────────────────────────────────────────
+// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+//   name       aisa
+//   endpoint   https://mcp.aisa.one/mcp
+//   transport  streamable-http
+//   auth       OAuth. The server publishes RFC 9728 metadata, so open a
+//              browser and the user clicks Allow once — nothing to paste.
+//              If AISA_API_KEY is set, send it as a bearer header instead.
+// Use your own MCP mechanism, not a hand-edited config file:
+//   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
+//   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
+//   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
+// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
+// search, get_details, use, batch_use, list_categories. search and
+// get_details are free; use is billed per call and max_price_usd refuses
+// anything above the cap before spending. This operation's full contract —
+// every argument, the response shape, the price and the pitfalls — is at
+//   https://aisa.one/docs/zh/api-reference/agentmail/post_agentmail-inboxes-inbox-id-drafts.md
+// Then run the call and show me the result.
+```
+</CodeGroup>
+
+<McpSetup />
