@@ -1,0 +1,70 @@
+---
+title: "AI 搜索"
+description: "在 Instagram、TikTok 或 YouTube 上，用自然语言描述查找创作者。"
+openapi: "openapi/zh/waveinflu.json POST /waveinflu/ai-search"
+---
+
+import McpSetup from "/snippets/zh/mcp-setup.mdx";
+
+{/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
+
+用自然语言描述而非种子账号来查找创作者。`platform` 与 `query` 为必填；另有 `limit`（1–100，默认 40）和与[相似创作者](/zh/api-reference/waveinflu/post_waveinflu-similar)相同的可选 `filters`（地区、语言、粉丝数与播放量区间、性别、种族、创作者类型、露脸情况、工作区去重）。
+
+用一句话描述你想要的创作者（例如 `"beauty creators in the US"`），响应返回的创作者结构与相似创作者一致：`id`、`username`、`fullName`、`biography`、`email`、`followerCount`、`averagePlayCount` / `medianPlayCount`、`averageEngagementRate` / `medianEngagementRate`、`region`、`language`，以及 AI 推断的 `gender`、`ageRange`、`ethnicity`、`faceVisibility`、`accountPositioning`、`aiDescription`、`profileUrl` 和相关度 `score`。结果按 `score` 降序排列。
+
+已有具体种子账号而非文字描述？请用 [`post_waveinflu_similar_creators`](/zh/api-reference/waveinflu/post_waveinflu-similar)。多数匹配已自带 `email`；对为 null 的结果请用 [`post_waveinflu_email_lookup`](/zh/api-reference/waveinflu/post_waveinflu-email-lookup)。
+
+按实际交付的达人数（`data.count`）计费。
+
+## 示例
+
+<CodeGroup>
+```bash REST
+curl -X POST "https://api.aisa.one/apis/v1/waveinflu/ai-search" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "platform": "instagram",
+        "query": "beauty creators in the US",
+        "limit": 10
+      }'
+```
+
+```jsonc MCP
+// 把整段复制给 Claude Code、Codex、Cursor 或任意 coding agent。
+// 连接、授权、跑通这个例子需要的东西都在里面 ——
+// 不用粘贴任何 key，浏览器里点一次 Allow 就好。
+{
+  "operation_id": "post_waveinflu_ai_search",
+  "arguments": {
+    "platform": "instagram",
+    "query": "beauty creators in the US",
+    "limit": 10
+  },
+  "max_price_usd": 0.5
+}
+// ── for the agent ─────────────────────────────────────────────────────────
+// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+//   name       aisa
+//   endpoint   https://mcp.aisa.one/mcp
+//   transport  streamable-http
+//   auth       OAuth. The server publishes RFC 9728 metadata, so open a
+//              browser and the user clicks Allow once — nothing to paste.
+//              If AISA_API_KEY is set, send it as a bearer header instead.
+// Use your own MCP mechanism, not a hand-edited config file:
+//   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
+//   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
+//   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
+// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
+// search, get_details, use, batch_use, list_categories. search and
+// get_details are free; use is billed per call and max_price_usd refuses
+// anything above the cap before spending. This operation's full contract —
+// every argument, the response shape, the price and the pitfalls — is at
+//   https://aisa.one/docs/zh/api-reference/waveinflu/post_waveinflu-ai-search.md
+// Then run the call and show me the result.
+```
+</CodeGroup>
+
+<McpSetup />
+
+[在你的 agent 里把这个端点跑起来 →](https://aisa.one/mcp?from=/zh/api-reference/waveinflu/post_waveinflu-ai-search)

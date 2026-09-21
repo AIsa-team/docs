@@ -1,6 +1,6 @@
 ---
 title: "相似创作者"
-description: "按种子主页、内容方向或两者结合，匹配 YouTube 或 TikTok 创作者。"
+description: "在 Instagram、TikTok 或 YouTube 上，按种子账号查找相似创作者。"
 openapi: "openapi/zh/waveinflu.json POST /waveinflu/similar"
 ---
 
@@ -8,17 +8,17 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
 
 {/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
 
-在 YouTube 或 TikTok 上按种子主页、自然语言内容方向或两者结合查找相似创作者。`platform` 为必填；`seedProfileUrl` 与 `contentDirection`（最长 800 字符）可任选其一或同时提供，另有 `limit`（1–100，默认 25）和可选的 `filters`（地区、语言、粉丝数与平均播放量区间）。
+在 Instagram、TikTok 或 YouTube 上，按种子账号查找相似创作者。`platform` 与 `target_account` 为必填；另有 `limit`（1–100，默认 40）和可选的 `filters`（地区、语言、粉丝数与播放量区间、性别、种族、创作者类型、露脸情况、工作区去重）。
 
-响应回显系统判定的 `mode` —— 仅种子为 `homepage`、仅方向为 `direction`、两者兼有为 `homepage_direction` —— 且仅在种子解析成功时才有 `sourceUserId`。
+每条匹配返回完整画像：`id`、`username`、`fullName`、`biography`、`email`、`followerCount`、`averagePlayCount` / `medianPlayCount`、`averageEngagementRate` / `medianEngagementRate`、`region`、`language`，以及 AI 推断的 `gender`、`ageRange`、`ethnicity`、`faceVisibility`、`accountPositioning` 标签、`aiDescription`、`profileUrl` 和相关度 `score`。结果按 `score` 降序排列。
 
-每条匹配包含 `username`、`platformHandle`、`description`、`email`、`profileUrl`、`avatar`、`similarityScore`（按降序排列）、`followerCount`、`averagePlayCount`、`lastPublishedTime`、`region` 和 `language`。
+更想用自然语言描述而非种子账号？请用 [`post_waveinflu_ai_search`](/zh/api-reference/waveinflu/post_waveinflu-ai-search)，返回结构与本接口一致。
 
-**字段结构随平台不同。** YouTube 结果额外带 `channelId` 和 `channelTitle`；TikTok 结果额外带 `userId`、`uniqueId`、`nickname` 和 `averageLikeCount`，这几个字段 YouTube 一个都不返回。
+多数匹配已自带 `email`。对 `email` 为 null 的结果，请改用 [`post_waveinflu_email_lookup`](/zh/api-reference/waveinflu/post_waveinflu-email-lookup)。
 
-实测 **5 条 YouTube 匹配 4.2 KB**（约 8 秒）、**3 条 TikTok 匹配 2.5 KB**。
-
-多数匹配已自带 `email`。对 `email` 为 null 的结果，以及本接口不覆盖的 Instagram 创作者，请改用 [`post_waveinflu_email_lookup`](/zh/api-reference/waveinflu/post_waveinflu-email-lookup)。
+<Note>
+**破坏性变更（上游迁移至 hiCreator）。** 种子改为单个必填的 `target_account`（原 `seedProfileUrl` / `contentDirection`）。响应改为 `data.items[]` 加 `data.count`（原 `data.data[]` 加 `total`），每条匹配用 `score`（原 `similarityScore`）。原 `mode`、`sourceUserId`、`quota` 字段已移除，并新增画像字段（`biography`、`gender`、`ageRange`、`ethnicity`、`faceVisibility`、`accountPositioning`、`aiDescription`）。按实际交付的达人数（`data.count`）计费。
+</Note>
 
 ## 示例
 
@@ -28,9 +28,9 @@ curl -X POST "https://api.aisa.one/apis/v1/waveinflu/similar" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-        "platform": "youtube",
-        "limit": 10,
-        "seedProfileUrl": "https://www.youtube.com/@mkbhd"
+        "platform": "instagram",
+        "target_account": "@onkimia",
+        "limit": 10
       }'
 ```
 
@@ -41,11 +41,11 @@ curl -X POST "https://api.aisa.one/apis/v1/waveinflu/similar" \
 {
   "operation_id": "post_waveinflu_similar_creators",
   "arguments": {
-    "platform": "youtube",
-    "limit": 10,
-    "seedProfileUrl": "https://www.youtube.com/@mkbhd"
+    "platform": "instagram",
+    "target_account": "@onkimia",
+    "limit": 10
   },
-  "max_price_usd": 0.05
+  "max_price_usd": 0.5
 }
 // ── for the agent ─────────────────────────────────────────────────────────
 // Register the AIsa MCP server, then call its `use` tool with the JSON above.
