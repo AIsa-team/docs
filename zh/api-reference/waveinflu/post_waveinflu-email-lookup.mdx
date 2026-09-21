@@ -8,13 +8,15 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
 
 {/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
 
-根据 TikTok、Instagram 或 YouTube 创作者的主页 URL 查询联系邮箱。返回从 URL 解析出的 `platform`、`username`、`profileLink`、`platformUserId`、`region`，主邮箱 `email`，包含全部命中地址的 `emails` 数组，以及外部联系方式数组 `contacts`（每项形如 `{url, type}`，包括个人站点、WhatsApp 链接），另有以积分计的 `quota.cost` 和 `quota.remainingQuota`。
+根据 Instagram、TikTok 或 YouTube 创作者的主页 URL 查询联系邮箱。传入 `profile_url`，响应返回解析出的 `platform`、规范化后的 `profile_url`，以及形如 `{status, value}` 的 `email` 对象。
 
-实测单个 Instagram 创作者响应 **533 字节、约 2 秒**。
+`status` 为 `not_found`（`value` 为 null）表示该创作者未公开邮箱 —— 这是正常结果，不是错误，且仍按一次有效查询计费。
 
-创作者未公开邮箱时 `email` 为 null、`emails` 为空数组 —— 这是正常结果，不是错误。
+每次调用只处理一个创作者。若需要先获得一批创作者，请用 [`post_waveinflu_similar_creators`](/zh/api-reference/waveinflu/post_waveinflu-similar) 或 [`post_waveinflu_ai_search`](/zh/api-reference/waveinflu/post_waveinflu-ai-search) —— 它们对多数匹配已直接返回 `email`，本接口只需用于 `email` 为 null 的结果。
 
-每次调用只处理一个创作者。若需要先获得一批创作者，请用 [`post_waveinflu_similar_creators`](/zh/api-reference/waveinflu/post_waveinflu-similar) —— 它对多数匹配已直接返回 `email`，本接口只需用于 `email` 为 null 的结果，以及相似创作者接口不覆盖的 Instagram 创作者。
+<Note>
+**破坏性变更（上游迁移至 hiCreator）。** 请求字段由 `url` 改为 `profile_url`；响应改为 `data.email.{status, value}` 与 `data.profile_url`，原 `emails[]`、`contacts[]`、`username`、`quota` 字段已移除。若仍传旧字段 `url`，将返回 `400 code=10001` 且不计费。
+</Note>
 
 ## 示例
 
@@ -23,7 +25,7 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
 curl -X POST "https://api.aisa.one/apis/v1/waveinflu/email-lookup" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://www.instagram.com/onkimia/"}'
+  -d '{"profile_url": "https://www.instagram.com/onkimia/"}'
 ```
 
 ```jsonc MCP
@@ -33,7 +35,7 @@ curl -X POST "https://api.aisa.one/apis/v1/waveinflu/email-lookup" \
 {
   "operation_id": "post_waveinflu_email_lookup",
   "arguments": {
-    "url": "https://www.instagram.com/onkimia/"
+    "profile_url": "https://www.instagram.com/onkimia/"
   },
   "max_price_usd": 0.05
 }
