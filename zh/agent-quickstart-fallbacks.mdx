@@ -7,13 +7,13 @@ description: "curl 下载官方 Skill，以及直接 HTTP 付费批准回退。�
 
 ## Skill 下载（curl）
 
-**门禁：** Node 或 `npx skills` 跑不起来，需要把官方 `aisa` Skill 落到磁盘，且当前是用户本机，**或**用户在此环境明确要求 CLI/Skill（包括云端沙箱）。把完整三文件（`SKILL.md`、`LICENSE`、`agents/openai.yaml`）下载到当前客户端的原生 Skill 位置。保留已有的官方或自定义 Skill（包括符号链接）；没有原生安装就不要声称 Web 端已持久化。Codex 用户级示例：`~/.agents/skills/aisa`。首选安装器仍是 Node.js **22.20.0+** 和 `skills` 1.5.25 的 `engines`；这条 curl 路径不改变这些下限。
+**门禁：** Node 或 `npx skills` 跑不起来，需要把官方 `aisa` Skill 落到磁盘，且当前是用户本机，**或**用户在此环境明确要求 CLI/Skill（包括云端沙箱）。把完整三文件（`SKILL.md`、`LICENSE`、`agents/openai.yaml`）下载到当前客户端的原生 Skill 位置。保留已有的官方或自定义 Skill（包括符号链接）；没有原生安装就不要声称 Web 端已持久化。Codex 用户级示例：`~/.agents/skills/aisa`。首选安装器仍是 Node.js **22.20.0+** 和 `skills` 1.5.25 的 `engines`；这条 curl 路径不改变这些下限。raw GitHub pin 是 Skill 提交 `e7809490a186af77c4b96a5c1cfeea1ee39ce4f9`。
 
 ```sh
 set -e
 aisa_skill_target="$HOME/.agents/skills/aisa"
 aisa_skill_parent="$HOME/.agents/skills"
-aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/7d7b1267f4363d894528f5c5b8d895214211cb84/platform/aisa"
+aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/e7809490a186af77c4b96a5c1cfeea1ee39ce4f9/platform/aisa"
 if [ -e "$aisa_skill_target" ] || [ -L "$aisa_skill_target" ]; then
   echo "exists, left unchanged: $aisa_skill_target"
   echo "not assumed official; inspect before treating as the AIsa skill"
@@ -30,9 +30,9 @@ mv "$aisa_skill_tmp/aisa" "$aisa_skill_target"
 
 ## 直接 HTTP API 回退
 
-**门禁：** CLI 和 MCP 都不可用、能发 HTTP、且已有有效的 AIsa API key 或秘密。提出付费方案或费用批准之前，以及发起任何付费请求之前，先读完本节（含 endpoint 文档、计价和批准 XML）。
+**门禁：** 当前环境不能使用 CLI、MCP 不可用、能发 HTTP，且静态 `AISA_API_KEY` 或等效秘密已经配置好。若 CLI 可用，离开本页，走 [Agent 快速开始](https://aisa.one/docs/zh/agent-quickstart.md) 的 CLI 路径。提出付费方案或费用批准之前，以及发起任何付费请求之前，先读完本节（含 endpoint 文档、计价和批准 XML）。
 
-仅当 CLI 和 MCP 都不可用、能发 HTTP、且已有有效的 AIsa API key 或秘密时使用。这条路径用于客户端、工具或路由器限制；不能绕过无效 API 凭证、额度用尽或同一底层 API 的故障。
+仅用于阻塞 CLI 和 MCP 的客户端、工具或路由器限制。不能绕过无效 API 凭证、额度用尽或同一底层 API 的故障。
 
 使用匹配的 endpoint 文档和公开计价。[API 参考](https://aisa.one/docs/zh/api-reference)。[认证](https://aisa.one/docs/zh/guides/authentication)。数据 API：`https://api.aisa.one/apis/v1`。模型目录：`https://api.aisa.one/v1/models`。任何付费数据请求前先读 [计价](https://aisa.one/docs/zh/guides/pricing)。
 
@@ -42,11 +42,9 @@ mv "$aisa_skill_tmp/aisa" "$aisa_skill_target"
 
 ### API key
 
-复用 `AISA_API_KEY`。若未设置且本 Agent 能读文件系统，使用 `aisa login` 写入的 `~/.aisa/key`，不要显示它。否则使用当前客户端已授权密钥库中的 AIsa API key。来源冲突时说明两边，不要覆盖用户自定义密钥。
+直接 HTTP 需要已经单独配置好的静态 `AISA_API_KEY` 或等效秘密（环境变量，或当前客户端已授权的密钥库）。浏览器 `aisa login` 或其他 OAuth 不会生成静态 HTTP key。不要在这条回退里运行 `aisa login`。不要读取 `tokens.json` 或兼容 key 文件。来源冲突时说明两边，不要覆盖用户自定义密钥。
 
-以上都没有、且 `aisa login` 可用时，运行浏览器 `aisa login` 自动保存密钥。若没有可用的 CLI 或浏览器登录路径，最后一步是用户到 https://console.aisa.one/api-keys 登录并创建密钥，保存到当前客户端的凭证/密钥设置，或本地 `AISA_API_KEY`。不要让用户把密钥粘贴进对话。不要打印密钥。不是每个客户端都有密钥设置界面；若当前客户端无法保存凭证，就停在该限制。
-
-受保护的 API 请求前先等到凭证就绪。拿到密钥不等于付费调用已获批准。
+若静态 key 或秘密尚未配置，就停在该限制。不要让用户把密钥粘贴进对话。不要打印密钥。不要让用户把控制台 Key 复制进这次对话。拿到密钥不等于付费调用已获批准。
 
 <a id="paid-api-approval-first"></a>
 
