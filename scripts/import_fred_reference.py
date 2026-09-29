@@ -103,7 +103,7 @@ def parameter(name, nodes, defaults=None):
     default = re.search(r'default:\s*([^\s(]+)', declaration)
     if default:
         token = default[1].rstrip('.')
-        if token not in ('today\'s', 'no'):
+        if token not in ('today\'s', 'no') and (schema.get('format') != 'date' or re.fullmatch(r'\d{4}-\d{2}-\d{2}', token)):
             if schema['type'] == 'integer':
                 if not re.fullmatch(r'\d+', token):
                     raise ValueError(f'{name}: unsupported integer default')

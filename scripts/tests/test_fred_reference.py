@@ -8,6 +8,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from import_fred_reference import INDEX, import_reference, parse_reference, official_url
 from compose_openapi import compose, digest
+from jsonschema import Draft202012Validator, FormatChecker
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -21,6 +22,15 @@ def reference(extra=''):
 
 
 class FredReferenceTest(unittest.TestCase):
+    def test_date_defaults_are_constants_not_prose(self):
+        _, op=parse_reference(reference('<h3>date</h3><ul><li>YYYY-MM-DD formatted string, optional, default: First day of the year</li></ul>'), INDEX+'example.html')
+        self.assertNotIn('default',op['parameters'][-1]['schema'])
+        for item in self.document()['paths'].values():
+            for parameter in item['get']['parameters']:
+                schema=parameter['schema']
+                if 'default' in schema:
+                    Draft202012Validator(schema, format_checker=FormatChecker()).validate(schema['default'])
+
     def test_structured_constraints_and_authentication(self):
         path, op = parse_reference(reference(), INDEX+'example.html')
         self.assertEqual(path, '/fred/example')
