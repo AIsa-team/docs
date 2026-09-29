@@ -40,7 +40,7 @@ REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 OPENAPI_DIR = os.path.join(REPO_ROOT, "openapi")
 
 # The Mintlify placeholder spec — skip it
-SKIP_FILES = {"openapi.json"}
+SKIP_FILES = {"openapi.json", "pending.json"}
 
 # Map each spec file to a category tag
 FILE_TAG_MAP = {
@@ -178,7 +178,12 @@ def inject_x402_annotations(spec):
         for method, op in ops.items():
             if not isinstance(op, dict):
                 continue
-            if method in ("parameters", "servers"):
+            if method not in {"get", "post", "put", "patch", "delete", "options", "head", "trace"}:
+                continue
+            if "x-aisa-validation" in op:
+                # Runtime contracts own capabilities. Never invent a mirror
+                # route from a price, method or absence of an LLM override.
+                op.pop("x-x402", None)
                 continue
             if excluded or is_llm_op(op):
                 # Defensive: drop any stale annotation that shouldn't
@@ -235,17 +240,33 @@ def merge_components(unified, spec, filename):
     """
     source_components = spec.get("components", {})
     prefix = component_collision_prefix(filename)
-
+    renamed = {}
     for section in COMPONENT_SECTIONS:
         entries = source_components.get(section, {})
-        if not isinstance(entries, dict) or not entries:
-            continue
         target = unified["components"].setdefault(section, {})
         for name, definition in entries.items():
-            if name not in target:
-                target[name] = definition
-            elif target[name] != definition:
-                target[f"{prefix}_{name}"] = definition
+            if name in target and target[name] != definition:
+                candidate = f"{prefix}_{name}"
+                if candidate in target and target[candidate] != definition:
+                    raise ValueError(f"component collision: {filename} {section}/{name}")
+                renamed[f"#/components/{section}/{name}"] = f"#/components/{section}/{candidate}"
+
+    def rewrite(node):
+        if isinstance(node, dict):
+            if node.get("$ref") in renamed:
+                node["$ref"] = renamed[node["$ref"]]
+            for value in node.values():
+                rewrite(value)
+        elif isinstance(node, list):
+            for value in node:
+                rewrite(value)
+
+    rewrite(spec)
+    for section in COMPONENT_SECTIONS:
+        for name, definition in source_components.get(section, {}).items():
+            ref = renamed.get(f"#/components/{section}/{name}")
+            target_name = ref.rsplit("/", 1)[1] if ref else name
+            unified["components"].setdefault(section, {})[target_name] = definition
 
 
 def load_spec(filepath):
@@ -351,6 +372,16 @@ def build_unified_spec():
             print(f"  SKIP {filename}: {e}", file=sys.stderr)
             continue
 
+        generated = bool(spec.get("info", {}).get("x-aisa-document", {}).get("document_hash"))
+        if generated:
+            provider = filename[:-5]
+            metadata = spec["info"]["x-aisa-document"]
+            unified["info"].setdefault("x-aisa-document", {}).setdefault("providers", {})[provider] = {
+                "document_hash": metadata["document_hash"],
+                "facts_hash": metadata.get("facts_hash"),
+            }
+        merge_components(unified, spec, filename)
+
         # Register tag
         if tag not in tags_seen:
             tags_seen.add(tag)
@@ -379,6 +410,7 @@ def build_unified_spec():
         if (
             file_server_url.startswith(default_server_url + "/")
             and not is_llm
+            and not generated
         ):
             path_prefix = file_server_url[len(default_server_url):]
 
@@ -386,13 +418,18 @@ def build_unified_spec():
         for path, methods in spec.get("paths", {}).items():
             for method, operation in methods.items():
                 if isinstance(operation, dict):
-                    operation["tags"] = [tag]
+                    if not generated:
+                        operation["tags"] = [tag]
                     # Drop any per-op servers from the input file
                     operation.pop("servers", None)
                     # Add LLM-server override on operations from LLM
                     # files so OpenAPI consumers route them to /v1 or /v1beta
                     # instead of the default /apis/v1.
-                    if is_llm:
+                    if generated:
+                        operation["servers"] = spec.get("servers", [])
+                        if "security" not in operation and "security" in spec:
+                            operation["security"] = spec["security"]
+                    elif is_llm:
                         operation["servers"] = [
                             {"url": file_server_url}
                         ]
@@ -405,8 +442,6 @@ def build_unified_spec():
                         unified["paths"][full_path][method] = operation
             else:
                 unified["paths"][full_path] = methods
-
-        merge_components(unified, spec, filename)
 
     # Sort tags alphabetically
     unified["tags"].sort(key=lambda t: t["name"])
