@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from import_fred_reference import INDEX, import_reference, parse_reference, official_url
-from compose_openapi import compose
+from compose_openapi import compose, digest
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -62,6 +62,10 @@ class FredReferenceTest(unittest.TestCase):
 
     def test_locked_sources_account_for_every_discovered_reference(self):
         source = self.document()['info']['x-aisa-source']
+        document=self.document()
+        expected=digest({**document,'info':{k:v for k,v in document['info'].items() if k!='x-aisa-source'}})
+        self.assertEqual(source['content_hash'],expected)
+        self.assertTrue(expected.startswith('sha256:'))
         self.assertEqual(len(source['references']),35)
         self.assertEqual(len(source['pending_references']),3)
         self.assertEqual(len(self.document()['paths']),32)

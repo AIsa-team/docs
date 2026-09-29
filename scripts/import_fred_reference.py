@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 from urllib.parse import urljoin, urlsplit
 from urllib.request import urlopen
+from compose_openapi import digest
 
 INDEX = 'https://fred.stlouisfed.org/docs/api/fred/'
 CONVERTER = 'scripts/import_fred_reference.py@1'
@@ -222,7 +223,7 @@ def import_reference(provider, url=INDEX, fetcher=None):
     document = {'openapi': '3.1.0', 'info': {'title': 'Official FRED reference', 'version': 'reference-html-1', 'x-aisa-source': source},
                 'servers': [{'url': 'https://api.stlouisfed.org'}], 'paths': paths,
                 'components': {'securitySchemes': {'fred_api_key': {'type': 'apiKey', 'in': 'query', 'name': 'api_key'}}}}
-    source['content_hash'] = hashlib.sha256(json.dumps({'paths': paths, 'components': document['components']}, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    source['content_hash'] = digest({**document, 'info': {key: value for key, value in document['info'].items() if key != 'x-aisa-source'}})
     return document
 
 
