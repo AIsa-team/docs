@@ -3,7 +3,12 @@
 `openapi/registry.yaml` owns the generated-provider list. Initially it contains
 only Similarweb and automatic provider discovery remains off. Existing provider
 files outside the registry remain handwritten. No production requests are made
-by unit tests.
+by unit tests. The 23-route baseline is only the historical Similarweb document,
+not the platform inventory. The whole-catalog regression loads all checked-in
+specs (over 1,000 operations), verifies that pilot cutover preserves every other
+operation, and verifies complete restoration after a legacy pin. This preserves
+existing provider documentation; it does not migrate or validate the remaining
+providers against their runtime contracts.
 
 ```sh
 python3 -m pip install 'PyYAML>=6,<7'
@@ -30,7 +35,11 @@ can be migrated without renaming existing tools.
 
 A previously published route disappearing or changing its ID aborts the entire
 pull before files are written. Disabled operations stay in the output. A pinned
-registry entry (`pin: <commit SHA>`) restores its committed document explicitly.
+registry entry (`pin: <commit SHA>`) restores its committed document explicitly,
+including handwritten versions without runtime hashes. Pinned files retain their
+original bytes and provenance; page references follow the pinned server/path
+format. A pin that removes or changes any published route identity is rejected
+before files are written.
 The content hash combines runtime facts, mirror, overlay, retained published
 success payloads and composer version; `generated_at` alone never causes a commit. ETags cache public facts under ignored
 `.cache/runtime-contracts`, and overlays are recomposed even after a 304.

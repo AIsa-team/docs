@@ -75,9 +75,10 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
         match = re.search(r"^openapi:\s*['\"]?openapi/" + re.escape(provider) + r"\.json\s+(\w+)\s+([^\s'\"]+)", text, re.M)
         if match:
             known[(previous_prefix + match[2], match[1].lower())] = mdx.relative_to(root).with_suffix("").as_posix()
+    current_prefix = urlsplit((document.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
     paths = []
     for path, method, operation in operations(document):
-        page = known.get((path, method), f"api-reference/{provider}/{slug(operation['operationId'])}")
+        page = known.get((current_prefix + path, method), f"api-reference/{provider}/{slug(operation['operationId'])}")
         paths.append(page)
         for language, prefix in (("en", ""), ("zh", "zh/")):
             destination = root / f"{prefix}{page}.mdx"
@@ -168,6 +169,8 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                 raise ValueError("pin must be a git commit SHA")
             result = subprocess.run(["git", "show", f"{pin}:openapi/{provider}.json"], cwd=root, check=True, text=True, capture_output=True)
             document = json.loads(result.stdout)
+            if previous:
+                assert_identities(normalize_paths(previous), normalize_paths(document))
             unresolved = pending["providers"].get(provider, [])
         else:
             if entry.get("group"):
@@ -191,17 +194,25 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             changes[facts_path] = json.dumps(facts, indent=2, ensure_ascii=False) + "\n"
         old_hash = previous.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         new_hash = document.get("info", {}).get("x-aisa-document", {}).get("document_hash")
-        if not new_hash:
-            raise ValueError(f"{provider}: generated document has no document_hash")
-        if old_hash != new_hash:
-            changes[output_path] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+        if entry.get("pin"):
+            # Historic handwritten documents predate runtime hashes. Restore
+            # their committed bytes without inventing generated provenance.
+            changed = not output_path.exists() or output_path.read_text() != result.stdout
+            if changed:
+                changes[output_path] = result.stdout
         else:
-            # generated_at is observational, and cannot create commit churn.
-            document = previous
+            if not new_hash:
+                raise ValueError(f"{provider}: generated document has no document_hash")
+            changed = old_hash != new_hash
+            if changed:
+                changes[output_path] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+            else:
+                # generated_at is observational, and cannot create commit churn.
+                document = previous
         pending["providers"][provider] = unresolved
         if with_pages:
             generate_pages(root, provider, document, changes, previous)
-        summary[provider] = {"changed": old_hash != new_hash, "operations": sum(1 for _ in operations(document)), "pending": len(unresolved), "document_hash": new_hash}
+        summary[provider] = {"changed": changed, "operations": sum(1 for _ in operations(document)), "pending": len(unresolved), "document_hash": new_hash}
     changes[root / "openapi/pending.json"] = json.dumps(pending, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     return {p: content for p, content in changes.items() if not p.exists() or p.read_text() != content}, summary
 

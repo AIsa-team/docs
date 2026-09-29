@@ -259,6 +259,85 @@ class PullTests(unittest.TestCase):
         changes, _ = stage(self.root, self.root / "facts", "unused")
         self.assertEqual(changes, {})
 
+    def test_pin_real_legacy_23_restores_bytes_pages_and_localized_references(self):
+        import re
+        import subprocess
+        from types import SimpleNamespace
+        from localize_openapi_zh import split_frontmatter
+        from pull_openapi import normalize_paths, operations
+        from validate_api_reference_slugs import validate
+
+        repository = Path(__file__).resolve().parents[2]
+        raw = subprocess.check_output(["git", "show", "3a00a91:openapi/similarweb.json"], cwd=repository, text=True, timeout=15)
+        legacy = json.loads(raw)
+        page_paths = subprocess.check_output(["git", "ls-tree", "-r", "--name-only", "3a00a91", "api-reference/similarweb"], cwd=repository, text=True, timeout=15).splitlines()
+        for name in page_paths:
+            target = self.root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(subprocess.check_output(["git", "show", f"3a00a91:{name}"], cwd=repository, timeout=15))
+        output = self.root / "openapi/similarweb.json"
+        output.write_text(raw)
+        runtime = normalize_paths(legacy)
+        runtime["openapi"] = "3.1.0"
+        runtime["servers"] = [{"url": "https://api.aisa.one"}]
+        runtime["info"]["x-aisa-document"] = {"facts_hash": "sha256:same23"}
+        for _, _, op in operations(runtime):
+            op["x-aisa-validation"] = "runtime"
+            op["x-aisa-status"] = "enabled"
+            op["summary"] = "Runtime " + op["operationId"]
+        (self.root / "facts/similarweb.json").write_text(json.dumps(runtime))
+        self.write(stage(self.root, self.root / "facts", "unused")[0])
+        pages = list((self.root / "api-reference/similarweb").glob("*.mdx")) + list((self.root / "zh/api-reference/similarweb").glob("*.mdx"))
+        self.assertEqual(len(pages), 46)
+        for page in pages:
+            page.write_text(page.read_text() + "\nKeep handwritten prose.\n")
+        bodies = {page: split_frontmatter(page.read_text())[1] for page in pages}
+        (self.root / "openapi/registry.yaml").write_text("auto_register: false\nproviders:\n  similarweb:\n    pin: 3a00a91\n")
+        with patch("pull_openapi.subprocess.run", return_value=SimpleNamespace(stdout=raw)), patch("pull_openapi.fetch_json", side_effect=AssertionError("pin must remain offline")):
+            changes, summary = stage(self.root, None, "unused")
+            self.assertTrue(summary["similarweb"]["changed"])
+            self.assertIsNone(summary["similarweb"]["document_hash"])
+            self.write(changes)
+            self.assertEqual(output.read_text(), raw)
+            self.assertEqual(validate(self.root, generated_only=True), [])
+            self.assertEqual(len(list((self.root / "api-reference/similarweb").glob("*.mdx"))), 23)
+            self.assertEqual(len(list((self.root / "zh/api-reference/similarweb").glob("*.mdx"))), 23)
+            for page in pages:
+                self.assertEqual(split_frontmatter(page.read_text())[1], bodies[page])
+                reference = json.loads(re.search(r"^openapi:\s*(.*)$", page.read_text(), re.M)[1])
+                name, method, path = reference.split()
+                document = json.loads((self.root / name).read_text())
+                self.assertNotIn("x-aisa-document", document["info"])
+                self.assertEqual(document["paths"][path][method.lower()]["operationId"], legacy["paths"][path][method.lower()]["operationId"])
+            for _ in range(2):
+                changes, summary = stage(self.root, None, "unused")
+                self.assertEqual(changes, {})
+                self.assertFalse(summary["similarweb"]["changed"])
+
+    def test_generated_pin_remains_supported_and_refuses_removed_routes(self):
+        from types import SimpleNamespace
+        self.write(stage(self.root, self.root / "facts", "unused")[0])
+        output = self.root / "openapi/similarweb.json"
+        pinned = output.read_text()
+        source = facts()
+        operation(source)["summary"] = "New title"
+        source["info"]["x-aisa-document"]["facts_hash"] = "sha256:new-title"
+        (self.root / "facts/similarweb.json").write_text(json.dumps(source))
+        self.write(stage(self.root, self.root / "facts", "unused")[0])
+        (self.root / "openapi/registry.yaml").write_text("auto_register: false\nproviders:\n  similarweb:\n    pin: abcdef1\n")
+        with patch("pull_openapi.subprocess.run", return_value=SimpleNamespace(stdout=pinned)):
+            self.write(stage(self.root, None, "unused")[0])
+            self.assertEqual(output.read_text(), pinned)
+            self.assertEqual(stage(self.root, None, "unused")[0], {})
+            published = json.loads(output.read_text())
+            published["paths"]["/apis/v1/similarweb/new-route"] = copy.deepcopy(published["paths"]["/apis/v1/similarweb/test"])
+            published["paths"]["/apis/v1/similarweb/new-route"]["post"]["operationId"] = "new-published-id"
+            output.write_text(json.dumps(published))
+            before = {p: p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+            with self.assertRaisesRegex(ValueError, "published identity changed or disappeared"):
+                stage(self.root, None, "unused")
+            self.assertEqual({p: p.read_bytes() for p in before}, before)
+
     def test_disabled_notice_updates_without_losing_prose(self):
         changes, _ = stage(self.root, self.root / "facts", "unused")
         self.write(changes)
