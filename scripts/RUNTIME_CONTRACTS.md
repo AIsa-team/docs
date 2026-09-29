@@ -63,8 +63,8 @@ alone cannot certify this mapping. Import a reviewed source explicitly with
 
 The source audit measures available request mirrors only. It does not prove
 runtime validation or deployment. The recorded 2026-09-29 public inventory has
-1,878 endpoints in 49 catalogs: 1,674 exact-path manual mirrors are available
-and 204 are absent. Legal recursive schemas retain local references and their
+1,878 endpoints in 49 catalogs: 1,676 exact-path manual mirrors are available
+and 202 are absent. Legal recursive schemas retain local references and their
 reachable namespaced component definitions. Some absent
 mirrors are unnecessary once a complete declarative runtime contract exists.
 The actual production facts endpoint must be deployed before a full live
