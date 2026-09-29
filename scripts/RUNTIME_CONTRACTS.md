@@ -111,12 +111,28 @@ documentation migration. Repeated pulls of the same pin produce no changes.
 Runtime ETags cache facts under ignored `.cache/runtime-contracts`. Overlays and
 mirrors are recomposed after 304; facts, consumed mirrors, retained response
 contracts and composer version enter `document_hash`. `generated_at` alone never
-causes churn. Imports remain explicit, reviewed source changes; this pipeline
-never silently refreshes manual or official schemas from the network.
+causes churn. Imports remain explicit, reviewed source changes; existing mirrors are not silently refreshed during composition. For a new
+passthrough provider, setting `upstream: https://.../openapi.json` (or an object
+with `url`) in its registry entry imports the initial official mirror automatically.
+No additional consumer registration or manual import command is required. A changed
+source URL triggers a new staged import. Download/validation failures retain the
+previous publication and are reported as pending.
 
-The pull workflow stages and validates by default. Publishing requires main and
-an explicit manual publish or the repository publish variable. Feature dispatches
-remain dry runs. The reusable consumer-dispatch workflow sends the published
+`refresh-upstream.yml` stages official source updates monthly as a review PR.
+It skips manual mirrors, avoids timestamp-only changes, and retains operations
+removed upstream along with their reachable components. Retained operations are
+explicitly listed in source provenance and the PR body. The workflow never merges
+its own PR.
+
+Scheduled/event pulls on main publish validated mirrors and coverage automatically;
+`RUNTIME_CONTRACT_PUBLISH=false` pauses those publications. Manual dispatch defaults
+to dry run and requires its publish input. Feature-branch dispatch remains a dry run. The reusable consumer-dispatch workflow sends the published
 revision and consolidated hash to consumers after publication. Application
 installation permissions and production endpoint deployment are operational
 prerequisites, not inferred from local test success.
+
+The daily `check-contract-revisions.yml` compares runtime per-catalog facts hashes
+and provider document hashes reported by docs, the website agent card, MCP manifest
+and Tool Router catalog metadata. A repeated mismatch on two consecutive checks
+fails the workflow. Legacy sources without runtime hashes are counted separately;
+they are never reported as successfully compared runtime contracts.

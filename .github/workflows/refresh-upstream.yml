@@ -1,0 +1,35 @@
+name: Review upstream contract changes
+on:
+  schedule:
+    - cron: '20 4 1 * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'PyYAML>=6,<7'
+      - run: python scripts/refresh_upstream.py --write --report /tmp/upstream-report.json
+      - name: Prepare review description
+        run: |
+          python - <<'PY'
+          import json
+          report = json.load(open('/tmp/upstream-report.json'))
+          with open('/tmp/upstream-body.md', 'w') as body:
+              body.write('Refresh official upstream schema mirrors. Runtime facts remain authoritative.\n\n')
+              body.write('Removed upstream operations are retained for review; no automatic merge.\n\n```json\n')
+              body.write(json.dumps(report, indent=2) + '\n```\n')
+          PY
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: automation/upstream-contract-refresh
+          title: 'chore: review upstream contract changes'
+          commit-message: 'chore: refresh upstream contract mirrors for review'
+          body-path: /tmp/upstream-body.md
+          add-paths: openapi/upstream/*.json

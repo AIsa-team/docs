@@ -31,6 +31,8 @@ jobs:
   compose:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      docs_commit: ${{ steps.publish.outputs.docs_commit }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -72,8 +74,9 @@ jobs:
       - name: Review staged differences
         if: steps.pull.outputs.available == 'true'
         run: git diff --stat >> "$GITHUB_STEP_SUMMARY"
-      - name: Commit verified contracts
-        if: github.ref == 'refs/heads/main' && steps.pull.outputs.available == 'true' && (inputs.publish == true || (github.event_name != 'workflow_dispatch' && vars.RUNTIME_CONTRACT_PUBLISH == 'true'))
+      - name: Commit contract mirrors and coverage
+        id: publish
+        if: github.ref == 'refs/heads/main' && steps.pull.outputs.available == 'true' && (inputs.publish == true || (github.event_name != 'workflow_dispatch' && vars.RUNTIME_CONTRACT_PUBLISH != 'false'))
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
@@ -82,3 +85,12 @@ jobs:
           git commit -m 'chore: regenerate runtime API contract mirrors'
           git pull --rebase origin main
           git push origin HEAD:main
+          echo "docs_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  notify-consumers:
+    needs: compose
+    if: needs.compose.outputs.docs_commit != ''
+    uses: ./.github/workflows/dispatch-contract-consumers.yml
+    with:
+      docs_commit: ${{ needs.compose.outputs.docs_commit }}
+    secrets: inherit

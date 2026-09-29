@@ -19,6 +19,7 @@ from urllib.request import Request, urlopen
 import yaml
 
 from compose_openapi import METHODS, compose, digest
+from import_upstream import import_source
 from runtime_registry import discover, combine_facts, public_mirror_index, published_documents, previous_for_facts, coverage_rows
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -237,18 +238,29 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             entry["display_name"] = facts.get("info", {}).get("title", provider)
             entry["description"] = facts.get("info", {}).get("description", "")
             registry["providers"][provider] = entry
-            upstream = read_json(root / f"openapi/upstream/{provider}.json")
-            if upstream and upstream.get("info", {}).get("x-aisa-source", {}).get("path_space") == "public":
-                upstream = None  # These are matched only by exact public route.
+            upstream_path = root / f"openapi/upstream/{provider}.json"
+            upstream = read_json(upstream_path)
             overlay_path = root / f"openapi/overlays/{provider}.yaml"
             overlay = yaml.safe_load(overlay_path.read_text()) if overlay_path.exists() else {}
             unresolved = []
             try:
+                configured = entry.get("upstream")
+                source_url = configured.get("url") if isinstance(configured, dict) else configured
+                if configured and (not isinstance(source_url, str) or not source_url.startswith("https://")):
+                    raise ValueError("upstream requires an HTTPS source URL")
+                current_source = (upstream or {}).get("info", {}).get("x-aisa-source", {})
+                if source_url and (current_source.get("kind") != "provider_openapi" or current_source.get("url") != source_url):
+                    # A new/changed registry source is enough to onboard a provider.
+                    # Existing mirrors stay immutable until a reviewed refresh.
+                    upstream = import_source(provider, source_url)
+                    changes[upstream_path] = json.dumps(upstream, indent=2, ensure_ascii=False) + "\n"
+                if upstream and upstream.get("info", {}).get("x-aisa-source", {}).get("path_space") == "public":
+                    upstream = None  # Manual mirrors match exact public routes only.
                 history = previous_for_facts(facts, original_documents, provider)
                 document, unresolved = compose(facts, upstream, overlay, history, public_mirrors)
                 coverage["providers"][provider] = coverage_rows(facts, document, unresolved, catalogs)
                 assert_identities(history, normalize_paths(document))
-            except ValueError as exc:
+            except (ValueError, HTTPError, URLError, TimeoutError) as exc:
                 if not registry.get("auto_register"):
                     raise
                 # Keep published pages/specs intact while reporting the exact

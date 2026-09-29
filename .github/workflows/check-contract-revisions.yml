@@ -1,0 +1,27 @@
+name: Check public contract revisions
+on:
+  schedule:
+    - cron: '35 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  revisions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'PyYAML>=6,<7'
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache/contract-revisions
+          key: contract-revisions-${{ github.run_id }}
+          restore-keys: contract-revisions-
+      - run: python scripts/check_contract_revisions.py
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .cache/contract-revisions
+          key: contract-revisions-${{ github.run_id }}

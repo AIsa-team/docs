@@ -71,6 +71,23 @@ class FullRegistryTests(unittest.TestCase):
         self.assertTrue(all(row['status'] == 'composed' for rows in coverage['providers'].values() for row in rows))
         self.assertEqual(self.pull()[0], {})
 
+    def test_passthrough_provider_requires_only_one_upstream_url(self):
+        source = contract('alpha', method='post', validation='provider')
+        self.sources({'alpha': source})
+        (self.root / 'openapi/registry.yaml').write_text('auto_register: true\nproviders:\n  alpha:\n    upstream: https://example.test/openapi.json\n')
+        upstream = mirror()
+        upstream['info']['x-aisa-source']['kind'] = 'provider_openapi'
+        upstream['info']['x-aisa-source']['url'] = 'https://example.test/openapi.json'
+        upstream['paths'] = {operation(source)['x-aisa-upstream-path']: next(iter(upstream['paths'].values()))}
+        with patch('pull_openapi.import_source', return_value=upstream) as fetch:
+            changes, summary = self.pull()
+            self.assertEqual(summary['alpha']['pending'], 0)
+            self.assertEqual(summary['alpha']['operations'], 1)
+            fetch.assert_called_once_with('alpha', 'https://example.test/openapi.json')
+            self.publish(changes)
+        with patch('pull_openapi.import_source', side_effect=AssertionError('Existing mirror was fetched again')):
+            self.assertEqual(self.pull()[0], {})
+
     def test_generation_time_does_not_churn_localized_pages_or_provider_spec(self):
         source = contract('alpha')
         self.sources({'alpha': source})

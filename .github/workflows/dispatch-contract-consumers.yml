@@ -1,0 +1,48 @@
+name: Notify contract consumers
+
+on:
+  workflow_call:
+    inputs:
+      docs_commit:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - repository: aisa-tool-router
+            event: docs_openapi_updated
+          - repository: aisa-mcp
+            event: contract-updated
+          - repository: aisa-landing-page
+            event: contract-updated
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.docs_commit }}
+      - name: Generate consumer dispatch token
+        id: token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.TOOL_ROUTER_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.TOOL_ROUTER_DISPATCH_APP_PRIVATE_KEY }}
+          owner: AIsa-team
+          repositories: ${{ matrix.repository }}
+      - name: Dispatch published revision
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          DOCS_COMMIT: ${{ inputs.docs_commit }}
+          CONSUMER: ${{ matrix.repository }}
+          EVENT_TYPE: ${{ matrix.event }}
+        run: |
+          jq -n --arg event "$EVENT_TYPE" --arg commit "$DOCS_COMMIT" \
+            --arg sha "$(sha256sum openapi.yaml | cut -d ' ' -f 1)" \
+            '{event_type: $event, client_payload: {docs_repository: "AIsa-team/docs", docs_commit: $commit, openapi_sha256: $sha}}' > /tmp/dispatch.json
+          gh api --method POST "repos/AIsa-team/$CONSUMER/dispatches" --input /tmp/dispatch.json
