@@ -1,0 +1,337 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Image Generation via Chat Completions",
+    "version": "1.0.0",
+    "description": "Image generation over the standard `POST /v1/chat/completions` route using OpenAI's multimodal `content` array; AIsa returns `choices[].message.content[]` containing one or more `{type: \"image\"}` parts. **As of July 28, 2026 the Wan 2.7 image models have moved to `/v1/images/generations` and `/v1/images/edits`** — `seedream-4-5-251128` is the remaining model configured on this route.",
+    "x-aisa-source": {
+      "kind": "manual",
+      "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/chat-image-generation.json",
+      "fetched_at": "2026-09-29T21:25:55+08:00",
+      "content_hash": "sha256:7d25b7a48d1e9410ce7396a342d12f20f7065a76dd35413d45b6d9ec149e7a98",
+      "converter": "scripts/import_existing_contracts.py@1",
+      "path_space": "public"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/v1"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "AISA API Key"
+      }
+    }
+  },
+  "paths": {
+    "/chat/completions": {
+      "post": {
+        "summary": "Generate images via Chat Completions",
+        "description": "Generate images over the chat route. Request shape matches OpenAI Chat Completions with multimodal content; the response contains `choices[].message.content[]` where each item is `{type: \"image\", image: \"<url or base64>\"}`.\n\n**Important:** `messages[].content` must be an **array of typed parts**, not a plain string. Passing a string returns `400 invalid_parameter_error` with `Input should be a valid list: messages[*].content`.\n\n**Routing note:** `wan2.7-image`, `wan2.7-image-pro`, `seedream-5-0-260128`, and `gpt-image-2` return `400 model_route_not_supported` here — use `/v1/images/generations` for those.",
+        "operationId": "generateImageViaChat",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "model",
+                  "messages"
+                ],
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "enum": [
+                      "seedream-4-5-251128"
+                    ],
+                    "description": "Image-generation model on the chat route. `seedream-4-5-251128` is billed at $0.036 per request. Wan and gpt-image-2 models use `/v1/images/generations` instead."
+                  },
+                  "messages": {
+                    "type": "array",
+                    "description": "Conversation messages. Image prompts go in the last user message's `content` array as `{type: \"text\"}` parts.",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "role",
+                        "content"
+                      ],
+                      "properties": {
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "system",
+                            "user",
+                            "assistant"
+                          ]
+                        },
+                        "content": {
+                          "type": "array",
+                          "description": "Multimodal parts. For image generation, include at least one `{type: \"text\"}` part with the prompt.",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "type"
+                            ],
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "text",
+                                  "image_url"
+                                ]
+                              },
+                              "text": {
+                                "type": "string",
+                                "description": "Used when `type: \"text\"`."
+                              },
+                              "image_url": {
+                                "type": "object",
+                                "description": "Used when `type: \"image_url\"` (image-to-image use cases).",
+                                "properties": {
+                                  "url": {
+                                    "type": "string",
+                                    "format": "uri"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "n": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Number of images to generate. Each image is billed separately; pass `1` unless you want candidates."
+                  }
+                }
+              },
+              "examples": {
+                "basic": {
+                  "summary": "Single-image prompt (n=1)",
+                  "value": {
+                    "model": "seedream-4-5-251128",
+                    "messages": [
+                      {
+                        "role": "user",
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "A cute red panda, ultra-detailed, cinematic lighting"
+                          }
+                        ]
+                      }
+                    ],
+                    "n": 1
+                  }
+                },
+                "four_variants": {
+                  "summary": "Default 4 candidates for selection",
+                  "value": {
+                    "model": "seedream-4-5-251128",
+                    "messages": [
+                      {
+                        "role": "user",
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "A futuristic cyberpunk city, neon lights, rainy night, 8k"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "pro": {
+                  "summary": "Higher-fidelity pro model",
+                  "value": {
+                    "model": "seedream-4-5-251128",
+                    "messages": [
+                      {
+                        "role": "user",
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Oil painting of a rolling hillside at sunset, artstation"
+                          }
+                        ]
+                      }
+                    ],
+                    "n": 1
+                  }
+                },
+                "image_to_image": {
+                  "summary": "Image-to-image (reference + prompt)",
+                  "value": {
+                    "model": "seedream-4-5-251128",
+                    "messages": [
+                      {
+                        "role": "user",
+                        "content": [
+                          {
+                            "type": "image_url",
+                            "image_url": {
+                              "url": "https://example.com/reference.jpg"
+                            }
+                          },
+                          {
+                            "type": "text",
+                            "text": "Transform into an oil painting in the style of Van Gogh"
+                          }
+                        ]
+                      }
+                    ],
+                    "n": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Images generated. Returned as Chat Completion with `message.content[]` image parts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "example": "chatcmpl-fcc86dfd-9424-9523-b0bd-cdf07383bee2"
+                    },
+                    "object": {
+                      "type": "string",
+                      "example": "chat.completion"
+                    },
+                    "created": {
+                      "type": "integer",
+                      "example": 1776495713
+                    },
+                    "model": {
+                      "type": "string",
+                      "example": "seedream-4-5-251128"
+                    },
+                    "choices": {
+                      "type": "array",
+                      "description": "One entry per generated image.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "finish_reason": {
+                            "type": "string",
+                            "example": "stop"
+                          },
+                          "message": {
+                            "type": "object",
+                            "properties": {
+                              "role": {
+                                "type": "string",
+                                "example": "assistant"
+                              },
+                              "content": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "required": [
+                                    "type"
+                                  ],
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "image"
+                                      ]
+                                    },
+                                    "image": {
+                                      "type": "string",
+                                      "description": "Short-lived URL to the generated image (or base64-encoded data, depending on your account configuration)."
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "prompt_tokens": {
+                          "type": "integer"
+                        },
+                        "completion_tokens": {
+                          "type": "integer"
+                        },
+                        "total_tokens": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "id": "chatcmpl-fcc86dfd-9424-9523-b0bd-cdf07383bee2",
+                  "object": "chat.completion",
+                  "created": 1776495713,
+                  "model": "seedream-4-5-251128",
+                  "choices": [
+                    {
+                      "index": 0,
+                      "finish_reason": "stop",
+                      "message": {
+                        "role": "assistant",
+                        "content": [
+                          {
+                            "type": "image",
+                            "image": "https://cdn.aisa.one/images/seedream/20260418-abc.png"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "usage": {
+                    "prompt_tokens": 104,
+                    "completion_tokens": 8,
+                    "total_tokens": 112
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request. Most common: `content` passed as a string instead of an array → `\"Input should be a valid list: messages[*].content\"`."
+          },
+          "401": {
+            "description": "Missing or invalid AIsa API key."
+          },
+          "429": {
+            "description": "Rate limit hit."
+          },
+          "500": {
+            "description": "Internal error."
+          },
+          "502": {
+            "description": "Upstream provider unreachable."
+          }
+        }
+      }
+    }
+  }
+}

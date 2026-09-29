@@ -1,14 +1,12 @@
-# Runtime contract mirror, first rollout
+# Runtime contract pipeline
 
-`openapi/registry.yaml` owns the generated-provider list. Initially it contains
-only Similarweb and automatic provider discovery remains off. Existing provider
-files outside the registry remain handwritten. No production requests are made
-by unit tests. The 23-route baseline is only the historical Similarweb document,
-not the platform inventory. The whole-catalog regression loads all checked-in
-specs (over 1,000 operations), verifies that pilot cutover preserves every other
-operation, and verifies complete restoration after a legacy pin. This preserves
-existing provider documentation; it does not migrate or validate the remaining
-providers against their runtime contracts.
+`openapi/registry.yaml` is the output registry. `auto_register: true` discovers
+catalog IDs from `/info/apis/category`; a new catalog gets `<catalog>.json`
+without a manual registration. New operations inside an existing catalog are
+composed on every pull. A `group: [catalog-a, catalog-b]` entry combines those
+catalogs into one output and excludes members from duplicate auto-registration.
+The initial registry includes all 49 observed catalogs; the 11 Open-Meteo
+catalogs share one output. Discovery remains active for future providers.
 
 ```sh
 python3 -m pip install 'PyYAML>=6,<7'
@@ -18,85 +16,107 @@ python3 scripts/pull_openapi.py --facts-dir /path/to/facts --write
 python3 scripts/pull_openapi.py                               # public API dry run
 ```
 
-Facts files are `<provider>.json`, using OpenAPI 3.1 from
-`/info/openapi/<provider>.json`. The generator emits a root server and full
-public paths. `info.x-aisa-document.facts_hash` is required. `x-aisa-any` is a
-path-item extension, never an invalid HTTP method.
+Offline facts contain `category.json` and `<catalog>.json` OpenAPI 3.1 documents.
+Optional `inventory/<catalog>.json` catalog responses let the coverage report
+list individual endpoints when that catalog's runtime projection is unavailable.
+Runtime facts require `info.x-aisa-document.facts_hash`. Public facts use the
+root server and full paths. `x-aisa-any` is a path-item extension, not a method.
 
-Composition preserves runtime IDs, status, pricing, protocol and capabilities.
-Editorial notes append to runtime constraint notes with stable deduplication;
-they do not replace the runtime's limits or other request rules.
-It reads upstream parameters/body only when the runtime says `provider` or
-`mixed`; gateway declarations win for fields it validates. Missing mirrors,
-external or cyclic references, ambiguous ANY identities, or unsafe mixed unions
-enter `pending.json`. ANY with exactly one mirrored method preserves the stored
-operation ID; multiple methods remain pending until method-specific identities
-can be migrated without renaming existing tools.
+Each output operation has `x-aisa-catalog-id` identifying its original runtime
+catalog. Grouped policies remain under `info.x-aisa-catalogs[catalog]`; the
+consolidated spec retains them under
+`info.x-aisa-document.providers[output].catalogs`. Provider metadata also includes
+`catalog_ids`, `display_name`, description, plans, capabilities and source kind.
+Every consolidated operation identifies its source output with `x-aisa-provider`.
+`x-aisa-docs-url` is emitted only when an existing MDX reference can be matched;
+it points to the actual `https://aisa.one/docs/...` page, never an invented slug.
 
-A previously published route disappearing or changing its ID aborts the entire
-pull before files are written. Disabled operations stay in the output. A pinned
-registry entry (`pin: <commit SHA>`) restores its committed document explicitly,
-including handwritten versions without runtime hashes. Pinned files retain their
-original bytes and provenance; page references follow the pinned server/path
-format. A pin that removes or changes any published route identity is rejected
-before files are written.
-The content hash combines runtime facts, mirror, overlay, retained published
-success payloads and composer version; `generated_at` alone never causes a commit. ETags cache public facts under ignored
-`.cache/runtime-contracts`, and overlays are recomposed even after a 304.
+## Request schemas and published compatibility
 
-Page creation reuses existing route references and never overwrites handwritten
-prose. Managed English titles track the runtime summary; Chinese titles use the
-existing translation catalog or the current English title when no translation
-exists. New pages and navigation entries are additive. Untranslated strings can
-be translated through the existing localization workflow.
-No model translation credentials or paid calls are required by this puller.
+Runtime identity, parameters it validates, status, prices, protocol and capabilities
+remain authoritative. Provider/mixed request fields require a matching upstream
+mirror. Official mirrors match `x-aisa-upstream-path`; transitional manual mirrors
+with `path_space: public` match the exact effective public path and method.
+They do not guess provider prefixes or rename parameter placeholders.
+Missing mirrors, external request references and unsupported mixed
+constraints remain pending with explicit reasons. No schema is invented from
+catalog descriptions. A runtime price estimate may be unavailable; absence does
+not mean zero, and quote remains the request-specific pricing authority.
 
-The workflow runs every 30 minutes, on dispatch and on source-input changes. It
-stages and validates by default. Publishing is restricted to `refs/heads/main`
-and requires the repository variable `RUNTIME_CONTRACT_PUBLISH=true`, or an
-explicit manual `publish=true` dispatch. A feature-branch dispatch still stages
-and validates, but cannot commit or push to main even with `publish=true`.
-Keep publishing disabled until the runtime endpoint is deployed and the initial
-identity/page diff has been reviewed. Unavailable runtime facts preserve all
-published files. Commits are serialized and rebased before push.
+All 47 existing specifications are imported under `openapi/upstream/` as
+**manual** sources with the immutable original GitHub URL, source content hash,
+revision time and converter version. They are not represented as official
+provider specifications. The importer is repeatable against a chosen revision:
 
-Not activated in this first batch: provider auto-registration/groups, upstream
-imports/monthly refresh, cross-repository dispatch, and global hand-edit lint.
-These need the corresponding downstream/rollout prerequisites. Existing
-`sync-openapi.yml` handles website distribution for user-authored source pushes;
-a GitHub-token bot push does not trigger that workflow, so cross-repository
-publication must be configured before enabling unattended mirror publication.
+```sh
+python3 scripts/import_existing_contracts.py --revision <docs-commit> --write
+python3 scripts/audit_public_coverage.py --inventory /path/to/public-inventory \
+  --output openapi/coverage-sources.json
+```
 
-The first cutover preserves published operation IDs, page URLs and handwritten
-MDX prose. Existing relative OpenAPI references are updated to the runtime's full
-public paths. Similarweb editorial overlays retain moving upstream date-window
-rules and response descriptions; request parameters, request examples and billing
-calculations remain runtime-owned. When runtime only describes a generic success
-response, composition retains the previously published success payload schema and
-examples for the same effective route, method and immutable operation ID. Only
-success content is inherited, never legacy error shapes, headers or authentication.
-An operation's `x-aisa-response-source` identifies this published-contract fallback
-by content hash; the retained payload also enters `document_hash`. Referenced
-schemas are resolved against the published document. A concrete runtime success
-payload supersedes this fallback. Subsequent pulls retain the same payload without
-creating a second source file or timestamp/hash churn.
+Six additional official machine specifications are imported with
+`kind: provider_openapi`: Polymarket Gamma, CLOB, Data, Relayer and Bridge, and
+Parallel. Their source URLs come from the providers' own documentation indexes.
+They are matched only using runtime `x-aisa-upstream-path`; the public inventory
+alone cannot certify this mapping. Import a reviewed source explicitly with
+`scripts/import_upstream.py --provider <catalog> --url <official-url> --write`.
 
-The consolidated spec preserves plans and default capabilities under
-`info.x-aisa-document.providers[provider]`, alongside that provider's hashes.
-Each generated operation carries `x-aisa-provider` to identify its policy, and its
-`x-aisa-capabilities` includes document defaults followed by operation overrides.
-The default-request estimate already includes customer pricing; apply only the
-associated display-plan multiplier when rendering the reference price.
+The source audit measures available request mirrors only. It does not prove
+runtime validation or deployment. The recorded 2026-09-29 public inventory has
+1,878 endpoints in 49 catalogs: 1,674 exact-path manual mirrors are available
+and 204 are absent. Legal recursive schemas retain local references and their
+reachable namespaced component definitions. Some absent
+mirrors are unnecessary once a complete declarative runtime contract exists.
+The actual production facts endpoint must be deployed before a full live
+projection can be verified.
 
-The pull workflow validates generated page references only. The repository's
-existing full slug audit remains available unchanged; historical provider page
-names do not all satisfy it. Disabled status updates use a managed notice block
-without replacing page prose. A pinned rollback is still subject to page
-reference validation: it cannot publish a version missing routes used by retained
-pages without an explicit documentation migration.
+ANY methods come from matching mirrors. Each previously published method keeps
+its operation ID; new methods get deterministic distinct IDs within the 56-character
+tool limit. The base endpoint ID never replaces a different published method's
+identity. Existing response schemas/examples remain a versioned fallback when
+runtime supplies only a generic success response; errors and authentication are
+never inherited. Explicit runtime response contracts supersede this fallback.
+Editorial notes append to runtime constraint notes with stable deduplication.
 
-The full initial-cutover test reads the 23-route published Similarweb contract and
-pages from git commit `3a00a91` (the pre-projection baseline), rather than keeping a
-duplicate response-schema fixture. It needs that commit available locally; the
-pull workflow uses full history. It verifies all payloads, examples, IDs, page
-URLs, both title locales, merged pricing/capabilities and repeat-pull stability.
+The puller finds existing pages by effective public route, across old split
+files. It keeps their slugs and prose and updates their OpenAPI references to
+the new output. Successful operations move out of old split specs; unsupported
+or out-of-scope legacy operations remain. Registry `legacy_sources` records old
+spec stems, and their complete immutable content remains in the manual mirrors.
+Consumers can use those original operation IDs to preserve hand-authored theme
+include selections without expanding the theme to every operation in a new file.
+
+English titles follow runtime summaries; Chinese titles and schemas use the
+existing translation catalog, with English fallback. No paid/model translation
+runs in this pipeline. New pages/navigation are additive. Disabled operations
+retain their page and a managed status notice.
+
+## Coverage and failure behavior
+
+`openapi/coverage.json` lists every observed runtime operation as composed or
+pending, with its catalog, route, method, identity, validation boundary and schema
+source. It also lists retained legacy operations outside composed contracts.
+`openapi/pending.json` carries actionable per-provider failures. A provider that
+cannot retain a published identity keeps its old spec/pages; the failure is
+reported without blocking independent providers. Grouped outputs are preserved
+as a unit if a member's facts are unavailable. Reports do not label old retained
+specifications as newly verified runtime contracts.
+
+`pin: <docs-commit>` restores the original bytes, including handwritten documents
+without runtime hashes. Page references follow the pinned server/path convention.
+A pin that removes or changes a published route identity is rejected before writes.
+Pinning a 23-route version after publishing 29 routes therefore requires an explicit
+documentation migration. Repeated pulls of the same pin produce no changes.
+
+Runtime ETags cache facts under ignored `.cache/runtime-contracts`. Overlays and
+mirrors are recomposed after 304; facts, consumed mirrors, retained response
+contracts and composer version enter `document_hash`. `generated_at` alone never
+causes churn. Imports remain explicit, reviewed source changes; this pipeline
+never silently refreshes manual or official schemas from the network.
+
+The pull workflow stages and validates by default. Publishing requires main and
+an explicit manual publish or the repository publish variable. Feature dispatches
+remain dry runs. The reusable consumer-dispatch workflow sends the published
+revision and consolidated hash to consumers after publication. Application
+installation permissions and production endpoint deployment are operational
+prerequisites, not inferred from local test success.

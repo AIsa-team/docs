@@ -26,6 +26,8 @@ If --output is omitted, writes to stdout.
 import argparse
 import json
 import os
+import re
+from pathlib import Path
 import sys
 from urllib.parse import urlparse
 
@@ -40,7 +42,7 @@ REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 OPENAPI_DIR = os.path.join(REPO_ROOT, "openapi")
 
 # The Mintlify placeholder spec — skip it
-SKIP_FILES = {"openapi.json", "pending.json"}
+SKIP_FILES = {"openapi.json", "pending.json", "coverage.json", "coverage-sources.json"}
 
 # Map each spec file to a category tag
 FILE_TAG_MAP = {
@@ -284,6 +286,17 @@ def load_spec(filepath):
         return json.load(f)
 
 
+def endpoint_page_links():
+    root = Path(OPENAPI_DIR).parent
+    links = {}
+    for page in sorted((root / "api-reference").rglob("*.mdx")):
+        match = re.search(r"^openapi:\s*['\"]?(openapi/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", page.read_text(), re.M)
+        if match:
+            key = (Path(match[1]).name, match[2].lower(), match[3])
+            links.setdefault(key, "https://aisa.one/docs/" + page.relative_to(root).with_suffix("").as_posix())
+    return links
+
+
 def build_unified_spec():
     """Merge all individual specs into one OpenAPI 3.1 document."""
     unified = {
@@ -367,6 +380,10 @@ def build_unified_spec():
     }
 
     tags_seen = set()
+    page_links = endpoint_page_links()
+    registry_path = Path(OPENAPI_DIR) / "registry.yaml"
+    registry = yaml.safe_load(registry_path.read_text()) if registry_path.exists() else {}
+    registrations = (registry or {}).get("providers", {})
     files = sorted(os.listdir(OPENAPI_DIR))
 
     for filename in files:
@@ -382,12 +399,22 @@ def build_unified_spec():
             print(f"  SKIP {filename}: {e}", file=sys.stderr)
             continue
 
-        generated = bool(spec.get("info", {}).get("x-aisa-document", {}).get("document_hash"))
-        if generated:
-            provider = filename[:-5]
-            metadata = spec["info"]["x-aisa-document"]
+        provider = filename[:-5]
+        metadata = spec.get("info", {}).get("x-aisa-document", {})
+        owners = [key for key, value in registrations.items() if provider == key or provider in (value or {}).get("legacy_sources", [])]
+        registry_provider = owners[0] if len(owners) == 1 else None
+        registration = registrations.get(registry_provider) or {}
+        catalog_ids = sorted({catalog for owner in owners for catalog in (registrations[owner] or {}).get("group", [owner])})
+        generated = bool(metadata.get("document_hash"))
+        if spec.get("paths"):
             unified["info"].setdefault("x-aisa-document", {}).setdefault("providers", {})[provider] = {
-                "document_hash": metadata["document_hash"],
+                "document_hash": metadata.get("document_hash"),
+                "catalog_ids": catalog_ids,
+                "registry_provider": registry_provider,
+                "display_name": registration.get("display_name") or spec.get("info", {}).get("title", provider),
+                "description": registration.get("description") or spec.get("info", {}).get("description", ""),
+                "source": "runtime" if generated else "legacy",
+                "catalogs": spec.get("info", {}).get("x-aisa-catalogs", {}),
                 "facts_hash": metadata.get("facts_hash"),
                 "x-aisa-plans": spec["info"].get("x-aisa-plans", {}),
                 "x-aisa-capabilities": spec["info"].get("x-aisa-capabilities", {}),
@@ -430,6 +457,13 @@ def build_unified_spec():
         for path, methods in spec.get("paths", {}).items():
             for method, operation in methods.items():
                 if isinstance(operation, dict):
+                    operation["x-aisa-provider"] = provider
+                    if len(catalog_ids) == 1:
+                        operation.setdefault("x-aisa-catalog-id", catalog_ids[0])
+                    if registry_provider:
+                        operation["x-aisa-registry-provider"] = registry_provider
+                    if (filename, method, path) in page_links:
+                        operation["x-aisa-docs-url"] = page_links[(filename, method, path)]
                     if not generated:
                         operation["tags"] = [tag]
                     # Drop any per-op servers from the input file

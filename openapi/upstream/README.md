@@ -1,13 +1,17 @@
-# Upstream mirrors
+# Request contract mirrors
 
-Provider and mixed operations require a reviewed `<provider>.json` OpenAPI mirror.
-Its `info.x-aisa-source` must contain `kind` (`provider_openapi` or `manual`),
-`url`, `fetched_at`, `content_hash`, and `converter`. The composer never fetches
-upstream URLs or external references. Missing or unsupported operations enter
-`openapi/pending.json` and are not exposed to consumers.
+Existing AIsa specifications are imported here as explicit `kind: manual`
+transitional request mirrors. Each records its immutable GitHub source URL,
+content hash, revision time, converter and `path_space: public`. These are existing
+handwritten AIsa contracts, not official upstream specifications. Matching uses
+exact effective public paths and methods; no provider-prefix guessing is allowed.
 
-Mirrors are not populated by copying existing AIsa documentation: that could
-reintroduce handwritten prices and confuse AIsa routes with provider routes.
-Provider imports and monthly reviewed refreshes follow after the initial
-Similarweb rollout. Recursive references and mixed-body conditional unions need
-a converter that produces a supported schema; they fail closed into pending.
+Official provider imports use `kind: provider_openapi` with the original source
+URL, acquisition timestamp, content hash and converter. Their paths match the
+runtime `x-aisa-upstream-path`. The composer consumes request schema/prose only;
+provider prices, authentication and response errors cannot override runtime facts.
+
+Re-import existing docs explicitly with `scripts/import_existing_contracts.py`.
+Do not replace these frozen inputs with newly generated outputs. Missing or
+unsupported schemas remain visible in coverage/pending. No scheduled unreviewed
+schema refresh is performed by the contract puller.

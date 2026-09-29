@@ -1,0 +1,699 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "TXYZ Platform API",
+    "version": "1.0.0",
+    "description": "API documentation for platform.txyz.ai services including academic search functionality",
+    "contact": {
+      "email": "support@txyz.ai"
+    },
+    "license": {
+      "name": "Proprietary"
+    },
+    "x-aisa-source": {
+      "kind": "manual",
+      "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/platform-txyz-openapi.json",
+      "fetched_at": "2026-09-29T21:25:55+08:00",
+      "content_hash": "sha256:344cbd3ae2de5312a40328dadd67b2a426a96be33f21a6eb7782bf330d28aba7",
+      "converter": "scripts/import_existing_contracts.py@1",
+      "path_space": "public"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "paths": {
+    "/scholar/search/mixed": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "per_request",
+          "currency": "USD",
+          "price_usd": 0.0024,
+          "cost_tier": "low"
+        },
+        "summary": "Smart search combining web and academic results",
+        "description": "Search the web and academic sources together, for questions that straddle both. ⚠️ Parameters go in the **query string**: `query` (required), `max_num_results`, `as_ylo`/`as_yhi`. Returns a search `id` and `results[]`; **the entry shape varies by source** — every result has `title`, `link` and `snippet`, and academic ones additionally carry `authors` and `number_of_citations`, so treat those two as optional rather than assuming they are there. Measured at about 3 seconds. Use it when you do not know in advance which kind of source will answer. When you do, `post_scholar_search_web` or `post_scholar_search_scholar` is more predictable. Keep the `id` for `post_scholar_search_explain`.",
+        "operationId": "post_scholar_search_mixed",
+        "tags": [
+          "Search",
+          "Smart"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "Search query for scholarly materials",
+            "schema": {
+              "type": "string",
+              "example": "machine learning"
+            }
+          },
+          {
+            "name": "max_num_results",
+            "in": "query",
+            "description": "Maximum number of search results to return, up to 100",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
+          },
+          {
+            "name": "as_ylo",
+            "in": "query",
+            "description": "Year of publication lower bound",
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 1900,
+              "maximum": 2030
+            }
+          },
+          {
+            "name": "as_yhi",
+            "in": "query",
+            "description": "Year of publication upper bound",
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 1900,
+              "maximum": 2030
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful search response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/scholar/search/web": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "per_request",
+          "currency": "USD",
+          "price_usd": 0.0024,
+          "cost_tier": "low"
+        },
+        "summary": "Search the web",
+        "description": "Search the open web and get back a lean result list. ⚠️ Despite being a POST, parameters go in the **query string** — `query` (required), `max_num_results` (default 10, max 100), and `as_ylo`/`as_yhi` for a year range. A JSON body is not accepted. Returns a search `id` and `results[]` carrying only `title`, `link` and `snippet`. Measured at about 4 seconds for a roughly 600-byte response. Its virtue is how little it returns, which suits an agent that only needs to know what exists. It gives you no page text — if you need the content, `post_tavily_search` returns it in the same call. Keep the `id`: it is what `post_scholar_search_explain` needs.",
+        "operationId": "post_scholar_search_web",
+        "tags": [
+          "Search",
+          "Web"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "Search query for scholarly materials",
+            "schema": {
+              "type": "string",
+              "example": "machine learning"
+            }
+          },
+          {
+            "name": "max_num_results",
+            "in": "query",
+            "description": "Maximum number of search results to return, up to 100",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
+          },
+          {
+            "name": "as_ylo",
+            "in": "query",
+            "description": "Year of publication lower bound",
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 1900,
+              "maximum": 2030
+            }
+          },
+          {
+            "name": "as_yhi",
+            "in": "query",
+            "description": "Year of publication upper bound",
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 1900,
+              "maximum": 2030
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful search response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/scholar/search/scholar": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "per_request",
+          "currency": "USD",
+          "price_usd": 0.0024,
+          "cost_tier": "low"
+        },
+        "summary": "Search academic papers",
+        "description": "Search academic literature. ⚠️ Parameters go in the **query string**, not a body: `query` (required), `max_num_results`, and `as_ylo`/`as_yhi` to bound publication years. Returns a search `id` and `results[]` with `title`, `link`, `snippet`, `authors` and `number_of_citations` — that last field is what a general web search cannot give you. Measured at under 2 seconds. Use it when the question calls for peer-reviewed sources or when citation counts matter. For current events and product pages a general engine is better: `post_tavily_search`. To cover both at once, `post_scholar_search_mixed`. Keep the `id` for `post_scholar_search_explain`.",
+        "operationId": "post_scholar_search_scholar",
+        "tags": [
+          "Search",
+          "Academic"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "Search query for scholarly materials",
+            "schema": {
+              "type": "string",
+              "example": "machine learning"
+            }
+          },
+          {
+            "name": "max_num_results",
+            "in": "query",
+            "description": "Maximum number of search results to return, up to 100",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
+          },
+          {
+            "name": "as_ylo",
+            "in": "query",
+            "description": "Year of publication lower bound",
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 1900,
+              "maximum": 2030
+            }
+          },
+          {
+            "name": "as_yhi",
+            "in": "query",
+            "description": "Year of publication upper bound",
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 1900,
+              "maximum": 2030
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful search response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScholarSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/scholar/search/explain": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "per_request",
+          "currency": "USD",
+          "price_usd": 0.0024,
+          "cost_tier": "low"
+        },
+        "summary": "Explain search results",
+        "description": "Explain a result set you already fetched. Unlike the three search endpoints this one takes a **JSON body**: `search_id` (required — the `id` returned by `post_scholar_search_web`, `post_scholar_search_scholar` or `post_scholar_search_mixed`), plus `detail_level` (BRIEF / MODERATE / DETAILED), `language`, and `response_mode`. ⚠️ Use `response_mode: NON_STREAMING`. It returns `{\"message\": \"…\"}` as JSON, measured at about 2 KB. The COMPLETE and INCREMENTAL modes emit server-sent events in which **each event repeats the whole answer so far** — the identical explanation measured 177 KB that way, roughly 90 times larger, and a tool call cannot consume a stream incrementally anyway. It only ever explains an existing search; it cannot run one.",
+        "operationId": "post_scholar_search_explain",
+        "tags": [
+          "Search",
+          "Explanation"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExplainSearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful explanation response. COMPLETE/INCREMENTAL stream text/event-stream; NON_STREAMING returns application/json.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplainSearchResponse"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Bad request - invalid parameters",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Unauthorized - invalid or missing API key",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Search ID not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "TooManyRequests": {
+        "description": "Rate limit exceeded",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Internal server error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ScholarSearchResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "results"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the search request"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScholarResult"
+            },
+            "description": "List of academic paper results"
+          }
+        }
+      },
+      "ScholarResult": {
+        "type": "object",
+        "required": [
+          "title",
+          "link",
+          "snippet",
+          "authors",
+          "number_of_citations"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title of the academic paper"
+          },
+          "link": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to access the full paper"
+          },
+          "snippet": {
+            "type": "string",
+            "description": "Brief summary or abstract of the paper"
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of authors"
+          },
+          "number_of_citations": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of citations the paper has received"
+          },
+          "year": {
+            "type": "integer",
+            "description": "Publication year",
+            "minimum": 1900,
+            "maximum": 2030
+          },
+          "journal": {
+            "type": "string",
+            "description": "Journal or conference name"
+          }
+        }
+      },
+      "WebSearchResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "results"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the search request"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebResult"
+            },
+            "description": "List of web search results"
+          }
+        }
+      },
+      "WebResult": {
+        "type": "object",
+        "required": [
+          "title",
+          "link",
+          "snippet"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title of the web page"
+          },
+          "link": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to access the web page"
+          },
+          "snippet": {
+            "type": "string",
+            "description": "Brief summary or preview of the web page content"
+          },
+          "display_url": {
+            "type": "string",
+            "description": "Display-friendly URL"
+          },
+          "published_date": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Publication date of the web page"
+          }
+        }
+      },
+      "SmartSearchResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "results"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the search request"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SmartResult"
+            },
+            "description": "List of smart search results combining web and academic content"
+          },
+          "search_type": {
+            "type": "string",
+            "enum": [
+              "web",
+              "academic",
+              "hybrid"
+            ],
+            "description": "Type of search results included"
+          }
+        }
+      },
+      "SmartResult": {
+        "type": "object",
+        "required": [
+          "title",
+          "link",
+          "snippet"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title of the result"
+          },
+          "link": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to access the content"
+          },
+          "snippet": {
+            "type": "string",
+            "description": "Brief summary or abstract"
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of authors (for academic content)"
+          },
+          "number_of_citations": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of citations (for academic content)"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "web",
+              "academic"
+            ],
+            "description": "Type of the result"
+          },
+          "relevance_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Relevance score of the result"
+          }
+        }
+      },
+      "ExplainSearchRequest": {
+        "type": "object",
+        "required": [
+          "search_id"
+        ],
+        "properties": {
+          "search_id": {
+            "type": "string",
+            "description": "ID of the search to explain"
+          },
+          "response_mode": {
+            "type": "string",
+            "enum": [
+              "COMPLETE",
+              "INCREMENTAL",
+              "NON_STREAMING"
+            ],
+            "default": "NON_STREAMING",
+            "description": "Format of the explanation response. COMPLETE and INCREMENTAL stream server-sent events; NON_STREAMING returns a JSON response."
+          },
+          "language": {
+            "type": "string",
+            "default": "en",
+            "description": "Language code for the explanation (e.g., en, zh, ar)",
+            "example": "ar"
+          },
+          "detail_level": {
+            "type": "string",
+            "enum": [
+              "BRIEF",
+              "MODERATE",
+              "DETAILED"
+            ],
+            "default": "MODERATE",
+            "description": "Level of detail in the explanation"
+          }
+        }
+      },
+      "ExplainSearchResponse": {
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Generated explanation text."
+          }
+        },
+        "description": "JSON explanation response returned when response_mode is NON_STREAMING."
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error message describing what went wrong"
+          },
+          "code": {
+            "type": "integer",
+            "description": "HTTP status code"
+          },
+          "details": {
+            "type": "string",
+            "description": "Additional error details"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ]
+}

@@ -18,7 +18,8 @@ from urllib.request import Request, urlopen
 
 import yaml
 
-from compose_openapi import METHODS, compose
+from compose_openapi import METHODS, compose, digest
+from runtime_registry import discover, combine_facts, public_mirror_index, published_documents, previous_for_facts, coverage_rows
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -59,7 +60,7 @@ def slug(value):
     return re.sub(r"[^a-zA-Z0-9_-]", "-", value)
 
 
-def generate_pages(root: Path, provider: str, document: dict, changes: dict, previous: dict | None = None) -> None:
+def generate_pages(root: Path, provider: str, document: dict, changes: dict, previous: dict | None = None, decorate_links: bool = True) -> None:
     """Append pages/navigation, reusing existing method/path references and prose."""
     docs_path = root / "docs.json"
     if not docs_path.exists():
@@ -72,14 +73,20 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
     previous_prefix = urlsplit(((previous or {}).get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
     for mdx in (root / "api-reference").rglob("*.mdx"):
         text = mdx.read_text()
-        match = re.search(r"^openapi:\s*['\"]?openapi/" + re.escape(provider) + r"\.json\s+(\w+)\s+([^\s'\"]+)", text, re.M)
+        match = re.search(r"^openapi:\s*['\"]?(openapi/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", text, re.M)
         if match:
-            known[(previous_prefix + match[2], match[1].lower())] = mdx.relative_to(root).with_suffix("").as_posix()
+            old_spec = read_json(root / match[1], {})
+            old_prefix = urlsplit((old_spec.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
+            if match[1] == f"openapi/{provider}.json":
+                old_prefix = previous_prefix
+            known[(old_prefix + match[3], match[2].lower())] = mdx.relative_to(root).with_suffix("").as_posix()
     current_prefix = urlsplit((document.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
     paths = []
     for path, method, operation in operations(document):
         page = known.get((current_prefix + path, method), f"api-reference/{provider}/{slug(operation['operationId'])}")
         paths.append(page)
+        if decorate_links:
+            operation["x-aisa-docs-url"] = "https://aisa.one/docs/" + page
         for language, prefix in (("en", ""), ("zh", "zh/")):
             destination = root / f"{prefix}{page}.mdx"
             spec_path = f"openapi/{'zh/' if language == 'zh' else ''}{provider}.json"
@@ -140,6 +147,9 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
     content = json.dumps(docs, indent=2, ensure_ascii=False) + "\n"
     if content != docs_path.read_text():
         changes[docs_path] = content
+    if decorate_links:
+        meta = document["info"]["x-aisa-document"]
+        meta["document_hash"] = digest({"composer_hash": meta["document_hash"], "page_links": {op["operationId"]: op.get("x-aisa-docs-url") for _, _, op in operations(document)}})
     # Use the existing deterministic translation catalog. Untranslated strings
     # retain English; no paid/model translation is invoked by scheduled pulls.
     localized = localization.localize_tree(document, catalog, allow_untranslated=True)
@@ -151,9 +161,18 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
     registry = yaml.safe_load(registry_path.read_text())
     if not isinstance(registry.get("providers"), dict):
         raise ValueError("registry providers must be a mapping")
-    if registry.get("auto_register"):
-        raise ValueError("auto_register remains disabled until staged rollout validation completes")
     changes = {}
+    if registry.get("auto_register"):
+        category = read_json(facts_dir / "category.json") if facts_dir else fetch_json(f"{base_url.rstrip('/')}/info/apis/category")
+        discover(registry, category)
+    else:
+        # Group overlap and invalid catalog names are still rejected when
+        # discovery is disabled for an offline or pinned rollout.
+        discover(registry, {"apis": []})
+    original_documents = published_documents(root)
+    public_mirrors = public_mirror_index(root)
+    coverage = {"providers": {}, "legacy_operations": []}
+    moved = set()
     pending = copy.deepcopy(read_json(root / "openapi/pending.json", {"providers": {}}))
     pending.setdefault("providers", {})
     summary = {}
@@ -173,25 +192,78 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                 assert_identities(normalize_paths(previous), normalize_paths(document))
             unresolved = pending["providers"].get(provider, [])
         else:
-            if entry.get("group"):
-                raise ValueError("group composition is not enabled in the initial rollout")
-            facts_path = root / f".cache/runtime-contracts/{provider}.json"
-            cached = read_json(facts_path)
-            etag = cached.get("info", {}).get("x-aisa-document", {}).get("facts_hash") if cached else None
-            facts = read_json(facts_dir / f"{provider}.json") if facts_dir else fetch_json(f"{base_url.rstrip('/')}/info/openapi/{provider}.json", f'"{etag}"' if etag else None)
-            if facts is None:
-                facts = cached
-            if not facts:
-                raise ValueError(f"{provider}: runtime facts unavailable; no files written")
+            catalogs = entry.get("group", [provider])
+            collected = {}
+            unavailable = []
+            for catalog in catalogs:
+                facts_path = root / f".cache/runtime-contracts/{catalog}.json"
+                cached = read_json(facts_path)
+                etag = cached.get("info", {}).get("x-aisa-document", {}).get("facts_hash") if cached else None
+                failure = None
+                try:
+                    facts = read_json(facts_dir / f"{catalog}.json") if facts_dir else fetch_json(f"{base_url.rstrip('/')}/info/openapi/{catalog}.json", f'"{etag}"' if etag else None)
+                    if facts is None:
+                        facts = cached
+                    if not facts or not facts.get("info", {}).get("x-aisa-document", {}).get("facts_hash"):
+                        failure = "runtime_contract_unavailable"
+                except (HTTPError, URLError, TimeoutError) as exc:
+                    if not registry.get("auto_register"):
+                        raise
+                    failure = f"runtime_contract_unavailable: {type(exc).__name__}"
+                if failure:
+                    if not registry.get("auto_register"):
+                        raise ValueError(f"{catalog}: runtime facts unavailable; no files written")
+                    try:
+                        detail = read_json(facts_dir / "inventory" / f"{catalog}.json", {}) if facts_dir else fetch_json(f"{base_url.rstrip('/')}/info/apis/{catalog}")
+                    except (HTTPError, URLError, TimeoutError):
+                        detail = {}
+                    endpoints = [endpoint for group in (detail or {}).get("api", {}).get("endpoint_groups", []) for endpoint in group.get("endpoints", [])]
+                    for endpoint in endpoints or [{"path": None, "method": None}]:
+                        unavailable.append({"catalog": catalog, "path": endpoint.get("path"), "method": endpoint.get("method"), "operation_id": endpoint.get("operation_id"), "status": "pending", "reason": failure, "validation": None, "schema_source": None})
+                    continue
+                collected[catalog] = facts
+                changes[facts_path] = json.dumps(facts, indent=2, ensure_ascii=False) + "\n"
+            if unavailable:
+                for catalog, available in collected.items():
+                    for path, item in available.get("paths", {}).items():
+                        for method, op in item.items():
+                            if method in METHODS or method == "x-aisa-any":
+                                unavailable.append({"catalog": catalog, "path": path, "method": method.upper(), "operation_id": op.get("operationId"), "status": "pending", "reason": "group_member_unavailable", "validation": op.get("x-aisa-validation"), "schema_source": None})
+                coverage["providers"][provider] = unavailable
+                pending["providers"][provider] = unavailable
+                summary[provider] = {"changed": False, "operations": sum(1 for _ in operations(previous)), "pending": len(unavailable), "blocked": "runtime_contract_unavailable"}
+                continue
+            facts = combine_facts(collected, provider)
+            entry["display_name"] = facts.get("info", {}).get("title", provider)
+            entry["description"] = facts.get("info", {}).get("description", "")
+            registry["providers"][provider] = entry
             upstream = read_json(root / f"openapi/upstream/{provider}.json")
+            if upstream and upstream.get("info", {}).get("x-aisa-source", {}).get("path_space") == "public":
+                upstream = None  # These are matched only by exact public route.
             overlay_path = root / f"openapi/overlays/{provider}.yaml"
             overlay = yaml.safe_load(overlay_path.read_text()) if overlay_path.exists() else {}
-            document, unresolved = compose(facts, upstream, overlay, previous)
-            # The initial hand-written -> generated cutover must retain IDs too.
-            # Relative legacy paths are compared as absolute effective routes.
-            if previous:
-                assert_identities(normalize_paths(previous), normalize_paths(document))
-            changes[facts_path] = json.dumps(facts, indent=2, ensure_ascii=False) + "\n"
+            unresolved = []
+            try:
+                history = previous_for_facts(facts, original_documents, provider)
+                document, unresolved = compose(facts, upstream, overlay, history, public_mirrors)
+                coverage["providers"][provider] = coverage_rows(facts, document, unresolved, catalogs)
+                assert_identities(history, normalize_paths(document))
+            except ValueError as exc:
+                if not registry.get("auto_register"):
+                    raise
+                # Keep published pages/specs intact while reporting the exact
+                # blocked cutover; another catalog can still make progress.
+                coverage["providers"].setdefault(provider, coverage_rows(facts, {"paths": {}}, [], catalogs))
+                for row in coverage["providers"][provider]:
+                    row["status"] = "pending"
+                    row["reason"] = str(exc) if row["reason"] in (None, "operation_not_composed") else row["reason"]
+                pending["providers"][provider] = unresolved + [{"reason": str(exc)}]
+                summary[provider] = {"changed": False, "operations": sum(1 for _ in operations(previous)), "pending": len(coverage["providers"][provider]), "blocked": str(exc)}
+                continue
+            for path, method, op in operations(normalize_paths(document)):
+                moved.add((path, method, op["operationId"], provider))
+        if with_pages:
+            generate_pages(root, provider, document, changes, previous, decorate_links=not entry.get("pin"))
         old_hash = previous.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         new_hash = document.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         if entry.get("pin"):
@@ -209,10 +281,34 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             else:
                 # generated_at is observational, and cannot create commit churn.
                 document = previous
+                if with_pages:
+                    generate_pages(root, provider, document, changes, previous, decorate_links=False)
         pending["providers"][provider] = unresolved
-        if with_pages:
-            generate_pages(root, provider, document, changes, previous)
         summary[provider] = {"changed": changed, "operations": sum(1 for _ in operations(document)), "pending": len(unresolved), "document_hash": new_hash}
+    # Retire only operations successfully moved to another output. Keeping
+    # unmatched legacy operations avoids deleting docs outside runtime scope.
+    from urllib.parse import urlsplit
+    for name, original in original_documents.items():
+        output_path = root / f"openapi/{name}.json"
+        retained = copy.deepcopy(original)
+        prefix = urlsplit((original.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
+        for path, method, op in list(operations(original)):
+            targets = [dest for p, m, oid, dest in moved if (p, m, oid) == (prefix + path, method, op.get("operationId"))]
+            if targets and name not in registry["providers"]:
+                for destination in targets:
+                    entry = registry["providers"][destination] or {}
+                    entry["legacy_sources"] = sorted(set(entry.get("legacy_sources", [])) | {name})
+                    registry["providers"][destination] = entry
+                del retained["paths"][path][method]
+                if not (set(retained["paths"][path]) & METHODS):
+                    del retained["paths"][path]
+            elif not targets:
+                coverage["legacy_operations"].append({"source": f"openapi/{name}.json", "path": prefix + path, "method": method.upper(), "operation_id": op.get("operationId"), "status": "retained_legacy", "reason": "not_in_composed_runtime_contract"})
+        if retained != original:
+            changes[output_path] = json.dumps(retained, indent=2, ensure_ascii=False) + "\n"
+    if registry.get("auto_register"):
+        changes[registry_path] = yaml.safe_dump(registry, sort_keys=False, allow_unicode=True)
+        changes[root / "openapi/coverage.json"] = json.dumps(coverage, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     changes[root / "openapi/pending.json"] = json.dumps(pending, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     return {p: content for p, content in changes.items() if not p.exists() or p.read_text() != content}, summary
 

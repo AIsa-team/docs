@@ -131,7 +131,7 @@ class CompositionTests(unittest.TestCase):
         self.assertEqual(schema["required"], ["country"])
 
     def test_unsupported_upstream_is_pending(self):
-        for ref in ("https://provider.example/schema.json", "#/components/schemas/Body"):
+        for ref in ("https://provider.example/schema.json", "#/components/schemas/Missing"):
             upstream = mirror()
             upstream["components"]["schemas"]["Body"] = {"$ref": ref}
             result, pending = compose(facts("provider"), upstream)
@@ -141,18 +141,22 @@ class CompositionTests(unittest.TestCase):
         self.assertEqual(result["paths"], {})
         self.assertEqual(pending[0]["reason"], "upstream operation missing")
 
-    def test_any_preserves_identity_or_stays_pending(self):
+    def test_any_preserves_published_methods_and_derives_new_method_ids(self):
         source = facts("provider", "x-aisa-any")
         result, pending = compose(source, mirror())
         self.assertFalse(pending)
         self.assertEqual(operation(result)["operationId"], "published_identity")
         upstream = mirror()
         upstream["paths"]["/provider/test"]["get"] = upstream["paths"]["/provider/test"]["post"]
-        ambiguous, pending = compose(source, upstream)
-        self.assertEqual(ambiguous["paths"], {})
-        self.assertEqual(pending[0]["reason"], "ambiguous_method_identity")
-        with self.assertRaises(ValueError):
-            assert_identities(result, ambiguous)
+        expanded, pending = compose(source, upstream, previous=result)
+        self.assertFalse(pending)
+        methods = expanded["paths"]["/apis/v1/similarweb/test"]
+        self.assertEqual(methods["post"]["operationId"], "published_identity")
+        self.assertEqual(methods["get"]["operationId"], "get_published_identity")
+        assert_identities(result, expanded)
+        missing, pending = compose(source)
+        self.assertFalse(missing["paths"])
+        self.assertEqual(pending[0]["reason"], "upstream operation missing")
 
     def test_hash_ignores_generation_time_and_tracks_inputs(self):
         source = facts()
@@ -502,6 +506,7 @@ class FullSimilarwebCutoverTests(unittest.TestCase):
                 destination = root / relative
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(repository / relative, destination)
+            (root / "openapi/registry.yaml").write_text("auto_register: false\nproviders:\n  similarweb: {}\n")
             original_pages = set((root / "api-reference/similarweb").glob("*.mdx"))
             original_bodies = {p: p.read_text().split("---", 2)[2] for p in original_pages}
             (root / "facts").mkdir()
@@ -576,7 +581,7 @@ class PublicationWorkflowTests(unittest.TestCase):
         import yaml
         workflow = yaml.safe_load((Path(__file__).resolve().parents[2] / ".github/workflows/pull-openapi.yml").read_text())
         steps = workflow["jobs"]["compose"]["steps"]
-        publish = next(step for step in steps if step.get("name") == "Commit verified contracts")
+        publish = next(step for step in steps if step.get("id") == "publish")
         stage_step = next(step for step in steps if step.get("name") == "Stage contracts")
         self.assertNotIn("if", stage_step, "feature branches must retain dry-run staging")
         self.assertNotIn("if", workflow["jobs"]["compose"], "do not disable the whole dry-run job")
