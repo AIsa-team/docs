@@ -41,8 +41,11 @@ jobs:
           DOCS_COMMIT: ${{ inputs.docs_commit }}
           CONSUMER: ${{ matrix.repository }}
           EVENT_TYPE: ${{ matrix.event }}
+          SOURCE_REF: ${{ github.ref_name }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
         run: |
           jq -n --arg event "$EVENT_TYPE" --arg commit "$DOCS_COMMIT" \
+            --arg source_ref "$SOURCE_REF" --arg workflow_run_id "$WORKFLOW_RUN_ID" \
             --arg sha "$(sha256sum openapi.yaml | cut -d ' ' -f 1)" \
-            '{event_type: $event, client_payload: {docs_repository: "AIsa-team/docs", docs_commit: $commit, openapi_sha256: $sha}}' > /tmp/dispatch.json
+            '{event_type: $event, client_payload: {docs_repository: "AIsa-team/docs", docs_commit: $commit, openapi_sha256: $sha, source_ref: $source_ref, workflow_run_id: $workflow_run_id}}' > /tmp/dispatch.json
           gh api --method POST "repos/AIsa-team/$CONSUMER/dispatches" --input /tmp/dispatch.json
