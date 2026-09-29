@@ -19,6 +19,8 @@ public paths. `info.x-aisa-document.facts_hash` is required. `x-aisa-any` is a
 path-item extension, never an invalid HTTP method.
 
 Composition preserves runtime IDs, status, pricing, protocol and capabilities.
+Editorial notes append to runtime constraint notes with stable deduplication;
+they do not replace the runtime's limits or other request rules.
 It reads upstream parameters/body only when the runtime says `provider` or
 `mixed`; gateway declarations win for fields it validates. Missing mirrors,
 external or cyclic references, ambiguous ANY identities, or unsafe mixed unions
@@ -41,8 +43,10 @@ be translated through the existing localization workflow.
 No model translation credentials or paid calls are required by this puller.
 
 The workflow runs every 30 minutes, on dispatch and on source-input changes. It
-stages and validates by default. Publishing requires the repository variable
-`RUNTIME_CONTRACT_PUBLISH=true`, or an explicit manual `publish=true` dispatch.
+stages and validates by default. Publishing is restricted to `refs/heads/main`
+and requires the repository variable `RUNTIME_CONTRACT_PUBLISH=true`, or an
+explicit manual `publish=true` dispatch. A feature-branch dispatch still stages
+and validates, but cannot commit or push to main even with `publish=true`.
 Keep publishing disabled until the runtime endpoint is deployed and the initial
 identity/page diff has been reviewed. Unavailable runtime facts preserve all
 published files. Commits are serialized and rebased before push.

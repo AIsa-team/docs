@@ -67,6 +67,24 @@ class CompositionTests(unittest.TestCase):
         self.assertNotIn("requestBody", op)
         self.assertNotIn("document_hash", source["info"]["x-aisa-document"])
 
+    def test_editorial_notes_append_without_losing_runtime_constraints(self):
+        source = facts()
+        runtime_notes = ["Monthly granularity only.", "Maximum range is 12 months."]
+        operation(source)["x-aisa-constraints"] = {"notes": runtime_notes, "required_any_of": [["start", "end"]]}
+        editorial = {"published_identity": {"x-aisa-notes": ["Monthly granularity only.", "Use the latest published month.", "Use the latest published month."]}}
+        document, pending = compose(source, overlay=editorial)
+        self.assertFalse(pending)
+        constraints = operation(document)["x-aisa-constraints"]
+        self.assertEqual(constraints["notes"], [*runtime_notes, "Use the latest published month."])
+        self.assertEqual(constraints["required_any_of"], [["start", "end"]])
+        self.assertEqual(operation(source)["x-aisa-constraints"]["notes"], runtime_notes)
+        self.assertEqual(compose(source, overlay=editorial)[0], document)
+        # Malformed runtime input must not be silently coerced into characters.
+        operation(source)["x-aisa-constraints"]["notes"] = "not a list"
+        malformed, pending = compose(source, overlay=editorial)
+        self.assertFalse(malformed["paths"])
+        self.assertEqual(pending[0]["reason"], "runtime constraint notes must be a list of text")
+
     def test_mixed_opaque_query_keeps_provider_body_and_removes_auth(self):
         document, pending = compose(facts("mixed"), mirror())
         self.assertFalse(pending)
@@ -190,6 +208,37 @@ class PullTests(unittest.TestCase):
         changes, _ = stage(self.root, self.root / "facts", "unused")
         self.assertEqual(changes, {})
         self.assertIn("Handwritten business prose.", page.read_text())
+
+    def test_version_two_notes_are_repaired_once_with_unchanged_inputs(self):
+        source = facts()
+        runtime_notes = ["Monthly granularity only.", "Maximum range is 12 months."]
+        operation(source)["x-aisa-constraints"] = {"notes": runtime_notes}
+        (self.root / "facts/similarweb.json").write_text(json.dumps(source))
+        overlay_dir = self.root / "openapi/overlays"
+        overlay_dir.mkdir()
+        overlay_dir.joinpath("similarweb.yaml").write_text(
+            "published_identity:\n  x-aisa-notes:\n    - Use the latest published month.\n")
+        # Recreate the published v2 hash and its old notes-overwrite behavior.
+        with patch("compose_openapi.VERSION", "2"):
+            old_changes, _ = stage(self.root, self.root / "facts", "unused")
+        output = self.root / "openapi/similarweb.json"
+        old_document = json.loads(old_changes[output])
+        operation(old_document)["x-aisa-constraints"]["notes"] = ["Use the latest published month."]
+        old_changes[output] = json.dumps(old_document, indent=2, ensure_ascii=False) + "\n"
+        self.write(old_changes)
+        old_hash = old_document["info"]["x-aisa-document"]["document_hash"]
+
+        changes, summary = stage(self.root, self.root / "facts", "unused")
+        self.assertTrue(summary["similarweb"]["changed"])
+        repaired = json.loads(changes[output])
+        self.assertNotEqual(repaired["info"]["x-aisa-document"]["document_hash"], old_hash)
+        self.assertEqual(operation(repaired)["x-aisa-constraints"]["notes"],
+                         [*runtime_notes, "Use the latest published month."])
+        self.write(changes)
+        for _ in range(2):
+            changes, summary = stage(self.root, self.root / "facts", "unused")
+            self.assertEqual(changes, {})
+            self.assertFalse(summary["similarweb"]["changed"])
 
     def test_first_cutover_reuses_legacy_page_and_preserves_prose(self):
         old = facts()
@@ -442,6 +491,36 @@ class FullSimilarwebCutoverTests(unittest.TestCase):
                 policy = unified["info"]["x-aisa-document"]["providers"][op["x-aisa-provider"]]["x-aisa-plans"]
                 self.assertEqual(op["x-aisa-pricing"]["default_request_estimate_usd"] * policy[policy["display_plan"]], 0.30)
                 self.assertIn("content", op["responses"]["200"])
+
+class PublicationWorkflowTests(unittest.TestCase):
+    def test_only_main_can_publish_while_feature_dispatch_still_stages(self):
+        import yaml
+        workflow = yaml.safe_load((Path(__file__).resolve().parents[2] / ".github/workflows/pull-openapi.yml").read_text())
+        steps = workflow["jobs"]["compose"]["steps"]
+        publish = next(step for step in steps if step.get("name") == "Commit verified contracts")
+        stage_step = next(step for step in steps if step.get("name") == "Stage contracts")
+        self.assertNotIn("if", stage_step, "feature branches must retain dry-run staging")
+        self.assertNotIn("if", workflow["jobs"]["compose"], "do not disable the whole dry-run job")
+        cases = [
+            ("refs/heads/main", "workflow_dispatch", True, "false", "true", True),
+            ("refs/heads/feature", "workflow_dispatch", True, "true", "true", False),
+            ("refs/heads/main", "workflow_dispatch", False, "true", "true", False),
+            ("refs/heads/main", "schedule", False, "true", "true", True),
+            ("refs/heads/main", "schedule", False, "false", "true", False),
+            ("refs/heads/main", "workflow_dispatch", True, "true", "false", False),
+        ]
+        for ref, event, manual, configured, available, expected in cases:
+            with self.subTest(ref=ref, event=event, manual=manual, configured=configured, available=available):
+                # The tested workflow expression uses only literals, comparisons
+                # and boolean operators; substitute its actual event inputs.
+                condition = publish["if"]
+                for name, value in {"github.ref": ref, "github.event_name": event,
+                                    "inputs.publish": manual, "vars.RUNTIME_CONTRACT_PUBLISH": configured,
+                                    "steps.pull.outputs.available": available}.items():
+                    condition = condition.replace(name, repr(value))
+                condition = condition.replace("&&", "and").replace("||", "or").replace(" == true", " == True")
+                self.assertEqual(eval(condition, {"__builtins__": {}}), expected)
+
 
 if __name__ == "__main__":
     unittest.main()

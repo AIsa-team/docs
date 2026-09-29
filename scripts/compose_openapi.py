@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit
 
-VERSION = "2"
+VERSION = "3"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 
@@ -254,7 +254,10 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         constraints = operation.setdefault("x-aisa-constraints", {})
                         if not isinstance(constraints, dict):
                             raise ValueError("runtime constraints must be an object")
-                        constraints["notes"] = copy.deepcopy(notes)
+                        runtime_notes = constraints.get("notes", [])
+                        if not isinstance(runtime_notes, list) or not all(isinstance(note, str) for note in runtime_notes):
+                            raise ValueError("runtime constraint notes must be a list of text")
+                        constraints["notes"] = list(dict.fromkeys([*runtime_notes, *notes]))
                     operation_id = operation["operationId"]
                     retained = {}
                     response_identity = (facts_prefix + path, actual_method, operation_id)
