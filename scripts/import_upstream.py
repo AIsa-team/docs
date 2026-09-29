@@ -4,25 +4,47 @@ import argparse
 from datetime import datetime, timezone
 import json
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 import yaml
 from compose_openapi import digest
 from runtime_registry import KEY
+from import_brave_reference import INDEX_URL as BRAVE_INDEX_URL, import_reference
+from import_fred_reference import INDEX as FRED_INDEX_URL, import_reference as import_fred_reference
+from import_querit_reference import REFERENCE_URL as QUERIT_REFERENCE_URL, import_reference as import_querit_reference
+
+
+class OfficialSourceLoader(yaml.SafeLoader):
+    """Keep the literal equality operator used in official provider enums."""
+
+
+# YAML 1.1 tags a plain '=' specially; OpenAPI treats it as an ordinary string.
+OfficialSourceLoader.add_constructor(
+    'tag:yaml.org,2002:value', OfficialSourceLoader.construct_yaml_str
+)
 
 
 def import_source(provider, url):
     if not KEY.fullmatch(provider) or not url.startswith('https://'):
         raise ValueError('provider id and HTTPS source URL are required')
-    with urlopen(url, timeout=30) as response:
-        raw = response.read()
-    document = yaml.safe_load(raw)
+    if url == FRED_INDEX_URL:
+        return import_fred_reference(provider, url)
+    def fetch(source_url):
+        with urlopen(Request(source_url, headers={"User-Agent": "Mozilla/5.0 AIsa-contract-source-importer"}), timeout=30) as response:
+            return response.read()
+    metadata = {}
+    if url == BRAVE_INDEX_URL:
+        document, metadata = import_reference(fetch)
+    elif url == QUERIT_REFERENCE_URL:
+        document, metadata = import_querit_reference(fetch)
+    else:
+        document = yaml.load(fetch(url), Loader=OfficialSourceLoader)
     if not isinstance(document, dict) or not str(document.get('openapi', '')).startswith('3.') or not isinstance(document.get('paths'), dict):
         raise ValueError('source is not an OpenAPI 3 document')
     source_hash = digest(document)
     document.setdefault('info', {})['x-aisa-source'] = {
         'kind': 'provider_openapi', 'url': url,
         'fetched_at': datetime.now(timezone.utc).isoformat(),
-        'content_hash': source_hash, 'converter': 'scripts/import_upstream.py@1',
+        'content_hash': source_hash, 'converter': 'scripts/import_upstream.py@2', **metadata,
     }
     return document
 

@@ -173,17 +173,119 @@ class FullRegistryTests(unittest.TestCase):
         broken = contract('alpha')
         operation(broken)['operationId'] = 'x' * 56 + '_first'
         extra = copy.deepcopy(operation(broken))
-        extra['operationId'] = 'x' * 56 + '_second'
+        extra['operationId'] = operation(broken)['operationId']
         broken['paths']['/apis/v1/alpha/other'] = {'get': extra}
         self.sources({'alpha': broken, 'beta': contract('beta')})
         changes, summary = self.pull()
-        self.assertIn('operationId prefix collision', summary['alpha']['blocked'])
+        self.assertIn('duplicate operationId', summary['alpha']['blocked'])
         self.assertEqual(summary['beta']['operations'], 1)
         self.publish(changes)
         rows = json.loads((self.root / 'openapi/coverage.json').read_text())['providers']['alpha']
         self.assertEqual(len(rows), 2)
-        self.assertTrue(all('operationId prefix collision' in row['reason'] for row in rows))
+        self.assertTrue(all('duplicate operationId' in row['reason'] for row in rows))
         self.assertFalse((self.root / 'openapi/alpha.json').exists())
+
+    def test_long_published_ids_with_the_same_prefix_remain_distinct(self):
+        source = contract('alpha')
+        operation(source)['operationId'] = 'x' * 56 + '_first'
+        extra = copy.deepcopy(operation(source))
+        extra['operationId'] = 'x' * 56 + '_second'
+        source['paths']['/apis/v1/alpha/other'] = {'get': extra}
+        self.sources({'alpha': source})
+        changes, summary = self.pull()
+        self.assertEqual(summary['alpha']['operations'], 2)
+        self.assertNotIn('blocked', summary['alpha'])
+
+    def test_explicit_official_mirror_file_keeps_manual_history(self):
+        runtime = contract('alpha', method='post', validation='provider')
+        self.sources({'alpha': runtime})
+        directory = self.root / 'openapi/upstream'
+        directory.mkdir()
+        official = mirror()
+        (directory / 'alpha-official.json').write_text(json.dumps(official))
+        (self.root / 'openapi/registry.yaml').write_text(yaml.safe_dump({'auto_register': True, 'providers': {'alpha': {'upstream': {'url': official['info']['x-aisa-source']['url'], 'file': 'alpha-official.json'}}}}))
+        with patch('pull_openapi.import_source', side_effect=AssertionError('existing verified mirror must not refetch')):
+            changes, summary = self.pull()
+        self.assertEqual(summary['alpha']['operations'], 1)
+        self.assertEqual(summary['alpha']['pending'], 0)
+        self.assertFalse((directory / 'alpha.json').exists())
+
+    def test_index_discovers_async_and_disabled_providers_absent_from_catalog(self):
+        self.sources({'alpha': contract('alpha')})
+        (self.root / 'facts/async-provider.json').write_text(json.dumps(contract('async-provider')))
+        (self.root / 'facts/index.json').write_text(json.dumps({'providers': [{'id': 'alpha'}, {'id': 'async-provider'}]}))
+        changes, summary = self.pull()
+        self.assertEqual(summary['async-provider']['operations'], 1)
+        self.publish(changes)
+        self.assertEqual(self.pull()[0], {})
+
+    def test_lifecycle_moves_out_of_a_provider_that_stays_active(self):
+        previous = contract('alpha')
+        moved = contract('beta')
+        previous['paths'].update(copy.deepcopy(moved['paths']))
+        (self.root / 'openapi/alpha.json').write_text(json.dumps(previous))
+        page = self.root / 'api-reference/alpha/old-link.mdx'
+        page.parent.mkdir(parents=True)
+        page.write_text('---\nopenapi: "openapi/alpha.json GET /apis/v1/beta/test"\n---\nKeep this prose.\n')
+        self.sources({'alpha': contract('alpha'), 'beta': moved})
+        changes, summary = self.pull()
+        self.assertEqual(summary['alpha']['operations'], 1)
+        self.assertEqual(summary['beta']['operations'], 1)
+        self.publish(changes)
+        old = json.loads((self.root / 'openapi/alpha.json').read_text())
+        self.assertNotIn('/apis/v1/beta/test', old['paths'])
+        self.assertIn('openapi/beta.json GET /apis/v1/beta/test', page.read_text())
+        self.assertIn('Keep this prose.', page.read_text())
+        self.assertEqual(self.pull()[0], {})
+
+    def test_failed_new_owner_keeps_historical_operation_with_old_owner(self):
+        previous = contract('alpha')
+        previous['paths'].update(copy.deepcopy(contract('beta')['paths']))
+        (self.root / 'openapi/alpha.json').write_text(json.dumps(previous))
+        self.sources({'alpha': contract('alpha'), 'beta': contract('beta', validation='provider')})
+        changes, summary = self.pull()
+        self.assertEqual(summary['alpha']['operations'], 2)
+        self.assertIn('blocked', summary['beta'])
+        self.publish(changes)
+        old = json.loads((self.root / 'openapi/alpha.json').read_text())
+        self.assertEqual(old['paths']['/apis/v1/beta/test']['get']['x-aisa-status'], 'disabled')
+
+    def test_removed_runtime_route_retains_link_as_disabled_history(self):
+        previous = contract('alpha')
+        old = copy.deepcopy(operation(previous))
+        old['operationId'] = 'old_removed_route'
+        old['requestBody'] = {'content': {'application/json': {'schema': {'$ref': '#/components/schemas/Old'}}}}
+        previous['components']['schemas'] = {'Old': {'type': 'object', 'properties': {'value': {'type': 'string'}}}}
+        previous['paths']['/apis/v1/alpha/removed'] = {'post': old}
+        (self.root / 'openapi/alpha.json').write_text(json.dumps(previous))
+        self.sources({'alpha': contract('alpha')})
+        changes, summary = self.pull()
+        self.assertNotIn('blocked', summary['alpha'])
+        self.publish(changes)
+        generated = json.loads((self.root / 'openapi/alpha.json').read_text())
+        retained = generated['paths']['/apis/v1/alpha/removed']['post']
+        self.assertEqual(retained['operationId'], 'old_removed_route')
+        self.assertEqual(retained['x-aisa-status'], 'disabled')
+        self.assertEqual(retained['x-aisa-contract-pending'], 'not_in_runtime_contract')
+        self.assertEqual(self.pull()[0], {})
+
+    def test_derived_lifecycle_id_preserves_published_identity(self):
+        previous = contract('alpha')
+        operation(previous)['operationId'] = 'established_detail'
+        (self.root / 'openapi/alpha.json').write_text(json.dumps(previous))
+        runtime = contract('alpha')
+        operation(runtime)['operationId'] = 'derived_detail'
+        operation(runtime)['x-aisa-identity-source'] = 'derived'
+        self.sources({'alpha': runtime})
+        changes, summary = self.pull()
+        self.assertNotIn('blocked', summary['alpha'])
+        self.publish(changes)
+        result = json.loads((self.root / 'openapi/alpha.json').read_text())
+        self.assertEqual(operation(result)['operationId'], 'established_detail')
+        operation(runtime).pop('x-aisa-identity-source')
+        runtime['info']['x-aisa-document']['facts_hash'] += '-changed'
+        self.sources({'alpha': runtime})
+        self.assertIn('blocked', self.pull()[1]['alpha'])
 
     def test_unavailable_catalog_reports_each_inventory_endpoint(self):
         self.sources({'missing': {}})

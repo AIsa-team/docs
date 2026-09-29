@@ -18,7 +18,7 @@ from urllib.request import Request, urlopen
 
 import yaml
 
-from compose_openapi import METHODS, compose, digest
+from compose_openapi import METHODS, compose, digest, resolve_fragment
 from import_upstream import import_source
 from runtime_registry import discover, combine_facts, public_mirror_index, published_documents, previous_for_facts, coverage_rows
 
@@ -42,6 +42,32 @@ def assert_identities(previous: dict, current: dict) -> None:
     for route, operation_id in old.items():
         if new.get(route) != operation_id:
             raise ValueError(f"published identity changed or disappeared: {operation_id} ({route})")
+
+
+def retain_unregistered_history(document: dict, facts: dict, history: dict) -> list:
+    """Keep old links visible without presenting unregistered routes as active.
+
+    This only handles paths absent from the complete runtime provider document.
+    A failed composition or changed ID on a present path must still fail review.
+    """
+    prefix = normalize_paths(facts)
+    retained = []
+    for path, method, old in operations(history):
+        if path in prefix.get("paths", {}):
+            continue
+        operation = resolve_fragment(old, history, document, "retained_history.json")
+        # Page links are added and hashed by generate_pages after composition.
+        # Feeding the previous run's derived link back here creates hash churn.
+        operation.pop("x-aisa-docs-url", None)
+        operation["x-aisa-status"] = "disabled"
+        operation["x-aisa-contract-state"] = "retained_legacy"
+        operation["x-aisa-contract-pending"] = "not_in_runtime_contract"
+        document["paths"].setdefault(path, {})[method] = operation
+        retained.append({"path": path, "method": method.upper(), "operation_id": operation["operationId"], "reason": "not_in_runtime_contract"})
+    if retained:
+        metadata = document["info"]["x-aisa-document"]
+        metadata["document_hash"] = digest({"composed": metadata["document_hash"], "retained": {row["operation_id"]: document["paths"][row["path"]][row["method"].lower()] for row in retained}})
+    return retained
 
 
 def fetch_json(url: str, etag: str | None = None):
@@ -166,6 +192,17 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
     if registry.get("auto_register"):
         category = read_json(facts_dir / "category.json") if facts_dir else fetch_json(f"{base_url.rstrip('/')}/info/apis/category")
         discover(registry, category)
+        # The public marketing catalog intentionally omits asynchronous and
+        # disabled integrations. Contract discovery also follows the actual
+        # runtime index, including providers whose projection is pending.
+        try:
+            index = read_json(facts_dir / "index.json", {}) if facts_dir else fetch_json(f"{base_url.rstrip('/')}/info/openapi.json")
+        except HTTPError as exc:
+            if exc.code != 404:
+                raise
+            index = {}  # Compatibility before runtime contract deployment.
+        indexed = (index or {}).get("providers", []) + (index or {}).get("pending_providers", [])
+        discover(registry, {"apis": [{"id": key} for key in sorted({row["id"] for row in indexed})]})
     else:
         # Group overlap and invalid catalog names are still rejected when
         # discovery is disabled for an offline or pinned rollout.
@@ -174,6 +211,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
     public_mirrors = public_mirror_index(root)
     coverage = {"providers": {}, "legacy_operations": []}
     moved = set()
+    ready = {}
     pending = copy.deepcopy(read_json(root / "openapi/pending.json", {"providers": {}}))
     pending.setdefault("providers", {})
     summary = {}
@@ -238,28 +276,37 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             entry["display_name"] = facts.get("info", {}).get("title", provider)
             entry["description"] = facts.get("info", {}).get("description", "")
             registry["providers"][provider] = entry
-            upstream_path = root / f"openapi/upstream/{provider}.json"
-            upstream = read_json(upstream_path)
+            upstream = None
             overlay_path = root / f"openapi/overlays/{provider}.yaml"
             overlay = yaml.safe_load(overlay_path.read_text()) if overlay_path.exists() else {}
             unresolved = []
             try:
                 configured = entry.get("upstream")
-                source_url = configured.get("url") if isinstance(configured, dict) else configured
-                if configured and (not isinstance(source_url, str) or not source_url.startswith("https://")):
-                    raise ValueError("upstream requires an HTTPS source URL")
-                current_source = (upstream or {}).get("info", {}).get("x-aisa-source", {})
-                if source_url and (current_source.get("kind") != "provider_openapi" or current_source.get("url") != source_url):
-                    # A new/changed registry source is enough to onboard a provider.
-                    # Existing mirrors stay immutable until a reviewed refresh.
-                    upstream = import_source(provider, source_url)
-                    changes[upstream_path] = json.dumps(upstream, indent=2, ensure_ascii=False) + "\n"
-                if upstream and upstream.get("info", {}).get("x-aisa-source", {}).get("path_space") == "public":
-                    upstream = None  # Manual mirrors match exact public routes only.
+                configurations = configured if isinstance(configured, list) else [configured]
+                upstream_documents = []
+                for configuration in configurations:
+                    source_url = configuration.get("url") if isinstance(configuration, dict) else configuration
+                    if configuration and (not isinstance(source_url, str) or not source_url.startswith("https://")):
+                        raise ValueError("upstream requires an HTTPS source URL")
+                    upstream_file = configuration.get("file", provider + ".json") if isinstance(configuration, dict) else provider + ".json"
+                    if not isinstance(upstream_file, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_.-]*\.json", upstream_file):
+                        raise ValueError("upstream file must name a JSON mirror within openapi/upstream")
+                    upstream_path = root / "openapi/upstream" / upstream_file
+                    document = read_json(upstream_path)
+                    current_source = (document or {}).get("info", {}).get("x-aisa-source", {})
+                    if source_url and (current_source.get("kind") != "provider_openapi" or current_source.get("url") != source_url):
+                        document = import_source(provider, source_url)
+                        changes[upstream_path] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+                    if document and document.get("info", {}).get("x-aisa-source", {}).get("path_space") != "public":
+                        upstream_documents.append(document)
+                upstream = upstream_documents if isinstance(configured, list) else (upstream_documents[0] if upstream_documents else None)
                 history = previous_for_facts(facts, original_documents, provider)
                 document, unresolved = compose(facts, upstream, overlay, history, public_mirrors)
                 coverage["providers"][provider] = coverage_rows(facts, document, unresolved, catalogs)
-                assert_identities(history, normalize_paths(document))
+                active_history = copy.deepcopy(history)
+                runtime_paths = normalize_paths(facts)["paths"]
+                active_history["paths"] = {p: item for p, item in history["paths"].items() if p in runtime_paths}
+                assert_identities(active_history, normalize_paths(document))
             except (ValueError, HTTPError, URLError, TimeoutError) as exc:
                 if not registry.get("auto_register"):
                     raise
@@ -274,6 +321,8 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                 continue
             for path, method, op in operations(normalize_paths(document)):
                 moved.add((path, method, op["operationId"], provider))
+            ready[provider] = (document, facts, history, previous, unresolved)
+            continue
         if with_pages:
             generate_pages(root, provider, document, changes, previous, decorate_links=not entry.get("pin"))
         old_hash = previous.get("info", {}).get("x-aisa-document", {}).get("document_hash")
@@ -297,26 +346,57 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                     generate_pages(root, provider, document, changes, previous, decorate_links=False)
         pending["providers"][provider] = unresolved
         summary[provider] = {"changed": changed, "operations": sum(1 for _ in operations(document)), "pending": len(unresolved), "document_hash": new_hash}
+    # Resolve ownership across all successfully composed providers before
+    # retaining history. A provider can lose one lifecycle while keeping its
+    # other active routes; its disabled historical copy must not duplicate the
+    # new canonical owner's immutable operation ID.
+    for provider, (document, facts, history, previous, unresolved) in ready.items():
+        history = copy.deepcopy(history)
+        for path, method, op in list(operations(history)):
+            targets = {dest for p, m, oid, dest in moved if (p, m, oid) == (path, method, op.get("operationId"))}
+            if targets and provider not in targets:
+                del history["paths"][path][method]
+                if not (set(history["paths"][path]) & METHODS):
+                    del history["paths"][path]
+        unresolved.extend(retain_unregistered_history(document, facts, history))
+        assert_identities(history, normalize_paths(document))
+        if with_pages:
+            generate_pages(root, provider, document, changes, previous)
+        old_hash = previous.get("info", {}).get("x-aisa-document", {}).get("document_hash")
+        new_hash = document.get("info", {}).get("x-aisa-document", {}).get("document_hash")
+        if not new_hash:
+            raise ValueError(f"{provider}: generated document has no document_hash")
+        changed = old_hash != new_hash
+        if changed:
+            changes[root / f"openapi/{provider}.json"] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+        elif with_pages:
+            generate_pages(root, provider, previous, changes, previous, decorate_links=False)
+        pending["providers"][provider] = unresolved
+        summary[provider] = {"changed": changed, "operations": sum(1 for _ in operations(document)), "pending": len(unresolved), "document_hash": new_hash}
     # Retire only operations successfully moved to another output. Keeping
     # unmatched legacy operations avoids deleting docs outside runtime scope.
     from urllib.parse import urlsplit
     for name, original in original_documents.items():
         output_path = root / f"openapi/{name}.json"
-        retained = copy.deepcopy(original)
+        staged = json.loads(changes[output_path]) if output_path in changes else original
+        retained = copy.deepcopy(staged)
         prefix = urlsplit((original.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
         for path, method, op in list(operations(original)):
             targets = [dest for p, m, oid, dest in moved if (p, m, oid) == (prefix + path, method, op.get("operationId"))]
-            if targets and name not in registry["providers"]:
+            if targets and name not in targets:
                 for destination in targets:
                     entry = registry["providers"][destination] or {}
                     entry["legacy_sources"] = sorted(set(entry.get("legacy_sources", [])) | {name})
                     registry["providers"][destination] = entry
-                del retained["paths"][path][method]
-                if not (set(retained["paths"][path]) & METHODS):
-                    del retained["paths"][path]
+                retained_prefix = urlsplit((retained.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
+                retained_path = (prefix + path).removeprefix(retained_prefix)
+                if method in retained.get("paths", {}).get(retained_path, {}):
+                    del retained["paths"][retained_path][method]
+                    if not (set(retained["paths"][retained_path]) & METHODS):
+                        del retained["paths"][retained_path]
             elif not targets:
                 coverage["legacy_operations"].append({"source": f"openapi/{name}.json", "path": prefix + path, "method": method.upper(), "operation_id": op.get("operationId"), "status": "retained_legacy", "reason": "not_in_composed_runtime_contract"})
-        if retained != original:
+        if retained != staged:
             changes[output_path] = json.dumps(retained, indent=2, ensure_ascii=False) + "\n"
     if registry.get("auto_register"):
         changes[registry_path] = yaml.safe_dump(registry, sort_keys=False, allow_unicode=True)

@@ -13,9 +13,10 @@ import re
 from typing import Any
 from urllib.parse import urlsplit
 
-VERSION = "4"
+VERSION = "6"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
+SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
 
 
 class IdentityError(ValueError):
@@ -24,6 +25,21 @@ class IdentityError(ValueError):
 
 def digest(value: Any) -> str:
     return "sha256:" + hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
+
+
+def parameter_wire_default(parameter: dict) -> dict:
+    """Normalize scalar URL/header defaults to their declared string wire type.
+
+    Historic provider mirrors sometimes give a boolean or numeric default for
+    a string parameter. HTTP serializes those scalars as text; body defaults
+    and complex parameter values must not be coerced this way.
+    """
+    result = copy.deepcopy(parameter)
+    schema = result.get("schema", {})
+    default = schema.get("default")
+    if result.get("in") in {"query", "path", "header"} and schema.get("type") == "string" and isinstance(default, (bool, int, float)):
+        schema["default"] = json.dumps(default, separators=(",", ":"), allow_nan=False)
+    return result
 
 
 def validate_overlay(overlay: dict) -> None:
@@ -62,14 +78,104 @@ def resolve(value: Any, document: dict, stack: tuple = (), preserve_recursive: b
         target = resolve(target, document, stack + (ref,), preserve_recursive)
         siblings = {k: resolve(v, document, stack, preserve_recursive) for k, v in value.items() if k != "$ref"}
         if siblings:
-            if not isinstance(target, dict):
-                raise ValueError("upstream reference has incompatible siblings")
-            if any(key in target and target[key] != value and key not in {"description", "summary", "title"} for key, value in siblings.items()):
-                raise ValueError("upstream reference has conflicting sibling constraints")
-            target = {**target, **siblings}
+            if ref.startswith("#/components/schemas/"):
+                annotations = {k: v for k, v in siblings.items() if k in SCHEMA_ANNOTATIONS}
+                constraints = {k: v for k, v in siblings.items() if k not in SCHEMA_ANNOTATIONS}
+                if any(k in constraints for k in ("$id", "$schema", "$anchor", "$dynamicRef", "$dynamicAnchor")):
+                    raise ValueError("unsupported upstream schema reference scope sibling")
+                if constraints:
+                    # JSON Schema ref siblings intersect; merging would discard
+                    # limits, required fields or properties from either branch.
+                    target = {"allOf": [target, constraints], **annotations}
+                elif isinstance(target, dict):
+                    target = {**target, **annotations}
+                else:
+                    target = {"allOf": [target], **annotations}
+            else:
+                if not isinstance(target, dict) or set(siblings) - {"description", "summary"}:
+                    raise ValueError("upstream non-schema reference has incompatible siblings")
+                target = {**target, **siblings}
         return target
     return {k: resolve(v, document, stack, preserve_recursive) for k, v in value.items()}
 
+
+def upstream_path_item(document: dict | None, upstream_path: str | None) -> dict:
+    """Match literal or server-prefixed upstream paths without guessing prefixes."""
+    if not document or not upstream_path:
+        return {}
+    selected = {}
+    origins = {}
+    for path, item in document.get("paths", {}).items():
+        for method, operation in item.items():
+            if method not in METHODS:
+                continue
+            servers = operation.get("servers", item.get("servers", document.get("servers", [])))
+            effective_paths = {path}
+            for server in servers or [{"url": "/"}]:
+                prefix = urlsplit(server.get("url", "/")).path
+                for name in re.findall(r"\{([^{}]+)\}", prefix):
+                    default = server.get("variables", {}).get(name, {}).get("default")
+                    if default is None:
+                        # The literal path remains usable, but do not guess a
+                        # variable server prefix from the caller's path.
+                        prefix = None
+                        break
+                    prefix = prefix.replace("{" + name + "}", str(default))
+                if prefix is not None:
+                    effective_paths.add(prefix.rstrip("/") + path)
+            if upstream_path not in effective_paths:
+                continue
+            if method in selected and origins[method] != path:
+                raise ValueError("ambiguous upstream server-path operation")
+            origins[method] = path
+            selected[method] = {**operation, "parameters": item.get("parameters", []) + operation.get("parameters", [])}
+    return selected
+
+
+def selector_value(selector):
+    if not isinstance(selector, dict) or set(selector) != {"in", "name", "value", "mode"} or selector.get("in") != "query" or selector.get("name") != "engine" or selector.get("mode") not in {"fixed", "default"} or not isinstance(selector.get("value"), str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,31}", selector["value"]):
+        raise ValueError("invalid public upstream selector")
+    return selector["value"]
+
+
+def select_upstream_operations(sources, path, selector=None):
+    """Keep source documents separate; select only matching official engine enums."""
+    value = selector_value(selector) if selector is not None else None
+    selected = {}
+    for document in sources:
+        for method, operation in upstream_path_item(document, path).items():
+            if value is not None:
+                parameters = [resolve(p, document) for p in operation.get("parameters", [])]
+                candidates = [p for p in parameters if p.get("in") == "query" and p.get("name") == selector["name"]]
+                if len(candidates) != 1:
+                    continue
+                schema = resolve(candidates[0].get("schema", {}), document)
+                choices = [schema["const"]] if "const" in schema else schema.get("enum")
+                if not isinstance(choices, list) or value not in choices:
+                    continue
+            if method in selected:
+                raise ValueError("ambiguous upstream source for path and selector")
+            selected[method] = (document, operation)
+    return selected
+
+
+def apply_upstream_selector(mirror, selector):
+    if selector is None:
+        return mirror
+    value = selector_value(selector)
+    result = copy.deepcopy(mirror)
+    for parameter in list(result.get("parameters", [])):
+        if parameter.get("in") != "query" or parameter.get("name") != selector["name"]:
+            continue
+        if selector["mode"] == "fixed":
+            result["parameters"].remove(parameter)
+        else:
+            parameter["required"] = False
+            # The transport allows another engine; the selected reference only
+            # documents fields for the configured default, not other engines.
+            parameter["schema"] = {"type": "string", "default": value}
+            parameter["description"] = "Defaults to the endpoint's configured engine. The caller may override it; parameter contracts for other engines are not guaranteed by this document."
+    return result
 
 
 def referenced_components(value: Any, document: dict) -> dict:
@@ -139,15 +245,25 @@ def flatten_object(schema: dict) -> dict:
     result = {k: copy.deepcopy(v) for k, v in schema.items() if k != "allOf"}
     props = result.setdefault("properties", {})
     required = set(result.pop("required", []))
-    for branch in schema.get("allOf", []):
-        part = flatten_object(branch)
+    parts = [flatten_object(branch) for branch in schema.get("allOf", [])]
+    if parts:
+        all_names = set(props).union(*(set(part.get("properties", {})) for part in parts))
+        for part in [schema, *parts]:
+            if "unevaluatedProperties" in part:
+                raise ValueError("mixed upstream allOf has unsupported unevaluatedProperties")
+            if part.get("additionalProperties", True) is not True and set(part.get("properties", {})) != all_names:
+                raise ValueError("mixed upstream allOf has branch-local additionalProperties")
+    for part in parts:
         for name, field in part.pop("properties", {}).items():
             if name in props and props[name] != field:
-                raise ValueError("upstream allOf has conflicting property constraints")
-            props[name] = field
+                props[name] = {"allOf": [props[name], field]}
+            else:
+                props[name] = field
         required.update(part.pop("required", []))
         for key, value in part.items():
             if key in result and result[key] != value:
+                if key in SCHEMA_ANNOTATIONS:
+                    continue
                 raise ValueError(f"upstream allOf has incompatible {key}")
             result[key] = value
     if required:
@@ -248,9 +364,11 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
     meta = facts.get("info", {}).get("x-aisa-document", {})
     if not meta.get("facts_hash"):
         raise ValueError("runtime facts missing facts_hash")
-    source = (upstream or {}).get("info", {}).get("x-aisa-source", {})
-    if upstream and (source.get("kind") not in {"manual", "provider_openapi"} or not all(source.get(k) for k in ("url", "fetched_at", "content_hash", "converter"))):
-        raise ValueError("upstream mirror requires complete x-aisa-source provenance")
+    sources = upstream if isinstance(upstream, list) else ([upstream] if upstream else [])
+    for document in sources:
+        source = document.get("info", {}).get("x-aisa-source", {})
+        if source.get("kind") not in {"manual", "provider_openapi"} or not all(source.get(k) for k in ("url", "fetched_at", "content_hash", "converter")):
+            raise ValueError("upstream mirror requires complete x-aisa-source provenance")
     output = copy.deepcopy(facts)
     output["paths"] = {}
     pending: list[dict] = []
@@ -267,9 +385,10 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                 published_ids[(previous_prefix + old_path, old_method)] = old_op.get("operationId")
     ids: set[str] = set()
     auth_names = {"authorization", "x-api-key", "api-key"}
-    for scheme in (upstream or {}).get("components", {}).get("securitySchemes", {}).values():
-        if scheme.get("name"):
-            auth_names.add(scheme["name"].lower())
+    for document in sources:
+        for scheme in document.get("components", {}).get("securitySchemes", {}).values():
+            if scheme.get("name"):
+                auth_names.add(scheme["name"].lower())
     for path, path_item in sorted(facts["paths"].items()):
         for method, runtime in sorted(path_item.items()):
             if method not in METHODS and method != "x-aisa-any":
@@ -280,20 +399,28 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
             validation = runtime.get("x-aisa-validation")
             if validation not in {"runtime", "provider", "mixed"}:
                 raise ValueError("runtime operation has unknown validation boundary")
-            upstream_item = (upstream or {}).get("paths", {}).get(runtime.get("x-aisa-upstream-path"), {})
+            try:
+                upstream_matches = select_upstream_operations(sources, runtime.get("x-aisa-upstream-path"), runtime.get("x-aisa-upstream-selector")) if validation != "runtime" or method == "x-aisa-any" else {}
+                upstream_item = {key: value[1] for key, value in upstream_matches.items()}
+            except (ValueError, TypeError, KeyError) as exc:
+                pending.append({"operation_id": base_id, "path": path, "method": "ANY" if method == "x-aisa-any" else method.upper(), "reason": str(exc)})
+                continue
             public_path = facts_prefix + path
             methods = sorted((set(upstream_item) & METHODS) | {m for p, m in public_mirrors if p == public_path}) if method == "x-aisa-any" else [method]
             if not methods:
-                pending.append({"operation_id": base_id, "path": path, "method": "ANY", "reason": "upstream operation missing"})
+                pending.append({"operation_id": base_id, "path": path, "method": "ANY", "reason": "upstream selector has no matching official operation" if runtime.get("x-aisa-upstream-selector") else "upstream operation missing"})
             for actual_method in methods:
                 try:
                     mirror = {}
-                    operation_source = source
+                    operation_source = {}
                     if validation != "runtime" or method == "x-aisa-any":
-                        if upstream and actual_method in upstream_item:
+                        if actual_method in upstream_item:
+                            selected_document = upstream_matches[actual_method][0]
+                            operation_source = selected_document.get("info", {}).get("x-aisa-source", {})
                             request_fields = {k: v for k, v in upstream_item[actual_method].items() if k in {"operationId", "summary", "description", "parameters", "requestBody"}}
                             request_fields["parameters"] = upstream_item.get("parameters", []) + request_fields.get("parameters", [])
-                            mirror = resolve_fragment(request_fields, upstream, output, "provider_" + digest(source)[7:19] + ".json")
+                            mirror = resolve_fragment(request_fields, selected_document, output, "provider_" + digest(operation_source)[7:19] + ".json")
+                            mirror = apply_upstream_selector(mirror, runtime.get("x-aisa-upstream-selector"))
                         elif (public_path, actual_method) in public_mirrors:
                             selected = public_mirrors[(public_path, actual_method)]
                             mirror = copy.deepcopy(selected["operation"])
@@ -305,6 +432,10 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         else:
                             raise ValueError("upstream operation missing")
                     operation = copy.deepcopy(runtime)
+                    if runtime.get("x-aisa-identity-source") == "derived":
+                        established_id = published_ids.get((public_path, actual_method))
+                        if established_id:
+                            operation["operationId"] = established_id
                     if method == "x-aisa-any":
                         published_id = published_ids.get((public_path, actual_method))
                         if not published_id and operation_source.get("path_space") == "public":
@@ -324,7 +455,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         }
                         parameters.update({(p["in"], p["name"]): copy.deepcopy(p) for p in runtime.get("parameters", [])})
                         if parameters:
-                            operation["parameters"] = [parameters[k] for k in sorted(parameters)]
+                            operation["parameters"] = [parameter_wire_default(parameters[k]) for k in sorted(parameters)]
                         if mirror.get("requestBody") or runtime.get("requestBody"):
                             operation["requestBody"] = merge_body(mirror.get("requestBody", {}), runtime.get("requestBody", {}))
                         operation["x-aisa-source"] = copy.deepcopy(operation_source)
@@ -360,9 +491,9 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             "kind": "published_success_contract",
                             "content_hash": digest(retained),
                         }
-                    if operation_id[:56] in ids:
-                        raise IdentityError(f"operationId prefix collision: {operation_id}")
-                    ids.add(operation_id[:56])
+                    if operation_id in ids:
+                        raise IdentityError(f"duplicate operationId: {operation_id}")
+                    ids.add(operation_id)
                     output["paths"].setdefault(path, {})[actual_method] = operation
                 except IdentityError:
                     raise

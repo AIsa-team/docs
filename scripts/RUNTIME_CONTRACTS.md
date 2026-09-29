@@ -9,7 +9,7 @@ The initial registry includes all 49 observed catalogs; the 11 Open-Meteo
 catalogs share one output. Discovery remains active for future providers.
 
 ```sh
-python3 -m pip install 'PyYAML>=6,<7'
+python3 -m pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5'
 python3 -m unittest discover -s scripts/tests -v
 python3 scripts/pull_openapi.py --facts-dir /path/to/facts       # dry run
 python3 scripts/pull_openapi.py --facts-dir /path/to/facts --write
@@ -136,3 +136,26 @@ and provider document hashes reported by docs, the website agent card, MCP manif
 and Tool Router catalog metadata. A repeated mismatch on two consecutive checks
 fails the workflow. Legacy sources without runtime hashes are counted separately;
 they are never reported as successfully compared runtime contracts.
+
+
+Handler-owned and historical operations
+---------------------------------------
+The runtime contract index also drives discovery, so asynchronous and disabled
+providers do not depend on the marketing catalog. Code-owned lifecycle routes
+use the real installed profile descriptors; derived lifecycle IDs retain the
+existing published ID at the same method/path. Full operation IDs must be unique;
+legacy IDs that share a 56-character prefix remain unchanged.
+
+An operation whose path is absent from the complete runtime provider document
+keeps its old page and identity with `x-aisa-status: disabled` and
+`x-aisa-contract-pending: not_in_runtime_contract`. This does not hide a missing
+schema or identity change on a path still present in runtime facts: those remain
+pending or block the affected provider. Inactive historical pages cannot block
+otherwise valid current contracts from refreshing.
+
+An upstream registry entry can set `file: provider-official.json` to select a
+reviewed official mirror while retaining the original public-route mirror for
+old identities and response schemas. Paths match the effective OpenAPI server
+prefix with operation/path/root precedence; ambiguous matches fail closed.
+Official reference converters record source hashes and never infer types from
+example responses. Refreshes run through the same reviewed upstream workflow.
