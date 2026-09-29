@@ -1,0 +1,30 @@
+name: Check canonical AIsa skill
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Pinned export check
+        run: python3 scripts/sync_canonical_aisa_skill.py --check
+      - name: Reject mutated export
+        run: |
+          tmp=$(mktemp -d)
+          cp skill.md "$tmp/skill.md"
+          printf '\nmutated\n' >> "$tmp/skill.md"
+          if python3 scripts/sync_canonical_aisa_skill.py --check --root "$tmp"; then
+            echo "::error::--check accepted a mutated skill.md"
+            exit 1
+          fi

@@ -1,23 +1,32 @@
 ---
 title: "智能体发现：让自主智能体发现并使用 AIsa"
-description: "使用 Google A2A 智能体卡片、OpenAI 插件清单和 OpenAPI 3.1 规范，将自主智能体与 AIsa 集成。涵盖程序化发现、身份认证和端到端集成模式。"
+description: "通过产品智能体卡片、OpenAPI 规范、Docs Skill 和文档索引发现 AIsa 能力。Docs 托管的卡片不是 A2A 运行时。"
 ---
 
-AIsa 发布了三个机器可读的发现端点，让自主智能体无需人工介入即可发现、理解并调用 AIsa 的能力。本指南逐一介绍这些端点，解释集成流程，并提供 Python、TypeScript 和 Bash 的可运行代码示例。
+AIsa 发布了若干机器可读的发现资源，让自主智能体可以发现、理解并调用受支持的能力。本指南说明主要入口和从发现到调用的流程。
 
 ## 发现端点
 
-AIsa 通过以下 well-known URL 支持智能体发现。这三个端点都可公开访问，读取时无需身份认证，并包含宽松的 CORS 响应头，因此基于浏览器的智能体可以直接获取数据。
+AIsa 通过以下公开 URL 支持智能体和文档发现。读取时无需身份认证。
 
 | 端点 | 协议 | URL | 用途 |
 | :--- | :--- | :--- | :--- |
-| **智能体卡片** | Google A2A | `https://aisa.one/.well-known/agent-card.json` | 主要发现入口，发布 13 项技能及其元数据、标签和输入/输出模式 |
+| **产品智能体卡片** | 落地页元数据 | `https://aisa.one/.well-known/agent-card.json` | 高层能力、标签、示例和输入/输出模式。不是 AIsa A2A 执行运行时。 |
+| **Docs 智能体卡片** | Mintlify 自动派生 | `https://aisa.one/docs/.well-known/agent-card.json` | 由已发布的 Docs Skill（`skill.md`）自动派生，与官方 `aisa` Skill 同源。不是 A2A 运行时。 |
 | **AI 插件** | OpenAI Plugin (v1) | `https://aisa.one/.well-known/ai-plugin.json` | 兼容 ChatGPT 时代的智能体工具 |
-| **OpenAPI 规范** | OpenAPI 3.1.0 | `https://aisa.one/openapi.yaml` | 覆盖 111 多条 API 路径和 121 个 Schema 的机器可读规范 |
+| **OpenAPI 规范** | OpenAPI 3.1.0 | `https://aisa.one/openapi.yaml` | 机器可读的请求和响应契约。需要 API 合同时使用此文件。 |
+| **产品 llms.txt** | llms.txt | `https://aisa.one/llms.txt` | 产品定位、目标和接口 |
+| **技术 llms.txt** | llms.txt | `https://aisa.one/docs/llms.txt` | 技术文档索引 |
+| **API 参考** | 文档索引 | `https://aisa.one/docs/zh/api-reference` | 供人阅读的 endpoint 索引 |
+| **Docs API catalog** | Mintlify `rel=api-catalog` | `https://aisa.one/docs/.well-known/api-catalog` | Docs 响应的 `Link` 头会广告此路径。在 `aisa.one` 和 `aisa.mintlify.dev` 上**当前为 404**。不要把它当成可用目录。 |
+
+<Warning>
+Mintlify 会在 Docs 响应（包括 404）里广告 `https://aisa.one/docs/.well-known/api-catalog`。该路径今天不可用。请改用 `https://aisa.one/openapi.yaml`、`https://aisa.one/docs/llms.txt` 或 `https://aisa.one/docs/zh/api-reference`。本页不声称该 404 已修复。
+</Warning>
 
 ## 智能体发现的工作方式
 
-发现流程包含三个步骤：**发现**、**检查**和**调用**。自主智能体先获取智能体卡片，了解 AIsa 的能力；再选择相关技能；最后根据 OpenAPI 规范中的请求和响应 Schema 调用相应 API 端点。
+发现流程包含三个步骤：**发现**、**检查**和**调用**。自主智能体先获取已发布的卡片或 Skill，再选择相关能力，最后根据 OpenAPI 规范中的请求和响应 Schema 调用相应 API 端点。Docs 托管的卡片是 Mintlify 对 Skill 的投影，不是 A2A 传输。
 
 <Steps>
   <Step title="发现">
@@ -31,9 +40,9 @@ AIsa 通过以下 well-known URL 支持智能体发现。这三个端点都可�
   </Step>
 </Steps>
 
-## A2A 智能体卡片
+## 智能体卡片
 
-[Google Agent-to-Agent（A2A）](https://google.github.io/A2A/)协议定义了智能体发布自身能力的标准格式。AIsa 的智能体卡片位于 well-known URL，用于描述平台、身份认证要求和完整技能目录。
+产品卡片位于 `https://aisa.one/.well-known/agent-card.json`，是落地页元数据。Docs 托管卡片位于 `https://aisa.one/docs/.well-known/agent-card.json`，由 Mintlify 从同源 Skill（仓库根目录 `skill.md`）自动生成。请拉取线上卡片，不要复制文档里的固定技能表。这两条 URL 都不会新增 A2A 执行运行时，也不会引入新的 well-known 名称。
 
 ### 获取智能体卡片
 
@@ -94,7 +103,7 @@ card.skills.forEach((s: any) => console.log(`  • ${s.id}: ${s.name}`));
 
 ### 可用技能
 
-AIsa 当前通过智能体卡片发布 13 项技能。下表中的名称和标签与实际发现 Payload 保持一致：
+请拉取线上卡片，不要依赖文档里的固定技能表。下表只是历史示例，不是当前目录：
 
 | 技能 ID | 名称 | 标签 |
 | :--- | :--- | :--- |
