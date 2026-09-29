@@ -65,6 +65,8 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
     if not docs_path.exists():
         return
     docs = json.loads(changes.get(docs_path, docs_path.read_text()))
+    import localize_openapi_zh as localization
+    catalog = read_json(root / "translations/openapi-zh.json", {"entries": {}})
     known = {}
     from urllib.parse import urlsplit
     previous_prefix = urlsplit(((previous or {}).get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
@@ -80,11 +82,21 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
         for language, prefix in (("en", ""), ("zh", "zh/")):
             destination = root / f"{prefix}{page}.mdx"
             spec_path = f"openapi/{'zh/' if language == 'zh' else ''}{provider}.json"
-            title = json.dumps(operation.get("summary", operation["operationId"]), ensure_ascii=False)
+            source_title = operation.get("summary") or operation["operationId"]
+            localized_title = source_title
+            if language == "zh":
+                try:
+                    localized_title = localization.translation(catalog, source_title)
+                except KeyError:
+                    pass  # Current English title is safer than a stale translation.
+            title = json.dumps(localized_title, ensure_ascii=False)
             reference = json.dumps(f"{spec_path} {method.upper()} {path}")
             identity = f"x-aisa-operation-id: {json.dumps(operation['operationId'])}"
             if destination.exists():
                 text = destination.read_text()
+                frontmatter, prose = localization.split_frontmatter(text)
+                frontmatter = localization.replace_frontmatter_value(frontmatter, "title", localized_title)
+                text = "---\n" + frontmatter + "\n---\n" + prose
                 text = re.sub(r"^openapi:.*$", lambda _: f"openapi: {reference}", text, count=1, flags=re.M)
                 if "x-aisa-operation-id:" not in text:
                     text = text.replace("---\n", "---\n" + identity + "\n", 1)
@@ -129,8 +141,6 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
         changes[docs_path] = content
     # Use the existing deterministic translation catalog. Untranslated strings
     # retain English; no paid/model translation is invoked by scheduled pulls.
-    import localize_openapi_zh as localization
-    catalog = read_json(root / "translations/openapi-zh.json", {"entries": {}})
     localized = localization.localize_tree(document, catalog, allow_untranslated=True)
     changes[root / f"openapi/zh/{provider}.json"] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
 
@@ -173,7 +183,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             upstream = read_json(root / f"openapi/upstream/{provider}.json")
             overlay_path = root / f"openapi/overlays/{provider}.yaml"
             overlay = yaml.safe_load(overlay_path.read_text()) if overlay_path.exists() else {}
-            document, unresolved = compose(facts, upstream, overlay)
+            document, unresolved = compose(facts, upstream, overlay, previous)
             # The initial hand-written -> generated cutover must retain IDs too.
             # Relative legacy paths are compared as absolute effective routes.
             if previous:

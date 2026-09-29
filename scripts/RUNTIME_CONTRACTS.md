@@ -29,14 +29,15 @@ can be migrated without renaming existing tools.
 A previously published route disappearing or changing its ID aborts the entire
 pull before files are written. Disabled operations stay in the output. A pinned
 registry entry (`pin: <commit SHA>`) restores its committed document explicitly.
-The content hash combines runtime facts, mirror, overlay and composer version;
-`generated_at` alone never causes a commit. ETags cache public facts under ignored
+The content hash combines runtime facts, mirror, overlay, retained published
+success payloads and composer version; `generated_at` alone never causes a commit. ETags cache public facts under ignored
 `.cache/runtime-contracts`, and overlays are recomposed even after a 304.
 
 Page creation reuses existing route references and never overwrites handwritten
-prose. New English and Chinese pages and navigation entries are additive. The
-existing translation catalog localizes available strings; untranslated strings
-remain English and can be translated through the existing localization workflow.
+prose. Managed English titles track the runtime summary; Chinese titles use the
+existing translation catalog or the current English title when no translation
+exists. New pages and navigation entries are additive. Untranslated strings can
+be translated through the existing localization workflow.
 No model translation credentials or paid calls are required by this puller.
 
 The workflow runs every 30 minutes, on dispatch and on source-input changes. It
@@ -56,10 +57,23 @@ publication must be configured before enabling unattended mirror publication.
 The first cutover preserves published operation IDs, page URLs and handwritten
 MDX prose. Existing relative OpenAPI references are updated to the runtime's full
 public paths. Similarweb editorial overlays retain moving upstream date-window
-rules and response descriptions; numerical parameter constraints, dated examples
-and billing calculations remain runtime-owned. Runtime response descriptors are
-kept as-is: legacy hand-authored response schemas are not copied into the new
-contract, and need review before enabling publication.
+rules and response descriptions; request parameters, request examples and billing
+calculations remain runtime-owned. When runtime only describes a generic success
+response, composition retains the previously published success payload schema and
+examples for the same effective route, method and immutable operation ID. Only
+success content is inherited, never legacy error shapes, headers or authentication.
+An operation's `x-aisa-response-source` identifies this published-contract fallback
+by content hash; the retained payload also enters `document_hash`. Referenced
+schemas are resolved against the published document. A concrete runtime success
+payload supersedes this fallback. Subsequent pulls retain the same payload without
+creating a second source file or timestamp/hash churn.
+
+The consolidated spec preserves plans and default capabilities under
+`info.x-aisa-document.providers[provider]`, alongside that provider's hashes.
+Each generated operation carries `x-aisa-provider` to identify its policy, and its
+`x-aisa-capabilities` includes document defaults followed by operation overrides.
+The default-request estimate already includes customer pricing; apply only the
+associated display-plan multiplier when rendering the reference price.
 
 The pull workflow validates generated page references only. The repository's
 existing full slug audit remains available unchanged; historical provider page
@@ -67,3 +81,9 @@ names do not all satisfy it. Disabled status updates use a managed notice block
 without replacing page prose. A pinned rollback is still subject to page
 reference validation: it cannot publish a version missing routes used by retained
 pages without an explicit documentation migration.
+
+The full initial-cutover test reads the 23-route published Similarweb contract and
+pages from git commit `3a00a91` (the pre-projection baseline), rather than keeping a
+duplicate response-schema fixture. It needs that commit available locally; the
+pull workflow uses full history. It verifies all payloads, examples, IDs, page
+URLs, both title locales, merged pricing/capabilities and repeat-pull stability.

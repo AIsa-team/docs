@@ -280,5 +280,168 @@ class ConsolidationTests(unittest.TestCase):
         self.assertIn("Similarweb_Error", unified["components"]["schemas"])
 
 
+
+
+class PublishedResponseTests(unittest.TestCase):
+    def test_fallback_is_content_addressed_idempotent_and_never_copies_errors(self):
+        previous, runtime = facts(), facts()
+        old = operation(previous)
+        old["responses"] = {
+            "200": {"description": "Published result", "headers": {"Legacy": {"schema": {"type": "string"}}},
+                    "content": {"application/json": {"schema": {"type": "object", "properties": {"value": {"type": "integer"}}}, "example": {"value": 7}}}},
+            "400": {"description": "Old incompatible error", "content": {"application/json": {"schema": {"type": "string"}}}},
+        }
+        operation(runtime)["responses"]["200"]["headers"] = {"Current": {"schema": {"type": "integer"}}}
+        operation(runtime)["responses"]["default"] = {"description": "Current runtime error"}
+        first, pending = compose(runtime, previous=previous)
+        self.assertFalse(pending)
+        success = operation(first)["responses"]["200"]
+        self.assertEqual(success["content"], old["responses"]["200"]["content"])
+        self.assertEqual(set(success["headers"]), {"Current"})
+        self.assertNotIn("400", operation(first)["responses"])
+        self.assertEqual(operation(first)["responses"]["default"], operation(runtime)["responses"]["default"])
+        self.assertEqual(operation(first)["x-aisa-response-source"]["kind"], "published_success_contract")
+        second, _ = compose(runtime, previous=first)
+        third, _ = compose(runtime, previous=second)
+        self.assertEqual(first, second)
+        self.assertEqual(second, third)
+        changed = copy.deepcopy(previous)
+        operation(changed)["responses"]["200"]["content"]["application/json"]["example"]["value"] = 8
+        edited, _ = compose(runtime, previous=changed)
+        self.assertNotEqual(first["info"]["x-aisa-document"]["document_hash"], edited["info"]["x-aisa-document"]["document_hash"])
+        # The response fallback requires both the route and immutable ID to match.
+        moved = copy.deepcopy(runtime)
+        moved["paths"] = {"/new": next(iter(moved["paths"].values()))}
+        relocated, _ = compose(moved, previous=previous)
+        self.assertNotIn("x-aisa-response-source", operation(relocated))
+        self.assertNotIn("content", operation(relocated)["responses"]["200"])
+        # Once runtime supplies a real payload contract it becomes authoritative.
+        operation(runtime)["responses"]["200"]["content"] = {"application/json": {"schema": {"type": "array"}}}
+        authoritative, _ = compose(runtime, previous=first)
+        self.assertEqual(operation(authoritative)["responses"]["200"]["content"], operation(runtime)["responses"]["200"]["content"])
+        self.assertNotIn("x-aisa-response-source", operation(authoritative))
+
+
+class FullSimilarwebCutoverTests(unittest.TestCase):
+    def test_all_published_routes_titles_payloads_and_unified_defaults_survive(self):
+        import shutil
+        import subprocess
+        from urllib.parse import urlsplit
+        from compose_openapi import METHODS, resolve
+        from localize_openapi_zh import key_for
+        from pull_openapi import operations
+        from validate_api_reference_slugs import validate
+
+        repository = Path(__file__).resolve().parents[2]
+        # Read the actual pre-cutover publication, without duplicating its
+        # response schemas in another fixture file. The pull workflow checks
+        # out full history; later generated endpoints must not alter this case.
+        baseline = "3a00a91"
+        page_paths = subprocess.check_output([
+            "git", "ls-tree", "-r", "--name-only", baseline, "api-reference/similarweb",
+        ], cwd=repository, text=True, timeout=15).splitlines()
+        baseline_files = {
+            name: subprocess.check_output(["git", "show", f"{baseline}:{name}"], cwd=repository, timeout=15)
+            for name in ["openapi/similarweb.json", *page_paths]
+        }
+        previous = json.loads(baseline_files["openapi/similarweb.json"])
+        published = list(operations(previous))
+        self.assertEqual(len(published), 23, "exercise the actual entire initial Similarweb catalog")
+        legacy_prefix = urlsplit(previous["servers"][0]["url"]).path.rstrip("/")
+        runtime = facts()
+        runtime["paths"] = {}
+        plans = {"payg": 1.5, "similarweb_payg": 2.0, "builder": 1.2, "team": 1.0, "display_plan": "similarweb_payg", "version": "actual-policy-fixture"}
+        capabilities = {"quote": {"header": "X-AISA-Cost-Mode", "value": "quote"}, "max_price": "X-AISA-Max-Price-USD", "idempotency": "Idempotency-Key"}
+        runtime["info"]["x-aisa-plans"] = plans
+        runtime["info"]["x-aisa-capabilities"] = capabilities
+        for path, method, old in published:
+            op = copy.deepcopy(operation(facts()))
+            op["operationId"] = old["operationId"]
+            op["summary"] = "Runtime " + old.get("summary", old["operationId"])
+            op["description"] = "Current runtime prose"
+            op["parameters"] = [{"in": "query", "name": "runtime_query", "schema": {"type": "string"}}]
+            op["x-aisa-pricing"] = {"default_request_estimate_usd": 0.15, "customer_multiplier": 2.0}
+            op["responses"]["default"] = {"description": "Current runtime error"}
+            runtime["paths"].setdefault(legacy_prefix + path, {})[method] = op
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for relative, content in baseline_files.items():
+                destination = root / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(content)
+            for relative in ("openapi/registry.yaml", "openapi/overlays/similarweb.yaml", "docs.json", "translations/openapi-zh.json"):
+                destination = root / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(repository / relative, destination)
+            original_pages = set((root / "api-reference/similarweb").glob("*.mdx"))
+            original_bodies = {p: p.read_text().split("---", 2)[2] for p in original_pages}
+            (root / "facts").mkdir()
+            facts_path = root / "facts/similarweb.json"
+            facts_path.write_text(json.dumps(runtime))
+
+            def publish(changes):
+                for path, text in changes.items():
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(text)
+
+            changes, summary = stage(root, root / "facts", "unused")
+            self.assertEqual(summary["similarweb"]["operations"], 23)
+            self.assertEqual(summary["similarweb"]["pending"], 0)
+            publish(changes)
+            generated = json.loads((root / "openapi/similarweb.json").read_text())
+            self.assertEqual(validate(root, generated_only=True), [])
+            self.assertEqual(set((root / "api-reference/similarweb").glob("*.mdx")), original_pages)
+            for path, method, old in published:
+                current = generated["paths"][legacy_prefix + path][method]
+                self.assertEqual(current["operationId"], old["operationId"])
+                self.assertEqual(current["responses"]["200"]["content"], resolve(old["responses"]["200"], previous)["content"])
+                self.assertEqual(current["responses"]["default"], {"description": "Current runtime error"})
+                self.assertEqual(current["parameters"], runtime["paths"][legacy_prefix + path][method]["parameters"])
+                self.assertEqual(current["x-aisa-pricing"], runtime["paths"][legacy_prefix + path][method]["x-aisa-pricing"])
+            for page in original_pages:
+                self.assertEqual(page.read_text().split("---", 2)[2], original_bodies[page])
+                self.assertIn('title: "Runtime ', page.read_text())
+            changes, _ = stage(root, root / "facts", "unused")
+            self.assertEqual(changes, {}, "retained success payloads must not change the hash on the next pull")
+
+            # Summary updates refresh both locales without changing page URLs or prose.
+            changed_path, changed_method, changed_op = next(operations(runtime))
+            changed_op["summary"] = "Updated Endpoint Title"
+            runtime["info"]["x-aisa-document"]["facts_hash"] = "sha256:updated-title"
+            facts_path.write_text(json.dumps(runtime))
+            catalog_path = root / "translations/openapi-zh.json"
+            catalog = json.loads(catalog_path.read_text())
+            catalog["entries"][key_for("Updated Endpoint Title")] = {"source": "Updated Endpoint Title", "translation": "已更新的端点标题"}
+            catalog_path.write_text(json.dumps(catalog))
+            target = next(page for page in original_pages if f"{changed_method.upper()} {changed_path}" in page.read_text())
+            zh_target = root / "zh" / target.relative_to(root)
+            target.write_text(target.read_text() + "\nKeep English prose.\n")
+            zh_target.write_text(zh_target.read_text() + "\n保留中文正文。\n")
+            changes, _ = stage(root, root / "facts", "unused")
+            publish(changes)
+            self.assertIn('title: "Updated Endpoint Title"', target.read_text())
+            self.assertIn('title: "已更新的端点标题"', zh_target.read_text())
+            self.assertIn("Keep English prose.", target.read_text())
+            self.assertIn("保留中文正文。", zh_target.read_text())
+            self.assertEqual(set((root / "api-reference/similarweb").glob("*.mdx")), original_pages)
+            self.assertEqual(validate(root, generated_only=True), [])
+            changes, _ = stage(root, root / "facts", "unused")
+            self.assertEqual(changes, {}, "third pull must not churn hashes, fallback payloads or titles")
+
+            with patch.object(consolidate, "OPENAPI_DIR", str(root / "openapi")):
+                unified = consolidate.build_unified_spec()
+            inherited = unified["info"]["x-aisa-document"]["providers"]["similarweb"]
+            self.assertEqual(inherited["x-aisa-plans"], plans)
+            self.assertEqual(inherited["x-aisa-capabilities"], capabilities)
+            self.assertEqual(len(unified["paths"]), 23)
+            for path, method, op in operations(unified):
+                self.assertEqual(op["x-aisa-provider"], "similarweb")
+                self.assertEqual(op["x-aisa-capabilities"]["quote"], capabilities["quote"])
+                self.assertFalse(op["x-aisa-capabilities"]["x402"])
+                policy = unified["info"]["x-aisa-document"]["providers"][op["x-aisa-provider"]]["x-aisa-plans"]
+                self.assertEqual(op["x-aisa-pricing"]["default_request_estimate_usd"] * policy[policy["display_plan"]], 0.30)
+                self.assertIn("content", op["responses"]["200"])
+
 if __name__ == "__main__":
     unittest.main()

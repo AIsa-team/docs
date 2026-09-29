@@ -11,8 +11,9 @@ import hashlib
 import json
 import re
 from typing import Any
+from urllib.parse import urlsplit
 
-VERSION = "1"
+VERSION = "2"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 
@@ -135,7 +136,53 @@ def merge_body(upstream: dict, runtime: dict) -> dict:
     return result
 
 
-def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = None) -> tuple[dict, list]:
+def has_response_contract(response: dict) -> bool:
+    return any(
+        media.get("schema") or "example" in media or "examples" in media
+        for media in response.get("content", {}).values()
+        if isinstance(media, dict)
+    )
+
+
+def published_success_responses(previous: dict | None) -> dict:
+    """Read only documented success payloads; never inherit errors or auth.
+
+    References are resolved against the published source before extracting the
+    response contract, so old component names cannot collide with runtime ones.
+    The retained payload is content-addressed and feeds document_hash below.
+    """
+    result = {}
+    if not previous:
+        return result
+    prefix = urlsplit((previous.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
+    for path, path_item in previous.get("paths", {}).items():
+        for method, operation in path_item.items():
+            if method not in METHODS:
+                continue
+            operation_id = operation.get("operationId")
+            if not operation_id:
+                continue
+            responses = {}
+            for status, response in operation.get("responses", {}).items():
+                if not re.fullmatch(r"2(?:[0-9]{2}|XX)", str(status)):
+                    continue
+                resolved = resolve(response, previous)
+                if has_response_contract(resolved):
+                    # Do not copy legacy headers/links: runtime owns protocol.
+                    responses[str(status)] = {
+                        "description": resolved.get("description", "Successful response"),
+                        "content": copy.deepcopy(resolved["content"]),
+                    }
+            if responses:
+                identity = (prefix + path, method, operation_id)
+                if identity in result:
+                    raise IdentityError(f"duplicate published response identity: {operation_id}")
+                result[identity] = responses
+    return result
+
+
+def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = None,
+            previous: dict | None = None) -> tuple[dict, list]:
     overlay = overlay or {}
     validate_overlay(overlay)
     if not isinstance(facts.get("paths"), dict) or not facts.get("openapi", "").startswith("3.1"):
@@ -149,6 +196,9 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
     output = copy.deepcopy(facts)
     output["paths"] = {}
     pending: list[dict] = []
+    published_responses = published_success_responses(previous)
+    retained_responses = {}
+    facts_prefix = urlsplit((facts.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
     ids: set[str] = set()
     auth_names = {"authorization", "x-api-key", "api-key"}
     for scheme in (upstream or {}).get("components", {}).get("securitySchemes", {}).values():
@@ -206,6 +256,23 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             raise ValueError("runtime constraints must be an object")
                         constraints["notes"] = copy.deepcopy(notes)
                     operation_id = operation["operationId"]
+                    retained = {}
+                    response_identity = (facts_prefix + path, actual_method, operation_id)
+                    for status, response in published_responses.get(response_identity, {}).items():
+                        runtime_response = operation.setdefault("responses", {}).get(status, {})
+                        if not has_response_contract(runtime_response):
+                            effective = copy.deepcopy(runtime_response)
+                            effective["content"] = copy.deepcopy(response["content"])
+                            if effective.get("description") in (None, "Success", "Successful response"):
+                                effective["description"] = response["description"]
+                            operation["responses"][status] = effective
+                            retained[status] = {"description": effective["description"], "content": effective["content"]}
+                    if retained:
+                        retained_responses[operation_id] = retained
+                        operation["x-aisa-response-source"] = {
+                            "kind": "published_success_contract",
+                            "content_hash": digest(retained),
+                        }
                     if operation_id[:56] in ids:
                         raise IdentityError(f"operationId prefix collision: {operation_id}")
                     ids.add(operation_id[:56])
@@ -216,5 +283,5 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     pending.append({"operation_id": base_id, "path": path, "method": actual_method.upper(), "reason": str(exc)})
     document_meta = output["info"]["x-aisa-document"]
     document_meta["composer_version"] = VERSION
-    document_meta["document_hash"] = digest({"facts_hash": meta["facts_hash"], "upstream": upstream, "overlay": overlay, "composer_version": VERSION})
+    document_meta["document_hash"] = digest({"facts_hash": meta["facts_hash"], "upstream": upstream, "overlay": overlay, "composer_version": VERSION, "published_success_responses": retained_responses})
     return output, pending

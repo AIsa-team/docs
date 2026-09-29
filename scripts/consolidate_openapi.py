@@ -389,6 +389,8 @@ def build_unified_spec():
             unified["info"].setdefault("x-aisa-document", {}).setdefault("providers", {})[provider] = {
                 "document_hash": metadata["document_hash"],
                 "facts_hash": metadata.get("facts_hash"),
+                "x-aisa-plans": spec["info"].get("x-aisa-plans", {}),
+                "x-aisa-capabilities": spec["info"].get("x-aisa-capabilities", {}),
             }
         merge_components(unified, spec, filename)
 
@@ -436,6 +438,13 @@ def build_unified_spec():
                     # files so OpenAPI consumers route them to /v1 or /v1beta
                     # instead of the default /apis/v1.
                     if generated:
+                        # Associate inherited provider defaults explicitly: plan
+                        # prices cannot be derived from the seed estimate alone.
+                        operation["x-aisa-provider"] = provider
+                        operation["x-aisa-capabilities"] = {
+                            **spec["info"].get("x-aisa-capabilities", {}),
+                            **operation.get("x-aisa-capabilities", {}),
+                        }
                         operation["servers"] = spec.get("servers", [])
                         if "security" not in operation and "security" in spec:
                             operation["security"] = spec["security"]
