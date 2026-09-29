@@ -49,11 +49,13 @@ def extract_openapi_ref(text: str) -> tuple[str, str] | None:
     return method, path
 
 
-def validate(root: Path) -> list[str]:
+def validate(root: Path, generated_only: bool = False) -> list[str]:
     errors: list[str] = []
     canonical_to_files: dict[str, list[str]] = {}
     for mdx in sorted((root / "api-reference").rglob("*.mdx")):
         text = mdx.read_text(encoding="utf-8")
+        if generated_only and "x-aisa-operation-id:" not in text:
+            continue
         ref = extract_openapi_ref(text)
         if ref is None:
             continue
@@ -88,8 +90,9 @@ def validate(root: Path) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--generated-only", action="store_true", help="validate generated contract page identities only")
     args = parser.parse_args()
-    errors = validate(args.root.resolve())
+    errors = validate(args.root.resolve(), args.generated_only)
     if errors:
         print("API reference slug validation failed:", file=sys.stderr)
         for error in errors:

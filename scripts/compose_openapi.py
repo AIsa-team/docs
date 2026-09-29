@@ -17,6 +17,10 @@ METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head",
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 
 
+class IdentityError(ValueError):
+    pass
+
+
 def digest(value: Any) -> str:
     return "sha256:" + hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
 
@@ -55,6 +59,8 @@ def resolve(value: Any, document: dict, stack: tuple = ()) -> Any:
         if siblings:
             if not isinstance(target, dict):
                 raise ValueError("upstream reference has incompatible siblings")
+            if any(key in target and target[key] != value and key not in {"description", "summary"} for key, value in siblings.items()):
+                raise ValueError("upstream reference has conflicting sibling constraints")
             target = {**target, **siblings}
         return target
     return {k: resolve(v, document, stack) for k, v in value.items()}
@@ -90,6 +96,25 @@ def flatten_object(schema: dict) -> dict:
     return result
 
 
+def merge_object(upstream: dict, declared: dict) -> dict:
+    merged = flatten_object(upstream)
+    names = set(declared.get("properties", {}))
+    required = (set(merged.get("required", [])) - names) | set(declared.get("required", []))
+    for name, value in declared.get("properties", {}).items():
+        original = merged.setdefault("properties", {}).get(name, {})
+        if value.get("properties") and isinstance(original, dict) and original.get("type", "object") == "object":
+            merged["properties"][name] = merge_object(original, value)
+        else:
+            merged["properties"][name] = copy.deepcopy(value)
+    merged.pop("required", None)
+    if required:
+        merged["required"] = sorted(required)
+    for key, value in declared.items():
+        if key not in {"properties", "required", "additionalProperties", "type"}:
+            merged[key] = copy.deepcopy(value)
+    return merged
+
+
 def merge_body(upstream: dict, runtime: dict) -> dict:
     if not runtime:
         return copy.deepcopy(upstream)
@@ -104,19 +129,7 @@ def merge_body(upstream: dict, runtime: dict) -> dict:
         declared = contract.get("schema", {})
         if not declared.get("properties"):
             continue
-        merged = flatten_object(original.get("schema", {}))
-        names = set(declared["properties"])
-        required = (set(merged.get("required", [])) - names) | set(declared.get("required", []))
-        merged.setdefault("properties", {}).update(copy.deepcopy(declared["properties"]))
-        merged.pop("required", None)
-        if required:
-            merged["required"] = sorted(required)
-        # Keep provider restrictions on undeclared properties; runtime constraints
-        # on declared fields supersede the provider's stale versions.
-        for key, value in declared.items():
-            if key not in {"properties", "required", "additionalProperties", "type"}:
-                merged[key] = copy.deepcopy(value)
-        original["schema"] = merged
+        original["schema"] = merge_object(original.get("schema", {}), declared)
         # Upstream request examples describe the complete body. Runtime examples
         # only cover declared fields and must not replace the complete example.
     return result
@@ -168,7 +181,13 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         mirror["parameters"] = resolve(upstream_item.get("parameters", []), upstream) + mirror.get("parameters", [])
                     operation = copy.deepcopy(runtime)
                     if validation != "runtime":
-                        parameters = {(p["in"], p["name"]): p for p in mirror.get("parameters", []) if p.get("name", "").lower() not in auth_names}
+                        runtime_fields = {(p["in"], p["name"]) for p in runtime.get("parameters", [])}
+                        query_passthrough = runtime.get("x-aisa-query-policy", {}).get("request_wins", False)
+                        parameters = {
+                            (p["in"], p["name"]): p for p in mirror.get("parameters", [])
+                            if p.get("name", "").lower() not in auth_names
+                            and (p.get("in") != "query" or query_passthrough or (p["in"], p["name"]) in runtime_fields)
+                        }
                         parameters.update({(p["in"], p["name"]): copy.deepcopy(p) for p in runtime.get("parameters", [])})
                         if parameters:
                             operation["parameters"] = [parameters[k] for k in sorted(parameters)]
@@ -188,9 +207,11 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         constraints["notes"] = copy.deepcopy(notes)
                     operation_id = operation["operationId"]
                     if operation_id[:56] in ids:
-                        raise ValueError(f"operationId prefix collision: {operation_id}")
+                        raise IdentityError(f"operationId prefix collision: {operation_id}")
                     ids.add(operation_id[:56])
                     output["paths"].setdefault(path, {})[actual_method] = operation
+                except IdentityError:
+                    raise
                 except (ValueError, KeyError, TypeError) as exc:
                     pending.append({"operation_id": base_id, "path": path, "method": actual_method.upper(), "reason": str(exc)})
     document_meta = output["info"]["x-aisa-document"]

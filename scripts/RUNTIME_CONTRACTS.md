@@ -52,3 +52,18 @@ These need the corresponding downstream/rollout prerequisites. Existing
 `sync-openapi.yml` handles website distribution for user-authored source pushes;
 a GitHub-token bot push does not trigger that workflow, so cross-repository
 publication must be configured before enabling unattended mirror publication.
+
+The first cutover preserves published operation IDs, page URLs and handwritten
+MDX prose. Existing relative OpenAPI references are updated to the runtime's full
+public paths. Similarweb editorial overlays retain moving upstream date-window
+rules and response descriptions; numerical parameter constraints, dated examples
+and billing calculations remain runtime-owned. Runtime response descriptors are
+kept as-is: legacy hand-authored response schemas are not copied into the new
+contract, and need review before enabling publication.
+
+The pull workflow validates generated page references only. The repository's
+existing full slug audit remains available unchanged; historical provider page
+names do not all satisfy it. Disabled status updates use a managed notice block
+without replacing page prose. A pinned rollback is still subject to page
+reference validation: it cannot publish a version missing routes used by retained
+pages without an explicit documentation migration.

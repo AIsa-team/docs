@@ -251,8 +251,18 @@ def merge_components(unified, spec, filename):
                     raise ValueError(f"component collision: {filename} {section}/{name}")
                 renamed[f"#/components/{section}/{name}"] = f"#/components/{section}/{candidate}"
 
+    security_names = {
+        old.rsplit("/", 1)[1]: new.rsplit("/", 1)[1]
+        for old, new in renamed.items() if old.startswith("#/components/securitySchemes/")
+    }
+
     def rewrite(node):
         if isinstance(node, dict):
+            if isinstance(node.get("security"), list):
+                node["security"] = [
+                    {security_names.get(name, name): scopes for name, scopes in requirement.items()}
+                    for requirement in node["security"]
+                ]
             if node.get("$ref") in renamed:
                 node["$ref"] = renamed[node["$ref"]]
             for value in node.values():

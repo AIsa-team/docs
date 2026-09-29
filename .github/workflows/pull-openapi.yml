@@ -49,22 +49,31 @@ jobs:
           restore-keys: runtime-contracts-
       - name: Stage contracts
         id: pull
-        continue-on-error: true
-        run: python scripts/pull_openapi.py --write
-      - name: Runtime unavailable or contract gate failed
-        if: steps.pull.outcome != 'success'
-        run: echo 'Runtime contracts were unavailable or failed validation. Published files were preserved.' >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          set +e
+          python scripts/pull_openapi.py --write
+          status=$?
+          set -e
+          if [ "$status" -eq 2 ]; then
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          echo 'available=true' >> "$GITHUB_OUTPUT"
+      - name: Runtime unavailable
+        if: steps.pull.outputs.available == 'false'
+        run: echo 'Runtime contracts were unavailable. Published files were preserved.' >> "$GITHUB_STEP_SUMMARY"
       - name: Consolidate generated contracts
-        if: steps.pull.outcome == 'success'
+        if: steps.pull.outputs.available == 'true'
         run: python scripts/consolidate_openapi.py --output openapi.yaml
       - name: Validate page references
-        if: steps.pull.outcome == 'success'
-        run: python scripts/validate_api_reference_slugs.py
+        if: steps.pull.outputs.available == 'true'
+        run: python scripts/validate_api_reference_slugs.py --generated-only
       - name: Review staged differences
-        if: steps.pull.outcome == 'success'
+        if: steps.pull.outputs.available == 'true'
         run: git diff --stat >> "$GITHUB_STEP_SUMMARY"
       - name: Commit verified contracts
-        if: steps.pull.outcome == 'success' && (inputs.publish == true || (github.event_name != 'workflow_dispatch' && vars.RUNTIME_CONTRACT_PUBLISH == 'true'))
+        if: steps.pull.outputs.available == 'true' && (inputs.publish == true || (github.event_name != 'workflow_dispatch' && vars.RUNTIME_CONTRACT_PUBLISH == 'true'))
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'

@@ -89,6 +89,29 @@ class CompositionTests(unittest.TestCase):
         self.assertEqual(schema["required"], ["email"])
         self.assertIn("email", schema["properties"])
 
+    def test_query_policy_does_not_expose_rejected_or_ignored_parameters(self):
+        upstream = mirror()
+        upstream["paths"]["/provider/test"]["post"]["parameters"].append({"name": "upstream_only", "in": "query", "schema": {"type": "integer"}})
+        for ignore in (False, True):
+            runtime = facts("mixed")
+            operation(runtime)["x-aisa-query-policy"] = {"request_wins": False, "ignore_undeclared": ignore}
+            document, pending = compose(runtime, upstream)
+            self.assertFalse(pending)
+            self.assertEqual([p["name"] for p in operation(document)["parameters"]], ["switch"])
+        operation(runtime)["x-aisa-query-policy"]["request_wins"] = True
+        document, _ = compose(runtime, upstream)
+        self.assertEqual([p["name"] for p in operation(document)["parameters"]], ["switch", "upstream_only"])
+
+    def test_nested_mixed_body_preserves_undeclared_provider_fields(self):
+        runtime, upstream = facts("mixed"), mirror()
+        operation(runtime)["requestBody"] = {"content": {"application/json": {"schema": {"type": "object", "properties": {"options": {"type": "object", "properties": {"limit": {"type": "integer"}}, "additionalProperties": True}}}}}}
+        upstream["components"]["schemas"]["Body"] = {"type": "object", "properties": {"options": {"type": "object", "properties": {"limit": {"type": "string"}, "country": {"type": "string"}}, "required": ["country", "limit"]}}}
+        document, pending = compose(runtime, upstream)
+        self.assertFalse(pending)
+        schema = operation(document)["requestBody"]["content"]["application/json"]["schema"]["properties"]["options"]
+        self.assertEqual(schema["properties"], {"limit": {"type": "integer"}, "country": {"type": "string"}})
+        self.assertEqual(schema["required"], ["country"])
+
     def test_unsupported_upstream_is_pending(self):
         for ref in ("https://provider.example/schema.json", "#/components/schemas/Body"):
             upstream = mirror()
@@ -167,6 +190,43 @@ class PullTests(unittest.TestCase):
         changes, _ = stage(self.root, self.root / "facts", "unused")
         self.assertEqual(changes, {})
         self.assertIn("Handwritten business prose.", page.read_text())
+
+    def test_first_cutover_reuses_legacy_page_and_preserves_prose(self):
+        old = facts()
+        old["servers"] = [{"url": "https://api.aisa.one/apis/v1"}]
+        old["paths"] = {"/similarweb/test": old["paths"]["/apis/v1/similarweb/test"]}
+        old["info"].pop("x-aisa-document")
+        (self.root / "openapi/similarweb.json").write_text(json.dumps(old))
+        page = self.root / "api-reference/similarweb/post_similarweb-test.mdx"
+        page.parent.mkdir(parents=True)
+        page.write_text('---\ntitle: "Published title"\nopenapi: "openapi/similarweb.json POST /similarweb/test"\n---\nBusiness prose.\n')
+        changes, _ = stage(self.root, self.root / "facts", "unused")
+        self.write(changes)
+        self.assertIn("Business prose.", page.read_text())
+        self.assertIn("POST /apis/v1/similarweb/test", page.read_text())
+        self.assertFalse((page.parent / "published_identity.mdx").exists())
+        from validate_api_reference_slugs import validate
+        self.assertEqual(validate(self.root, generated_only=True), [])
+        changes, _ = stage(self.root, self.root / "facts", "unused")
+        self.assertEqual(changes, {})
+
+    def test_disabled_notice_updates_without_losing_prose(self):
+        changes, _ = stage(self.root, self.root / "facts", "unused")
+        self.write(changes)
+        page = self.root / "api-reference/similarweb/published_identity.mdx"
+        page.write_text(page.read_text() + "Handwritten prose.\n")
+        source = facts()
+        operation(source)["x-aisa-status"] = "disabled"
+        source["info"]["x-aisa-document"]["facts_hash"] = "sha256:disabled"
+        (self.root / "facts/similarweb.json").write_text(json.dumps(source))
+        changes, _ = stage(self.root, self.root / "facts", "unused")
+        self.write(changes)
+        self.assertIn("Currently disabled.", page.read_text())
+        self.assertIn("Handwritten prose.", page.read_text())
+        changes, _ = stage(self.root, self.root / "facts", "unused")
+        self.assertEqual(changes, {})
+        from validate_api_reference_slugs import validate
+        self.assertEqual(validate(self.root), [])
 
     def test_identity_change_aborts_before_writing(self):
         changes, _ = stage(self.root, self.root / "facts", "unused", False)
