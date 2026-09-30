@@ -79,34 +79,6 @@ remain unchanged; the three uncertain routes remain pending. Sources:
 The exact official crypto client is
 [Financial MCP](https://github.com/financial-datasets/mcp-server/blob/fe853352ccee2105ea6677fb493eaff5ce2ffa3b/server.py#L276).
 
-## Further runtime compatibility review
-
-A fresh production read-only follow-up confirmed the six upstream-maintenance
-operations are still enabled on the official provider bases and bound to
-metered_v2 immutable profiles. See the [detailed compatibility review and proposed
-company-facts transaction](https://github.com/AIsa-team/AIsaServices/blob/codex/api-contract-runtime-projection/docs/maintenance/integration-route-investigation-20260930.md).
-
-Only company facts has a prepared target-only semantic correction candidate,
-paired with a new immutable profile revision. Request and billing rules remain
-unchanged; the correct sibling profile is deliberately not reused because its
-query policy differs. No production correction has been applied.
-
-CLOB order and trades also have a confirmed runtime authentication capability
-gap: production config uses a single Authorization credential, whereas the
-upstream requires five POLY_* headers with per-path HMAC signatures. The current
-executor drops those caller headers and has no CLOB signer. Order's missing
-/data prefix therefore cannot be fixed by changing only configuration. Trades'
-legacy alias remains unproved, but it is no longer merely a schema-evidence issue.
-The twelve pending contracts comprise seven operations with route/retirement or
-runtime capability findings and five still limited to contract evidence. This
-classification does not change the twelve-operation pending count.
-
-Gamma provider 62 exists with the correct host but has configured Authorization
-and a credential. Public Gamma 200 is not proof that a rebind preserves configured
-gateway authentication/accounting. Segmented-revenues, institutional-ownership
-and earnings/press-releases likewise cannot be silently redirected to superficially
-similar new APIs. These are separate migration or retirement decisions.
-
 ## Handling future missing definitions
 
 The intake process is documented in [runtime contracts](../scripts/RUNTIME_CONTRACTS.md#resolving-a-missing-contract).
