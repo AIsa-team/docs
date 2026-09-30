@@ -52,6 +52,25 @@ class FredReferenceTest(unittest.TestCase):
         self.assertEqual(op['parameters'][3]['schema']['default'],0)
         self.assertFalse(op['parameters'][3]['required'])
 
+    def test_nested_official_enum_and_conditional_default(self):
+        _, op = parse_reference(reference('''
+            <h3>region_type</h3><ul><li>string, required</li>
+            <li>One of the following values:<ul><li>state</li><li>country</li></ul></li></ul>
+            <h3>order_by</h3><ul><li>One of the following strings: 'search_rank', 'series_id'.</li>
+            <li>optional, default: If search_type is 'full_text', the default is 'search_rank'.</li></ul>
+            '''), INDEX+'example.html')
+        region, order = op['parameters'][-2:]
+        self.assertEqual(region['schema'], {'type': 'string', 'enum': ['state', 'country']})
+        self.assertTrue(region['required'])
+        self.assertNotIn('default', order['schema'])
+        self.assertIn("If search_type is 'full_text'", order['description'])
+
+    def test_nested_enum_does_not_guess_values_from_prose(self):
+        with self.assertRaisesRegex(ValueError, 'unsupported nested enum'):
+            parse_reference(reference('''<h3>region_type</h3><ul><li>string, required</li>
+                <li>One of the following values:<ul><li>state (US states)</li></ul></li></ul>'''),
+                INDEX+'example.html')
+
     def test_index_discovers_future_route_and_records_unknown_reference(self):
         index = b'<a href="example.html">fred/example</a><a href="future.html">fred/future</a>'
         future = reference().replace(b'fred/example', b'fred/future').replace(b'integer between 1 and 1000, optional, default: 1000',b'opaque, required')
@@ -82,6 +101,10 @@ class FredReferenceTest(unittest.TestCase):
         self.assertEqual({p['url'] for p in source['pending_references']}, {
             INDEX+'series_search.html', 'https://fred.stlouisfed.org/docs/api/geofred/shapes.html',
             'https://fred.stlouisfed.org/docs/api/geofred/regional_data.html'})
+        self.assertEqual({p['reason'] for p in source['pending_references']}, {
+            'search_text: required/optional is not stated',
+            'shape: required/optional is not stated',
+            'frequency: required/optional is not stated'})
         for row in source['references']:
             self.assertRegex(row['sha256'],r'^[0-9a-f]{64}$')
             official_url(row['url'])

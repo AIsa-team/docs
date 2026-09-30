@@ -12,7 +12,7 @@ from urllib.request import urlopen
 from compose_openapi import digest
 
 INDEX = 'https://fred.stlouisfed.org/docs/api/fred/'
-CONVERTER = 'scripts/import_fred_reference.py@1'
+CONVERTER = 'scripts/import_fred_reference.py@2'
 VOID = {'br', 'hr', 'img', 'input', 'meta', 'link', 'wbr', 'source'}
 
 
@@ -94,14 +94,25 @@ def parameter(name, nodes, defaults=None):
         schema['minimum'] = 0
     elif re.search(r'\b(between|at least|at most|greater than|less than)\b', declaration):
         raise ValueError(f'{name}: unsupported numeric constraint {declaration!r}')
-    for bullet in bullets:
+    for node in (n for n in nodes if n.tag == 'li'):
+        bullet = node.text(skip={'p', 'ul', 'ol'})
         if re.match(r'On(?:e)? of the following (?:values|strings):', bullet):
             values = re.findall(r"'([^']*)'", bullet)
+            if not values:
+                # Regional Data declares region_type as nested list items,
+                # rather than quoted values in the parent bullet.
+                children = [child for child in node.children
+                            if isinstance(child, Node) and child.tag in ('ul', 'ol')]
+                values = [item.text() for child in children for item in child.all('li')]
+                if any(not re.fullmatch(r'[a-zA-Z0-9_]+', value) for value in values):
+                    raise ValueError(f'{name}: unsupported nested enum declaration')
             if not values:
                 raise ValueError(f'{name}: unsupported enum declaration')
             schema['enum'] = [int(v) for v in values] if schema['type'] == 'integer' else values
     default = re.search(r'default:\s*([^\s(]+)', declaration)
-    if default:
+    # Search ordering has defaults conditional on another parameter. Preserve
+    # that rule in the description, not as a bogus literal default of "If".
+    if default and not re.search(r'default:\s*[Ii]f\b', declaration):
         token = default[1].rstrip('.')
         if token not in ('today\'s', 'no') and (schema.get('format') != 'date' or re.fullmatch(r'\d{4}-\d{2}-\d{2}', token)):
             if schema['type'] == 'integer':
