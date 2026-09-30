@@ -70,7 +70,7 @@ def convert_reference(raw):
     document = {'openapi': '3.1.0', 'info': {'title': 'Cloudsway smart search official request', 'version': '1'},
         'paths': {'/apis/v1/search/smart': {'get': {'summary': 'Perform Smart Search', 'parameters': parameters,
             'responses': {'200': {'description': 'Provider response; response required fields are not inferred.'}}}}}}
-    return document, {'converter': VERSION, 'path_space': 'public', 'upstream_path_sha256': UPSTREAM_PATH_SHA256,
+    return document, {'kind': 'manual', 'refresh_policy': 'automatic', 'converter': VERSION, 'path_space': 'public', 'upstream_path_sha256': UPSTREAM_PATH_SHA256,
         'original_upstream_path_template': '/search/{Endpoint}/smart',
         'public_path_mapping': 'Reviewed AIsa routing maps the account-specific Cloudsway endpoint to /apis/v1/search/smart.',
         'source_pages': [{'url': REFERENCE_URL, 'raw_content_hash': 'sha256:' + hashlib.sha256(raw).hexdigest()}]}

@@ -208,6 +208,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         # discovery is disabled for an offline or pinned rollout.
         discover(registry, {"apis": []})
     original_documents = published_documents(root)
+    public_source_overrides = {}
     public_mirrors = public_mirror_index(root)
     coverage = {"providers": {}, "legacy_operations": []}
     moved = set()
@@ -302,11 +303,16 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                     upstream_path = root / "openapi/upstream" / upstream_file
                     document = read_json(upstream_path)
                     current_source = (document or {}).get("info", {}).get("x-aisa-source", {})
-                    if source_url and (current_source.get("kind") != "provider_openapi" or current_source.get("url") != source_url):
+                    trusted_kind = current_source.get("kind") == "provider_openapi" or (current_source.get("kind") == "manual" and current_source.get("path_space") == "public")
+                    if source_url and (not trusted_kind or current_source.get("url") != source_url):
                         document = import_source(provider, source_url)
                         changes[upstream_path] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
-                    if document and document.get("info", {}).get("x-aisa-source", {}).get("path_space") != "public":
-                        upstream_documents.append(document)
+                    if document:
+                        if document.get("info", {}).get("x-aisa-source", {}).get("path_space") == "public":
+                            public_source_overrides[upstream_file] = document
+                            public_mirrors = public_mirror_index(root, public_source_overrides)
+                        else:
+                            upstream_documents.append(document)
                 upstream = upstream_documents if isinstance(configured, list) else (upstream_documents[0] if upstream_documents else None)
                 history = previous_for_facts(facts, original_documents, provider)
                 document, unresolved = compose(facts, upstream, overlay, history, public_mirrors, source_bindings)

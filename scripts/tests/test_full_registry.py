@@ -389,10 +389,16 @@ class FullRegistryTests(unittest.TestCase):
                 self.assertTrue(source['url'].startswith('https://'))
                 self.assertNotIn('path_space', source)
                 continue
-            manual += 1
             self.assertEqual(source['kind'], 'manual')
             self.assertEqual(source['path_space'], 'public')
-            self.assertIn('/blob/', source['url'])
+            if source['converter'] == 'scripts/import_existing_contracts.py@1':
+                manual += 1
+                self.assertIn('/blob/', source['url'])
+            else:
+                self.assertTrue(source['url'].startswith('https://'))
+                self.assertRegex(source['upstream_path_sha256'], r'^[a-f0-9]{64}$')
+                self.assertIn('{', source['original_upstream_path_template'])
+                self.assertTrue(source['source_pages'])
         self.assertEqual(manual, 47)
         self.assertGreater(len(public_mirror_index(root)), 1000)
 

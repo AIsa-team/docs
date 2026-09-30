@@ -36,3 +36,18 @@ A reviewed public mirror for a private wrapper binding may record
 `upstream_path_sha256` in its source metadata. The composer verifies that digest
 against runtime facts and reports a changed binding instead of applying the old
 schema to a newly routed service. The private path itself stays out of the mirror.
+
+## Versioned and private sources
+
+Parallel beta events and Cloudsway full search use explicitly labeled historical
+primary contracts. Their presence establishes request-document evidence, not
+current upstream availability. Keep retirement/404 evidence in the route audit.
+
+The Twitter delete wrapper is derived from the owning service's pinned request
+DTO and handler. That source repository is private: its initial acquisition and
+revision updates require an authorized repository reader. Routine composition
+uses the checked-in mirror and does not require source credentials. The scheduled
+refresh skips explicitly pinned private sources and reports them separately, so
+they do not block review PRs for public-source updates. Reviewed public mappings
+can explicitly opt into automatic refresh through their official converter. A
+skipped source is not a fresh verification of the owning service.

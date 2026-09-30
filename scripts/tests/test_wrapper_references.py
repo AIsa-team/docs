@@ -19,7 +19,8 @@ class WrapperReferenceTests(unittest.TestCase):
         op = document['paths']['/delete_twitter']['post']
         body = op['requestBody']['content']['application/json']['schema']
         self.assertEqual(set(body['required']), {'aisa_api_key', 'tweet_id'})
-        self.assertEqual(body['properties']['tweet_id']['maxLength'], 64)
+        self.assertNotIn('maxLength', body['properties']['tweet_id'])
+        self.assertEqual(body['properties']['tweet_id']['x-aisa-normalized-schema'], {'type': 'string', 'minLength': 1, 'maxLength': 64})
         self.assertEqual(body['properties']['tweet_id']['x-aisa-normalization'], 'strip')
         self.assertNotIn('additionalProperties', body)  # Pydantic ignores extras.
         self.assertEqual(metadata['source_revision'], twitter.REVISION)
@@ -68,6 +69,16 @@ class WrapperReferenceTests(unittest.TestCase):
         self.assertEqual(actual['x-aisa-pricing'],op['x-aisa-pricing'])
         self.assertEqual(actual['operationId'],op['operationId'])
         self.assertIn('requestBody',actual)
+
+    def test_twitter_normalized_bounds_do_not_reject_valid_raw_whitespace(self):
+        from jsonschema import Draft202012Validator
+        document, _ = twitter.convert_reference((FIXTURES/'wrapper_twitter_routes.py.txt').read_bytes(), (FIXTURES/'wrapper_twitter_schemas.py.txt').read_bytes())
+        field = document['paths']['/delete_twitter']['post']['requestBody']['content']['application/json']['schema']['properties']['tweet_id']
+        raw = Draft202012Validator(field)
+        normalized = Draft202012Validator(field['x-aisa-normalized-schema'])
+        for value, valid in [(' ' + 'x'*64 + ' ', True), (' ', False), ('x'*65, False), (' x ', True)]:
+            self.assertTrue(raw.is_valid(value))
+            self.assertEqual(normalized.is_valid(value.strip()), valid)
 
 
 if __name__ == '__main__': unittest.main()

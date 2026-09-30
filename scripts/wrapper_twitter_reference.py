@@ -46,14 +46,16 @@ def normalize_tweet_id(cls, value: str) -> str:
             raise ValueError('unrepresented request class behavior')
     if set(properties) != {'aisa_api_key', 'tweet_id'}:
         raise ValueError('delete request fields changed; review the contract')
-    properties['tweet_id']['description'] = 'The service strips surrounding whitespace before validating the length.'
+    normalized_bounds = {key: properties['tweet_id'].pop(key) for key in ('minLength', 'maxLength')}
+    properties['tweet_id']['x-aisa-normalized-schema'] = {'type': 'string', **normalized_bounds}
+    properties['tweet_id']['description'] = 'The service strips surrounding whitespace first; the result must contain 1 to 64 characters. Length limits apply after normalization, not to the raw input.'
     properties['tweet_id']['x-aisa-normalization'] = 'strip'
     properties['aisa_api_key']['description'] = 'AIsa API key bound to the OAuth account; the wrapper requires this body field in addition to gateway authorization.'
     document = {'openapi': '3.1.0', 'info': {'title': 'AIsa Twitter delete wrapper', 'version': REVISION}, 'paths': {
         '/delete_twitter': {'post': {'summary': 'Delete an authorized account tweet', 'requestBody': {
             'required': True, 'content': {'application/json': {'schema': {'type': 'object', 'properties': properties, 'required': list(properties)}}}},
             'responses': {'200': {'description': 'ApiResponse returned by the owning service; result data is not inferred.'}}}}}}
-    return document, {'converter': VERSION, 'source_revision': REVISION, 'source_pages': [
+    return document, {'converter': VERSION, 'source_revision': REVISION, 'refresh_policy': 'pinned', 'refresh_reason': 'Private owning-service source; revision updates require an authorized reader.', 'source_pages': [
         {'url': url, 'raw_content_hash': 'sha256:' + hashlib.sha256(raw).hexdigest()}
         for url, raw in [(REFERENCE_URL, routes_raw), (SCHEMA_URL, schemas_raw)]]}
 

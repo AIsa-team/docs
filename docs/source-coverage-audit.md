@@ -1,5 +1,7 @@
 # Missing manual mirror source audit
 
+> Follow-up: six of the 18 enabled gaps below have now been recovered, leaving 12. Six remaining paths also have upstream 404/410 or provider-binding evidence. See [the deeper investigation](endpoint-gap-investigation-20260930.md) for the updated per-route classification. The counts below preserve the earlier audit snapshot.
+
 This audit starts with the public inventory captured on 2026-09-29: 1,878 routes in 49 catalog entries. The existing `coverage-sources.json` labels 202 routes in 20 catalogs `mirror_missing`. That label only tests exact public-path manual mirrors; it does **not** mean 202 official upstream schemas are absent. Catalog display methods are not runtime HTTP method declarations.
 
 No endpoint handler, pricing, request validation, provider registration, or published root OpenAPI is changed by this audit. New files are reviewed official sources. The results below join their schemas to a production read-only runtime projection captured on 2026-09-30; they do not establish deployment.

@@ -11,6 +11,10 @@ from runtime_registry import KEY
 from import_brave_reference import INDEX_URL as BRAVE_INDEX_URL, import_reference
 from import_fred_reference import INDEX as FRED_INDEX_URL, import_reference as import_fred_reference
 from import_querit_reference import REFERENCE_URL as QUERIT_REFERENCE_URL, import_reference as import_querit_reference
+from import_parallel_legacy_events import SOURCE_URL as PARALLEL_LEGACY_URL, extract as extract_parallel_legacy
+from wrapper_twitter_reference import REFERENCE_URL as TWITTER_REFERENCE_URL, import_reference as import_twitter_reference
+from wrapper_cloudsway_reference import REFERENCE_URL as CLOUDSWAY_REFERENCE_URL, import_reference as import_cloudsway_reference
+from wrapper_cloudsway_full_reference import REFERENCE_URL as CLOUDSWAY_FULL_URL, import_reference as import_cloudsway_full_reference
 
 
 class OfficialSourceLoader(yaml.SafeLoader):
@@ -32,7 +36,18 @@ def import_source(provider, url):
         with urlopen(Request(source_url, headers={"User-Agent": "Mozilla/5.0 AIsa-contract-source-importer"}), timeout=30) as response:
             return response.read()
     metadata = {}
-    if url == BRAVE_INDEX_URL:
+    if url == PARALLEL_LEGACY_URL:
+        document = extract_parallel_legacy(fetch(url))
+        metadata = document['info'].pop('x-aisa-source')
+        metadata.pop('content_hash', None)
+    elif url == TWITTER_REFERENCE_URL:
+        document, metadata = import_twitter_reference(fetch)
+    elif url == CLOUDSWAY_FULL_URL:
+        document, metadata = import_cloudsway_full_reference(fetch)
+    elif url == CLOUDSWAY_REFERENCE_URL:
+        document, metadata = import_cloudsway_reference(fetch)
+        metadata['kind'] = 'manual'  # Reviewed public mapping of an official upstream source.
+    elif url == BRAVE_INDEX_URL:
         document, metadata = import_reference(fetch)
     elif url == QUERIT_REFERENCE_URL:
         document, metadata = import_querit_reference(fetch)

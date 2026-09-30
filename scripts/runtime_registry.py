@@ -74,16 +74,17 @@ def combine_facts(documents, provider):
     return first
 
 
-def public_mirror_index(root: Path):
+def public_mirror_index(root: Path, overrides: dict | None = None):
     """Only explicit public-route mirrors may match a gateway URL directly."""
     index = {}
-    for path in sorted((root / 'openapi/upstream').glob('*.json')):
-        document = json.loads(path.read_text())
+    documents = {path.name: json.loads(path.read_text()) for path in sorted((root / 'openapi/upstream').glob('*.json'))}
+    documents.update(overrides or {})
+    for filename, document in sorted(documents.items()):
         source = document.get('info', {}).get('x-aisa-source', {})
         if source.get('path_space') != 'public':
             continue
         if source.get('kind') != 'manual' or not all(source.get(k) for k in ('url', 'fetched_at', 'content_hash', 'converter')):
-            raise ValueError(f'{path.name}: public mirror requires complete manual provenance')
+            raise ValueError(f'{filename}: public mirror requires complete manual provenance')
         prefix = urlsplit((document.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
         for route, item in document.get('paths', {}).items():
             for method, op in item.items():

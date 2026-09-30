@@ -28,11 +28,14 @@ def preserve_removed(previous, updated, name):
 
 
 def refresh(root, fetch=import_source):
-    changes, report = {}, {'updated': {}, 'manual': [], 'failed': {}}
+    changes, report = {}, {'updated': {}, 'manual': [], 'pinned': {}, 'failed': {}}
     for path in sorted((root / 'openapi/upstream').glob('*.json')):
         previous = json.loads(path.read_text())
         source = previous.get('info', {}).get('x-aisa-source', {})
-        if source.get('kind') != 'provider_openapi':
+        if source.get('refresh_policy') == 'pinned':
+            report['pinned'][path.stem] = source.get('refresh_reason', 'Explicitly pinned source; review a source revision update separately.')
+            continue
+        if source.get('kind') != 'provider_openapi' and source.get('refresh_policy') != 'automatic':
             report['manual'].append(path.stem)
             continue
         try:
