@@ -3,7 +3,7 @@
   "info": {
     "title": "Exa API",
     "version": "1.0.0",
-    "description": "通过 AIsa 网关开放的 Exa 神经语义搜索 endpoint 的统一 API 文档：Search、Contents、Answer，以及异步的研究型 Agent Runs。\n\nSearch、Contents 和 Answer 为同步接口，每次成功请求固定计费 $0.08。Agent Runs 为异步接口：调用方提交任务，然后轮询返回的任务资源以获取状态和结果，每次任务固定计费 $0.10。上游 4xx 响应（例如 401/403/404）不计费。Exa 返回的 `costDollars` 字段是上游成本明细，仅供参考——客户计费以上述 AIsa 固定价格为准。"
+    "description": "通过 AIsa 网关开放的 Exa 神经语义搜索 endpoint 的统一 API 文档：Search、Contents、Answer，以及异步的研究型 Agent Runs。\n\nSearch、Contents 和 Answer 为同步接口，每次成功请求按固定费率计费。Agent Runs 为异步接口：调用方提交任务，然后轮询返回的任务资源以获取状态和结果，每次任务按固定费率计费。上游 4xx 响应（例如 401/403/404）不计费。Exa 返回的 `costDollars` 字段是上游成本明细，仅供参考——客户计费以上述 AIsa 固定价格为准。"
   },
   "servers": [
     {
@@ -68,7 +68,7 @@
               },
               "authorizedMicrosUSD": {
                 "type": "integer",
-                "description": "任务被受理时授权（冻结）的金额，单位为微美元。Agent Runs 按每次任务固定 $0.10 结算。"
+                "description": "任务被受理时授权（冻结）的金额，单位为微美元。Agent Runs 按每次任务的固定费率结算。"
               },
               "finalMicrosUSD": {
                 "type": "integer",
@@ -121,7 +121,7 @@
           "https://docs.exa.ai/reference/search"
         ],
         "summary": "执行神经语义网页搜索。",
-        "description": "按语义而不是关键词搜索网页。`query` 必填；可用 `category`、`includeDomains`、`excludeDomains`、`startPublishedDate`、`endPublishedDate` 收窄，用 `numResults` 控制条数。返回 `requestId`、`resolvedSearchType`、`searchTime`、`costDollars` 和 `results[]`（含 `id`、`title`、`url`）。**`id` 就是 URL**，也正是 `post_exa_contents` 要的东西。实测 1.4 秒，是这里最快的搜索。按次固定计费 $0.08。⚠️ 结果**默认不带页面正文**：要么传 `contents`，要么再调一次 `post_exa_contents`。查询是一段描述而不是关键词时，选它而不是 `post_tavily_search`；想在同一次调用里拿到正文，选 Tavily；想要一段写好的答案而不是列表，用 `post_exa_answer`。",
+        "description": "按语义而不是关键词搜索网页。`query` 必填；可用 `category`、`includeDomains`、`excludeDomains`、`startPublishedDate`、`endPublishedDate` 收窄，用 `numResults` 控制条数。返回 `requestId`、`resolvedSearchType`、`searchTime`、`costDollars` 和 `results[]`（含 `id`、`title`、`url`）。**`id` 就是 URL**，也正是 `post_exa_contents` 要的东西。实测 1.4 秒，是这里最快的搜索。按次固定计费。⚠️ 结果**默认不带页面正文**：要么传 `contents`，要么再调一次 `post_exa_contents`。查询是一段描述而不是关键词时，选它而不是 `post_tavily_search`；想在同一次调用里拿到正文，选 Tavily；想要一段写好的答案而不是列表，用 `post_exa_answer`。",
         "requestBody": {
           "required": true,
           "content": {
@@ -265,7 +265,7 @@
                       "nullable": true
                     },
                     "costDollars": {
-                      "description": "上游 Exa 的成本明细。仅供参考；客户计费为固定 $0.08。",
+                      "description": "上游 Exa 的成本明细。仅供参考；客户按每次请求的固定费率计费。",
                       "nullable": true
                     }
                   }
@@ -283,7 +283,7 @@
           "https://docs.exa.ai/reference/get-contents"
         ],
         "summary": "为一组 URL 提取完整页面内容。",
-        "description": "为你已经拿到的 URL 取回页面正文和元信息。`ids` 必填，接收 `post_exa_search` 返回的 `id` —— 那本身就是 URL，所以任何 URL 都能用。可开关 `text`、`highlights`、`summary`、`subpages`、`livecrawl`。返回 `results[]`（含 `id`、`title`、`url`、`author`、`text`），外加一个 **`statuses[]` 数组，逐个 URL 给出 `status` 和 `source`** —— 一定要读，取不到的 URL 记在那里而不是抛错。命中缓存时立即返回，未命中则回落到实时抓取。实测 1.2 秒。按次固定计费 $0.08。要的是整站而不是一份 URL 清单，用 `post_firecrawl_crawl`。",
+        "description": "为你已经拿到的 URL 取回页面正文和元信息。`ids` 必填，接收 `post_exa_search` 返回的 `id` —— 那本身就是 URL，所以任何 URL 都能用。可开关 `text`、`highlights`、`summary`、`subpages`、`livecrawl`。返回 `results[]`（含 `id`、`title`、`url`、`author`、`text`），外加一个 **`statuses[]` 数组，逐个 URL 给出 `status` 和 `source`** —— 一定要读，取不到的 URL 记在那里而不是抛错。命中缓存时立即返回，未命中则回落到实时抓取。实测 1.2 秒。按次固定计费。要的是整站而不是一份 URL 清单，用 `post_firecrawl_crawl`。",
         "requestBody": {
           "required": true,
           "content": {
@@ -395,7 +395,7 @@
           "https://docs.exa.ai/reference/answer"
         ],
         "summary": "获得针对某个问题的带引用直接答案。",
-        "description": "提一个问题，拿回一段带引用的答案。`query` 必填；`text` 会带上来源正文，`outputSchema` 可以约束结构化输出。返回 `requestId`、成段的 `answer`、`citations[]`（含 `id`、`title`、`url`）和 `costDollars`。实测 2.1 秒、8 条引用。按次固定计费 $0.08。它介于搜索和研究之间：比 `post_exa_agent_runs` 更快更便宜，又比自己去读 `post_exa_search` 的结果更直接。`post_perplexity_sonar` 回答同一类问题只要 $0.012 —— 当检索本身需要语义匹配时才选 Exa。",
+        "description": "提一个问题，拿回一段带引用的答案。`query` 必填；`text` 会带上来源正文，`outputSchema` 可以约束结构化输出。返回 `requestId`、成段的 `answer`、`citations[]`（含 `id`、`title`、`url`）和 `costDollars`。实测 2.1 秒、8 条引用。按次固定计费。它介于搜索和研究之间：比 `post_exa_agent_runs` 更快更便宜，又比自己去读 `post_exa_search` 的结果更直接。`post_perplexity_sonar` 也能回答同一类问题 —— 当检索本身需要语义匹配时才选 Exa。",
         "requestBody": {
           "required": true,
           "content": {
@@ -479,7 +479,7 @@
                       }
                     },
                     "costDollars": {
-                      "description": "上游 Exa 的成本明细。仅供参考；客户计费为固定 $0.08。",
+                      "description": "上游 Exa 的成本明细。仅供参考；客户按每次请求的固定费率计费。",
                       "nullable": true
                     }
                   }
@@ -497,7 +497,7 @@
           "https://docs.exa.ai/reference/create-a-research-task"
         ],
         "summary": "提交一个异步的研究型 Agent 任务。",
-        "description": "把一个研究任务交给后台的 agent。`query` 和 `Idempotency-Key` 必填；`effort` 在深度与耗时之间取舍，`outputSchema` 约束产出结构，`dataSources` 限定检索范围，`previousRunId` 可以接着上一次继续。异步。提交后返回 HTTP 202 和一个任务信封 —— `id`、`object`、`endpoint`、`status`、`createdAt`、`completedAt`、`pricing`、`output`、`error`，此时 `output` 还是 null。轮询 `get_exa_agent_run` 直到终态；届时 `output` 含 `text`、`structured` 和 `grounding`。一个单句问题实测远不到一分钟就完成。按次固定计费 $0.10 —— `pricing.billingMode` 是 `fixed_request`，也就是说和 Firecrawl 的爬取不同，**价格不随它找到多少而增长**。当交付物本身就是一份报告时用它。想要一口气读完的答案，`post_exa_answer` 约 2 秒就返回。每个不同的任务换一个新的 `Idempotency-Key`。",
+        "description": "把一个研究任务交给后台的 agent。`query` 和 `Idempotency-Key` 必填；`effort` 在深度与耗时之间取舍，`outputSchema` 约束产出结构，`dataSources` 限定检索范围，`previousRunId` 可以接着上一次继续。异步。提交后返回 HTTP 202 和一个任务信封 —— `id`、`object`、`endpoint`、`status`、`createdAt`、`completedAt`、`pricing`、`output`、`error`，此时 `output` 还是 null。轮询 `get_exa_agent_run` 直到终态；届时 `output` 含 `text`、`structured` 和 `grounding`。一个单句问题实测远不到一分钟就完成。按次固定计费 —— `pricing.billingMode` 是 `fixed_request`，也就是说和 Firecrawl 的爬取不同，**价格不随它找到多少而增长**。当交付物本身就是一份报告时用它。想要一口气读完的答案，`post_exa_answer` 约 2 秒就返回。每个不同的任务换一个新的 `Idempotency-Key`。",
         "parameters": [
           {
             "in": "header",
