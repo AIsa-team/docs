@@ -19,6 +19,9 @@ on:
       - 'openapi/upstream/**'
       - 'scripts/compose_openapi.py'
       - 'scripts/pull_openapi.py'
+      - 'scripts/runtime_registry.py'
+      - 'scripts/contract_readiness.py'
+      - 'scripts/check_contract_candidate.py'
 
 permissions:
   contents: write
@@ -51,9 +54,13 @@ jobs:
           restore-keys: runtime-contracts-
       - name: Stage contracts
         id: pull
+        env:
+          REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
         run: |
           set +e
-          python scripts/pull_openapi.py --write
+          python scripts/pull_openapi.py --write \
+            --baseline-ref "$REVIEWED_BASELINE" \
+            --readiness-report /tmp/contract-readiness.json
           status=$?
           set -e
           if [ "$status" -eq 2 ]; then
@@ -62,6 +69,13 @@ jobs:
           fi
           if [ "$status" -ne 0 ]; then exit "$status"; fi
           echo 'available=true' >> "$GITHUB_OUTPUT"
+      - name: Retain publication assessment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publication-contract-readiness
+          path: /tmp/contract-readiness.json
+          if-no-files-found: ignore
       - name: Runtime unavailable
         if: steps.pull.outputs.available == 'false'
         run: echo 'Runtime contracts were unavailable. Published files were preserved.' >> "$GITHUB_STEP_SUMMARY"

@@ -87,7 +87,23 @@ def slug(value):
     return re.sub(r"[^a-zA-Z0-9_-]", "-", value)
 
 
-def generate_pages(root: Path, provider: str, document: dict, changes: dict, previous: dict | None = None, decorate_links: bool = True) -> None:
+def existing_page_references(root: Path):
+    """Read each referenced spec once, preserving the existing page selection."""
+    from urllib.parse import urlsplit
+    prefixes, references = {}, []
+    for mdx in (root / 'api-reference').rglob('*.mdx'):
+        match = re.search(r"^openapi:\s*['\"]?(openapi/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", mdx.read_text(), re.M)
+        if not match:
+            continue
+        spec = match[1]
+        if spec not in prefixes:
+            document = read_json(root / spec, {})
+            prefixes[spec] = urlsplit((document.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
+        references.append((spec, prefixes[spec], match[3], match[2].lower(), mdx.relative_to(root).with_suffix('').as_posix()))
+    return references
+
+
+def generate_pages(root: Path, provider: str, document: dict, changes: dict, previous: dict | None = None, decorate_links: bool = True, page_references=None) -> None:
     """Append pages/navigation, reusing existing method/path references and prose."""
     docs_path = root / "docs.json"
     if not docs_path.exists():
@@ -98,15 +114,11 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
     known = {}
     from urllib.parse import urlsplit
     previous_prefix = urlsplit(((previous or {}).get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
-    for mdx in (root / "api-reference").rglob("*.mdx"):
-        text = mdx.read_text()
-        match = re.search(r"^openapi:\s*['\"]?(openapi/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", text, re.M)
-        if match:
-            old_spec = read_json(root / match[1], {})
-            old_prefix = urlsplit((old_spec.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
-            if match[1] == f"openapi/{provider}.json":
-                old_prefix = previous_prefix
-            known[(old_prefix + match[3], match[2].lower())] = mdx.relative_to(root).with_suffix("").as_posix()
+    references = existing_page_references(root) if page_references is None else page_references
+    for spec, old_prefix, path, method, page in references:
+        if spec == f'openapi/{provider}.json':
+            old_prefix = previous_prefix
+        known[(old_prefix + path, method)] = page
     current_prefix = urlsplit((document.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
     paths = []
     for path, method, operation in operations(document):
@@ -183,14 +195,17 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
     changes[root / f"openapi/zh/{provider}.json"] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
 
 
-def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = True) -> tuple[dict, dict]:
+def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = True,
+          readiness_context: dict | None = None) -> tuple[dict, dict]:
     registry_path = root / "openapi/registry.yaml"
     registry = yaml.safe_load(registry_path.read_text())
     if not isinstance(registry.get("providers"), dict):
         raise ValueError("registry providers must be a mapping")
     changes = {}
+    index = read_json(facts_dir / 'index.json', {}) if facts_dir else {}
     if registry.get("auto_register"):
         category = read_json(facts_dir / "category.json") if facts_dir else fetch_json(f"{base_url.rstrip('/')}/info/apis/category")
+        changes[root / '.cache/runtime-contracts/category.json'] = json.dumps(category, indent=2, sort_keys=True) + '\n'
         discover(registry, category)
         # The public marketing catalog intentionally omits asynchronous and
         # disabled integrations. Contract discovery also follows the actual
@@ -203,16 +218,22 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             index = {}  # Compatibility before runtime contract deployment.
         indexed = (index or {}).get("providers", []) + (index or {}).get("pending_providers", [])
         discover(registry, {"apis": [{"id": key} for key in sorted({row["id"] for row in indexed})]})
+    if index:
+        changes[root / '.cache/runtime-contracts/index.json'] = json.dumps(index, indent=2, sort_keys=True) + '\n'
     else:
         # Group overlap and invalid catalog names are still rejected when
         # discovery is disabled for an offline or pinned rollout.
         discover(registry, {"apis": []})
     original_documents = published_documents(root)
+    page_references = existing_page_references(root) if with_pages else []
     public_source_overrides = {}
     public_mirrors = public_mirror_index(root)
     coverage = {"providers": {}, "legacy_operations": []}
     moved = set()
     ready = {}
+    recomposed_documents = {}
+    facts_by_provider = {}
+    indexed_hashes = {row['id']: row.get('facts_hash') for row in index.get('providers', [])}
     pending = copy.deepcopy(read_json(root / "openapi/pending.json", {"providers": {}}))
     pending.setdefault("providers", {})
     summary = {}
@@ -246,6 +267,8 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                         facts = cached
                     if not facts or not facts.get("info", {}).get("x-aisa-document", {}).get("facts_hash"):
                         failure = "runtime_contract_unavailable"
+                    elif indexed_hashes.get(catalog) and facts['info']['x-aisa-document']['facts_hash'] != indexed_hashes[catalog]:
+                        failure = 'runtime_contract_unavailable: facts_hash_mismatch'
                 except (HTTPError, URLError, TimeoutError) as exc:
                     if not registry.get("auto_register"):
                         raise
@@ -257,9 +280,18 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                         detail = read_json(facts_dir / "inventory" / f"{catalog}.json", {}) if facts_dir else fetch_json(f"{base_url.rstrip('/')}/info/apis/{catalog}")
                     except (HTTPError, URLError, TimeoutError):
                         detail = {}
-                    endpoints = [endpoint for group in (detail or {}).get("api", {}).get("endpoint_groups", []) for endpoint in group.get("endpoints", [])]
-                    for endpoint in endpoints or [{"path": None, "method": None}]:
-                        unavailable.append({"catalog": catalog, "path": endpoint.get("path"), "method": endpoint.get("method"), "operation_id": endpoint.get("operation_id"), "status": "pending", "reason": failure, "validation": None, "schema_source": None})
+                    indexed_endpoints = index.get('pending_endpoints', []) + index.get('coverage', {}).get('projected_endpoints', [])
+                    endpoints = [row for row in indexed_endpoints if row.get('provider') == catalog]
+                    if not endpoints:
+                        endpoints = [endpoint for group in (detail or {}).get("api", {}).get("endpoint_groups", []) for endpoint in group.get("endpoints", [])]
+                    for endpoint in endpoints:
+                        unavailable.append({"catalog": catalog, "path": endpoint.get("path"), "method": endpoint.get("method") or 'ANY', "operation_id": endpoint.get("operation_id"), "status": "pending", "reason": failure, "validation": None, "schema_source": None})
+                    if not endpoints:
+                        # Unknown inventory is an input gap, not a fictitious
+                        # operation with a missing path. The checker records it.
+                        unavailable.append({'catalog': catalog, 'status': 'pending',
+                                            'reason': failure, 'inventory_unavailable': True,
+                                            'publication_state': 'retained'})
                     continue
                 collected[catalog] = facts
                 changes[facts_path] = json.dumps(facts, indent=2, ensure_ascii=False) + "\n"
@@ -269,11 +301,14 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                         for method, op in item.items():
                             if method in METHODS or method == "x-aisa-any":
                                 unavailable.append({"catalog": catalog, "path": path, "method": method.upper(), "operation_id": op.get("operationId"), "status": "pending", "reason": "group_member_unavailable", "validation": op.get("x-aisa-validation"), "schema_source": None})
-                coverage["providers"][provider] = unavailable
+                for row in unavailable:
+                    row['publication_state'] = 'retained'
+                coverage["providers"][provider] = [row for row in unavailable if not row.get('inventory_unavailable')]
                 pending["providers"][provider] = unavailable
                 summary[provider] = {"changed": False, "operations": sum(1 for _ in operations(previous)), "pending": len(unavailable), "blocked": "runtime_contract_unavailable"}
                 continue
             facts = combine_facts(collected, provider)
+            facts_by_provider[provider] = facts
             entry["display_name"] = facts.get("info", {}).get("title", provider)
             entry["description"] = facts.get("info", {}).get("description", "")
             registry["providers"][provider] = entry
@@ -305,6 +340,8 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                     current_source = (document or {}).get("info", {}).get("x-aisa-source", {})
                     trusted_kind = current_source.get("kind") == "provider_openapi" or (current_source.get("kind") == "manual" and current_source.get("path_space") == "public")
                     if source_url and (not trusted_kind or current_source.get("url") != source_url):
+                        if readiness_context and readiness_context.get('offline'):
+                            raise ValueError('upstream source mirror unavailable for offline candidate evaluation')
                         document = import_source(provider, source_url)
                         changes[upstream_path] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
                     if document:
@@ -330,15 +367,22 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                 for row in coverage["providers"][provider]:
                     row["status"] = "pending"
                     row["reason"] = str(exc) if row["reason"] in (None, "operation_not_composed") else row["reason"]
+                    from contract_readiness import reason_code
+                    row['reason_code'] = reason_code(row['reason'])
+                    row['publication_state'] = 'retained'
                 pending["providers"][provider] = unresolved + [{"reason": str(exc)}]
                 summary[provider] = {"changed": False, "operations": sum(1 for _ in operations(previous)), "pending": len(coverage["providers"][provider]), "blocked": str(exc)}
                 continue
             for path, method, op in operations(normalize_paths(document)):
                 moved.add((path, method, op["operationId"], provider))
             ready[provider] = (document, facts, history, previous, unresolved)
+            # Capture independent composition before prior document_hash can
+            # cause old bytes to be reused as the publication candidate.
+            if readiness_context is not None:
+                recomposed_documents[provider] = copy.deepcopy(document)
             continue
         if with_pages:
-            generate_pages(root, provider, document, changes, previous, decorate_links=not entry.get("pin"))
+            generate_pages(root, provider, document, changes, previous, decorate_links=not entry.get("pin"), page_references=page_references)
         old_hash = previous.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         new_hash = document.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         if entry.get("pin"):
@@ -357,7 +401,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                 # generated_at is observational, and cannot create commit churn.
                 document = previous
                 if with_pages:
-                    generate_pages(root, provider, document, changes, previous, decorate_links=False)
+                    generate_pages(root, provider, document, changes, previous, decorate_links=False, page_references=page_references)
         pending["providers"][provider] = unresolved
         summary[provider] = {"changed": changed, "operations": sum(1 for _ in operations(document)), "pending": len(unresolved), "document_hash": new_hash}
     # Resolve ownership across all successfully composed providers before
@@ -375,7 +419,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         unresolved.extend(retain_unregistered_history(document, facts, history))
         assert_identities(history, normalize_paths(document))
         if with_pages:
-            generate_pages(root, provider, document, changes, previous)
+            generate_pages(root, provider, document, changes, previous, page_references=page_references)
         old_hash = previous.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         new_hash = document.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         if not new_hash:
@@ -384,7 +428,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         if changed:
             changes[root / f"openapi/{provider}.json"] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
         elif with_pages:
-            generate_pages(root, provider, previous, changes, previous, decorate_links=False)
+            generate_pages(root, provider, previous, changes, previous, decorate_links=False, page_references=page_references)
         pending["providers"][provider] = unresolved
         summary[provider] = {"changed": changed, "operations": sum(1 for _ in operations(document)), "pending": len(unresolved), "document_hash": new_hash}
     # Retire only operations successfully moved to another output. Keeping
@@ -416,6 +460,23 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         changes[registry_path] = yaml.safe_dump(registry, sort_keys=False, allow_unicode=True)
         changes[root / "openapi/coverage.json"] = json.dumps(coverage, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     changes[root / "openapi/pending.json"] = json.dumps(pending, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+    if readiness_context is not None:
+        from contract_readiness import check_readiness
+        documents = dict(original_documents)
+        from consolidate_openapi import SKIP_FILES
+        for path, content in changes.items():
+            if path.parent == root / 'openapi' and path.suffix == '.json' and path.name not in SKIP_FILES:
+                documents[path.stem] = json.loads(content)
+        readiness_context['facts_by_provider'] = facts_by_provider
+        readiness_context['coverage'] = coverage
+        readiness_context['runtime_index'] = index
+        readiness_context['recomposed_documents'] = recomposed_documents
+        readiness_context['report'] = check_readiness(
+            facts_by_provider, documents, coverage,
+            baseline_coverage=readiness_context.get('baseline_coverage'),
+            runtime_index=index)
+        from check_contract_candidate import assess_fresh_requests
+        assess_fresh_requests(readiness_context['report'], documents, recomposed_documents, coverage)
     return {p: content for p, content in changes.items() if not p.exists() or p.read_text() != content}, summary
 
 
@@ -434,16 +495,31 @@ def main():
     parser.add_argument("--base-url", default="https://api.aisa.one")
     parser.add_argument("--write", action="store_true", help="write staged files; default is dry-run")
     parser.add_argument("--skip-pages", action="store_true")
+    parser.add_argument('--baseline-ref', help='Full reviewed Git revision containing accepted coverage; never inferred from current generated files')
+    parser.add_argument('--readiness-mode', choices=('publication', 'pr'), default='publication')
+    parser.add_argument('--readiness-report', type=Path, help='Write the readiness report, including failures, outside published contract inputs')
     args = parser.parse_args()
     try:
-        changes, summary = stage(args.root, args.facts_dir, args.base_url, not args.skip_pages)
+        from check_contract_candidate import load_baseline
+        context = {'baseline_coverage': load_baseline(args.root, args.baseline_ref)}
+        changes, summary = stage(args.root, args.facts_dir, args.base_url, not args.skip_pages, context)
     except (HTTPError, URLError, TimeoutError) as exc:
         print(f"Runtime unavailable; no files written: {exc}", file=sys.stderr)
         return 2
     except Exception as exc:
         print(f"Contract pull aborted; no files written: {exc}", file=sys.stderr)
         return 1
-    print(json.dumps({"dry_run": not args.write, "providers": summary, "files": [str(p.relative_to(args.root)) for p in sorted(changes)]}, indent=2))
+    report = context['report']
+    if args.readiness_report:
+        args.readiness_report.parent.mkdir(parents=True, exist_ok=True)
+        args.readiness_report.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n')
+    print(json.dumps({"dry_run": not args.write, "providers": summary, "readiness": report, "files": [str(p.relative_to(args.root)) for p in sorted(changes)]}, indent=2))
+    if report.get('global_errors') or report.get('missing_inputs') or report['status'] == 'not_assessed':
+        return 3
+    if any(provider.get('errors') for provider in report.get('providers', {}).values()):
+        return 1
+    if args.readiness_mode == 'pr' and report['status'] != 'passed':
+        return 1
     if args.write:
         for path, content in changes.items():
             path.parent.mkdir(parents=True, exist_ok=True)

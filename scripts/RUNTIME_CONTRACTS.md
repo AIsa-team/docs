@@ -166,6 +166,68 @@ prefix with operation/path/root precedence; ambiguous matches fail closed.
 Official reference converters record source hashes and never infer types from
 example responses. Refreshes run through the same reviewed upstream workflow.
 
+## Publication readiness checks
+
+`contract_readiness.py` checks the actual public operation graph, runtime endpoint
+accounting, exact coverage outcomes and runtime-owned request declarations. It is
+a pure assessment and cannot change routing, admission, authentication or billing.
+Endpoint counts remain separate from ANY method expansion and async/Batch
+lifecycle operation counts. Runtime `coverage.projected_endpoints` supplies the
+configured endpoint evidence, including source paths that differ from public
+lifecycle paths.
+
+`pull_openapi.py` assesses staged outputs before any file writes. Structural
+errors, incomplete global evidence and index/facts hash mismatches cannot be
+reported as successful fresh publication. Explicitly unavailable providers keep
+their last published files; unaffected providers can refresh. New unresolved
+operations remain absent from complete contracts and appear in coverage/pending
+reports. `--readiness-mode pr` additionally fails for newly introduced or changed
+pending operations.
+
+Accepted pending debt comes from `--baseline-ref`, a full independently reviewed
+Git SHA containing coverage. The workflow reads `RUNTIME_CONTRACT_BASELINE_REF`;
+it does not advance it when a scheduled run writes new pending entries. Without
+that reference, no unresolved operation gets an existing-pending exemption. The
+initial baseline is a review decision, not a claim that pending contracts work.
+Comparison uses operation identity, binding and stable failure classification;
+whole-source content hashes and error wording do not become endpoint identities.
+Bindings include the reachable local request-schema graph, so changing a type
+behind an unchanged reference name cannot preserve an accepted pending entry.
+
+PR CI runs both unit tests and `check_contract_candidate.py`. The latter checks
+the actual PR documents/coverage and reproduces composition offline using the
+existing public runtime cache, including category, index and per-catalog facts.
+Fresh request declarations are compared with independent composition before any
+previous document-hash reuse. Parameter/body/authentication drift fails even when
+the candidate retains its old hash; editorial text and examples remain editable.
+It never fetches production or invents missing fixtures. Missing evidence produces
+`not_assessed` and a nonzero exit. Existing pre-rollout caches without endpoint
+evidence are insufficient; seed the cache from the new runtime before treating
+this check as acceptance.
+
+Retained contents are verified against an independently selected published Git
+revision (`--published-ref`, PR base/before SHA in CI). Comparison includes local
+reference closures, inherited parameters and authentication declarations. The
+candidate cannot certify a newly added operation as historical by setting a flag.
+This historical-content reference grants no pending-debt exemption.
+
+Examples, using separately selected reviewed revisions:
+
+```sh
+python scripts/check_contract_candidate.py \
+  --baseline-ref "$REVIEWED_BASELINE_SHA" \
+  --published-ref "$PUBLISHED_DOCS_SHA" \
+  --report /tmp/contract-readiness.json
+python scripts/pull_openapi.py --write \
+  --baseline-ref "$REVIEWED_BASELINE_SHA" \
+  --readiness-report /tmp/contract-readiness.json
+```
+
+Readiness reports are workflow artifacts. `passed` describes declarations and
+accounting; it is not execution capability or upstream uptime evidence. Existing
+LLM-only legacy source overlaps are listed separately, while conflicts involving
+managed integration outputs and all identity collisions block publication.
+
 ## Resolving a missing contract
 
 A pending entry is an intake item, not a diagnosis that the API is broken.

@@ -135,6 +135,7 @@ def previous_for_facts(facts, documents, provider):
 
 
 def coverage_rows(facts, document, pending, catalogs):
+    from contract_readiness import binding_hash, reason_code
     failures = {(row['path'], row['method'].lower()): row['reason'] for row in pending}
     rows = []
     for path, item in sorted(facts.get('paths', {}).items()):
@@ -148,10 +149,15 @@ def coverage_rows(facts, document, pending, catalogs):
             for actual in methods:
                 emitted = produced.get(actual)
                 reason = failures.get((path, actual), failures.get((path, 'any')))
+                effective = dict(op)
+                if item.get('parameters'):
+                    effective['parameters'] = item['parameters'] + op.get('parameters', [])
                 rows.append({'catalog': op.get('x-aisa-catalog-id', catalogs[0]), 'path': path, 'method': actual.upper(),
                              'operation_id': emitted.get('operationId') if emitted else op.get('operationId'),
                              'status': 'composed' if emitted and not reason else 'pending',
                              'reason': reason or (None if emitted else 'operation_not_composed'),
+                             'reason_code': reason_code(reason or 'operation_not_composed') if reason or not emitted else None,
+                             'binding_hash': binding_hash(effective, facts),
                              'validation': op.get('x-aisa-validation'),
                              'schema_source': emitted.get('x-aisa-source', {}).get('kind', 'runtime') if emitted else None})
     return rows
