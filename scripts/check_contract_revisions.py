@@ -2,6 +2,7 @@
 """Compare public contract revisions. No provider calls or credentials required."""
 import argparse
 import json
+import re
 import time
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -40,11 +41,58 @@ def update_state(errors, previous):
     return {'checked_at': int(time.time()), 'consecutive': {error: counts.get(error, 0) + 1 for error in errors}}
 
 
+def assess(documents, runtime=None, website=None, mcp=None, router=None,
+           expected_docs_ref=None, failures=()):
+    """Strict, dated convergence evidence, separate from monitor escalation."""
+    verified = {key: value for key, value in documents.items() if value.get('document_hash')}
+    missing = list(failures)
+    if not verified:
+        missing.append('docs:no_runtime_composed_provider_metadata')
+    surfaces = dict(runtime=runtime, website=website, mcp=mcp, router=router)
+    missing.extend(f'{key}:publication_metadata_unavailable' for key, value in surfaces.items()
+                   if not isinstance(value, dict))
+    errors = []
+    if expected_docs_ref and not re.fullmatch(r'[0-9a-f]{40}', expected_docs_ref):
+        raise ValueError('expected docs revision must be a full Git SHA')
+    if not missing:
+        errors = compare(documents, **surfaces)
+        represented = set()
+        for provider, metadata in verified.items():
+            represented.update(metadata.get('catalogs') or {provider: {}})
+        for provider in runtime.get('providers', []):
+            if provider['id'] not in represented:
+                errors.append(f"{provider['id']}:docs:catalog_missing")
+        for provider in runtime.get('pending_providers', []):
+            missing.append(f"runtime:{provider['id']}:projection_pending")
+        if expected_docs_ref:
+            if mcp.get('docsRefs') != [expected_docs_ref]:
+                errors.append('mcp:docs_revision_mismatch')
+            if router.get('docs_commit') != expected_docs_ref:
+                errors.append('tool-router:docs_revision_mismatch')
+    return {'checked_at': int(time.time()),
+            'status': 'not_assessed' if missing else ('failed' if errors else 'passed'),
+            'scope': 'public_contract_convergence',
+            'verified_providers': len(verified),
+            'legacy_providers': len(documents) - len(verified),
+            'expected_docs_ref': expected_docs_ref,
+            'missing_inputs': sorted(set(missing)), 'mismatches': sorted(set(errors))}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--state', type=Path, default=Path('.cache/contract-revisions/state.json'))
+    parser.add_argument('--acceptance', action='store_true', help='Fail immediately on missing evidence or any mismatch; does not update monitor state')
+    parser.add_argument('--evidence-dir', type=Path, help='Offline public metadata: runtime.json, website.json, mcp.json, router.json')
+    parser.add_argument('--expected-docs-ref', help='Full immutable docs SHA required in MCP and Router publication metadata')
+    parser.add_argument('--report', type=Path, help='Save dated assessment JSON; contains no provider requests')
     args = parser.parse_args()
+    if (args.evidence_dir or args.expected_docs_ref) and not args.acceptance:
+        parser.error('--evidence-dir and --expected-docs-ref require --acceptance')
+    if args.acceptance and not args.expected_docs_ref:
+        parser.error('--acceptance requires --expected-docs-ref from an independently selected publication')
+    if args.expected_docs_ref and not re.fullmatch(r'[0-9a-f]{40}', args.expected_docs_ref):
+        parser.error('--expected-docs-ref must be a full Git SHA')
     spec = yaml.safe_load((args.root / 'openapi.yaml').read_text())
     documents = spec.get('info', {}).get('x-aisa-document', {}).get('providers', {})
     targets = {
@@ -56,9 +104,16 @@ def main():
     results, failures = {}, []
     for key, url in targets.items():
         try:
-            results[key] = read_public(url)
+            results[key] = json.loads((args.evidence_dir / f'{key}.json').read_text()) if args.evidence_dir else read_public(url)
         except Exception as exc:
             failures.append(f'{key}:unavailable:{type(exc).__name__}')
+    assessment = assess(documents, **results, expected_docs_ref=args.expected_docs_ref, failures=failures)
+    if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(json.dumps(assessment, indent=2, sort_keys=True) + '\n')
+    if args.acceptance:
+        print(json.dumps(assessment, indent=2, sort_keys=True))
+        return 0 if assessment['status'] == 'passed' else 1
     if not failures:
         failures = compare(documents, **results)
     previous = json.loads(args.state.read_text()) if args.state.exists() else {}
@@ -67,6 +122,7 @@ def main():
     args.state.write_text(json.dumps(state, indent=2) + '\n')
     print(json.dumps({'verified_providers': sum(bool(p.get('document_hash')) for p in documents.values()),
                       'legacy_providers': sum(not bool(p.get('document_hash')) for p in documents.values()),
+                      'assessment_status': assessment['status'],
                       'mismatches': state['consecutive']}, indent=2))
     return 1 if any(count >= 2 for count in state['consecutive'].values()) else 0
 

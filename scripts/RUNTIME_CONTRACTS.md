@@ -127,8 +127,27 @@ previous publication and are reported as pending.
 `refresh-upstream.yml` stages official source updates monthly as a review PR.
 It skips manual mirrors, avoids timestamp-only changes, and retains operations
 removed upstream along with their reachable components. Retained operations are
-explicitly listed in source provenance and the PR body. The workflow never merges
-its own PR.
+historical evidence, not a claim that the provider still serves them. Pinned
+sources remain unchanged until their owner supplies a reviewed revision update.
+The workflow never merges its own PR or rewrites runtime bindings.
+
+Before retaining removals, `upstream_semantics.py` compares effective method/path
+and inherited server bindings, request parameters/body, requiredness, types,
+constraints and serialization, effective authentication/security schemes, and
+response declarations. Local references and path/operation inheritance are
+resolved. Prose/examples and reordering unordered schema declarations do not
+produce semantic changes. Added/removed/changed declarations require review;
+external, recursive or unsupported reference scopes remain explicitly uncertain.
+`declarations_unchanged` reports only the compared declarations, and compatibility
+is always `not_assessed`; this is not an upstream execution probe.
+
+The refresh report records source URLs, content hashes, fetch times and source
+age. Source acquisition failure preserves the previous file and reports the
+failure class plus prior evidence; it does not refresh its age or claim a fresh
+contract. Successful updates can still form a review PR when another source
+fails, and the workflow remains failed for that acquisition error. The full
+field diff is uploaded as the `upstream-contract-review` workflow artifact;
+the PR body contains a compact summary rather than an unbounded report.
 
 Scheduled/event pulls on main publish validated mirrors and coverage automatically;
 `RUNTIME_CONTRACT_PUBLISH=false` pauses those publications. Manual dispatch defaults
@@ -227,6 +246,33 @@ Readiness reports are workflow artifacts. `passed` describes declarations and
 accounting; it is not execution capability or upstream uptime evidence. Existing
 LLM-only legacy source overlaps are listed separately, while conflicts involving
 managed integration outputs and all identity collisions block publication.
+
+## Publication convergence acceptance
+
+`check_contract_revisions.py` compares public runtime facts, docs, website, MCP
+and Router metadata. Ordinary scheduled monitoring keeps its existing
+two-consecutive-failure escalation. A separate strict mode fails on the first
+missing input or mismatch and never updates that monitor state:
+
+```sh
+python scripts/check_contract_revisions.py --acceptance \
+  --expected-docs-ref "$PUBLISHED_DOCS_SHA" \
+  --report /tmp/public-contract-convergence.json
+```
+
+The expected revision must be an independently selected full immutable docs SHA.
+Empty or entirely legacy docs metadata cannot pass acceptance. Every runtime
+catalog must have docs metadata; runtime projections still pending are unassessed.
+MCP and Router must report the exact selected docs revision as well as matching
+provider hashes. Unavailable surfaces produce a dated `not_assessed` report and a
+nonzero exit, even if another surface is healthy.
+
+For offline verification, add `--evidence-dir DIR` containing public metadata in
+`runtime.json`, `website.json`, `mcp.json` and `router.json`. The manual existing
+workflow exposes the same acceptance mode and retains the report as an artifact.
+This verifies public contract convergence. It does not invoke upstream provider
+operations, prove execution support or establish provider availability, and it
+cannot change production configuration.
 
 ## Resolving a missing contract
 
