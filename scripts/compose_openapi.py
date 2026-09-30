@@ -13,10 +13,26 @@ import re
 from typing import Any
 from urllib.parse import urlsplit
 
-VERSION = "7"
+VERSION = "8"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
+INSTANCE_FIELDS = {"example", "default", "enum", "const", "value"}
+NAMED_CONTRACT_MAPS = {"properties", "patternProperties", "$defs", "definitions", "schemas", "responses",
+                      "headers", "parameters", "requestBodies", "securitySchemes", "examples", "links", "callbacks"}
+
+
+def map_contract_children(node: dict, transform) -> dict:
+    """Walk declarations without interpreting reference-shaped JSON instances."""
+    result = {}
+    for key, child in node.items():
+        if key in INSTANCE_FIELDS or key.startswith("x-") or (key == "examples" and isinstance(child, list)):
+            result[key] = copy.deepcopy(child)
+        elif key in NAMED_CONTRACT_MAPS and isinstance(child, dict):
+            result[key] = {name: transform(definition) for name, definition in child.items()}
+        else:
+            result[key] = transform(child)
+    return result
 
 
 class IdentityError(ValueError):
@@ -76,7 +92,8 @@ def resolve(value: Any, document: dict, stack: tuple = (), preserve_recursive: b
         for part in ref[2:].split("/"):
             target = target[part.replace("~1", "/").replace("~0", "~")]
         target = resolve(target, document, stack + (ref,), preserve_recursive)
-        siblings = {k: resolve(v, document, stack, preserve_recursive) for k, v in value.items() if k != "$ref"}
+        siblings = map_contract_children({k: v for k, v in value.items() if k != "$ref"},
+                                        lambda child: resolve(child, document, stack, preserve_recursive))
         if siblings:
             if ref.startswith("#/components/schemas/"):
                 annotations = {k: v for k, v in siblings.items() if k in SCHEMA_ANNOTATIONS}
@@ -96,7 +113,7 @@ def resolve(value: Any, document: dict, stack: tuple = (), preserve_recursive: b
                     raise ValueError("upstream non-schema reference has incompatible siblings")
                 target = {**target, **siblings}
         return target
-    return {k: resolve(v, document, stack, preserve_recursive) for k, v in value.items()}
+    return map_contract_children(value, lambda child: resolve(child, document, stack, preserve_recursive))
 
 
 def upstream_path_item(document: dict | None, upstream_path: str | None) -> dict:
@@ -182,6 +199,7 @@ def referenced_components(value: Any, document: dict) -> dict:
     """Collect the finite reachable component graph without expanding cycles."""
     components = {}
     seen = set()
+    openapi30 = document.get("openapi", "").startswith("3.0.")
     def visit(node):
         if isinstance(node, list):
             for item in node:
@@ -197,19 +215,75 @@ def referenced_components(value: Any, document: dict) -> dict:
                 section, name = (part.replace("~1", "/").replace("~0", "~") for part in parts[2:4])
                 if section == "securitySchemes":
                     raise ValueError("provider security scheme is not a request schema")
-                definition = document["components"][section][name]
+                original = document["components"][section][name]
+                definition = original
+                if openapi30:
+                    definition = schema_30_to_31(definition) if section == "schemas" else fragment_30_to_31(definition)
                 seen.add(ref)
-                components.setdefault(section, {})[name] = copy.deepcopy(definition)
+                components.setdefault(section, {})[name] = copy.deepcopy(original)
                 visit(definition)
-            for item in node.values():
-                visit(item)
-    visit(value)
+            map_contract_children(node, visit)
+    visit(fragment_30_to_31(value) if openapi30 else value)
     return components
 
 
-def resolve_fragment(value: Any, document: dict, output: dict, namespace: str) -> Any:
+def schema_30_to_31(schema: Any) -> Any:
+    """Convert Schema Objects, never examples/defaults or property-name maps."""
+    if not isinstance(schema, dict):
+        return copy.deepcopy(schema)
+    # OpenAPI 3.0 Reference Objects ignore siblings, unlike 3.1 schemas.
+    if "$ref" in schema:
+        return {"$ref": schema["$ref"]}
+    result = copy.deepcopy(schema)
+    for key in ("properties", "patternProperties", "$defs", "definitions"):
+        if isinstance(result.get(key), dict):
+            result[key] = {name: schema_30_to_31(child) for name, child in result[key].items()}
+    for key in ("items", "additionalProperties", "not"):
+        if key in result:
+            result[key] = schema_30_to_31(result[key])
+    for key in ("allOf", "anyOf", "oneOf"):
+        if isinstance(result.get(key), list):
+            result[key] = [schema_30_to_31(child) for child in result[key]]
+    nullable = result.pop("nullable", False)
+    if not isinstance(nullable, bool):
+        raise ValueError("unsupported OpenAPI 3.0 nullable declaration")
+    if nullable and "type" in result:
+        if not isinstance(result["type"], str):
+            raise ValueError("unsupported OpenAPI 3.0 type declaration")
+        result["type"] = [result["type"], "null"]
+    for bound in ("minimum", "maximum"):
+        exclusive = "exclusive" + bound.capitalize()
+        if exclusive not in result:
+            continue
+        flag = result.pop(exclusive)
+        if not isinstance(flag, bool):
+            raise ValueError("unsupported OpenAPI 3.0 exclusive bound")
+        if flag:
+            if bound not in result:
+                raise ValueError("OpenAPI 3.0 exclusive bound is missing its limit")
+            result[exclusive] = result.pop(bound)
+    return result
+
+
+def fragment_30_to_31(value: Any) -> Any:
+    if isinstance(value, list):
+        return [fragment_30_to_31(child) for child in value]
+    if not isinstance(value, dict):
+        return copy.deepcopy(value)
+    result = map_contract_children(value, fragment_30_to_31)
+    if "schema" in value:
+        result["schema"] = schema_30_to_31(value["schema"])
+    return result
+
+
+def resolve_fragment(value: Any, document: dict, output: dict, namespace: str, preserve_refs: bool = False) -> Any:
     from consolidate_openapi import component_collision_prefix, merge_components
     selected = {"fragment": copy.deepcopy(value), "components": referenced_components(value, document)}
+    if document.get("openapi", "").startswith("3.0."):
+        selected["fragment"] = fragment_30_to_31(selected["fragment"])
+        selected["components"] = {section: {name: schema_30_to_31(definition) if section == "schemas" else fragment_30_to_31(definition)
+                                           for name, definition in entries.items()}
+                                  for section, entries in selected["components"].items()}
     # Give the entire reachable graph one stable namespace, so recursive and
     # mutually-dependent definitions cannot capture another source's names.
     prefix = component_collision_prefix(namespace) + "_"
@@ -223,12 +297,15 @@ def resolve_fragment(value: Any, document: dict, output: dict, namespace: str) -
             return [rewrite(item) for item in node]
         if not isinstance(node, dict):
             return node
-        return {key: renamed.get(item, item) if key == "$ref" else rewrite(item) for key, item in node.items()}
+        result = map_contract_children(node, rewrite)
+        if "$ref" in result:
+            result["$ref"] = renamed.get(result["$ref"], result["$ref"])
+        return result
     selected = rewrite(selected)
     selected["components"] = {section: {renamed[f"#/components/{section}/{name}"].rsplit("/", 1)[1]: definition for name, definition in entries.items()} for section, entries in selected["components"].items()}
     output.setdefault("components", {})
     merge_components(output, selected, namespace)
-    return resolve(selected["fragment"], output, preserve_recursive=True)
+    return selected["fragment"] if preserve_refs else resolve(selected["fragment"], output, preserve_recursive=True)
 
 
 def flatten_object(schema: dict) -> dict:
@@ -311,19 +388,54 @@ def merge_body(upstream: dict, runtime: dict) -> dict:
 
 
 def has_response_contract(response: dict) -> bool:
-    return any(
-        media.get("schema") or "example" in media or "examples" in media
+    return response.get("x-aisa-no-content") is True or any(
+        "schema" in media or "example" in media or "examples" in media
         for media in response.get("content", {}).values()
         if isinstance(media, dict)
     )
 
 
-def published_success_responses(previous: dict | None, output: dict | None = None) -> dict:
+def response_object(raw: dict, document: dict) -> dict:
+    response, seen = raw, set()
+    if not isinstance(response, dict):
+        raise ValueError("invalid upstream response declaration")
+    while "$ref" in response:
+        ref = response["$ref"]
+        if not ref.startswith("#/components/responses/") or ref in seen:
+            raise ValueError("unsupported upstream response reference")
+        seen.add(ref)
+        name = ref.rsplit("/", 1)[1].replace("~1", "/").replace("~0", "~")
+        response = document.get("components", {}).get("responses", {}).get(name)
+        if not isinstance(response, dict):
+            raise ValueError("unresolved upstream response reference: " + ref)
+    return response
+
+
+def source_success_responses(operation: dict, document: dict, output: dict, namespace: str, runtime_responses: dict) -> dict:
+    """Copy payloads only; runtime owns error envelopes, headers and links."""
+    result = {}
+    for status, raw in operation.get("responses", {}).items():
+        if not re.fullmatch(r"2(?:[0-9]{2}|XX)", str(status)):
+            continue
+        if has_response_contract(runtime_responses.get(str(status), {})):
+            continue
+        # Resolve a Response Object first, without importing headers or links.
+        response = response_object(raw, document)
+        if str(status) in {"204", "205"} and not response.get("content"):
+            result[str(status)] = {"description": response.get("description", "No content"), "content": {}, "x-aisa-no-content": True}
+            continue
+        if has_response_contract(response):
+            result[str(status)] = resolve_fragment({"description": response.get("description", "Successful response"),
+                                                   "content": response["content"]}, document, output, namespace, preserve_refs=True)
+    return result
+
+
+def published_success_responses(previous: dict | None) -> dict:
     """Read only documented success payloads; never inherit errors or auth.
 
-    References are resolved against the published source before extracting the
-    response contract, so old component names cannot collide with runtime ones.
-    The retained payload is content-addressed and feeds document_hash below.
+    Response Object references are resolved here. Payload schemas are imported
+    lazily only when used, so fresh contracts do not acquire unused old schemas.
+    Retained payloads are content-addressed and feed document_hash below.
     """
     result = {}
     if not previous:
@@ -340,12 +452,12 @@ def published_success_responses(previous: dict | None, output: dict | None = Non
             for status, response in operation.get("responses", {}).items():
                 if not re.fullmatch(r"2(?:[0-9]{2}|XX)", str(status)):
                     continue
-                resolved = resolve_fragment(response, previous, output, "published_responses.json") if output is not None else resolve(response, previous)
+                resolved = response_object(response, previous)
                 if has_response_contract(resolved):
                     # Do not copy legacy headers/links: runtime owns protocol.
                     responses[str(status)] = {
                         "description": resolved.get("description", "Successful response"),
-                        "content": copy.deepcopy(resolved["content"]),
+                        "content": copy.deepcopy(resolved.get("content", {})),
                     }
             if responses:
                 identity = (prefix + path, method, operation_id)
@@ -373,8 +485,9 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
     output = copy.deepcopy(facts)
     output["paths"] = {}
     pending: list[dict] = []
-    published_responses = published_success_responses(previous, output)
+    published_responses = published_success_responses(previous)
     retained_responses = {}
+    response_gaps = []
     facts_prefix = urlsplit((facts.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
     public_mirrors = public_mirrors or {}
     source_bindings = source_bindings or {}
@@ -423,6 +536,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                 try:
                     mirror = {}
                     operation_source = {}
+                    response_operation, response_document = {}, {}
                     if validation != "runtime" or method == "x-aisa-any":
                         if actual_method in upstream_item:
                             selected_document = upstream_matches[actual_method][0]
@@ -431,6 +545,9 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             request_fields["parameters"] = upstream_item.get("parameters", []) + request_fields.get("parameters", [])
                             mirror = resolve_fragment(request_fields, selected_document, output, "provider_" + digest(operation_source)[7:19] + ".json")
                             mirror = apply_upstream_selector(mirror, runtime.get("x-aisa-upstream-selector"))
+                            if runtime.get("x-aisa-passthrough") is True:
+                                response_operation = upstream_item[actual_method]
+                                response_document = selected_document
                         elif (public_path, actual_method) in public_mirrors:
                             selected = public_mirrors[(public_path, actual_method)]
                             mirror = copy.deepcopy(selected["operation"])
@@ -441,7 +558,9 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             used_mirrors[f"{actual_method} {public_path}"] = selected
                             if mirror.get("x-aisa-mirror-error"):
                                 raise ValueError(mirror["x-aisa-mirror-error"])
-                            mirror = resolve_fragment(mirror, {"components": selected.get("components", {})}, output, "manual_" + digest(operation_source)[7:19] + ".json")
+                            mirror = resolve_fragment(mirror, {"openapi": selected.get("openapi", "3.1.0"), "components": selected.get("components", {})}, output, "manual_" + digest(operation_source)[7:19] + ".json")
+                            response_operation = selected.get("response_operation", {})
+                            response_document = {"openapi": selected.get("openapi", "3.1.0"), "components": selected.get("response_components", {})}
                         else:
                             raise ValueError("upstream operation missing")
                     operation = copy.deepcopy(runtime)
@@ -497,22 +616,52 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         constraints["notes"] = list(dict.fromkeys([*runtime_notes, *notes]))
                     operation_id = operation["operationId"]
                     retained = {}
+                    fresh = {}
+                    response_error = None
+                    try:
+                        fresh = source_success_responses(response_operation, response_document, output, "response_" + digest(operation_source)[7:19] + ".json", runtime.get("responses", {}))
+                    except (ValueError, KeyError, TypeError) as exc:
+                        response_error = str(exc)
+                    source_payloads = {}
                     response_identity = (facts_prefix + path, actual_method, operation_id)
-                    for status, response in published_responses.get(response_identity, {}).items():
+                    old_responses = published_responses.get(response_identity, {})
+                    if fresh and "200" not in fresh and runtime.get("x-aisa-passthrough") is True and not has_response_contract(operation.get("responses", {}).get("200", {})):
+                        operation.get("responses", {}).pop("200", None)
+                        old_responses = {status: response for status, response in old_responses.items() if status != "200"}
+                    for status in sorted(set(old_responses) | set(fresh)):
+                        response = fresh.get(status, old_responses.get(status))
                         runtime_response = operation.setdefault("responses", {}).get(status, {})
                         if not has_response_contract(runtime_response):
+                            if status not in fresh:
+                                response = resolve_fragment(response, previous, output, "published_responses.json", preserve_refs=True)
                             effective = copy.deepcopy(runtime_response)
                             effective["content"] = copy.deepcopy(response["content"])
                             if effective.get("description") in (None, "Success", "Successful response"):
                                 effective["description"] = response["description"]
                             operation["responses"][status] = effective
-                            retained[status] = {"description": effective["description"], "content": effective["content"]}
+                            if response.get("x-aisa-no-content") is True:
+                                effective["x-aisa-no-content"] = True
+                            payload = {"description": effective["description"], "content": effective["content"]}
+                            if status in fresh:
+                                source_payloads[status] = payload
+                            else:
+                                retained[status] = payload
+                    if source_payloads:
+                        operation["x-aisa-response-source"] = {"kind": "upstream_success_contract", "source": copy.deepcopy(operation_source),
+                                                               "content_hash": digest(source_payloads)}
                     if retained:
                         retained_responses[operation_id] = retained
-                        operation["x-aisa-response-source"] = {
+                        operation.setdefault("x-aisa-response-source", {
                             "kind": "published_success_contract",
                             "content_hash": digest(retained),
-                        }
+                        })
+                    unknown = [str(status) for status, response in operation.get("responses", {}).items()
+                               if re.fullmatch(r"2(?:[0-9]{2}|XX)", str(status)) and str(status) not in {"204", "205"} and not has_response_contract(response)]
+                    if unknown or response_error:
+                        gap = {"operation_id": operation_id, "path": path, "method": actual_method.upper(),
+                               "statuses": unknown, "reason": response_error or "public success response has no authoritative payload declaration"}
+                        response_gaps.append(gap)
+                        operation["x-aisa-response-pending"] = copy.deepcopy(gap)
                     if operation_id in ids:
                         raise IdentityError(f"duplicate operationId: {operation_id}")
                     ids.add(operation_id)
@@ -523,5 +672,6 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     pending.append({"operation_id": base_id, "path": path, "method": actual_method.upper(), "reason": str(exc)})
     document_meta = output["info"]["x-aisa-document"]
     document_meta["composer_version"] = VERSION
+    document_meta["response_pending"] = response_gaps
     document_meta["document_hash"] = digest({"facts_hash": meta["facts_hash"], "upstream": upstream, "overlay": overlay, "composer_version": VERSION, "published_success_responses": retained_responses, "public_mirrors": used_mirrors, "source_bindings": source_bindings})
     return output, pending

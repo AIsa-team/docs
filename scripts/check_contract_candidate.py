@@ -47,8 +47,15 @@ def effective_request(operation, document):
     return result
 
 
-def assess_fresh_requests(report, documents, recomposed_documents, coverage):
-    """Append candidate errors against pre-reuse composition, never old hashes."""
+def effective_responses(operation, document):
+    """Payload/protocol declarations and explicit response uncertainty."""
+    responses = {str(status): _schema_contract(resolve(response, document, preserve_recursive=True))
+                 for status, response in operation.get('responses', {}).items()}
+    return {'responses': responses, 'pending': operation.get('x-aisa-response-pending')}
+
+
+def assess_fresh_contracts(report, documents, recomposed_documents, coverage):
+    """Verify request/response declarations against fresh composition, never hashes."""
     if not isinstance(coverage, dict) or not isinstance(coverage.get('providers'), dict):
         return
     for provider, rows in coverage['providers'].items():
@@ -68,6 +75,8 @@ def assess_fresh_requests(report, documents, recomposed_documents, coverage):
                     continue  # The primary checker reports the missing operation.
                 elif effective_request(actual[key], actual_document) != effective_request(expected[key], expected_document):
                     code = 'composed_request_contract_mismatch'
+                elif effective_responses(actual[key], actual_document) != effective_responses(expected[key], expected_document):
+                    code = 'composed_response_contract_mismatch'
             except (ValueError, KeyError, TypeError) as exc:
                 code, detail = 'unresolved_composed_request', str(exc)
             if code:
@@ -158,7 +167,7 @@ def assess_candidate(root: Path, facts_dir: Path, baseline_ref: str | None = Non
     report = check_readiness(context['facts_by_provider'], documents,
                              coverage, baseline_coverage=baseline,
                              runtime_index=context['runtime_index'])
-    assess_fresh_requests(report, documents, context['recomposed_documents'], coverage)
+    assess_fresh_contracts(report, documents, context['recomposed_documents'], coverage)
     staged = context['report']
     report['composed_candidate'] = staged
     if staged['status'] != 'passed' and report['status'] == 'passed':

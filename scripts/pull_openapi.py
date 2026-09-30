@@ -475,8 +475,8 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             facts_by_provider, documents, coverage,
             baseline_coverage=readiness_context.get('baseline_coverage'),
             runtime_index=index)
-        from check_contract_candidate import assess_fresh_requests
-        assess_fresh_requests(readiness_context['report'], documents, recomposed_documents, coverage)
+        from check_contract_candidate import assess_fresh_contracts
+        assess_fresh_contracts(readiness_context['report'], documents, recomposed_documents, coverage)
     return {p: content for p, content in changes.items() if not p.exists() or p.read_text() != content}, summary
 
 

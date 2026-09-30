@@ -4,7 +4,7 @@ import json
 import re
 from pathlib import Path
 from urllib.parse import urlsplit
-from compose_openapi import METHODS, digest, referenced_components
+from compose_openapi import METHODS, digest, referenced_components, response_object
 
 KEY = re.compile(r'[a-z0-9][a-z0-9_.-]*')
 
@@ -99,9 +99,33 @@ def public_mirror_index(root: Path, overrides: dict | None = None):
                     components = referenced_components(request, document)
                 except (ValueError, KeyError, TypeError) as exc:
                     request = {'x-aisa-mirror-error': str(exc)}
-                candidate = {'operation': request, 'source': source, 'components': components}
+                # Public-route mirrors may also declare the gateway's success
+                # payload. Keep its references separate: missing response
+                # evidence must not invalidate a valid request declaration.
+                responses = {}
+                for status, raw in op.get('responses', {}).items():
+                    if not re.fullmatch(r'2(?:[0-9]{2}|XX)', str(status)):
+                        continue
+                    try:
+                        response = response_object(raw, document)
+                        responses[str(status)] = {field: response[field] for field in ('description', 'content') if field in response}
+                    except (ValueError, KeyError, TypeError):
+                        # Preserve unresolved evidence for the response gap,
+                        # without traversing unused protocol headers or links.
+                        responses[str(status)] = raw
+                response_operation = {'responses': responses}
+                response_components = {}
+                try:
+                    response_components = referenced_components(response_operation, document)
+                except (ValueError, KeyError, TypeError):
+                    # The composer records the unsupported response reference.
+                    pass
+                candidate = {'operation': request, 'source': source, 'components': components,
+                             'openapi': document.get('openapi', '3.1.0'),
+                             'response_operation': response_operation, 'response_components': response_components}
                 key = (prefix + route, method)
-                if key in index and (index[key]['operation'] != request or index[key].get('components', {}) != components):
+                if key in index and any(index[key].get(field) != candidate.get(field)
+                                        for field in ('operation', 'components', 'openapi', 'response_operation', 'response_components')):
                     index[key] = {'operation': {'x-aisa-mirror-error': 'ambiguous published request contract'}, 'source': source}
                 else:
                     index[key] = candidate
@@ -115,6 +139,7 @@ def published_documents(root: Path):
 def previous_for_facts(facts, documents, provider):
     """Collect matching historic contracts even when split across old filenames."""
     from consolidate_openapi import merge_components
+    from compose_openapi import resolve_fragment
     result = {'servers': [{'url': 'https://api.aisa.one'}], 'paths': {}, 'components': {}}
     fact_prefix = urlsplit((facts.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
     routes = {fact_prefix + p for p in facts.get('paths', {})}
@@ -124,6 +149,24 @@ def previous_for_facts(facts, documents, provider):
         document['paths'] = {prefix + p: item for p, item in document.get('paths', {}).items() if name == provider or prefix + p in routes}
         if not document['paths']:
             continue
+        if document.get('openapi', '').startswith('3.0.'):
+            # The merged publication has no single source dialect. Normalize
+            # only reachable success payloads before losing this source's 3.0
+            # semantics; unrelated components and response protocol stay intact.
+            for item in document['paths'].values():
+                for method, operation in item.items():
+                    if method not in METHODS:
+                        continue
+                    for status, raw in operation.get('responses', {}).items():
+                        if not re.fullmatch(r'2(?:[0-9]{2}|XX)', str(status)):
+                            continue
+                        response = copy.deepcopy(response_object(raw, document))
+                        if not response.get('content'):
+                            continue
+                        converted = resolve_fragment({'content': response['content']}, document, document,
+                                                     'previous_response_' + name + '.json', preserve_refs=True)
+                        response['content'] = converted['content']
+                        operation['responses'][status] = response
         merge_components(result, document, name + '.json')
         for path, item in document['paths'].items():
             target = result['paths'].setdefault(path, {})

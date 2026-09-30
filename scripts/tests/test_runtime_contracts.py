@@ -528,7 +528,10 @@ class FullSimilarwebCutoverTests(unittest.TestCase):
             for path, method, old in published:
                 current = generated["paths"][legacy_prefix + path][method]
                 self.assertEqual(current["operationId"], old["operationId"])
-                self.assertEqual(current["responses"]["200"]["content"], resolve(old["responses"]["200"], previous)["content"])
+                from compose_openapi import resolve_fragment
+                expected_output = {"components": {}}
+                expected = resolve_fragment({"content": old["responses"]["200"]["content"]}, previous, expected_output, "expected.json")
+                self.assertEqual(resolve(current["responses"]["200"], generated)["content"], expected["content"])
                 self.assertEqual(current["responses"]["default"], {"description": "Current runtime error"})
                 self.assertEqual(current["parameters"], runtime["paths"][legacy_prefix + path][method]["parameters"])
                 self.assertEqual(current["x-aisa-pricing"], runtime["paths"][legacy_prefix + path][method]["x-aisa-pricing"])

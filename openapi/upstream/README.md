@@ -8,8 +8,12 @@ exact effective public paths and methods; no provider-prefix guessing is allowed
 
 Official provider imports use `kind: provider_openapi` with the original source
 URL, acquisition timestamp, content hash and converter. Their paths match the
-runtime `x-aisa-upstream-path`. The composer consumes request schema/prose only;
-provider prices, authentication and response errors cannot override runtime facts.
+runtime `x-aisa-upstream-path`. The composer consumes request schema/prose and
+success payloads only where runtime explicitly declares passthrough responses.
+Exact public-route mirrors may supply the public success payload. Runtime-owned
+response contracts always win; provider prices, authentication, response errors,
+headers and links cannot override runtime facts. Missing response declarations
+are reported separately and never become invented schemas.
 
 Re-import existing docs explicitly with `scripts/import_existing_contracts.py`.
 Do not replace these frozen inputs with newly generated outputs. Missing or

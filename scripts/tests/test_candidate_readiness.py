@@ -216,6 +216,37 @@ class CandidateReadinessTests(unittest.TestCase):
         self.assertEqual(report['status'], 'failed')
         self.assertTrue(report['providers']['alpha']['errors'])
 
+    def test_upstream_response_tampering_fails_without_document_hash_change(self):
+        self.publish_official_fixture()
+        op = self.fact['paths']['/apis/v1/alpha/read']['get']
+        op['x-aisa-passthrough'] = True
+        self.write_facts()
+        source_path = self.root / 'openapi/upstream/alpha.json'
+        source = json.loads(source_path.read_text())
+        source['paths']['/read']['get']['responses'] = {'200': {'description': 'Current payload',
+            'content': {'application/json': {'schema': {'type': 'integer'}}}}}
+        source_path.write_text(json.dumps(source))
+        self.assertEqual(self.publish(), 0)
+        path = self.root / 'openapi/alpha.json'
+        original = json.loads(path.read_text())
+        for change in ('schema', 'missing', 'false_pending'):
+            with self.subTest(change=change):
+                document = copy.deepcopy(original)
+                actual = document['paths']['/apis/v1/alpha/read']['get']
+                if change == 'schema':
+                    actual['responses']['200']['content']['application/json']['schema']['type'] = 'string'
+                elif change == 'missing':
+                    actual['responses']['200'].pop('content')
+                else:
+                    actual['x-aisa-response-pending'] = {'reason': 'invented uncertainty'}
+                path.write_text(json.dumps(document))
+                report = assess_candidate(self.root, self.facts)
+                self.assertEqual(report['status'], 'failed', report)
+                self.assertIn('composed_response_contract_mismatch', [e['code'] for e in report['providers']['alpha']['errors']])
+                before = path.read_bytes()
+                self.assertEqual(self.publish(), 1)
+                self.assertEqual(path.read_bytes(), before)
+
     def test_upstream_request_tampering_fails_without_document_hash_change(self):
         path = self.publish_official_fixture()
         original = json.loads(path.read_text())

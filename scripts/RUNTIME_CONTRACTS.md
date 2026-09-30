@@ -73,10 +73,25 @@ projection can be verified.
 ANY methods come from matching mirrors. Each previously published method keeps
 its operation ID; new methods get deterministic distinct IDs within the 56-character
 tool limit. The base endpoint ID never replaces a different published method's
-identity. Existing response schemas/examples remain a versioned fallback when
-runtime supplies only a generic success response; errors and authentication are
-never inherited. Explicit runtime response contracts supersede this fallback.
+identity. Explicit runtime success response contracts remain authoritative.
+For `x-aisa-passthrough: true`, current matching provider success payloads take
+precedence over historical published payloads. Exact public-route mirrors may
+also declare the public response; an upstream wrapper is never assumed to have
+the same output shape. Errors, headers, links and authentication are not inherited.
+Historical success schemas/examples remain a labeled, versioned fallback when
+no current authority supplies the payload. Unknown response declarations and
+unresolved response references appear in `x-aisa-response-pending` and provider
+metadata `response_pending`, separately from request pending. These are source
+gaps, not execution failures or additional endpoint admission gates. A complete
+request publication is not a claim of complete response documentation.
+204/205 No Content and explicitly unconstrained JSON schemas are valid responses.
 Editorial notes append to runtime constraint notes with stable deduplication.
+
+OpenAPI 3.0 Schema Objects are converted to 3.1 before use: nullable types and
+exclusive numeric bounds retain their semantics, and 3.0 reference siblings are
+ignored as required by that dialect. JSON instance data in defaults and examples
+is preserved even when it contains a literal `$ref`. Recursive schema definitions
+remain namespaced local references. Unsupported declarations remain reported.
 
 The puller finds existing pages by effective public route, across old split
 files. It keeps their slugs and prose and updates their OpenAPI references to
@@ -158,8 +173,10 @@ prerequisites, not inferred from local test success.
 
 The daily `check-contract-revisions.yml` compares runtime per-catalog facts hashes
 and provider document hashes reported by docs, the website agent card, MCP manifest
-and Tool Router catalog metadata. A repeated mismatch on two consecutive checks
-fails the workflow. Legacy sources without runtime hashes are counted separately;
+and Tool Router catalog metadata. Missing runtime catalogs, pending projections,
+missing publication evidence and hash mismatches all enter the existing consecutive
+check state; the same issue on two consecutive checks fails the workflow. A healthy
+check clears it. Legacy sources without runtime hashes are counted separately;
 they are never reported as successfully compared runtime contracts.
 
 
@@ -216,9 +233,10 @@ behind an unchanged reference name cannot preserve an accepted pending entry.
 PR CI runs both unit tests and `check_contract_candidate.py`. The latter checks
 the actual PR documents/coverage and reproduces composition offline using the
 existing public runtime cache, including category, index and per-catalog facts.
-Fresh request declarations are compared with independent composition before any
-previous document-hash reuse. Parameter/body/authentication drift fails even when
-the candidate retains its old hash; editorial text and examples remain editable.
+Fresh request and response declarations are compared with independent composition
+before any previous document-hash reuse. Parameter/body/authentication and response
+payload/protocol drift fails even when the candidate retains its old hash;
+editorial text and examples remain editable.
 It never fetches production or invents missing fixtures. Missing evidence produces
 `not_assessed` and a nonzero exit. Existing pre-rollout caches without endpoint
 evidence are insufficient; seed the cache from the new runtime before treating
@@ -250,8 +268,10 @@ managed integration outputs and all identity collisions block publication.
 ## Publication convergence acceptance
 
 `check_contract_revisions.py` compares public runtime facts, docs, website, MCP
-and Router metadata. Ordinary scheduled monitoring keeps its existing
-two-consecutive-failure escalation. A separate strict mode fails on the first
+and Router metadata. Scheduled monitoring uses the same mismatches and missing
+inputs as the convergence assessment, with its existing two-consecutive-failure
+escalation. Missing catalogs cannot stay green indefinitely; recovery clears their
+state. A separate strict mode fails on the first
 missing input or mismatch and never updates that monitor state:
 
 ```sh

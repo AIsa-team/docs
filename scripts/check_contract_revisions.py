@@ -114,8 +114,9 @@ def main():
     if args.acceptance:
         print(json.dumps(assessment, indent=2, sort_keys=True))
         return 0 if assessment['status'] == 'passed' else 1
-    if not failures:
-        failures = compare(documents, **results)
+    # Scheduled monitoring observes the same convergence assessment as strict
+    # acceptance, retaining only its existing two-consecutive-check escalation.
+    failures = sorted(set(assessment['mismatches'] + assessment['missing_inputs']))
     previous = json.loads(args.state.read_text()) if args.state.exists() else {}
     state = update_state(failures, previous)
     args.state.parent.mkdir(parents=True, exist_ok=True)
