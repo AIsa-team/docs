@@ -9,7 +9,7 @@ The initial registry includes all 49 observed catalogs; the 11 Open-Meteo
 catalogs share one output. Discovery remains active for future providers.
 
 ```sh
-python3 -m pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5'
+python3 -m pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
 python3 -m unittest discover -s scripts/tests -v
 python3 scripts/pull_openapi.py --facts-dir /path/to/facts       # dry run
 python3 scripts/pull_openapi.py --facts-dir /path/to/facts --write
@@ -90,6 +90,12 @@ English titles follow runtime summaries; Chinese titles and schemas use the
 existing translation catalog, with English fallback. No paid/model translation
 runs in this pipeline. New pages/navigation are additive. Disabled operations
 retain their page and a managed status notice.
+
+The `Test runtime contracts` workflow runs the same regression suite for pull
+requests that change contract sources, scripts, workflows or reference pages.
+It uses local fixtures and checked-in mirrors without production credentials,
+publishing or provider calls. An optional cached FRED reference audit may skip
+when that local cache is absent; it does not disable the rest of the suite.
 
 ## Coverage and failure behavior
 
