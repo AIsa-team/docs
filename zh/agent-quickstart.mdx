@@ -9,13 +9,13 @@ description: "优先用 MCP OAuth 接入；只有 MCP 跑不起来时才用 CLI�
 
 只要当前客户端能添加 MCP 连接器，无论用户本机还是云端、有没有终端，都默认使用原生远程 MCP `https://tools.aisa.one/mcp`（Streamable HTTP，OAuth）。可用的 shell 不是选择 CLI 的理由。
 
-仅当当前客户端完全没有 MCP 机制、任务是无法完成 OAuth 的非交互自动化（CI、cron、脚本），或用户明确选择 CLI 时，才使用 CLI。如果环境里没有安装 Node.js，不要为了用 CLI 去安装 Node、npm 或私有运行时：改用 MCP，或询问用户。
+仅当当前客户端完全没有 MCP 机制、任务是持有既有 key 且无法完成 OAuth 的非交互自动化（CI、cron、脚本），或用户明确选择 CLI 时，才使用 CLI。上述门槛与下文的 Node 规则优先于任何已安装的 `aisa` Skill；Skill 只承接后续操作。
 
 ## MCP（默认）
 
 连接 `https://tools.aisa.one/mcp`（Streamable HTTP，OAuth）。不需要安装 CLI、npm、npx 或 Skill；已安装的指引仍可使用。由客户端完成浏览器登录并保存 token。不要使用 `https://mcp.aisa.one/servers` 或默认 `aisa connect` 的 web-search。
 
-通过客户端的原生 MCP 配置添加连接器，然后让用户在浏览器完成 OAuth——例如 `claude mcp add --transport http aisa https://tools.aisa.one/mcp`、设置界面，或客户端的 MCP 配置文件。沙盒或云端终端仍按云端处理：如果客户端加不了连接器，走下面的 CLI 节。
+通过客户端的原生 MCP 配置添加连接器，然后让用户在浏览器完成 OAuth。如果客户端支持 MCP 但你在这里加不了连接器——能力未知、沙盒或权限拒绝——不要改走 CLI：请用户启用或添加连接器，然后等待。如果客户端需要重载或新开会话才能加载连接器，告诉用户；之后验证四个工具都在，期间不要改走 CLI。
 
 Grok Bot + Plugins：Settings → Plugins → Add → 如需则认证 → `@` 附加。若有原生自定义 MCP 设置，填入该 URL 并完成 OAuth。两者都不可用时，请用户启用或添加该连接器。grok.com（`grok.com/connectors`）是另一款产品。
 
@@ -23,7 +23,7 @@ Grok Bot + Plugins：Settings → Plugins → Add → 如需则认证 → `@` �
 
 ## CLI（仅当 MCP 跑不起来）
 
-门槛：当前客户端没有 MCP 机制、任务是持有既有 key 的非交互自动化，或用户明确选择 CLI。Node.js **必须已经安装**——否则停下改用 MCP。
+门槛：当前客户端没有 MCP 机制、任务是持有既有 key 的非交互自动化，或用户明确选择 CLI。Node.js **必须已经安装**——否则停下；客户端有 MCP 就用 MCP，没有就告诉用户缺 Node.js。不要绕过缺失的前置条件或被拒的写入：不安装 Node/npm，不建私有或隔离运行时，不重定向 `HOME`。
 
 ```sh
 npx skills add AIsa-team/agent-skills --skill aisa --agent codex --global
@@ -38,7 +38,7 @@ npm install -g @aisa-one/cli
 aisa --version
 ```
 
-复用已经能用的 `@aisa-one/cli` **0.5.0 或更高**；只有缺失时才安装；不要降级。CLI 仍可沿用 Node.js **18+**。Skill 落盘后读取它。登录遵循该 Skill 和 `aisa login --help`。用 `aisa balance` 证明认证。`aisa whoami` 只检查本地。`AISA_API_KEY` 优先于已存储密钥；冲突时说明两个来源。不要打印凭证，也不要让用户去控制台复制 Key。获取凭证仍以浏览器 `aisa login` 为主。CLI 凭证保存在正常用户主目录；不要为此重定向 `HOME` 或搭建隔离运行时。
+复用已经能用的 `@aisa-one/cli` **0.5.0 或更高**；只有缺失时才安装；不要降级。CLI 仍可沿用 Node.js **18+**。Skill 落盘后读取它。登录遵循该 Skill 和 `aisa login --help`。用 `aisa balance` 证明认证。`aisa whoami` 只检查本地。`AISA_API_KEY` 优先于已存储密钥；冲突时说明两个来源。不要打印凭证，也不要让用户去控制台复制 Key。交互场景以浏览器 `aisa login` 为主获取凭证；无头自动化使用预先配置的 `AISA_API_KEY`。
 
 ## 收口
 
