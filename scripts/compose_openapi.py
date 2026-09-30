@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit
 
-VERSION = "6"
+VERSION = "7"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -356,7 +356,8 @@ def published_success_responses(previous: dict | None, output: dict | None = Non
 
 
 def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = None,
-            previous: dict | None = None, public_mirrors: dict | None = None) -> tuple[dict, list]:
+            previous: dict | None = None, public_mirrors: dict | None = None,
+            source_bindings: dict | None = None) -> tuple[dict, list]:
     overlay = overlay or {}
     validate_overlay(overlay)
     if not isinstance(facts.get("paths"), dict) or not facts.get("openapi", "").startswith("3.1"):
@@ -376,6 +377,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
     retained_responses = {}
     facts_prefix = urlsplit((facts.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
     public_mirrors = public_mirrors or {}
+    source_bindings = source_bindings or {}
     used_mirrors = {}
     published_ids = {}
     previous_prefix = urlsplit(((previous or {}).get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
@@ -399,13 +401,21 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
             validation = runtime.get("x-aisa-validation")
             if validation not in {"runtime", "provider", "mixed"}:
                 raise ValueError("runtime operation has unknown validation boundary")
+            public_path = facts_prefix + path
+            bound_source = source_bindings.get(public_path)
             try:
-                upstream_matches = select_upstream_operations(sources, runtime.get("x-aisa-upstream-path"), runtime.get("x-aisa-upstream-selector")) if validation != "runtime" or method == "x-aisa-any" else {}
+                candidates = sources
+                if bound_source:
+                    candidates = [source for source in sources if source.get("info", {}).get("x-aisa-source", {}).get("url") == bound_source]
+                    if len(candidates) != 1:
+                        raise ValueError("public operation source binding must select exactly one locked source")
+                upstream_matches = select_upstream_operations(candidates, runtime.get("x-aisa-upstream-path"), runtime.get("x-aisa-upstream-selector")) if validation != "runtime" or method == "x-aisa-any" else {}
+                if bound_source and not upstream_matches:
+                    raise ValueError("bound source does not match the runtime upstream path and selector")
                 upstream_item = {key: value[1] for key, value in upstream_matches.items()}
             except (ValueError, TypeError, KeyError) as exc:
                 pending.append({"operation_id": base_id, "path": path, "method": "ANY" if method == "x-aisa-any" else method.upper(), "reason": str(exc)})
                 continue
-            public_path = facts_prefix + path
             methods = sorted((set(upstream_item) & METHODS) | {m for p, m in public_mirrors if p == public_path}) if method == "x-aisa-any" else [method]
             if not methods:
                 pending.append({"operation_id": base_id, "path": path, "method": "ANY", "reason": "upstream selector has no matching official operation" if runtime.get("x-aisa-upstream-selector") else "upstream operation missing"})
@@ -425,6 +435,9 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             selected = public_mirrors[(public_path, actual_method)]
                             mirror = copy.deepcopy(selected["operation"])
                             operation_source = selected["source"]
+                            expected_path_hash = operation_source.get("upstream_path_sha256")
+                            if expected_path_hash and expected_path_hash != hashlib.sha256(runtime.get("x-aisa-upstream-path", "").encode()).hexdigest():
+                                raise ValueError("public mirror upstream binding changed; review its source mapping")
                             used_mirrors[f"{actual_method} {public_path}"] = selected
                             if mirror.get("x-aisa-mirror-error"):
                                 raise ValueError(mirror["x-aisa-mirror-error"])
@@ -448,6 +461,15 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     if validation != "runtime":
                         runtime_fields = {(p["in"], p["name"]) for p in runtime.get("parameters", [])}
                         query_passthrough = runtime.get("x-aisa-query-policy", {}).get("request_wins", False)
+                        if bound_source and not runtime.get("x-aisa-upstream-selector"):
+                            for parameter in mirror.get("parameters", []):
+                                if parameter.get("in") == "query" and parameter.get("required") and "default" in parameter.get("schema", {}):
+                                    # Required provider arguments are caller inputs, not
+                                    # transport defaults. Keep the suggested value as an example.
+                                    value = parameter["schema"].pop("default")
+                                    parameter.setdefault("example", value)
+                        if bound_source and not query_passthrough and any(p.get("in") == "query" and p.get("required") and (p["in"], p["name"]) not in runtime_fields for p in mirror.get("parameters", [])):
+                            raise ValueError("bound source requires query parameters that runtime does not forward")
                         parameters = {
                             (p["in"], p["name"]): p for p in mirror.get("parameters", [])
                             if p.get("name", "").lower() not in auth_names
@@ -501,5 +523,5 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     pending.append({"operation_id": base_id, "path": path, "method": actual_method.upper(), "reason": str(exc)})
     document_meta = output["info"]["x-aisa-document"]
     document_meta["composer_version"] = VERSION
-    document_meta["document_hash"] = digest({"facts_hash": meta["facts_hash"], "upstream": upstream, "overlay": overlay, "composer_version": VERSION, "published_success_responses": retained_responses, "public_mirrors": used_mirrors})
+    document_meta["document_hash"] = digest({"facts_hash": meta["facts_hash"], "upstream": upstream, "overlay": overlay, "composer_version": VERSION, "published_success_responses": retained_responses, "public_mirrors": used_mirrors, "source_bindings": source_bindings})
     return output, pending

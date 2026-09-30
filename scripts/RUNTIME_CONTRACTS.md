@@ -159,3 +159,31 @@ old identities and response schemas. Paths match the effective OpenAPI server
 prefix with operation/path/root precedence; ambiguous matches fail closed.
 Official reference converters record source hashes and never infer types from
 example responses. Refreshes run through the same reviewed upstream workflow.
+
+## Resolving a missing contract
+
+A pending entry is an intake item, not a diagnosis that the API is broken.
+Use the operation ID, actual upstream binding and reported missing declaration
+to find its owner and source. Check, in order, the current handler/request type,
+official OpenAPI, the provider's official reference/source repository, and a
+versioned official legacy contract for an exact legacy path. A documentation
+page slug or similar path is not a verified upstream alias.
+
+Distinguish source acquisition, conversion and binding failures. Repair an
+importer when the official declaration is present but its syntax is unsupported.
+For multiplexed APIs, an explicit reviewed source binding selects the documented
+caller mode and retains its required inputs; it must not invent a runtime default.
+If no authority defines a parameter's type or required status, record that exact
+uncertainty for provider clarification or authorized request validation.
+
+A known 404/410 or deprecation is an endpoint maintenance issue. Keep its evidence
+separate from missing-schema items and propose the exact route/provider change
+with its authentication, request, response and pricing implications. Publishing a
+schema for a differently named replacement does not repair the configured route.
+The documentation pipeline does not silently rewrite production bindings.
+
+Close an item only after composition, OpenAPI validation and relevant consumer
+search/details checks pass. An existing published contract remains available as
+historical evidence during unresolved refreshes; new operations without a valid
+contract stay pending. Changes to runtime execution or production configuration
+use their normal separate review/deployment process.

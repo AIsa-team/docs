@@ -284,10 +284,18 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                 configured = entry.get("upstream")
                 configurations = configured if isinstance(configured, list) else [configured]
                 upstream_documents = []
+                source_bindings = {}
                 for configuration in configurations:
                     source_url = configuration.get("url") if isinstance(configuration, dict) else configuration
                     if configuration and (not isinstance(source_url, str) or not source_url.startswith("https://")):
                         raise ValueError("upstream requires an HTTPS source URL")
+                    public_paths = configuration.get("public_paths", []) if isinstance(configuration, dict) else []
+                    if not isinstance(public_paths, list) or any(not isinstance(path, str) or not path.startswith("/") or any(char in path for char in "?# ") for path in public_paths):
+                        raise ValueError("upstream public_paths must be exact public path templates")
+                    for public_path in public_paths:
+                        if public_path in source_bindings:
+                            raise ValueError("duplicate public operation source binding")
+                        source_bindings[public_path] = source_url
                     upstream_file = configuration.get("file", provider + ".json") if isinstance(configuration, dict) else provider + ".json"
                     if not isinstance(upstream_file, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_.-]*\.json", upstream_file):
                         raise ValueError("upstream file must name a JSON mirror within openapi/upstream")
@@ -301,7 +309,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                         upstream_documents.append(document)
                 upstream = upstream_documents if isinstance(configured, list) else (upstream_documents[0] if upstream_documents else None)
                 history = previous_for_facts(facts, original_documents, provider)
-                document, unresolved = compose(facts, upstream, overlay, history, public_mirrors)
+                document, unresolved = compose(facts, upstream, overlay, history, public_mirrors, source_bindings)
                 coverage["providers"][provider] = coverage_rows(facts, document, unresolved, catalogs)
                 active_history = copy.deepcopy(history)
                 runtime_paths = normalize_paths(facts)["paths"]
