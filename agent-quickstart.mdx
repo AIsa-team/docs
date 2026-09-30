@@ -1,18 +1,29 @@
 ---
 title: "Connect your agent to AIsa"
-description: "Install the AIsa skill, sign in, and start using tools."
+description: "Connect by MCP OAuth first; use the CLI only when MCP cannot run here."
 ---
 
 Set up AIsa. Run the matching commands yourself. Do not ask the user to run them.
 
 Reuse a working official `aisa` skill plus valid CLI auth, or unified MCP with `AISA_SEARCH_TOOL`, `AISA_BATCH_GET_SCHEMA`, `AISA_BATCH_QUOTE`, and `AISA_BATCH_USE`. Explicit choice or a still-authorized connection wins; do not migrate or reinstall automatically. Do not change unrelated model settings. Describe installs and credentials as in this agent environment.
 
-Choose by actual execution environment, not product name or a terminal.
+Default to native remote MCP at `https://tools.aisa.one/mcp` (Streamable HTTP, OAuth) whenever this client can add that connector — user-local or cloud, with or without a terminal. A working shell is not a reason to choose the CLI.
 
-- User-local: prefer one official `aisa` skill plus the CLI. Any working local shell, including PowerShell.
-- Grok Bot or another cloud sandbox, even with a terminal: prefer native remote MCP at `https://tools.aisa.one/mcp`. A cloud terminal is not a user-local machine.
+Use the CLI only when this client has no MCP mechanism at all, for non-interactive automation (CI, cron, scripts) that cannot complete OAuth, or by explicit user choice. If Node.js is not already installed, do not install Node, npm, or a private runtime just to reach the CLI: use MCP, or ask the user.
 
-## Local
+## MCP (default)
+
+Connect `https://tools.aisa.one/mcp` (Streamable HTTP, OAuth). No CLI, npm, npx, or Skill install is required; already-installed guidance may be used. The client owns browser sign-in and tokens. Do not use `https://mcp.aisa.one/servers` or the default `aisa connect` web-search server.
+
+Add the connector through this client's native MCP config, then let the user finish OAuth in the browser — for example `claude mcp add --transport http aisa https://tools.aisa.one/mcp`, a settings UI, or the client's MCP config file. A sandboxed or cloud terminal still counts as cloud: if the client cannot add connectors, use the CLI section below.
+
+Grok Bot + Plugins: Settings → Plugins → Add → auth if asked → `@` attach. If a native custom MCP setup exists, enter that URL and complete OAuth. If neither is available, ask the user to enable or add the connector. grok.com (`grok.com/connectors`) is a different product.
+
+Then those four tools: search → schema when `has_full_schema` is false → quote → use. Take IDs and arguments from search/schema; do not invent IDs or prices. Quote does not execute and is not approval. A missing, failed, or partial quote is not free, not a batch total, and not a cap; neither is estimated cost. Re-quote if tools, arguments, or scope change. Stop if the quote or documented maximum exceeds the remaining approved cap.
+
+## CLI (only when MCP cannot run here)
+
+Gate: this client has no MCP mechanism, the task is non-interactive automation with an existing key, or the user explicitly chose the CLI. Node.js **must already be installed** — otherwise stop and use MCP.
 
 ```sh
 npx skills add AIsa-team/agent-skills --skill aisa --agent codex --global
@@ -20,26 +31,18 @@ npx skills add AIsa-team/agent-skills --skill aisa --agent codex --global
 
 Set `--agent` to this harness (`codex`, `claude-code`, `cursor`, …). Prefer `--global` unless the user asked for this repo only. Do not use `--all` or `*`. Requires Node.js **22.20.0+** (`skills` 1.5.25 `engines`).
 
-If Node or `npx skills` cannot run, and this is user-local **or** the user explicitly prefers CLI/Skill here (including cloud), read the skill-download section of [Agent Quickstart fallbacks](https://aisa.one/docs/agent-quickstart-fallbacks.md) before running it.
+If `npx skills` cannot run and the gate above still holds, read the skill-download section of [Agent Quickstart fallbacks](https://aisa.one/docs/agent-quickstart-fallbacks.md) before running it.
 
 ```sh
 npm install -g @aisa-one/cli
 aisa --version
 ```
 
-Reuse `@aisa-one/cli` **0.5.0 or later** if present; otherwise install; do not downgrade. CLI may keep Node.js **18+**. Read the on-disk skill. Sign in via that skill and `aisa login --help`. Prove auth with `aisa balance`. `aisa whoami` is local only. `AISA_API_KEY` overrides the stored key; if they conflict, explain both. Never print credentials or send the user to copy a dashboard key. Browser `aisa login` is the primary credential path.
-
-## Cloud
-
-Connect `https://tools.aisa.one/mcp` (Streamable HTTP, OAuth). No CLI, npm, npx, or Skill install is required; already-installed guidance may be used. The client owns browser sign-in and tokens. Do not use `https://mcp.aisa.one/servers` or the default `aisa connect` web-search server.
-
-Grok Bot + Plugins: Settings → Plugins → Add → auth if asked → `@` attach. If a native custom MCP setup exists, enter that URL and complete OAuth. If neither is available, ask the user to enable or add the connector. grok.com (`grok.com/connectors`) is a different product.
-
-Then those four tools: search → schema when `has_full_schema` is false → quote → use. Take IDs and arguments from search/schema; do not invent IDs or prices. Quote does not execute and is not approval. A missing, failed, or partial quote is not free, not a batch total, and not a cap; neither is estimated cost. Re-quote if tools, arguments, or scope change. Stop if the quote or documented maximum exceeds the remaining approved cap.
+Reuse `@aisa-one/cli` **0.5.0 or later** if present; otherwise install; do not downgrade. CLI may keep Node.js **18+**. Read the on-disk skill. Sign in via that skill and `aisa login --help`. Prove auth with `aisa balance`. `aisa whoami` is local only. `AISA_API_KEY` overrides the stored key; if they conflict, explain both. Never print credentials or send the user to copy a dashboard key. Browser `aisa login` is the primary credential path. Keep CLI credentials in the normal user home; do not redirect `HOME` or build an isolated runtime for them.
 
 ## Finish
 
-**AIsa is connected.** only after `aisa balance` (CLI) or OAuth plus those four tools (MCP). Metadata or a `401` is not a protected call. A missing connector is not connected. Then continue a named task, or ask **What would you like to do first?** CLI follows the `aisa` skill; MCP uses those tools. Setup is not spend approval.
+**AIsa is connected.** only after OAuth plus those four tools (MCP) or `aisa balance` (CLI). Metadata or a `401` is not a protected call. A missing connector is not connected. Then continue a named task, or ask **What would you like to do first?** CLI follows the `aisa` skill; MCP uses those tools. Setup is not spend approval.
 
 Do not jump to HTTP to bypass missing credentials, exhausted credit, or the same API outage. Do not make paid calls to test availability. Do not extract client-owned MCP OAuth tokens.
 
