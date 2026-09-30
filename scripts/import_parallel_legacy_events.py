@@ -2,6 +2,7 @@
 """Reproduce the pinned official beta events contract without changing its route."""
 import argparse
 from copy import deepcopy
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -64,6 +65,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     source = args.source.read_bytes() if args.source else urlopen(Request(SOURCE_URL, headers={'User-Agent': 'Mozilla/5.0'}), timeout=30).read()
     document = extract(source)
+    document['info']['x-aisa-source']['fetched_at'] = datetime.now(timezone.utc).isoformat()
     if args.write:
         destination = Path(__file__).resolve().parents[1] / 'openapi/upstream/parallel-legacy-events.json'
         destination.write_text(json.dumps(document, indent=2, ensure_ascii=False) + '\n')
