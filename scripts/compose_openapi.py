@@ -13,19 +13,25 @@ import re
 from typing import Any
 from urllib.parse import urlsplit
 
-VERSION = "8"
+VERSION = "9"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
 INSTANCE_FIELDS = {"example", "default", "enum", "const", "value"}
 NAMED_CONTRACT_MAPS = {"properties", "patternProperties", "$defs", "definitions", "schemas", "responses",
                       "headers", "parameters", "requestBodies", "securitySchemes", "examples", "links", "callbacks"}
+# SDK code-generation overrides do not describe the public wire contract. Some
+# consumers inspect references inside them, although OpenAPI validators ignore
+# them. Keep the original in the upstream mirror, not the public projection.
+NON_PUBLIC_EXTENSIONS = {"x-stainless-override-schema"}
 
 
 def map_contract_children(node: dict, transform) -> dict:
     """Walk declarations without interpreting reference-shaped JSON instances."""
     result = {}
     for key, child in node.items():
+        if key in NON_PUBLIC_EXTENSIONS:
+            continue
         if key in INSTANCE_FIELDS or key.startswith("x-") or (key == "examples" and isinstance(child, list)):
             result[key] = copy.deepcopy(child)
         elif key in NAMED_CONTRACT_MAPS and isinstance(child, dict):

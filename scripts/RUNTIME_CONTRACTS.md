@@ -92,6 +92,11 @@ exclusive numeric bounds retain their semantics, and 3.0 reference siblings are
 ignored as required by that dialect. JSON instance data in defaults and examples
 is preserved even when it contains a literal `$ref`. Recursive schema definitions
 remain namespaced local references. Unsupported declarations remain reported.
+Provider SDK code-generation overrides (`x-stainless-override-schema`) stay in
+the upstream mirror and are omitted from the public projection. They are not
+public wire schemas; retaining their private references can prevent consumers
+from loading otherwise valid contracts. Public `x-aisa-*` metadata and literal
+JSON examples/defaults remain intact.
 
 The puller finds existing pages by effective public route, across old split
 files. It keeps their slugs and prose and updates their OpenAPI references to

@@ -9,12 +9,44 @@ from jsonschema import Draft202012Validator
 from openapi_spec_validator import validate
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from compose_openapi import compose, resolve
+from compose_openapi import compose, resolve, resolve_fragment
 from runtime_registry import public_mirror_index
 from test_runtime_contracts import facts, mirror, operation
 
 
 class SchemaResponseContractsTests(unittest.TestCase):
+    def test_parallel_sdk_override_is_not_a_public_contract_dependency(self):
+        source = json.loads((Path(__file__).resolve().parents[2] / 'openapi/upstream/parallel.ai.json').read_text())
+        parameters = [parameter for item in source['paths'].values() for method, op in item.items()
+                      if method in ('get', 'post') for parameter in op.get('parameters', [])
+                      if 'x-stainless-override-schema' in parameter.get('schema', {})]
+        self.assertTrue(parameters, 'exercise the checked-in official Parallel declaration')
+        original = copy.deepcopy(parameters)
+        output = {}
+        selected = resolve_fragment({'parameters': parameters}, source, output, 'parallel-sdk.json')
+        self.assertNotIn('x-stainless-override-schema', json.dumps(selected))
+        self.assertNotIn('ParallelBeta', json.dumps(output))
+        for before, after in zip(parameters, selected['parameters']):
+            expected = copy.deepcopy(before)
+            expected['schema'].pop('x-stainless-override-schema')
+            self.assertEqual(after, expected, 'public header wire semantics must remain intact')
+        self.assertEqual(parameters, original, 'do not alter the authoritative upstream mirror')
+
+    def test_sdk_extension_filter_does_not_rewrite_literal_json_or_aisa_metadata(self):
+        upstream = mirror()
+        literal = {'x-stainless-override-schema': {'$ref': '#/components/schemas/Literal'},
+                   '$ref': 'https://example.test/literal'}
+        upstream['components']['schemas']['Body']['example'] = literal
+        upstream['components']['schemas']['Body']['x-aisa-notes'] = ['Keep this metadata']
+        upstream['components']['schemas']['Body']['x-stainless-override-schema'] = {
+            '$ref': '#/components/schemas/NotAWireDependency'}
+        document, pending = compose(facts('provider'), upstream)
+        self.assertFalse(pending)
+        schema = operation(document)['requestBody']['content']['application/json']['schema']
+        self.assertEqual(schema['example'], literal)
+        self.assertEqual(schema['x-aisa-notes'], ['Keep this metadata'])
+        self.assertNotIn('x-stainless-override-schema', schema)
+
     def test_openapi30_nullable_bounds_refs_and_literal_examples(self):
         upstream = mirror()
         upstream['openapi'] = '3.0.3'
