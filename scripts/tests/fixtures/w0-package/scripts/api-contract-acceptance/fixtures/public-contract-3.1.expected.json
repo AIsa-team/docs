@@ -1,0 +1,254 @@
+{
+  "format_version": 1,
+  "fixture": "public-contract-3.1.json",
+  "cases": [
+    {
+      "id": "parameters-and-public-inheritance",
+      "criteria": ["C03"],
+      "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1widgets~1{id}"},
+      "assertions": [
+        {"pointer": "/servers", "equals": [{"url": "https://public.example.invalid/v1", "description": "Public root route"}]},
+        {"pointer": "/security", "equals": [{"PublicBearer": []}]},
+        {"pointer": "/paths/~1widgets~1{id}/parameters/0", "equals": {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[a-z]+$"}, "style": "simple", "explode": false}},
+        {"pointer": "/paths/~1widgets~1{id}/parameters/1", "equals": {"name": "filter", "in": "query", "schema": {"type": "string"}, "style": "form", "explode": false}},
+        {"pointer": "/paths/~1widgets~1{id}/parameters/2", "equals": {"name": "filter", "in": "header", "schema": {"type": "string"}, "style": "simple", "explode": false}},
+        {"pointer": "/components/parameters/Session", "equals": {"name": "session", "in": "cookie", "required": false, "schema": {"type": "string"}, "style": "form", "explode": true}},
+        {"pointer": "/paths/~1widgets~1{id}/get/parameters/0", "equals": {"name": "filter", "in": "query", "required": true, "schema": {"type": "array", "items": {"type": "string"}, "minItems": 1}, "style": "pipeDelimited", "explode": false, "allowReserved": true}},
+        {"pointer": "/paths/~1widgets~1{id}/get/parameters/1", "equals": {"name": "metadata", "in": "query", "content": {"application/json": {"schema": {"type": "object", "additionalProperties": {"type": "integer"}}, "example": {"rank": 2}}}}},
+        {"pointer": "/paths/~1widgets~1{id}/delete/security", "equals": []},
+        {"pointer": "/paths/~1widgets/servers", "equals": [{"url": "https://public.example.invalid/path", "description": "Public path route"}]},
+        {"pointer": "/paths/~1widgets/post/servers", "equals": [{"url": "https://public.example.invalid/upload", "description": "Public operation route"}]},
+        {"pointer": "/paths/~1widgets/post/security", "equals": [{"PublicKey": []}]},
+        {"pointer": "/components/securitySchemes", "equals": {"PublicBearer": {"type": "http", "scheme": "bearer", "bearerFormat": "opaque"}, "PublicKey": {"type": "apiKey", "in": "header", "name": "X-Public-Key"}}}
+      ]
+    },
+    {
+      "id": "request-media-encoding-and-examples",
+      "criteria": ["C03", "C07", "C08"],
+      "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1widgets/post/requestBody"},
+      "assertions": [
+        {"pointer": "/paths/~1widgets/post/requestBody/required", "equals": true},
+        {"pointer": "/paths/~1widgets/post/requestBody/description", "equals": "Declared alternate public media, no execution claim"},
+        {"pointer": "/paths/~1widgets/post/requestBody/content/application~1json", "equals": {"schema": {"$ref": "#/components/schemas/Envelope"}, "example": {"payload": {"$ref": "literal instance data, not a schema reference"}}}},
+        {"pointer": "/paths/~1widgets/post/requestBody/content/application~1vnd.fixture+json", "equals": {"schema": {"$ref": "#/components/schemas/NullableText"}, "example": null}},
+        {"pointer": "/paths/~1widgets/post/requestBody/content/text~1plain", "equals": {"schema": {"type": "string", "minLength": 1}, "example": "hello"}},
+        {"pointer": "/paths/~1widgets/post/requestBody/content/application~1octet-stream", "equals": {"schema": {"type": "string", "format": "binary"}}},
+        {"pointer": "/paths/~1widgets/post/requestBody/content/application~1x-www-form-urlencoded", "equals": {"schema": {"type": "object", "required": ["labels"], "properties": {"labels": {"type": "array", "items": {"type": "string"}}, "note": {"type": "string"}}}, "encoding": {"labels": {"style": "form", "explode": true, "allowReserved": false}, "note": {"style": "form", "explode": false}}}},
+        {"pointer": "/paths/~1widgets/post/requestBody/content/multipart~1form-data", "equals": {"schema": {"type": "object", "required": ["file"], "properties": {"file": {"type": "string", "format": "binary"}, "metadata": {"$ref": "#/components/schemas/Widget"}}}, "encoding": {"file": {"contentType": "application/octet-stream", "headers": {"X-Part-ID": {"schema": {"type": "string"}}}}, "metadata": {"contentType": "application/json"}}}}
+      ]
+    },
+    {
+      "id": "schema-shapes-and-constraints",
+      "criteria": ["C04"],
+      "source_ref": {"file": "public-contract-3.1.json", "pointer": "/components/schemas"},
+      "assertions": [
+        {"pointer": "/components/schemas/Widget", "equals": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string", "minLength": 1, "maxLength": 5}, "score": {"type": "integer", "minimum": 0, "maximum": 10, "default": 0}, "attributes": {"type": "object", "additionalProperties": {"type": "string"}}}, "additionalProperties": false, "examples": [{"id": "alpha"}]}},
+        {"pointer": "/components/schemas/Anything", "equals": true},
+        {"pointer": "/components/schemas/Impossible", "equals": false},
+        {"pointer": "/components/schemas/Unconstrained", "equals": {}},
+        {"pointer": "/components/schemas/NullOnly", "equals": {"type": "null", "const": null}},
+        {"pointer": "/components/schemas/NullableText", "equals": {"type": ["string", "null"], "enum": ["ok", null], "default": null, "examples": [null, "ok"]}},
+        {"pointer": "/components/schemas/Array", "equals": {"type": "array", "items": {"type": "integer"}, "minItems": 1, "maxItems": 3, "uniqueItems": true}},
+        {"pointer": "/components/schemas/Bounds", "equals": {"type": "number", "exclusiveMinimum": 0, "maximum": 4, "multipleOf": 0.5}},
+        {"pointer": "/components/schemas/Composed", "equals": {"allOf": [{"type": "object", "required": ["kind"], "properties": {"kind": {"const": "widget"}}}, {"anyOf": [{"required": ["left"]}, {"required": ["right"]}]}], "oneOf": [{"properties": {"left": {"type": "integer"}}, "required": ["left"], "not": {"required": ["right"]}}, {"properties": {"right": {"type": "string"}}, "required": ["right"], "not": {"required": ["left"]}}]}},
+        {"pointer": "/components/schemas/Conditional", "equals": {"type": "object", "properties": {"mode": {"enum": ["credit", "cash"]}, "card": {"type": "string"}, "receipt": {"type": "string"}}, "required": ["mode"], "if": {"properties": {"mode": {"const": "credit"}}, "required": ["mode"]}, "then": {"required": ["card"]}, "else": {"not": {"required": ["card"]}}, "dependentRequired": {"card": ["receipt"]}, "additionalProperties": false}},
+        {"pointer": "/components/schemas/Dependent", "equals": {"type": "object", "properties": {"count": {"type": "integer"}, "items": {"type": "array"}}, "dependentSchemas": {"count": {"required": ["items"]}}, "minProperties": 1, "maxProperties": 2, "additionalProperties": false}}
+      ],
+      "schema_examples": [
+        {"schema_pointer": "/components/schemas/Widget", "instance": {"id": "alpha", "score": 10, "attributes": {"color": "blue"}}, "valid": true},
+        {"schema_pointer": "/components/schemas/Widget", "instance": {"id": "abcdef"}, "valid": false},
+        {"schema_pointer": "/components/schemas/Widget", "instance": {"id": "a", "score": 11}, "valid": false},
+        {"schema_pointer": "/components/schemas/Widget", "instance": {"id": "a", "attributes": {"rank": 2}}, "valid": false},
+        {"schema_pointer": "/components/schemas/Widget", "instance": {"id": "a", "extra": true}, "valid": false},
+        {"schema_pointer": "/components/schemas/Anything", "instance": [null, {"x": true}], "valid": true},
+        {"schema_pointer": "/components/schemas/Impossible", "instance": null, "valid": false},
+        {"schema_pointer": "/components/schemas/Unconstrained", "instance": 42, "valid": true},
+        {"schema_pointer": "/components/schemas/NullOnly", "instance": null, "valid": true},
+        {"schema_pointer": "/components/schemas/NullOnly", "instance": "null", "valid": false},
+        {"schema_pointer": "/components/schemas/NullableText", "instance": null, "valid": true},
+        {"schema_pointer": "/components/schemas/NullableText", "instance": "other", "valid": false},
+        {"schema_pointer": "/components/schemas/Array", "instance": [1, 2], "valid": true},
+        {"schema_pointer": "/components/schemas/Array", "instance": [], "valid": false},
+        {"schema_pointer": "/components/schemas/Array", "instance": [1, 1], "valid": false},
+        {"schema_pointer": "/components/schemas/Array", "instance": [1, 2, 3, 4], "valid": false},
+        {"schema_pointer": "/components/schemas/Array", "instance": ["1"], "valid": false},
+        {"schema_pointer": "/components/schemas/Bounds", "instance": 0.5, "valid": true},
+        {"schema_pointer": "/components/schemas/Bounds", "instance": 0, "valid": false},
+        {"schema_pointer": "/components/schemas/Bounds", "instance": 4, "valid": true},
+        {"schema_pointer": "/components/schemas/Bounds", "instance": 4.5, "valid": false},
+        {"schema_pointer": "/components/schemas/Bounds", "instance": 0.25, "valid": false},
+        {"schema_pointer": "/components/schemas/Composed", "instance": {"kind": "widget", "left": 2}, "valid": true},
+        {"schema_pointer": "/components/schemas/Composed", "instance": {"kind": "widget", "right": "a"}, "valid": true},
+        {"schema_pointer": "/components/schemas/Composed", "instance": {"kind": "wrong", "left": 2}, "valid": false},
+        {"schema_pointer": "/components/schemas/Composed", "instance": {"kind": "widget", "left": 2, "right": "a"}, "valid": false},
+        {"schema_pointer": "/components/schemas/Composed", "instance": {"kind": "widget"}, "valid": false},
+        {"schema_pointer": "/components/schemas/Conditional", "instance": {"mode": "credit", "card": "c", "receipt": "r"}, "valid": true},
+        {"schema_pointer": "/components/schemas/Conditional", "instance": {"mode": "credit", "card": "c"}, "valid": false},
+        {"schema_pointer": "/components/schemas/Conditional", "instance": {"mode": "credit"}, "valid": false},
+        {"schema_pointer": "/components/schemas/Conditional", "instance": {"mode": "cash"}, "valid": true},
+        {"schema_pointer": "/components/schemas/Conditional", "instance": {"mode": "cash", "card": "c", "receipt": "r"}, "valid": false},
+        {"schema_pointer": "/components/schemas/Dependent", "instance": {"count": 1, "items": ["x"]}, "valid": true},
+        {"schema_pointer": "/components/schemas/Dependent", "instance": {"count": 1}, "valid": false},
+        {"schema_pointer": "/components/schemas/Dependent", "instance": {}, "valid": false}
+      ]
+    },
+    {
+      "id": "finite-recursive-shared-escaped-closure",
+      "criteria": ["C05"],
+      "source_ref": {"file": "public-contract-3.1.json", "pointer": "/components/schemas"},
+      "assertions": [
+        {"pointer": "/components/schemas/Node", "equals": {"type": "object", "required": ["value"], "properties": {"value": {"type": "string"}, "children": {"type": "array", "items": {"$ref": "#/components/schemas/Node"}}}, "additionalProperties": false}},
+        {"pointer": "/components/schemas/Shared", "equals": {"type": "object", "properties": {"first": {"$ref": "#/components/schemas/Widget"}, "second": {"$ref": "#/components/schemas/Widget"}}}},
+        {"pointer": "/components/schemas/Escaped", "equals": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}},
+        {"pointer": "/components/schemas/EscapedDefinitions/$defs/a~1b~0c", "equals": {"type": "string", "pattern": "^escaped$"}}
+      ],
+      "schema_examples": [
+        {"schema_pointer": "/components/schemas/Node", "instance": {"value": "root", "children": [{"value": "leaf"}]}, "valid": true},
+        {"schema_pointer": "/components/schemas/Node", "instance": {"value": "root", "children": [{"value": 7}]}, "valid": false},
+        {"schema_pointer": "/components/schemas/Shared", "instance": {"first": {"id": "a"}, "second": {"id": "b"}}, "valid": true},
+        {"schema_pointer": "/components/schemas/Shared", "instance": {"first": {"id": "a"}, "second": {"id": 7}}, "valid": false},
+        {"schema_pointer": "/components/schemas/Escaped", "instance": "escaped", "valid": true},
+        {"schema_pointer": "/components/schemas/Escaped", "instance": "wrong", "valid": false},
+        {"schema_pointer": "/components/schemas/Envelope", "instance": {"payload": {"$ref": "literal instance data, not a schema reference"}}, "valid": true}
+      ]
+    },
+    {
+      "id": "all-statuses-public-headers-links-and-body-states",
+      "criteria": ["C06", "C07"],
+      "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1widgets~1{id}/get/responses"},
+      "assertions": [
+        {"pointer": "/paths/~1widgets~1{id}/get/responses/200/headers", "equals": {"X-Request-ID": {"description": "Public request receipt", "schema": {"type": "string"}}}},
+        {"pointer": "/paths/~1widgets~1{id}/get/responses/200/links", "equals": {"self": {"operationId": "getWidget", "parameters": {"id": "$response.body#/id"}, "description": "Fetch this widget"}}},
+        {"pointer": "/paths/~1widgets~1{id}/get/responses/201", "equals": {"description": "Alternate success", "content": {"application/vnd.fixture+json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Widget"}}, "example": [{"id": "alpha"}]}}}},
+        {"pointer": "/paths/~1widgets~1{id}/get/responses/204", "equals": {"description": "No content", "headers": {"ETag": {"schema": {"type": "string"}}}}},
+        {"pointer": "/paths/~1widgets~1{id}/get/responses/204/content", "absent": true},
+        {"pointer": "/paths/~1widgets~1{id}/get/responses/205", "equals": {"description": "Reset content"}},
+        {"pointer": "/paths/~1widgets~1{id}/get/responses/2XX", "equals": {"description": "Other success with unconstrained JSON", "content": {"application/json": {"schema": {}}}}},
+        {"pointer": "/paths/~1widgets~1{id}/get/responses/400", "equals": {"description": "Public validation error", "content": {"application/problem+json": {"schema": {"type": "object", "required": ["detail"], "properties": {"detail": {"type": "string"}}, "additionalProperties": false}, "example": {"detail": "Invalid filter"}}}}},
+        {"pointer": "/paths/~1widgets~1{id}/get/responses/default", "equals": {"description": "Public fallback with unknown payload", "content": {"application/json": {}}}},
+        {"pointer": "/paths/~1widgets~1{id}/get/responses/default/content/application~1json/schema", "absent": true},
+        {"pointer": "/paths/~1widgets/post/responses/200", "equals": {"description": "Text", "content": {"text/plain": {"schema": {"type": "string"}, "example": "created"}}}},
+        {"pointer": "/paths/~1widgets/post/responses/202", "equals": {"description": "SSE stream", "content": {"text/event-stream": {"schema": {"type": "string"}, "example": "data: ready\n\n"}}}},
+        {"pointer": "/paths/~1widgets/post/responses/206", "equals": {"description": "Binary part", "content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}}},
+        {"pointer": "/paths/~1widgets/post/responses/default", "equals": {"description": "Fallback", "content": {"application/json": {"schema": false}}}},
+        {"pointer": "/paths/~1widgets/get/responses/200", "equals": {"description": "NDJSON stream", "content": {"application/x-ndjson": {"schema": {"type": "string"}}}}}
+      ]
+    },
+    {
+      "id": "literal-dollar-ref-property-name",
+      "criteria": ["C04", "C05", "C08"],
+      "source_ref": {"file": "public-contract-3.1.json", "pointer": "/components/schemas/DollarProperty"},
+      "assertions": [
+        {"pointer": "/components/schemas/DollarProperty", "equals": {"type": "object", "required": ["$ref"], "properties": {"$ref": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}}, "additionalProperties": false, "examples": [{"$ref": "escaped"}]}}
+      ],
+      "schema_examples": [
+        {"schema_pointer": "/components/schemas/DollarProperty", "instance": {"$ref": "escaped"}, "valid": true},
+        {"schema_pointer": "/components/schemas/DollarProperty", "instance": {"$ref": "wrong"}, "valid": false},
+        {"schema_pointer": "/components/schemas/DollarProperty", "instance": {}, "valid": false}
+      ]
+    },
+    {
+      "id": "reserved-property-and-response-names-are-declarations",
+      "criteria": ["C04", "C05", "C06"],
+      "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1reserved/get"},
+      "assertions": [
+        {"pointer": "/paths/~1reserved/get/responses/default", "equals": {"$ref": "#/components/responses/PublicFallback"}},
+        {"pointer": "/components/responses/PublicFallback", "equals": {"description": "Referenced public fallback", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReservedPropertyNames"}}}}},
+        {"pointer": "/components/schemas/ReservedPropertyNames", "equals": {"type": "object", "required": ["value", "example", "default", "enum", "const"], "properties": {"value": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}, "example": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}, "default": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}, "enum": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}, "const": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}}, "additionalProperties": false}}
+      ],
+      "schema_examples": [
+        {"schema_pointer": "/components/schemas/ReservedPropertyNames", "instance": {"value": "escaped", "example": "escaped", "default": "escaped", "enum": "escaped", "const": "escaped"}, "valid": true},
+        {"schema_pointer": "/components/schemas/ReservedPropertyNames", "instance": {"value": "escaped", "example": "escaped", "default": 7, "enum": "escaped", "const": "escaped"}, "valid": false}
+      ]
+    },
+    {
+      "id": "declared-callback-and-webhook",
+      "criteria": ["C05", "C06"],
+      "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1widgets/post/callbacks"},
+      "assertions": [
+        {"pointer": "/paths/~1widgets/post/callbacks", "equals": {"onWidget": {"$ref": "#/components/callbacks/WidgetNotification"}}},
+        {"pointer": "/components/callbacks/WidgetNotification", "equals": {"{$request.body#/payload/callbackUrl}": {"post": {"operationId": "widgetNotification", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Widget"}}}}, "responses": {"204": {"description": "Callback accepted"}}}}}},
+        {"pointer": "/webhooks", "equals": {"widgetChanged": {"post": {"operationId": "widgetChanged", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Widget"}}}}, "responses": {"204": {"description": "Notification accepted"}}}}}}
+      ]
+    },
+    {
+      "id": "example-location-null-absence-invalid-and-literal-ref",
+      "criteria": ["C05", "C08"],
+      "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1nullable/get"},
+      "assertions": [
+        {"pointer": "/paths/~1widgets~1{id}/get/responses/200/content/application~1json/examples", "equals": {"regular": {"value": {"id": "alpha", "score": 2}}, "reusable": {"$ref": "#/components/examples/Widget"}, "invalid": {"summary": "Deliberately invalid, preserve and flag", "value": {"id": 7}}}},
+        {"pointer": "/components/examples/Widget", "equals": {"summary": "Shared example", "value": {"id": "beta", "score": 3}}},
+        {"pointer": "/components/examples/Null/value", "equals": null},
+        {"pointer": "/components/schemas/Widget/examples", "equals": [{"id": "alpha"}]},
+        {"pointer": "/paths/~1nullable/get/responses/200/content/application~1json/examples", "equals": {"nullValue": {"$ref": "#/components/examples/Null"}, "literalRef": {"value": {"$ref": "literal JSON data"}}}},
+        {"pointer": "/paths/~1widgets/post/responses/206/content/application~1octet-stream/example", "absent": true},
+        {"pointer": "/paths/~1widgets~1{id}/get/responses/default/content/application~1json/example", "absent": true}
+      ],
+      "schema_examples": [
+        {"schema_pointer": "/components/schemas/Widget", "instance": {"id": 7}, "valid": false},
+        {"schema_pointer": "/components/schemas/NullableText", "instance": {"$ref": "literal JSON data"}, "valid": false}
+      ]
+    }
+  ],
+  "consumer_expectations": [
+    {
+      "id": "effective-get-widget",
+      "kind": "effective_operation",
+      "criteria": ["C03", "C05", "C06", "C08"],
+      "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1widgets~1{id}/get"},
+      "expected": {
+        "operationId": "getWidget",
+        "servers": [{"url": "https://public.example.invalid/v1", "description": "Public root route"}],
+        "security": [{"PublicBearer": []}],
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[a-z]+$"}, "style": "simple", "explode": false},
+          {"name": "filter", "in": "query", "required": true, "schema": {"type": "array", "items": {"type": "string"}, "minItems": 1}, "style": "pipeDelimited", "explode": false, "allowReserved": true},
+          {"name": "filter", "in": "header", "schema": {"type": "string"}, "style": "simple", "explode": false},
+          {"name": "session", "in": "cookie", "required": false, "schema": {"type": "string"}, "style": "form", "explode": true},
+          {"name": "metadata", "in": "query", "content": {"application/json": {"schema": {"type": "object", "additionalProperties": {"type": "integer"}}, "example": {"rank": 2}}}}
+        ],
+        "responses": {
+          "200": {"description": "A widget", "headers": {"X-Request-ID": {"description": "Public request receipt", "schema": {"type": "string"}}}, "links": {"self": {"operationId": "getWidget", "parameters": {"id": "$response.body#/id"}, "description": "Fetch this widget"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Widget"}, "examples": {"regular": {"value": {"id": "alpha", "score": 2}}, "reusable": {"$ref": "#/components/examples/Widget"}, "invalid": {"summary": "Deliberately invalid, preserve and flag", "value": {"id": 7}}}}}},
+          "201": {"description": "Alternate success", "content": {"application/vnd.fixture+json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Widget"}}, "example": [{"id": "alpha"}]}}},
+          "204": {"description": "No content", "headers": {"ETag": {"schema": {"type": "string"}}}},
+          "205": {"description": "Reset content"},
+          "2XX": {"description": "Other success with unconstrained JSON", "content": {"application/json": {"schema": {}}}},
+          "400": {"description": "Public validation error", "content": {"application/problem+json": {"schema": {"type": "object", "required": ["detail"], "properties": {"detail": {"type": "string"}}, "additionalProperties": false}, "example": {"detail": "Invalid filter"}}}},
+          "default": {"description": "Public fallback with unknown payload", "content": {"application/json": {}}}
+        },
+        "components": {
+          "securitySchemes": {"PublicBearer": {"type": "http", "scheme": "bearer", "bearerFormat": "opaque"}},
+          "schemas": {"Widget": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string", "minLength": 1, "maxLength": 5}, "score": {"type": "integer", "minimum": 0, "maximum": 10, "default": 0}, "attributes": {"type": "object", "additionalProperties": {"type": "string"}}}, "additionalProperties": false, "examples": [{"id": "alpha"}]}},
+          "examples": {"Widget": {"summary": "Shared example", "value": {"id": "beta", "score": 3}}}
+        }
+      }
+    },
+    {"id": "effective-path-server", "kind": "effective_servers", "criteria": ["C03"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1widgets/get"}, "expected": [{"url": "https://public.example.invalid/path", "description": "Public path route"}]},
+    {"id": "effective-operation-server", "kind": "effective_servers", "criteria": ["C03"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1widgets/post"}, "expected": [{"url": "https://public.example.invalid/upload", "description": "Public operation route"}]},
+    {"id": "explicit-public-security-clear", "kind": "effective_security", "criteria": ["C03"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1widgets~1{id}/delete"}, "expected": []},
+    {"id": "recursive-closure", "kind": "reference_closure", "criteria": ["C05"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/components/schemas/Node"}, "expected": ["#/components/schemas/Node"]},
+    {"id": "shared-closure", "kind": "reference_closure", "criteria": ["C05"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/components/schemas/Shared"}, "expected": ["#/components/schemas/Widget"]},
+    {"id": "escaped-closure", "kind": "reference_closure", "criteria": ["C05"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/components/schemas/Escaped"}, "expected": ["#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"]},
+    {"id": "response-body-distinction", "kind": "response_definition_states", "criteria": ["C06"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1widgets~1{id}/get/responses"}, "expected": {"204": "no_content", "205": "no_content", "2XX": "unconstrained", "default": "unknown"}},
+    {"id": "literal-example-not-ref", "kind": "reference_closure", "criteria": ["C05", "C08"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1nullable/get"}, "expected": ["#/components/examples/Null", "#/components/schemas/NullableText"]},
+    {
+      "id": "callback-webhook-public-preservation",
+      "kind": "callback_webhook_declarations",
+      "criteria": ["C05", "C06"],
+      "source_ref": {"file": "public-contract-3.1.json", "pointer": ""},
+      "expected": {
+        "callbacks": {"onWidget": {"$ref": "#/components/callbacks/WidgetNotification"}},
+        "callback_components": {"WidgetNotification": {"{$request.body#/payload/callbackUrl}": {"post": {"operationId": "widgetNotification", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Widget"}}}}, "responses": {"204": {"description": "Callback accepted"}}}}}},
+        "webhooks": {"widgetChanged": {"post": {"operationId": "widgetChanged", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Widget"}}}}, "responses": {"204": {"description": "Notification accepted"}}}}}
+      }
+    },
+    {"id": "callback-closure", "kind": "reference_closure", "criteria": ["C05"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1widgets/post/callbacks"}, "expected": ["#/components/callbacks/WidgetNotification", "#/components/schemas/Widget"]},
+    {"id": "reserved-property-response-closure", "kind": "reference_closure", "criteria": ["C05", "C06"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1reserved/get"}, "expected": ["#/components/responses/PublicFallback", "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c", "#/components/schemas/ReservedPropertyNames"]},
+    {"id": "literal-dollar-property-closure", "kind": "reference_closure", "criteria": ["C05"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/components/schemas/DollarProperty"}, "expected": ["#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"]},
+    {"id": "all-schema-declarations", "kind": "lossless_declaration", "criteria": ["C04", "C05", "C08"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/components/schemas"}, "expected": {"Widget": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string", "minLength": 1, "maxLength": 5}, "score": {"type": "integer", "minimum": 0, "maximum": 10, "default": 0}, "attributes": {"type": "object", "additionalProperties": {"type": "string"}}}, "additionalProperties": false, "examples": [{"id": "alpha"}]}, "Envelope": {"type": "object", "required": ["payload"], "properties": {"payload": {"$ref": "#/components/schemas/Anything"}}, "additionalProperties": false}, "Anything": true, "Impossible": false, "Unconstrained": {}, "NullOnly": {"type": "null", "const": null}, "NullableText": {"type": ["string", "null"], "enum": ["ok", null], "default": null, "examples": [null, "ok"]}, "Array": {"type": "array", "items": {"type": "integer"}, "minItems": 1, "maxItems": 3, "uniqueItems": true}, "Bounds": {"type": "number", "exclusiveMinimum": 0, "maximum": 4, "multipleOf": 0.5}, "Composed": {"allOf": [{"type": "object", "required": ["kind"], "properties": {"kind": {"const": "widget"}}}, {"anyOf": [{"required": ["left"]}, {"required": ["right"]}]}], "oneOf": [{"properties": {"left": {"type": "integer"}}, "required": ["left"], "not": {"required": ["right"]}}, {"properties": {"right": {"type": "string"}}, "required": ["right"], "not": {"required": ["left"]}}]}, "Conditional": {"type": "object", "properties": {"mode": {"enum": ["credit", "cash"]}, "card": {"type": "string"}, "receipt": {"type": "string"}}, "required": ["mode"], "if": {"properties": {"mode": {"const": "credit"}}, "required": ["mode"]}, "then": {"required": ["card"]}, "else": {"not": {"required": ["card"]}}, "dependentRequired": {"card": ["receipt"]}, "additionalProperties": false}, "Dependent": {"type": "object", "properties": {"count": {"type": "integer"}, "items": {"type": "array"}}, "dependentSchemas": {"count": {"required": ["items"]}}, "minProperties": 1, "maxProperties": 2, "additionalProperties": false}, "Node": {"type": "object", "required": ["value"], "properties": {"value": {"type": "string"}, "children": {"type": "array", "items": {"$ref": "#/components/schemas/Node"}}}, "additionalProperties": false}, "Shared": {"type": "object", "properties": {"first": {"$ref": "#/components/schemas/Widget"}, "second": {"$ref": "#/components/schemas/Widget"}}}, "ReservedPropertyNames": {"type": "object", "required": ["value", "example", "default", "enum", "const"], "properties": {"value": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}, "example": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}, "default": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}, "enum": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}, "const": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}}, "additionalProperties": false}, "EscapedDefinitions": {"$defs": {"a/b~c": {"type": "string", "pattern": "^escaped$"}}}, "DollarProperty": {"type": "object", "required": ["$ref"], "properties": {"$ref": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}}, "additionalProperties": false, "examples": [{"$ref": "escaped"}]}, "Escaped": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}}},
+    {"id": "post-full-request-body", "kind": "lossless_declaration", "criteria": ["C03", "C07", "C08"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1widgets/post/requestBody"}, "expected": {"required": true, "description": "Declared alternate public media, no execution claim", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}, "example": {"payload": {"$ref": "literal instance data, not a schema reference"}}}, "application/vnd.fixture+json": {"schema": {"$ref": "#/components/schemas/NullableText"}, "example": null}, "text/plain": {"schema": {"type": "string", "minLength": 1}, "example": "hello"}, "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}, "application/x-www-form-urlencoded": {"schema": {"type": "object", "required": ["labels"], "properties": {"labels": {"type": "array", "items": {"type": "string"}}, "note": {"type": "string"}}}, "encoding": {"labels": {"style": "form", "explode": true, "allowReserved": false}, "note": {"style": "form", "explode": false}}}, "multipart/form-data": {"schema": {"type": "object", "required": ["file"], "properties": {"file": {"type": "string", "format": "binary"}, "metadata": {"$ref": "#/components/schemas/Widget"}}}, "encoding": {"file": {"contentType": "application/octet-stream", "headers": {"X-Part-ID": {"schema": {"type": "string"}}}}, "metadata": {"contentType": "application/json"}}}}}},
+    {"id": "post-all-response-declarations", "kind": "lossless_declaration", "criteria": ["C06", "C07", "C08"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1widgets/post/responses"}, "expected": {"200": {"description": "Text", "content": {"text/plain": {"schema": {"type": "string"}, "example": "created"}}}, "202": {"description": "SSE stream", "content": {"text/event-stream": {"schema": {"type": "string"}, "example": "data: ready\n\n"}}}, "206": {"description": "Binary part", "content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}}, "default": {"description": "Fallback", "content": {"application/json": {"schema": false}}}}},
+    {"id": "nullable-all-response-declarations", "kind": "lossless_declaration", "criteria": ["C05", "C06", "C08"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1nullable/get/responses"}, "expected": {"200": {"description": "Explicit null example", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/NullableText"}, "examples": {"nullValue": {"$ref": "#/components/examples/Null"}, "literalRef": {"value": {"$ref": "literal JSON data"}}}}}}}},
+    {"id": "list-ndjson-response-declarations", "kind": "lossless_declaration", "criteria": ["C06", "C07"], "source_ref": {"file": "public-contract-3.1.json", "pointer": "/paths/~1widgets/get/responses"}, "expected": {"200": {"description": "NDJSON stream", "content": {"application/x-ndjson": {"schema": {"type": "string"}}}}}}
+  ]
+}

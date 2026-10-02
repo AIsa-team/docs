@@ -1,0 +1,51 @@
+name: Check public contract revisions
+on:
+  workflow_dispatch:
+    inputs:
+      acceptance:
+        description: Fail immediately on missing evidence or a revision mismatch
+        type: boolean
+        default: false
+      expected_docs_ref:
+        description: Independently selected full published docs SHA for acceptance
+        type: string
+
+permissions:
+  contents: read
+jobs:
+  revisions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'PyYAML>=6,<7'
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache/contract-revisions
+          key: contract-revisions-${{ github.run_id }}
+          restore-keys: contract-revisions-
+      - name: Check published contract evidence
+        env:
+          ACCEPTANCE: ${{ inputs.acceptance }}
+          EXPECTED_DOCS_REF: ${{ inputs.expected_docs_ref }}
+        run: |
+          args=(--report /tmp/contract-revisions-report.json)
+          if [ "$ACCEPTANCE" = 'true' ]; then
+            args+=(--acceptance --expected-docs-ref "$EXPECTED_DOCS_REF")
+          fi
+          python scripts/check_contract_revisions.py "${args[@]}"
+      - name: Retain dated convergence assessment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-contract-convergence
+          path: /tmp/contract-revisions-report.json
+          if-no-files-found: ignore
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .cache/contract-revisions
+          key: contract-revisions-${{ github.run_id }}

@@ -1,0 +1,626 @@
+#!/usr/bin/env python3
+"""
+Consolidate individual AIsa OpenAPI spec files into a single unified openapi.yaml.
+
+Reads all JSON specs from the openapi/ directory, merges paths (with correct
+server-path prefixes) and schemas, and outputs a single OpenAPI 3.1 YAML file
+that includes the x402 (pay-per-call) surface:
+
+  * Four top-level servers: /apis/v1 (Bearer), /apis/v2 (x402),
+    /v1 (LLM, OpenAI-compatible), and /v1beta (Gemini-compatible).
+  * Every paid data-API op carries an `x-x402.path` with its absolute
+    `/apis/v2/{rel}` route and an `x-x402.source` link to the open-source
+    aisa-proxy gateway. The top-level `/apis/v2` server also makes those
+    x402 routes addressable without duplicating path items.
+  * LLM ops are never annotated as /apis/v2.
+  * /services/aigc/* (async video generation) is denylisted from the
+    x402 surface — the runtime gateway returns 404, not 402, so promising a
+    /apis/v2 surface there would make the spec a liar.
+
+Usage:
+    python scripts/runtime_consolidate_openapi.py [--output path/to/openapi.yaml]
+
+If --output is omitted, writes to stdout.
+"""
+
+import argparse
+import json
+import os
+import re
+from pathlib import Path
+import sys
+from urllib.parse import urlparse
+from urllib.parse import unquote
+
+try:
+    import yaml
+except ImportError:
+    print("ERROR: PyYAML is required. Install with: pip install pyyaml", file=sys.stderr)
+    sys.exit(1)
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(SCRIPT_DIR)
+OPENAPI_DIR = os.path.join(REPO_ROOT, "openapi")
+
+# The Mintlify placeholder spec — skip it
+SKIP_FILES = {"openapi.json", "pending.json", "coverage.json", "coverage-sources.json"}
+
+# Map each spec file to a category tag
+FILE_TAG_MAP = {
+    "openai-chat.json": "AI Models",
+    "gemini-openapi.json": "AI Models",
+    "claude-messages.json": "AI Models",
+    "perplexity-openapi.json": "AI Models",
+    "openai-images-generations.json": "Image Generation",
+    "chat-image-generation.json": "Image Generation",
+    "twitter-user-batch_01.json": "Twitter / X",
+    "twitter-user-batch_02.json": "Twitter / X",
+    "twitter-tweet-batch_01.json": "Twitter / X",
+    "twitter-tweet-replies-v2.json": "Twitter / X",
+    "twitter-tweet-batch_02.json": "Twitter / X",
+    "twitter-actions.json": "Twitter / X",
+    "twitter-communities.json": "Twitter / X",
+    "twitter-list.json": "Twitter / X",
+    "twitter-trend.json": "Twitter / X",
+    "youte-search.json": "YouTube Search",
+    "tavily.json": "Web & News Search",
+    "platform-txyz-openapi.json": "Scholar Search",
+    "waveinflu.json": "WaveInflu",
+    "openapi-financial.json": "Financial Data",
+    "analyst-estimates.json": "Financial Data",
+    "macro_snapshot.json": "Financial Data",
+    "coingecko.json": "Crypto Data",
+    "polymarket-openapi.json": "Prediction Markets",
+    "kalshi-openapi.json": "Prediction Markets",
+    "matching-markets-openapi.json": "Prediction Markets",
+    "apollo.json": "Sales Intelligence",
+    "dataforseo.json": "SEO & Search Data",
+    "semrush.json": "SEO & Search Data",
+    "ahrefs.json": "SEO & Search Data",
+    "agentmail.json": "Agent Email",
+    "reddit.json": "Reddit",
+    "instagram.json": "Instagram",
+    "pinterest.json": "Pinterest",
+    "similarweb.json": "Market Intelligence",
+    "oxylabs.json": "Web & News Search",
+    "byteplus-search.json": "Web & News Search",
+    "websearch.json": "Web & News Search",
+    "edinet.json": "Financial Data",
+    "account.json": "Account & Usage",
+}
+
+TAG_DESCRIPTIONS = {
+    "AI Models": "Access 50+ LLMs via OpenAI-compatible, Anthropic, and Google Gemini interfaces",
+    "Image Generation": "Generate and edit images using AI models",
+    "Video Generation": "Generate videos using AI models (Wan family)",
+    "Twitter / X": "Read, search, and interact with Twitter/X — profiles, tweets, communities, trends, and engagement",
+    "YouTube Search": "Search YouTube videos",
+    "Web & News Search": "Search the web and news — Tavily search, Oxylabs AI-answer-engine queries, and model-grounded search",
+    "Scholar Search": "Search academic papers and research",
+    "Financial Data": "Stock prices, financials, analyst estimates, SEC filings, and macro data",
+    "Crypto Data": "Cryptocurrency prices, markets, and exchange data via CoinGecko",
+    "Prediction Markets": "Query prediction markets — Polymarket, Kalshi, and matching markets",
+    "Sales Intelligence": "B2B contact and company enrichment, search, and outreach via Apollo.io",
+    "SEO & Search Data": "SERP, keywords, backlinks, domain and competitor analysis — DataForSEO, Semrush, and Ahrefs",
+    "Agent Email": "AI-agent email accounts, inboxes, threads, drafts, and message send/reply via AgentMail.to",
+    "Reddit": "Read public Reddit data — search posts, browse subreddits, and fetch comments",
+    "Instagram": "Read public Instagram data — profiles, posts, reels, highlights, comments, and Google-backed search",
+    "Pinterest": "Read public Pinterest data — search pins, fetch pin details, and browse boards",
+    "Account & Usage": "Programmatic account balance and usage endpoints for cost monitoring and alerting",
+}
+
+# Server URLs used by the unified spec — keep in sync with the
+# `servers` list inside build_unified_spec().
+DATA_API_SERVER_URL = "https://api.aisa.one/apis/v1"
+DATA_API_X402_SERVER_URL = "https://api.aisa.one/apis/v2"
+LLM_SERVER_URLS = {
+    "https://api.aisa.one/v1",
+    "https://api.aisa.one/v1beta",
+}
+X402_IMPLEMENTATION_URL = "https://github.com/AIsa-team/aisa-proxy"
+
+COMPONENT_SECTIONS = (
+    "schemas",
+    "responses",
+    "parameters",
+    "examples",
+    "requestBodies",
+    "headers",
+    "securitySchemes",
+    "links",
+    "callbacks",
+    "pathItems",
+)
+
+# Path-prefix denylist for the v2 (x402) mirror.
+#
+# Some operations look mirrorable (non-LLM, no per-op /v1 override)
+# but the runtime aisa-proxy gateway doesn't expose them at /apis/v2
+# — probing those paths returns 404 instead of the expected x402 402
+# challenge, which makes the spec a liar.
+#
+# Currently denylisted:
+#   /services/aigc/* — async video-generation endpoints. Not in
+#     aisa-proxy's pricing catalog; the payment lifecycle for async
+#     long-running jobs differs from per-call x402 settlement.
+#
+# Add to this list only after confirming the runtime gateway returns
+# 404 (not 402) for the endpoint at /apis/v2.
+V2_MIRROR_DENYLIST_PREFIXES = ("/services/aigc/",)
+
+
+def is_v2_excluded(path_key):
+    """Return True if path_key is on the v2-mirror denylist."""
+    return any(path_key.startswith(prefix) for prefix in V2_MIRROR_DENYLIST_PREFIXES)
+
+
+def is_llm_op(operation):
+    """Return True if the operation has an LLM server override."""
+    if not isinstance(operation, dict):
+        return False
+    for s in operation.get("servers") or []:
+        if isinstance(s, dict) and s.get("url") in LLM_SERVER_URLS:
+            return True
+    return False
+
+
+def inject_x402_annotations(spec):
+    """Annotate every data-API operation with `x-x402`.
+
+    The signal for "this op is paid via x402" is absence of an LLM
+    server override AND not on the denylist. The annotation holds NO
+    pricing — prices change upstream and live in the runtime HTTP 402
+    challenge response. We expose only the absolute v2 path and link
+    the open-source gateway implementation. Idempotent.
+    """
+    annotated = 0
+    for path_key, ops in spec.get("paths", {}).items():
+        if path_key.startswith("/apis/v2/"):
+            continue  # stale mirrors are removed separately
+        excluded = is_v2_excluded(path_key)
+        for method, op in ops.items():
+            if not isinstance(op, dict):
+                continue
+            if method not in {"get", "post", "put", "patch", "delete", "options", "head", "trace"}:
+                continue
+            if "x-aisa-validation" in op:
+                # Runtime contracts own capabilities. Never invent a mirror
+                # route from a price, method or absence of an LLM override.
+                op.pop("x-x402", None)
+                continue
+            if excluded or is_llm_op(op):
+                # Defensive: drop any stale annotation that shouldn't
+                # be there (e.g., from a previous run before denylist).
+                op.pop("x-x402", None)
+                continue
+            op["x-x402"] = {
+                "path": f"/apis/v2{path_key}",
+                "source": X402_IMPLEMENTATION_URL,
+            }
+            annotated += 1
+    return annotated
+
+
+def remove_v2_path_mirrors(spec):
+    """Remove explicit `/apis/v2/{rel}` path-key mirrors.
+
+    The unified spec already declares both `/apis/v1` and `/apis/v2`
+    as top-level servers. A relative path such as `/twitter/follow_twitter`
+    therefore resolves to both API surfaces depending on the selected
+    server. Keeping a second explicit `/apis/v2/...` path duplicates the
+    operation and previously required method-level `$ref`, which is not
+    valid OpenAPI.
+    """
+    paths = spec.get("paths", {})
+    removed = sum(1 for path_key in paths if path_key.startswith("/apis/v2/"))
+    if removed:
+        spec["paths"] = {
+            path_key: ops
+            for path_key, ops in paths.items()
+            if not path_key.startswith("/apis/v2/")
+        }
+    return removed
+
+
+def component_collision_prefix(filename):
+    """Return a stable prefix for component names on cross-file collision."""
+    return (
+        filename.replace(".json", "")
+        .replace("-", "_")
+        .title()
+        .replace("_", "")
+    )
+
+
+def merge_components(unified, spec, filename):
+    """Merge all reusable OpenAPI components from a source spec.
+
+    Component `$ref`s in source specs point at their local names, so we
+    preserve names whenever possible. If a name already exists with the
+    same definition, keep one copy. If a name collides with a different
+    definition, add a filename-prefixed variant, matching the historical
+    schema merge behavior.
+    """
+    source_components = spec.get("components", {})
+    prefix = component_collision_prefix(filename)
+    renamed = {}
+    def escape(value):
+        return value.replace('~', '~0').replace('/', '~1')
+    for section in COMPONENT_SECTIONS:
+        entries = source_components.get(section, {})
+        target = unified["components"].setdefault(section, {})
+        for name, definition in entries.items():
+            if name in target and target[name] != definition:
+                candidate = f"{prefix}_{name}"
+                if candidate in target and target[candidate] != definition:
+                    raise ValueError(f"component collision: {filename} {section}/{name}")
+                renamed[f"#/components/{section}/{escape(name)}"] = f"#/components/{section}/{escape(candidate)}"
+
+    security_names = {
+        old.rsplit("/", 1)[1].replace('~1', '/').replace('~0', '~'): new.rsplit("/", 1)[1].replace('~1', '/').replace('~0', '~')
+        for old, new in renamed.items() if old.startswith("#/components/securitySchemes/")
+    }
+
+    def rewrite_reference(ref):
+        if not isinstance(ref, str) or not ref.startswith('#/components/'):
+            return ref
+        parts = unquote(ref[2:]).split('/')
+        if len(parts) < 3:
+            return ref
+        base = '#/' + '/'.join(parts[:3])
+        return renamed.get(base, base) + ('/' + '/'.join(parts[3:]) if len(parts) > 3 else '')
+
+    def rewrite(node):
+        if isinstance(node, dict):
+            from compose_openapi import map_contract_children
+            result = map_contract_children(node, rewrite)
+            if isinstance(result.get("security"), list):
+                result["security"] = [
+                    {security_names.get(name, name): scopes for name, scopes in requirement.items()}
+                    for requirement in result["security"]
+                ]
+            for key in ('$ref', 'operationRef'):
+                if key in result:
+                    result[key] = rewrite_reference(result[key])
+            if isinstance(result.get('discriminator'), dict) and isinstance(result['discriminator'].get('mapping'), dict):
+                result['discriminator']['mapping'] = {
+                    name: rewrite_reference(target if target.startswith('#') else '#/components/schemas/' + escape(target))
+                    if target.startswith('#') or not target.startswith(('https://', 'http://')) else target
+                    for name, target in result['discriminator']['mapping'].items()}
+            return result
+        elif isinstance(node, list):
+            return [rewrite(value) for value in node]
+        return node
+
+    spec.update(rewrite(spec))
+    source_components = spec.get('components', {})
+    for section in COMPONENT_SECTIONS:
+        for name, definition in source_components.get(section, {}).items():
+            ref = renamed.get(f"#/components/{section}/{escape(name)}")
+            target_name = ref.rsplit("/", 1)[1].replace('~1', '/').replace('~0', '~') if ref else name
+            unified["components"].setdefault(section, {})[target_name] = definition
+
+
+def validate_reference_closure(document):
+    """Reject unresolved declaration references; literal JSON is not a ref."""
+    from compose_openapi import map_contract_children, pointer_target
+    def visit(node):
+        if isinstance(node, list):
+            for child in node:
+                visit(child)
+        elif isinstance(node, dict):
+            for key in ('$ref', 'operationRef'):
+                if key in node:
+                    pointer_target(document, node[key])
+            for target in node.get('discriminator', {}).get('mapping', {}).values():
+                pointer_target(document, target if target.startswith('#') else '#/components/schemas/' + target.replace('~', '~0').replace('/', '~1'))
+            map_contract_children(node, visit)
+    visit(document)
+
+
+def load_spec(filepath):
+    with open(filepath, "r") as f:
+        return json.load(f)
+
+
+def endpoint_page_links():
+    root = Path(OPENAPI_DIR).parent
+    links = {}
+    for page in sorted((root / "api-reference").rglob("*.mdx")):
+        match = re.search(r"^openapi:\s*['\"]?(openapi/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", page.read_text(), re.M)
+        if match:
+            key = (Path(match[1]).name, match[2].lower(), match[3])
+            links.setdefault(key, "https://aisa.one/docs/" + page.relative_to(root).with_suffix("").as_posix())
+    return links
+
+
+def build_unified_spec():
+    """Merge all individual specs into one OpenAPI 3.1 document."""
+    unified = {
+        "openapi": "3.1.0",
+        "info": {
+            "title": "AIsa API",
+            "description": (
+                "Capability layer for the agentic economy. "
+                "Models, skills, payments, and deployment — everything AI agents "
+                "need to reason, act, and transact. "
+                "This spec consolidates all AIsa API endpoints into a single reference."
+            ),
+            "version": "1.0.0",
+            "contact": {
+                "name": "AIsa",
+                "url": "https://aisa.one",
+                "email": "developer@aisa.one",
+            },
+            "license": {"name": "MIT", "url": "https://opensource.org/licenses/MIT"},
+            "termsOfService": "https://aisa.one/tos",
+        },
+        # Four-server setup. Data API ops inherit the top-level list,
+        # so OpenAPI consumers can pick /apis/v1 (Bearer) or /apis/v2
+        # (x402 pay-per-call) at call time. LLM ops have an
+        # operation-level override that pins them to /v1 or /v1beta.
+        #
+        #   * /apis/v1 — default server for data APIs (Bearer)
+        #   * /apis/v2 — same data API surface, mirrored for x402
+        #     pay-per-call. No registration; receive HTTP 402 challenge,
+        #     settle with stablecoin micropayment. Spec: x402.org
+        #   * /v1     — LLM inference (OpenAI-compatible)
+        #   * /v1beta — Gemini-compatible generateContent
+        #
+        # Path keys stay relative to whichever server applies, matching
+        # the per-file spec convention.
+        "servers": [
+            {
+                "url": "https://api.aisa.one/apis/v1",
+                "description": (
+                    "AIsa Data APIs (Bearer auth — register at https://aisa.one)"
+                ),
+            },
+            {
+                "url": "https://api.aisa.one/apis/v2",
+                "description": (
+                    "AIsa Data APIs (x402 pay-per-call) — same surface as "
+                    "/apis/v1, mirrored. No registration; receive HTTP 402 "
+                    "challenge, settle with stablecoin micropayment. "
+                    "Spec: https://www.x402.org. "
+                    "Open-source gateway implementation: "
+                    "https://github.com/AIsa-team/aisa-proxy"
+                ),
+                # Non-standard `x-*` extension naming the open-source
+                # gateway that serves this surface. Ignored by vanilla
+                # OpenAPI parsers; tooling that walks
+                # `servers[].x-implementation` can deep-link the repo.
+                "x-implementation": "https://github.com/AIsa-team/aisa-proxy",
+            },
+            {
+                "url": "https://api.aisa.one/v1",
+                "description": "AIsa LLM Inference (OpenAI-compatible, Bearer auth)",
+            },
+            {
+                "url": "https://api.aisa.one/v1beta",
+                "description": "AIsa Gemini-compatible GenerateContent (Bearer auth)",
+            },
+        ],
+        "security": [{"BearerAuth": []}],
+        "tags": [],
+        "paths": {},
+        "components": {
+            "securitySchemes": {
+                "BearerAuth": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "description": "AIsa API key. Get yours at https://aisa.one",
+                }
+            },
+            "schemas": {},
+        },
+    }
+
+    tags_seen = set()
+    page_links = endpoint_page_links()
+    registry_path = Path(OPENAPI_DIR) / "registry.yaml"
+    registry = yaml.safe_load(registry_path.read_text()) if registry_path.exists() else {}
+    registrations = (registry or {}).get("providers", {})
+    files = sorted(os.listdir(OPENAPI_DIR))
+
+    for filename in files:
+        if filename in SKIP_FILES or not filename.endswith(".json"):
+            continue
+
+        filepath = os.path.join(OPENAPI_DIR, filename)
+        tag = FILE_TAG_MAP.get(filename, "Other")
+
+        try:
+            spec = load_spec(filepath)
+        except Exception as e:
+            print(f"  SKIP {filename}: {e}", file=sys.stderr)
+            continue
+
+        provider = filename[:-5]
+        metadata = spec.get("info", {}).get("x-aisa-document", {})
+        owners = [key for key, value in registrations.items() if provider == key or provider in (value or {}).get("legacy_sources", [])]
+        registry_provider = owners[0] if len(owners) == 1 else None
+        registration = registrations.get(registry_provider) or {}
+        catalog_ids = sorted({catalog for owner in owners for catalog in (registrations[owner] or {}).get("group", [owner])})
+        generated = bool(metadata.get("document_hash"))
+        if spec.get("paths"):
+            unified["info"].setdefault("x-aisa-document", {}).setdefault("providers", {})[provider] = {
+                "document_hash": metadata.get("document_hash"),
+                "catalog_ids": catalog_ids,
+                "registry_provider": registry_provider,
+                "display_name": registration.get("display_name") or spec.get("info", {}).get("title", provider),
+                "description": registration.get("description") or spec.get("info", {}).get("description", ""),
+                "source": "runtime" if generated else "legacy",
+                "catalogs": spec.get("info", {}).get("x-aisa-catalogs", {}),
+                "facts_hash": metadata.get("facts_hash"),
+                "x-aisa-plans": spec["info"].get("x-aisa-plans", {}),
+                "x-aisa-capabilities": spec["info"].get("x-aisa-capabilities", {}),
+            }
+        merge_components(unified, spec, filename)
+
+        # Register tag
+        if tag not in tags_seen:
+            tags_seen.add(tag)
+            unified["tags"].append(
+                {"name": tag, "description": TAG_DESCRIPTIONS.get(tag, "")}
+            )
+
+        # Detect which top-level server this file's paths resolve
+        # against. LLM specs need an operation-level `servers` override
+        # in the unified spec; /apis/v1 specs use the default (first)
+        # server and need no override. Path keys are kept RELATIVE in
+        # the unified output, matching the per-file convention.
+        #
+        # When a file's server is a SUB-path of the unified default
+        # server (e.g. `/apis/v1/financial`), prepend the delta to
+        # each path key so the merged path resolves to the correct
+        # absolute URL. Without this, `/financials/balance-sheets`
+        # from a file with server `…/apis/v1/financial` collides at
+        # the top level instead of becoming `/financial/financials/
+        # balance-sheets`.
+        servers = spec.get("servers", [])
+        file_server_url = servers[0].get("url", "") if servers else ""
+        is_llm = file_server_url in LLM_SERVER_URLS
+        default_server_url = unified["servers"][0]["url"]
+        path_prefix = ""
+        if (
+            file_server_url.startswith(default_server_url + "/")
+            and not is_llm
+            and not generated
+        ):
+            path_prefix = file_server_url[len(default_server_url):]
+
+        # Merge paths — preserve relative path keys
+        for path, methods in spec.get("paths", {}).items():
+            for method, operation in methods.items():
+                if isinstance(operation, dict):
+                    operation["x-aisa-provider"] = provider
+                    if len(catalog_ids) == 1:
+                        operation.setdefault("x-aisa-catalog-id", catalog_ids[0])
+                    if registry_provider:
+                        operation["x-aisa-registry-provider"] = registry_provider
+                    if (filename, method, path) in page_links:
+                        operation["x-aisa-docs-url"] = page_links[(filename, method, path)]
+                    if not generated:
+                        operation["tags"] = [tag]
+                    # Drop any per-op servers from the input file
+                    operation.pop("servers", None)
+                    # Add LLM-server override on operations from LLM
+                    # files so OpenAPI consumers route them to /v1 or /v1beta
+                    # instead of the default /apis/v1.
+                    if generated:
+                        # Associate inherited provider defaults explicitly: plan
+                        # prices cannot be derived from the seed estimate alone.
+                        operation["x-aisa-provider"] = provider
+                        operation["x-aisa-capabilities"] = {
+                            **spec["info"].get("x-aisa-capabilities", {}),
+                            **operation.get("x-aisa-capabilities", {}),
+                        }
+                        operation["servers"] = spec.get("servers", [])
+                        if "security" not in operation and "security" in spec:
+                            operation["security"] = spec["security"]
+                    elif is_llm:
+                        operation["servers"] = [
+                            {"url": file_server_url}
+                        ]
+
+            full_path = path_prefix + path
+
+            if full_path in unified["paths"]:
+                for method, operation in methods.items():
+                    if method not in unified["paths"][full_path]:
+                        unified["paths"][full_path][method] = operation
+            else:
+                unified["paths"][full_path] = methods
+
+    # Sort tags alphabetically
+    unified["tags"].sort(key=lambda t: t["name"])
+    return unified
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Consolidate AIsa OpenAPI specs into a single YAML file"
+    )
+    parser.add_argument(
+        "--output", "-o", default=None, help="Output file path (default: stdout)"
+    )
+    args = parser.parse_args()
+
+    unified = build_unified_spec()
+
+    # Layer x402 surface on top of the consolidated spec:
+    #   1. Annotate every paid data-API op with `x-x402`.
+    #   2. Remove any stale explicit `/apis/v2/{rel}` mirrors. The
+    #      `/apis/v2` server plus `x-x402.path` annotations describe
+    #      the x402 surface without duplicating operations.
+    x402_annotated = inject_x402_annotations(unified)
+    v2_removed = remove_v2_path_mirrors(unified)
+
+    # Stats
+    num_paths = len(unified["paths"])
+    num_ops = sum(
+        len([m for m in methods if m in ("get", "post", "put", "patch", "delete")])
+        for methods in unified["paths"].values()
+    )
+    num_schemas = len(unified["components"]["schemas"])
+    print(
+        f"Consolidated: {num_paths} paths, {num_ops} operations, "
+        f"{num_schemas} schemas, {len(unified['tags'])} tags",
+        file=sys.stderr,
+    )
+    print(
+        f"  x402: {x402_annotated} ops annotated, "
+        f"{v2_removed} stale /apis/v2/* mirrors removed",
+        file=sys.stderr,
+    )
+
+    # Custom YAML representer for multiline strings
+    def str_representer(dumper, data):
+        if "\n" in data:
+            return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+
+    yaml.add_representer(str, str_representer)
+
+    output = yaml.dump(
+        unified,
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+        width=120,
+    )
+
+    # Prepend an autogeneration banner so anyone editing the served
+    # file knows changes won't survive the next sync. YAML treats `#`
+    # lines as comments, so this doesn't affect parsers.
+    banner = (
+        "# ──────────────────────────────────────────────────────────────────\n"
+        "# AUTOGENERATED — do not edit by hand.\n"
+        "#\n"
+        "# Source of truth: AIsa-team/docs (openapi/*.json).\n"
+        "# Producer:        scripts/runtime_consolidate_openapi.py\n"
+        "# Sync workflow:   .github/workflows/sync-openapi.yml\n"
+        "#\n"
+        "# To change this file, edit the per-API spec under\n"
+        "#   https://github.com/AIsa-team/docs/tree/main/openapi\n"
+        "# and merge to main. The sync workflow regenerates and commits\n"
+        "# the consolidated spec here, then notifies Tool Router.\n"
+        "#\n"
+        "# Direct edits here will be overwritten on the next sync.\n"
+        "# ──────────────────────────────────────────────────────────────────\n"
+    )
+    output = banner + output
+
+    if args.output:
+        os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
+        with open(args.output, "w") as f:
+            f.write(output)
+        size_kb = os.path.getsize(args.output) / 1024
+        print(f"Written to: {args.output} ({size_kb:.1f} KB)", file=sys.stderr)
+    else:
+        sys.stdout.write(output)
+
+
+if __name__ == "__main__":
+    main()

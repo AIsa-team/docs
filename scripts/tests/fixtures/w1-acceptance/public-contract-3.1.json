@@ -1,0 +1,103 @@
+{
+  "openapi": "3.1.0",
+  "info": {"title": "Synthetic public contract acceptance fixture", "version": "1.0.0"},
+  "servers": [{"url": "https://public.example.invalid/v1", "description": "Public root route"}],
+  "security": [{"PublicBearer": []}],
+  "paths": {
+    "/widgets/{id}": {
+      "parameters": [
+        {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[a-z]+$"}, "style": "simple", "explode": false},
+        {"name": "filter", "in": "query", "schema": {"type": "string"}, "style": "form", "explode": false},
+        {"name": "filter", "in": "header", "schema": {"type": "string"}, "style": "simple", "explode": false},
+        {"$ref": "#/components/parameters/Session"}
+      ],
+      "get": {
+        "operationId": "getWidget",
+        "parameters": [
+          {"name": "filter", "in": "query", "required": true, "schema": {"type": "array", "items": {"type": "string"}, "minItems": 1}, "style": "pipeDelimited", "explode": false, "allowReserved": true},
+          {"name": "metadata", "in": "query", "content": {"application/json": {"schema": {"type": "object", "additionalProperties": {"type": "integer"}}, "example": {"rank": 2}}}}
+        ],
+        "responses": {
+          "200": {
+            "description": "A widget",
+            "headers": {"X-Request-ID": {"description": "Public request receipt", "schema": {"type": "string"}}},
+            "links": {"self": {"operationId": "getWidget", "parameters": {"id": "$response.body#/id"}, "description": "Fetch this widget"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Widget"}, "examples": {"regular": {"value": {"id": "alpha", "score": 2}}, "reusable": {"$ref": "#/components/examples/Widget"}, "invalid": {"summary": "Deliberately invalid, preserve and flag", "value": {"id": 7}}}}}
+          },
+          "201": {"description": "Alternate success", "content": {"application/vnd.fixture+json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Widget"}}, "example": [{"id": "alpha"}]}}},
+          "204": {"description": "No content", "headers": {"ETag": {"schema": {"type": "string"}}}},
+          "205": {"description": "Reset content"},
+          "2XX": {"description": "Other success with unconstrained JSON", "content": {"application/json": {"schema": {}}}},
+          "400": {"description": "Public validation error", "content": {"application/problem+json": {"schema": {"type": "object", "required": ["detail"], "properties": {"detail": {"type": "string"}}, "additionalProperties": false}, "example": {"detail": "Invalid filter"}}}},
+          "default": {"description": "Public fallback with unknown payload", "content": {"application/json": {}}}
+        }
+      },
+      "delete": {"operationId": "deleteWidget", "security": [], "responses": {"204": {"description": "No content"}}}
+    },
+    "/widgets": {
+      "servers": [{"url": "https://public.example.invalid/path", "description": "Public path route"}],
+      "post": {
+        "operationId": "createWidget",
+        "servers": [{"url": "https://public.example.invalid/upload", "description": "Public operation route"}],
+        "security": [{"PublicKey": []}],
+        "callbacks": {"onWidget": {"$ref": "#/components/callbacks/WidgetNotification"}},
+        "requestBody": {
+          "required": true,
+          "description": "Declared alternate public media, no execution claim",
+          "content": {
+            "application/json": {"schema": {"$ref": "#/components/schemas/Envelope"}, "example": {"payload": {"$ref": "literal instance data, not a schema reference"}}},
+            "application/vnd.fixture+json": {"schema": {"$ref": "#/components/schemas/NullableText"}, "example": null},
+            "text/plain": {"schema": {"type": "string", "minLength": 1}, "example": "hello"},
+            "application/octet-stream": {"schema": {"type": "string", "format": "binary"}},
+            "application/x-www-form-urlencoded": {"schema": {"type": "object", "required": ["labels"], "properties": {"labels": {"type": "array", "items": {"type": "string"}}, "note": {"type": "string"}}}, "encoding": {"labels": {"style": "form", "explode": true, "allowReserved": false}, "note": {"style": "form", "explode": false}}},
+            "multipart/form-data": {"schema": {"type": "object", "required": ["file"], "properties": {"file": {"type": "string", "format": "binary"}, "metadata": {"$ref": "#/components/schemas/Widget"}}}, "encoding": {"file": {"contentType": "application/octet-stream", "headers": {"X-Part-ID": {"schema": {"type": "string"}}}}, "metadata": {"contentType": "application/json"}}}
+          }
+        },
+        "responses": {
+          "200": {"description": "Text", "content": {"text/plain": {"schema": {"type": "string"}, "example": "created"}}},
+          "202": {"description": "SSE stream", "content": {"text/event-stream": {"schema": {"type": "string"}, "example": "data: ready\n\n"}}},
+          "206": {"description": "Binary part", "content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}},
+          "default": {"description": "Fallback", "content": {"application/json": {"schema": false}}}
+        }
+      },
+      "get": {"operationId": "listWidgets", "responses": {"200": {"description": "NDJSON stream", "content": {"application/x-ndjson": {"schema": {"type": "string"}}}}}}
+    },
+    "/reserved": {"get": {"operationId": "getReserved", "responses": {"default": {"$ref": "#/components/responses/PublicFallback"}}}},
+    "/nullable": {
+      "get": {"operationId": "getNullable", "responses": {"200": {"description": "Explicit null example", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/NullableText"}, "examples": {"nullValue": {"$ref": "#/components/examples/Null"}, "literalRef": {"value": {"$ref": "literal JSON data"}}}}}}}}
+    }
+  },
+  "webhooks": {
+    "widgetChanged": {"post": {"operationId": "widgetChanged", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Widget"}}}}, "responses": {"204": {"description": "Notification accepted"}}}}
+  },
+  "components": {
+    "responses": {"PublicFallback": {"description": "Referenced public fallback", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReservedPropertyNames"}}}}},
+    "callbacks": {"WidgetNotification": {"{$request.body#/payload/callbackUrl}": {"post": {"operationId": "widgetNotification", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Widget"}}}}, "responses": {"204": {"description": "Callback accepted"}}}}}},
+    "securitySchemes": {
+      "PublicBearer": {"type": "http", "scheme": "bearer", "bearerFormat": "opaque"},
+      "PublicKey": {"type": "apiKey", "in": "header", "name": "X-Public-Key"}
+    },
+    "parameters": {"Session": {"name": "session", "in": "cookie", "required": false, "schema": {"type": "string"}, "style": "form", "explode": true}},
+    "examples": {"Widget": {"summary": "Shared example", "value": {"id": "beta", "score": 3}}, "Null": {"value": null}},
+    "schemas": {
+      "Widget": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string", "minLength": 1, "maxLength": 5}, "score": {"type": "integer", "minimum": 0, "maximum": 10, "default": 0}, "attributes": {"type": "object", "additionalProperties": {"type": "string"}}}, "additionalProperties": false, "examples": [{"id": "alpha"}]},
+      "Envelope": {"type": "object", "required": ["payload"], "properties": {"payload": {"$ref": "#/components/schemas/Anything"}}, "additionalProperties": false},
+      "Anything": true,
+      "Impossible": false,
+      "Unconstrained": {},
+      "NullOnly": {"type": "null", "const": null},
+      "NullableText": {"type": ["string", "null"], "enum": ["ok", null], "default": null, "examples": [null, "ok"]},
+      "Array": {"type": "array", "items": {"type": "integer"}, "minItems": 1, "maxItems": 3, "uniqueItems": true},
+      "Bounds": {"type": "number", "exclusiveMinimum": 0, "maximum": 4, "multipleOf": 0.5},
+      "Composed": {"allOf": [{"type": "object", "required": ["kind"], "properties": {"kind": {"const": "widget"}}}, {"anyOf": [{"required": ["left"]}, {"required": ["right"]}]}], "oneOf": [{"properties": {"left": {"type": "integer"}}, "required": ["left"], "not": {"required": ["right"]}}, {"properties": {"right": {"type": "string"}}, "required": ["right"], "not": {"required": ["left"]}}]},
+      "Conditional": {"type": "object", "properties": {"mode": {"enum": ["credit", "cash"]}, "card": {"type": "string"}, "receipt": {"type": "string"}}, "required": ["mode"], "if": {"properties": {"mode": {"const": "credit"}}, "required": ["mode"]}, "then": {"required": ["card"]}, "else": {"not": {"required": ["card"]}}, "dependentRequired": {"card": ["receipt"]}, "additionalProperties": false},
+      "Dependent": {"type": "object", "properties": {"count": {"type": "integer"}, "items": {"type": "array"}}, "dependentSchemas": {"count": {"required": ["items"]}}, "minProperties": 1, "maxProperties": 2, "additionalProperties": false},
+      "Node": {"type": "object", "required": ["value"], "properties": {"value": {"type": "string"}, "children": {"type": "array", "items": {"$ref": "#/components/schemas/Node"}}}, "additionalProperties": false},
+      "Shared": {"type": "object", "properties": {"first": {"$ref": "#/components/schemas/Widget"}, "second": {"$ref": "#/components/schemas/Widget"}}},
+      "ReservedPropertyNames": {"type": "object", "required": ["value", "example", "default", "enum", "const"], "properties": {"value": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}, "example": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}, "default": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}, "enum": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}, "const": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}}, "additionalProperties": false},
+      "EscapedDefinitions": {"$defs": {"a/b~c": {"type": "string", "pattern": "^escaped$"}}},
+      "DollarProperty": {"type": "object", "required": ["$ref"], "properties": {"$ref": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}}, "additionalProperties": false, "examples": [{"$ref": "escaped"}]},
+      "Escaped": {"$ref": "#/components/schemas/EscapedDefinitions/$defs/a~1b~0c"}
+    }
+  }
+}

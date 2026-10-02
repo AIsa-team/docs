@@ -1,0 +1,83 @@
+name: Review upstream contract changes
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'PyYAML>=6,<7'
+      - name: Restore source review receipts
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/source-reviews.json
+          key: source-reviews-${{ github.run_id }}
+          restore-keys: source-reviews-
+      - name: Stage source updates and comparison evidence
+        id: refresh
+        continue-on-error: true
+        run: python scripts/refresh_upstream.py --write --receipts .cache/source-reviews.json --report /tmp/upstream-report.json
+      - name: Upload source comparison report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-contract-review
+          path: /tmp/upstream-report.json
+          if-no-files-found: error
+      - name: Retain successful observations without refreshing failed reviews
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = Path('/tmp/upstream-report.json')
+          if report.exists():
+              data = json.loads(report.read_text())
+              target = Path('.cache/source-reviews.json')
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(json.dumps({'schema_version': 1, 'receipts': data.get('receipts', {}), 'attempts': data.get('attempts', {})}, indent=2) + '\n')
+          PY
+      - name: Cache source receipt history
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/source-reviews.json
+          key: source-reviews-${{ github.run_id }}
+      - name: Prepare review description
+        run: |
+          python - <<'PY'
+          import json
+          report = json.load(open('/tmp/upstream-report.json'))
+          with open('/tmp/upstream-body.md', 'w') as body:
+              body.write('Refresh official upstream schema mirrors. Runtime facts remain authoritative.\n\n')
+              body.write('Removed operations remain historical evidence; compatibility is not assessed. No automatic merge.\n\n')
+              body.write('The full field diff and source hashes/age are in the upstream-contract-review workflow artifact.\n\n')
+              for provider, update in report['updated'].items():
+                  comparison = update['semantic_changes']
+                  counts = ', '.join(f"{len(comparison[key])} {key}" for key in ('added', 'removed', 'changed', 'uncertain'))
+                  body.write(f"- {provider}: {comparison['status']} ({counts})\n")
+              for provider, failure in report['failed'].items():
+                  previous = failure['previous']
+                  body.write(f"- {provider}: prior source preserved after {failure['failure']}; age seconds: {previous['source_age_seconds']}\n")
+              for source, row in report.get('sources', {}).items():
+                  if row['freshness'] != 'fresh':
+                      body.write(f"- {source}: {row['status']} / {row['freshness']}; owner {row['owner']}; review due {row['review_due_at']}\n")
+          PY
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: automation/upstream-contract-refresh
+          title: 'chore: review upstream contract changes'
+          commit-message: 'chore: refresh upstream contract mirrors for review'
+          body-path: /tmp/upstream-body.md
+          add-paths: openapi/upstream/*.json
+      - name: Report acquisition, policy or missing/overdue review failures
+        if: steps.refresh.outcome == 'failure'
+        run: exit 1
