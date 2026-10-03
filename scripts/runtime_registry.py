@@ -1,6 +1,7 @@
 """Discovery and public legacy-input indexing for the runtime contract puller."""
 import copy
 import json
+from source_json import loads as source_json_loads
 import re
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -77,7 +78,7 @@ def combine_facts(documents, provider):
 def public_mirror_index(root: Path, overrides: dict | None = None):
     """Only explicit public-route mirrors may match a gateway URL directly."""
     index = {}
-    documents = {path.name: json.loads(path.read_text()) for path in sorted((root / 'openapi/upstream').glob('*.json'))}
+    documents = {path.name: source_json_loads(path.read_text()) for path in sorted((root / 'openapi/upstream').glob('*.json'))}
     documents.update(overrides or {})
     for filename, document in sorted(documents.items()):
         source = document.get('info', {}).get('x-aisa-source', {})
@@ -133,7 +134,7 @@ def public_mirror_index(root: Path, overrides: dict | None = None):
 
 
 def published_documents(root: Path):
-    return {p.stem: json.loads(p.read_text()) for p in sorted((root / 'openapi').glob('*.json')) if p.name not in {'openapi.json', 'pending.json', 'coverage.json', 'coverage-sources.json'}}
+    return {p.stem: source_json_loads(p.read_text()) for p in sorted((root / 'openapi').glob('*.json')) if p.name not in {'openapi.json', 'pending.json', 'coverage.json', 'coverage-sources.json'}}
 
 
 def previous_for_facts(facts, documents, provider):

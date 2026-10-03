@@ -414,6 +414,16 @@ exponent-shaped profile hashes across Python and JavaScript YAML readers without
 changing their source values. Code CI exercises the producer serializer with
 Node 22 and js-yaml 4.1.1 in addition to the complete fixed candidate checks.
 
+Runtime JSON source readers reject a decimal or exponent token when conversion
+to a finite Python float would change its decimal value. Unsupported precision,
+overflow, underflow, NaN and Infinity raise `unsupported_numeric_precision`
+before publication; automatic discovery records the gap as pending and retains
+the last good contract. Integer tokens remain integers. JSON sources use the JSON
+parser directly. YAML sources reject ambiguous plain numeric, boolean and date
+scalars instead of relying on YAML 1.1 coercion: use an actual JSON source for
+numbers, or quote a scalar when the authority intends it to be a string. This
+guard does not add an arbitrary precision serialization format.
+
 ```sh
 python scripts/tests/w3_verification/prepare_full_catalog.py --docs-root . \
   --archive scripts/tests/fixtures/w0-package/scripts/api-contract-acceptance/data/full-catalog.tar.gz \

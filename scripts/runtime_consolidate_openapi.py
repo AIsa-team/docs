@@ -31,6 +31,7 @@ from pathlib import Path
 import sys
 from urllib.parse import urlparse
 from urllib.parse import unquote
+from source_json import load as source_json_load
 
 try:
     import yaml
@@ -341,7 +342,7 @@ def validate_reference_closure(document):
 
 def load_spec(filepath):
     with open(filepath, "r") as f:
-        return json.load(f)
+        return source_json_load(f)
 
 
 def endpoint_page_links():

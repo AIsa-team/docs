@@ -21,12 +21,13 @@ import yaml
 from compose_openapi import METHODS, compose, digest, resolve_fragment
 from import_upstream import import_source
 from runtime_registry import discover, combine_facts, public_mirror_index, published_documents, previous_for_facts, coverage_rows
+from source_json import loads as source_json_loads, load as source_json_load, UnsupportedNumericPrecision
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def read_json(path: Path, default=None):
-    return json.loads(path.read_text()) if path.exists() else default
+    return source_json_loads(path.read_text()) if path.exists() else default
 
 
 def operations(spec):
@@ -76,7 +77,7 @@ def fetch_json(url: str, etag: str | None = None):
         headers["If-None-Match"] = etag
     try:
         with urlopen(Request(url, headers=headers), timeout=30) as response:
-            return json.load(response)
+            return source_json_load(response)
     except HTTPError as exc:
         if exc.code == 304:
             return None
@@ -264,7 +265,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             if not re.fullmatch(r"[a-fA-F0-9]{7,40}", pin):
                 raise ValueError("pin must be a git commit SHA")
             result = subprocess.run(["git", "show", f"{pin}:openapi/{provider}.json"], cwd=root, check=True, text=True, capture_output=True)
-            document = json.loads(result.stdout)
+            document = source_json_loads(result.stdout)
             if previous:
                 assert_identities(normalize_paths(previous), normalize_paths(document))
             unresolved = pending["providers"].get(provider, [])
@@ -285,10 +286,10 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                         failure = "runtime_contract_unavailable"
                     elif indexed_hashes.get(catalog) and facts['info']['x-aisa-document']['facts_hash'] != indexed_hashes[catalog]:
                         failure = 'runtime_contract_unavailable: facts_hash_mismatch'
-                except (HTTPError, URLError, TimeoutError) as exc:
+                except (HTTPError, URLError, TimeoutError, UnsupportedNumericPrecision) as exc:
                     if not registry.get("auto_register"):
                         raise
-                    failure = f"runtime_contract_unavailable: {type(exc).__name__}"
+                    failure = str(exc) if isinstance(exc, UnsupportedNumericPrecision) else f"runtime_contract_unavailable: {type(exc).__name__}"
                 if failure:
                     if not registry.get("auto_register"):
                         raise ValueError(f"{catalog}: runtime facts unavailable; no files written")

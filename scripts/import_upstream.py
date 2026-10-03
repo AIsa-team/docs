@@ -3,6 +3,7 @@
 import argparse
 from datetime import datetime, timezone
 import json
+import re
 from pathlib import Path
 from urllib.request import Request, urlopen
 import yaml
@@ -16,6 +17,7 @@ from wrapper_twitter_reference import REFERENCE_URL as TWITTER_REFERENCE_URL, im
 from wrapper_cloudsway_reference import REFERENCE_URL as CLOUDSWAY_REFERENCE_URL, import_reference as import_cloudsway_reference
 from wrapper_cloudsway_full_reference import REFERENCE_URL as CLOUDSWAY_FULL_URL, import_reference as import_cloudsway_full_reference
 from source_governance import initial_policy
+from source_json import loads as source_json_loads, checked_float, UnsupportedNumericPrecision
 
 
 class OfficialSourceLoader(yaml.SafeLoader):
@@ -27,6 +29,39 @@ OfficialSourceLoader.add_constructor(
     'tag:yaml.org,2002:value', OfficialSourceLoader.construct_yaml_str
 )
 
+JSON_NUMBER = re.compile(r'-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?\Z')
+NUMERIC_SHAPED = re.compile(r'[+-]?(?:[0-9][0-9_]*(?:\.[0-9_]*)?|\.[0-9_]+)(?:[eE][+-]?[0-9_]+)?\Z')
+
+
+def _yaml_number(loader, node):
+    token = node.value
+    if not JSON_NUMBER.fullmatch(token):
+        raise UnsupportedNumericPrecision('unsupported_numeric_precision: ambiguous YAML numeric scalar ' + token)
+    return checked_float(token) if node.tag.endswith(':float') else int(token)
+
+
+def _yaml_string(loader, node):
+    if node.style is None and NUMERIC_SHAPED.fullmatch(node.value):
+        raise UnsupportedNumericPrecision('unsupported_numeric_precision: ambiguous plain YAML scalar; quote it or provide JSON: ' + node.value)
+    return loader.construct_yaml_str(node)
+
+
+def _yaml_boolean(loader, node):
+    if node.value.lower() not in ('true', 'false'):
+        raise ValueError('unsupported_yaml_scalar: ambiguous YAML boolean; quote it or provide JSON: ' + node.value)
+    return loader.construct_yaml_bool(node)
+
+
+def _yaml_timestamp(loader, node):
+    raise ValueError('unsupported_yaml_scalar: timestamps must be quoted or provided as JSON: ' + node.value)
+
+
+OfficialSourceLoader.add_constructor('tag:yaml.org,2002:int', _yaml_number)
+OfficialSourceLoader.add_constructor('tag:yaml.org,2002:float', _yaml_number)
+OfficialSourceLoader.add_constructor('tag:yaml.org,2002:str', _yaml_string)
+OfficialSourceLoader.add_constructor('tag:yaml.org,2002:bool', _yaml_boolean)
+OfficialSourceLoader.add_constructor('tag:yaml.org,2002:timestamp', _yaml_timestamp)
+
 
 def import_source(provider, url):
     if not KEY.fullmatch(provider) or not url.startswith('https://'):
@@ -37,7 +72,10 @@ def import_source(provider, url):
         return result
     def fetch(source_url):
         with urlopen(Request(source_url, headers={"User-Agent": "Mozilla/5.0 AIsa-contract-source-importer"}), timeout=30) as response:
-            return response.read()
+            raw = response.read()
+            if raw.lstrip().startswith((b'{', b'[')):
+                source_json_loads(raw)  # Validate before specialized source converters parse it.
+            return raw
     metadata = {}
     if url == PARALLEL_LEGACY_URL:
         document = extract_parallel_legacy(fetch(url))
@@ -55,7 +93,8 @@ def import_source(provider, url):
     elif url == QUERIT_REFERENCE_URL:
         document, metadata = import_querit_reference(fetch)
     else:
-        document = yaml.load(fetch(url), Loader=OfficialSourceLoader)
+        raw = fetch(url)
+        document = source_json_loads(raw) if raw.lstrip().startswith((b'{', b'[')) else yaml.load(raw, Loader=OfficialSourceLoader)
     if not isinstance(document, dict) or not str(document.get('openapi', '')).startswith('3.') or not isinstance(document.get('paths'), dict):
         raise ValueError('source is not an OpenAPI 3 document')
     source_hash = digest(document)
