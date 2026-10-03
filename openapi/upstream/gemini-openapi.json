@@ -1,0 +1,261 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Gemini-compatible Generate Content API",
+    "version": "v1beta",
+    "description": "AIsa Gemini-compatible API for native generateContent requests.",
+    "x-aisa-source": {
+      "kind": "manual",
+      "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/gemini-openapi.json",
+      "fetched_at": "2026-09-29T21:25:55+08:00",
+      "content_hash": "sha256:890d7a5518dd7a1fd52307139eeca23f8c36dbe71379eccf57af7977eabdd7db",
+      "converter": "scripts/import_existing_contracts.py@1",
+      "path_space": "public"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/v1beta",
+      "description": "Gemini-compatible API base URL"
+    }
+  ],
+  "paths": {
+    "/models/{model}:generateContent": {
+      "post": {
+        "summary": "Generate content using a Gemini-compatible AIsa model",
+        "operationId": "generateContent",
+        "parameters": [
+          {
+            "name": "model",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "gemini-3.5-flash"
+            },
+            "description": "The AIsa model ID to use, for example: gemini-3.5-flash."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateContentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful content generation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateContentResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key"
+      }
+    },
+    "schemas": {
+      "GenerateContentRequest": {
+        "type": "object",
+        "properties": {
+          "contents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Content"
+            },
+            "description": "Content of the conversation, required"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tool"
+            },
+            "description": "Optional tools the model can use"
+          },
+          "toolConfig": {
+            "type": "object",
+            "description": "Optional tool configuration"
+          },
+          "safetySettings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SafetySetting"
+            }
+          },
+          "systemInstruction": {
+            "$ref": "#/components/schemas/Content"
+          },
+          "generationConfig": {
+            "$ref": "#/components/schemas/GenerationConfig"
+          },
+          "cachedContent": {
+            "type": "string",
+            "description": "Optional cached content ID"
+          }
+        },
+        "required": [
+          "contents"
+        ]
+      },
+      "Content": {
+        "type": "object",
+        "properties": {
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Part"
+            }
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "model",
+              "system",
+              "assistant"
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "Tool": {
+        "type": "object"
+      },
+      "SafetySetting": {
+        "type": "object"
+      },
+      "GenerationConfig": {
+        "type": "object"
+      },
+      "GenerateContentResponse": {
+        "type": "object",
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Candidate"
+            }
+          },
+          "usageMetadata": {
+            "$ref": "#/components/schemas/UsageMetadata"
+          },
+          "modelVersion": {
+            "type": "string"
+          },
+          "responseId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "integer"
+              },
+              "message": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "Part": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Generated or input text content."
+          },
+          "inline_data": {
+            "type": "object",
+            "description": "Inline binary data for multimodal content."
+          },
+          "thoughtSignature": {
+            "type": "string",
+            "description": "Provider-generated thought signature metadata."
+          }
+        },
+        "additionalProperties": true
+      },
+      "Candidate": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/Content"
+          },
+          "finishReason": {
+            "type": "string"
+          },
+          "index": {
+            "type": "integer"
+          },
+          "safetyRatings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "UsageMetadata": {
+        "type": "object",
+        "properties": {
+          "promptTokenCount": {
+            "type": "integer"
+          },
+          "candidatesTokenCount": {
+            "type": "integer"
+          },
+          "totalTokenCount": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ]
+}

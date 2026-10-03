@@ -11,6 +11,7 @@ slashes with hyphens.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -48,14 +49,28 @@ def extract_openapi_ref(text: str) -> tuple[str, str] | None:
     return method, path
 
 
-def validate(root: Path) -> list[str]:
+def validate(root: Path, generated_only: bool = False) -> list[str]:
     errors: list[str] = []
     canonical_to_files: dict[str, list[str]] = {}
     for mdx in sorted((root / "api-reference").rglob("*.mdx")):
-        ref = extract_openapi_ref(mdx.read_text(encoding="utf-8"))
+        text = mdx.read_text(encoding="utf-8")
+        if generated_only and "x-aisa-operation-id:" not in text:
+            continue
+        ref = extract_openapi_ref(text)
         if ref is None:
             continue
         method, path = ref
+        identity = re.search(r'^x-aisa-operation-id:\s*(.+)$', text, re.M)
+        if identity:
+            try:
+                operation_id = json.loads(identity[1])
+                spec_name = OPENAPI_RE.search(text)[1].split()[0]
+                document = json.loads((root / spec_name).read_text())
+                if document["paths"][path][method]["operationId"] != operation_id:
+                    errors.append(f"{mdx}: generated page operation identity differs from its contract")
+            except (KeyError, ValueError, OSError) as exc:
+                errors.append(f"{mdx}: invalid generated contract reference: {exc}")
+            continue
         expected_stem = f"{method}_{slugify_path(path)}"
         rel = mdx.relative_to(root).as_posix()
         expected_rel = mdx.with_name(expected_stem + ".mdx").relative_to(root).as_posix()
@@ -75,8 +90,9 @@ def validate(root: Path) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--generated-only", action="store_true", help="validate generated contract page identities only")
     args = parser.parse_args()
-    errors = validate(args.root.resolve())
+    errors = validate(args.root.resolve(), args.generated_only)
     if errors:
         print("API reference slug validation failed:", file=sys.stderr)
         for error in errors:

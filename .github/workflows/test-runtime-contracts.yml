@@ -1,0 +1,64 @@
+name: Test runtime contracts
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/**'
+      - 'openapi/**'
+      - 'openapi.yaml'
+      - 'docs.json'
+      - 'api-reference/**'
+      - 'zh/api-reference/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/**'
+      - 'openapi/**'
+      - 'openapi.yaml'
+      - 'docs.json'
+      - 'api-reference/**'
+      - 'zh/api-reference/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
+      - name: Test discovery, composition and preservation
+        run: python -m unittest discover -s scripts/tests -v
+      - name: Restore public runtime-contract evidence
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/runtime-contracts
+          key: runtime-contracts-pr-${{ github.run_id }}
+          restore-keys: runtime-contracts-
+      - name: Check actual candidate readiness
+        env:
+          REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
+          PUBLISHED_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          python scripts/check_contract_candidate.py \
+            --baseline-ref "$REVIEWED_BASELINE" \
+            --published-ref "$PUBLISHED_REF" \
+            --report /tmp/contract-readiness.json
+      - name: Retain candidate assessment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-contract-readiness
+          path: /tmp/contract-readiness.json
+          if-no-files-found: ignore

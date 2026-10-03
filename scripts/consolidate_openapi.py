@@ -26,6 +26,8 @@ If --output is omitted, writes to stdout.
 import argparse
 import json
 import os
+import re
+from pathlib import Path
 import sys
 from urllib.parse import urlparse
 
@@ -40,7 +42,7 @@ REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 OPENAPI_DIR = os.path.join(REPO_ROOT, "openapi")
 
 # The Mintlify placeholder spec — skip it
-SKIP_FILES = {"openapi.json"}
+SKIP_FILES = {"openapi.json", "pending.json", "coverage.json", "coverage-sources.json"}
 
 # Map each spec file to a category tag
 FILE_TAG_MAP = {
@@ -178,7 +180,12 @@ def inject_x402_annotations(spec):
         for method, op in ops.items():
             if not isinstance(op, dict):
                 continue
-            if method in ("parameters", "servers"):
+            if method not in {"get", "post", "put", "patch", "delete", "options", "head", "trace"}:
+                continue
+            if "x-aisa-validation" in op:
+                # Runtime contracts own capabilities. Never invent a mirror
+                # route from a price, method or absence of an LLM override.
+                op.pop("x-x402", None)
                 continue
             if excluded or is_llm_op(op):
                 # Defensive: drop any stale annotation that shouldn't
@@ -235,22 +242,59 @@ def merge_components(unified, spec, filename):
     """
     source_components = spec.get("components", {})
     prefix = component_collision_prefix(filename)
-
+    renamed = {}
     for section in COMPONENT_SECTIONS:
         entries = source_components.get(section, {})
-        if not isinstance(entries, dict) or not entries:
-            continue
         target = unified["components"].setdefault(section, {})
         for name, definition in entries.items():
-            if name not in target:
-                target[name] = definition
-            elif target[name] != definition:
-                target[f"{prefix}_{name}"] = definition
+            if name in target and target[name] != definition:
+                candidate = f"{prefix}_{name}"
+                if candidate in target and target[candidate] != definition:
+                    raise ValueError(f"component collision: {filename} {section}/{name}")
+                renamed[f"#/components/{section}/{name}"] = f"#/components/{section}/{candidate}"
+
+    security_names = {
+        old.rsplit("/", 1)[1]: new.rsplit("/", 1)[1]
+        for old, new in renamed.items() if old.startswith("#/components/securitySchemes/")
+    }
+
+    def rewrite(node):
+        if isinstance(node, dict):
+            if isinstance(node.get("security"), list):
+                node["security"] = [
+                    {security_names.get(name, name): scopes for name, scopes in requirement.items()}
+                    for requirement in node["security"]
+                ]
+            if node.get("$ref") in renamed:
+                node["$ref"] = renamed[node["$ref"]]
+            for value in node.values():
+                rewrite(value)
+        elif isinstance(node, list):
+            for value in node:
+                rewrite(value)
+
+    rewrite(spec)
+    for section in COMPONENT_SECTIONS:
+        for name, definition in source_components.get(section, {}).items():
+            ref = renamed.get(f"#/components/{section}/{name}")
+            target_name = ref.rsplit("/", 1)[1] if ref else name
+            unified["components"].setdefault(section, {})[target_name] = definition
 
 
 def load_spec(filepath):
     with open(filepath, "r") as f:
         return json.load(f)
+
+
+def endpoint_page_links():
+    root = Path(OPENAPI_DIR).parent
+    links = {}
+    for page in sorted((root / "api-reference").rglob("*.mdx")):
+        match = re.search(r"^openapi:\s*['\"]?(openapi/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", page.read_text(), re.M)
+        if match:
+            key = (Path(match[1]).name, match[2].lower(), match[3])
+            links.setdefault(key, "https://aisa.one/docs/" + page.relative_to(root).with_suffix("").as_posix())
+    return links
 
 
 def build_unified_spec():
@@ -336,6 +380,10 @@ def build_unified_spec():
     }
 
     tags_seen = set()
+    page_links = endpoint_page_links()
+    registry_path = Path(OPENAPI_DIR) / "registry.yaml"
+    registry = yaml.safe_load(registry_path.read_text()) if registry_path.exists() else {}
+    registrations = (registry or {}).get("providers", {})
     files = sorted(os.listdir(OPENAPI_DIR))
 
     for filename in files:
@@ -350,6 +398,28 @@ def build_unified_spec():
         except Exception as e:
             print(f"  SKIP {filename}: {e}", file=sys.stderr)
             continue
+
+        provider = filename[:-5]
+        metadata = spec.get("info", {}).get("x-aisa-document", {})
+        owners = [key for key, value in registrations.items() if provider == key or provider in (value or {}).get("legacy_sources", [])]
+        registry_provider = owners[0] if len(owners) == 1 else None
+        registration = registrations.get(registry_provider) or {}
+        catalog_ids = sorted({catalog for owner in owners for catalog in (registrations[owner] or {}).get("group", [owner])})
+        generated = bool(metadata.get("document_hash"))
+        if spec.get("paths"):
+            unified["info"].setdefault("x-aisa-document", {}).setdefault("providers", {})[provider] = {
+                "document_hash": metadata.get("document_hash"),
+                "catalog_ids": catalog_ids,
+                "registry_provider": registry_provider,
+                "display_name": registration.get("display_name") or spec.get("info", {}).get("title", provider),
+                "description": registration.get("description") or spec.get("info", {}).get("description", ""),
+                "source": "runtime" if generated else "legacy",
+                "catalogs": spec.get("info", {}).get("x-aisa-catalogs", {}),
+                "facts_hash": metadata.get("facts_hash"),
+                "x-aisa-plans": spec["info"].get("x-aisa-plans", {}),
+                "x-aisa-capabilities": spec["info"].get("x-aisa-capabilities", {}),
+            }
+        merge_components(unified, spec, filename)
 
         # Register tag
         if tag not in tags_seen:
@@ -379,6 +449,7 @@ def build_unified_spec():
         if (
             file_server_url.startswith(default_server_url + "/")
             and not is_llm
+            and not generated
         ):
             path_prefix = file_server_url[len(default_server_url):]
 
@@ -386,13 +457,32 @@ def build_unified_spec():
         for path, methods in spec.get("paths", {}).items():
             for method, operation in methods.items():
                 if isinstance(operation, dict):
-                    operation["tags"] = [tag]
+                    operation["x-aisa-provider"] = provider
+                    if len(catalog_ids) == 1:
+                        operation.setdefault("x-aisa-catalog-id", catalog_ids[0])
+                    if registry_provider:
+                        operation["x-aisa-registry-provider"] = registry_provider
+                    if (filename, method, path) in page_links:
+                        operation["x-aisa-docs-url"] = page_links[(filename, method, path)]
+                    if not generated:
+                        operation["tags"] = [tag]
                     # Drop any per-op servers from the input file
                     operation.pop("servers", None)
                     # Add LLM-server override on operations from LLM
                     # files so OpenAPI consumers route them to /v1 or /v1beta
                     # instead of the default /apis/v1.
-                    if is_llm:
+                    if generated:
+                        # Associate inherited provider defaults explicitly: plan
+                        # prices cannot be derived from the seed estimate alone.
+                        operation["x-aisa-provider"] = provider
+                        operation["x-aisa-capabilities"] = {
+                            **spec["info"].get("x-aisa-capabilities", {}),
+                            **operation.get("x-aisa-capabilities", {}),
+                        }
+                        operation["servers"] = spec.get("servers", [])
+                        if "security" not in operation and "security" in spec:
+                            operation["security"] = spec["security"]
+                    elif is_llm:
                         operation["servers"] = [
                             {"url": file_server_url}
                         ]
@@ -405,8 +495,6 @@ def build_unified_spec():
                         unified["paths"][full_path][method] = operation
             else:
                 unified["paths"][full_path] = methods
-
-        merge_components(unified, spec, filename)
 
     # Sort tags alphabetically
     unified["tags"].sort(key=lambda t: t["name"])

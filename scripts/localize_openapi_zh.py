@@ -340,18 +340,23 @@ def translation(catalog: dict[str, Any], source: str) -> str:
     return entry["translation"]
 
 
-def localize_tree(node: Any, catalog: dict[str, Any], path: tuple[str, ...] = ()) -> Any:
+def localize_tree(node: Any, catalog: dict[str, Any], path: tuple[str, ...] = (), *, allow_untranslated: bool = False) -> Any:
     if isinstance(node, dict):
         result = {}
         for key, value in node.items():
             if key in TRANSLATABLE_KEYS and isinstance(value, str) and value.strip():
                 if is_translatable_spec_field(path, key):
-                    result[key] = translation(catalog, value)
+                    try:
+                        result[key] = translation(catalog, value)
+                    except KeyError:
+                        if not allow_untranslated:
+                            raise
+                        result[key] = value
                     continue
-            result[key] = localize_tree(value, catalog, path + (str(key),))
+            result[key] = localize_tree(value, catalog, path + (str(key),), allow_untranslated=allow_untranslated)
         return result
     if isinstance(node, list):
-        return [localize_tree(value, catalog, path + (str(index),)) for index, value in enumerate(node)]
+        return [localize_tree(value, catalog, path + (str(index),), allow_untranslated=allow_untranslated) for index, value in enumerate(node)]
     return node
 
 

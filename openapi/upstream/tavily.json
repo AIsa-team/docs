@@ -1,0 +1,1047 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Tavily API",
+    "version": "1.0.0",
+    "description": "Unified API documentation for Tavily endpoints including Search, Extract, Crawl, and Map.",
+    "x-aisa-source": {
+      "kind": "manual",
+      "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+      "fetched_at": "2026-09-29T21:25:55+08:00",
+      "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+      "converter": "scripts/import_existing_contracts.py@1",
+      "path_space": "public"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/tavily/search": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "dynamic",
+          "currency": "USD",
+          "basis": "provider_cost x 1",
+          "nominal_usd": 0.0096,
+          "observed_usd": {
+            "min": 1e-06,
+            "p50": 0.0096,
+            "p95": 0.016,
+            "max": 0.016
+          },
+          "cost_drivers": [
+            {
+              "param": "results / pages",
+              "effect": "charge scales with number of results (search) or pages (crawl/extract) returned"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
+        },
+        "tags": [
+          "https://docs.tavily.com/documentation/api-reference/endpoint/search"
+        ],
+        "summary": "Execute a search query using Tavily Search.",
+        "operationId": "post_tavily_search",
+        "description": "Search the web and get back ranked results with the page text already extracted, so there is no second call to fetch content. `query` is required. Returns `results[]` with `url`, `title`, `content` (the extracted excerpt), `score` and optionally `raw_content`, alongside `query`, `images`, `response_time` and `request_id`; set `include_answer` to also get a one-paragraph `answer`. Filter with `topic` (general/news/finance), `time_range` or explicit `start_date`/`end_date`, and trade cost against depth with `search_depth`. Measured at roughly 6 seconds for 2 results. This is the default choice for open-web research, and the only search here that returns ranked results and page text in one call. Reach past it when: you already know the URLs — `post_tavily_extract` is cheaper and exact; the query is a description rather than keywords — `post_exa_search` matches on meaning; you want a written answer rather than a list to iterate — `post_perplexity_sonar`; you want peer-reviewed papers — `post_scholar_search_scholar`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "The search query to execute with Tavily.",
+                    "example": "Who is Leo Messi?"
+                  },
+                  "search_depth": {
+                    "type": "string",
+                    "enum": [
+                      "advanced",
+                      "basic",
+                      "fast",
+                      "ultra-fast"
+                    ],
+                    "default": "basic",
+                    "description": "Controls the latency vs. relevance tradeoff. advanced gives the highest relevance with higher latency and cost; basic is balanced; fast and ultra-fast optimize for lower latency."
+                  },
+                  "chunks_per_source": {
+                    "type": "integer",
+                    "default": 3,
+                    "description": "Maximum number of relevant chunks returned per source.",
+                    "minimum": 1,
+                    "maximum": 3
+                  },
+                  "max_results": {
+                    "type": "integer",
+                    "default": 5,
+                    "description": "Maximum number of search results to return.",
+                    "minimum": 0,
+                    "maximum": 20
+                  },
+                  "topic": {
+                    "type": "string",
+                    "enum": [
+                      "general",
+                      "news",
+                      "finance"
+                    ],
+                    "default": "general",
+                    "description": "Category of the search."
+                  },
+                  "time_range": {
+                    "type": "string",
+                    "enum": [
+                      "day",
+                      "week",
+                      "month",
+                      "year",
+                      "d",
+                      "w",
+                      "m",
+                      "y"
+                    ],
+                    "description": "Time range to filter results based on publish date."
+                  },
+                  "start_date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Return results after the specified start date.",
+                    "example": "2025-02-09"
+                  },
+                  "end_date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Return results before the specified end date.",
+                    "example": "2025-12-29"
+                  },
+                  "include_answer": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "basic",
+                          "advanced"
+                        ]
+                      }
+                    ],
+                    "default": false,
+                    "description": "Include an LLM-generated answer. true uses the default answer mode; basic or advanced selects the answer generation mode."
+                  },
+                  "include_raw_content": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "markdown",
+                          "text"
+                        ]
+                      }
+                    ],
+                    "default": false,
+                    "description": "Include cleaned and parsed content for each search result. true or markdown returns markdown; text returns plain text and may increase latency."
+                  },
+                  "include_images": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Perform an image search and include results."
+                  },
+                  "include_image_descriptions": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Add descriptive text for each image when include_images is true."
+                  },
+                  "safe_search": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Filter out adult or unsafe content from search results. Enterprise only; not supported when search_depth is fast or ultra-fast."
+                  },
+                  "include_favicon": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include the favicon URL for each result."
+                  },
+                  "include_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "List of domains to specifically include in the search results.",
+                    "maxItems": 300
+                  },
+                  "exclude_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "List of domains to specifically exclude from the search results.",
+                    "maxItems": 150
+                  },
+                  "country": {
+                    "type": "string",
+                    "description": "Boost search results from a specific country. Available only when topic is general.",
+                    "enum": [
+                      "afghanistan",
+                      "albania",
+                      "algeria",
+                      "andorra",
+                      "angola",
+                      "argentina",
+                      "armenia",
+                      "australia",
+                      "austria",
+                      "azerbaijan",
+                      "bahamas",
+                      "bahrain",
+                      "bangladesh",
+                      "barbados",
+                      "belarus",
+                      "belgium",
+                      "belize",
+                      "benin",
+                      "bhutan",
+                      "bolivia",
+                      "bosnia and herzegovina",
+                      "botswana",
+                      "brazil",
+                      "brunei",
+                      "bulgaria",
+                      "burkina faso",
+                      "burundi",
+                      "cambodia",
+                      "cameroon",
+                      "canada",
+                      "cape verde",
+                      "central african republic",
+                      "chad",
+                      "chile",
+                      "china",
+                      "colombia",
+                      "comoros",
+                      "congo",
+                      "costa rica",
+                      "croatia",
+                      "cuba",
+                      "cyprus",
+                      "czech republic",
+                      "denmark",
+                      "djibouti",
+                      "dominican republic",
+                      "ecuador",
+                      "egypt",
+                      "el salvador",
+                      "equatorial guinea",
+                      "eritrea",
+                      "estonia",
+                      "ethiopia",
+                      "fiji",
+                      "finland",
+                      "france",
+                      "gabon",
+                      "gambia",
+                      "georgia",
+                      "germany",
+                      "ghana",
+                      "greece",
+                      "guatemala",
+                      "guinea",
+                      "haiti",
+                      "honduras",
+                      "hungary",
+                      "iceland",
+                      "india",
+                      "indonesia",
+                      "iran",
+                      "iraq",
+                      "ireland",
+                      "israel",
+                      "italy",
+                      "jamaica",
+                      "japan",
+                      "jordan",
+                      "kazakhstan",
+                      "kenya",
+                      "kuwait",
+                      "kyrgyzstan",
+                      "latvia",
+                      "lebanon",
+                      "lesotho",
+                      "liberia",
+                      "libya",
+                      "liechtenstein",
+                      "lithuania",
+                      "luxembourg",
+                      "madagascar",
+                      "malawi",
+                      "malaysia",
+                      "maldives",
+                      "mali",
+                      "malta",
+                      "mauritania",
+                      "mauritius",
+                      "mexico",
+                      "moldova",
+                      "monaco",
+                      "mongolia",
+                      "montenegro",
+                      "morocco",
+                      "mozambique",
+                      "myanmar",
+                      "namibia",
+                      "nepal",
+                      "netherlands",
+                      "new zealand",
+                      "nicaragua",
+                      "niger",
+                      "nigeria",
+                      "north korea",
+                      "north macedonia",
+                      "norway",
+                      "oman",
+                      "pakistan",
+                      "panama",
+                      "papua new guinea",
+                      "paraguay",
+                      "peru",
+                      "philippines",
+                      "poland",
+                      "portugal",
+                      "qatar",
+                      "romania",
+                      "russia",
+                      "rwanda",
+                      "saudi arabia",
+                      "senegal",
+                      "serbia",
+                      "singapore",
+                      "slovakia",
+                      "slovenia",
+                      "somalia",
+                      "south africa",
+                      "south korea",
+                      "south sudan",
+                      "spain",
+                      "sri lanka",
+                      "sudan",
+                      "sweden",
+                      "switzerland",
+                      "syria",
+                      "taiwan",
+                      "tajikistan",
+                      "tanzania",
+                      "thailand",
+                      "togo",
+                      "trinidad and tobago",
+                      "tunisia",
+                      "turkey",
+                      "turkmenistan",
+                      "uganda",
+                      "ukraine",
+                      "united arab emirates",
+                      "united kingdom",
+                      "united states",
+                      "uruguay",
+                      "uzbekistan",
+                      "venezuela",
+                      "vietnam",
+                      "yemen",
+                      "zambia",
+                      "zimbabwe"
+                    ]
+                  },
+                  "auto_parameters": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Automatically configure search parameters based on query content."
+                  },
+                  "include_usage": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include credit usage information in the response."
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search results returned successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "query": {
+                      "type": "string",
+                      "description": "The search query that was executed."
+                    },
+                    "answer": {
+                      "type": "string",
+                      "description": "A short LLM-generated answer. Present as null when include_answer is false or no answer is generated.",
+                      "nullable": true
+                    },
+                    "images": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string",
+                            "description": "Image URL."
+                          },
+                          "description": {
+                            "type": "string",
+                            "description": "Image description."
+                          }
+                        }
+                      }
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string",
+                            "description": "Title of the search result."
+                          },
+                          "url": {
+                            "type": "string",
+                            "description": "URL of the search result."
+                          },
+                          "content": {
+                            "type": "string",
+                            "description": "Content snippet of the search result."
+                          },
+                          "score": {
+                            "type": "number",
+                            "format": "float",
+                            "description": "Relevance score of the search result."
+                          },
+                          "favicon": {
+                            "type": "string",
+                            "description": "Favicon URL of the search result.",
+                            "nullable": true
+                          },
+                          "raw_content": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "Cleaned and parsed source content. Null unless include_raw_content is requested or no raw content is available."
+                          }
+                        }
+                      }
+                    },
+                    "response_time": {
+                      "type": "number",
+                      "format": "float",
+                      "description": "Time in seconds it took to complete the request."
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "credits": {
+                          "type": "integer",
+                          "description": "Credit usage details for the request."
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "description": "Unique request identifier."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tavily/extract": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "dynamic",
+          "currency": "USD",
+          "basis": "provider_cost x 1",
+          "nominal_usd": 0.0096,
+          "observed_usd": {
+            "min": 0.008,
+            "p50": 0.0096,
+            "p95": 0.0096,
+            "max": 0.04
+          },
+          "cost_drivers": [
+            {
+              "param": "results / pages",
+              "effect": "charge scales with number of results (search) or pages (crawl/extract) returned"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
+        },
+        "tags": [
+          "https://docs.tavily.com/documentation/api-reference/endpoint/extract"
+        ],
+        "summary": "Extract web page content from specified URLs using Tavily Extract.",
+        "operationId": "post_tavily_extract",
+        "description": "Fetch clean, parsed content for URLs you already have — from a search result, a sitemap, or a user. `urls` is required and takes several at once. Returns `results[]` with `url`, `title`, `raw_content` and `images`, plus a `failed_results[]` array — **read that one**, because a page that could not be fetched is reported there rather than raising an error. Choose `format` (markdown or text) and `extract_depth`. Measured at about 1 second for one page. Use this instead of `post_tavily_search` whenever you can already name the pages; searching for pages you can name costs more and may not return them. For a long list that can wait, `post_firecrawl_batch_scrape` runs it as a background job. To discover the URLs of a whole site first, use `post_tavily_map`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "urls": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    ],
+                    "description": "The URL or URLs to extract content from. A single URL string and an array of URL strings are both accepted.",
+                    "example": [
+                      "https://en.wikipedia.org/wiki/Artificial_intelligence"
+                    ]
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "User intent for reranking extracted content chunks."
+                  },
+                  "chunks_per_source": {
+                    "type": "integer",
+                    "default": 3,
+                    "description": "Maximum number of relevant chunks returned per source. Available only when query is provided.",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "extract_depth": {
+                    "type": "string",
+                    "enum": [
+                      "basic",
+                      "advanced"
+                    ],
+                    "default": "basic",
+                    "description": "Depth of the extraction process."
+                  },
+                  "include_images": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include a list of images extracted from the URLs."
+                  },
+                  "include_favicon": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include the favicon URL for each result."
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "markdown",
+                      "text"
+                    ],
+                    "default": "markdown",
+                    "description": "Format of the extracted web page content."
+                  },
+                  "timeout": {
+                    "type": "number",
+                    "format": "float",
+                    "description": "Maximum time in seconds to wait for URL extraction. If omitted, default timeouts depend on extract_depth: 10 seconds for basic and 30 seconds for advanced.",
+                    "minimum": 1,
+                    "maximum": 60
+                  },
+                  "include_usage": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include credit usage information in the response."
+                  }
+                },
+                "required": [
+                  "urls"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Extraction results returned successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string",
+                            "description": "URL of the extracted content."
+                          },
+                          "title": {
+                            "type": "string",
+                            "description": "Title of the extracted page."
+                          },
+                          "raw_content": {
+                            "type": "string",
+                            "description": "Extracted raw content from the URL."
+                          },
+                          "images": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "Images extracted from the URL when include_images is true."
+                          },
+                          "favicon": {
+                            "type": "string",
+                            "description": "Favicon URL of the extracted content.",
+                            "nullable": true
+                          }
+                        }
+                      }
+                    },
+                    "failed_results": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "List of URLs that could not be processed."
+                    },
+                    "response_time": {
+                      "type": "number",
+                      "format": "float",
+                      "description": "Time in seconds it took to complete the request."
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "credits": {
+                          "type": "integer",
+                          "description": "Credit usage details for the request."
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "description": "Unique request identifier."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tavily/crawl": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "dynamic",
+          "currency": "USD",
+          "basis": "provider_cost x 1",
+          "nominal_usd": 0.0096,
+          "observed_usd": {
+            "min": 0.008,
+            "p50": 0.0096,
+            "p95": 0.016,
+            "max": 0.024
+          },
+          "cost_drivers": [
+            {
+              "param": "results / pages",
+              "effect": "charge scales with number of results (search) or pages (crawl/extract) returned"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
+        },
+        "tags": [
+          "https://docs.tavily.com/documentation/api-reference/endpoint/crawl"
+        ],
+        "summary": "Graph-based website traversal tool using Tavily Crawl.",
+        "operationId": "post_tavily_crawl",
+        "description": "Walk a site from a root `url` and return the content of the pages it finds. Steer it with natural-language `instructions` plus regex path and domain filters, and bound it with `max_depth`, `max_breadth` and `limit`. Returns `base_url` and `results[]` with `url` and `raw_content`. Measured at about 4.5 seconds for a 3-page limit; cost and time grow with the bounds you set, so set them. Use it for broad coverage of one site — documentation, a catalogue, a competitor's blog. It answers synchronously, which `post_firecrawl_crawl` does not: that one runs as a background job and suits crawls too large to wait on. For a handful of known pages `post_tavily_extract` is far cheaper; to size a site before paying to crawl it, run `post_tavily_map` first.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "The root URL to begin the crawl.",
+                    "example": "docs.tavily.com"
+                  },
+                  "instructions": {
+                    "type": "string",
+                    "description": "Natural language instructions for the crawler."
+                  },
+                  "chunks_per_source": {
+                    "type": "integer",
+                    "default": 3,
+                    "description": "Maximum number of relevant chunks returned per source.",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "max_depth": {
+                    "type": "integer",
+                    "default": 1,
+                    "description": "Max depth of the crawl.",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "max_breadth": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "Max number of links to follow per level of the tree.",
+                    "minimum": 1,
+                    "maximum": 500
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "default": 50,
+                    "description": "Total number of links the crawler will process before stopping.",
+                    "minimum": 1
+                  },
+                  "select_paths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to select only URLs with specific path patterns."
+                  },
+                  "select_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to select crawling to specific domains or subdomains."
+                  },
+                  "exclude_paths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to exclude URLs with specific path patterns."
+                  },
+                  "exclude_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to exclude specific domains or subdomains from crawling."
+                  },
+                  "allow_external": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Include external domain links in the final results list."
+                  },
+                  "include_images": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include images in the crawl results."
+                  },
+                  "extract_depth": {
+                    "type": "string",
+                    "enum": [
+                      "basic",
+                      "advanced"
+                    ],
+                    "default": "basic",
+                    "description": "Depth of the extraction process."
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "markdown",
+                      "text"
+                    ],
+                    "default": "markdown",
+                    "description": "Format of the extracted web page content."
+                  },
+                  "include_favicon": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include the favicon URL for each result."
+                  },
+                  "timeout": {
+                    "type": "number",
+                    "format": "float",
+                    "default": 150,
+                    "description": "Maximum time in seconds to wait for the crawl operation.",
+                    "minimum": 10,
+                    "maximum": 150
+                  },
+                  "include_usage": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include credit usage information in the response."
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Crawl results returned successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "base_url": {
+                      "type": "string",
+                      "description": "The base URL that was crawled."
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string",
+                            "description": "URL of the crawled page."
+                          },
+                          "raw_content": {
+                            "type": "string",
+                            "description": "Extracted raw content from the page."
+                          },
+                          "favicon": {
+                            "type": "string",
+                            "description": "Favicon URL of the crawled page."
+                          }
+                        }
+                      }
+                    },
+                    "response_time": {
+                      "type": "number",
+                      "format": "float",
+                      "description": "Time in seconds it took to complete the request."
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "credits": {
+                          "type": "integer",
+                          "description": "Credit usage details for the request."
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "description": "Unique request identifier."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tavily/map": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "dynamic",
+          "currency": "USD",
+          "basis": "provider_cost x 1",
+          "nominal_usd": 0.0096,
+          "observed_usd": {
+            "min": 0.008,
+            "p50": 0.0096,
+            "p95": 0.016,
+            "max": 0.064
+          },
+          "cost_drivers": [
+            {
+              "param": "results / pages",
+              "effect": "charge scales with number of results (search) or pages (crawl/extract) returned"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
+        },
+        "tags": [
+          "https://docs.tavily.com/documentation/api-reference/endpoint/map"
+        ],
+        "summary": "Generate comprehensive site maps using Tavily Map.",
+        "operationId": "post_tavily_map",
+        "description": "List a site's URLs from a root `url` without fetching any page content. Steer it with natural-language `instructions` and regex `select_paths` / `exclude_paths` / `select_domains` filters. Returns `base_url` and `results` — **a flat array of URL strings, not objects** — with `response_time` and `request_id`. Fast and cheap: measured at about 1.5 seconds. Use it to size a site before committing to a crawl, then fetch only the parts that matter with `post_tavily_extract`. When you want the content rather than the shape, `post_tavily_crawl` does both in one call.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "The root URL to begin the mapping.",
+                    "example": "docs.tavily.com"
+                  },
+                  "instructions": {
+                    "type": "string",
+                    "description": "Natural language instructions for the crawler."
+                  },
+                  "max_depth": {
+                    "type": "integer",
+                    "default": 1,
+                    "description": "Max depth of the mapping.",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "max_breadth": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "Max number of links to follow per level of the tree.",
+                    "minimum": 1,
+                    "maximum": 500
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "default": 50,
+                    "description": "Total number of links the crawler will process before stopping.",
+                    "minimum": 1
+                  },
+                  "select_paths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to select only URLs with specific path patterns."
+                  },
+                  "select_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to select crawling to specific domains or subdomains."
+                  },
+                  "exclude_paths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to exclude URLs with specific path patterns."
+                  },
+                  "exclude_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to exclude specific domains or subdomains from mapping."
+                  },
+                  "allow_external": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Include external domain links in the final results list."
+                  },
+                  "timeout": {
+                    "type": "number",
+                    "format": "float",
+                    "default": 150,
+                    "description": "Maximum time in seconds to wait for the map operation.",
+                    "minimum": 10,
+                    "maximum": 150
+                  },
+                  "include_usage": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include credit usage information in the response."
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Map results returned successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "base_url": {
+                      "type": "string",
+                      "description": "The base URL that was mapped."
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "description": "URLs discovered during the mapping."
+                      }
+                    },
+                    "response_time": {
+                      "type": "number",
+                      "format": "float",
+                      "description": "Time in seconds it took to complete the request."
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "credits": {
+                          "type": "integer",
+                          "description": "Credit usage details for the request."
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "description": "Unique request identifier."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

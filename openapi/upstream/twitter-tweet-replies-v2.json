@@ -1,0 +1,214 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Twitter API - Tweet Replies V2",
+    "version": "1.0.0",
+    "description": "Get tweet replies with advanced sorting options.",
+    "x-aisa-source": {
+      "kind": "manual",
+      "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/twitter-tweet-replies-v2.json",
+      "fetched_at": "2026-09-29T21:25:55+08:00",
+      "content_hash": "sha256:73e0f30e3276deb4f2c159ef47c2058ea84de8925db773ebdd9394531bf6724b",
+      "converter": "scripts/import_existing_contracts.py@1",
+      "path_space": "public"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "Tweet": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "description": "The ID of the tweet"
+          },
+          "url": {
+            "type": "string",
+            "description": "The URL of the tweet"
+          },
+          "text": {
+            "type": "string",
+            "description": "The text of the tweet"
+          },
+          "source": {
+            "type": "string",
+            "description": "The source client of the tweet"
+          },
+          "retweetCount": {
+            "type": "integer"
+          },
+          "replyCount": {
+            "type": "integer"
+          },
+          "likeCount": {
+            "type": "integer"
+          },
+          "quoteCount": {
+            "type": "integer"
+          },
+          "viewCount": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "The date and time the tweet was created"
+          },
+          "lang": {
+            "type": "string",
+            "description": "The language of the tweet"
+          },
+          "bookmarkCount": {
+            "type": "integer"
+          },
+          "isReply": {
+            "type": "boolean"
+          },
+          "inReplyToId": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "inReplyToUserId": {
+            "type": "string"
+          },
+          "inReplyToUsername": {
+            "type": "string"
+          },
+          "isLimitedReply": {
+            "type": "boolean",
+            "description": "Whether the tweet is a limited reply"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/twitter/tweet/replies/v2": {
+      "get": {
+        "x-aisa-pricing": {
+          "model": "dynamic",
+          "currency": "USD",
+          "basis": "provider_cost x 2",
+          "nominal_usd": 0.0036,
+          "observed_usd": {
+            "min": 0.00015,
+            "p50": 0.0036,
+            "p95": 0.0108,
+            "max": 0.0225
+          },
+          "cost_drivers": [
+            {
+              "param": "result count",
+              "effect": "charge scales with number of tweets/users returned"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
+        },
+        "tags": [
+          "https://docs.twitterapi.io/api-reference/endpoint/get_tweet_replies_v2"
+        ],
+        "summary": "Get Tweet Replies V2",
+        "operationId": "get_twitter_tweet_replies_v2",
+        "description": "Get replies to a tweet with control over sort order — Relevance (default), Latest, or Likes — 20 per page, cursor-paginated. Use this instead of `get_twitter_tweet_replies` whenever ordering matters: Likes surfaces the community's top responses, Latest gives a live view of an unfolding thread. Returns full tweet objects with engagement counts.",
+        "parameters": [
+          {
+            "name": "tweetId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The tweet ID to get replies for. e.g. 1846987139428634858"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor for paginating through results. Leave empty for the first page."
+          },
+          {
+            "name": "queryType",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Relevance",
+                "Latest",
+                "Likes"
+              ],
+              "default": "Relevance"
+            },
+            "description": "Sort order for replies. Default is Relevance."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tweet replies response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "has_next_page": {
+                      "type": "boolean",
+                      "description": "Indicates if there are more results available"
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "description": "Cursor for fetching the next page of results"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "success",
+                        "error"
+                      ],
+                      "example": "success",
+                      "description": "Status of the request"
+                    },
+                    "tweets": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Tweet"
+                      },
+                      "description": "Array of reply tweets."
+                    },
+                    "msg": {
+                      "type": "string",
+                      "description": "Error message if status is error."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
