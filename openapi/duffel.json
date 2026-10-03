@@ -1,0 +1,862 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Duffel Flights API",
+    "version": "v2",
+    "description": "Flight search, booking, changes, and cancellations through the Duffel network. Search by route and passengers, refresh offers before ordering, then book with a balance payment. Currently operates in sandbox mode (Duffel Airways test data)."
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "SliceInput": {
+        "type": "object",
+        "required": ["origin", "destination", "departure_date"],
+        "properties": {
+          "origin": {
+            "type": "string",
+            "description": "IATA airport code (JFK) or city code (NYC)"
+          },
+          "destination": {
+            "type": "string",
+            "description": "IATA airport code (ATL) or city code"
+          },
+          "departure_date": {
+            "type": "string",
+            "format": "date",
+            "description": "YYYY-MM-DD"
+          }
+        }
+      },
+      "PassengerInput": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["adult"],
+            "description": "Use for adults; passengers under 18 must provide age instead"
+          },
+          "age": {
+            "type": "integer",
+            "description": "Required for passengers under 18"
+          }
+        }
+      },
+      "CabinClass": {
+        "type": "string",
+        "enum": ["economy", "premium_economy", "business", "first"]
+      },
+      "Airport": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "iata_code": { "type": "string" },
+          "city_name": { "type": "string" }
+        }
+      },
+      "Segment": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "origin": { "$ref": "#/components/schemas/Airport" },
+          "destination": { "$ref": "#/components/schemas/Airport" },
+          "departing_at": { "type": "string", "format": "date-time" },
+          "arriving_at": { "type": "string", "format": "date-time" },
+          "flight_number": { "type": "string" },
+          "operating_carrier": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "iata_code": { "type": "string" }
+            }
+          }
+        }
+      },
+      "Offer": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "off_0000BAzrX1wdbYyQFAuAoz" },
+          "total_amount": { "type": "string", "description": "Decimal string, e.g. 70.48", "example": "70.48" },
+          "total_currency": { "type": "string", "example": "USD" },
+          "expires_at": { "type": "string", "format": "date-time" },
+          "passenger_ids": { "type": "array", "items": { "type": "string" } },
+          "slices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "segments": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Segment" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "OfferRequest": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "orq_0000BAzrX1jsN0lVbavyvg" },
+          "live_mode": { "type": "boolean" },
+          "cabin_class": { "type": "string" },
+          "slices": { "type": "array", "items": { "$ref": "#/components/schemas/SliceInput" } },
+          "passengers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string", "example": "pas_0000BAzrX1jsN0lVbavyvi" },
+                "type": { "type": "string" }
+              }
+            }
+          },
+          "offers": { "type": "array", "items": { "$ref": "#/components/schemas/Offer" } }
+        }
+      },
+      "BookingPassenger": {
+        "type": "object",
+        "required": ["id", "title", "gender", "given_name", "family_name", "born_on", "email", "phone_number"],
+        "properties": {
+          "id": { "type": "string", "description": "Passenger id from the offer request response" },
+          "title": { "type": "string", "enum": ["mr", "ms", "mrs", "dr"] },
+          "gender": { "type": "string", "enum": ["m", "f", "x"] },
+          "given_name": { "type": "string" },
+          "family_name": { "type": "string" },
+          "born_on": { "type": "string", "format": "date" },
+          "email": { "type": "string", "format": "email", "description": "Must be the passenger's own email" },
+          "phone_number": { "type": "string" },
+          "infant_passenger_id": { "type": "string", "description": "Infant passenger id this adult is responsible for; one infant per adult" }
+        }
+      },
+      "BalancePayment": {
+        "type": "object",
+        "required": ["type", "amount", "currency"],
+        "properties": {
+          "type": { "type": "string", "enum": ["balance"] },
+          "amount": { "type": "string", "description": "Must equal the refreshed offer total_amount" },
+          "currency": { "type": "string", "description": "Must equal the refreshed offer total_currency" }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "ord_0000BAzrYIJiDdmFJKIhcy" },
+          "booking_reference": { "type": "string", "example": "DJMT4D" },
+          "total_amount": { "type": "string" },
+          "total_currency": { "type": "string" },
+          "live_mode": { "type": "boolean" },
+          "documents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "type": { "type": "string", "enum": ["electronic_ticket"] },
+                "unique_id": { "type": "string" }
+              }
+            }
+          },
+          "available_actions": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "OrderCancellation": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "ore_0000BAzrZ6yBtPriPLcjeX" },
+          "order_id": { "type": "string" },
+          "refund_amount": { "type": "string", "nullable": true, "description": "0.00 when non-refundable; null when the airline has not quoted" },
+          "refund_currency": { "type": "string", "nullable": true },
+          "refund_to": { "type": "string" },
+          "expires_at": { "type": "string", "format": "date-time", "nullable": true },
+          "confirmed_at": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "PaginationMeta": {
+        "type": "object",
+        "properties": {
+          "limit": { "type": "integer" },
+          "after": { "type": "string", "nullable": true, "description": "Cursor for the next page" },
+          "before": { "type": "string", "nullable": true }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "properties": {
+          "meta": {
+            "type": "object",
+            "properties": {
+              "request_id": { "type": "string" }
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string" },
+                "message": { "type": "string" },
+                "source": {
+                  "type": "object",
+                  "properties": {
+                    "field": { "type": "string" },
+                    "pointer": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "parameters": {
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }
+      },
+      "After": {
+        "name": "after",
+        "in": "query",
+        "schema": { "type": "string" }
+      },
+      "OfferIdQuery": {
+        "name": "offer_id",
+        "in": "query",
+        "required": true,
+        "schema": { "type": "string" }
+      }
+    }
+  },
+  "paths": {
+    "/duffel/flights/offer-requests/create": {
+      "post": {
+        "summary": "Create Flight Search",
+        "description": "Search flights by route and passengers. Returns an offer request with priced offers including full segment details. $0.02 per request.",
+        "operationId": "post_duffel_offer_requests_create",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["data"],
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "required": ["slices", "passengers"],
+                    "properties": {
+                      "slices": {
+                        "type": "array",
+                        "items": { "$ref": "#/components/schemas/SliceInput" }
+                      },
+                      "passengers": {
+                        "type": "array",
+                        "items": { "$ref": "#/components/schemas/PassengerInput" }
+                      },
+                      "cabin_class": { "$ref": "#/components/schemas/CabinClass" },
+                      "max_connections": {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Maximum connections per slice; 0 for direct flights only"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Offer request created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/OfferRequest" }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error (not charged)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorEnvelope" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/duffel/flights/offer-requests/{id}": {
+      "get": {
+        "summary": "Get Flight Search",
+        "description": "Retrieve a single offer request by id. $0.005 per request.",
+        "operationId": "get_duffel_offer_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Offer request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/OfferRequest" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/duffel/flights/offer-requests/list": {
+      "get": {
+        "summary": "List Flight Searches",
+        "description": "List your offer requests, newest first. $0.005 per request.",
+        "operationId": "get_duffel_offer_requests_list",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/After" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated offer requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "meta": { "$ref": "#/components/schemas/PaginationMeta" },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/OfferRequest" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/duffel/flights/offers/{id}": {
+      "get": {
+        "summary": "Get Flight Offer",
+        "description": "Refresh a single offer. Call immediately before ordering: the returned price and expiry are authoritative, and offers expire. $0.005 per request.",
+        "operationId": "get_duffel_offer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Offer with authoritative pricing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Offer" }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Offer not found or expired; search again",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorEnvelope" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/duffel/flights/offers/list": {
+      "get": {
+        "summary": "List Flight Offers",
+        "description": "List offers across your searches. $0.005 per request.",
+        "operationId": "get_duffel_offers_list",
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/After" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated offers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "meta": { "$ref": "#/components/schemas/PaginationMeta" },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Offer" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/duffel/flights/seat-maps": {
+      "get": {
+        "summary": "Get Seat Maps",
+        "description": "Seat map per segment for an offer. Not supported by every airline. Seats can only be selected when creating the order via services. $0.005 per request.",
+        "operationId": "get_duffel_seat_maps",
+        "parameters": [
+          { "$ref": "#/components/parameters/OfferIdQuery" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Seat maps for each segment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "segment_id": { "type": "string" },
+                          "cabins": { "type": "array", "items": { "type": "object" } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/duffel/flights/orders/create": {
+      "post": {
+        "summary": "Create Flight Order",
+        "description": "Book the selected offer and pay with your Aisa balance. The payment amount must equal the refreshed offer total. Returns the airline booking reference and electronic ticket documents. Always refresh the offer immediately before ordering.",
+        "operationId": "post_duffel_orders_create",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["data"],
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "required": ["selected_offers", "payments", "passengers"],
+                    "properties": {
+                      "selected_offers": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "maxItems": 1,
+                        "description": "Exactly one offer id"
+                      },
+                      "payments": {
+                        "type": "array",
+                        "items": { "$ref": "#/components/schemas/BalancePayment" },
+                        "maxItems": 1
+                      },
+                      "passengers": {
+                        "type": "array",
+                        "items": { "$ref": "#/components/schemas/BookingPassenger" }
+                      },
+                      "services": {
+                        "type": "array",
+                        "description": "Optional ancillaries (bags, seats) by service id",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": { "type": "string" },
+                            "quantity": { "type": "integer" },
+                            "passenger_ids": { "type": "array", "items": { "type": "string" } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Order created with booking reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Order" }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error, expired offer, or amount mismatch (not charged)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorEnvelope" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/duffel/flights/orders/hold-create": {
+      "post": {
+        "summary": "Create Hold Flight Order",
+        "description": "Hold the selected order without immediate payment. Same body as Create Flight Order plus \"type\": \"hold\" in data. Unpaid orders expose payment_required_by and intended_payment_methods.",
+        "operationId": "post_duffel_orders_hold_create",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": ["hold"]
+                      },
+                      "selected_offers": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "maxItems": 1
+                      },
+                      "passengers": {
+                        "type": "array",
+                        "items": { "$ref": "#/components/schemas/BookingPassenger" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Held order awaiting payment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Order" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/duffel/flights/order-change-requests/create": {
+      "post": {
+        "summary": "Create Order Change Request",
+        "description": "Fetch change offers for a paid order. The response embeds order_change_offers with new_total_amount, penalty_total_amount, and change_total_amount. New slices must keep the original cabin class.",
+        "operationId": "post_duffel_order_change_requests_create",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "required": ["order_id"],
+                    "properties": {
+                      "order_id": { "type": "string" },
+                      "slices": {
+                        "type": "object",
+                        "properties": {
+                          "add": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/SliceInput" }
+                          },
+                          "remove": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Slice ids to remove"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Change request with embedded change offers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "string" },
+                        "order_change_offers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": { "type": "string" },
+                              "new_total_amount": { "type": "string" },
+                              "penalty_total_amount": { "type": "string" },
+                              "change_total_amount": { "type": "string" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/duffel/flights/order-change-requests/{id}": {
+      "get": {
+        "summary": "Get Order Change Request",
+        "description": "Retrieve a change request with its change offers. $0.005 per request.",
+        "operationId": "get_duffel_order_change_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Change request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/duffel/flights/order-changes/create": {
+      "post": {
+        "summary": "Confirm Order Change",
+        "description": "Execute a selected change offer. The price difference settles through your Aisa balance.",
+        "operationId": "post_duffel_order_changes_create",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "required": ["selected_order_change_offer"],
+                    "properties": {
+                      "selected_order_change_offer": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Change executed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/duffel/flights/order-cancellations/create": {
+      "post": {
+        "summary": "Create Order Cancellation",
+        "description": "Fetch the refund quote for an order. refund_amount may be 0.00 (non-refundable) or null (airline has not quoted). Only the most recently created cancellation can be confirmed.",
+        "operationId": "post_duffel_order_cancellations_create",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "required": ["order_id"],
+                    "properties": {
+                      "order_id": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cancellation quote",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/OrderCancellation" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/duffel/flights/order-cancellations/{id}": {
+      "get": {
+        "summary": "Get Order Cancellation",
+        "description": "Retrieve a cancellation quote by id. $0.005 per request.",
+        "operationId": "get_duffel_order_cancellation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancellation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/OrderCancellation" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/duffel/flights/order-cancellations/{id}/confirm": {
+      "post": {
+        "summary": "Confirm Order Cancellation",
+        "description": "Confirm the most recent cancellation quote for an order. The refund is issued to the payment source.",
+        "operationId": "post_duffel_order_cancellation_confirm",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cancellation confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/OrderCancellation" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
