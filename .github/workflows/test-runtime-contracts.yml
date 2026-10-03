@@ -1,0 +1,138 @@
+name: Test runtime contracts
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/**'
+      - 'openapi/**'
+      - 'openapi.yaml'
+      - 'docs.json'
+      - 'api-reference.mdx'
+      - 'zh/api-reference.mdx'
+      - 'api-reference/**'
+      - 'zh/api-reference/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/**'
+      - 'openapi/**'
+      - 'openapi.yaml'
+      - 'docs.json'
+      - 'api-reference.mdx'
+      - 'zh/api-reference.mdx'
+      - 'api-reference/**'
+      - 'zh/api-reference/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      artifacts: ${{ steps.scope.outputs.artifacts }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: scope
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          python scripts/contract_change_scope.py --base "$BASE" >> "$GITHUB_OUTPUT"
+  code-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RUNTIME_YAML_READER_MODULE: /tmp/runtime-yaml-reader/node_modules/js-yaml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install actual JavaScript YAML reader for publication regression
+        run: npm install --prefix /tmp/runtime-yaml-reader --no-audit --no-fund --ignore-scripts js-yaml@4.1.1
+      - name: Install test dependencies
+        run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
+      - name: Test discovery, composition and preservation
+        run: python -m unittest discover -s scripts/tests -v
+      - name: Verify unchanged frozen acceptance inputs
+        run: python scripts/tests/fixtures/w0-package/scripts/api-contract-acceptance/verify.py
+      - name: Verify proposed policy fixture boundaries
+        run: python -m unittest discover -s scripts/tests/w3_verification -v
+      - name: Recompose the complete frozen catalog without publication approval
+        run: |
+          python scripts/tests/w3_verification/prepare_full_catalog.py \
+            --docs-root . \
+            --archive scripts/tests/fixtures/w0-package/scripts/api-contract-acceptance/data/full-catalog.tar.gz \
+            --with-pages \
+            --output /tmp/docs-candidate
+      - name: Retain offline code acceptance result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-code-catalog
+          path: /tmp/docs-candidate/receipt.json
+          if-no-files-found: ignore
+  artifact-contracts:
+    needs: changes
+    if: needs.changes.outputs.artifacts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install assessment dependencies
+        run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
+      - name: Restore public runtime-contract evidence
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/runtime-contracts
+          key: runtime-contracts-pr-${{ github.run_id }}
+          restore-keys: runtime-contracts-
+      - name: Restore attributed source-maintenance receipts
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/source-reviews.json
+          key: source-reviews-assess-${{ github.run_id }}
+          restore-keys: source-reviews-
+      - name: Check actual candidate readiness
+        env:
+          REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
+          PUBLISHED_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          python scripts/check_contract_candidate.py \
+            --baseline-ref "$REVIEWED_BASELINE" \
+            --published-ref "$PUBLISHED_REF" \
+            --report /tmp/contract-readiness.json
+      - name: Retain candidate assessment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-contract-readiness
+          path: /tmp/contract-readiness.json
+          if-no-files-found: ignore
+  contracts:
+    # Preserve the existing required check and reject skipped formal checks
+    # when the fixed Git diff contains publication artifacts.
+    needs: [changes, code-contracts, artifact-contracts]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require all applicable checks
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python scripts/contract_change_scope.py --check-jobs

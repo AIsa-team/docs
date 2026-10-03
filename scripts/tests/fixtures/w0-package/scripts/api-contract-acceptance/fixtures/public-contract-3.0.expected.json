@@ -1,0 +1,86 @@
+{
+  "format_version": 1,
+  "fixture": "public-contract-3.0.json",
+  "cases": [
+    {
+      "id": "oas30-source-semantics",
+      "criteria": ["C04", "C05", "C06", "C08"],
+      "source_ref": {"file": "public-contract-3.0.json", "pointer": "/components/schemas"},
+      "assertions": [
+        {"pointer": "/openapi", "equals": "3.0.3"},
+        {"pointer": "/components/schemas/NullableBound", "equals": {"type": "number", "nullable": true, "minimum": 0, "exclusiveMinimum": true, "maximum": 10, "exclusiveMaximum": false, "multipleOf": 0.5, "default": null}},
+        {"pointer": "/components/schemas/InclusiveBound", "equals": {"type": "integer", "minimum": 0, "exclusiveMinimum": false, "maximum": 10, "exclusiveMaximum": true}},
+        {"pointer": "/components/schemas/NullableEnum", "equals": {"type": "string", "nullable": true, "enum": ["ok", null]}},
+        {"pointer": "/components/schemas/NullableRestrictedEnum", "equals": {"type": "string", "nullable": true, "enum": ["ok"]}},
+        {"pointer": "/components/schemas/NullableObject", "equals": {"type": "object", "nullable": true, "required": ["name"], "properties": {"name": {"type": "string"}}, "additionalProperties": false}},
+        {"pointer": "/components/schemas/IgnoredNullable", "equals": {"nullable": true, "enum": ["ok"]}},
+        {"pointer": "/paths/~1legacy/get/responses/200/content/application~1json/example", "equals": null},
+        {"pointer": "/paths/~1legacy/get/responses/204/content", "absent": true},
+        {"pointer": "/paths/~1legacy/get/responses/default", "equals": {"description": "Public fallback", "content": {"text/plain": {"schema": {"type": "string"}}}}}
+      ]
+    }
+  ],
+  "consumer_expectations": [
+    {
+      "id": "convert-nullable-exclusive-bound",
+      "kind": "oas30_conversion",
+      "criteria": ["C04", "C05"],
+      "source_ref": {"file": "public-contract-3.0.json", "pointer": "/components/schemas/NullableBound"},
+      "expected": {"type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 10, "multipleOf": 0.5, "default": null},
+      "schema_examples": [
+        {"instance": null, "valid": true},
+        {"instance": 0, "valid": false},
+        {"instance": 0.5, "valid": true},
+        {"instance": 10, "valid": true},
+        {"instance": 10.5, "valid": false},
+        {"instance": 0.25, "valid": false},
+        {"instance": "0.5", "valid": false}
+      ]
+    },
+    {
+      "id": "convert-inclusive-minimum-exclusive-maximum",
+      "kind": "oas30_conversion",
+      "criteria": ["C05"],
+      "source_ref": {"file": "public-contract-3.0.json", "pointer": "/components/schemas/InclusiveBound"},
+      "expected": {"type": "integer", "minimum": 0, "exclusiveMaximum": 10},
+      "schema_examples": [
+        {"instance": 0, "valid": true},
+        {"instance": -1, "valid": false},
+        {"instance": 9, "valid": true},
+        {"instance": 10, "valid": false}
+      ]
+    },
+    {
+      "id": "convert-nullable-enum-with-explicit-null",
+      "kind": "oas30_conversion",
+      "criteria": ["C05", "C08"],
+      "source_ref": {"file": "public-contract-3.0.json", "pointer": "/components/schemas/NullableEnum"},
+      "expected": {"type": ["string", "null"], "enum": ["ok", null]},
+      "schema_examples": [{"instance": null, "valid": true}, {"instance": "ok", "valid": true}, {"instance": "other", "valid": false}]
+    },
+    {
+      "id": "nullable-does-not-widen-restricted-enum",
+      "kind": "oas30_conversion",
+      "criteria": ["C05"],
+      "source_ref": {"file": "public-contract-3.0.json", "pointer": "/components/schemas/NullableRestrictedEnum"},
+      "expected": {"type": ["string", "null"], "enum": ["ok"]},
+      "schema_examples": [{"instance": null, "valid": false}, {"instance": "ok", "valid": true}, {"instance": "other", "valid": false}]
+    },
+    {
+      "id": "convert-nullable-object-with-object-constraints",
+      "kind": "oas30_conversion",
+      "criteria": ["C04", "C05"],
+      "source_ref": {"file": "public-contract-3.0.json", "pointer": "/components/schemas/NullableObject"},
+      "expected": {"type": ["object", "null"], "required": ["name"], "properties": {"name": {"type": "string"}}, "additionalProperties": false},
+      "schema_examples": [{"instance": null, "valid": true}, {"instance": {"name": "a"}, "valid": true}, {"instance": {}, "valid": false}, {"instance": {"name": "a", "extra": 1}, "valid": false}]
+    },
+    {
+      "id": "nullable-without-type-does-not-add-null",
+      "kind": "oas30_conversion",
+      "criteria": ["C05"],
+      "source_ref": {"file": "public-contract-3.0.json", "pointer": "/components/schemas/IgnoredNullable"},
+      "expected": {"enum": ["ok"]},
+      "schema_examples": [{"instance": null, "valid": false}, {"instance": "ok", "valid": true}]
+    }
+  ]
+}
