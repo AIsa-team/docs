@@ -120,14 +120,14 @@ curl -X POST "https://api.aisa.one/apis/v1/duffel/flights/orders/create" \
 | 座位图 | GET | `flights/seat-maps?offer_id=` | $0.005/次 |
 | 查询改签请求 | GET | `flights/order-change-requests/{id}` | $0.005/次 |
 | 查询退票申请 | GET | `flights/order-cancellations/{id}` | $0.005/次 |
-| **创建订单** | POST | `flights/orders/create` | 见说明 |
-| hold 订单 | POST | `flights/orders/hold-create`（body 加 `"type":"hold"`） | 见说明 |
-| 创建改签请求 | POST | `flights/order-change-requests/create` | 见说明 |
-| 确认改签 | POST | `flights/order-changes/create` | 见说明 |
-| 创建退票申请 | POST | `flights/order-cancellations/create` | 见说明 |
-| 确认退票 | POST | `flights/order-cancellations/{id}/confirm` | 见说明 |
+| **创建订单** | POST | `flights/orders/create` | 票面价 × ~1.05 |
+| hold 订单 | POST | `flights/orders/hold-create`（body 加 `"type":"hold"`） | 票面价 × ~1.05 |
+| 创建改签请求 | POST | `flights/order-change-requests/create` | 改签差额 × ~1.05 |
+| 确认改签 | POST | `flights/order-changes/create` | 改签差额 × ~1.05 |
+| 创建退票申请 | POST | `flights/order-cancellations/create` | 退款额 × ~1.05 |
+| 确认退票 | POST | `flights/order-cancellations/{id}/confirm` | — |
 
-> 交易类端点当前为固定服务费定价；切换到按票面金额计费前，价格以[目录 API](https://api.aisa.one/info/apis/category) 为准。
+> 交易类端点按订单实际金额计费（票面价/改签差额 × 服务费倍率，normal 1.05 / vip 1.04 / svip 1.03），下单前会按预估金额预授权。最终价格以调用时的实际结算为准。
 
 ## 搜索参数详解
 
@@ -223,8 +223,8 @@ curl -X POST "https://api.aisa.one/apis/v1/duffel/flights/order-cancellations/or
 
 **Q: 能查所有航司吗？**
 
-覆盖范围以 Duffel 供应商网络为准；沙箱环境返回的是虚拟航司（Duffel Airways）测试数据。
+覆盖范围以 Duffel 供应商网络为准（数百家真实航司，含全日空、汉莎、美联航等；部分廉航不在覆盖内）。
 
-**Q: 如何测试？**
+**Q: 下单是真实出票吗？计费怎么算？**
 
-当前平台凭证为沙箱模式（`live_mode: false`），可完整走通搜索→下单→退票流程，不产生真实机票。切换生产模式前会另行公告。
+是。下单会向航司真实订座并出具电子票，费用 = 票面价 + 服务费（约 5%），通过你的 AIsa 余额结算（响应 `live_mode: true`）。搜索、改签、退票前请仔细核对行程与乘机人信息——出票后的退改规则以航司客规为准，可能产生罚金且不一定全额退款。建议先用低价航线验证完整流程。
