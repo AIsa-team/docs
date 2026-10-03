@@ -1,5 +1,8 @@
 name: Check public contract revisions
 on:
+  # Dormant until BOTH the tracked plan and operator variable are enabled.
+  schedule:
+    - cron: '35 * * * *'
   workflow_dispatch:
     inputs:
       acceptance:
@@ -9,15 +12,33 @@ on:
       expected_docs_ref:
         description: Independently selected full published docs SHA for acceptance
         type: string
+      budget_start:
+        description: Independently recorded UTC release budget start; never inferred or reset
+        type: string
 
 permissions:
   contents: read
 jobs:
+  activation-plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      enabled: ${{ steps.plan.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        run: |
+          python scripts/contract_activation.py > /tmp/activation-plan.json
+          echo "enabled=$(python -c 'import json; print(str(json.load(open("/tmp/activation-plan.json"))["activation_enabled"]).lower())')" >> "$GITHUB_OUTPUT"
   revisions:
+    needs: activation-plan
+    if: github.event_name == 'workflow_dispatch' || (needs.activation-plan.outputs.enabled == 'true' && vars.RUNTIME_CONTRACT_ACTIVATION_ENABLED == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -31,10 +52,30 @@ jobs:
         env:
           ACCEPTANCE: ${{ inputs.acceptance }}
           EXPECTED_DOCS_REF: ${{ inputs.expected_docs_ref }}
+          BUDGET_START: ${{ inputs.budget_start }}
+          CONFIGURED_DOCS_REF: ${{ vars.RUNTIME_CONTRACT_EXPECTED_DOCS_REF }}
+          CONFIGURED_BUDGET_START: ${{ vars.RUNTIME_CONTRACT_BUDGET_START }}
         run: |
+          set -euo pipefail
           args=(--report /tmp/contract-revisions-report.json)
+          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            EXPECTED_DOCS_REF="$CONFIGURED_DOCS_REF"
+            BUDGET_START="$CONFIGURED_BUDGET_START"
+            args+=(--require-budget)
+            if [ -z "$EXPECTED_DOCS_REF" ] || [ -z "$BUDGET_START" ]; then
+              python scripts/check_contract_revisions.py --require-budget \
+                --report /tmp/contract-revisions-report.json
+            fi
+          fi
+          if [ -n "$BUDGET_START" ]; then args+=(--budget-start "$BUDGET_START" --require-budget); fi
+          if [ -n "$EXPECTED_DOCS_REF" ]; then
+            hash=$(git show "$EXPECTED_DOCS_REF:openapi.yaml" | sha256sum | cut -d ' ' -f 1)
+            python scripts/contract_activation.py --event "$GITHUB_EVENT_NAME" \
+              --published-ref "$EXPECTED_DOCS_REF" --published-hash "$hash" > /tmp/source-selection.json
+            args+=(--expected-docs-ref "$EXPECTED_DOCS_REF" --selection-file /tmp/source-selection.json --require-budget)
+          fi
           if [ "$ACCEPTANCE" = 'true' ]; then
-            args+=(--acceptance --expected-docs-ref "$EXPECTED_DOCS_REF")
+            args+=(--acceptance --require-budget)
           fi
           python scripts/check_contract_revisions.py "${args[@]}"
       - name: Retain dated convergence assessment

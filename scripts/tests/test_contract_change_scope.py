@@ -3,12 +3,23 @@ from pathlib import Path
 import tempfile
 import sys
 import unittest
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from contract_change_scope import git_requires_artifact_check, verify_required_jobs
+from contract_change_scope import git_requires_artifact_check, verify_required_jobs, requires_artifact_check
 
 
 class ChangeScopeTests(unittest.TestCase):
+    def test_exact_overview_pages_require_formal_gate_and_both_ci_triggers(self):
+        workflow = yaml.safe_load((Path(__file__).resolve().parents[2] /
+                                   '.github/workflows/test-runtime-contracts.yml').read_text())
+        triggers = workflow.get('on', workflow.get(True))
+        for page in ('api-reference.mdx', 'zh/api-reference.mdx'):
+            self.assertTrue(requires_artifact_check([page]))
+            for event in ('push', 'pull_request'):
+                self.assertIn(page, triggers[event]['paths'])
+        self.assertFalse(requires_artifact_check(['README.mdx', 'zh/guide.mdx', 'api-reference-extra.mdx']))
+
     def test_existing_required_check_rejects_failed_missing_or_skipped_applicable_jobs(self):
         def results(scope='false', changes='success', code='success', artifact='skipped'):
             return {'changes': {'result': changes, 'outputs': {'artifacts': scope}},

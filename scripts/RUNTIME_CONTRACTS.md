@@ -398,6 +398,53 @@ python scripts/check_contract_candidate.py --source-receipts /path/to/receipts.j
   --report /tmp/formal-contract-readiness.json
 ```
 
+## W3 fixed inputs and dormant activation
+
+The W3 code gate also generates the actual EN/ZH schemas, MDX and navigation
+from fixed inputs. `publication_surface.py` compares protocol structure while
+allowing translated prose, checks each page's declared operation ID and ensures
+both navigation trees reach the same runtime operations. The formal checker
+uses that same read-only validator and binds every actual schema/page/navigation
+file in its receipt. Existing page aliases follow their published operation ID
+when a path is normalized; their URLs and prose remain intact.
+
+The runtime aggregate quotes all single-line JSON strings explicitly, retaining
+multiline block strings. This preserves identifiers with leading zeros and
+exponent-shaped profile hashes across Python and JavaScript YAML readers without
+changing their source values. Code CI exercises the producer serializer with
+Node 22 and js-yaml 4.1.1 in addition to the complete fixed candidate checks.
+
+```sh
+python scripts/tests/w3_verification/prepare_full_catalog.py --docs-root . \
+  --archive scripts/tests/fixtures/w0-package/scripts/api-contract-acceptance/data/full-catalog.tar.gz \
+  --with-pages --output /tmp/docs-code-candidate
+python scripts/publication_surface.py --root /tmp/docs-code-candidate/candidate
+```
+
+The extra legacy MDX fixture and page identity index contain exact data from the
+W0 fixed Docs revision, with separate hashes and provenance. They fill only the
+temporary test candidate; they do not alter W0 or become production authority.
+The generated `diagnostic-docs.lock.json` binds actual aggregate bytes and marks
+the result unapproved and non-activatable. Its code SHA is not a publication SHA.
+
+`contract_activation.json` defaults to `activation_enabled: false`. The 10-minute
+pull and hourly monitor schedule definitions stay dormant unless both the tracked
+plan and `RUNTIME_CONTRACT_ACTIVATION_ENABLED=true` are enabled by the release
+owner. Manual dry-run defaults remain available. Activated monitoring requires
+an independently selected `RUNTIME_CONTRACT_EXPECTED_DOCS_REF` and recorded
+`RUNTIME_CONTRACT_BUDGET_START`; missing/invalid inputs fail before fetching.
+Scheduled recovery selects that exact Git source and validates its aggregate
+hash. The original budget start is retained: 3600 seconds for a candidate and
+14400 seconds for convergence, with the first deadline breach failing immediately.
+After an on-time complete observation, the monitor retains its latency for that
+exact Docs SHA, aggregate hash, budget start and phase while rechecking all live
+surfaces. A new version/start or a later mismatch cannot reuse that healthy
+result. Strict acceptance ignores the monitor cache.
+Operator/CDN limits and real normal/lost-dispatch timing receipts remain W4 work.
+The legacy `sync-openapi` writer exits 3 when a runtime registry exists, directing
+publication to the single strictly assessed `pull-openapi` path. Without a
+registry, its existing legacy consolidator and outputs remain unchanged.
+
 ## Resolving a missing contract
 
 A pending entry is an intake item, not a diagnosis that the API is broken.

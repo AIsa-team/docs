@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 import shutil
 import sys
+import subprocess
 import tarfile
 import time
 
@@ -83,6 +84,7 @@ def main():
     parser.add_argument('--archive', type=Path, default=Path(__file__).resolve().parents[2] /
                         'scripts/api-contract-acceptance/data/full-catalog.tar.gz')
     parser.add_argument('--profile', action='store_true', help='Save local composition profiling evidence')
+    parser.add_argument('--with-pages', action='store_true', help='Validate actual full EN/ZH publication graph; remains diagnostic only')
     parser.add_argument('--policy-fixture', type=Path, default=Path(__file__).with_name('source-policy.fixture.json'),
                         help='Proposed source policies for offline testing; creates no review receipts')
     args = parser.parse_args()
@@ -98,6 +100,31 @@ def main():
     from pull_openapi import stage
     candidate = args.output / 'candidate'
     shutil.copytree(args.output / 'input', candidate)
+    if args.with_pages:
+        # W0 intentionally omitted unrelated existing MDX. Supplement only
+        # missing files with exact bytes from its already fixed Docs revision.
+        fixture = args.docs_root / 'scripts/tests/fixtures/legacy-pages.tar.gz'
+        if hashlib.sha256(fixture.read_bytes()).hexdigest() != '72bf4861f077f1293b993bdad05b7a563ff4ac62741463049099a7d4cdd82c85':
+            raise ValueError('fixed legacy page fixture checksum mismatch')
+        with tarfile.open(fixture) as pages:
+            for member in pages.getmembers():
+                if not member.isfile() or not member.name.endswith('.mdx'):
+                    continue
+                path = candidate / member.name
+                if not path.is_file():
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(pages.extractfile(member).read())
+        identity_fixture = args.docs_root / 'scripts/tests/fixtures/legacy-page-identities.json'
+        if hashlib.sha256(identity_fixture.read_bytes()).hexdigest() != 'f245bbd8ce97352c82ce20216bb6cb8939686d1a1a8bf50111a082a3242e8239':
+            raise ValueError('fixed legacy page identity checksum mismatch')
+        identities = json.loads(identity_fixture.read_text())
+        if identities['docs_ref'] != '89296da5fac52ad51b360ca24005cc2f5a03daa0':
+            raise ValueError('legacy page identities do not match frozen W0 revision')
+        for name, row in identities['pages'].items():
+            page = candidate / name
+            text = page.read_text()
+            if 'x-aisa-operation-id:' not in text:
+                page.write_text(text.replace('---\n', '---\nx-aisa-operation-id: ' + json.dumps(row['operation_id']) + '\n', 1))
     apply_policy_fixture(candidate, json.loads(args.policy_fixture.read_text()), POLICY_FIELDS, policy_errors)
     context = {'offline': True}
     profiler = cProfile.Profile() if args.profile else None
@@ -106,7 +133,7 @@ def main():
     if profiler:
         profiler.enable()
     changes, summary = stage(candidate, candidate / 'facts', 'https://api.aisa.one',
-                             with_pages=False, readiness_context=context)
+                             with_pages=args.with_pages, readiness_context=context)
     first_seconds = time.monotonic() - started
     if profiler:
         profiler.disable()
@@ -118,7 +145,7 @@ def main():
     print('First composition written; checking idempotent replay.', flush=True)
     started = time.monotonic()
     repeat, _ = stage(candidate, candidate / 'facts', 'https://api.aisa.one',
-                      with_pages=False, readiness_context=repeat_context)
+                      with_pages=args.with_pages, readiness_context=repeat_context)
     repeat_seconds = time.monotonic() - started
     coverage = context['coverage']
     pending = [row for rows in coverage['providers'].values() for row in rows if row['status'] == 'pending']
@@ -140,6 +167,25 @@ def main():
         'sources': len(maintenance['sources']), 'source_policy_errors': maintenance['policy_errors'],
         'source_freshness': maintenance['status'], 'policy_counts': dict(Counter(row['policy'] for row in maintenance['sources'].values()))}
     receipt['full_set_reconciliation'] = full_set
+    if args.with_pages:
+        from publication_surface import validate_surfaces, publication_hashes
+        receipt['legacy_page_fixture'] = {'sha256': '72bf4861f077f1293b993bdad05b7a563ff4ac62741463049099a7d4cdd82c85',
+            'page_identities_sha256': 'f245bbd8ce97352c82ce20216bb6cb8939686d1a1a8bf50111a082a3242e8239',
+            'docs_ref': '89296da5fac52ad51b360ca24005cc2f5a03daa0', 'scope': 'fixed existing MDX/page identities; no contract authority'}
+        subprocess.run([sys.executable, str(args.docs_root / 'scripts/runtime_consolidate_openapi.py'),
+                        '--root', str(candidate), '--output', str(candidate / 'openapi.yaml')], check=True)
+        import yaml
+        from runtime_consolidate_openapi import validate_reference_closure
+        validate_reference_closure(yaml.safe_load((candidate / 'openapi.yaml').read_text()))
+        receipt['publication_surfaces'] = validate_surfaces(candidate)
+        receipt['publication_files_sha256'] = publication_hashes(candidate)
+        code_sha = subprocess.check_output(['git', '-C', str(args.docs_root), 'rev-parse', 'HEAD'], text=True).strip()
+        lock = {'repository': 'AIsa-team/docs', 'commit': code_sha,
+                'openapi_sha256': hashlib.sha256((candidate / 'openapi.yaml').read_bytes()).hexdigest(),
+                'diagnostic_only': True, 'publication_verified': False, 'activatable': False,
+                'code_revision_dirty': bool(subprocess.check_output(['git', '-C', str(args.docs_root), 'status', '--porcelain'], text=True)),
+                'scope': 'actual fixed W0 candidate bytes; code revision is not an approved publication'}
+        (args.output / 'diagnostic-docs.lock.json').write_text(json.dumps(lock, indent=2) + '\n')
     (args.output / 'receipt.json').write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
     print(json.dumps(receipt, indent=2, sort_keys=True))
     # Unknown real reviews/debt are expected here, and are reported explicitly.

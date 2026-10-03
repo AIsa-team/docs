@@ -119,45 +119,61 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
         if spec == f'openapi/{provider}.json':
             old_prefix = previous_prefix
         known[(old_prefix + path, method)] = page
+    # Stable published IDs preserve old URLs when a provider path is normalized
+    # or moves between output documents. Never infer an ID from a filename.
+    previous_ids = {(previous_prefix + path, method): op.get('operationId')
+                    for path, method, op in operations(previous or {})}
+    known_ids = {}
+    for spec, old_prefix, path, method, page in references:
+        header, _ = localization.split_frontmatter((root / (page + '.mdx')).read_text())
+        identity = (yaml.safe_load(header) or {}).get('x-aisa-operation-id')
+        if not identity and spec == f'openapi/{provider}.json':
+            identity = previous_ids.get((old_prefix + path, method))
+        if identity:
+            known_ids.setdefault(identity, set()).add(page)
     current_prefix = urlsplit((document.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
     paths = []
     for path, method, operation in operations(document):
-        page = known.get((current_prefix + path, method), f"api-reference/{provider}/{slug(operation['operationId'])}")
-        paths.append(page)
-        if decorate_links:
-            operation["x-aisa-docs-url"] = "https://aisa.one/docs/" + page
-        for language, prefix in (("en", ""), ("zh", "zh/")):
-            destination = root / f"{prefix}{page}.mdx"
-            spec_path = f"openapi/{'zh/' if language == 'zh' else ''}{provider}.json"
-            source_title = operation.get("summary") or operation["operationId"]
-            localized_title = source_title
-            if language == "zh":
-                try:
-                    localized_title = localization.translation(catalog, source_title)
-                except KeyError:
-                    pass  # Current English title is safer than a stale translation.
-            title = json.dumps(localized_title, ensure_ascii=False)
-            reference = json.dumps(f"{spec_path} {method.upper()} {path}")
-            identity = f"x-aisa-operation-id: {json.dumps(operation['operationId'])}"
-            if destination.exists():
-                text = destination.read_text()
-                frontmatter, prose = localization.split_frontmatter(text)
-                frontmatter = localization.replace_frontmatter_value(frontmatter, "title", localized_title)
-                text = "---\n" + frontmatter + "\n---\n" + prose
-                text = re.sub(r"^openapi:.*$", lambda _: f"openapi: {reference}", text, count=1, flags=re.M)
-                if "x-aisa-operation-id:" not in text:
-                    text = text.replace("---\n", "---\n" + identity + "\n", 1)
-            else:
-                text = f"---\ntitle: {title}\nopenapi: {reference}\n{identity}\n---\n"
-            # A small managed notice can change with status while all user prose
-            # remains intact, including on pre-existing pages.
-            begin, end = "{/* aisa-contract-status:start */}", "{/* aisa-contract-status:end */}"
-            text = re.sub(re.escape(begin) + r".*?" + re.escape(end) + r"\n?", "", text, flags=re.S)
-            if operation.get("x-aisa-status") == "disabled":
-                notice = "当前未启用。" if language == "zh" else "Currently disabled."
-                text += f"{begin}\n{notice}\n{end}\n"
-            if not destination.exists() or text != destination.read_text():
-                changes[destination] = text
+        page_names = sorted(known_ids.get(operation['operationId'], set())) or [
+            known.get((current_prefix + path, method), f"api-reference/{provider}/{slug(operation['operationId'])}")]
+        for page in page_names:
+            paths.append(page)
+            if decorate_links:
+                operation["x-aisa-docs-url"] = "https://aisa.one/docs/" + page
+            for language, prefix in (("en", ""), ("zh", "zh/")):
+                destination = root / f"{prefix}{page}.mdx"
+                spec_path = f"openapi/{'zh/' if language == 'zh' else ''}{provider}.json"
+                source_title = operation.get("summary") or operation["operationId"]
+                localized_title = source_title
+                if language == "zh":
+                    try:
+                        localized_title = localization.translation(catalog, source_title)
+                    except KeyError:
+                        pass  # Current English title is safer than a stale translation.
+                title = json.dumps(localized_title, ensure_ascii=False)
+                reference = json.dumps(f"{spec_path} {method.upper()} {path}")
+                identity = f"x-aisa-operation-id: {json.dumps(operation['operationId'])}"
+                if destination.exists():
+                    text = destination.read_text()
+                    frontmatter, prose = localization.split_frontmatter(text)
+                    frontmatter = localization.replace_frontmatter_value(frontmatter, "title", localized_title)
+                    text = "---\n" + frontmatter + "\n---\n" + prose
+                    text = re.sub(r"^openapi:.*$", lambda _: f"openapi: {reference}", text, count=1, flags=re.M)
+                    if "x-aisa-operation-id:" not in text:
+                        text = text.replace("---\n", "---\n" + identity + "\n", 1)
+                    else:
+                        text = re.sub(r"^x-aisa-operation-id:.*$", lambda _: identity, text, count=1, flags=re.M)
+                else:
+                    text = f"---\ntitle: {title}\nopenapi: {reference}\n{identity}\n---\n"
+                # A small managed notice can change with status while all user prose
+                # remains intact, including on pre-existing pages.
+                begin, end = "{/* aisa-contract-status:start */}", "{/* aisa-contract-status:end */}"
+                text = re.sub(re.escape(begin) + r".*?" + re.escape(end) + r"\n?", "", text, flags=re.S)
+                if operation.get("x-aisa-status") == "disabled":
+                    notice = "当前未启用。" if language == "zh" else "Currently disabled."
+                    text += f"{begin}\n{notice}\n{end}\n"
+                if not destination.exists() or text != destination.read_text():
+                    changes[destination] = text
     for language in docs.get("navigation", {}).get("languages", []):
         prefix = "zh/" if language.get("language") == "zh" else ""
         for tab in language.get("tabs", []):

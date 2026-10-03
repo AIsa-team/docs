@@ -589,7 +589,8 @@ class PublicationWorkflowTests(unittest.TestCase):
         publish = next(step for step in steps if step.get("id") == "publish")
         stage_step = next(step for step in steps if step.get("name") == "Stage contracts")
         self.assertNotIn("if", stage_step, "feature branches must retain dry-run staging")
-        self.assertNotIn("if", workflow["jobs"]["compose"], "do not disable the whole dry-run job")
+        self.assertIn("github.event_name == 'workflow_dispatch'", workflow["jobs"]["compose"]["if"],
+                      "manual feature-branch dry runs must remain available while scheduled activation is dormant")
         cases = [
             ("refs/heads/main", "workflow_dispatch", True, "false", "true", True),
             ("refs/heads/feature", "workflow_dispatch", True, "true", "true", False),

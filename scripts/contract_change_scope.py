@@ -8,7 +8,8 @@ import subprocess
 
 def requires_artifact_check(paths):
     return any(path.startswith(('openapi/', 'api-reference/', 'zh/api-reference/'))
-               or path in ('openapi.yaml', 'docs.json') for path in paths)
+               or path in ('openapi.yaml', 'docs.json', 'api-reference.mdx',
+                           'zh/api-reference.mdx') for path in paths)
 
 
 def git_requires_artifact_check(root, base, head='HEAD'):

@@ -210,6 +210,12 @@ def main():
             if report['status'] != 'failed':
                 report['status'] = sources['status']
             report.setdefault('missing_inputs', []).append('current source-maintenance evidence')
+        from publication_surface import validate_surfaces, publication_hashes
+        try:
+            report['publication_surfaces'] = validate_surfaces(args.root)
+        except (ValueError, KeyError, TypeError, OSError) as exc:
+            report['status'] = 'failed'
+            report.setdefault('global_errors', []).append({'code': 'publication_surface_mismatch', 'detail': str(exc)})
         aggregate_path = args.root / 'openapi.yaml'
         if aggregate_path.exists():
             import runtime_consolidate_openapi as consolidate
@@ -234,10 +240,7 @@ def main():
             report['publication_artifact'] = {'openapi_sha256': hashlib.sha256(raw).hexdigest(),
                 'assessment_scope': 'formal producer artifact declarations and source maintenance; no execution',
                 'source_hashes': {name: row['source_hash'] for name, row in sources['sources'].items()},
-                'files_sha256': {path.relative_to(args.root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
-                    for path in sorted(set((args.root / 'openapi').glob('*.json')) |
-                                       set((args.root / 'openapi/upstream').glob('*.json')) |
-                                       {p for p in (args.root / 'openapi/registry.yaml', args.root / 'docs.json') if p.is_file()})},
+                'files_sha256': publication_hashes(args.root),
                 'baseline_ref': args.baseline_ref, 'published_ref': args.published_ref}
         else:
             if report['status'] != 'failed':

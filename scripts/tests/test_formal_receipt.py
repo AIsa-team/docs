@@ -13,7 +13,7 @@ from source_governance import acquisition_receipt, initial_policy, receipt_key
 
 
 class FormalReceiptTests(unittest.TestCase):
-    def run_check(self, source_receipt=True, tamper=False, unresolved=False):
+    def run_check(self, source_receipt=True, tamper=False, unresolved=False, surfaces=False, surface_mutation=None):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             upstream = root / 'openapi/upstream'; upstream.mkdir(parents=True)
@@ -29,6 +29,19 @@ class FormalReceiptTests(unittest.TestCase):
                 expected['components'] = {'schemas': {'Input': {'$ref': '#/components/schemas/Missing'}}}
                 raw = json.dumps(expected).encode()
             (root / 'openapi.yaml').write_bytes(raw if not tamper else raw + b'info: {title: altered}\n')
+            if surfaces:
+                from pull_openapi import generate_pages
+                document = {'openapi': '3.1.0', 'info': {'title': 'Fixture', 'x-aisa-document': {'document_hash': 'h'}},
+                            'paths': {'/one': {'get': {'operationId': 'one', 'responses': {'204': {'description': 'Empty'}}}}}}
+                (root / 'docs.json').write_text(json.dumps({'navigation': {'languages': [
+                    {'language': lang, 'tabs': [{'tab': title, 'groups': []}]}
+                    for lang, title in [('en', 'API Reference'), ('zh', 'API 参考')]]}}))
+                changes = {}; generate_pages(root, 'p', document, changes)
+                changes[root / 'openapi/p.json'] = json.dumps(document)
+                for path, content in changes.items():
+                    path.parent.mkdir(parents=True, exist_ok=True); path.write_text(content)
+                if surface_mutation:
+                    surface_mutation(root)
             report_path = root / 'report.json'
             with patch('check_contract_candidate.assess_candidate', return_value={
                 'status': 'passed', 'global_errors': [], 'missing_inputs': [],
@@ -59,6 +72,21 @@ class FormalReceiptTests(unittest.TestCase):
         status, report, _ = self.run_check(unresolved=True)
         self.assertEqual((status, report['status']), (1, 'failed'))
         self.assertEqual('aggregate_unresolved_reference', report['global_errors'][0]['code'])
+
+    def test_formal_receipt_binds_actual_language_schema_pages_and_navigation(self):
+        status, report, _ = self.run_check(surfaces=True)
+        self.assertEqual(status, 0)
+        self.assertEqual(report['publication_surfaces']['operations'], 1)
+        self.assertTrue({'openapi.yaml', 'docs.json', 'openapi/zh/p.json', 'api-reference/p/one.mdx',
+                         'zh/api-reference/p/one.mdx'} <= report['publication_artifact']['files_sha256'].keys())
+
+    def test_actual_language_navigation_or_identity_tampering_blocks_formal_receipt(self):
+        for mutation in (lambda root: (root / 'openapi/zh/p.json').unlink(),
+                         lambda root: (root / 'zh/api-reference/p/one.mdx').write_text('---\nopenapi: "openapi/zh/p.json GET /one"\nx-aisa-operation-id: "wrong"\n---\n'),
+                         lambda root: (root / 'docs.json').write_text('{"navigation":{}}')):
+            status, report, _ = self.run_check(surfaces=True, surface_mutation=mutation)
+            self.assertEqual((status, report['status']), (1, 'failed'))
+            self.assertEqual(report['global_errors'][0]['code'], 'publication_surface_mismatch')
 
 
 if __name__ == '__main__':

@@ -8,6 +8,8 @@ on:
       - 'openapi/**'
       - 'openapi.yaml'
       - 'docs.json'
+      - 'api-reference.mdx'
+      - 'zh/api-reference.mdx'
       - 'api-reference/**'
       - 'zh/api-reference/**'
   push:
@@ -18,6 +20,8 @@ on:
       - 'openapi/**'
       - 'openapi.yaml'
       - 'docs.json'
+      - 'api-reference.mdx'
+      - 'zh/api-reference.mdx'
       - 'api-reference/**'
       - 'zh/api-reference/**'
   workflow_dispatch:
@@ -42,6 +46,8 @@ jobs:
   code-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      RUNTIME_YAML_READER_MODULE: /tmp/runtime-yaml-reader/node_modules/js-yaml
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,6 +55,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install actual JavaScript YAML reader for publication regression
+        run: npm install --prefix /tmp/runtime-yaml-reader --no-audit --no-fund --ignore-scripts js-yaml@4.1.1
       - name: Install test dependencies
         run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
       - name: Test discovery, composition and preservation
@@ -62,6 +73,7 @@ jobs:
           python scripts/tests/w3_verification/prepare_full_catalog.py \
             --docs-root . \
             --archive scripts/tests/fixtures/w0-package/scripts/api-contract-acceptance/data/full-catalog.tar.gz \
+            --with-pages \
             --output /tmp/docs-candidate
       - name: Retain offline code acceptance result
         if: always()

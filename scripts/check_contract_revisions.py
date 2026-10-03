@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Compare public contract revisions. No provider calls or credentials required."""
 import argparse
+from datetime import datetime, timezone
+import hashlib
 import json
 import re
+import subprocess
 import time
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -39,6 +42,40 @@ def read_public(url):
 def update_state(errors, previous):
     counts = previous.get('consecutive', {})
     return {'checked_at': int(time.time()), 'consecutive': {error: counts.get(error, 0) + 1 for error in errors}}
+
+
+def monitor_timing(assessment, current, previous, expected_ref, source_hash):
+    """Retain first on-time completion only for this exact release identity.
+
+    Every current public surface is still checked. This cache only avoids
+    treating a completed release as forever overdue; strict acceptance ignores it.
+    """
+    from contract_activation import deadline
+    if not expected_ref:
+        return current, None
+    identity = {'docs_ref': expected_ref, 'openapi_sha256': source_hash,
+                'budget_start': current['budget_start'], 'phase': current['phase']}
+    observed = previous.get('convergence_observation', {})
+    retained = None
+    if observed.get('identity') == identity:
+        checked_at = observed.get('checked_at')
+        if type(checked_at) is int and 0 < checked_at <= assessment['checked_at']:
+            try:
+                first = deadline(current['budget_start'], current['phase'],
+                                 datetime.fromtimestamp(checked_at, timezone.utc))
+                if not first['deadline_breached']:
+                    retained = observed
+            except (ValueError, OverflowError, OSError):
+                pass
+    if assessment['status'] == 'passed':
+        if retained:
+            first['current_elapsed_seconds'] = current['elapsed_seconds']
+            first['observed_at'] = retained['checked_at']
+            first['scope'] = 'first on-time convergence; current public surfaces revalidated'
+            return first, retained
+        if not current['deadline_breached']:
+            retained = {'identity': identity, 'checked_at': assessment['checked_at']}
+    return current, retained
 
 
 def assess(documents, runtime=None, website=None, mcp=None, router=None,
@@ -86,14 +123,52 @@ def main():
     parser.add_argument('--evidence-dir', type=Path, help='Offline public metadata: runtime.json, website.json, mcp.json, router.json')
     parser.add_argument('--expected-docs-ref', help='Full immutable docs SHA required in MCP and Router publication metadata')
     parser.add_argument('--report', type=Path, help='Save dated assessment JSON; contains no provider requests')
+    parser.add_argument('--budget-start', help='UTC start recorded by the release owner; no inferred/reset deadline')
+    parser.add_argument('--budget-phase', choices=('candidate', 'convergence'), default='convergence')
+    parser.add_argument('--require-budget', action='store_true', help='Activated monitoring cannot run without the independently recorded start and expected SHA')
+    parser.add_argument('--selection-file', type=Path, help='Actual fixed source selected by the scheduled/manual recovery workflow')
     args = parser.parse_args()
-    if (args.evidence_dir or args.expected_docs_ref) and not args.acceptance:
+    if args.require_budget and (not args.budget_start or not args.expected_docs_ref):
+        assessment = {'status': 'not_assessed', 'missing_inputs': ['recorded budget start and independently selected Docs SHA'],
+                      'scope': 'activated monitor; no network or deadline inference'}
+        if args.report:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            args.report.write_text(json.dumps(assessment, indent=2) + '\n')
+        print(json.dumps(assessment))
+        return 3
+    if (args.evidence_dir or args.expected_docs_ref) and not (args.acceptance or args.require_budget):
         parser.error('--evidence-dir and --expected-docs-ref require --acceptance')
     if args.acceptance and not args.expected_docs_ref:
         parser.error('--acceptance requires --expected-docs-ref from an independently selected publication')
     if args.expected_docs_ref and not re.fullmatch(r'[0-9a-f]{40}', args.expected_docs_ref):
         parser.error('--expected-docs-ref must be a full Git SHA')
-    spec = yaml.safe_load((args.root / 'openapi.yaml').read_text())
+    if args.budget_start:
+        from contract_activation import deadline
+        try:
+            deadline(args.budget_start, args.budget_phase)
+        except ValueError as exc:
+            assessment = {'status': 'not_assessed', 'missing_inputs': ['valid independently recorded budget start'],
+                          'scope': 'budget validation before any fetch', 'error': str(exc)}
+            if args.report:
+                args.report.parent.mkdir(parents=True, exist_ok=True)
+                args.report.write_text(json.dumps(assessment, indent=2) + '\n')
+            print(json.dumps(assessment))
+            return 3
+    if args.selection_file:
+        from contract_activation import select_revision
+        selected = json.loads(args.selection_file.read_text())['selection']
+        selection = select_revision(selected['event'], selected['docs_ref'], selected['openapi_sha256'],
+                                    selected['docs_ref'], selected['openapi_sha256'])
+        if selection['docs_ref'] != args.expected_docs_ref:
+            raise ValueError('selected source differs from independently expected Docs SHA')
+        raw = subprocess.check_output(['git', 'show', selection['docs_ref'] + ':openapi.yaml'], cwd=args.root)
+        if hashlib.sha256(raw).hexdigest() != selection['openapi_sha256']:
+            raise ValueError('selected source bytes do not match exact publication hash')
+        spec = yaml.safe_load(raw)
+    else:
+        raw = (args.root / 'openapi.yaml').read_bytes()
+        spec = yaml.safe_load(raw)
+    source_hash = hashlib.sha256(raw).hexdigest()
     documents = spec.get('info', {}).get('x-aisa-document', {}).get('providers', {})
     targets = {
         'runtime': 'https://api.aisa.one/info/openapi.json',
@@ -108,6 +183,18 @@ def main():
         except Exception as exc:
             failures.append(f'{key}:unavailable:{type(exc).__name__}')
     assessment = assess(documents, **results, expected_docs_ref=args.expected_docs_ref, failures=failures)
+    # Strict acceptance neither reads nor writes prior monitor observations.
+    previous = json.loads(args.state.read_text()) if not args.acceptance and args.state.exists() else {}
+    observation = None
+    if args.budget_start:
+        from contract_activation import deadline
+        assessment['timing'] = deadline(args.budget_start, args.budget_phase)
+        if not args.acceptance:
+            assessment['timing'], observation = monitor_timing(
+                assessment, assessment['timing'], previous, args.expected_docs_ref, source_hash)
+        if assessment['timing']['deadline_breached']:
+            assessment['status'] = 'failed'
+            assessment['mismatches'].append('timing:deadline_breached')
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(assessment, indent=2, sort_keys=True) + '\n')
@@ -117,15 +204,16 @@ def main():
     # Scheduled monitoring observes the same convergence assessment as strict
     # acceptance, retaining only its existing two-consecutive-check escalation.
     failures = sorted(set(assessment['mismatches'] + assessment['missing_inputs']))
-    previous = json.loads(args.state.read_text()) if args.state.exists() else {}
     state = update_state(failures, previous)
+    if observation:
+        state['convergence_observation'] = observation
     args.state.parent.mkdir(parents=True, exist_ok=True)
     args.state.write_text(json.dumps(state, indent=2) + '\n')
     print(json.dumps({'verified_providers': sum(bool(p.get('document_hash')) for p in documents.values()),
                       'legacy_providers': sum(not bool(p.get('document_hash')) for p in documents.values()),
                       'assessment_status': assessment['status'],
                       'mismatches': state['consecutive']}, indent=2))
-    return 1 if any(count >= 2 for count in state['consecutive'].values()) else 0
+    return 1 if assessment.get('timing', {}).get('deadline_breached') or any(count >= 2 for count in state['consecutive'].values()) else 0
 
 if __name__ == '__main__':
     raise SystemExit(main())

@@ -42,6 +42,27 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 OPENAPI_DIR = os.path.join(REPO_ROOT, "openapi")
 
+
+class RuntimePublicationDumper(yaml.SafeDumper):
+    """Keep JSON strings strings across YAML readers with different resolvers."""
+
+
+def _publication_string(dumper, value):
+    # PyYAML and JavaScript YAML readers disagree about unquoted exponents,
+    # leading-zero identifiers and other implicit scalar types. Explicit string
+    # syntax preserves every source string, including future unknown formats.
+    return dumper.represent_scalar('tag:yaml.org,2002:str', value,
+                                   style='|' if '\n' in value else '"')
+
+
+RuntimePublicationDumper.add_representer(str, _publication_string)
+
+
+def publication_yaml(document):
+    return yaml.dump(document, Dumper=RuntimePublicationDumper,
+                     default_flow_style=False, sort_keys=False,
+                     allow_unicode=True, width=120)
+
 # The Mintlify placeholder spec — skip it
 SKIP_FILES = {"openapi.json", "pending.json", "coverage.json", "coverage-sources.json"}
 
@@ -539,13 +560,17 @@ def build_unified_spec():
 
 
 def main():
+    global OPENAPI_DIR
     parser = argparse.ArgumentParser(
         description="Consolidate AIsa OpenAPI specs into a single YAML file"
     )
     parser.add_argument(
         "--output", "-o", default=None, help="Output file path (default: stdout)"
     )
+    parser.add_argument('--root', help='Explicit candidate root; never changes the legacy consolidator')
     args = parser.parse_args()
+    if args.root:
+        OPENAPI_DIR = os.path.join(args.root, 'openapi')
 
     unified = build_unified_spec()
 
@@ -575,21 +600,7 @@ def main():
         file=sys.stderr,
     )
 
-    # Custom YAML representer for multiline strings
-    def str_representer(dumper, data):
-        if "\n" in data:
-            return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
-        return dumper.represent_scalar("tag:yaml.org,2002:str", data)
-
-    yaml.add_representer(str, str_representer)
-
-    output = yaml.dump(
-        unified,
-        default_flow_style=False,
-        sort_keys=False,
-        allow_unicode=True,
-        width=120,
-    )
+    output = publication_yaml(unified)
 
     # Prepend an autogeneration banner so anyone editing the served
     # file knows changes won't survive the next sync. YAML treats `#`

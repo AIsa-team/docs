@@ -1,6 +1,9 @@
 name: Pull runtime API contracts
 
 on:
+  # Dormant until BOTH the tracked plan and operator variable are enabled.
+  schedule:
+    - cron: '*/10 * * * *'
   workflow_dispatch:
     inputs:
       publish:
@@ -16,7 +19,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  activation-plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      enabled: ${{ steps.plan.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        run: |
+          python scripts/contract_activation.py > /tmp/activation-plan.json
+          echo "enabled=$(python -c 'import json; print(str(json.load(open("/tmp/activation-plan.json"))["activation_enabled"]).lower())')" >> "$GITHUB_OUTPUT"
   compose:
+    needs: activation-plan
+    if: github.event_name == 'workflow_dispatch' || (needs.activation-plan.outputs.enabled == 'true' && vars.RUNTIME_CONTRACT_ACTIVATION_ENABLED == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
