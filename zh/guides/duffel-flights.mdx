@@ -1,0 +1,230 @@
+---
+title: "Duffel 机票 API - 搜索、订票、改签与退票"
+excerpt: "通过 AIsa 网关调用 Duffel 机票 API：搜索航班、查询报价、下单出票、改签与退票。所有请求使用你的 AIsa API key 认证，按调用计费。"
+---
+
+通过 AIsa 网关调用 Duffel 机票 API：搜索航班、查询报价、下单出票、改签与退票。
+所有请求使用你的 AIsa API key 认证，按调用计费（见价格表）。
+
+## 快速开始
+
+Base URL：`https://api.aisa.one`
+
+```bash
+# 1. 搜索航班：纽约 → 亚特兰大，2026-11-11，1 名成人，经济舱
+curl -X POST "https://api.aisa.one/apis/v1/duffel/flights/offer-requests/create" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "slices": [
+        {"origin": "NYC", "destination": "ATL", "departure_date": "2026-11-11"}
+      ],
+      "passengers": [{"type": "adult"}],
+      "cabin_class": "economy"
+    }
+  }'
+```
+
+响应（节选）：
+
+```json
+{
+  "data": {
+    "id": "orq_0000BAzrX1jsN0lVbavyvg",
+    "passengers": [{"id": "pas_0000BAzrX1jsN0lVbavyvi", "type": "adult"}],
+    "offers": [
+      {
+        "id": "off_0000BAzrX1wdbYyQFAuAoz",
+        "total_amount": "70.48",
+        "total_currency": "USD",
+        "expires_at": "2026-11-01T12:00:00Z",
+        "slices": [
+          {
+            "segments": [
+              {
+                "origin": {"iata_code": "EWR"},
+                "destination": {"iata_code": "ATL"},
+                "departing_at": "2026-11-11T10:00:00Z",
+                "flight_number": "DL1234"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+记下 `offers[0].id`（下单用）和 `passengers[0].id`（乘机人信息回填用）。
+
+## 核心流程：三步出票
+
+```text
+① 创建搜索 ──► ② 刷新选中报价 ──► ③ 创建订单（出票）
+```
+
+### ② 下单前刷新报价（必做）
+
+Offer 会过期，价格以刷新返回为准：
+
+```bash
+curl "https://api.aisa.one/apis/v1/duffel/flights/offers/off_0000BAzrX1wdbYyQFAuAoz" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+### ③ 下单出票
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/duffel/flights/orders/create" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "selected_offers": ["off_0000BAzrX1wdbYyQFAuAoz"],
+      "payments": [
+        {"type": "balance", "amount": "70.48", "currency": "USD"}
+      ],
+      "passengers": [
+        {
+          "id": "pas_0000BAzrX1jsN0lVbavyvi",
+          "title": "mr", "gender": "m",
+          "given_name": "Tony", "family_name": "Stark",
+          "born_on": "1980-07-24",
+          "email": "passenger@example.com",
+          "phone_number": "+12125550000"
+        }
+      ]
+    }
+  }'
+```
+
+响应包含 `booking_reference`（航司订位编号）和 `documents`（电子票）。
+
+**注意：**
+
+* `payments.amount` 必须等于第 ② 步刷新返回的 `total_amount`
+* `passengers[].id` 必须用搜索响应里返回的 passenger id
+* 婴儿乘客（2 岁以下）必须通过成人的 `infant_passenger_id` 字段绑定，一名成人最多带一名婴儿
+
+## 端点总表
+
+| 端点 | 方法 | 路径（`/apis/v1/duffel/` 下） | 计费 |
+|---|---|---|---|
+| 创建航班搜索 | POST | `flights/offer-requests/create` | $0.02/次 |
+| 查询搜索 | GET | `flights/offer-requests/{id}` | $0.005/次 |
+| 搜索列表 | GET | `flights/offer-requests/list` | $0.005/次 |
+| 刷新报价 | GET | `flights/offers/{id}` | $0.005/次 |
+| 报价列表 | GET | `flights/offers/list` | $0.005/次 |
+| 座位图 | GET | `flights/seat-maps?offer_id=` | $0.005/次 |
+| 查询改签请求 | GET | `flights/order-change-requests/{id}` | $0.005/次 |
+| 查询退票申请 | GET | `flights/order-cancellations/{id}` | $0.005/次 |
+| **创建订单** | POST | `flights/orders/create` | 票面价 × ~1.05 |
+| hold 订单 | POST | `flights/orders/hold-create`（body 加 `"type":"hold"`） | 票面价 × ~1.05 |
+| 创建改签请求 | POST | `flights/order-change-requests/create` | 改签差额 × ~1.05 |
+| 确认改签 | POST | `flights/order-changes/create` | 改签差额 × ~1.05 |
+| 创建退票申请 | POST | `flights/order-cancellations/create` | 退款额 × ~1.05 |
+| 确认退票 | POST | `flights/order-cancellations/{id}/confirm` | — |
+
+> 交易类端点按订单实际金额计费（票面价/改签差额 × 服务费倍率，normal 1.05 / vip 1.04 / svip 1.03），下单前会按预估金额预授权。最终价格以调用时的实际结算为准。
+
+## 搜索参数详解
+
+| 参数 | 位置 | 必填 | 说明 |
+|---|---|---|---|
+| `slices[]` | body | 是 | 行程段：`origin`/`destination` 用 IATA 机场码（`JFK`）或城市码（`NYC`）+ `departure_date`（YYYY-MM-DD）；往返放两个 slice |
+| `passengers[]` | body | 是 | 成人 `{"type":"adult"}`；18 岁以下必须给 `age` 整数 |
+| `cabin_class` | body | 否 | `economy` / `premium_economy` / `business` / `first` |
+| `max_connections` | body | 否 | 每段最大中转数，默认 1，`0` 为直飞 |
+| `limit` / `after` | query | 否 | 列表端点分页（limit 1-200，默认 50；用响应 `meta.after` 翻页） |
+
+## 改签与退票
+
+改签是两步操作——先创建请求获取改签报价，再确认：
+
+```bash
+# 1. 创建改签请求（查询改签报价）
+curl -X POST "https://api.aisa.one/apis/v1/duffel/flights/order-change-requests/create" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {
+      "order_id": "ord_0000BAzrYIJiDdmFJKIhcy",
+      "slices": {
+        "add": [
+          {"origin": "JFK", "destination": "ATL", "departure_date": "2026-11-12", "cabin_class": "economy"}
+        ],
+        "remove": ["sli_0000BAzrYIJiDdmFJKIhc1"]
+      }
+    }
+  }'
+```
+
+响应含 `order_change_offers[]`（改签差价 `change_total_amount`、罚金 `penalty_total_amount`）。
+
+```bash
+# 2. 确认改签（传选中的改签报价 id）
+curl -X POST "https://api.aisa.one/apis/v1/duffel/flights/order-changes/create" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"data": {"selected_order_change_offer": "oco_..."}}'
+```
+
+退票同样是两步——先取退款报价，再确认：
+
+```bash
+# 1. 创建退票申请（响应含 refund_amount；可能为 "0.00" 不可退）
+curl -X POST "https://api.aisa.one/apis/v1/duffel/flights/order-cancellations/create" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"data": {"order_id": "ord_0000BAzrYIJiDdmFJKIhcy"}}'
+
+# 2. 确认退票（只能确认最近一次创建的退票申请）
+curl -X POST "https://api.aisa.one/apis/v1/duffel/flights/order-cancellations/ore_.../confirm" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+**改签约束：** 新行程舱位必须与原订单一致。
+
+## 错误处理
+
+非 2xx 响应为 JSON 错误体（Duffel 原样透传）：
+
+```json
+{
+  "errors": [
+    {
+      "type": "validation_error",
+      "message": "Field 'passengers' can't be blank",
+      "source": {"field": "passengers", "pointer": "/passengers"}
+    }
+  ],
+  "meta": {"request_id": "GNqqw-10xEheB5YAQuCC"}
+}
+```
+
+* **422** 参数校验失败（检查 body 结构）
+* **404** offer/order 不存在或已过期（重新搜索）
+* **429** 触发限流（指数退避重试）
+* 计费规则：**失败请求不收费**（4xx/5xx 自动免计费）
+
+## 常见问题
+
+**Q: offer 多久过期？**
+
+通常几十分钟内，搜索响应的每个 offer 有 `expires_at`。下单前务必刷新报价；过期后需重新搜索。
+
+**Q: 为什么下单报金额不匹配？**
+
+`payments.amount` 必须与刷新后的 `total_amount` 完全一致（字符串十进制，如 `"70.48"`）。票价是实时的。
+
+**Q: 能查所有航司吗？**
+
+覆盖范围以 Duffel 供应商网络为准（数百家真实航司，含全日空、汉莎、美联航等；部分廉航不在覆盖内）。
+
+**Q: 下单是真实出票吗？计费怎么算？**
+
+是。下单会向航司真实订座并出具电子票，费用 = 票面价 + 服务费（约 5%），通过你的 AIsa 余额结算（响应 `live_mode: true`）。搜索、改签、退票前请仔细核对行程与乘机人信息——出票后的退改规则以航司客规为准，可能产生罚金且不一定全额退款。建议先用低价航线验证完整流程。
