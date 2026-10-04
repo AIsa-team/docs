@@ -1,5 +1,6 @@
 import sys
 import unittest
+import yaml
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from check_contract_revisions import assess, compare, main, update_state
