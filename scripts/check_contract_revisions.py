@@ -79,7 +79,8 @@ def monitor_timing(assessment, current, previous, expected_ref, source_hash):
 
 
 def assess(documents, runtime=None, website=None, mcp=None, router=None,
-           expected_docs_ref=None, failures=()):
+           expected_docs_ref=None, failures=(), website_version=None,
+           expected_openapi_sha256=None):
     """Strict, dated convergence evidence, separate from monitor escalation."""
     verified = {key: value for key, value in documents.items() if value.get('document_hash')}
     missing = list(failures)
@@ -91,6 +92,13 @@ def assess(documents, runtime=None, website=None, mcp=None, router=None,
     errors = []
     if expected_docs_ref and not re.fullmatch(r'[0-9a-f]{40}', expected_docs_ref):
         raise ValueError('expected docs revision must be a full Git SHA')
+    if expected_openapi_sha256 and not re.fullmatch(r'[0-9a-f]{64}', expected_openapi_sha256):
+        raise ValueError('expected aggregate content hash must be a full SHA-256')
+    if expected_docs_ref or expected_openapi_sha256:
+        if not isinstance(website_version, dict):
+            missing.append('website:source_version_unavailable')
+        if not expected_openapi_sha256:
+            missing.append('docs:aggregate_content_hash_unavailable')
     if not missing:
         errors = compare(documents, **surfaces)
         represented = set()
@@ -106,12 +114,20 @@ def assess(documents, runtime=None, website=None, mcp=None, router=None,
                 errors.append('mcp:docs_revision_mismatch')
             if router.get('docs_commit') != expected_docs_ref:
                 errors.append('tool-router:docs_revision_mismatch')
+        if expected_docs_ref or expected_openapi_sha256:
+            if website_version.get('mode') != 'formal':
+                errors.append('website:source_mode_not_formal')
+            if expected_docs_ref and website_version.get('docsRevision') != expected_docs_ref:
+                errors.append('website:docs_revision_mismatch')
+            if website_version.get('contentHash') != expected_openapi_sha256:
+                errors.append('website:aggregate_content_hash_mismatch')
     return {'checked_at': int(time.time()),
             'status': 'not_assessed' if missing else ('failed' if errors else 'passed'),
             'scope': 'public_contract_convergence',
             'verified_providers': len(verified),
             'legacy_providers': len(documents) - len(verified),
             'expected_docs_ref': expected_docs_ref,
+            'expected_openapi_sha256': expected_openapi_sha256,
             'missing_inputs': sorted(set(missing)), 'mismatches': sorted(set(errors))}
 
 
@@ -176,13 +192,18 @@ def main():
         'mcp': 'https://mcp.aisa.one/.well-known/mcp.json',
         'router': 'https://tools.aisa.one/.well-known/catalog.json',
     }
+    if args.expected_docs_ref:
+        targets['website_version'] = 'https://aisa.one/api/contracts/version'
     results, failures = {}, []
     for key, url in targets.items():
         try:
-            results[key] = json.loads((args.evidence_dir / f'{key}.json').read_text()) if args.evidence_dir else read_public(url)
+            filename = 'website-version' if key == 'website_version' else key
+            results[key] = json.loads((args.evidence_dir / f'{filename}.json').read_text()) if args.evidence_dir else read_public(url)
         except Exception as exc:
             failures.append(f'{key}:unavailable:{type(exc).__name__}')
-    assessment = assess(documents, **results, expected_docs_ref=args.expected_docs_ref, failures=failures)
+    assessment = assess(documents, **results, expected_docs_ref=args.expected_docs_ref,
+                        expected_openapi_sha256=source_hash if args.expected_docs_ref else None,
+                        failures=failures)
     # Strict acceptance neither reads nor writes prior monitor observations.
     previous = json.loads(args.state.read_text()) if not args.acceptance and args.state.exists() else {}
     observation = None

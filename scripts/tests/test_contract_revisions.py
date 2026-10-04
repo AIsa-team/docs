@@ -5,6 +5,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from check_contract_revisions import assess, compare, main, update_state
 
 class RevisionTests(unittest.TestCase):
+    def assess(self, *values, **kwargs):
+        kwargs.setdefault('website_version', {'mode': 'formal', 'docsRevision': 'a' * 40, 'contentHash': 'd' * 64})
+        kwargs.setdefault('expected_openapi_sha256', 'd' * 64)
+        return assess(*values, **kwargs)
+
+    def write_website_version(self, root):
+        import hashlib
+        import json
+        (root / 'website-version.json').write_text(json.dumps({'mode': 'formal', 'docsRevision': 'a' * 40,
+            'contentHash': hashlib.sha256((root / 'openapi.yaml').read_bytes()).hexdigest()}))
+
     def test_grouped_facts_and_consumers_use_per_provider_hashes(self):
         documents = {'group': {'document_hash': 'document', 'catalogs': {'a': {'x-aisa-document': {'facts_hash': 'facts'}}}}, 'legacy': {}}
         runtime = {'providers': [{'id': 'a', 'facts_hash': 'facts'}]}
@@ -34,30 +45,77 @@ class RevisionTests(unittest.TestCase):
         self.assertIn('docs:no_runtime_composed_provider_metadata', result['missing_inputs'])
 
     def test_matching_hashes_and_locked_revisions_pass(self):
-        result = assess(*self.fixture(), expected_docs_ref='a' * 40)
+        result = self.assess(*self.fixture(), expected_docs_ref='a' * 40)
         self.assertEqual(result['status'], 'passed')
         self.assertEqual(result['scope'], 'public_contract_convergence')
         self.assertGreater(result['checked_at'], 0)
+
+    def test_matching_provider_hashes_cannot_hide_wrong_website_source(self):
+        for field, replacement, expected in [
+                ('docsRevision', 'b' * 40, 'website:docs_revision_mismatch'),
+                ('contentHash', 'e' * 64, 'website:aggregate_content_hash_mismatch'),
+                ('mode', 'legacy', 'website:source_mode_not_formal')]:
+            with self.subTest(field=field):
+                version = {'mode': 'formal', 'docsRevision': 'a' * 40, 'contentHash': 'd' * 64}
+                version[field] = replacement
+                result = self.assess(*self.fixture(), expected_docs_ref='a' * 40, website_version=version)
+                self.assertEqual(result['status'], 'failed')
+                self.assertEqual(result['mismatches'], [expected])
+
+    def test_strict_source_version_and_aggregate_hash_are_required(self):
+        result = self.assess(*self.fixture(), expected_docs_ref='a' * 40, website_version=None)
+        self.assertEqual(result['status'], 'not_assessed')
+        self.assertIn('website:source_version_unavailable', result['missing_inputs'])
+        result = self.assess(*self.fixture(), expected_docs_ref='a' * 40, expected_openapi_sha256=None)
+        self.assertEqual(result['status'], 'not_assessed')
+        self.assertIn('docs:aggregate_content_hash_unavailable', result['missing_inputs'])
+
+    def test_actual_strict_cli_reads_public_website_version_before_acceptance(self):
+        import hashlib
+        import json
+        import tempfile
+        from unittest.mock import patch
+        documents, *values = self.fixture()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            raw = yaml.safe_dump({'info': {'x-aisa-document': {'providers': documents}}})
+            (root / 'openapi.yaml').write_text(raw)
+            urls = dict(zip(('https://api.aisa.one/info/openapi.json',
+                'https://aisa.one/.well-known/agent-card.json',
+                'https://mcp.aisa.one/.well-known/mcp.json',
+                'https://tools.aisa.one/.well-known/catalog.json'), values))
+            version_url = 'https://aisa.one/api/contracts/version'
+            urls[version_url] = {'mode': 'formal', 'docsRevision': 'b' * 40,
+                'contentHash': hashlib.sha256(raw.encode()).hexdigest()}
+            with patch.object(sys, 'argv', ['monitor', '--root', str(root), '--acceptance',
+                    '--expected-docs-ref', 'a' * 40, '--report', str(root / 'report.json')]), \
+                    patch('check_contract_revisions.read_public', side_effect=lambda url: urls[url]) as reader, \
+                    patch('builtins.print'):
+                self.assertEqual(main(), 1)
+            self.assertIn(version_url, [call.args[0] for call in reader.call_args_list])
+            report = json.loads((root / 'report.json').read_text())
+            self.assertEqual(report['mismatches'], ['website:docs_revision_mismatch'])
+            self.assertEqual(report['expected_openapi_sha256'], urls[version_url]['contentHash'])
 
     def test_matching_hashes_do_not_hide_wrong_consumer_revision(self):
         values = list(self.fixture())
         values[3]['docsRefs'].append('b' * 40)
         values[4]['docs_commit'] = 'b' * 40
-        result = assess(*values, expected_docs_ref='a' * 40)
+        result = self.assess(*values, expected_docs_ref='a' * 40)
         self.assertEqual(result['status'], 'failed')
         self.assertEqual(result['mismatches'], ['mcp:docs_revision_mismatch', 'tool-router:docs_revision_mismatch'])
 
     def test_new_runtime_catalog_cannot_be_absent_from_every_consumer(self):
         values = list(self.fixture())
         values[1]['providers'].append({'id': 'new_provider', 'facts_hash': 'newfacts'})
-        result = assess(*values, expected_docs_ref='a' * 40)
+        result = self.assess(*values, expected_docs_ref='a' * 40)
         self.assertEqual(result['status'], 'failed')
         self.assertEqual(result['mismatches'], ['new_provider:docs:catalog_missing'])
 
     def test_runtime_projection_pending_is_not_deployed_acceptance(self):
         values = list(self.fixture())
         values[1]['pending_providers'] = [{'id': 'new_provider', 'endpoint_count': 1}]
-        result = assess(*values, expected_docs_ref='a' * 40)
+        result = self.assess(*values, expected_docs_ref='a' * 40)
         self.assertEqual(result['status'], 'not_assessed')
         self.assertIn('runtime:new_provider:projection_pending', result['missing_inputs'])
 
@@ -81,6 +139,7 @@ class RevisionTests(unittest.TestCase):
             (root / 'openapi.yaml').write_text(yaml.safe_dump({'info': {'x-aisa-document': {'providers': documents}}}))
             for name, value in zip(('runtime', 'website', 'mcp', 'router'), surfaces):
                 (root / f'{name}.json').write_text(json.dumps(value))
+            self.write_website_version(root)
             state = root / 'state.json'
             state.write_text('{"consecutive":{"old":1}}')
             report = root / 'report.json'
@@ -196,6 +255,7 @@ class RevisionTests(unittest.TestCase):
             (root / 'openapi.yaml').write_text(yaml.safe_dump({'info': {'x-aisa-document': {'providers': documents}}}))
             for name, value in zip(('runtime', 'website', 'mcp', 'router'), values):
                 (root / f'{name}.json').write_text(json.dumps(value))
+            self.write_website_version(root)
             state = root / 'state.json'
             previous = '{"consecutive":{"alpha:mcp:document_hash_mismatch":2}}'
             state.write_text(previous)

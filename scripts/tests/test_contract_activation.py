@@ -66,6 +66,8 @@ class ActivationTests(unittest.TestCase):
             state = root / 'state.json'; report = root / 'report.json'
             urls = dict(zip(('https://api.aisa.one/info/openapi.json', 'https://aisa.one/.well-known/agent-card.json',
                 'https://mcp.aisa.one/.well-known/mcp.json', 'https://tools.aisa.one/.well-known/catalog.json'), surfaces.values()))
+            urls['https://aisa.one/api/contracts/version'] = {'mode': 'formal', 'docsRevision': 'a' * 40,
+                'contentHash': hashlib.sha256(original.encode()).hexdigest()}
             def run(now, start=began, expected='a'*40, acceptance=False):
                 argv = ['monitor', '--root', str(root), '--state', str(state), '--report', str(report),
                         '--require-budget', '--expected-docs-ref', expected, '--budget-start', start.isoformat()]
@@ -150,6 +152,8 @@ class ActivationTests(unittest.TestCase):
             surfaces['mcp']['docsRefs'] = [old]; surfaces['router']['docs_commit'] = old
             urls = dict(zip(('https://api.aisa.one/info/openapi.json', 'https://aisa.one/.well-known/agent-card.json',
                 'https://mcp.aisa.one/.well-known/mcp.json', 'https://tools.aisa.one/.well-known/catalog.json'), surfaces.values()))
+            urls['https://aisa.one/api/contracts/version'] = {'mode': 'formal', 'docsRevision': expected,
+                'contentHash': digest}
             report = root / 'report.json'
             def run(began):
                 argv = ['monitor', '--root', str(root), '--state', str(root/'state.json'), '--require-budget',
