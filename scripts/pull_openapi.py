@@ -40,7 +40,12 @@ def operations(spec):
 def assert_identities(previous: dict, current: dict) -> None:
     old = {(p, m): op["operationId"] for p, m, op in operations(previous)}
     new = {(p, m): op["operationId"] for p, m, op in operations(current)}
+    current_ids = set(new.values())
     for route, operation_id in old.items():
+        # Runtime owns the current path/method. An immutable ID may move, and
+        # generate_pages rebinds its existing page URLs to the current route.
+        if route not in new and operation_id in current_ids:
+            continue
         if new.get(route) != operation_id:
             raise ValueError(f"published identity changed or disappeared: {operation_id} ({route})")
 
@@ -52,9 +57,12 @@ def retain_unregistered_history(document: dict, facts: dict, history: dict) -> l
     A failed composition or changed ID on a present path must still fail review.
     """
     prefix = normalize_paths(facts)
+    current_ids = {op['operationId'] for _, _, op in operations(document)}
     retained = []
     for path, method, old in operations(history):
         if path in prefix.get("paths", {}):
+            continue
+        if old['operationId'] in current_ids:
             continue
         operation = resolve_fragment(old, history, document, "retained_history.json")
         # Page links are added and hashed by generate_pages after composition.
@@ -77,11 +85,20 @@ def fetch_json(url: str, etag: str | None = None):
         headers["If-None-Match"] = etag
     try:
         with urlopen(Request(url, headers=headers), timeout=30) as response:
+            reject_stale_runtime_response(getattr(response, 'headers', {}))
             return source_json_load(response)
     except HTTPError as exc:
         if exc.code == 304:
+            reject_stale_runtime_response(exc.headers or {})
             return None
         raise
+
+
+def reject_stale_runtime_response(headers):
+    # Last-good HTTP responses are useful to readers, but cannot attest that
+    # current runtime bindings were checked for a new publication candidate.
+    if re.search(r'(?:^|,)\s*110\s', headers.get('Warning', '')):
+        raise URLError('runtime_contract_unavailable: stale runtime response')
 
 
 def slug(value):
@@ -125,11 +142,18 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
     previous_ids = {(previous_prefix + path, method): op.get('operationId')
                     for path, method, op in operations(previous or {})}
     known_ids = {}
+    page_documents = {}
     for spec, old_prefix, path, method, page in references:
         header, _ = localization.split_frontmatter((root / (page + '.mdx')).read_text())
         identity = (yaml.safe_load(header) or {}).get('x-aisa-operation-id')
         if not identity and spec == f'openapi/{provider}.json':
             identity = previous_ids.get((old_prefix + path, method))
+        if not identity:
+            # A stable endpoint can move to another provider output as well as
+            # another path. Legacy pages may not yet carry the managed ID.
+            if spec not in page_documents:
+                page_documents[spec] = read_json(root / spec, {})
+            identity = page_documents[spec].get('paths', {}).get(path, {}).get(method, {}).get('operationId')
         if identity:
             known_ids.setdefault(identity, set()).add(page)
     current_prefix = urlsplit((document.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
@@ -448,7 +472,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
     for provider, (document, facts, history, previous, unresolved) in ready.items():
         history = copy.deepcopy(history)
         for path, method, op in list(operations(history)):
-            targets = {dest for p, m, oid, dest in moved if (p, m, oid) == (path, method, op.get("operationId"))}
+            targets = {dest for p, m, oid, dest in moved if oid == op.get("operationId")}
             if targets and provider not in targets:
                 del history["paths"][path][method]
                 if not (set(history["paths"][path]) & METHODS):
