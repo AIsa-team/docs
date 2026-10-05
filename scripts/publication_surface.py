@@ -9,6 +9,7 @@ import yaml
 
 from compose_openapi import METHODS
 from runtime_localize_openapi_zh import strip_translatable
+from identity_compatibility import published_history, validate_document_identities, canonicalize_localized
 
 
 def publication_files(root):
@@ -42,16 +43,19 @@ def navigation_pages(node):
             yield from navigation_pages(value)
 
 
-def validate_surfaces(root):
+def validate_surfaces(root, published_ref=None):
     root = Path(root)
-    documents = {}
+    documents, all_documents = {}, {}
     for path in (root / 'openapi').glob('*.json'):
         document = json.loads(path.read_text())
+        all_documents[path.stem] = document
         if document.get('info', {}).get('x-aisa-document', {}).get('document_hash'):
             documents[path.stem] = document
     # The unchanged legacy workflow remains outside runtime activation.
     if not documents:
         return {'status': 'passed', 'scope': 'legacy publication; no runtime surface claim', 'providers': 0}
+    history = published_history(root, published_ref)
+    validate_document_identities(all_documents, history)
     identities = {operation.get('operationId') for document in documents.values()
                   for item in document.get('paths', {}).values() for method, operation in item.items()
                   if method in METHODS}
@@ -99,21 +103,28 @@ def validate_surfaces(root):
             if bool(match[1]) != (language == 'zh'):
                 raise ValueError('page references wrong language: ' + str(path))
             provider, method, route = match[2], match[3].lower(), match[4]
-            operation = documents[provider].get('paths', {}).get(route, {}).get(method)
+            source_document = documents[provider]
+            if language == 'zh':
+                locale_path = root / 'openapi/zh' / (provider + '.json')
+                if not locale_path.is_file():
+                    raise ValueError('missing localized runtime schema: ' + provider)
+                source_document = json.loads(locale_path.read_text())
+            operation = source_document.get('paths', {}).get(route, {}).get(method)
             if method not in METHODS or not isinstance(operation, dict):
                 raise ValueError('page references missing operation: ' + str(path))
             identity = operation.get('operationId')
             if not identity or header.get('x-aisa-operation-id') != identity:
                 raise ValueError('page operation identity mismatch: ' + str(path))
             page = path.relative_to(root).with_suffix('').as_posix()
-            found[language].setdefault((provider, route, method, identity), set()).add(page)
+            canonical = operation.get('x-aisa-identity', {}).get('canonical_operation_id', identity)
+            found[language].setdefault((provider, route, method, canonical), set()).add(page)
     count = 0
     for provider, document in documents.items():
         localized_path = root / 'openapi/zh' / (provider + '.json')
         if not localized_path.is_file():
             raise ValueError('missing localized runtime schema: ' + provider)
         localized = json.loads(localized_path.read_text())
-        if strip_translatable(document) != strip_translatable(localized):
+        if strip_translatable(document) != strip_translatable(canonicalize_localized(localized, history)):
             raise ValueError('localized runtime protocol changed: ' + provider)
         for route, item in document.get('paths', {}).items():
             for method, operation in item.items():

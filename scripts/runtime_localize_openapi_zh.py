@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Generate Chinese OpenAPI specs and API-reference MDX mirrors.
 
-Translation is stored in a stable source-string catalog. The script never edits
-runtime identifiers: paths, methods, operationIds, parameter/property names,
+Translation is stored in a stable source-string catalog. The script preserves
+runtime identifiers: paths, methods, parameter/property names,
 $refs, enum values, examples, servers, and security configuration are copied
-unchanged from the English source.
+unchanged from the English source. A proved historical Chinese operationId
+remains the actual Chinese machine ID with an explicit canonical association.
 
 Typical workflow:
   python scripts/runtime_localize_openapi_zh.py extract
@@ -371,19 +372,31 @@ def replace_frontmatter_value(frontmatter: str, field: str, value: str) -> str:
     return frontmatter[:match.start()] + f"{field}: {encoded}" + frontmatter[match.end():]
 
 
-def generate() -> None:
+def generate(published_ref=None) -> None:
+    from identity_compatibility import published_history, attach_history, localize_identities, validate_document_identities
     catalog = load_catalog()
+    history = published_history(ROOT, published_ref)
     missing = [e["source"] for e in catalog["entries"].values() if not e.get("translation")]
     if missing:
         raise SystemExit(f"catalog has {len(missing)} untranslated strings; run translate first")
 
-    ZH_OPENAPI_DIR.mkdir(parents=True, exist_ok=True)
+    sources = {}
     for spec_path in referenced_spec_paths():
         try:
             source = json.loads(spec_path.read_text())
         except json.JSONDecodeError as exc:
             raise RuntimeError(f"invalid OpenAPI JSON {spec_path.relative_to(ROOT)}: {exc}") from exc
+        attach_history(source, history)
+        sources[spec_path] = source
+    all_sources = {p.stem: json.loads(p.read_text()) for p in OPENAPI_DIR.glob('*.json')}
+    all_sources.update({p.stem: source for p, source in sources.items()})
+    validate_document_identities(all_sources, history)
+    ZH_OPENAPI_DIR.mkdir(parents=True, exist_ok=True)
+    for spec_path, source in sources.items():
+        if json.loads(spec_path.read_text()) != source:
+            spec_path.write_text(json.dumps(source, ensure_ascii=False, indent=2) + '\n')
         localized = localize_tree(source, catalog)
+        localized = localize_identities(localized)
         (ZH_OPENAPI_DIR / spec_path.name).write_text(json.dumps(localized, ensure_ascii=False, indent=2) + "\n")
 
     generated = 0
@@ -408,6 +421,16 @@ def generate() -> None:
             count=1,
             flags=re.M,
         )
+        reference = re.search(r'^openapi:\s*["\']?openapi/zh/([^"\'\s]+)\s+(\w+)\s+([^"\'\s]+)', frontmatter, re.M)
+        if reference:
+            spec = json.loads((ZH_OPENAPI_DIR / reference[1]).read_text())
+            operation = spec.get('paths', {}).get(reference[3], {}).get(reference[2].lower(), {})
+            if operation.get('x-aisa-identity'):
+                field = 'x-aisa-operation-id'
+                if frontmatter_value(frontmatter, field) is None:
+                    frontmatter += '\n' + field + ': ' + json.dumps(operation['operationId'])
+                else:
+                    frontmatter = replace_frontmatter_value(frontmatter, field, operation['operationId'])
         localized_body = translation(catalog, body) if body.strip() else body
         # Route links between localized API pages to the canonical Chinese mirror.
         localized_body = localized_body.replace("](/api-reference/", "](/zh/api-reference/")
@@ -543,8 +566,15 @@ def strip_translatable(node: Any, path: tuple[str, ...] = ()) -> Any:
     return node
 
 
-def validate() -> None:
+def validate(published_ref=None) -> None:
+    from identity_compatibility import published_history, validate_document_identities, canonicalize_localized
+    history = published_history(ROOT, published_ref)
     failures: list[str] = []
+    all_sources = {p.stem: json.loads(p.read_text()) for p in OPENAPI_DIR.glob('*.json')}
+    try:
+        validate_document_identities(all_sources, history)
+    except ValueError as exc:
+        failures.append('invalid identity namespace: ' + str(exc))
     source_specs = referenced_spec_paths()
     for source_path in source_specs:
         target_path = ZH_OPENAPI_DIR / source_path.name
@@ -557,8 +587,12 @@ def validate() -> None:
         except json.JSONDecodeError as exc:
             failures.append(f"invalid JSON: {exc}")
             continue
-        if strip_translatable(source) != strip_translatable(target):
-            failures.append(f"structural difference: {source_path.name}")
+        try:
+            validate_document_identities({source_path.stem: source}, history)
+            if strip_translatable(source) != strip_translatable(canonicalize_localized(target, history)):
+                failures.append(f"structural difference: {source_path.name}")
+        except ValueError as exc:
+            failures.append(f"invalid historical identity: {source_path.name}: {exc}")
 
     source_pages = []
     for source_path in sorted(API_DIR.rglob("*.mdx")):
@@ -637,8 +671,9 @@ def main() -> None:
     translate_parser.add_argument("--limit", type=int)
     translate_parser.add_argument("--workers", type=int, default=1)
     translate_parser.add_argument("--worker", type=int, default=0)
-    sub.add_parser("generate")
-    sub.add_parser("validate")
+    for command in ('generate', 'validate'):
+        command_parser = sub.add_parser(command)
+        command_parser.add_argument('--published-ref', help='Full immutable publication base for historical identity proofs')
     sub.add_parser("extract-nav")
     sub.add_parser("translate-nav")
     sub.add_parser("sync-nav")
@@ -648,9 +683,9 @@ def main() -> None:
     elif args.command == "translate":
         translate(args.batch_size, args.limit, args.workers, args.worker)
     elif args.command == "generate":
-        generate()
+        generate(args.published_ref)
     elif args.command == "validate":
-        validate()
+        validate(args.published_ref)
     elif args.command == "extract-nav":
         extract_nav()
     elif args.command == "translate-nav":

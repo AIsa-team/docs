@@ -22,6 +22,7 @@ from compose_openapi import METHODS, compose, digest, resolve_fragment
 from import_upstream import import_source
 from runtime_registry import discover, combine_facts, public_mirror_index, published_documents, previous_for_facts, coverage_rows
 from source_json import loads as source_json_loads, load as source_json_load, UnsupportedNumericPrecision
+from identity_compatibility import published_history, attach_history, localize_identities, validate_document_identities
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -177,7 +178,10 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                         pass  # Current English title is safer than a stale translation.
                 title = json.dumps(localized_title, ensure_ascii=False)
                 reference = json.dumps(f"{spec_path} {method.upper()} {path}")
-                identity = f"x-aisa-operation-id: {json.dumps(operation['operationId'])}"
+                machine_id = operation['operationId']
+                if language == 'zh' and operation.get('x-aisa-identity'):
+                    machine_id = operation['x-aisa-identity']['historical_aliases'][0]['operation_id']
+                identity = f"x-aisa-operation-id: {json.dumps(machine_id)}"
                 if destination.exists():
                     text = destination.read_text()
                     frontmatter, prose = localization.split_frontmatter(text)
@@ -233,6 +237,7 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
     # Use the existing deterministic translation catalog. Untranslated strings
     # retain English; no paid/model translation is invoked by scheduled pulls.
     localized = localization.localize_tree(document, catalog, allow_untranslated=True)
+    localized = localize_identities(localized)
     changes[root / f"openapi/zh/{provider}.json"] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
 
 
@@ -243,6 +248,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
     if not isinstance(registry.get("providers"), dict):
         raise ValueError("registry providers must be a mapping")
     changes = {}
+    identity_history = published_history(root, (readiness_context or {}).get('published_ref'))
     index = read_json(facts_dir / 'index.json', {}) if facts_dir else {}
     if registry.get("auto_register"):
         category = read_json(facts_dir / "category.json") if facts_dir else fetch_json(f"{base_url.rstrip('/')}/info/apis/category")
@@ -442,6 +448,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             if readiness_context is not None:
                 recomposed_documents[provider] = copy.deepcopy(document)
             continue
+        attach_history(document, identity_history)
         if with_pages:
             generate_pages(root, provider, document, changes, previous, decorate_links=not entry.get("pin"), page_references=page_references)
         old_hash = previous.get("info", {}).get("x-aisa-document", {}).get("document_hash")
@@ -479,6 +486,9 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                     del history["paths"][path]
         unresolved.extend(retain_unregistered_history(document, facts, history))
         assert_identities(history, normalize_paths(document))
+        attach_history(document, identity_history)
+        if provider in recomposed_documents:
+            attach_history(recomposed_documents[provider], identity_history)
         if with_pages:
             generate_pages(root, provider, document, changes, previous, page_references=page_references)
         old_hash = previous.get("info", {}).get("x-aisa-document", {}).get("document_hash")
@@ -523,6 +533,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         if path.parent == root / 'openapi' and path.suffix == '.json' and path.name not in SKIP_FILES:
             documents[path.stem] = json.loads(content)
     from gap_evidence import response_gap_rows
+    validate_document_identities(documents, identity_history)
     coverage['response_gaps'] = {provider: response_gap_rows(documents.get(provider, {}), facts_by_provider.get(provider, {}), rows)
         for provider, rows in coverage['providers'].items()}
     if registry.get("auto_register"):
