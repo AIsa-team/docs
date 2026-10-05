@@ -56,6 +56,18 @@ def validate_surfaces(root, published_ref=None):
         return {'status': 'passed', 'scope': 'legacy publication; no runtime surface claim', 'providers': 0}
     history = published_history(root, published_ref)
     validate_document_identities(all_documents, history)
+    localized_documents = {}
+
+    def localized_document(provider):
+        # Scope the cache to this assessment. Repeated pages of a large
+        # provider share one parse, while the next assessment rereads bytes.
+        if provider not in localized_documents:
+            path = root / 'openapi/zh' / (provider + '.json')
+            if not path.is_file():
+                raise ValueError('missing localized runtime schema: ' + provider)
+            localized_documents[provider] = json.loads(path.read_text())
+        return localized_documents[provider]
+
     identities = {operation.get('operationId') for document in documents.values()
                   for item in document.get('paths', {}).values() for method, operation in item.items()
                   if method in METHODS}
@@ -105,10 +117,7 @@ def validate_surfaces(root, published_ref=None):
             provider, method, route = match[2], match[3].lower(), match[4]
             source_document = documents[provider]
             if language == 'zh':
-                locale_path = root / 'openapi/zh' / (provider + '.json')
-                if not locale_path.is_file():
-                    raise ValueError('missing localized runtime schema: ' + provider)
-                source_document = json.loads(locale_path.read_text())
+                source_document = localized_document(provider)
             operation = source_document.get('paths', {}).get(route, {}).get(method)
             if method not in METHODS or not isinstance(operation, dict):
                 raise ValueError('page references missing operation: ' + str(path))
@@ -120,10 +129,7 @@ def validate_surfaces(root, published_ref=None):
             found[language].setdefault((provider, route, method, canonical), set()).add(page)
     count = 0
     for provider, document in documents.items():
-        localized_path = root / 'openapi/zh' / (provider + '.json')
-        if not localized_path.is_file():
-            raise ValueError('missing localized runtime schema: ' + provider)
-        localized = json.loads(localized_path.read_text())
+        localized = localized_document(provider)
         if strip_translatable(document) != strip_translatable(canonicalize_localized(localized, history)):
             raise ValueError('localized runtime protocol changed: ' + provider)
         for route, item in document.get('paths', {}).items():

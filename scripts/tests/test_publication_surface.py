@@ -5,6 +5,7 @@ import sys
 import tempfile
 import subprocess
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from publication_surface import validate_surfaces, publication_hashes
@@ -60,6 +61,52 @@ class PublicationSurfaceTests(unittest.TestCase):
         self.change_json('openapi/zh/fixture.json', lambda d: d['paths']['/one']['get']['responses']['200']['content']['application/json']['schema']['properties']['literal']['default'].update(description='changed'))
         with self.assertRaisesRegex(ValueError, 'protocol changed'):
             validate_surfaces(self.root)
+
+    def test_multiple_pages_share_one_localized_read_and_protocol_check(self):
+        document = json.loads((self.root / 'openapi/fixture.json').read_text())
+        document['paths']['/two'] = copy.deepcopy(document['paths']['/one'])
+        document['paths']['/two']['get']['operationId'] = 'two'
+        changes = {}
+        generate_pages(self.root, 'fixture', document, changes)
+        changes[self.root / 'openapi/fixture.json'] = json.dumps(document)
+        for path, text in changes.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+        localized = self.root / 'openapi/zh/fixture.json'
+        original_read = Path.read_text
+        reads = []
+
+        def count_read(path, *args, **kwargs):
+            if path == localized:
+                reads.append(path)
+            return original_read(path, *args, **kwargs)
+
+        before = publication_hashes(self.root)
+        with patch.object(Path, 'read_text', count_read):
+            self.assertEqual(validate_surfaces(self.root)['operations'], 2)
+        # Both page identity checks and final wire parity share the same bytes.
+        self.assertEqual(reads, [localized])
+        self.assertEqual(publication_hashes(self.root), before)
+
+    def test_localized_cache_does_not_hide_wire_tampering_between_assessments(self):
+        localized = self.root / 'openapi/zh/fixture.json'
+        original_read = Path.read_text
+        reads = []
+
+        def count_read(path, *args, **kwargs):
+            if path == localized:
+                reads.append(path)
+            return original_read(path, *args, **kwargs)
+
+        with patch.object(Path, 'read_text', count_read):
+            validate_surfaces(self.root)
+            document = json.loads(original_read(localized))
+            schema = document['paths']['/one']['get']['responses']['200']['content']['application/json']['schema']
+            schema['properties']['literal']['default']['description'] = 'changed'
+            localized.write_text(json.dumps(document))
+            with self.assertRaisesRegex(ValueError, 'protocol changed'):
+                validate_surfaces(self.root)
+        self.assertEqual(reads, [localized, localized])
 
     def test_missing_language_schema_page_or_navigation_cannot_pass(self):
         for relative in ('openapi/zh/fixture.json', 'api-reference/fixture/one.mdx', 'zh/api-reference/fixture/one.mdx'):
