@@ -1,0 +1,302 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Akta Private Market Data API",
+    "description": "Private company intelligence: enrich 20M+ companies across 16 sections (firmographics, funding rounds, M&A, financial estimates, management, and more), build targeted company lists from structured filters or natural language, and resolve companies and industries from free text.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1/akta",
+      "description": "Production server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Company Data",
+      "description": "Enrich a single company by section: firmographics, funding, M&A, financials, management"
+    },
+    {
+      "name": "Company Discovery",
+      "description": "Build targeted company lists from structured filters or natural language"
+    },
+    {
+      "name": "Supporting",
+      "description": "Entity resolution for companies and industries"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/company/enrichment": {
+      "get": {
+        "x-aisa-pricing": {
+          "model": "metered",
+          "formula": "per-section credits x2; e.g. firmographic (2cr) $0.16, funding_detail (3cr) $0.24, mna_and_investment (5cr) $0.40"
+        },
+        "tags": ["Company Data"],
+        "operationId": "get_akta_company_enrichment",
+        "summary": "Enrich a company",
+        "description": "Enrich one private company across 16 sections and 75+ data points. `company` accepts a website (canva.com) or a UUID from company search. `sections` is a comma-separated list; billing follows akta's per-section credits (x2 customer multiplier): firmographic/business_model/company_assessment/technology/product_offering (2cr, $0.16), strategic_signal (1.5cr, $0.12), management_profile/customer_profile/industry (1cr, $0.08), trust_signal/company_hierarchy/digital_presence/financial_estimate/location (0.5cr, $0.04), funding_detail (3cr, $0.24), mna_and_investment (5cr, $0.40). Use funding_detail for rounds, investors, and total raised; use mna_and_investment for acquisitions and investments.",
+        "parameters": [
+          {
+            "name": "company",
+            "in": "query",
+            "description": "Company website (e.g. canva.com) or company UUID from company search.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sections",
+            "in": "query",
+            "description": "Comma-separated section list. One of: firmographic, business_model, company_assessment, trust_signal, company_hierarchy, digital_presence, financial_estimate, funding_detail, location, mna_and_investment, management_profile, product_offering, strategic_signal, customer_profile, industry, technology.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "firmographic,funding_detail"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Company profile with the requested sections.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/list/generate/companies": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "per_request",
+          "cost_tier": "med"
+        },
+        "tags": ["Company Discovery"],
+        "operationId": "post_akta_list_generate",
+        "summary": "Generate a company list",
+        "description": "Build a targeted company list from structured filters or a natural-language query, with optional per-section enrichment. Use filter-builder first to turn plain language into a reviewable filters object, then pass it here. Pricing: base $0.05 + $0.40 per returned company when enrichment sections are requested.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "Natural-language description of target companies (adds $0.10 surcharge; prefer filters for repeatability)."
+                  },
+                  "filters": {
+                    "type": "object",
+                    "description": "Structured filters from filter-builder (dotted-path keys, e.g. location.hq.city, funding_detail.funding_overview.funding_stage, industry.industry)."
+                  },
+                  "sections": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Optional enrichment sections per returned company (same section names as company enrichment)."
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "description": "Max companies to return (total capped at 500)."
+                  },
+                  "offset": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Matching companies with optional enrichment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/list/filter-builder": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "per_request",
+          "cost_tier": "low"
+        },
+        "tags": ["Company Discovery"],
+        "operationId": "post_akta_filter_builder",
+        "summary": "Build structured filters",
+        "description": "Convert a natural-language description of target companies into a structured filters object for list generation. Reviewable, tweakable, and reusable — costs the same $0.025 as the natural-language surcharge but the output can be cached and re-run. Returns no companies itself.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["query"],
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "e.g. 'series a companies in mumbai working in climate tech'."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Structured filters object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/company/search": {
+      "get": {
+        "x-aisa-pricing": {
+          "model": "per_request",
+          "cost_tier": "free"
+        },
+        "tags": ["Supporting"],
+        "operationId": "get_akta_company_search",
+        "summary": "Resolve a company",
+        "description": "Resolve a company from a name, website, or UUID and get its core identity: uuid, name, website, product_category, company_status. The first step before enrichment when you only have a fuzzy name.",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Company name, website, or UUID. Input type is auto-detected.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching companies ranked by akta_rank.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/industry/search": {
+      "get": {
+        "x-aisa-pricing": {
+          "model": "per_request",
+          "cost_tier": "free"
+        },
+        "tags": ["Supporting"],
+        "operationId": "get_akta_industry_search",
+        "summary": "Resolve an industry",
+        "description": "Resolve an industry from free text into akta's 4-level taxonomy codes (30K+ sub-sectors), ranked by similarity. Use the codes in list-generation industry filters.",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Free-text industry or topic, e.g. 'warehouse automation'.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "description": "Taxonomy level: l1, l2, l3, l4, all, or comma-separated list. Default l4.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "l4"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ranked industry codes with similarity scores.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/{request_id}": {
+      "get": {
+        "x-aisa-pricing": {
+          "model": "per_request",
+          "cost_tier": "free"
+        },
+        "tags": ["Supporting"],
+        "operationId": "get_akta_request_status",
+        "summary": "Get request status",
+        "description": "Poll the status of an asynchronous akta request (e.g. a company addition) by its request_id.",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "The request UUID returned by the originating call.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current request status and type-specific detail.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
