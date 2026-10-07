@@ -78,7 +78,7 @@ def refresh(root, fetch=import_source, checked_at=None, receipts=None, attempts=
     attempts = copy.deepcopy(attempts or {})
     changes, report = {}, {'updated': {}, 'manual': [], 'pinned': {}, 'failed': {},
                            'checked_at': checked_at.isoformat(), 'checked': {},
-                           'comparison_version': 'scripts/upstream_semantics.py@1',
+                           'comparison_version': 'scripts/upstream_semantics.py@2',
                            'sources': {}, 'receipts': receipts, 'attempts': attempts, 'policy_errors': {}}
     for path in sorted((root / 'openapi/upstream').glob('*.json')):
         previous = json.loads(path.read_text())

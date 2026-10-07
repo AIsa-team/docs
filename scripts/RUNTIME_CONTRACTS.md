@@ -157,7 +157,9 @@ constraints and serialization, effective authentication/security schemes, and
 response declarations. Local references and path/operation inheritance are
 resolved. Prose/examples and reordering unordered schema declarations do not
 produce semantic changes. Added/removed/changed declarations require review;
-external, recursive or unsupported reference scopes remain explicitly uncertain.
+Local recursive schema graphs are compared through memoized declaration pairs,
+including reachable constraints and reference siblings. External, dynamic,
+non-schema recursive and unsupported reference scopes remain explicitly uncertain.
 `declarations_unchanged` reports only the compared declarations, and compatibility
 is always `not_assessed`; this is not an upstream execution probe.
 

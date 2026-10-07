@@ -3,7 +3,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from upstream_semantics import compare_contracts
+from upstream_semantics import compare_contracts, LocalSchemaComparison
 
 
 def document():
@@ -137,6 +137,22 @@ class SemanticTests(unittest.TestCase):
                 target[field] = 'after'
                 self.assertEqual(compare_contracts(before, after)['status'], 'review_required')
 
+    def test_boolean_to_number_instances_are_changes_including_recursive_targets(self):
+        for key in ('enum', 'default', 'const'):
+            for recursive in (False, True):
+                before = self.recursive_document() if recursive else document()
+                schema = (before['components']['schemas']['Node']['properties']['value'] if recursive
+                          else before['paths']['/search']['get']['responses']['200']['content']['application/json']['schema'])
+                schema[key] = [True, False] if key == 'enum' else {'literal': [True, False]}
+                after = copy.deepcopy(before)
+                target = (after['components']['schemas']['Node']['properties']['value'] if recursive
+                          else after['paths']['/search']['get']['responses']['200']['content']['application/json']['schema'])
+                target[key] = [1, 0] if key == 'enum' else {'literal': [1, 0]}
+                with self.subTest(key=key, recursive=recursive):
+                    report = compare_contracts(before, after)
+                    self.assertEqual(report['uncertain'], [])
+                    self.assertEqual(len(report['changed']), 1)
+
     def test_ref_sibling_intersection_detected(self):
         before = document()
         before['components'] = {'schemas': {'Value': {'type': 'integer', 'minimum': 0}}}
@@ -145,8 +161,8 @@ class SemanticTests(unittest.TestCase):
         after['paths']['/search']['get']['parameters'][0]['schema']['maximum'] = 4
         self.assertEqual(compare_contracts(before, after)['status'], 'review_required')
 
-    def test_external_recursive_and_dynamic_refs_uncertain(self):
-        for schema in [{'$ref': 'https://api.test/private.json#/Value'}, {'$ref': '#/components/schemas/Node'}, {'$dynamicRef': '#node'}]:
+    def test_external_and_dynamic_refs_uncertain(self):
+        for schema in [{'$ref': 'https://api.test/private.json#/Value'}, {'$dynamicRef': '#node'}]:
             with self.subTest(schema=schema):
                 before = document()
                 before['components'] = {'schemas': {'Node': {'type': 'object', 'properties': {'next': {'$ref': '#/components/schemas/Node'}}}}}
@@ -155,6 +171,120 @@ class SemanticTests(unittest.TestCase):
                 self.assertEqual(report['status'], 'uncertain')
                 self.assertEqual(report['compatibility'], 'not_assessed')
                 self.assertEqual(report['changed'], [])
+
+    def recursive_document(self):
+        value = document()
+        value['components'] = {'schemas': {'Node': {'type': 'object', 'properties': {
+            'value': {'type': 'integer', 'minimum': 0},
+            'next': {'$ref': '#/components/schemas/Node'}}}}}
+        value['paths']['/search']['get']['responses']['200']['content']['application/json']['schema'] = {'$ref': '#/components/schemas/Node'}
+        return value
+
+    def test_recursive_local_schema_is_compared_without_compatibility_claim(self):
+        before = self.recursive_document()
+        report = compare_contracts(before, copy.deepcopy(before))
+        self.assertEqual(report['status'], 'declarations_unchanged')
+        self.assertEqual(report['uncertain'], [])
+        self.assertEqual(report['compatibility'], 'not_assessed')
+        after = copy.deepcopy(before)
+        after['components']['schemas']['Node']['properties']['value']['minimum'] = 1
+        report = compare_contracts(before, after)
+        self.assertEqual(report['status'], 'review_required')
+        self.assertEqual(report['uncertain'], [])
+        self.assertTrue(any(row['field'].endswith('/value/minimum') for row in report['changed'][0]['changes']))
+
+    def test_mutual_recursive_graph_compares_reachable_constraint(self):
+        before = self.recursive_document()
+        schemas = before['components']['schemas']
+        schemas['Node']['properties']['next'] = {'$ref': '#/components/schemas/Other'}
+        schemas['Other'] = {'type': 'object', 'properties': {
+            'back': {'$ref': '#/components/schemas/Node'}, 'value': {'type': 'string', 'maxLength': 4}}}
+        after = copy.deepcopy(before)
+        after['components']['schemas']['Other']['properties']['value']['maxLength'] = 3
+        report = compare_contracts(before, after)
+        self.assertEqual(report['uncertain'], [])
+        self.assertEqual(len(report['changed']), 1)
+
+    def test_equal_reference_lists_do_not_hide_multiple_changed_targets(self):
+        before = self.recursive_document()
+        before['components']['schemas']['Other'] = {'type': 'integer', 'maximum': 9}
+        after = copy.deepcopy(before)
+        after['components']['schemas']['Node']['properties']['value']['minimum'] = 1
+        after['components']['schemas']['Other']['maximum'] = 8
+        view = {'oneOf': [{'$ref': '#/components/schemas/Node'},
+                          {'$ref': '#/components/schemas/Other'}]}
+        changes = LocalSchemaComparison(before, after).changes(copy.deepcopy(view), copy.deepcopy(view))
+        fields = {row['field'] for row in changes}
+        self.assertTrue(any(field.endswith('/value/minimum') for field in fields))
+        self.assertTrue(any(field.endswith('/maximum') for field in fields))
+
+    def test_recursive_array_items_and_oneof_target_changes_are_reported(self):
+        before = self.recursive_document()
+        schema = before['paths']['/search']['get']['responses']['200']['content']['application/json']['schema']
+        schema.clear()
+        schema.update({'type': 'array', 'items': {'oneOf': [{'$ref': '#/components/schemas/Node'}]}})
+        after = copy.deepcopy(before)
+        after['components']['schemas']['Node']['properties']['value']['minimum'] = 1
+        report = compare_contracts(before, after)
+        self.assertEqual(report['uncertain'], [])
+        self.assertEqual(len(report['changed']), 1)
+
+    def test_recursive_component_rename_and_unreachable_edit_are_not_wire_changes(self):
+        before = self.recursive_document()
+        after = copy.deepcopy(before)
+        node = after['components']['schemas'].pop('Node')
+        node['properties']['next']['$ref'] = '#/components/schemas/Renamed'
+        after['components']['schemas']['Renamed'] = node
+        after['components']['schemas']['Unreachable'] = {'type': 'boolean'}
+        after['paths']['/search']['get']['responses']['200']['content']['application/json']['schema']['$ref'] = '#/components/schemas/Renamed'
+        self.assertEqual(compare_contracts(before, after)['status'], 'declarations_unchanged')
+
+    def test_recursive_ref_sibling_constraints_and_literals_remain_visible(self):
+        before = self.recursive_document()
+        node = before['components']['schemas']['Node']
+        node['properties']['next']['maxProperties'] = 5
+        node['default'] = {'$ref': 'literal-value', 'description': 'before'}
+        for mutation in ('sibling', 'literal'):
+            after = copy.deepcopy(before)
+            if mutation == 'sibling':
+                after['components']['schemas']['Node']['properties']['next']['maxProperties'] = 4
+            else:
+                after['components']['schemas']['Node']['default']['description'] = 'after'
+            with self.subTest(mutation=mutation):
+                report = compare_contracts(before, after)
+                self.assertEqual(report['uncertain'], [])
+                self.assertEqual(len(report['changed']), 1)
+
+    def test_recursive_schema_property_names_are_not_opaque_instances(self):
+        before = self.recursive_document()
+        before['components']['schemas']['Node']['properties']['default'] = {'$ref': '#/components/schemas/Other'}
+        before['components']['schemas']['Other'] = {'type': 'string', 'maxLength': 4}
+        after = copy.deepcopy(before)
+        after['components']['schemas']['Other']['maxLength'] = 3
+        self.assertEqual(compare_contracts(before, after)['status'], 'review_required')
+
+    def test_ref_named_property_is_not_a_reference_edge(self):
+        before = self.recursive_document()
+        before['components']['schemas']['Node']['properties']['$ref'] = {'type': 'string'}
+        after = copy.deepcopy(before)
+        after['components']['schemas']['Node']['properties']['$ref']['type'] = 'boolean'
+        report = compare_contracts(before, after)
+        self.assertEqual(report['uncertain'], [])
+        self.assertEqual(len(report['changed']), 1)
+
+    def test_invalid_edges_inside_recursive_graph_remain_uncertain(self):
+        for ref in ('https://api.test/private.json', '#/components/schemas/Missing'):
+            before = self.recursive_document()
+            before['components']['schemas']['Node']['properties']['other'] = {'$ref': ref}
+            with self.subTest(ref=ref):
+                self.assertEqual(compare_contracts(before, copy.deepcopy(before))['status'], 'uncertain')
+        before = document()
+        before['components'] = {'responses': {'Loop': {'$ref': '#/components/responses/Loop'}}}
+        before['paths']['/search']['get']['responses']['200'] = {'$ref': '#/components/responses/Loop'}
+        self.assertEqual(compare_contracts(before, copy.deepcopy(before))['status'], 'uncertain')
+        before = self.recursive_document()
+        before['components']['schemas']['Node'] = {'$ref': '#/components/schemas/Node'}
+        self.assertEqual(compare_contracts(before, copy.deepcopy(before))['status'], 'uncertain')
 
     def test_deprecation_and_protocol_extensions_require_review(self):
         for field, value in [('deprecated', True), ('x-protocol', {'description': 'signed'})]:

@@ -1,11 +1,15 @@
 """Compare upstream declarations for review, never infer execution compatibility.
 
-Only local OpenAPI references are resolved. Recursive/external reference scopes
-are reported as uncertain rather than fetching or guessing their meaning.
+Only local OpenAPI references are resolved. Local recursive schema graphs are
+compared finitely; external or unsupported scopes remain uncertain.
 """
 import copy
 
 from compose_openapi import METHODS, digest, resolve
+
+
+def resolve_declaration(value, document):
+    return resolve(value, document, preserve_recursive=True)
 
 PROSE = {'description', 'summary', 'title', 'example', 'examples', '$comment',
          'externalDocs', 'tags', 'x-aisa-source', 'x-aisa-notes'}
@@ -52,18 +56,18 @@ def parameter_view(parameter):
 
 
 def effective_operation(document, path, method, item):
-    operation = resolve(item[method], document)
+    operation = resolve_declaration(item[method], document)
     parameters = {}
     for values in (item.get('parameters', []), operation.get('parameters', [])):
         own_keys = set()
         for raw in values:
-            parameter = parameter_view(resolve(raw, document))
+            parameter = parameter_view(resolve_declaration(raw, document))
             key = (parameter['in'], parameter['name'])
             if key in own_keys:
                 raise ValueError('duplicate_parameter_identity')
             own_keys.add(key)
             parameters[key] = parameter
-    security = resolve(operation.get('security', document.get('security', [])), document)
+    security = resolve_declaration(operation.get('security', document.get('security', [])), document)
     requirements, schemes = [], {}
     for alternative in security:
         if not isinstance(alternative, dict):
@@ -76,7 +80,7 @@ def effective_operation(document, path, method, item):
             scheme = document.get('components', {}).get('securitySchemes', {}).get(name)
             if scheme is None:
                 raise ValueError('missing_security_scheme')
-            schemes[name] = semantic_value(resolve(scheme, document))
+            schemes[name] = semantic_value(resolve_declaration(scheme, document))
     body = operation.get('requestBody')
     if body is not None:
         body = semantic_value(body)
@@ -84,7 +88,7 @@ def effective_operation(document, path, method, item):
     servers = operation.get('servers', item.get('servers', document.get('servers', [])))
     return {
         'binding': {'method': method.upper(), 'path': path,
-                    'servers': semantic_value(resolve(servers or [{'url': '/'}], document))},
+                    'servers': semantic_value(resolve_declaration(servers or [{'url': '/'}], document))},
         'identity': {'operationId': operation.get('operationId')},
         'operation': {'deprecated': operation.get('deprecated', False),
                       'extensions': {key: copy.deepcopy(value) for key, value in operation.items()
@@ -94,6 +98,70 @@ def effective_operation(document, path, method, item):
         'responses': semantic_value(operation.get('responses', {}), True),
         'callbacks': semantic_value(operation.get('callbacks', {}), True),
     }
+
+
+class LocalSchemaComparison:
+    """Compare reachable declaration pairs without unfolding a cycle forever.
+
+    Reference names and sharing are not wire constraints. Literal instance data
+    remains opaque, and unsupported reference scopes still fail closed.
+    """
+    def __init__(self, previous, updated):
+        self.documents = (previous, updated)
+        self.targets = ({}, {})
+        self.seen = set()
+
+    def expand(self, value, side):
+        if not isinstance(value, dict) or '$ref' not in value:
+            return value
+        ref = value['$ref']
+        if not isinstance(ref, str) or not ref.startswith('#/components/schemas/'):
+            raise ValueError('unsupported_recursive_non_schema_reference')
+        # Resolve siblings with the same intersection rules as acyclic schemas.
+        key = digest(value)
+        if key not in self.targets[side]:
+            target = semantic_value(resolve_declaration(value, self.documents[side]))
+            if isinstance(target, dict) and '$ref' in target:
+                raise ValueError('unsupported_pure_reference_cycle')
+            self.targets[side][key] = target
+        return self.targets[side][key]
+
+    def changes(self, previous, updated, pointer='', opaque=False, map_object=False):
+        if opaque:
+            return field_changes(previous, updated, pointer)
+        if isinstance(previous, dict) and isinstance(updated, dict):
+            pair = (id(previous), id(updated), map_object)
+            if pair in self.seen:
+                return []
+            self.seen.add(pair)
+        before, after = ((previous, updated) if map_object else
+                         (self.expand(previous, 0), self.expand(updated, 1)))
+        if before is not previous or after is not updated:
+            return self.changes(before, after, pointer)
+        if isinstance(before, dict) and isinstance(after, dict):
+            changes = []
+            for key in sorted(before.keys() | after.keys()):
+                field = pointer + '/' + str(key).replace('~', '~0').replace('/', '~1')
+                if key not in before:
+                    changes.append({'field': field, 'change': 'added', 'after': after[key]})
+                elif key not in after:
+                    changes.append({'field': field, 'change': 'removed', 'before': before[key]})
+                else:
+                    changes.extend(self.changes(before[key], after[key], field,
+                        not map_object and (key in {'default', 'const', 'enum'} or key.startswith('x-')),
+                        key in MAPS and not map_object))
+            return changes
+        if isinstance(before, list) and isinstance(after, list) and len(before) == len(after):
+            # Keep existing list-level reporting, but compare the nested graph.
+            nested = []
+            for i, (a, b) in enumerate(zip(before, after)):
+                nested.extend(self.changes(a, b, pointer + '/' + str(i)))
+            if not nested:
+                return []
+            # Equal local ref strings can hide changed targets. Never discard
+            # the graph differences merely because the literal list is equal.
+            return field_changes(before, after, pointer) or nested
+        return field_changes(before, after, pointer)
 
 
 def path_item(raw, document, stack=()):
@@ -123,7 +191,11 @@ def operations(document):
         for method in sorted(METHODS & item.keys()):
             key = (path, method)
             try:
-                result[key] = effective_operation(document, path, method, item)
+                view = effective_operation(document, path, method, item)
+                # Validate every reachable remaining edge, including operations
+                # present on only one side of a comparison.
+                LocalSchemaComparison(document, document).changes(view, view)
+                result[key] = view
             except (ValueError, KeyError, TypeError) as exc:
                 # Do not echo external ref URLs or arbitrary source text.
                 message = str(exc) if isinstance(exc, ValueError) else 'invalid_or_missing_local_declaration'
@@ -131,8 +203,23 @@ def operations(document):
     return result, uncertain
 
 
+def json_equal(previous, updated):
+    """JSON booleans are not numbers, including inside instances and enums."""
+    if isinstance(previous, bool) or isinstance(updated, bool):
+        return type(previous) is type(updated) and previous == updated
+    if isinstance(previous, dict) and isinstance(updated, dict):
+        return previous.keys() == updated.keys() and all(
+            json_equal(value, updated[key]) for key, value in previous.items())
+    if isinstance(previous, list) and isinstance(updated, list):
+        return len(previous) == len(updated) and all(
+            json_equal(a, b) for a, b in zip(previous, updated))
+    if isinstance(previous, (int, float)) and isinstance(updated, (int, float)):
+        return previous == updated
+    return type(previous) is type(updated) and previous == updated
+
+
 def field_changes(previous, updated, pointer=''):
-    if previous == updated:
+    if json_equal(previous, updated):
         return []
     if isinstance(previous, dict) and isinstance(updated, dict):
         changes = []
@@ -168,10 +255,11 @@ def compare_contracts(previous, updated):
             report['added'].append({'operation': operation, 'declaration_hash': digest(after[key])})
         elif key not in after:
             report['removed'].append({'operation': operation, 'declaration_hash': digest(before[key])})
-        elif before[key] != after[key]:
-            report['changed'].append({'operation': operation, 'before_hash': digest(before[key]),
-                                      'after_hash': digest(after[key]),
-                                      'changes': field_changes(before[key], after[key])})
+        else:
+            changes = LocalSchemaComparison(previous, updated).changes(before[key], after[key])
+            if changes:
+                report['changed'].append({'operation': operation, 'before_hash': digest(before[key]),
+                                          'after_hash': digest(after[key]), 'changes': changes})
     if any(report[key] for key in ('added', 'removed', 'changed')):
         report['status'] = 'review_required'
     elif report['uncertain']:
