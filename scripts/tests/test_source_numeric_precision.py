@@ -37,10 +37,11 @@ class SourceNumericPrecisionTests(unittest.TestCase):
 
     def test_yaml_keeps_supported_types_but_rejects_ambiguous_or_unsupported_scalars(self):
         template = 'openapi: 3.1.0\ninfo: {title: Source}\npaths: {}\nvalue: %s\n'
-        for token, expected in [('0.125', 0.125), ('true', True), ("'1e400'", '1e400'), ("'0123'", '0123')]:
+        for token, expected in [('0.125', 0.125), ('true', True), ('yes', 'yes'),
+                                ("'1e400'", '1e400'), ("'0123'", '0123')]:
             with patch('import_upstream.urlopen', return_value=io.BytesIO((template % token).encode())):
                 self.assertEqual(import_source('precision', 'https://example.invalid/openapi.yaml')['value'], expected)
-        for token in ('1.0000000000000001', '1.0e+400', '1e400', '0123', '0129', '.inf', 'yes', '2026-10-03'):
+        for token in ('1.0000000000000001', '1.0e+400', '1e400', '0123', '0129', '.inf', '2026-10-03'):
             with self.subTest(token=token), patch('import_upstream.urlopen', return_value=io.BytesIO((template % token).encode())):
                 with self.assertRaisesRegex(ValueError, 'unsupported_(numeric_precision|yaml_scalar)'):
                     import_source('precision', 'https://example.invalid/openapi.yaml')

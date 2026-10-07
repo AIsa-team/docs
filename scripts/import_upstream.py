@@ -21,7 +21,59 @@ from source_json import loads as source_json_loads, checked_float, UnsupportedNu
 
 
 class OfficialSourceLoader(yaml.SafeLoader):
-    """Keep the literal equality operator used in official provider enums."""
+    """Read JSON-safe provider YAML without YAML 1.1 boolean coercion."""
+
+    def __init__(self, stream):
+        super().__init__(stream)
+        self._checked_explicit_members = set()
+
+    def _member_name(self, node, deep=False):
+        if not isinstance(node, yaml.ScalarNode):
+            raise ValueError('unsupported_yaml_mapping_key: expected a scalar JSON member name')
+        value = self.construct_object(node, deep=deep)
+        if isinstance(value, str):
+            return value
+        if value is None or isinstance(value, bool):
+            return json.dumps(value)
+        if isinstance(value, int):
+            return str(value)  # Unquoted response status codes are JSON member names.
+        raise ValueError('unsupported_yaml_mapping_key: quote non-integer numeric member names')
+
+    def flatten_mapping(self, node):
+        if not isinstance(node, yaml.MappingNode):
+            raise ValueError('unsupported_yaml_mapping: expected a mapping')
+        # Check original explicit members before flattening: a legal YAML merge
+        # may be overridden explicitly, but repeated explicit JSON names may not.
+        # SafeLoader recursively flattens inline merge inputs, so validate each
+        # such node too; cache node identity before subsequent alias flattening.
+        if node not in self._checked_explicit_members:
+            names = set()
+            for key, _ in node.value:
+                if key.tag == 'tag:yaml.org,2002:merge':
+                    continue
+                name = self._member_name(key)
+                if name in names:
+                    raise ValueError('duplicate_yaml_mapping_key')
+                names.add(name)
+            self._checked_explicit_members.add(node)
+        super().flatten_mapping(node)
+
+    def construct_mapping(self, node, deep=False):
+        self.flatten_mapping(node)
+        return {self._member_name(key, deep=deep): self.construct_object(value, deep=deep)
+                for key, value in node.value}
+
+
+# Resolve boolean words only as YAML 1.2 booleans. Copy the resolver lists so
+# this provider reader never changes PyYAML's other callers or global loader.
+OfficialSourceLoader.yaml_implicit_resolvers = {
+    char: [(tag, pattern) for tag, pattern in entries if tag != 'tag:yaml.org,2002:bool']
+    for char, entries in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+OfficialSourceLoader.add_implicit_resolver(
+    'tag:yaml.org,2002:bool', re.compile(r'(?:true|True|TRUE|false|False|FALSE)\Z'),
+    list('tTfF')
+)
 
 
 # YAML 1.1 tags a plain '=' specially; OpenAPI treats it as an ordinary string.
