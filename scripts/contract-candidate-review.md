@@ -44,6 +44,31 @@ public wire-contract projection, source approval or permission to import IDs.
 Formal publication still requires the actual locked Runtime inputs and the
 existing artifact readiness checks. Code-only CI does not grant that approval.
 
+## Additional bounded source candidates
+
+`import_duffel_reference.py DIRECTORY --fetched-at TIMESTAMP` reads saved official
+v2 reference pages and the hash-locked provider SDK, and writes a manual source
+to stdout. Its fixture tests document the required files. The source declares
+nine operations; it does not invent the two historical GET search-result/rates
+routes or claim that changing them to POST preserves behavior.
+
+`prepare_route_migrations.py --current-map FILE --write` prepares ten
+finite route decisions from locked public sources. Seven alternatives are
+intentional migrations, not aliases. A target-only update would invalidate the
+current immutable Profile binding. The packet contains no executable migration,
+new Profile, permission to apply, or claim that archived SDK code proves current
+provider support. See `docs/routing-debt-resolution-20261008/README.md`.
+
+Source-only improvements must be replayed through the real composer before
+subtracting debt. In particular, request validation ownership does not establish
+response passthrough: a typed provider response cannot fill a Runtime-owned
+response without an explicit response transport declaration and matching origin
+and path hashes. Response-only mirrors never establish request fields or ANY
+methods, and explicitly transformed responses cannot inherit old provider payloads.
+See `scripts/response-source-candidates.md` for the separate response candidates.
+The immutable W0 catalog remains the regression baseline; refreshed source
+candidates are assessed separately.
+
 ## Validation
 
 ```sh
