@@ -16,12 +16,7 @@ import sys
 from pathlib import Path
 
 METHODS = {"get", "post", "put", "patch", "delete"}
-ALLOWLIST = {
-    # Two manual pages document POST /chat/completions. The main OpenAI Chat
-    # page owns the canonical slug; this page documents image generation routed
-    # through the chat-completions surface.
-    "api-reference/chat/post_chat-completions-image-generation.mdx": "post_chat-completions",
-}
+ALLOWLIST: dict[str, str] = {}
 
 OPENAPI_RE = re.compile(r"^openapi:\s*[\"']([^\"']+)[\"']", re.MULTILINE)
 
