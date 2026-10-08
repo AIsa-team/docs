@@ -5,10 +5,28 @@ import re
 from urllib.parse import urlsplit
 
 from compose_openapi import METHODS, digest
+from source_json import loads as source_json_loads
 
 INDEX_URL = "https://api-dashboard.search.brave.com/llms.txt"
 ORIGIN = "https://api-dashboard.search.brave.com"
-VERSION = "scripts/import_brave_reference.py@1"
+VERSION = "scripts/import_brave_reference.py@2"
+
+
+def canonical(value):
+    """Compare wire declarations without Python's True == 1 coercion."""
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+
+def load_reference(raw):
+    def members(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate official reference member")
+            result[key] = value
+        return result
+    source_json_loads(raw)  # Reject non-JSON and unsupported numeric precision.
+    return json.loads(raw, object_pairs_hook=members)
 
 
 def decode_api_spec(payload):
@@ -50,7 +68,9 @@ def decode_api_spec(payload):
         memo[index] = result
         return result
 
-    return decode(pool[0]["apiSpec"])
+    result = decode(pool[0]["apiSpec"])
+    canonical(result)  # Also validate callers supplying a decoded Python graph.
+    return result
 
 
 def reference_url(url):
@@ -89,7 +109,7 @@ def convert_specs(rows):
             scheme = {"type": "apiKey", "in": param["in"], "name": param["name"]}
             name = param["name"]
             previous = document["components"]["securitySchemes"].setdefault(name, scheme)
-            if previous != scheme:
+            if canonical(previous) != canonical(scheme):
                 raise ValueError("conflicting official authentication schema")
             auth[name] = []
         if auth:
@@ -107,11 +127,11 @@ def convert_specs(rows):
                 "description": response["description"],
                 "content": {"application/json": {"schema": response["schema"]}}}
         existing = document["paths"].setdefault(path, {}).setdefault(method, operation)
-        if existing != operation:
+        if canonical(existing) != canonical(operation):
             raise ValueError("conflicting official operation documents")
         for name, schema in spec["schemas"].items():
             existing = document["components"]["schemas"].setdefault(name, schema)
-            if existing != schema:
+            if canonical(existing) != canonical(schema):
                 raise ValueError("conflicting official component definitions")
     return document
 
@@ -126,7 +146,7 @@ def import_reference(fetch):
         url = sorted(urls - rows.keys())[0]
         if len(rows) >= 250:
             raise ValueError("official reference discovery exceeded its bound")
-        spec = decode_api_spec(json.loads(fetch(url + "/__data.json")))
+        spec = decode_api_spec(load_reference(fetch(url + "/__data.json")))
         rows[url] = spec
         urls.update(reference_url(variant["href"]) for variant in spec["methodVariants"])
     document = convert_specs(rows)

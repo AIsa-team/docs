@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from compose_openapi import digest
-from import_brave_reference import INDEX_URL, ORIGIN, convert_specs, decode_api_spec, import_reference
+from import_brave_reference import INDEX_URL, ORIGIN, convert_specs, decode_api_spec, import_reference, load_reference
 from import_upstream import import_source
 
 
@@ -78,6 +78,30 @@ class BraveReferenceTests(unittest.TestCase):
         self.assertEqual(source["url"], INDEX_URL)
         self.assertEqual(source["content_hash"], digest(imported))
         self.assertEqual(source["converter"], "reference@1")
+
+    def test_type_changed_literals_cannot_hide_source_conflicts(self):
+        for field in ("default", "enum", "examples", "const"):
+            with self.subTest(field=field):
+                a, b = spec(), spec("POST")
+                a["schemas"]["Result"][field] = [True] if field in ("enum", "examples") else True
+                b["schemas"]["Result"][field] = [1] if field in ("enum", "examples") else 1
+                with self.assertRaisesRegex(ValueError, "component"):
+                    convert_specs({"a": a, "b": b})
+        a, b = spec(), spec()
+        a["queryParams"][0]["schema"]["default"] = True
+        b["queryParams"][0]["schema"]["default"] = 1
+        with self.assertRaisesRegex(ValueError, "operation"):
+            convert_specs({"a": a, "b": b})
+
+    def test_reference_json_rejects_duplicate_and_non_json_numbers(self):
+        for raw in (b'{"nodes":[],"nodes":[]}', b'{"nodes":[NaN]}', b'{"nodes":[Infinity]}'):
+            with self.subTest(raw=raw), self.assertRaises(ValueError):
+                load_reference(raw)
+        malformed = payload(spec())
+        malformed["nodes"][1]["data"].append(float("nan"))
+        malformed["nodes"][1]["data"][1]["unexpected"] = len(malformed["nodes"][1]["data"]) - 1
+        with self.assertRaises(ValueError):
+            decode_api_spec(malformed)
 
 
 if __name__ == "__main__":
