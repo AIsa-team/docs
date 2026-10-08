@@ -46,7 +46,8 @@ def field_schema(node, location):
         raise ValueError('unrepresented Similarweb serialization style')
     if options.get('schemaNames') not in (None, []) or options.get('xml') not in (None, {'prefix': None}):
         raise ValueError('unrepresented Similarweb schema/XML declaration')
-    if options.get('nullable') not in (None, False, True): raise ValueError('invalid nullable marker')
+    if options.get('nullable') is not None and type(options['nullable']) is not bool:
+        raise ValueError('invalid nullable marker')
     if options.get('nullable') is True: schema['type'] = [kind, 'null']
     for key in ('example','format','minLength','maxLength','minimum','maximum'):
         if key in options: schema[key] = copy.deepcopy(options[key])

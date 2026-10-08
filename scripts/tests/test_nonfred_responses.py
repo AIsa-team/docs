@@ -103,7 +103,8 @@ class NonFredResponseTests(unittest.TestCase):
                     {'valueType':'object','additionalProperties':False},
                     {'valueType':'array','items':[]},
                     {'valueType':'string','complexItems':[{'value':'x'}]},
-                    {'valueType':'string','options':{'style':'form'}}]:
+                    {'valueType':'string','options':{'style':'form'}},
+                    {'valueType':'string','options':{'nullable':1}}]:
             with self.assertRaises(ValueError):similarweb.field_schema(bad,'data')
         with self.assertRaisesRegex(ValueError,'endpoint mismatch'):
             similarweb.convert_reference((FIXTURES/'similarweb-segments-response.html').read_bytes(),'/wrong','https://docs.similarweb.com/api-v5/x')
