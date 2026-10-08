@@ -13,7 +13,7 @@ from compose_openapi import digest
 from source_json import checked_float
 
 INDEX = 'https://fred.stlouisfed.org/docs/api/fred/'
-CONVERTER = 'scripts/import_fred_reference.py@3'
+CONVERTER = 'scripts/import_fred_reference.py@4'
 GEO_REFERENCE = {
     '/geofred/shapes/file': 'shapes.html',
     '/geofred/series/group': 'series_group.html',
@@ -200,7 +200,7 @@ def reject_json_constant(token):
 def response_evidence(content):
     # Carry explicit representations/examples, never infer schema from samples.
     media = set(re.findall(r'HTTP Content-Type is ([a-z]+/[a-z0-9.+-]*[a-z0-9+-])', content.text()))
-    content_values, pending = {}, []
+    content_values, pending, declarations = {}, [], []
     representation, response = None, False
     for node in content.all():
         if node.tag == 'h2':
@@ -211,6 +211,21 @@ def response_evidence(content):
             response = True
         elif node.tag in ('h3', 'h4') and node.text().startswith('Request'):
             response = False
+        elif node.tag == 'p' and response and representation == 'XML':
+            # These are explicit XML attribute declarations, not facts learned
+            # from example values or statements about the JSON representation.
+            match = re.fullmatch(r"The ([A-Za-z_][A-Za-z0-9_.-]*) tag's "
+                                 r"([A-Za-z_][A-Za-z0-9_.-]*)(?: and ([A-Za-z_][A-Za-z0-9_.-]*))? "
+                                 r"attributes? (?:is|are) optional\.", node.text())
+            if match:
+                element, first, second = match.groups()
+                for attribute in (first, second):
+                    if attribute is not None:
+                        declaration = {'media_type': 'text/xml', 'element': element,
+                                       'attribute': attribute, 'required': False,
+                                       'source_statement': node.text()}
+                        if declaration not in declarations:
+                            declarations.append(declaration)
         elif node.tag == 'pre' and response:
             raw = node.raw_text().strip().strip('`').strip()
             kind = {'XML': 'text/xml', 'JSON': 'application/json'}.get(representation)
@@ -244,6 +259,7 @@ def response_evidence(content):
     for kind in sorted(media):
         content_values.setdefault(kind, {})
     return {'content': content_values, 'pending': pending,
+            'field_declarations': declarations,
             'schema_status': 'not_declared_in_reference', 'schema_inferred': False}
 
 

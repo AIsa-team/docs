@@ -148,6 +148,11 @@ class FredReferenceTest(unittest.TestCase):
         self.assertEqual(len(evidence),35)
         self.assertEqual(sum(x['request_status']=='pending' for x in evidence),3)
         self.assertEqual({x['method'] for x in evidence},{'GET'})
+        declarations=[field for row in evidence for field in row['response_evidence']['field_declarations']]
+        self.assertEqual(len(declarations),24)
+        self.assertEqual(sum(bool(row['response_evidence']['field_declarations']) for row in evidence),17)
+        self.assertEqual({row['attribute'] for row in declarations},{'link','notes'})
+        self.assertTrue(all(row['required'] is False and row['media_type']=='text/xml' for row in declarations))
         facts=json.loads((ROOT/'facts/fred.json').read_text())
         public,pending=compose(facts,fresh)
         self.assertEqual(len(pending),3)
@@ -205,6 +210,22 @@ class FredReferenceTest(unittest.TestCase):
                 self.assertEqual(evidence['content'],{})
                 self.assertEqual(evidence['pending'][0]['reason'],'official JSON response example is not valid JSON')
                 self.assertRegex(evidence['pending'][0]['example_sha256'],r'^[a-f0-9]{64}$')
+
+    def test_only_explicit_response_xml_attribute_optionality_is_retained(self):
+        raw=b'''<div><h3>XML</h3><h4>Response</h4>
+        <pre>&lt;release notes="sample" other="1"/&gt;</pre>
+        <p>The release tag's link and notes attributes are optional.</p>
+        <h3>JSON</h3><h4>Response</h4><pre>{"release":{"notes":"sample"}}</pre>
+        <p>The series tag's notes attribute is optional.</p>
+        <h2>Parameters</h2><p>The source tag's link attribute is optional.</p></div>'''
+        evidence=response_evidence(Tree(raw).root)
+        self.assertEqual([(row['element'],row['attribute'],row['required'])
+                          for row in evidence['field_declarations']],
+                         [('release','link',False),('release','notes',False)])
+        self.assertEqual({row['media_type'] for row in evidence['field_declarations']},{'text/xml'})
+        self.assertTrue(all('type' not in row for row in evidence['field_declarations']))
+        self.assertNotIn('schema',evidence['content']['text/xml'])
+        self.assertFalse(evidence['schema_inferred'])
 
     def test_xml_example_dtd_is_never_loaded(self):
         raw=b'<div><h3>XML</h3><h4>Response</h4><pre>&lt;!DOCTYPE x SYSTEM "https://example.com/private"&gt;&lt;x/&gt;</pre></div>'
