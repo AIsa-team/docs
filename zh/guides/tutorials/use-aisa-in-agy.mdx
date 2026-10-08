@@ -1,0 +1,136 @@
+---
+title: "在 Antigravity 中使用 AIsa"
+description: "通过远程 MCP，把 Google Antigravity 的 agy CLI 连接到 AIsa 能力。"
+---
+
+Google Antigravity 的模型列表由 Google 固定——没有自定义 base URL 或自带 key 的设置，所以 AIsa 无法替换它的内置模型。取而代之，你可以把 AIsa 添加为远程 MCP server，让 Antigravity 的 agent 以工具形式调用 AIsa 能力——网页研究、金融、社交、SEO、销售等。
+
+AIsa MCP endpoint：
+
+```txt
+https://mcp.aisa.one/mcp
+```
+
+## 前置条件
+
+开始前，请确认你已经具备：
+
+- AIsa API key（[console.aisa.one/api-keys](https://console.aisa.one/api-keys)）
+- macOS、Linux 或 Windows 上的 terminal
+
+## 1. 安装 agy CLI
+
+```bash
+# macOS / Linux
+curl -fsSL https://antigravity.google/cli/install.sh | bash
+
+# Windows (PowerShell)
+irm https://antigravity.google/cli/install.ps1 | iex
+```
+
+验证安装：
+
+```bash
+agy --version
+```
+
+## 2. 把 AIsa 加入 MCP 配置
+
+打开全局 MCP 配置（不存在就新建）：
+
+| 系统 | 路径 |
+| --- | --- |
+| macOS / Linux | `~/.gemini/config/mcp_config.json` |
+| Windows | `%USERPROFILE%\.gemini\config\mcp_config.json` |
+
+添加 `aisa` 条目，把 `sk-aisa-...` 换成你的真实 key：
+
+```json
+{
+  "mcpServers": {
+    "aisa": {
+      "serverUrl": "https://mcp.aisa.one/mcp",
+      "headers": {
+        "Authorization": "Bearer sk-aisa-..."
+      }
+    }
+  }
+}
+```
+
+<Warning>
+  大多数配置失败都栽在这三点：
+
+  - **用 `serverUrl`，不要用 `url`。** Antigravity 对远程 server 会忽略 `url` 和 `httpUrl`。
+  - **直接粘贴 key 本身。** Antigravity 不会展开 `headers` 里的环境变量——`"Bearer ${AISA_API_KEY}"` 会被原样发送，返回 401。
+  - **用 API key，不要用浏览器登录。** 我们测试时 Antigravity 的 OAuth 流程无法在 AIsa 上完成；`Authorization` header 是可靠的方式。
+</Warning>
+
+因为文件里现在有明文 key，把权限限制为仅当前用户可读：
+
+```bash
+chmod 600 ~/.gemini/config/mcp_config.json
+```
+
+<Tip>
+  建议单独创建一个标记为 `antigravity` 的 key，方便独立轮换或吊销。参见[认证](/zh/guides/authentication)。
+</Tip>
+
+## 3. 开启新会话并验证
+
+Antigravity 在会话启动时加载 MCP server，所以修改配置后要开启新的 `agy` 会话。确认 server 已注册：
+
+```bash
+agy mcp list
+```
+
+```txt
+NAME  TYPE  STATUS   COMMAND/URL
+aisa  http  enabled  https://mcp.aisa.one/mcp
+```
+
+`agy mcp list` 只显示配置；Antigravity 还会把工具定义缓存在 `~/.gemini/antigravity-cli/mcp/aisa/`——所以能看到五个工具并不代表 key 可用。请用下一步的真实请求验证。
+
+## 4. 使用 AIsa 能力
+
+在 `agy` 会话中试试：
+
+```txt
+Use AIsa to check the price of BTC today.
+```
+
+Antigravity 会搜索 AIsa 目录、读取匹配操作的 schema，然后在 `max_price_usd` 上限内执行。发现类工具（`list_categories`、`search`、`get_details`）免费；`use` 和 `batch_use` 按次计费。
+
+## 快速参考
+
+| 项目 | 值 |
+| --- | --- |
+| 配置文件 | `~/.gemini/config/mcp_config.json` |
+| Server 字段 | `serverUrl`（不是 `url`） |
+| Server URL | `https://mcp.aisa.one/mcp` |
+| 认证 | `"Authorization": "Bearer sk-aisa-..."`——明文 key，不支持环境变量 |
+| 文件权限 | `chmod 600` |
+| 检查注册 | `agy mcp list` |
+
+## 故障排查
+
+| 问题 | 解决方法 |
+| --- | --- |
+| 能看到工具，但调用返回 401 | header 有误或仍是 `${AISA_API_KEY}`——粘贴明文 key，然后开启新会话 |
+| `agy mcp list` 里没有 `aisa` | 确认 JSON 合法且使用 `serverUrl` |
+| 当前会话里没有工具 | 开启新的 `agy` 会话；会话中途修改的配置不会生效 |
+| 想在 Antigravity 中使用 AIsa 模型 | 不支持——Antigravity 不接受自定义模型 endpoint。请用 [Claude Code](/zh/guides/tutorials/use-aisa-in-claude-code)、[Codex](/zh/guides/tutorials/use-aisa-in-codex) 或 [Cursor](/zh/guides/tutorials/use-aisa-in-cursor) 运行 AIsa 模型 |
+
+## 相关页面
+
+<CardGroup cols={3}>
+  <Card title="在 Grok Build 中使用 AIsa" icon="terminal" href="/zh/guides/tutorials/use-aisa-in-grok">
+    在 xAI 的 Grok CLI 中完成同样的 MCP 设置。
+  </Card>
+  <Card title="认证" icon="key" href="/zh/guides/authentication">
+    API key 创建、轮换和存储最佳实践。
+  </Card>
+  <Card title="Agent Skills" icon="puzzle-piece" href="/zh/agent-skills">
+    浏览 AIsa 向 agent 开放的能力。
+  </Card>
+</CardGroup>

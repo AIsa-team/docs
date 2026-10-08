@@ -1,0 +1,120 @@
+---
+title: "Use AIsa in Pi"
+description: "Add AIsa as a remote MCP server in the Pi coding agent with one command."
+---
+
+Pi has a built-in MCP client. Add AIsa as a remote MCP server, authenticated with your AIsa API key, and Pi's agent can discover and call AIsa capabilities — web research, finance, social, SEO, sales, and more.
+
+AIsa MCP endpoint:
+
+```txt
+https://mcp.aisa.one/mcp
+```
+
+## Prerequisites
+
+Before you start, make sure you have:
+
+- An AIsa API key ([console.aisa.one/api-keys](https://console.aisa.one/api-keys))
+- [Pi](https://pi.dev) installed, with built-in MCP support (`pi mcp --help` works)
+
+## 1. Export your AIsa key
+
+Pi reads the key from an environment variable, so it never lands in the config file. Add this to `~/.zshrc` or `~/.bashrc`:
+
+```bash
+export AISA_API_KEY="sk-aisa-..."
+```
+
+Open a new terminal, or `source` the file, before starting Pi.
+
+## 2. Ask Pi to connect AIsa
+
+Start `pi` and send:
+
+```txt
+Read https://aisa.one/llms.txt and help me connect to AIsa.
+```
+
+Pi reads AIsa's agent-facing instructions and registers the AIsa MCP server globally, using your `AISA_API_KEY`.
+
+<Tip>
+  Prefer to do it yourself? Run the same command Pi runs:
+
+  ```bash
+  pi mcp add aisa \
+    --url https://mcp.aisa.one/mcp \
+    --bearer-token-env-var AISA_API_KEY \
+    --description "AIsa capability layer: discover and call APIs across web, finance, social, SEO, sales, and more."
+  ```
+</Tip>
+
+## 3. Verify and reload
+
+Check the connection:
+
+```bash
+pi mcp list
+```
+
+You should see:
+
+```txt
+aisa: connected, 5 tools (codemode, global)
+  https://mcp.aisa.one/mcp
+  tools: list_categories, search, get_details, use, batch_use
+```
+
+If you added the server from inside a running Pi session, type `/reload` so the session picks up the new tools.
+
+## 4. Use AIsa capabilities
+
+Ask Pi for anything AIsa can fetch, for example:
+
+```txt
+Use AIsa to check the recent posts of Sam Altman.
+```
+
+Pi searches the AIsa catalog, reads the matching operation's schema, then runs it and reports the cost. The five tools work as follows:
+
+| Tool | What it does | Billing |
+| --- | --- | --- |
+| `list_categories` | Lists capability categories | Free |
+| `search` | Finds operations by natural-language task | Free |
+| `get_details` | Returns schema, pricing, and pitfalls for an operation | Free |
+| `use` | Runs one operation, capped by `max_price_usd` | Billed |
+| `batch_use` | Runs several operations, capped by `max_price_usd` | Billed |
+
+## Quick reference
+
+| Item | Value |
+| --- | --- |
+| MCP URL | `https://mcp.aisa.one/mcp` |
+| Auth | Bearer token from `AISA_API_KEY` |
+| Add command | `pi mcp add aisa --url https://mcp.aisa.one/mcp --bearer-token-env-var AISA_API_KEY` |
+| Global config | `~/.pi/agent/mcp.json` |
+| Verify | `pi mcp list` |
+| Load into a running session | `/reload` |
+
+## Troubleshooting
+
+| Problem | Fix |
+| --- | --- |
+| `pi mcp list` shows an auth error (401) | Confirm `echo $AISA_API_KEY` prints your key in the shell that starts Pi, and the key is valid in the [dashboard](https://console.aisa.one) |
+| AIsa tools missing in the current session | Type `/reload`, or start a new Pi session |
+| `pi mcp` is not a command | Update Pi to a version with built-in MCP support |
+| Want AIsa in one project only | Add the server to the project's `.pi/mcp.json` instead of the global config |
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Use AIsa in Claude Code" icon="terminal" href="/guides/tutorials/use-aisa-in-claude-code">
+    Run Claude models through AIsa in Claude Code.
+  </Card>
+  <Card title="Authentication" icon="key" href="/guides/authentication">
+    API key creation, rotation, and storage best practices.
+  </Card>
+  <Card title="Agent Skills" icon="puzzle-piece" href="/agent-skills">
+    Browse the capabilities AIsa exposes to agents.
+  </Card>
+</CardGroup>
