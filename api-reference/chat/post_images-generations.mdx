@@ -4,17 +4,16 @@ description: "Generate images with Seedream, Wan, gpt-image-2, and GPT Image 2.5
 openapi: "openapi/openai-images-generations.json POST /images/generations"
 ---
 
-The standard OpenAI-compatible `POST /v1/images/generations` endpoint. As of September 30, 2026 it serves `seedream-5-0-260128`, `wan2.7-image`, `wan2.7-image-pro`, `gpt-image-2`, `gpt-image-2.5-flare`, and `gpt-image-2.5-sunburst`. The older `seedream-4-5-251128` route is reached through [Image Generation via Chat](/api-reference/chat/post_chat-completions-image-generation) instead.
+The standard OpenAI-compatible `POST /v1/images/generations` endpoint. As of September 30, 2026 it serves `seedream-5-0-260128`, `wan2.7-image`, `wan2.7-image-pro`, `gpt-image-2`, `gpt-image-2.5-flare`, and `gpt-image-2.5-sunburst`. No image model is served on `POST /v1/chat/completions` — image generation goes through this endpoint (and `POST /v1/images/edits` where noted).
 
 ## Routing at a glance
 
 | Model | Endpoint |
 |---|---|
-| `seedream-5-0-260128` | **`POST /v1/images/generations`** *(this page)*, also `POST /v1/chat/completions` |
+| `seedream-5-0-260128` | **`POST /v1/images/generations`** *(this page)* |
 | `wan2.7-image` / `wan2.7-image-pro` | **`POST /v1/images/generations`** *(this page)*, `POST /v1/images/edits` |
 | `gpt-image-2` | **`POST /v1/images/generations`** *(this page)*, `POST /v1/images/edits` |
 | `gpt-image-2.5-flare` / `gpt-image-2.5-sunburst` | **`POST /v1/images/generations`** *(this page)*, `POST /v1/images/edits` |
-| `seedream-4-5-251128` | [`POST /v1/chat/completions`](/api-reference/chat/post_chat-completions-image-generation) |
 | Gemini-compatible models | [`POST /v1beta/models/{model}:generateContent`](/api-reference/chat/post_models-model-generatecontent) |
 
 ## Supported models
@@ -144,7 +143,8 @@ for (const item of resp.data) {
 ## Common 4xx causes
 
 - `400 InvalidParameter — image size must be at least 3686400 pixels` — `size` was too small. Use `1920x1920` or larger.
-- `404 openai_error` — you passed a model that isn't routed through this endpoint (e.g., `wan2.7-image`). Use the [chat-based route](/api-reference/chat/post_chat-completions-image-generation) instead.
+- `400 model_route_not_supported` — the model doesn't serve this endpoint (e.g., a text model like `gpt-4.1-mini`). The error body's `supported_routes` lists the routes it does serve.
+- `404 model not found` — the model ID doesn't exist on the gateway (e.g., the retired `seedream-4-5-251128`). Check the [model catalog](/guides/models).
 - `400 invalid_request` — malformed `size` string (e.g., `1024` instead of `1024x1024`).
 
 See [Error Codes](/api-reference/errors) and [Rate Limits](/api-reference/rate-limits) for more.
@@ -152,8 +152,8 @@ See [Error Codes](/api-reference/errors) and [Rate Limits](/api-reference/rate-l
 ## Related
 
 <CardGroup cols={3}>
-  <Card title="Image Generation via Chat" icon="message" href="/api-reference/chat/post_chat-completions-image-generation">
-    The `/v1/chat/completions` route for the Wan 2.7 family.
+  <Card title="Model catalog" icon="list" href="/guides/models">
+    Current model IDs and the endpoints each one serves.
   </Card>
   <Card title="Gemini generateContent" icon="google" href="/api-reference/chat/post_models-model-generatecontent">
     Gemini-compatible generateContent endpoint.
