@@ -40,3 +40,13 @@ Local verification covers strict OpenAPI validity of all 26 input documents,
 actual source-loader membership, response-only request exclusion, policy validity,
 and unchanged candidate schemas/transport pins. It does not claim current-facts
 composition, a successful source review, publication, deployment or wire replay.
+
+## Independent review completion
+
+The 26 declarations now have hash/policy-bound attributed receipts in
+`response-source-review-receipts.json`, backed by immutable review commit
+`b90226fd6580bea02cd13b6048ce50ac65e97499`. The historical 25 retain exactly their published success schemas;
+Segments was independently fetched and regenerated from current official typed
+documentation. Use `--source-receipts docs/response-source-review-receipts.json`
+when assessing this candidate. This explicit input does not replace other source
+receipts or bypass the current Runtime/full-catalog publication gates.
