@@ -48,10 +48,16 @@ MARK = "Register the AIsa MCP server"
 def _key() -> str:
     key = os.environ.get("AISA_API_KEY") or ""
     if not key:
-        path = Path.home() / ".aisa" / "key"
-        key = path.read_text(encoding="utf-8").strip() if path.exists() else ""
+        # CLI 0.6+ keeps credentials in tokens.json; ~/.aisa/key is a legacy
+        # mirror that can lag behind a refresh.
+        path = Path.home() / ".aisa" / "tokens.json"
+        tokens = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        expires = tokens.get("expiresAt")
+        if expires is not None and expires <= time.time() * 1000:
+            sys.exit("~/.aisa/tokens.json session expired — run `aisa balance` to refresh it")
+        key = tokens.get("accessToken") or ""
     if not key:
-        sys.exit("no AISA_API_KEY and no ~/.aisa/key — tools/list needs one")
+        sys.exit("no AISA_API_KEY and no ~/.aisa/tokens.json — tools/list needs one")
     return key
 
 
