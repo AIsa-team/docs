@@ -127,6 +127,12 @@ class PublishedIdentityTests(unittest.TestCase):
         self.assertEqual(self.compose(), {})
 
     def test_localization_generator_really_keeps_zh_ids_and_validates_wire_equivalence(self):
+        for path in (self.root / 'facts').glob('*.json'):
+            facts = json.loads(path.read_text())
+            for item in facts['paths'].values():
+                for operation in item.values():
+                    operation['x-aisa-pricing'] = {'model': 'per_request', 'cost_tier': 'low'}
+            path.write_text(json.dumps(facts))
         self.compose()
         # Translation uses existing deterministic glossary/identity translation,
         # with no model or paid network calls.
@@ -145,6 +151,7 @@ class PublishedIdentityTests(unittest.TestCase):
             provider = Path(row['proof']['source_file']).stem
             operation = json.loads((self.root/f'openapi/zh/{provider}.json').read_text())['paths'][row['proof']['public_path']][row['proof']['method'].lower()]
             self.assertEqual(operation['operationId'], row['proof']['operation_id'])
+            self.assertEqual(operation['x-aisa-pricing'], {'model': 'per_request', 'cost_tier': 'low'})
 
     def test_forged_source_hash_id_ref_and_shadow_are_rejected(self):
         self.compose()

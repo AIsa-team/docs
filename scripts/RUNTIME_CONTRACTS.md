@@ -484,3 +484,29 @@ search/details checks pass. An existing published contract remains available as
 historical evidence during unresolved refreshes; new operations without a valid
 contract stay pending. Changes to runtime execution or production configuration
 use their normal separate review/deployment process.
+
+## Repairing missing historical locale pricing
+
+For a ZH mirror that only lacks an existing root `x-aisa-pricing` object,
+use the bounded localization command with an explicitly selected immutable
+publication base. It defaults to a dry-run; add `--write` to save the reviewed
+additions:
+
+```sh
+python scripts/runtime_localize_openapi_zh.py sync-alias-pricing \
+  --published-ref cf10c7c23c44b2a7666f2d1946cad106a42e326d
+python scripts/runtime_localize_openapi_zh.py sync-alias-pricing \
+  --published-ref cf10c7c23c44b2a7666f2d1946cad106a42e326d --write
+python -m unittest discover -s scripts/tests -p 'test_alias_pricing_sync.py' -v
+python -m unittest discover -s scripts/tests -p 'test_identity_compatibility.py' -v
+```
+
+The command verifies all historical alias operations and shared spec wire
+contexts (servers, security, reusable schemas and path-level parameters) before
+writing any file. Other operations remain outside this bounded repair.
+Missing root pricing, conflicting locale
+pricing, changed route/method/identity, or other wire differences reject the
+whole batch. Examples, enum, const and default literals remain significant.
+Only missing locale pricing is copied, exactly from root; root specs, prose,
+pages, identity metadata and historical Git proof bytes remain unchanged.
+This repair does not add approval, publish a receipt, or enable activation.

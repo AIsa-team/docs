@@ -566,6 +566,108 @@ def strip_translatable(node: Any, path: tuple[str, ...] = ()) -> Any:
     return node
 
 
+def sync_alias_pricing(published_ref: str, *, write: bool = False) -> dict[str, Any]:
+    """Fill missing locale pricing only for immutable, proved historical aliases.
+
+    Validate the complete selected batch before writing. Unlike generate(), this
+    does not add identity metadata, translate prose, or regenerate pages/specs.
+    """
+    from identity_compatibility import published_history, operations
+    if not isinstance(published_ref, str) or not re.fullmatch(r'[0-9a-f]{40}', published_ref):
+        raise ValueError('alias pricing sync requires an explicit full published Git SHA')
+    history = published_history(ROOT, published_ref)
+    if history is None or not history.aliases:
+        raise ValueError('alias pricing sync requires proved published locale identities')
+
+    def unique_members(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError('duplicate JSON member in alias pricing source: ' + key)
+            result[key] = value
+        return result
+
+    def reject_constant(value):
+        raise ValueError('non-JSON numeric constant in alias pricing source: ' + value)
+
+    def wire_json(value):
+        # Python equality treats True as 1. Canonical JSON preserves wire types.
+        return json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(',', ':'))
+
+    originals: dict[Path, str] = {}
+    original_documents: dict[Path, Any] = {}
+    documents: dict[Path, Any] = {}
+
+    def document(filename):
+        path = ROOT / filename
+        if path not in documents:
+            originals[path] = path.read_text()
+            documents[path] = json.loads(originals[path], object_pairs_hook=unique_members, parse_constant=reject_constant)
+            original_documents[path] = copy.deepcopy(documents[path])
+        return documents[path]
+
+    def operation(doc, proof):
+        matches = [op for path, method, op in operations(doc)
+                   if (path, method) == (proof['public_path'], proof['method'])]
+        if len(matches) != 1:
+            raise ValueError('alias pricing sync requires the exact published route and method')
+        return matches[0]
+
+    checked = updated = 0
+    pairs: set[tuple[Path, Path]] = set()
+    for canonical, proofs in sorted(history.aliases.items()):
+        for proof in proofs:
+            history.verify(canonical, proof)
+            source = document(proof['canonical_source_file'])
+            target = document(proof['source_file'])
+            english, chinese = operation(source, proof), operation(target, proof)
+            if english.get('operationId') != canonical or chinese.get('operationId') != proof['operation_id']:
+                raise ValueError('alias pricing sync cannot change current canonical/locale identities')
+            pricing = english.get('x-aisa-pricing')
+            if not isinstance(pricing, dict) or not pricing:
+                raise ValueError('alias pricing sync requires existing root pricing: ' + canonical)
+            if 'x-aisa-pricing' in chinese:
+                if wire_json(chinese['x-aisa-pricing']) != wire_json(pricing):
+                    raise ValueError('alias pricing sync refuses conflicting locale pricing: ' + canonical)
+            else:
+                chinese['x-aisa-pricing'] = copy.deepcopy(pricing)
+                updated += 1
+            comparable = copy.deepcopy(chinese)
+            comparable['operationId'] = canonical
+            if wire_json(strip_translatable(english, ('paths',))) != wire_json(strip_translatable(comparable, ('paths',))):
+                raise ValueError('alias pricing sync refuses non-pricing wire differences: ' + canonical)
+            pairs.add((ROOT / proof['canonical_source_file'], ROOT / proof['source_file']))
+            checked += 1
+
+    # Compare shared spec contexts too: servers, security, reusable schemas and
+    # path-level parameters. Unselected operations can have separate legacy
+    # pricing debt; they remain untouched and are outside this bounded repair.
+    def context(doc):
+        result = copy.deepcopy(doc)
+        for item in result.get('paths', {}).values():
+            for method in HTTP_METHODS:
+                item.pop(method, None)
+        return strip_translatable(result)
+
+    for source_path, target_path in sorted(pairs):
+        if wire_json(context(documents[source_path])) != wire_json(context(documents[target_path])):
+            raise ValueError('alias pricing sync refuses non-pricing wire/context differences: ' + target_path.name)
+
+    changes = {path: json.dumps(documents[path], ensure_ascii=False, allow_nan=False, indent=2) + '\n'
+               for _, path in pairs if wire_json(documents[path]) != wire_json(original_documents[path])}
+    if write:
+        # Detect concurrent edits to either input before any output is changed.
+        if any(path.read_text() != raw for path, raw in originals.items()):
+            raise ValueError('alias pricing sync input changed during validation')
+        for path, content in sorted(changes.items()):
+            path.write_text(content)
+    result = {'published_ref': published_ref, 'aliases_checked': checked,
+              'pricing_added': updated, 'write': write,
+              'changed_files': [str(path.relative_to(ROOT)) for path in sorted(changes)]}
+    print(json.dumps(result, sort_keys=True))
+    return result
+
+
 def validate(published_ref=None) -> None:
     from identity_compatibility import published_history, validate_document_identities, canonicalize_localized
     history = published_history(ROOT, published_ref)
@@ -674,6 +776,9 @@ def main() -> None:
     for command in ('generate', 'validate'):
         command_parser = sub.add_parser(command)
         command_parser.add_argument('--published-ref', help='Full immutable publication base for historical identity proofs')
+    pricing_parser = sub.add_parser('sync-alias-pricing', help='Fill only missing proved locale pricing; dry-run by default')
+    pricing_parser.add_argument('--published-ref', required=True, help='Full immutable publication base for historical identity proofs')
+    pricing_parser.add_argument('--write', action='store_true', help='Write validated locale pricing additions')
     sub.add_parser("extract-nav")
     sub.add_parser("translate-nav")
     sub.add_parser("sync-nav")
@@ -686,6 +791,8 @@ def main() -> None:
         generate(args.published_ref)
     elif args.command == "validate":
         validate(args.published_ref)
+    elif args.command == 'sync-alias-pricing':
+        sync_alias_pricing(args.published_ref, write=args.write)
     elif args.command == "extract-nav":
         extract_nav()
     elif args.command == "translate-nav":
