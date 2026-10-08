@@ -8,11 +8,18 @@ import json
 from pathlib import Path
 import re
 from urllib.parse import urljoin, urlsplit
-from urllib.request import urlopen
+from urllib.request import HTTPRedirectHandler, build_opener
 from compose_openapi import digest
+from source_json import checked_float
 
 INDEX = 'https://fred.stlouisfed.org/docs/api/fred/'
-CONVERTER = 'scripts/import_fred_reference.py@2'
+CONVERTER = 'scripts/import_fred_reference.py@3'
+GEO_REFERENCE = {
+    '/geofred/shapes/file': 'shapes.html',
+    '/geofred/series/group': 'series_group.html',
+    '/geofred/series/data': 'series_data.html',
+    '/geofred/regional/data': 'regional_data.html',
+}
 VOID = {'br', 'hr', 'img', 'input', 'meta', 'link', 'wbr', 'source'}
 
 
@@ -23,6 +30,9 @@ class Node:
     def text(self, skip=()):
         return ' '.join(' '.join(c if isinstance(c, str) else c.text(skip)
                                 for c in self.children if isinstance(c, str) or c.tag not in skip).split())
+
+    def raw_text(self):
+        return ''.join(c if isinstance(c, str) else c.raw_text() for c in self.children)
 
     def all(self, tag=None):
         for child in self.children:
@@ -62,10 +72,21 @@ def official_url(url):
     return url
 
 
+class OfficialRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Validate before following a redirect; never contact a business API or
+        # another host and only reject its response afterwards.
+        official_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def fetch(url):
-    with urlopen(official_url(url), timeout=40) as response:
+    with build_opener(OfficialRedirectHandler()).open(official_url(url), timeout=40) as response:
         official_url(response.url)
-        return response.read()
+        raw = response.read((2 << 20) + 1)
+        if len(raw) > 2 << 20:
+            raise ValueError('official reference exceeds 2MiB bound')
+        return raw
 
 
 def parameter(name, nodes, defaults=None):
@@ -136,7 +157,8 @@ def parameter(name, nodes, defaults=None):
             'description': description, 'x-aisa-reference-declarations': bullets}
 
 
-def parse_reference(raw, url):
+def reference_identity(raw, url):
+    official_url(url)
     tree = Tree(raw).root
     content = next((n for n in tree.all() if n.attrs.get('id') == 'content-container'), None)
     if content is None:
@@ -153,8 +175,80 @@ def parse_reference(raw, url):
         expected_url = INDEX + path.removeprefix('/fred/').replace('/', '_') + '.html'
         if url != expected_url or path != '/' + title:
             raise ValueError('reference title, request path and source URL disagree')
+    elif path.startswith('/geofred/'):
+        filename = GEO_REFERENCE.get(path)
+        if filename is None or url != 'https://fred.stlouisfed.org/docs/api/geofred/' + filename:
+            raise ValueError('GeoFRED request path and source URL disagree')
     if not any('Request (HTTPS GET)' == n.text() for n in content.all() if n.tag in ('h3','h4')):
         raise ValueError('official GET method declaration missing')
+    return content, title, path
+
+
+def unique_json_members(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('duplicate JSON response example member')
+        result[key] = value
+    return result
+
+
+def reject_json_constant(token):
+    raise ValueError('non-JSON response example constant')
+
+
+def response_evidence(content):
+    # Carry explicit representations/examples, never infer schema from samples.
+    media = set(re.findall(r'HTTP Content-Type is ([a-z]+/[a-z0-9.+-]*[a-z0-9+-])', content.text()))
+    content_values, pending = {}, []
+    representation, response = None, False
+    for node in content.all():
+        if node.tag == 'h2':
+            representation, response = None, False
+        elif node.tag == 'h3' and node.text() in ('XML', 'JSON'):
+            representation, response = node.text(), False
+        elif node.tag in ('h3', 'h4') and node.text() == 'Response':
+            response = True
+        elif node.tag in ('h3', 'h4') and node.text().startswith('Request'):
+            response = False
+        elif node.tag == 'pre' and response:
+            raw = node.raw_text().strip().strip('`').strip()
+            kind = {'XML': 'text/xml', 'JSON': 'application/json'}.get(representation)
+            # GeoFRED shapes explicitly says that only JSON is returned.
+            if kind is None and 'only returns the shape files as json' in content.text():
+                kind = 'application/json'
+            if kind is None:
+                pending.append({'reason': 'response representation not explicitly declared'})
+                continue
+            if kind == 'application/json':
+                try:
+                    value = json.loads(raw, object_pairs_hook=unique_json_members, parse_float=checked_float, parse_constant=reject_json_constant)
+                except (ValueError, TypeError):
+                    pending.append({'media_type': kind, 'reason': 'official JSON response example is not valid JSON',
+                                    'example_sha256': hashlib.sha256(raw.encode()).hexdigest()})
+                    continue
+            else:
+                from xml.etree import ElementTree
+                if '<!DOCTYPE' in raw.upper() or '<!ENTITY' in raw.upper():
+                    pending.append({'media_type': kind, 'reason': 'XML declarations are unsupported'})
+                    continue
+                try:
+                    ElementTree.fromstring(raw)
+                except ElementTree.ParseError:
+                    pending.append({'media_type': kind, 'reason': 'official XML response example is not well formed',
+                                    'example_sha256': hashlib.sha256(raw.encode()).hexdigest()})
+                    continue
+                value = raw
+            bucket = content_values.setdefault(kind, {'examples': {}})['examples']
+            bucket['official_' + str(len(bucket) + 1)] = {'value': value, 'description': 'Official response example only; not a complete payload schema.'}
+    for kind in sorted(media):
+        content_values.setdefault(kind, {})
+    return {'content': content_values, 'pending': pending,
+            'schema_status': 'not_declared_in_reference', 'schema_inferred': False}
+
+
+def parse_reference(raw, url):
+    content, title, path = reference_identity(raw, url)
     defaults = dict(re.findall(r'default value of ([a-z_]+) is ([a-z0-9_]+)\.', content.text()))
     all_nodes = list(content.all())
     starts = [i for i,n in enumerate(all_nodes) if n.tag == 'h2' and n.text() == 'Parameters']
@@ -188,10 +282,14 @@ def parse_reference(raw, url):
         raise ValueError('empty or duplicate parameter declarations')
     if not any(p['name'] == 'api_key' and p['required'] for p in parameters):
         raise ValueError('official provider authentication declaration missing')
+    evidence = response_evidence(content)
+    response = {'description': 'Official representation and examples only; no complete response schema is declared.'}
+    if evidence['content']:
+        response['content'] = evidence['content']
     return path, {'summary': description or title, 'description': description,
                   'parameters': parameters, 'security': [{'fred_api_key': []}],
-                  'externalDocs': {'url': url},
-                  'responses': {'200': {'description': 'Provider response in the requested file_type (XML by default). Official examples are not a complete response schema.'}}}
+                  'externalDocs': {'url': url}, 'responses': {'200': response},
+                  'x-aisa-response-evidence': evidence}
 
 
 def import_reference(provider, url=INDEX, fetcher=None):
@@ -210,25 +308,38 @@ def import_reference(provider, url=INDEX, fetcher=None):
             links[text] = destination
     if not links:
         raise ValueError('official index has no FRED endpoint references')
-    paths, sources, pending = {}, [], []
+    paths, sources, pending, identities = {}, [], [], []
     for title, destination in sorted(links.items()):
         raw = fetcher(destination)
         source = {'url': destination, 'sha256': hashlib.sha256(raw).hexdigest()}
         sources.append(source)
+        # Method/path proof is independent of complete parameter declarations.
+        # Incomplete requests are evidence only, never emitted in paths.
+        content, reference_title, identity_path = reference_identity(raw, destination)
+        if identity_path in {row['path'] for row in identities} or title.startswith('fred/') and identity_path != '/' + title:
+            raise ValueError('index and reference path disagree')
+        identity = dict(source, path=identity_path, method='GET',
+                        identity_source='official_reference_path_and_explicit_method',
+                        response_evidence=response_evidence(content))
+        identities.append(identity)
         try:
             path, operation = parse_reference(raw, destination)
         except ValueError as error:
-            pending.append(dict(source, reason=str(error)))
+            pending.append(dict(source, path=identity_path, method='GET', reason=str(error)))
+            identity.update(request_status='pending', request_reason=str(error))
             continue
         if title.startswith('fred/') and path != '/' + title or path in paths:
             raise ValueError('index and reference path disagree')
         paths[path] = {'get': operation}
         source.update(path=path, parameter_count=len(operation['parameters']))
+        identity.update(request_status='complete', parameter_count=len(operation['parameters']))
     source = {'kind': 'provider_openapi', 'url': url, 'converter': CONVERTER,
               'fetched_at': datetime.now(timezone.utc).isoformat(),
               'index_sha256': hashlib.sha256(index).hexdigest(), 'references': sources, 'pending_references': pending,
+              'operation_identity_evidence': identities,
               'request_contract_source': 'official_html_parameter_declarations',
               'response_schema_available': False,
+              'response_example_contract': 'authoritative examples retained without schema inference or debt closure',
               'limitations': ['Conditional prose constraints remain descriptions, not executable validation.',
                              'References with incomplete type or required/optional declarations are explicitly pending and not emitted.']}
     document = {'openapi': '3.1.0', 'info': {'title': 'Official FRED reference', 'version': 'reference-html-1', 'x-aisa-source': source},

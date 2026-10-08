@@ -6,7 +6,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from import_fred_reference import INDEX, import_reference, parse_reference, official_url
+from import_fred_reference import INDEX, import_reference, parse_reference, official_url, reference_identity, response_evidence, Tree, OfficialRedirectHandler
 from compose_openapi import compose, digest
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -135,9 +135,102 @@ class FredReferenceTest(unittest.TestCase):
             name='index.html' if url==INDEX else ('geofred_' if '/geofred/' in url else '')+url.rsplit('/',1)[-1]
             return (Path(directory)/name).read_bytes()
         fresh=import_reference('fred',fetcher=fetcher)
-        self.assertEqual(fresh['paths'],self.document()['paths'])
-        self.assertEqual(fresh['info']['x-aisa-source']['references'],self.document()['info']['x-aisa-source']['references'])
-        self.assertEqual(fresh['info']['x-aisa-source']['content_hash'],self.document()['info']['x-aisa-source']['content_hash'])
+        # Current static reference bytes/examples may advance. Request
+        # semantics remain compared to the locked baseline without treating
+        # that baseline as approval or requiring historical HTML byte identity.
+        self.assertEqual(set(fresh['paths']),set(self.document()['paths']))
+        for path, item in fresh['paths'].items():
+            for key in ('parameters','security','externalDocs'):
+                self.assertEqual(item['get'][key],self.document()['paths'][path]['get'][key])
+            for media in item['get']['responses']['200'].get('content',{}).values():
+                self.assertNotIn('schema',media)
+        evidence=fresh['info']['x-aisa-source']['operation_identity_evidence']
+        self.assertEqual(len(evidence),35)
+        self.assertEqual(sum(x['request_status']=='pending' for x in evidence),3)
+        self.assertEqual({x['method'] for x in evidence},{'GET'})
+        facts=json.loads((ROOT/'facts/fred.json').read_text())
+        public,pending=compose(facts,fresh)
+        self.assertEqual(len(pending),3)
+        self.assertEqual(len(public['info']['x-aisa-document']['response_pending']),32)
+        self.assertTrue(any('examples' in media for item in public['paths'].values()
+                            for op in item.values() for response in op.get('responses',{}).values()
+                            for media in response.get('content',{}).values()))
+
+
+    def test_redirect_is_rejected_before_following_business_or_other_host(self):
+        from urllib.request import Request
+        handler=OfficialRedirectHandler()
+        for destination in ('https://api.stlouisfed.org/fred/series', 'https://evil.example/docs/api/fred/'):
+            with self.subTest(url=destination),self.assertRaises(ValueError):
+                handler.redirect_request(Request(INDEX),None,302,'Found',{},destination)
+
+    def test_identity_survives_missing_parameter_declaration_without_partial_operation(self):
+        raw=reference('<h3>search_text</h3><p>Words to search for.</p>')
+        index=b'<a href="example.html">fred/example</a>'
+        document=import_reference('fred',fetcher={INDEX:index,INDEX+'example.html':raw}.__getitem__)
+        self.assertEqual(document['paths'],{})
+        evidence=document['info']['x-aisa-source']['operation_identity_evidence']
+        self.assertEqual(evidence[0]['path'],'/fred/example')
+        self.assertEqual(evidence[0]['method'],'GET')
+        self.assertEqual(evidence[0]['request_status'],'pending')
+        self.assertEqual(evidence[0]['request_reason'],'search_text: required/optional is not stated')
+        self.assertNotIn('operation_id',evidence[0])
+
+    def test_geofred_path_requires_exact_official_reference_url(self):
+        raw=reference().replace(b'fred/example',b'geofred/series/data')
+        good='https://fred.stlouisfed.org/docs/api/geofred/series_data.html'
+        self.assertEqual(reference_identity(raw,good)[2],'/geofred/series/data')
+        for bad in (INDEX+'example.html','https://fred.stlouisfed.org/docs/api/geofred/series_group.html'):
+            with self.subTest(url=bad),self.assertRaisesRegex(ValueError,'GeoFRED'):
+                reference_identity(raw,bad)
+
+    def test_official_response_examples_keep_strings_and_never_infer_schema(self):
+        raw=b'''<div id="content-container"><h2>Examples</h2><h3>JSON</h3>
+        <h4>Request (HTTPS GET)</h4><pre>https://api.stlouisfed.org/fred/example?api_key=demo</pre>
+        <h4>Response</h4><pre>{"note":"two  spaces", "count":2, "items":[]}</pre>
+        <h2>Parameters</h2><p>The HTTP Content-Type is application/json.</p></div>'''
+        evidence=response_evidence(Tree(raw).root)
+        self.assertEqual(set(evidence['content']),{'application/json'})
+        media=evidence['content']['application/json']
+        self.assertEqual(media['examples']['official_1']['value']['note'],'two  spaces')
+        self.assertNotIn('schema',media)
+        self.assertFalse(evidence['schema_inferred'])
+        self.assertEqual(evidence['schema_status'],'not_declared_in_reference')
+
+    def test_malformed_duplicate_and_nonfinite_response_examples_remain_pending(self):
+        for sample in ('{"x":1,"x":2}','{"x":NaN}','{"x": ...}'):
+            raw=('<div><h3>JSON</h3><h4>Response</h4><pre>'+sample+'</pre></div>').encode()
+            with self.subTest(sample=sample):
+                evidence=response_evidence(Tree(raw).root)
+                self.assertEqual(evidence['content'],{})
+                self.assertEqual(evidence['pending'][0]['reason'],'official JSON response example is not valid JSON')
+                self.assertRegex(evidence['pending'][0]['example_sha256'],r'^[a-f0-9]{64}$')
+
+    def test_xml_example_dtd_is_never_loaded(self):
+        raw=b'<div><h3>XML</h3><h4>Response</h4><pre>&lt;!DOCTYPE x SYSTEM "https://example.com/private"&gt;&lt;x/&gt;</pre></div>'
+        evidence=response_evidence(Tree(raw).root)
+        self.assertEqual(evidence['content'],{})
+        self.assertEqual(evidence['pending'][0]['reason'],'XML declarations are unsupported')
+
+    def test_examples_do_not_silently_satisfy_composer_payload_schema_gate(self):
+        source=self.document()
+        source=json.loads(json.dumps(source))
+        path=next(iter(source['paths']))
+        content=b'<div><h3>JSON</h3><h4>Response</h4><pre>{"items":[]}</pre></div>'
+        evidence=response_evidence(Tree(content).root)
+        source['paths'][path]['get']['responses']['200']['content']=evidence['content']
+        source['paths'][path]['get']['x-aisa-response-evidence']=evidence
+        facts={'openapi':'3.1.0','info':{'x-aisa-document':{'facts_hash':'fixture'}},'paths':{
+            '/apis/v1/fred/example':{'x-aisa-any':{'operationId':'fixture_preserved','x-aisa-status':'enabled',
+                'x-aisa-passthrough':True,'x-aisa-validation':'provider','x-aisa-upstream-path':path,
+                'x-aisa-query-policy':{'request_wins':True},'responses':{'200':{'description':'Success'}}}}}}
+        document,pending=compose(facts,source)
+        self.assertEqual(pending,[])
+        self.assertEqual(document['paths']['/apis/v1/fred/example']['get']['operationId'],'fixture_preserved')
+        self.assertEqual(len(document['info']['x-aisa-document']['response_pending']),1)
+        response=document['paths']['/apis/v1/fred/example']['get']['responses']['200']
+        self.assertEqual(response['content']['application/json']['examples']['official_1']['value'],{'items':[]})
+        self.assertNotIn('schema',response['content']['application/json'])
 
     @staticmethod
     def document():
