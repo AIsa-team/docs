@@ -80,3 +80,33 @@ owning repository declares its deployment hostname.
 facts. Passing these tests does not change W0 debt or prove a current production
 projection. Run with `python -m unittest discover -s scripts/tests -p
 test_independent_response_sources.py -v`.
+
+## Migrate an existing public response declaration
+
+When new Runtime transport descriptors make anonymous historical inheritance
+unusable, use `prepare_response_source_migration.py` to prepare explicit sources.
+`plan` compares a pinned, published AIsa document with new Runtime facts and
+records each old response hash, current request/profile fingerprint, immutable
+operation identity, and path/origin pins. Transformed routes, incomplete
+responses, and identity mismatches remain blocked.
+
+```sh
+python scripts/prepare_response_source_migration.py plan --published OLD.json --facts CURRENT.json --source-url https://github.com/AIsa-team/docs/blob/FULL_REVISION/openapi/PROVIDER.json --source-revision FULL_REVISION --output REVIEW.json
+python scripts/prepare_response_source_migration.py prepare --published OLD.json --facts CURRENT.json --review REVIEW.json --output /private/tmp/response-migration-candidates
+```
+
+The plan defaults every route to `review_decision: pending`. Before preparation,
+a reviewer must compare the public response semantics with the current owning
+handler or provider contract, then explicitly choose
+`accept_existing_public_response` and record `review_evidence` per accepted row.
+Supply the original `source_verified_at`; migration time is not acquisition
+proof. Existing source approval, artifact publication and deployment remain
+separate. The tool does not register sources or set an approval flag. A schema
+that happened to be inherited before is not automatically authoritative for the
+current binding.
+
+Preparation rejects source byte changes, response changes, request/profile
+changes, identity changes, target-path changes and origin changes after review.
+The generated mirrors contain only responses and remain subject to the normal
+Runtime descriptor and publication checks. Never disable a mismatch check to
+make a historical test pass; provide the reviewed fixture source explicitly.
