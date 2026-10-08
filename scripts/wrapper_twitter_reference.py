@@ -6,7 +6,58 @@ REVISION = '9481772229feb96eed7fef509234d089cd0d7ec3'
 ROOT = 'https://raw.githubusercontent.com/AIsa-team/AisaTwitterAuthService/' + REVISION + '/'
 REFERENCE_URL = ROOT + 'app/api/routes/twitter.py'
 SCHEMA_URL = ROOT + 'app/schemas/twitter.py'
-VERSION = 'scripts/wrapper_twitter_reference.py@1'
+VERSION = 'scripts/wrapper_twitter_reference.py@2'
+
+
+def response_reference(routes_raw, schemas_raw):
+    """Project the explicit public response_model, including its typed opaque map.
+
+    We never infer Twitter upstream result fields. ApiResponse intentionally
+    declares data as an optional arbitrary dictionary; FastAPI serializes this
+    model for these successful routes.
+    """
+    routes, schemas = ast.parse(routes_raw), ast.parse(schemas_raw)
+    classes = [n for n in schemas.body if isinstance(n, ast.ClassDef) and n.name == 'ApiResponse']
+    expected = ast.parse("""class ApiResponse(BaseModel):
+    code: int
+    msg: str
+    data: Optional[dict[str, Any]] = None
+""").body[0]
+    if len(classes) != 1 or ast.dump(classes[0]) != ast.dump(expected):
+        raise ValueError('ApiResponse declaration changed; response review required')
+    schema = {'type': 'object', 'properties': {'code': {'type': 'integer'},
+        'msg': {'type': 'string'}, 'data': {'anyOf': [{'type': 'object',
+            'additionalProperties': True}, {'type': 'null'}], 'default': None,
+            'description': 'The owning service explicitly declares an optional dictionary of arbitrary values; nested Twitter result fields are opaque.'}},
+        'required': ['code', 'msg']}
+    paths = {}
+    for route in ('/delete_twitter', '/post_twitter'):
+        matches = []
+        for handler in routes.body:
+            if not isinstance(handler, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for dec in handler.decorator_list:
+                if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute) and dec.args:
+                    try:
+                        path = ast.literal_eval(dec.args[0])
+                    except ValueError:
+                        continue
+                    if path == route:
+                        matches.append((handler, dec))
+        if route == '/post_twitter' and not matches:
+            continue  # A focused delete-only source fixture need not invent post.
+        if len(matches) != 1 or ast.unparse(matches[0][1].func) != 'router.post':
+            raise ValueError('owning response route method changed')
+        for keyword in matches[0][1].keywords:
+            if keyword.arg == 'status_code' and ast.literal_eval(keyword.value) == 200:
+                continue
+            if keyword.arg != 'response_model':
+                raise ValueError('owning response serialization/status changed')
+        if not any(k.arg == 'response_model' and ast.unparse(k.value) == 'ApiResponse' for k in matches[0][1].keywords):
+            raise ValueError('owning response_model changed')
+        paths[route] = {'post': {'responses': {'200': {'description': 'Successful ApiResponse serialized by the owning service.',
+            'content': {'application/json': {'schema': schema}}}}}}
+    return paths
 
 
 def convert_reference(routes_raw, schemas_raw):
@@ -55,6 +106,12 @@ def normalize_tweet_id(cls, value: str) -> str:
         '/delete_twitter': {'post': {'summary': 'Delete an authorized account tweet', 'requestBody': {
             'required': True, 'content': {'application/json': {'schema': {'type': 'object', 'properties': properties, 'required': list(properties)}}}},
             'responses': {'200': {'description': 'ApiResponse returned by the owning service; result data is not inferred.'}}}}}}
+    for path, item in response_reference(routes_raw, schemas_raw).items():
+        if path in document['paths']:
+            document['paths'][path]['post']['responses'] = item['post']['responses']
+        # Post has a multipart/JSON parser outside this request converter. Its
+        # response declaration is available through response_reference only;
+        # adding it here would falsely assert a complete request source.
     return document, {'converter': VERSION, 'source_revision': REVISION, 'refresh_policy': 'pinned', 'refresh_reason': 'Private owning-service source; revision updates require an authorized reader.', 'source_pages': [
         {'url': url, 'raw_content_hash': 'sha256:' + hashlib.sha256(raw).hexdigest()}
         for url, raw in [(REFERENCE_URL, routes_raw), (SCHEMA_URL, schemas_raw)]]}

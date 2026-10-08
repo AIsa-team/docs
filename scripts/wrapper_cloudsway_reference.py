@@ -5,10 +5,55 @@ from import_querit_reference import ReferenceTables
 
 REFERENCE_URL = 'https://docs.infra-agent.ai/Smart_Search/Cloudsway_Smart_Search/api/'
 ORIGINAL_REFERENCE_URL = 'https://docs.cloudsway.net/Smart_Search/Cloudsway_Smart_Search/api/'
-VERSION = 'scripts/wrapper_cloudsway_reference.py@1'
+VERSION = 'scripts/wrapper_cloudsway_reference.py@2'
 # Reviewed routing proof: AIsaConsole bin/cloudsway_search_api_import.sh names
 # Cloudsway and maps this configured path to smart. No account path is published.
 UPSTREAM_PATH_SHA256 = '96e1bbbdf395b4c6825c213d53fcd646493e1426452ed6a2d33825fa073cc27d'
+
+
+def response_schema(parser):
+    """Convert declared response types; optionality and item types stay explicit.
+
+    Dotted children of the declared webPages.value array describe its object
+    items. imageList is only declared Array: its item type is left unspecified.
+    """
+    tables = parser.unique_section('Response')['tables']
+    if len(tables) != 1 or tables[0][0] != ['Parameter', 'Type', 'Description']:
+        raise ValueError('Cloudsway response declaration changed')
+    expected = {'queryContext.originalQuery': 'String', 'webPages.value': 'Array',
+        'webPages.value.name': 'String', 'webPages.value.url': 'String',
+        'webPages.value.datePublished': 'String', 'webPages.value.snippet': 'String',
+        'webPages.value.mainText': 'String', 'webPages.value.siteName': 'String',
+        'webPages.value.contentCrawled': 'Bool', 'webPages.value.content': 'String',
+        'webPages.value.logo': 'String', 'webPages.value.imageList': 'Array',
+        'webPages.value.score': 'Float'}
+    root = {'type': 'object', 'properties': {}}
+    seen = set()
+    for row in tables[0][1:]:
+        if len(row) != 3:
+            raise ValueError('Cloudsway response row width changed')
+        name, kind, description = row
+        if name in seen or expected.get(name) != kind:
+            raise ValueError('Cloudsway response field/type changed; review required')
+        seen.add(name)
+        parts = name.split('.')
+        cursor = root
+        for part in parts[:-1]:
+            field = cursor.setdefault('properties', {}).setdefault(part, {'type': 'object', 'properties': {}})
+            if field.get('type') == 'array':
+                field.setdefault('items', {'type': 'object', 'properties': {}})
+                cursor = field['items']
+            elif field.get('type') == 'object':
+                cursor = field
+            else:
+                raise ValueError('Cloudsway response parent conflicts')
+        value = {'type': {'String': 'string', 'Bool': 'boolean', 'Float': 'number', 'Array': 'array'}[kind], 'description': description}
+        if parts[-1] in cursor.setdefault('properties', {}):
+            raise ValueError('Cloudsway response declaration order conflicts')
+        cursor['properties'][parts[-1]] = value
+    if seen != set(expected):
+        raise ValueError('Cloudsway response fields missing; review required')
+    return root
 
 
 def convert_reference(raw):
@@ -69,7 +114,7 @@ def convert_reference(raw):
         parameters.append({'name': name, 'in': 'header', 'required': False, 'description': description, 'schema': {'type': 'string'}})
     document = {'openapi': '3.1.0', 'info': {'title': 'Cloudsway smart search official request', 'version': '1'},
         'paths': {'/apis/v1/search/smart': {'get': {'summary': 'Perform Smart Search', 'parameters': parameters,
-            'responses': {'200': {'description': 'Provider response; response required fields are not inferred.'}}}}}}
+            'responses': {'200': {'description': 'Official typed response table; required fields and undeclared array item types are not inferred.', 'content': {'application/json': {'schema': response_schema(parser)}}}}}}}}
     return document, {'kind': 'manual', 'refresh_policy': 'automatic', 'converter': VERSION, 'path_space': 'public', 'upstream_path_sha256': UPSTREAM_PATH_SHA256,
         'original_upstream_path_template': '/search/{Endpoint}/smart',
         'public_path_mapping': 'Reviewed AIsa routing maps the account-specific Cloudsway endpoint to /apis/v1/search/smart.',
