@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit, unquote
 
-VERSION = "10"
+VERSION = "11"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -495,9 +495,24 @@ def merge_body(upstream: dict, runtime: dict) -> dict:
 
 
 def has_response_contract(response: dict) -> bool:
-    return response.get("x-aisa-no-content") is True or any(
+    """Schema completeness is distinct from having a payload example to retain."""
+    content = response.get("content", {})
+    if not isinstance(content, dict):
+        return False
+    if not content:
+        return response.get("x-aisa-no-content") is True
+    return all(
+        isinstance(media, dict) and isinstance(media.get("schema"), (dict, bool))
+        for media in content.values()
+    )
+
+
+def has_response_payload(response: dict) -> bool:
+    """Keep examples and partial declarations without claiming schema coverage."""
+    content = response.get("content", {})
+    return response.get("x-aisa-no-content") is True or isinstance(content, dict) and any(
         "schema" in media or "example" in media or "examples" in media
-        for media in response.get("content", {}).values()
+        for media in content.values()
         if isinstance(media, dict)
     )
 
@@ -524,16 +539,19 @@ def source_success_responses(operation: dict, document: dict, output: dict, name
     for status, raw in operation.get("responses", {}).items():
         if not re.fullmatch(r"2(?:[0-9]{2}|XX)", str(status)):
             continue
-        if has_response_contract(runtime_responses.get(str(status), {})):
+        if has_response_payload(runtime_responses.get(str(status), {})):
             continue
         # Resolve a Response Object first, without importing headers or links.
         response = response_object(raw, document)
         if str(status) in {"204", "205"} and not response.get("content"):
             result[str(status)] = {"description": response.get("description", "No content"), "content": {}, "x-aisa-no-content": True}
             continue
-        if has_response_contract(response):
-            result[str(status)] = resolve_fragment({"description": response.get("description", "Successful response"),
-                                                   "content": response["content"]}, document, output, namespace, preserve_refs=True)
+        if has_response_payload(response):
+            payload = {"description": response.get("description", "Successful response"),
+                       "content": response.get("content", {})}
+            if response.get("x-aisa-no-content") is True:
+                payload["x-aisa-no-content"] = True
+            result[str(status)] = resolve_fragment(payload, document, output, namespace, preserve_refs=True)
     return result
 
 
@@ -560,12 +578,14 @@ def published_success_responses(previous: dict | None) -> dict:
                 if not re.fullmatch(r"2(?:[0-9]{2}|XX)", str(status)):
                     continue
                 resolved = response_object(response, previous)
-                if has_response_contract(resolved):
+                if has_response_payload(resolved):
                     # Do not copy legacy headers/links: runtime owns protocol.
                     responses[str(status)] = {
                         "description": resolved.get("description", "Successful response"),
                         "content": copy.deepcopy(resolved.get("content", {})),
                     }
+                    if resolved.get("x-aisa-no-content") is True:
+                        responses[str(status)]["x-aisa-no-content"] = True
             if responses:
                 identity = (prefix + path, method, operation_id)
                 if identity in result:
@@ -736,13 +756,13 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     source_payloads = {}
                     response_identity = (facts_prefix + path, actual_method, operation_id)
                     old_responses = published_responses.get(response_identity, {})
-                    if fresh and "200" not in fresh and runtime.get("x-aisa-passthrough") is True and not has_response_contract(operation.get("responses", {}).get("200", {})):
+                    if fresh and "200" not in fresh and runtime.get("x-aisa-passthrough") is True and not has_response_payload(operation.get("responses", {}).get("200", {})):
                         operation.get("responses", {}).pop("200", None)
                         old_responses = {status: response for status, response in old_responses.items() if status != "200"}
                     for status in sorted(set(old_responses) | set(fresh)):
                         response = fresh.get(status, old_responses.get(status))
                         runtime_response = operation.setdefault("responses", {}).get(status, {})
-                        if not has_response_contract(runtime_response):
+                        if not has_response_payload(runtime_response):
                             if status not in fresh:
                                 response = resolve_fragment(response, previous, output, "published_responses.json", preserve_refs=True)
                             effective = copy.deepcopy(runtime_response)
@@ -767,7 +787,9 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             "content_hash": digest(retained),
                         })
                     unknown = [str(status) for status, response in operation.get("responses", {}).items()
-                               if re.fullmatch(r"2(?:[0-9]{2}|XX)", str(status)) and str(status) not in {"204", "205"} and not has_response_contract(response)]
+                               if re.fullmatch(r"2(?:[0-9]{2}|XX)", str(status))
+                               and not (str(status) in {"204", "205"} and not response.get("content"))
+                               and not has_response_contract(response)]
                     if unknown or response_error:
                         gap = {"operation_id": operation_id, "path": path, "method": actual_method.upper(),
                                "statuses": unknown, "reason": response_error or "public success response has no authoritative payload declaration"}
