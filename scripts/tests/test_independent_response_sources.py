@@ -8,6 +8,7 @@ import unittest
 sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
 from compose_openapi import compose
 from runtime_registry import public_mirror_index
+from gap_evidence import source_binding_evidence
 from test_runtime_contracts import facts, operation
 
 PATH_HASH = hashlib.sha256(b'/provider/test').hexdigest()
@@ -99,6 +100,25 @@ class IndependentResponseTests(unittest.TestCase):
             self.assertEqual(pending,[]);self.assertNotIn('x-aisa-response-pending',operation(doc))
             self.assertEqual(set(operation(doc)['responses']),{status})
             if status=='200':self.assertTrue(operation(doc)['responses']['200']['x-aisa-no-content'])
+
+    def test_gap_fingerprints_track_response_binding_without_changing_request_evidence(self):
+        runtime=descriptor(facts());source=response_source();path=next(iter(runtime['paths']))
+        def fingerprint(document,mirrors,response=False,sources=None):
+            return source_binding_evidence(operation(document),document,sources,mirrors,path,'POST',response=response)
+        baseline=fingerprint(runtime,{},response=False)
+        self.assertEqual(fingerprint(runtime,index(source)),baseline)
+        self.assertEqual(fingerprint(runtime,index(source),sources=source),baseline)
+        response_fingerprint=fingerprint(runtime,index(source),response=True)
+        for change in ('source_schema','source_origin','runtime_origin','runtime_path','runtime_flag'):
+            current=copy.deepcopy(runtime);changed=copy.deepcopy(source)
+            if change=='source_schema':
+                changed['paths'][path]['post']['responses']['200']['content']['application/json']['schema']['properties']['value']['type']='number'
+            elif change=='source_origin':changed['info']['x-aisa-source']['upstream_origin_sha256']='0'*64
+            elif change=='runtime_origin':operation(current)['x-aisa-response-upstream-origin-sha256']='0'*64
+            elif change=='runtime_path':operation(current)['x-aisa-response-upstream-path-sha256']='0'*64
+            else:operation(current)['x-aisa-response-passthrough']=False
+            self.assertNotEqual(fingerprint(current,index(changed),response=True),response_fingerprint,change)
+            self.assertEqual(fingerprint(current,index(changed)),baseline,change)
 
     def test_origin_change_missing_origin_and_source_origin_mismatch_fail_closed(self):
         for change in ('runtime_changed','runtime_missing','source_changed'):

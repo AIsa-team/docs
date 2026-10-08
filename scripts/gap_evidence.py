@@ -57,7 +57,8 @@ def available_targets(fragment, document):
 def source_binding_evidence(fact, facts, sources, mirrors, public_path, method, source_bindings=None, response=False):
     sources = sources if isinstance(sources, list) else ([sources] if sources else [])
     selected_url = (source_bindings or {}).get(public_path)
-    selected_sources = [s for s in sources if not selected_url or s.get('info', {}).get('x-aisa-source', {}).get('url') == selected_url]
+    selected_sources = [s for s in sources if s.get('info', {}).get('x-aisa-source', {}).get('response_only') is not True
+                        and (not selected_url or s.get('info', {}).get('x-aisa-source', {}).get('url') == selected_url)]
     value = {'runtime_binding': binding_hash(fact, facts), 'selected_url': selected_url,
              'upstream_path': fact.get('x-aisa-upstream-path'), 'selector': fact.get('x-aisa-upstream-selector')}
     ambiguous_candidates = []
@@ -81,7 +82,7 @@ def source_binding_evidence(fact, facts, sources, mirrors, public_path, method, 
                     else:
                         candidates = {}
                 ambiguous_candidates.extend((source, candidate, op) for candidate, op in candidates.items())
-    methods = sorted(set(selected) | {m for p, m in mirrors if p == public_path}) if method.lower() == 'any' else [method.lower()]
+    methods = sorted(set(selected) | {m for (p, m), entry in mirrors.items() if p == public_path and not entry.get('response_only')}) if method.lower() == 'any' else [method.lower()]
     declarations = []
     def relevant(op, doc, public=False):
         if not response:
@@ -116,7 +117,7 @@ def source_binding_evidence(fact, facts, sources, mirrors, public_path, method, 
             declarations.append({'method': candidate, 'authority': source.get('url'),
                 'kind': source.get('kind'), 'policy_revision': source.get('policy_revision'),
                 **declaration_evidence(fragment, source_doc, fields)})
-        elif (public_path, candidate) in mirrors:
+        elif (public_path, candidate) in mirrors and not mirrors[(public_path, candidate)].get('response_only'):
             entry = mirrors[(public_path, candidate)]
             source = entry.get('source', {})
             fragment = {**entry.get('operation', {}), **entry.get('response_operation', {})}
@@ -129,6 +130,27 @@ def source_binding_evidence(fact, facts, sources, mirrors, public_path, method, 
                 'kind': source.get('kind'), 'policy_revision': source.get('policy_revision'),
                 **declaration_evidence(fragment, doc, fields)})
     value['declarations'] = declarations
+    if response:
+        descriptor = {key: fact[key] for key in ('x-aisa-response-passthrough',
+            'x-aisa-response-upstream-path-sha256', 'x-aisa-response-upstream-origin-sha256') if key in fact}
+        if descriptor:
+            value['runtime_response_transport'] = descriptor
+        independent = []
+        for (path, candidate_method), entry in mirrors.items():
+            if path != public_path or method.lower() not in {'any', candidate_method}:
+                continue
+            candidates = entry.get('independent_response_candidates', [])
+            if descriptor and not candidates and entry.get('source', {}).get('upstream_path_sha256'):
+                candidates = [entry]
+            for candidate in candidates:
+                metadata = candidate.get('source', {})
+                document = {'openapi': candidate.get('openapi'), 'components': candidate.get('response_components', {})}
+                independent.append({'method': candidate_method,
+                    'source': {key: metadata[key] for key in ('kind', 'url', 'converter', 'content_hash',
+                        'response_only', 'upstream_path_sha256', 'upstream_origin_sha256') if key in metadata},
+                    **declaration_evidence(candidate.get('response_operation', {}), document, ('responses',))})
+        if independent:
+            value['independent_response_candidates'] = sorted(independent, key=digest)
     return digest(value)
 
 
