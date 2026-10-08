@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""Import a configured provider OpenAPI source for review; never publishes it."""
+import argparse
+from datetime import datetime, timezone
+import json
+import re
+from pathlib import Path
+from urllib.request import Request, urlopen
+import yaml
+from compose_openapi import digest
+from runtime_registry import KEY
+from import_brave_reference import INDEX_URL as BRAVE_INDEX_URL, import_reference
+from import_fred_reference import INDEX as FRED_INDEX_URL, import_reference as import_fred_reference
+from import_querit_reference import REFERENCE_URL as QUERIT_REFERENCE_URL, import_reference as import_querit_reference
+from import_parallel_legacy_events import SOURCE_URL as PARALLEL_LEGACY_URL, extract as extract_parallel_legacy
+from wrapper_twitter_reference import REFERENCE_URL as TWITTER_REFERENCE_URL, import_reference as import_twitter_reference
+from wrapper_cloudsway_reference import REFERENCE_URL as CLOUDSWAY_REFERENCE_URL, import_reference as import_cloudsway_reference
+from wrapper_cloudsway_full_reference import REFERENCE_URL as CLOUDSWAY_FULL_URL, import_reference as import_cloudsway_full_reference
+from source_governance import initial_policy
+from source_json import loads as source_json_loads, checked_float, UnsupportedNumericPrecision
+
+
+class OfficialSourceLoader(yaml.SafeLoader):
+    """Read JSON-safe provider YAML without YAML 1.1 boolean coercion."""
+
+    def __init__(self, stream):
+        super().__init__(stream)
+        self._checked_explicit_members = set()
+
+    def _member_name(self, node, deep=False):
+        if not isinstance(node, yaml.ScalarNode):
+            raise ValueError('unsupported_yaml_mapping_key: expected a scalar JSON member name')
+        value = self.construct_object(node, deep=deep)
+        if isinstance(value, str):
+            return value
+        if value is None or isinstance(value, bool):
+            return json.dumps(value)
+        if isinstance(value, int):
+            return str(value)  # Unquoted response status codes are JSON member names.
+        raise ValueError('unsupported_yaml_mapping_key: quote non-integer numeric member names')
+
+    def flatten_mapping(self, node):
+        if not isinstance(node, yaml.MappingNode):
+            raise ValueError('unsupported_yaml_mapping: expected a mapping')
+        # Check original explicit members before flattening: a legal YAML merge
+        # may be overridden explicitly, but repeated explicit JSON names may not.
+        # SafeLoader recursively flattens inline merge inputs, so validate each
+        # such node too; cache node identity before subsequent alias flattening.
+        if node not in self._checked_explicit_members:
+            names = set()
+            for key, _ in node.value:
+                if key.tag == 'tag:yaml.org,2002:merge':
+                    continue
+                name = self._member_name(key)
+                if name in names:
+                    raise ValueError('duplicate_yaml_mapping_key')
+                names.add(name)
+            self._checked_explicit_members.add(node)
+        super().flatten_mapping(node)
+
+    def construct_mapping(self, node, deep=False):
+        self.flatten_mapping(node)
+        return {self._member_name(key, deep=deep): self.construct_object(value, deep=deep)
+                for key, value in node.value}
+
+
+# Resolve boolean words only as YAML 1.2 booleans. Copy the resolver lists so
+# this provider reader never changes PyYAML's other callers or global loader.
+OfficialSourceLoader.yaml_implicit_resolvers = {
+    char: [(tag, pattern) for tag, pattern in entries if tag != 'tag:yaml.org,2002:bool']
+    for char, entries in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+OfficialSourceLoader.add_implicit_resolver(
+    'tag:yaml.org,2002:bool', re.compile(r'(?:true|True|TRUE|false|False|FALSE)\Z'),
+    list('tTfF')
+)
+
+
+# YAML 1.1 tags a plain '=' specially; OpenAPI treats it as an ordinary string.
+OfficialSourceLoader.add_constructor(
+    'tag:yaml.org,2002:value', OfficialSourceLoader.construct_yaml_str
+)
+
+JSON_NUMBER = re.compile(r'-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?\Z')
+NUMERIC_SHAPED = re.compile(r'[+-]?(?:[0-9][0-9_]*(?:\.[0-9_]*)?|\.[0-9_]+)(?:[eE][+-]?[0-9_]+)?\Z')
+
+
+def _yaml_number(loader, node):
+    token = node.value
+    if not JSON_NUMBER.fullmatch(token):
+        raise UnsupportedNumericPrecision('unsupported_numeric_precision: ambiguous YAML numeric scalar ' + token)
+    return checked_float(token) if node.tag.endswith(':float') else int(token)
+
+
+def _yaml_string(loader, node):
+    if node.style is None and NUMERIC_SHAPED.fullmatch(node.value):
+        raise UnsupportedNumericPrecision('unsupported_numeric_precision: ambiguous plain YAML scalar; quote it or provide JSON: ' + node.value)
+    return loader.construct_yaml_str(node)
+
+
+def _yaml_boolean(loader, node):
+    if node.value.lower() not in ('true', 'false'):
+        raise ValueError('unsupported_yaml_scalar: ambiguous YAML boolean; quote it or provide JSON: ' + node.value)
+    return loader.construct_yaml_bool(node)
+
+
+def _yaml_timestamp(loader, node):
+    raise ValueError('unsupported_yaml_scalar: timestamps must be quoted or provided as JSON: ' + node.value)
+
+
+OfficialSourceLoader.add_constructor('tag:yaml.org,2002:int', _yaml_number)
+OfficialSourceLoader.add_constructor('tag:yaml.org,2002:float', _yaml_number)
+OfficialSourceLoader.add_constructor('tag:yaml.org,2002:str', _yaml_string)
+OfficialSourceLoader.add_constructor('tag:yaml.org,2002:bool', _yaml_boolean)
+OfficialSourceLoader.add_constructor('tag:yaml.org,2002:timestamp', _yaml_timestamp)
+
+
+def import_source(provider, url):
+    if not KEY.fullmatch(provider) or not url.startswith('https://'):
+        raise ValueError('provider id and HTTPS source URL are required')
+    if url == FRED_INDEX_URL:
+        result = import_fred_reference(provider, url)
+        result['info']['x-aisa-source'] = initial_policy(result['info']['x-aisa-source'])
+        return result
+    def fetch(source_url):
+        with urlopen(Request(source_url, headers={"User-Agent": "Mozilla/5.0 AIsa-contract-source-importer"}), timeout=30) as response:
+            raw = response.read()
+            if raw.lstrip().startswith((b'{', b'[')):
+                source_json_loads(raw)  # Validate before specialized source converters parse it.
+            return raw
+    metadata = {}
+    if url == PARALLEL_LEGACY_URL:
+        document = extract_parallel_legacy(fetch(url))
+        metadata = document['info'].pop('x-aisa-source')
+        metadata.pop('content_hash', None)
+    elif url == TWITTER_REFERENCE_URL:
+        document, metadata = import_twitter_reference(fetch)
+    elif url == CLOUDSWAY_FULL_URL:
+        document, metadata = import_cloudsway_full_reference(fetch)
+    elif url == CLOUDSWAY_REFERENCE_URL:
+        document, metadata = import_cloudsway_reference(fetch)
+        metadata['kind'] = 'manual'  # Reviewed public mapping of an official upstream source.
+    elif url == BRAVE_INDEX_URL:
+        document, metadata = import_reference(fetch)
+    elif url == QUERIT_REFERENCE_URL:
+        document, metadata = import_querit_reference(fetch)
+    else:
+        raw = fetch(url)
+        document = source_json_loads(raw) if raw.lstrip().startswith((b'{', b'[')) else yaml.load(raw, Loader=OfficialSourceLoader)
+    if not isinstance(document, dict) or not str(document.get('openapi', '')).startswith('3.') or not isinstance(document.get('paths'), dict):
+        raise ValueError('source is not an OpenAPI 3 document')
+    source_hash = digest(document)
+    document.setdefault('info', {})['x-aisa-source'] = {
+        'kind': 'provider_openapi', 'url': url,
+        'fetched_at': datetime.now(timezone.utc).isoformat(),
+        'content_hash': source_hash, 'converter': 'scripts/import_upstream.py@2', **metadata,
+    }
+    document['info']['x-aisa-source'] = initial_policy(document['info']['x-aisa-source'])
+    return document
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument('--provider', required=True)
+    parser.add_argument('--url', required=True)
+    parser.add_argument('--write', action='store_true')
+    args = parser.parse_args()
+    document = import_source(args.provider, args.url)
+    if args.write:
+        destination = args.root / 'openapi/upstream' / (args.provider + '.json')
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(json.dumps(document, indent=2, ensure_ascii=False) + '\n')
+    print(json.dumps({'provider': args.provider, 'operations': sum(len([m for m in item if m in {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'}]) for item in document['paths'].values()), 'source': document['info']['x-aisa-source'], 'written': args.write}))

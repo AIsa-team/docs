@@ -1,0 +1,146 @@
+name: Pull runtime API contracts
+
+on:
+  # Dormant until BOTH the tracked plan and operator variable are enabled.
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Commit verified generated contracts (default is dry run)
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pull-openapi
+  cancel-in-progress: false
+
+jobs:
+  activation-plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      enabled: ${{ steps.plan.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        run: |
+          python scripts/contract_activation.py > /tmp/activation-plan.json
+          echo "enabled=$(python -c 'import json; print(str(json.load(open("/tmp/activation-plan.json"))["activation_enabled"]).lower())')" >> "$GITHUB_OUTPUT"
+  compose:
+    needs: activation-plan
+    if: github.event_name == 'workflow_dispatch' || (needs.activation-plan.outputs.enabled == 'true' && vars.RUNTIME_CONTRACT_ACTIVATION_ENABLED == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      docs_commit: ${{ steps.publish.outputs.docs_commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
+      - name: Test composition and preservation rules
+        run: python -m unittest discover -s scripts/tests -v
+      - name: Restore public runtime response cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/runtime-contracts
+          key: runtime-contracts-${{ github.run_id }}
+          restore-keys: runtime-contracts-
+      - name: Restore attributed source maintenance evidence
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/source-reviews.json
+          key: source-reviews-publish-${{ github.run_id }}
+          restore-keys: source-reviews-
+      - name: Stage contracts
+        id: pull
+        env:
+          REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
+        run: |
+          set +e
+          python scripts/pull_openapi.py --write \
+            --baseline-ref "$REVIEWED_BASELINE" \
+            --readiness-report /tmp/contract-readiness.json
+          status=$?
+          set -e
+          if [ "$status" -eq 2 ]; then
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          echo 'available=true' >> "$GITHUB_OUTPUT"
+      - name: Preserve real source acquisition observations
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/source-reviews.json
+          key: source-reviews-pull-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Retain publication assessment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publication-contract-readiness
+          path: /tmp/contract-readiness.json
+          if-no-files-found: ignore
+      - name: Runtime unavailable
+        if: steps.pull.outputs.available == 'false'
+        run: echo 'Runtime contracts were unavailable. Published files were preserved.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Consolidate generated contracts
+        if: steps.pull.outputs.available == 'true'
+        run: python scripts/runtime_consolidate_openapi.py --output openapi.yaml
+      - name: Validate page references
+        if: steps.pull.outputs.available == 'true'
+        run: python scripts/validate_runtime_api_reference_slugs.py --generated-only
+      - name: Check formal artifact readiness before publication
+        if: steps.pull.outputs.available == 'true'
+        env:
+          REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
+        run: |
+          python scripts/check_contract_candidate.py \
+            --baseline-ref "$REVIEWED_BASELINE" \
+            --published-ref "$(git rev-parse HEAD)" \
+            --report /tmp/formal-contract-readiness.json
+      - name: Retain formal publication assessment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: formal-contract-readiness
+          path: /tmp/formal-contract-readiness.json
+          if-no-files-found: ignore
+      - name: Review staged differences
+        if: steps.pull.outputs.available == 'true'
+        run: git diff --stat >> "$GITHUB_STEP_SUMMARY"
+      - name: Commit contract mirrors and coverage
+        id: publish
+        if: github.ref == 'refs/heads/main' && steps.pull.outputs.available == 'true' && (inputs.publish == true || (github.event_name != 'workflow_dispatch' && vars.RUNTIME_CONTRACT_PUBLISH != 'false'))
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add openapi api-reference zh/api-reference docs.json openapi.yaml
+          if git diff --cached --quiet; then exit 0; fi
+          assessed_base=$(git rev-parse HEAD)
+          git commit -m 'chore: regenerate runtime API contract mirrors'
+          # The formal receipt describes this exact graph. Never incorporate
+          # concurrent main changes after assessment; retry from new inputs.
+          git fetch origin main
+          if [ "$(git rev-parse origin/main)" != "$assessed_base" ]; then
+            echo 'Main changed after contract assessment; publication must be retried.' >&2
+            exit 1
+          fi
+          git push origin HEAD:main
+          echo "docs_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  notify-consumers:
+    needs: compose
+    if: needs.compose.outputs.docs_commit != ''
+    uses: ./.github/workflows/dispatch-contract-consumers.yml
+    with:
+      docs_commit: ${{ needs.compose.outputs.docs_commit }}
+    secrets: inherit
