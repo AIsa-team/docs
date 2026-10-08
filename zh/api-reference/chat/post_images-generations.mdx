@@ -4,17 +4,16 @@ description: "通过标准的 POST /v1/images/generations endpoint，使用 Seed
 openapi: "openapi/zh/openai-images-generations.json POST /images/generations"
 ---
 
-标准的 OpenAI 兼容 `POST /v1/images/generations` endpoint。截至 2026 年 9 月 30 日，它服务 `seedream-5-0-260128`、`wan2.7-image`、`wan2.7-image-pro`、`gpt-image-2`、`gpt-image-2.5-flare` 和 `gpt-image-2.5-sunburst`。较早的 `seedream-4-5-251128` 路由改为通过[经由 Chat 的图像生成](/zh/api-reference/chat/post_chat-completions-image-generation)访问。
+标准的 OpenAI 兼容 `POST /v1/images/generations` endpoint。截至 2026 年 9 月 30 日，它服务 `seedream-5-0-260128`、`wan2.7-image`、`wan2.7-image-pro`、`gpt-image-2`、`gpt-image-2.5-flare` 和 `gpt-image-2.5-sunburst`。`POST /v1/chat/completions` 上没有可用的图像模型——图像生成统一走本 endpoint（标注处另支持 `POST /v1/images/edits`）。
 
 ## 路由速览
 
 | 模型 | Endpoint |
 |---|---|
-| `seedream-5-0-260128` | **`POST /v1/images/generations`** *(本页)*，同时支持 `POST /v1/chat/completions` |
+| `seedream-5-0-260128` | **`POST /v1/images/generations`** *(本页)* |
 | `wan2.7-image` / `wan2.7-image-pro` | **`POST /v1/images/generations`** *(本页)*、`POST /v1/images/edits` |
 | `gpt-image-2` | **`POST /v1/images/generations`** *(本页)*、`POST /v1/images/edits` |
 | `gpt-image-2.5-flare` / `gpt-image-2.5-sunburst` | **`POST /v1/images/generations`** *(本页)*、`POST /v1/images/edits` |
-| `seedream-4-5-251128` | [`POST /v1/chat/completions`](/zh/api-reference/chat/post_chat-completions-image-generation) |
 | Gemini 兼容模型 | [`POST /v1beta/models/{model}:generateContent`](/zh/api-reference/chat/post_models-model-generatecontent) |
 
 ## 支持的模型
@@ -144,7 +143,8 @@ for (const item of resp.data) {
 ## 常见 4xx 原因
 
 - `400 InvalidParameter — image size must be at least 3686400 pixels`——`size` 太小。请使用 `1920x1920` 或更大。
-- `404 openai_error`——传入的模型不走该 endpoint（例如 `wan2.7-image`）。请改用[基于 chat 的路由](/zh/api-reference/chat/post_chat-completions-image-generation)。
+- `400 model_route_not_supported`——该模型不走本 endpoint（例如文本模型 `gpt-4.1-mini`）。错误体中的 `supported_routes` 会列出它支持的路由。
+- `404 model not found`——网关上不存在该模型 ID（例如已下线的 `seedream-4-5-251128`）。请查阅[模型目录](/zh/guides/models)。
 - `400 invalid_request`——`size` 字符串格式不正确（例如写成 `1024` 而不是 `1024x1024`）。
 
 更多内容参见[错误码](/zh/api-reference/errors)和[速率限制](/zh/api-reference/rate-limits)。
@@ -152,8 +152,8 @@ for (const item of resp.data) {
 ## 相关
 
 <CardGroup cols={3}>
-  <Card title="Image Generation via Chat" icon="message" href="/zh/api-reference/chat/post_chat-completions-image-generation">
-    Wan 2.7 系列使用的 `/v1/chat/completions` 路由。
+  <Card title="模型目录" icon="list" href="/zh/guides/models">
+    当前模型 ID 及各自支持的 endpoint。
   </Card>
   <Card title="Gemini generateContent" icon="google" href="/zh/api-reference/chat/post_models-model-generatecontent">
     Gemini 兼容的 generateContent endpoint。

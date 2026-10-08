@@ -7990,213 +7990,6 @@ paths:
       x-x402:
         path: /apis/v2/byteplus/fetch
         source: https://github.com/AIsa-team/aisa-proxy
-  /chat/completions:
-    post:
-      summary: Generate images via Chat Completions
-      description: |-
-        Generate images over the chat route. Request shape matches OpenAI Chat Completions with multimodal content; the response contains `choices[].message.content[]` where each item is `{type: "image", image: "<url or base64>"}`.
-
-        **Important:** `messages[].content` must be an **array of typed parts**, not a plain string. Passing a string returns `400 invalid_parameter_error` with `Input should be a valid list: messages[*].content`.
-
-        **Routing note:** `wan2.7-image`, `wan2.7-image-pro`, `seedream-5-0-260128`, and `gpt-image-2` return `400 model_route_not_supported` here — use `/v1/images/generations` for those.
-      operationId: generateImageViaChat
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - model
-              - messages
-              properties:
-                model:
-                  type: string
-                  enum:
-                  - seedream-4-5-251128
-                  description: Image-generation model on the chat route. `seedream-4-5-251128` is billed per request. Wan
-                    and gpt-image-2 models use `/v1/images/generations` instead.
-                messages:
-                  type: array
-                  description: 'Conversation messages. Image prompts go in the last user message''s `content` array as `{type:
-                    "text"}` parts.'
-                  items:
-                    type: object
-                    required:
-                    - role
-                    - content
-                    properties:
-                      role:
-                        type: string
-                        enum:
-                        - system
-                        - user
-                        - assistant
-                      content:
-                        type: array
-                        description: 'Multimodal parts. For image generation, include at least one `{type: "text"}` part with
-                          the prompt.'
-                        items:
-                          type: object
-                          required:
-                          - type
-                          properties:
-                            type:
-                              type: string
-                              enum:
-                              - text
-                              - image_url
-                            text:
-                              type: string
-                              description: 'Used when `type: "text"`.'
-                            image_url:
-                              type: object
-                              description: 'Used when `type: "image_url"` (image-to-image use cases).'
-                              properties:
-                                url:
-                                  type: string
-                                  format: uri
-                n:
-                  type: integer
-                  minimum: 1
-                  description: Number of images to generate. Each image is billed separately; pass `1` unless you want candidates.
-            examples:
-              basic:
-                summary: Single-image prompt (n=1)
-                value:
-                  model: seedream-4-5-251128
-                  messages:
-                  - role: user
-                    content:
-                    - type: text
-                      text: A cute red panda, ultra-detailed, cinematic lighting
-                  n: 1
-              four_variants:
-                summary: Default 4 candidates for selection
-                value:
-                  model: seedream-4-5-251128
-                  messages:
-                  - role: user
-                    content:
-                    - type: text
-                      text: A futuristic cyberpunk city, neon lights, rainy night, 8k
-              pro:
-                summary: Higher-fidelity pro model
-                value:
-                  model: seedream-4-5-251128
-                  messages:
-                  - role: user
-                    content:
-                    - type: text
-                      text: Oil painting of a rolling hillside at sunset, artstation
-                  n: 1
-              image_to_image:
-                summary: Image-to-image (reference + prompt)
-                value:
-                  model: seedream-4-5-251128
-                  messages:
-                  - role: user
-                    content:
-                    - type: image_url
-                      image_url:
-                        url: https://example.com/reference.jpg
-                    - type: text
-                      text: Transform into an oil painting in the style of Van Gogh
-                  n: 1
-      responses:
-        '200':
-          description: Images generated. Returned as Chat Completion with `message.content[]` image parts.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: chatcmpl-fcc86dfd-9424-9523-b0bd-cdf07383bee2
-                  object:
-                    type: string
-                    example: chat.completion
-                  created:
-                    type: integer
-                    example: 1776495713
-                  model:
-                    type: string
-                    example: seedream-4-5-251128
-                  choices:
-                    type: array
-                    description: One entry per generated image.
-                    items:
-                      type: object
-                      properties:
-                        index:
-                          type: integer
-                          nullable: true
-                        finish_reason:
-                          type: string
-                          example: stop
-                        message:
-                          type: object
-                          properties:
-                            role:
-                              type: string
-                              example: assistant
-                            content:
-                              type: array
-                              items:
-                                type: object
-                                required:
-                                - type
-                                properties:
-                                  type:
-                                    type: string
-                                    enum:
-                                    - image
-                                  image:
-                                    type: string
-                                    description: Short-lived URL to the generated image (or base64-encoded data, depending
-                                      on your account configuration).
-                  usage:
-                    type: object
-                    properties:
-                      prompt_tokens:
-                        type: integer
-                      completion_tokens:
-                        type: integer
-                      total_tokens:
-                        type: integer
-              example:
-                id: chatcmpl-fcc86dfd-9424-9523-b0bd-cdf07383bee2
-                object: chat.completion
-                created: 1776495713
-                model: seedream-4-5-251128
-                choices:
-                - index: 0
-                  finish_reason: stop
-                  message:
-                    role: assistant
-                    content:
-                    - type: image
-                      image: https://cdn.aisa.one/images/seedream/20260418-abc.png
-                usage:
-                  prompt_tokens: 104
-                  completion_tokens: 8
-                  total_tokens: 112
-        '400':
-          description: 'Invalid request. Most common: `content` passed as a string instead of an array → `"Input should be
-            a valid list: messages[*].content"`.'
-        '401':
-          description: Missing or invalid AIsa API key.
-        '429':
-          description: Rate limit hit.
-        '500':
-          description: Internal error.
-        '502':
-          description: Upstream provider unreachable.
-      tags:
-      - Image Generation
-      servers:
-      - url: https://api.aisa.one/v1
   /messages:
     post:
       summary: Create a message
@@ -88850,6 +88643,77 @@ paths:
       x-x402:
         path: /apis/v2/financial/macro/interest-rates/snapshot
         source: https://github.com/AIsa-team/aisa-proxy
+  /chat/completions:
+    post:
+      summary: Create chat completion
+      description: Generate chat responses with support for images, streaming, function calling, and logprobs.
+      operationId: createChatCompletion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                model:
+                  type: string
+                  example: gpt-4.1-mini
+                messages:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role:
+                        type: string
+                        example: user
+                      content:
+                        description: Can be a text string or an array (for image inputs).
+                        oneOf:
+                        - type: string
+                        - type: array
+                          items:
+                            type: object
+                            properties:
+                              type:
+                                type: string
+                              text:
+                                type: string
+                              image_url:
+                                type: string
+                stream:
+                  type: boolean
+                  example: false
+                logprobs:
+                  type: boolean
+                top_logprobs:
+                  type: integer
+                functions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      description:
+                        type: string
+                      parameters:
+                        type: object
+                        properties: {}
+                function_call:
+                  oneOf:
+                  - type: string
+                    example: auto
+                  - type: object
+                    properties:
+                      name:
+                        type: string
+      responses:
+        '200':
+          description: Successful completion
+      tags:
+      - AI Models
+      servers:
+      - url: https://api.aisa.one/v1
   /images/generations:
     post:
       summary: Generate images (OpenAI-compatible)
@@ -170617,10 +170481,6 @@ components:
     Apollo_BearerAuth:
       type: http
       scheme: bearer
-    ChatImageGeneration_BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: AISA API Key
     ClaudeMessages_BearerAuth:
       type: http
       scheme: bearer
