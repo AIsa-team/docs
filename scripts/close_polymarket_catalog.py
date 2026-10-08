@@ -408,7 +408,7 @@ def main():
         report['input_hashes']['current_mapping_sha256'] = hashlib.sha256(args.current_mapping.read_bytes()).hexdigest()
     if args.write_candidates:
         destination = directory / 'candidates-NOT-APPROVED'
-        destination.mkdir(exist_ok=True)
+        destination.mkdir(parents=True, exist_ok=True)
         (destination / 'zh').mkdir(exist_ok=True)
         for provider, document in documents.items():
             (destination / (provider + '.json')).write_text(json.dumps(document, indent=2, ensure_ascii=False) + '\n')

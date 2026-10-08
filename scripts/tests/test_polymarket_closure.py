@@ -1,5 +1,7 @@
 import copy
 import hashlib
+import io
+from contextlib import redirect_stdout
 import json
 from pathlib import Path
 import sys
@@ -13,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from close_polymarket_catalog import (PROVIDERS, SERVER_ORIGINS, SPEC_URLS,
                                       build_candidate, load_frozen_facts,
-                                      load_official_sources, load_official_sources_archive)
+                                      load_official_sources, load_official_sources_archive, main)
 from compose_openapi import digest
 from identity_compatibility import metadata, localize_identities
 from source_governance import initial_policy, validate_receipt
@@ -53,6 +55,34 @@ def small_catalog():
 
 
 class PolymarketCandidateTests(unittest.TestCase):
+    def test_default_cli_writes_nothing_and_opt_in_creates_fresh_evidence_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / 'scripts/tests/fixtures/polymarket-official-sources-20261008.tar.gz'
+            source.parent.mkdir(parents=True)
+            source.write_bytes((ROOT / 'scripts/tests/fixtures/polymarket-official-sources-20261008.tar.gz').read_bytes())
+            arguments = ['close_polymarket_catalog.py', '--root', str(root), '--plan',
+                str(ROOT / 'scripts/tests/fixtures/polymarket-targets-snapshot-20261008.json'),
+                '--archive', str(ARCHIVE), '--current-mapping',
+                str(ROOT / 'scripts/tests/fixtures/polymarket-current-binding-map-20261008.json')]
+            evidence = root / 'docs/polymarket-closure-20261008'
+            with patch('sys.argv', arguments), redirect_stdout(io.StringIO()) as output:
+                main()
+            self.assertFalse(evidence.exists())
+            self.assertFalse(json.loads(output.getvalue())['candidate_files_written'])
+            with patch('sys.argv', arguments + ['--write-candidates']), redirect_stdout(io.StringIO()) as output:
+                main()
+            summary = json.loads(output.getvalue())
+            self.assertTrue(summary['candidate_files_written'])
+            self.assertEqual(summary['counts']['current_routing_metadata_verified'], 89)
+            candidate = json.loads((evidence / 'closure-candidates-NOT-APPROVED.json').read_text())
+            self.assertEqual(candidate['approval_status'], 'UNAPPROVED')
+            self.assertFalse(candidate['apply_authorized'])
+            self.assertEqual(len(list((evidence / 'candidates-NOT-APPROVED').glob('*.json'))), 5)
+            self.assertEqual(len(list((evidence / 'candidates-NOT-APPROVED/zh').glob('*.json'))), 5)
+            self.assertFalse((root / 'openapi').exists())
+            self.assertFalse((root / 'facts').exists())
+
     def test_complete_official_methods_requests_responses_without_input_mutations(self):
         plan, frozen, sources = small_catalog()
         sources['polymarket-clob']['paths']['/route']['post'] = {
