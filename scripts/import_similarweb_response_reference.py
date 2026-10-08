@@ -5,12 +5,28 @@ must be numeric and describe the same schema; raw values never become defaults.
 """
 import copy
 import hashlib
+from html.parser import HTMLParser
 import re
 from source_json import loads
 from compose_openapi import digest
 
-VERSION = 'scripts/import_similarweb_response_reference.py@1'
+VERSION = 'scripts/import_similarweb_response_reference.py@2'
 ORIGIN = 'https://api.similarweb.com/'
+
+
+class CanonicalURL(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.urls = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag != 'link':
+            return
+        values = dict(attrs)
+        if values.get('rel') == 'canonical':
+            if len([key for key, _ in attrs if key in {'rel', 'href'}]) != 2:
+                raise ValueError('ambiguous Similarweb canonical link')
+            self.urls.append(values.get('href'))
 
 
 def declaration(raw, expected_path):
@@ -93,6 +109,10 @@ def object_fields(children, location):
 def convert_reference(raw, expected_path, source_url):
     if not source_url.startswith('https://docs.similarweb.com/api-v5/'):
         raise ValueError('official Similarweb source URL required')
+    parser = CanonicalURL()
+    parser.feed(raw.decode())
+    if parser.urls != [source_url]:
+        raise ValueError('official Similarweb canonical source URL mismatch')
     section = declaration(raw, expected_path)
     responses = section.get('responses')
     if not isinstance(responses, list) or len(responses) != 1 or responses[0].get('statusCode') != 200 or responses[0].get('contentType') != 'application/json':
@@ -105,3 +125,16 @@ def convert_reference(raw, expected_path, source_url):
         'kind':'manual','converter':VERSION,'refresh_policy':'automatic','source_pages':[{'url':source_url,
             'raw_content_hash':'sha256:'+hashlib.sha256(raw).hexdigest()}],
         'limits':['UI value fields are example values, not defaults. Named array children and differing prototypes fail closed.']}
+
+
+def convert_response_only_reference(raw, expected_path, source_url, public_path):
+    """Prepare a response-only candidate for the reviewed AIsa v5 path mapping."""
+    if not expected_path.startswith('/v5/') or public_path != '/apis/v1/similarweb/' + expected_path[len('/v5/'):]:
+        raise ValueError('Similarweb public response mapping requires exact v5 suffix')
+    document, metadata = convert_reference(raw, expected_path, source_url)
+    document['paths'] = {public_path: document['paths'][expected_path]}
+    document['servers'] = [{'url': 'https://api.aisa.one'}]
+    metadata.update(response_only=True, path_space='public',
+        upstream_path_sha256=hashlib.sha256(expected_path.encode()).hexdigest(),
+        upstream_origin_sha256=hashlib.sha256(ORIGIN.rstrip('/').encode()).hexdigest())
+    return document, metadata

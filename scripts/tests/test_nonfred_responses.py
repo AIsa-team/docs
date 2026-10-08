@@ -86,7 +86,7 @@ class NonFredResponseTests(unittest.TestCase):
     def test_similarweb_explicit_graph_preserves_nullable_enum_and_required(self):
         path='/v5/segment-analysis/segments/traffic-and-engagement'
         raw=(FIXTURES/'similarweb-segments-response.html').read_bytes()
-        doc,_=similarweb.convert_reference(raw,path,'https://docs.similarweb.com/api-v5/segment-analysis/segments/traffic-and-engagement')
+        doc,_=similarweb.convert_reference(raw,path,'https://docs.similarweb.com/api-v5/similarweb-api/website-analysis-api/website-segments/segments')
         schema=doc['paths'][path]['get']['responses']['200']['content']['application/json']['schema']
         Draft202012Validator.check_schema(schema)
         request=schema['properties']['meta']['properties']['request']
@@ -106,8 +106,25 @@ class NonFredResponseTests(unittest.TestCase):
                     {'valueType':'string','options':{'style':'form'}},
                     {'valueType':'string','options':{'nullable':1}}]:
             with self.assertRaises(ValueError):similarweb.field_schema(bad,'data')
+        with self.assertRaisesRegex(ValueError,'canonical source URL mismatch'):
+            similarweb.convert_reference((FIXTURES/'similarweb-segments-response.html').read_bytes(),'/v5/segment-analysis/segments/traffic-and-engagement','https://docs.similarweb.com/api-v5/wrong')
         with self.assertRaisesRegex(ValueError,'endpoint mismatch'):
-            similarweb.convert_reference((FIXTURES/'similarweb-segments-response.html').read_bytes(),'/wrong','https://docs.similarweb.com/api-v5/x')
+            similarweb.convert_reference((FIXTURES/'similarweb-segments-response.html').read_bytes(),'/wrong','https://docs.similarweb.com/api-v5/similarweb-api/website-analysis-api/website-segments/segments')
+
+    def test_response_only_converters_keep_explicit_public_route_and_binding_pins(self):
+        routes=(FIXTURES/'wrapper_twitter_routes.py.txt').read_bytes()+b'\n@router.post("/post_twitter", response_model=ApiResponse)\nasync def post_tweet(request):\n    pass\n'
+        doc,meta=twitter.convert_response_only_reference(routes,(FIXTURES/'wrapper_twitter_schemas.py.txt').read_bytes(),'a'*64)
+        self.assertEqual(set(doc['paths']),{'/apis/v1/twitter/post_twitter'})
+        self.assertTrue(meta['response_only']);self.assertEqual(meta['upstream_origin_sha256'],'a'*64)
+        self.assertNotIn('requestBody',doc['paths']['/apis/v1/twitter/post_twitter']['post'])
+        with self.assertRaises(ValueError):twitter.convert_response_only_reference(routes,(FIXTURES/'wrapper_twitter_schemas.py.txt').read_bytes(),'bad')
+        path='/v5/segment-analysis/segments/traffic-and-engagement'
+        public='/apis/v1/similarweb/segment-analysis/segments/traffic-and-engagement'
+        raw=(FIXTURES/'similarweb-segments-response.html').read_bytes()
+        url='https://docs.similarweb.com/api-v5/similarweb-api/website-analysis-api/website-segments/segments'
+        doc,meta=similarweb.convert_response_only_reference(raw,path,url,public)
+        self.assertEqual(set(doc['paths']),{public});self.assertTrue(meta['response_only'])
+        with self.assertRaises(ValueError):similarweb.convert_response_only_reference(raw,path,url,public+'-wrong')
 
     def test_composition_reduces_only_response_debt_preserves_identity_price(self):
         doc,_=cloudsway.convert_reference((FIXTURES/'wrapper_cloudsway_smart.html').read_bytes())

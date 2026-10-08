@@ -86,6 +86,11 @@ def public_mirror_index(root: Path, overrides: dict | None = None):
             continue
         if source.get('kind') != 'manual' or not all(source.get(k) for k in ('url', 'fetched_at', 'content_hash', 'converter')):
             raise ValueError(f'{filename}: public mirror requires complete manual provenance')
+        response_only = source.get('response_only') is True
+        if 'response_only' in source and type(source['response_only']) is not bool:
+            raise ValueError(f'{filename}: response_only must be boolean')
+        if response_only and any(not isinstance(source.get(field), str) or not re.fullmatch(r'[0-9a-f]{64}', source[field]) for field in ('upstream_path_sha256', 'upstream_origin_sha256')):
+            raise ValueError(f'{filename}: response-only source requires path and origin binding hashes')
         prefix = urlsplit((document.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
         for route, item in document.get('paths', {}).items():
             for method, op in item.items():
@@ -109,7 +114,7 @@ def public_mirror_index(root: Path, overrides: dict | None = None):
                         continue
                     try:
                         response = response_object(raw, document)
-                        responses[str(status)] = {field: response[field] for field in ('description', 'content') if field in response}
+                        responses[str(status)] = {field: response[field] for field in ('description', 'content', 'x-aisa-no-content') if field in response}
                     except (ValueError, KeyError, TypeError):
                         # Preserve unresolved evidence for the response gap,
                         # without traversing unused protocol headers or links.
@@ -125,11 +130,20 @@ def public_mirror_index(root: Path, overrides: dict | None = None):
                              'openapi': document.get('openapi', '3.1.0'),
                              'response_operation': response_operation, 'response_components': response_components}
                 key = (prefix + route, method)
-                if key in index and any(index[key].get(field) != candidate.get(field)
+                if response_only:
+                    # Keep response authority separate from request/method discovery.
+                    # A typed response cannot establish even an empty request.
+                    entry = index.setdefault(key, {'response_only': True, 'operation': {}, 'source': {}})
+                    entry.setdefault('independent_response_candidates', []).append(candidate)
+                    continue
+                independent = index.get(key, {}).get('independent_response_candidates', [])
+                if key in index and not index[key].get('response_only') and any(index[key].get(field) != candidate.get(field)
                                         for field in ('operation', 'components', 'openapi', 'response_operation', 'response_components')):
                     index[key] = {'operation': {'x-aisa-mirror-error': 'ambiguous published request contract'}, 'source': source}
                 else:
                     index[key] = candidate
+                if independent:
+                    index[key]['independent_response_candidates'] = independent
     return index
 
 

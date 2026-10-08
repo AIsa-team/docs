@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit, unquote
 
-VERSION = "11"
+VERSION = "12"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -607,6 +607,8 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
     sources = upstream if isinstance(upstream, list) else ([upstream] if upstream else [])
     for document in sources:
         source = document.get("info", {}).get("x-aisa-source", {})
+        if "response_only" in source and type(source["response_only"]) is not bool:
+            raise ValueError("upstream response_only marker must be boolean")
         if source.get("kind") not in {"manual", "provider_openapi"} or not all(source.get(k) for k in ("url", "fetched_at", "content_hash", "converter")):
             raise ValueError("upstream mirror requires complete x-aisa-source provenance")
     output = copy.deepcopy(facts)
@@ -648,9 +650,9 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
             public_path = facts_prefix + path
             bound_source = source_bindings.get(public_path)
             try:
-                candidates = sources
+                candidates = [source for source in sources if source.get("info", {}).get("x-aisa-source", {}).get("response_only") is not True]
                 if bound_source:
-                    candidates = [source for source in sources if source.get("info", {}).get("x-aisa-source", {}).get("url") == bound_source]
+                    candidates = [source for source in candidates if source.get("info", {}).get("x-aisa-source", {}).get("url") == bound_source]
                     if len(candidates) != 1:
                         raise ValueError("public operation source binding must select exactly one locked source")
                 upstream_matches = select_upstream_operations(candidates, runtime.get("x-aisa-upstream-path"), runtime.get("x-aisa-upstream-selector")) if validation != "runtime" or method == "x-aisa-any" else {}
@@ -660,7 +662,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
             except (ValueError, TypeError, KeyError) as exc:
                 pending.append({"operation_id": base_id, "path": path, "method": "ANY" if method == "x-aisa-any" else method.upper(), "reason": str(exc)})
                 continue
-            methods = sorted((set(upstream_item) & METHODS) | {m for p, m in public_mirrors if p == public_path}) if method == "x-aisa-any" else [method]
+            methods = sorted((set(upstream_item) & METHODS) | {m for (p, m), candidate in public_mirrors.items() if p == public_path and not candidate.get("response_only")}) if method == "x-aisa-any" else [method]
             if not methods:
                 pending.append({"operation_id": base_id, "path": path, "method": "ANY", "reason": "upstream selector has no matching official operation" if runtime.get("x-aisa-upstream-selector") else "upstream operation missing"})
             for actual_method in methods:
@@ -679,7 +681,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             if runtime.get("x-aisa-passthrough") is True:
                                 response_operation = upstream_item[actual_method]
                                 response_document = selected_document
-                        elif (public_path, actual_method) in public_mirrors:
+                        elif (public_path, actual_method) in public_mirrors and not public_mirrors[(public_path, actual_method)].get("response_only"):
                             selected = public_mirrors[(public_path, actual_method)]
                             mirror = copy.deepcopy(selected["operation"])
                             operation_source = selected["source"]
@@ -749,14 +751,45 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     retained = {}
                     fresh = {}
                     response_error = None
+                    response_source = operation_source
+                    # Runtime explicitly attests unchanged response transport.
+                    # This authority is independent from request validation and
+                    # never discovers methods or contributes request fields.
+                    descriptor_present = any(k in runtime for k in ("x-aisa-response-passthrough", "x-aisa-response-upstream-path-sha256", "x-aisa-response-upstream-origin-sha256"))
+                    if descriptor_present:
+                        response_operation, response_document = {}, {}
+                        transport = runtime.get("x-aisa-response-passthrough")
+                        path_hash = runtime.get("x-aisa-response-upstream-path-sha256")
+                        origin_hash = runtime.get("x-aisa-response-upstream-origin-sha256")
+                        if type(transport) is not bool:
+                            response_error = "runtime response transport flag is missing or invalid"
+                        elif transport is True:
+                            selected = public_mirrors.get((public_path, actual_method), {})
+                            choices = selected.get("independent_response_candidates", [])
+                            if not choices and selected.get("source", {}).get("upstream_path_sha256"):
+                                choices = [selected]
+                            if any(not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value) for value in (path_hash, origin_hash)):
+                                response_error = "runtime response path or origin binding hash is missing or invalid"
+                            elif choices:
+                                if len(choices) != 1 or choices[0].get("source", {}).get("upstream_path_sha256") != path_hash or choices[0].get("source", {}).get("upstream_origin_sha256") != origin_hash:
+                                    response_error = "independent response source binding is ambiguous or changed"
+                                else:
+                                    selected_response = choices[0]
+                                    response_operation = selected_response.get("response_operation", {})
+                                    response_document = {"openapi": selected_response.get("openapi", "3.1.0"),
+                                                         "components": selected_response.get("response_components", {})}
+                                    response_source = selected_response["source"]
+                                    used_mirrors[f"response {actual_method} {public_path}"] = selected_response
+                        elif any(k in runtime for k in ("x-aisa-response-upstream-path-sha256", "x-aisa-response-upstream-origin-sha256")):
+                            response_error = "transformed response must not declare passthrough binding hashes"
                     try:
-                        fresh = source_success_responses(response_operation, response_document, output, "response_" + digest(operation_source)[7:19] + ".json", runtime.get("responses", {}))
+                        fresh = source_success_responses(response_operation, response_document, output, "response_" + digest(response_source)[7:19] + ".json", runtime.get("responses", {}))
                     except (ValueError, KeyError, TypeError) as exc:
                         response_error = str(exc)
                     source_payloads = {}
                     response_identity = (facts_prefix + path, actual_method, operation_id)
-                    old_responses = published_responses.get(response_identity, {})
-                    if fresh and "200" not in fresh and runtime.get("x-aisa-passthrough") is True and not has_response_payload(operation.get("responses", {}).get("200", {})):
+                    old_responses = {} if descriptor_present else published_responses.get(response_identity, {})
+                    if fresh and "200" not in fresh and (runtime.get("x-aisa-passthrough") is True or runtime.get("x-aisa-response-passthrough") is True) and not has_response_payload(operation.get("responses", {}).get("200", {})):
                         operation.get("responses", {}).pop("200", None)
                         old_responses = {status: response for status, response in old_responses.items() if status != "200"}
                     for status in sorted(set(old_responses) | set(fresh)):
@@ -778,7 +811,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             else:
                                 retained[status] = payload
                     if source_payloads:
-                        operation["x-aisa-response-source"] = {"kind": "upstream_success_contract", "source": copy.deepcopy(operation_source),
+                        operation["x-aisa-response-source"] = {"kind": "upstream_success_contract", "source": copy.deepcopy(response_source),
                                                                "content_hash": digest(source_payloads)}
                     if retained:
                         retained_responses[operation_id] = retained

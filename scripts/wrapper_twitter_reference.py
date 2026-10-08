@@ -1,12 +1,13 @@
 """Read the owning service's pinned Python declarations without importing its code."""
 import ast
 import hashlib
+import re
 
 REVISION = '9481772229feb96eed7fef509234d089cd0d7ec3'
 ROOT = 'https://raw.githubusercontent.com/AIsa-team/AisaTwitterAuthService/' + REVISION + '/'
 REFERENCE_URL = ROOT + 'app/api/routes/twitter.py'
 SCHEMA_URL = ROOT + 'app/schemas/twitter.py'
-VERSION = 'scripts/wrapper_twitter_reference.py@2'
+VERSION = 'scripts/wrapper_twitter_reference.py@3'
 
 
 def response_reference(routes_raw, schemas_raw):
@@ -119,3 +120,26 @@ def normalize_tweet_id(cls, value: str) -> str:
 
 def import_reference(fetch):
     return convert_reference(fetch(REFERENCE_URL), fetch(SCHEMA_URL))
+
+
+def convert_response_only_reference(routes_raw, schemas_raw, upstream_origin_sha256):
+    """Prepare post response evidence with an independently reviewed origin pin.
+
+    The source defines the owning route, not the deployment hostname. The origin
+    pin must come from a reviewed current binding; credentials/hosts stay private.
+    This helper never fetches, registers or approves a source.
+    """
+    if not isinstance(upstream_origin_sha256, str) or not re.fullmatch(r'[0-9a-f]{64}', upstream_origin_sha256):
+        raise ValueError('reviewed Twitter origin SHA256 required')
+    responses = response_reference(routes_raw, schemas_raw)
+    if '/post_twitter' not in responses:
+        raise ValueError('owning post response route missing')
+    document = {'openapi': '3.1.0', 'info': {'title': 'Twitter post response declaration', 'version': REVISION},
+        'servers': [{'url': 'https://api.aisa.one'}],
+        'paths': {'/apis/v1/twitter/post_twitter': responses['/post_twitter']}}
+    return document, {'kind': 'manual', 'converter': VERSION, 'response_only': True,
+        'path_space': 'public', 'source_revision': REVISION, 'refresh_policy': 'pinned',
+        'upstream_path_sha256': hashlib.sha256(b'/post_twitter').hexdigest(),
+        'upstream_origin_sha256': upstream_origin_sha256,
+        'source_pages': [{'url': url, 'raw_content_hash': 'sha256:' + hashlib.sha256(raw).hexdigest()}
+            for url, raw in [(REFERENCE_URL, routes_raw), (SCHEMA_URL, schemas_raw)]]}

@@ -47,3 +47,36 @@ Validation:
 python -m unittest discover -s scripts/tests -p test_nonfred_responses.py -v
 python -m unittest discover -s scripts/tests -p test_wrapper_references.py -v
 ```
+
+## Independent Runtime response transport
+
+Composer 12 accepts a response-only public mirror only when the Runtime operation
+explicitly supplies `x-aisa-response-passthrough: true`, together with matching
+64-character SHA256 values in `x-aisa-response-upstream-path-sha256` and
+`x-aisa-response-upstream-origin-sha256`. The origin hashes the lowercase scheme
+and host (including an explicit port); the path hash covers the executor's full
+base prefix plus target path. Current producer scope excludes query-selected and
+encoded-path targets. Request validation ownership remains unchanged.
+
+The source metadata must contain `kind: manual`, `path_space: public`,
+`response_only: true`, both `upstream_path_sha256` and `upstream_origin_sha256`,
+and the normal complete provenance. Its public path and HTTP method must match.
+A response-only source cannot discover an ANY request method or supply request
+parameters/body. Ambiguous, absent or changed bindings leave response debt open.
+Explicit Runtime `false` forbids both source response copying and historical
+response inheritance while preserving any response schema owned by Runtime.
+
+Prepare a reviewed candidate with
+`wrapper_twitter_reference.convert_response_only_reference(routes_bytes,
+schemas_bytes, reviewed_current_origin_sha256)` for Twitter post, or
+`import_similarweb_response_reference.convert_response_only_reference(raw_bytes,
+expected_v5_path, canonical_source_url, exact_public_path)` for Similarweb.
+These return `(document, metadata)`; record normal acquisition provenance before
+reviewing an artifact. They do not fetch, approve, register, or publish anything.
+The Twitter origin pin is a reviewed deployment binding, not a claim that the
+owning repository declares its deployment hostname.
+
+`test_independent_response_sources.py` uses clearly synthetic next-projection
+facts. Passing these tests does not change W0 debt or prove a current production
+projection. Run with `python -m unittest discover -s scripts/tests -p
+test_independent_response_sources.py -v`.
