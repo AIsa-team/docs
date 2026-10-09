@@ -2,9 +2,9 @@
 
 These declarations and receipts prepare the Docs candidate. They do not approve
 Runtime compatibility, a pending-debt baseline, or publication. The source graph
-contains 106 files: 47 historical public AIsa mirrors reviewed as historical
+contains 107 files: 47 historical public AIsa mirrors reviewed as historical
 sources, plus official acquisitions, converted/pinned sources and explicitly
-bound response declarations. This is not a claim of 106 newly fetched official
+bound response declarations. This is not a claim of 107 newly fetched official
 OpenAPI specifications.
 
 `merged-source-reviews.json` is the reproducible receipt input. It preserves real
@@ -85,3 +85,8 @@ artifact reference. A code-only main commit is not evidence of a newer published
 artifact. The GitHub workflows currently select PR base/HEAD as their historical
 reference; the operator must verify that graph corresponds to the actual last
 publication before relying on its retained-content assessment.
+
+The Twitter POST response source is separately reviewed in
+`twitter-post-independent-review.json`; its receipt points to the immutable
+review commit and preserves the actual review time. It supplies responses only.
+The existing independently pinned request mirror remains the method authority.
