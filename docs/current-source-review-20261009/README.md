@@ -20,11 +20,15 @@ Run from the Docs repository with its Python requirements installed:
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=scripts:scripts/tests \
   python -m unittest discover -s scripts/tests -p 'test_*.py'
 
+python scripts/prepare_source_receipts.py \
+  --reviewed docs/current-source-review-20261009/merged-source-reviews.json \
+  --cache .cache/source-reviews.json
+
 python scripts/check_contract_candidate.py --root "$PWD" \
   --facts-dir "$ACTUAL_COMPLETE_RUNTIME_FACTS" \
   --baseline-ref "$INDEPENDENTLY_REVIEWED_BASELINE_FULL_SHA" \
   --published-ref "$PUBLISHED_ARTIFACT_FULL_SHA" \
-  --source-receipts docs/current-source-review-20261009/merged-source-reviews.json \
+  --source-receipts .cache/source-reviews.json \
   --report "$READINESS_REPORT"
 ```
 
@@ -48,3 +52,36 @@ print(json.dumps(report, indent=2, sort_keys=True))
 assert report['status'] == 'passed'
 PY
 ```
+
+CI, source refresh and contract publication run the same receipt preparation
+step after restoring their observation cache. Each source/policy key keeps the
+newest actual review and newest acquisition attempt independently; a newer
+failed fetch still blocks readiness. Conflicting equal-time observations and
+malformed packets stop preparation. This step never creates an approval or
+changes a timestamp. Receipt-only changes require the formal artifact check.
+
+A cold CI cache still needs locked actual public Runtime facts. The published
+artifact reference and independently reviewed pending baseline remain separate
+inputs. Recompose provider files/pages and the aggregate from those inputs before
+formal assessment; this source packet cannot approve the existing aggregate or
+the outstanding request/response definition gaps.
+
+The facts directory layout consumed by the existing CLI is `index.json`,
+`category.json`, and one `<catalog-id>.json` per Runtime index provider (flatten
+an exported `providers/` directory without altering document contents). Provider
+`info.x-aisa-document.facts_hash` must equal its index entry. Any unavailable
+provider needs its explicit Runtime inventory; a missing file is not an empty
+catalog. Preserve the original snapshot receipt and artifact/source hashes next
+to the export. Do not copy the historical W0 or hypothetical oracle into this
+cache.
+
+After the actual snapshot and separately reviewed baseline are available,
+`pull_openapi.py --write` with the explicit `--facts-dir` and `--baseline-ref`
+arguments above uses the existing
+staging gate before writing the provider/page/coverage graph. Run
+`runtime_consolidate_openapi.py --output openapi.yaml`, then the explicit
+`check_contract_candidate.py` command above against the actual published
+artifact reference. A code-only main commit is not evidence of a newer published
+artifact. The GitHub workflows currently select PR base/HEAD as their historical
+reference; the operator must verify that graph corresponds to the actual last
+publication before relying on its retained-content assessment.
