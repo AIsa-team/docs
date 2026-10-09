@@ -314,13 +314,37 @@ def merge_components(unified, spec, filename):
             return [rewrite(value) for value in node]
         return node
 
+    # An otherwise identical parent can still acquire different meaning when
+    # one of its referenced components is renamed. Propagate those collisions
+    # before copying any definitions, including through recursive graphs.
+    while True:
+        added = False
+        for section in COMPONENT_SECTIONS:
+            target = unified['components'].setdefault(section, {})
+            for name, definition in source_components.get(section, {}).items():
+                ref = f'#/components/{section}/{escape(name)}'
+                if ref in renamed or name not in target or rewrite(definition) == target[name]:
+                    continue
+                renamed[ref] = f'#/components/{section}/{escape(f"{prefix}_{name}")}'
+                added = True
+        security_names = {
+            old.rsplit('/', 1)[1].replace('~1', '/').replace('~0', '~'):
+                new.rsplit('/', 1)[1].replace('~1', '/').replace('~0', '~')
+            for old, new in renamed.items() if old.startswith('#/components/securitySchemes/')
+        }
+        if not added:
+            break
+
     spec.update(rewrite(spec))
     source_components = spec.get('components', {})
     for section in COMPONENT_SECTIONS:
         for name, definition in source_components.get(section, {}).items():
             ref = renamed.get(f"#/components/{section}/{escape(name)}")
             target_name = ref.rsplit("/", 1)[1].replace('~1', '/').replace('~0', '~') if ref else name
-            unified["components"].setdefault(section, {})[target_name] = definition
+            target = unified["components"].setdefault(section, {})
+            if target_name in target and target[target_name] != definition:
+                raise ValueError(f"component collision after reference rewrite: {filename} {section}/{target_name}")
+            target[target_name] = definition
 
 
 def validate_reference_closure(document):

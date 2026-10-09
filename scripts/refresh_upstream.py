@@ -119,7 +119,9 @@ def refresh(root, fetch=import_source, checked_at=None, receipts=None, attempts=
             retained, removed = preserve_removed(previous, updated, path.name)
             changes[path] = json.dumps(retained, indent=2, ensure_ascii=False) + '\n'
             report['updated'][path.stem] = {'removed_upstream_but_retained': removed,
-                                          'semantic_changes': semantic, **evidence}
+                                          'semantic_changes': semantic,
+                                          'candidate_semantic_changes': compare_contracts(previous, retained),
+                                          **evidence}
             if not policy_errors(updated_source):
                 receipts[receipt_key(updated_source)] = acquisition_receipt(updated_source, checked_at)
             attempts[receipt_key(updated_source)] = {'checked_at': checked_at.isoformat(), 'status': 'confirmed'}
