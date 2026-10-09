@@ -42,3 +42,54 @@ AIsa 在 `https://api.aisa.one` 提供统一 API：兼容 OpenAI 的聊天接口
     查询钱包余额和 API Key 实际可用额度。
   </Card>
 </CardGroup>
+
+## 已结算调用费用
+
+Integration API 响应报告已结算客户扣费时，
+`X-AISA-Customer-Cost-Micros-USD` 是以 micro-USD 为单位的非负十进制整数：
+`1000000` 表示 `$1.00`。返回 `0` 表示本次报告的扣费为零。响应头缺失或格式无效时，
+表示该响应没有提供可用的结算金额；**缺失不等于免费**。不要仅依据 HTTP 成功或失败、
+价格档位或目录估算推断实际扣费。
+
+网关通过 `Access-Control-Expose-Headers` 向浏览器调用方暴露该客户费用头。
+接受的整数范围是 `0` 到 `9223372036854775807`；对账时使用整数或十进制表示，
+不要先转换为浮点数。JavaScript 调用方应使用 `BigInt` 保存 micro-USD，或保留十进制字符串。
+
+| 响应路径 | 费用头策略 |
+| --- | --- |
+| Metered V2 结算 | 可能返回 `X-AISA-Customer-Cost-Micros-USD` 和 `X-AISA-Provider-Cost-Micros-USD`。Provider 成本是独立账务证据，不是客户扣费；回退证据可能是估算。 |
+| 固定/default 结算 | 报告已结算客户扣费，包括零；不新增暴露 Provider-cost micro-USD 头，并移除上游伪装提供的同名头。 |
+| 报价、结算前拒绝、传输失败或特殊免客户费用路径 | 已结算费用头可能不存在。请遵循端点的报价或错误契约，不能将缺失解释成零费用。 |
+
+Provider 成本头不在通用浏览器 CORS 暴露列表内。它们由具体端点及计费策略决定，
+本页不保证它们出现，也不扩大暴露范围。尤其不能将 web-search 专用费用头视为所有
+Integration API 的统一契约。
+
+费用报价是在执行前返回的估算或上界，不是已经扣费的证明。请求头
+`X-AISA-Max-Price-USD` 表示花费上限，不是实际扣费。MCP 结果字段取决于实际部署版本。
+如果提供 `customer_cost_micros_usd` 和 `cost_usd_exact`，可用它们保留已报告的金额；
+`cost_usd` 用于数字展示，极大数值可能被舍入。不要假定每个 MCP 部署都提供这些精确字段。
+未知费用保持缺失，错误响应也是如此。不能用报价的 `estimated_cost_micros_usd` 代替已结算金额。
+
+下面的 Python 示例接收不区分大小写的 HTTP 响应头映射（例如
+`requests.Response.headers`），并保留精确十进制输出：
+
+{/* settled-cost-parser */}
+```python
+def settled_customer_cost(headers):
+    raw = headers.get("X-AISA-Customer-Cost-Micros-USD")
+    if raw is None:
+        return None
+    value = str(raw).strip()
+    if not value.isascii() or not value.isdecimal():
+        return None
+    micros = int(value)
+    if micros > 9223372036854775807:
+        return None
+    return {
+        "customer_cost_micros_usd": micros,
+        "cost_usd_exact": f"{micros // 1000000}.{micros % 1000000:06d}",
+    }
+```
+
+兼容错误格式和安全重试方式见[错误代码](/zh/api-reference/errors)。

@@ -1,159 +1,180 @@
 ---
 title: "错误代码"
-description: "AIsa API 的 HTTP 状态码、错误 Payload 结构和建议的重试策略。"
+description: "Integration API 的错误格式、六类诊断信息和安全重试指南。"
 ---
 
-AIsa API 的响应遵循标准 HTTP 语义：成功调用返回 `2xx`，客户端错误返回 `4xx`，服务端或上游错误返回 `5xx`。本页说明错误模型以及不同错误的处理方式。
+## 响应格式由端点决定
 
-## 错误响应结构
+Integration API 保留多种兼容错误格式。`error` 可以是字符串或对象；机器可读的 `code` 可能位于顶层，也可能位于该对象内。不要要求每个错误都包含 `type`、`code` 或 `request_id`。
 
-错误响应始终是包含 `error` 对象的 JSON：
+下方示例说明网关生成的 Integration API 错误。OpenAI 兼容端点和 Anthropic 兼容端点各自遵循对应协议。普通 Provider 响应可能保留上游状态码、正文和内容类型，包括非 JSON 错误。解析响应前请先检查 HTTP 状态码和内容类型。
+
+排查问题时，请保留响应返回的 `X-Request-ID`，以及正文中存在的 `request_id`。它们是否存在、出现在哪里取决于错误路径；示例不保证每次拒绝都同时包含两者。
+
+## 六类诊断信息
+
+| 类别 | 常见 Integration API 响应 | 处理方式 |
+| --- | --- | --- |
+| 认证 | `401`：`missing_api_key`、`invalid_api_key`、`api_key_disabled` 或 `expired_api_key`；认证依赖失败可能返回 `503 authentication_unavailable` | 修正 AISA 凭据或排查认证依赖。 |
+| 参数 | `400`，可能只有字符串错误；托管产品的参数校验可能返回结构化代码 | 按端点契约修正请求。 |
+| 预算 | `402`：`estimated_price_exceeds_max_price`、`insufficient_api_key_balance` 或 `insufficient_wallet_balance` | 检查花费上限和可用余额；估算不等于已结算费用。 |
+| 幂等 | `409`：`request_in_progress`、`request_already_completed` 或 `idempotency_conflict`；Similarweb 保留带前缀的兼容代码 | 核查原操作，不要仅为绕过冲突而换用新键。 |
+| 上游 | 原生转发的传输失败可能返回 `502`；托管 Similarweb 的传输失败可能返回 `503 provider_unavailable`；Provider 响应可能透传 | 重复请求前确认是否已经转发或执行。 |
+| 配置或依赖 | `503`：`metered_v2_billing_config_invalid`、`metered_v2_billing_dependency_timeout` 或 `metered_v2_billing_dependency_unavailable`；Similarweb 可能使用 `similarweb_billing_` 前缀 | 区分需要修复的配置和可恢复的临时依赖故障。 |
+
+仅凭 `503` 不能判定为上游故障。`404` 可能指路由或上游资源；认证可能先于路由查找，因此缺少凭据不能证明路由不存在。`403`、`422`、`429` 的具体含义仍由端点决定，不要假定统一错误代码或限流响应头。实际返回 `Retry-After` 时应遵守该值。
+
+## 网关实际格式示例
+
+下方示例保留真实错误结构，请求 ID 仅作示意。
+
+### 认证：API Key
+
+{/* runtime-error: authentication/api_key */}
+
+HTTP `401`
+
+```json
+{
+  "code": "invalid_api_key",
+  "error": "AISA API key is invalid. Check that you copied the complete key and are using an AISA key, not an upstream provider key.",
+  "request_id": "example-request-id"
+}
+```
+
+### 参数：原生请求
+
+{/* runtime-error: parameters/native_request */}
+
+HTTP `400`
+
+```json
+{
+  "error": "request does not match the endpoint contract"
+}
+```
+
+### 预算：估算超出上限
+
+{/* runtime-error: budget/estimate_cap */}
+
+HTTP `402`
 
 ```json
 {
   "error": {
-    "type": "authentication_error",
-    "code": "invalid_api_key",
-    "message": "The API key provided is invalid or has been revoked.",
-    "request_id": "req_01JABCD9F1YYEXAMPLE"
+    "code": "estimated_price_exceeds_max_price",
+    "message": "The estimated request price exceeds the configured maximum.",
+    "retryable": false
   }
 }
 ```
 
-| 字段 | 含义 |
-| --- | --- |
-| `type` | 高层错误类别，例如 `authentication_error`、`invalid_request_error`、`rate_limit_error`、`api_error`、`upstream_error` |
-| `code` | 机器可读的稳定错误代码，可安全用于程序匹配 |
-| `message` | 供人阅读的错误说明 |
-| `request_id` | 请求的唯一 ID。**提交支持工单时请附上该值。** |
+### 幂等：请求已完成
 
-## 状态码
+{/* runtime-error: idempotency/generic */}
 
-<AccordionGroup>
+HTTP `409`
 
-<Accordion title="400：请求错误" icon="triangle-exclamation">
-请求 Payload 格式错误，例如缺少必填参数、类型错误、JSON 无效或参数值超出范围。
+```json
+{
+  "error": {
+    "code": "request_already_completed",
+    "message": "An identical request is already complete.",
+    "retryable": false
+  }
+}
+```
 
-**常见代码：** `invalid_request`、`missing_parameter`、`invalid_parameter_type`、`json_parse_error`
+### 幂等：Similarweb 兼容格式
 
-**处理方式：** 修正请求后再试，不要自动重试。
-</Accordion>
+{/* runtime-error: idempotency/similarweb_compatibility */}
 
-<Accordion title="401：未授权" icon="lock">
-未提供 API Key、`Authorization` 请求头格式错误，或密钥无效/已撤销。
+HTTP `409`
 
-**常见代码：** `missing_api_key`、`invalid_api_key`、`revoked_api_key`
+```json
+{
+  "error": {
+    "code": "similarweb_request_already_completed",
+    "message": "An identical request is already complete.",
+    "retryable": false
+  }
+}
+```
 
-**处理方式：** 在[控制台](https://console.aisa.one)中检查密钥，并使用 `Authorization: Bearer YOUR_A...EY` 重新发送请求。
-</Accordion>
+### 上游：原生转发传输失败
 
-<Accordion title="403：禁止访问" icon="ban">
-密钥有效，但无权访问该端点、模型或区域。
+{/* runtime-error: upstream/native_transport */}
 
-**常见代码：** `insufficient_permissions`、`model_not_allowed`、`region_blocked`
+HTTP `502`
 
-**处理方式：** 检查工作区套餐和密钥权限范围。如果限制不符合预期，请联系支持团队。
-</Accordion>
+```json
+{
+  "error": "provider request failed"
+}
+```
 
-<Accordion title="404：未找到" icon="question">
-端点路径、模型 ID 或资源 ID 不存在。
+### 上游：托管产品传输失败
 
-**常见代码：** `unknown_model`、`resource_not_found`、`unknown_endpoint`
+{/* runtime-error: upstream/managed_transport */}
 
-**处理方式：** 对照[模型目录](/zh/guides/models)检查模型名，并对照 [API 参考](/zh/api-reference/chat/post_chat-completions)检查端点路径。
-</Accordion>
+HTTP `503`
 
-<Accordion title="422：无法处理的实体" icon="circle-exclamation">
-语法有效，但请求违反业务规则，例如 `max_tokens` 超过模型限制、参数组合不受支持，或内容违反上游提供商的安全策略。
+```json
+{
+  "error": {
+    "code": "provider_unavailable",
+    "message": "Similarweb is temporarily unavailable."
+  }
+}
+```
 
-**常见代码：** `max_tokens_exceeded`、`unsupported_parameter`、`content_policy_violation`
+### 依赖：计费依赖超时
 
-**处理方式：** 仔细阅读 `message` 并调整 Payload，不要盲目重试。
-</Accordion>
+{/* runtime-error: configuration_dependency/timeout */}
 
-<Accordion title="429：请求过多" icon="gauge-high">
-请求触发了速率限制，可能是账户 RPM/TPM 上限，也可能是上游提供商的限流。
+HTTP `503`; `X-Request-ID: example-request-id`
 
-**常见代码：** `rate_limit_exceeded`、`upstream_rate_limit`、`quota_exceeded`
+```json
+{
+  "error": {
+    "code": "metered_v2_billing_dependency_timeout",
+    "message": "The billing dependency timed out. Retry the request.",
+    "request_id": "example-request-id",
+    "retryable": true
+  }
+}
+```
 
-**返回的响应头：**
-- `Retry-After`：允许再次尝试前需要等待的秒数
-- `X-RateLimit-Limit`：当前限制
-- `X-RateLimit-Remaining`：当前窗口中的剩余请求数
-- `X-RateLimit-Reset`：计数器重置时的 UNIX 时间戳
+### 配置：计费配置无效
 
-**处理方式：** 退避后重试，具体方式见下方[重试指南](#重试指南)。完整额度表请参阅[速率限制](/zh/api-reference/rate-limits)。
-</Accordion>
+{/* runtime-error: configuration_dependency/invalid_config */}
 
-<Accordion title="500：内部服务器错误" icon="server">
-AIsa 侧发生意外错误。`request_id` 字段对于支持团队排查问题非常重要。
+HTTP `503`
 
-**处理方式：** 使用指数退避重试。如果错误持续出现，请将 `request_id` 发送至 [developer@aisa.one](mailto:developer@aisa.one)。
-</Accordion>
+```json
+{
+  "error": {
+    "code": "metered_v2_billing_config_invalid",
+    "message": "The Metering V2 billing configuration is invalid.",
+    "retryable": true
+  }
+}
+```
 
-<Accordion title="502 / 503 / 504：上游错误" icon="cloud-exclamation">
-AIsa 无法连接上游模型提供商（例如 OpenAI、Anthropic），或从上游收到错误。此类问题通常是暂时的。
+费用报价模式的认证错误使用 `error` 内的对象，包含 `code`、`message` 和 `request_id`，与上方顶层认证格式不同。处理该模式时请遵循端点的报价契约。
 
-**常见代码：** `upstream_unavailable`、`upstream_timeout`、`gateway_error`
 
-**处理方式：** 使用指数退避重试。如果问题持续出现，请切换备用模型；网关可以通过不同上游部署路由 Claude 请求。
-</Accordion>
-
-</AccordionGroup>
+已报告费用的含义见[已结算调用费用](/zh/api-reference#已结算调用费用)；错误响应或费用头缺失都不能证明扣费为零。
 
 ## 重试指南
 
-<Steps>
-  <Step title="只重试幂等或可安全重复的调用">
-    所有 `GET` 请求和大多数聊天补全调用都可以安全重试。不要盲目重试会产生副作用的 `POST` 请求，例如发布推文。
-  </Step>
-  <Step title="遵守 `Retry-After`">
-    收到 429 响应时，始终遵守 `Retry-After` 响应头。收到未包含该响应头的 5xx 错误时，使用指数退避。
-  </Step>
-  <Step title="使用带抖动的指数退避">
-    从 1 秒开始，每次尝试将等待时间翻倍，并添加 ±25% 抖动，上限为 30 秒。
-    ```
-    1.0s → 2.0s → 4.0s → 8.0s → 16.0s → 30.0s (max)
-    ```
-  </Step>
-  <Step title="限制总重试时间">
-    尝试 3–5 次或总计 60 秒后停止，以先到者为准，并将错误返回给调用方。
-  </Step>
-  <Step title="除 429 外，不要重试 4xx">
-    `400`、`401`、`403`、`404` 和 `422` 表示请求本身存在问题，重试无法解决。
-  </Step>
-</Steps>
-
-### 最小重试示例（Python）
-
-```python
-import time, random
-from openai import OpenAI, APIError, RateLimitError
-
-client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
-
-def call_with_retry(messages, model="gpt-4.1-mini", max_retries=5):
-    delay = 1.0
-    for attempt in range(max_retries):
-        try:
-            return client.chat.completions.create(model=model, messages=messages)
-        except RateLimitError as e:
-            wait = getattr(e.response.headers, "Retry-After", None) or delay
-            time.sleep(float(wait) * (1 + random.uniform(-0.25, 0.25)))
-        except APIError as e:
-            if e.status_code >= 500:
-                time.sleep(delay * (1 + random.uniform(-0.25, 0.25)))
-            else:
-                raise
-        delay = min(delay * 2, 30)
-    raise RuntimeError("Exceeded max retries")
-```
+- 对于认证、参数和预算拒绝，先修正凭据、请求或花费限制，再重试。
+- `retryable` 提示不保证原操作没有副作用、重试免费或端点支持幂等。重复 GET 或聊天请求也可能产生费用。
+- 收到 `409` 时核查原操作，并遵循该端点的幂等规则。规则要求时保留同一键和请求正文；更换键可能创建第二次操作。
+- 遇到临时故障，先确认重复执行安全。若有 `Retry-After` 则遵守它，否则使用带抖动且有次数和时间上限的指数退避。不要盲目重放执行结果不明的 Provider 创建操作或计费调用。
+- 持续的配置错误需要运维排查，不能依靠无限重试解决。Provider 错误不符合上述示例时，保留原状态和响应。
 
 ## 获取帮助
 
-向 [developer@aisa.one](mailto:developer@aisa.one) 报告问题时，请提供：
-
-- 错误响应中的 `request_id`
-- HTTP 状态码和 `error.code`
-- 模型 ID 和最小复现示例（使用已脱敏密钥的 cURL）
-- 请求失败的大致时间
+向 [developer@aisa.one](mailto:developer@aisa.one) 提供大致 UTC 时间、HTTP 方法和公开路径、状态码、实际返回的错误代码（若有）、请求 ID（若有）和最小脱敏复现。不要附上 API Key 或其他凭据。
