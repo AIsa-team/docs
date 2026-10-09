@@ -20,9 +20,17 @@ HEX40 = re.compile(r'[0-9a-f]{40}')
 PROVIDER = re.compile(r'[a-z0-9][a-z0-9_.-]*')
 
 
+class AcquisitionRejected(ValueError):
+    """A controlled diagnostic containing no response body or credentials."""
+
+
+def failure_diagnostic(exc):
+    return str(exc) if isinstance(exc, AcquisitionRejected) else type(exc).__name__
+
+
 def require(condition, message):
     if not condition:
-        raise ValueError(message)
+        raise AcquisitionRejected(message)
 
 
 def sha(raw):
@@ -37,12 +45,12 @@ def decode(raw):
             value[key] = item
         return value
     return json.loads(raw, object_pairs_hook=pairs,
-                      parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Non-finite JSON')))
+                      parse_constant=lambda _: (_ for _ in ()).throw(AcquisitionRejected('Non-finite JSON')))
 
 
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
-        raise ValueError('HTTP redirect rejected')
+        raise AcquisitionRejected('HTTP redirect rejected')
 
 
 class PublicReader:
@@ -63,8 +71,11 @@ class PublicReader:
                 require(response.status == 200, 'Expected HTTP 200')
                 raw = response.read(MAX_FILE + 1)
                 headers = dict((k.lower(), v) for k, v in response.headers.items())
-        except (HTTPError, URLError, TimeoutError, OSError) as exc:
-            raise ValueError('Public metadata request failed: ' + type(exc).__name__) from None
+        except HTTPError as exc:
+            exc.close()
+            raise AcquisitionRejected('Public metadata request failed: HTTP ' + str(exc.code)) from None
+        except (URLError, TimeoutError, OSError) as exc:
+            raise AcquisitionRejected('Public metadata request failed: ' + type(exc).__name__) from None
         require(time.monotonic() <= self.deadline, 'Acquisition deadline exceeded')
         require(len(raw) <= MAX_FILE, 'Public file exceeds byte limit')
         require('110' not in headers.get('warning', ''), 'Stale public metadata rejected')
@@ -98,6 +109,20 @@ def validate_current(current, revision, compiler):
                     {key: row[key] for key in ('name', 'media_type', 'sha256')} for row in files]}
     require(sha(json.dumps(manifest, separators=(',', ':')).encode()) == revision,
             'Manifest revision hash mismatch')
+
+
+def category_content(raw):
+    category = decode(raw)
+    require(isinstance(category, dict) and isinstance(category.get('apis'), list),
+            'Invalid live category response')
+    # Runtime api_catalog_handlers.go stamps cache construction time independently
+    # of catalog content. Every other field and ordered API row must still match.
+    if 'cached_at' in category:
+        require(type(category['cached_at']) is int and category['cached_at'] >= 0,
+                'Invalid category cache timestamp')
+    content = {key: value for key, value in category.items() if key != 'cached_at'}
+    # Canonical JSON keeps booleans distinct from numbers (True == 1 in Python).
+    return json.dumps(content, sort_keys=True, separators=(',', ':')).encode()
 
 
 def acquire(revision, compiler, reader):
@@ -141,9 +166,9 @@ def acquire(revision, compiler, reader):
                 meta.get('facts_hash') == provider['facts_hash'], 'Index/provider facts hash mismatch')
     require(expected == set(contents), 'Manifest contains an unindexed provider')
     category, _ = reader('/info/apis/category')
-    require(isinstance(decode(category).get('apis'), list), 'Invalid live category response')
+    catalog = category_content(category)
     category_after, _ = reader('/info/apis/category')
-    require(category == category_after, 'Live category changed during acquisition')
+    require(catalog == category_content(category_after), 'Live category changed during acquisition')
     after_raw, _ = reader('/public/api-contract/current')
     after = decode(after_raw)
     validate_current(after, revision, compiler)
@@ -154,7 +179,10 @@ def acquire(revision, compiler, reader):
                'fresh_before_and_after': True, 'manifest_files': before['files'],
                'inventory_endpoint_count': coverage.get('inventory_endpoint_count'),
                'selected_endpoint_count': selected, 'provider_count': len(providers),
-               'category_sha256': sha(category), 'category_scope': 'live unversioned category, stable twice; outside immutable release manifest',
+               'category_sha256': sha(category), 'category_after_sha256': sha(category_after),
+               'category_content_sha256': sha(catalog),
+               'category_ignored_volatile_fields': ['cached_at'],
+               'category_scope': 'live unversioned category content, stable twice except cache construction timestamp; outside immutable release manifest',
                'scope': 'actual public Runtime input acquisition only; no Docs readiness or baseline approval'}
     return contents, category, before_raw, after_raw, receipt
 
@@ -183,18 +211,22 @@ def save(output, acquisition):
             shutil.rmtree(temporary)
 
 
-if __name__ == '__main__':
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base-url', default='https://api.aisa.one')
     parser.add_argument('--artifact-revision', required=True)
     parser.add_argument('--compiler-revision', required=True)
     parser.add_argument('--output', type=Path, required=True)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
         require(not args.output.exists() and not args.output.is_symlink(), 'Output directory already exists')
         result = acquire(args.artifact_revision, args.compiler_revision,
                          PublicReader(args.base_url, time.monotonic() + 180))
         save(args.output, result)
         print(json.dumps(result[-1], sort_keys=True))
-    except (ValueError, KeyError, TypeError, OSError) as exc:
-        parser.exit(1, 'Runtime acquisition rejected: ' + type(exc).__name__ + '\n')
+    except Exception as exc:
+        parser.exit(1, 'Runtime acquisition rejected: ' + failure_diagnostic(exc) + '\n')
+
+
+if __name__ == '__main__':
+    main()

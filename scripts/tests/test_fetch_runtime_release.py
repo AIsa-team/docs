@@ -1,12 +1,18 @@
 import copy
+from contextlib import redirect_stderr
+from http.client import BadStatusLine
+import io
 import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
+from urllib.error import HTTPError, URLError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from fetch_runtime_release import acquire, save, sha, PublicReader, NoRedirect
+from fetch_runtime_release import (acquire, save, sha, PublicReader, NoRedirect,
+                                   AcquisitionRejected, failure_diagnostic, main)
 
 
 def encoded(value):
@@ -14,6 +20,36 @@ def encoded(value):
 
 
 class PublicReleaseTests(unittest.TestCase):
+    def test_cli_unexpected_protocol_error_omits_untrusted_exception_text(self):
+        with tempfile.TemporaryDirectory() as temp:
+            stderr = io.StringIO()
+            with patch('fetch_runtime_release.acquire', side_effect=BadStatusLine('secret protocol line')):
+                with redirect_stderr(stderr), self.assertRaises(SystemExit) as raised:
+                    main(['--artifact-revision', 'a' * 64, '--compiler-revision', 'b' * 40,
+                          '--output', str(Path(temp) / 'facts')])
+            self.assertEqual(raised.exception.code, 1)
+            self.assertEqual(stderr.getvalue(), 'Runtime acquisition rejected: BadStatusLine\n')
+            self.assertFalse((Path(temp) / 'facts').exists())
+
+    def test_failure_diagnostics_preserve_guard_reason_without_untrusted_details(self):
+        self.assertEqual(failure_diagnostic(AcquisitionRejected('Manifest revision hash mismatch')),
+                         'Manifest revision hash mismatch')
+        for exc in (ValueError('secret response body'), KeyError('secret field'),
+                    OSError('secret filename')):
+            self.assertEqual(failure_diagnostic(exc), type(exc).__name__)
+
+    def test_network_failure_reports_status_or_type_without_url_reason_or_body(self):
+        for exc, expected in (
+                (HTTPError('https://user:secret@example.test', 403, 'secret reason', {}, None), 'HTTP 403'),
+                (URLError('secret reason'), 'URLError'),
+                (TimeoutError('secret reason'), 'TimeoutError')):
+            reader = PublicReader('https://api.aisa.one', float('inf'))
+            reader.opener = Mock()
+            reader.opener.open.side_effect = exc
+            with self.assertRaises(AcquisitionRejected) as raised:
+                reader('/public/api-contract/current')
+            self.assertEqual(failure_diagnostic(raised.exception), 'Public metadata request failed: ' + expected)
+
     def fixture(self, mutate_index=None, mutate_current=None):
         compiler = 'b' * 40
         provider = {'info': {'x-aisa-document': {'facts_hash': 'c' * 64}}, 'paths': {}}
@@ -136,6 +172,39 @@ class PublicReleaseTests(unittest.TestCase):
                 return raw, headers
             with self.assertRaises(ValueError):
                 acquire(revision, compiler, reader)
+
+    def test_only_category_cache_timestamp_can_change(self):
+        for change in ('cached_at', 'provider_price', 'extra_field', 'invalid_cached_at',
+                       'one_to_true', 'zero_to_false'):
+            revision, compiler, original, *_ = self.fixture()
+            reads = 0
+            def reader(path):
+                nonlocal reads
+                raw, headers = original(path)
+                if path == '/info/apis/category':
+                    reads += 1
+                    category = json.loads(raw)
+                    category['cached_at'] = 100 + reads
+                    if change == 'one_to_true':
+                        category['apis'][0]['pricing'] = {'price': 1 if reads == 1 else True}
+                    elif change == 'zero_to_false':
+                        category['apis'][0]['pricing'] = {'price': 0 if reads == 1 else False}
+                    if reads == 2 and change == 'provider_price':
+                        category['apis'][0]['pricing'] = {'price': 1}
+                    elif reads == 2 and change == 'extra_field':
+                        category['new_field'] = True
+                    elif reads == 2 and change == 'invalid_cached_at':
+                        category['cached_at'] = True
+                    raw = encoded(category)
+                return raw, headers
+            with self.subTest(change=change):
+                if change == 'cached_at':
+                    result = acquire(revision, compiler, reader)
+                    self.assertNotEqual(result[-1]['category_sha256'], result[-1]['category_after_sha256'])
+                    self.assertEqual(result[-1]['category_ignored_volatile_fields'], ['cached_at'])
+                else:
+                    with self.assertRaises(ValueError):
+                        acquire(revision, compiler, reader)
 
     def test_network_boundary_rejects_credentials_http_redirects_and_expired_deadline(self):
         for origin in ('http://api.aisa.one', 'https://user:secret@api.aisa.one',
