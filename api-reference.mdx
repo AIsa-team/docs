@@ -42,3 +42,62 @@ AIsa exposes a unified API surface at `https://api.aisa.one` — OpenAI-compatib
     Read wallet balance and API-key availability.
   </Card>
 </CardGroup>
+
+## Settled call cost
+
+For Integration API responses that report a settled customer debit,
+`X-AISA-Customer-Cost-Micros-USD` contains a nonnegative decimal integer in
+micro-USD: `1000000` means `$1.00`. A returned `0` means the reported debit is
+zero. A missing or malformed header means the response did not supply a usable
+settled amount; **missing does not mean free**. Do not infer a debit solely from
+HTTP success or failure, a price tier, or a catalog estimate.
+
+The gateway exposes this customer-cost header through
+`Access-Control-Expose-Headers` for browser callers. Its accepted integer range
+is `0` through `9223372036854775807`; use an integer/decimal representation, not a
+floating-point conversion, when reconciling money. JavaScript callers should use
+`BigInt` for micro-USD or preserve the decimal string.
+
+| Response path | Cost-header policy |
+| --- | --- |
+| Metered V2 settlement | Can return both `X-AISA-Customer-Cost-Micros-USD` and `X-AISA-Provider-Cost-Micros-USD`. Provider cost is separate accounting evidence, not the customer's debit; fallback evidence may be an estimate. |
+| Fixed/default settlement | Reports the settled customer debit, including zero; does not expose a new Provider-cost micro-USD header and removes an upstream-supplied one. |
+| Quote, pre-settlement rejection, transport failure, or special no-charge path | A settled header may be absent. Follow the endpoint's quote or error contract; absence does not establish zero cost. |
+
+Provider-cost headers are not part of the common browser CORS exposed-header
+list. They are endpoint/strategy-specific; this page does not promise their
+presence or expand their exposure. In particular, web-search-specific cost
+headers are not a universal Integration API contract.
+
+A cost quote is an estimate or bound returned before execution, not proof of a
+settled charge. The `X-AISA-Max-Price-USD` request header is a spending cap, not a
+reported debit. MCP result fields depend on the deployed version. When
+`customer_cost_micros_usd` and `cost_usd_exact` are provided, use them to preserve
+the reported amount; `cost_usd` is a numeric display and can round very large
+values. Do not assume every MCP deployment supplies the exact fields. Unknown
+cost remains absent, including on an error. A quoted
+`estimated_cost_micros_usd` must not be substituted for a settled amount.
+
+The following Python example accepts a case-insensitive HTTP headers mapping
+(such as `requests.Response.headers`) and preserves exact decimal output:
+
+{/* settled-cost-parser */}
+```python
+def settled_customer_cost(headers):
+    raw = headers.get("X-AISA-Customer-Cost-Micros-USD")
+    if raw is None:
+        return None
+    value = str(raw).strip()
+    if not value.isascii() or not value.isdecimal():
+        return None
+    micros = int(value)
+    if micros > 9223372036854775807:
+        return None
+    return {
+        "customer_cost_micros_usd": micros,
+        "cost_usd_exact": f"{micros // 1000000}.{micros % 1000000:06d}",
+    }
+```
+
+See [Error Codes](/api-reference/errors) for retained response formats and safe
+retry handling.
