@@ -98,3 +98,9 @@ The Twitter POST response source is separately reviewed in
 `twitter-post-independent-review.json`; its receipt points to the immutable
 review commit and preserves the actual review time. It supplies responses only.
 The existing independently pinned request mirror remains the method authority.
+
+The AgentMail composite receipt is in
+`../agentmail-response-review-20261009/reviewed-source-receipts.json`. It binds
+independent review of both raw inputs and exactly eleven success replacements;
+the hosted200/owning204 conflict and preserved request graph are recorded there.
+This replaces the active source key without deleting historical receipts.
