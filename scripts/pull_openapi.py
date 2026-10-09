@@ -386,7 +386,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                     document = read_json(upstream_path)
                     imported_source = False
                     current_source = (document or {}).get("info", {}).get("x-aisa-source", {})
-                    trusted_kind = current_source.get("kind") == "provider_openapi" or (current_source.get("kind") == "manual" and current_source.get("path_space") == "public")
+                    trusted_kind = current_source.get("kind") in {"provider_openapi", "manual"}
                     if source_url and (not trusted_kind or current_source.get("url") != source_url):
                         if readiness_context and readiness_context.get('offline'):
                             raise ValueError('upstream source mirror unavailable for offline candidate evaluation')
