@@ -6,6 +6,49 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from refresh_upstream import preserve_removed, refresh
 
 class RefreshTests(unittest.TestCase):
+    def test_retention_never_replaces_new_parent_with_rewritten_old_dependency(self):
+        from compose_openapi import resolve
+        from upstream_semantics import compare_contracts
+        response = {'responses': {'200': {'description': 'ok', 'content': {
+            'application/json': {'schema': {'$ref': '#/components/schemas/Parent'}}}}}}
+        old = {'info': {'x-aisa-source': {}}, 'paths': {
+            '/removed': {'get': copy.deepcopy(response)},
+            '/current': {'get': copy.deepcopy(response)}}, 'components': {'schemas': {
+                'Parent': {'type': 'object', 'properties': {'child': {'$ref': '#/components/schemas/Child'}}},
+                'Child': {'type': 'string'}}}}
+        new = copy.deepcopy(old)
+        del new['paths']['/removed']
+        new['components']['schemas']['Child'] = {'type': 'integer'}
+        expected_new = copy.deepcopy(new)
+        candidate, removed = preserve_removed(old, new, 'provider.json')
+        self.assertEqual(candidate['components']['schemas']['Parent'], expected_new['components']['schemas']['Parent'])
+        self.assertEqual(candidate['components']['schemas']['Child'], {'type': 'integer'})
+        for path, wanted in (('/current', 'integer'), ('/removed', 'string')):
+            schema = candidate['paths'][path]['get']['responses']['200']['content']['application/json']['schema']
+            self.assertEqual(resolve(schema, candidate)['properties']['child']['type'], wanted)
+        self.assertEqual(new, expected_new)
+        self.assertEqual(removed, ['GET /removed'])
+        delta = compare_contracts(old, candidate)
+        self.assertEqual([row['operation'] for row in delta['changed']], ['GET /current'])
+        self.assertEqual(delta['removed'], [])
+
+    def test_retention_isolates_recursive_ancestor_dependencies(self):
+        from runtime_consolidate_openapi import merge_components
+        old = {'components': {'schemas': {
+            'A': {'properties': {'b': {'$ref': '#/components/schemas/B'}}},
+            'B': {'properties': {'a': {'$ref': '#/components/schemas/A'}, 'value': {'$ref': '#/components/schemas/Value'}}},
+            'Value': {'type': 'string'}}}}
+        new = copy.deepcopy(old)
+        new['components']['schemas']['Value'] = {'type': 'integer'}
+        expected = copy.deepcopy(new)
+        merge_components(new, old, 'old.json')
+        for name, value in expected['components']['schemas'].items():
+            self.assertEqual(new['components']['schemas'][name], value)
+        self.assertEqual(new['components']['schemas']['Old_A']['properties']['b']['$ref'], '#/components/schemas/Old_B')
+        self.assertEqual(new['components']['schemas']['Old_B']['properties']['a']['$ref'], '#/components/schemas/Old_A')
+        self.assertEqual(new['components']['schemas']['Old_B']['properties']['value']['$ref'], '#/components/schemas/Old_Value')
+        self.assertEqual(new['components']['schemas']['Old_Value']['type'], 'string')
+
     def test_deleted_upstream_operation_retains_its_renamed_components(self):
         old = {'paths': {'/old': {'get': {'operationId': 'old', 'responses': {'200': {'content': {'application/json': {'schema': {'$ref': '#/components/schemas/Body'}}}}}}}}, 'components': {'schemas': {'Body': {'type': 'string'}}}}
         new = {'info': {'x-aisa-source': {'kind': 'provider_openapi'}}, 'paths': {'/new': {'get': {'operationId': 'new'}}}, 'components': {'schemas': {'Body': {'type': 'integer'}}}}
@@ -107,6 +150,9 @@ class RefreshTests(unittest.TestCase):
             retained = json.loads(changes[path])
             self.assertIn('/old', retained['paths'])
             self.assertEqual(report['updated']['provider']['removed_upstream_but_retained'], ['GET /old'])
+        candidate_comparison = report['updated']['provider']['candidate_semantic_changes']
+        self.assertEqual(candidate_comparison['removed'], [])
+        self.assertEqual(candidate_comparison['changed'], [])
 
     def test_retained_operation_preserves_prior_inherited_auth_and_servers(self):
         before = {'servers': [{'url': 'https://api.test/old'}], 'security': [{'Key': []}],

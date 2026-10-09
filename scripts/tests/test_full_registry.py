@@ -92,6 +92,59 @@ class FullRegistryTests(unittest.TestCase):
         with patch('pull_openapi.import_source', side_effect=AssertionError('Existing mirror was fetched again')):
             self.assertEqual(self.pull()[0], {})
 
+    def test_offline_manual_upstream_uses_mirror_without_fabricating_review(self):
+        from datetime import datetime, timezone
+        from source_governance import initial_policy, receipt_key, source_report
+        source = contract('alpha', method='post', validation='provider')
+        self.sources({'alpha': source})
+        url = 'https://example.test/structured-reference'
+        (self.root / 'openapi/registry.yaml').write_text(yaml.safe_dump({
+            'auto_register': True, 'providers': {'alpha': {'upstream': {'url': url, 'file': 'alpha.json'}}}}))
+        upstream = mirror()
+        metadata = upstream['info']['x-aisa-source']
+        metadata.update(kind='manual', url=url)
+        metadata = upstream['info']['x-aisa-source'] = initial_policy(metadata)
+        path = self.root / 'openapi/upstream/alpha.json'
+        path.parent.mkdir()
+        path.write_text(json.dumps(upstream))
+        with patch('pull_openapi.import_source', side_effect=AssertionError('offline manual mirror fetched')):
+            changes, summary = stage(self.root, self.root / 'facts', 'unused', with_pages=False,
+                                     readiness_context={'offline': True})
+        self.assertEqual(summary['alpha']['pending'], 0)
+        self.assertNotIn(self.root / '.cache/source-reviews.json', changes)
+        # Acquisition or rereading the mirror does not grant a release receipt.
+        self.assertNotEqual(source_report(self.root, {})['status'], 'passed')
+        now = datetime.now(timezone.utc).isoformat()
+        receipt = {'source_hash': metadata['content_hash'], 'policy_revision': metadata['policy_revision'],
+                   'last_successful_review_at': now, 'result': 'confirmed',
+                   'reviewer': 'independent test reviewer', 'review_ref': 'a' * 40,
+                   'evidence': {'kind': 'official_documentation', 'url': url}}
+        self.assertEqual(source_report(self.root, {receipt_key(metadata): receipt})['status'], 'passed')
+
+    def test_offline_manual_upstream_rejects_wrong_authority_or_missing_provenance(self):
+        source = contract('alpha', method='post', validation='provider')
+        self.sources({'alpha': source})
+        url = 'https://example.test/structured-reference'
+        (self.root / 'openapi/registry.yaml').write_text(yaml.safe_dump({
+            'auto_register': True, 'providers': {'alpha': {'upstream': {'url': url, 'file': 'alpha.json'}}}}))
+        path = self.root / 'openapi/upstream/alpha.json'
+        path.parent.mkdir()
+        for missing in ('url_mismatch', 'converter', 'content_hash', 'fetched_at'):
+            with self.subTest(missing=missing):
+                upstream = mirror()
+                metadata = upstream['info']['x-aisa-source']
+                metadata.update(kind='manual', url=url)
+                if missing == 'url_mismatch':
+                    metadata['url'] = 'https://other.example/reference'
+                else:
+                    metadata.pop(missing)
+                path.write_text(json.dumps(upstream))
+                with patch('pull_openapi.import_source', side_effect=AssertionError('offline acquisition forbidden')):
+                    _, summary = stage(self.root, self.root / 'facts', 'unused', with_pages=False,
+                                       readiness_context={'offline': True})
+                self.assertIn('blocked', summary['alpha'])
+                self.assertGreater(summary['alpha']['pending'], 0)
+
     def test_generation_time_does_not_churn_localized_pages_or_provider_spec(self):
         source = contract('alpha')
         self.sources({'alpha': source})
@@ -149,6 +202,9 @@ class FullRegistryTests(unittest.TestCase):
         methods = generated['paths']['/apis/v1/alpha/test']
         self.assertEqual(methods['get']['operationId'], 'published_read')
         self.assertEqual(methods['post']['operationId'], 'published_write')
+        for method in ['get', 'post']:
+            self.assertEqual(methods[method]['x-aisa-runtime-operation'], {
+                'operation_id': 'published_write', 'method': 'ANY', 'path': '/apis/v1/alpha/test'})
         self.assertEqual(methods['get']['responses']['200']['content'], first['responses']['200']['content'])
         self.assertEqual(methods['get']['x-aisa-source']['kind'], 'manual')
         self.assertEqual(methods['get']['x-aisa-docs-url'], 'https://aisa.one/docs/api-reference/old-split/get_original-slug')

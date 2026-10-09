@@ -47,25 +47,26 @@ jobs:
       - run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
       - name: Test composition and preservation rules
         run: python -m unittest discover -s scripts/tests -v
-      - name: Restore public runtime response cache
-        uses: actions/cache@v4
-        with:
-          path: .cache/runtime-contracts
-          key: runtime-contracts-${{ github.run_id }}
-          restore-keys: runtime-contracts-
+      - name: Acquire one complete fresh immutable Runtime release
+        run: python scripts/fetch_runtime_release.py --current --output /tmp/formal-runtime-facts
       - name: Restore attributed source maintenance evidence
         uses: actions/cache/restore@v4
         with:
           path: .cache/source-reviews.json
           key: source-reviews-publish-${{ github.run_id }}
           restore-keys: source-reviews-
+      - name: Combine reviewed source evidence with newer observations
+        run: >-
+          python scripts/prepare_source_receipts.py
+          --reviewed docs/current-source-review-20261009/merged-source-reviews.json
+          --cache .cache/source-reviews.json
       - name: Stage contracts
         id: pull
         env:
           REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
         run: |
           set +e
-          python scripts/pull_openapi.py --write \
+          python scripts/pull_openapi.py --write --facts-dir /tmp/formal-runtime-facts \
             --baseline-ref "$REVIEWED_BASELINE" \
             --readiness-report /tmp/contract-readiness.json
           status=$?
@@ -103,7 +104,7 @@ jobs:
         env:
           REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
         run: |
-          python scripts/check_contract_candidate.py \
+          python scripts/check_contract_candidate.py --facts-dir /tmp/formal-runtime-facts \
             --baseline-ref "$REVIEWED_BASELINE" \
             --published-ref "$(git rev-parse HEAD)" \
             --report /tmp/formal-contract-readiness.json
@@ -114,6 +115,12 @@ jobs:
           name: formal-contract-readiness
           path: /tmp/formal-contract-readiness.json
           if-no-files-found: ignore
+      - name: Export the passed same-commit publication pointer
+        if: steps.pull.outputs.available == 'true'
+        run: >-
+          python scripts/export_contract_publication.py
+          --facts-dir /tmp/formal-runtime-facts
+          --report /tmp/formal-contract-readiness.json
       - name: Review staged differences
         if: steps.pull.outputs.available == 'true'
         run: git diff --stat >> "$GITHUB_STEP_SUMMARY"
@@ -123,7 +130,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add openapi api-reference zh/api-reference docs.json openapi.yaml
+          git add openapi api-reference zh/api-reference docs.json openapi.yaml docs/publication
           if git diff --cached --quiet; then exit 0; fi
           assessed_base=$(git rev-parse HEAD)
           git commit -m 'chore: regenerate runtime API contract mirrors'

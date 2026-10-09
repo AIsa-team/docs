@@ -1,0 +1,525 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AIsa API proxy",
+    "description": "APIs for prediction markets.",
+    "version": "0.0.1",
+    "x-aisa-source": {
+      "kind": "manual",
+      "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/kalshi-openapi.json",
+      "fetched_at": "2026-09-29T21:25:55+08:00",
+      "content_hash": "sha256:4e6badb7f24dd1fb3fa658e810d16cdee2affa30975dc7ee017e0d42e46252c9",
+      "converter": "scripts/import_existing_contracts.py@1",
+      "path_space": "public",
+      "owner": "AIsa-team/docs",
+      "refresh_policy": "manual",
+      "review_period_days": 30,
+      "policy_revision": "sha256:d52624da2ac67272bcaa8754db1f4b76660f498727ebe080f850b080919d3f97"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/kalshi/markets": {
+      "get": {
+        "x-aisa-pricing": {
+          "model": "per_request",
+          "currency": "USD",
+          "price_usd": 0.02,
+          "cost_tier": "med"
+        },
+        "summary": "Get Kalshi Markets",
+        "description": "List markets on Kalshi, the CFTC-regulated US prediction exchange, with live bid/ask quotes in dollars. Use this when you need odds from a regulated venue, or to cross-check a Polymarket price against a second market; fetch specific markets with `tickers` (comma-separated), scope to a group with `event_ticker` / `series_ticker`, or narrow with `status`, `search`, and the created / close / settled timestamp ranges.\n\nReturns `markets[]` with `title`, `status`, `yes_bid_dollars` / `yes_ask_dollars`, `last_price_dollars`, `volume_fp`, `open_interest_fp`, and `rules_primary` (the settlement criteria), plus a `cursor` to page with.\n\nFor executed fills rather than quotes, use `get_kalshi_trades`. For the crypto-native venue carrying similar questions, use `get_polymarket_markets`.",
+        "operationId": "get_kalshi_markets",
+        "parameters": [
+          {
+            "name": "tickers",
+            "in": "query",
+            "required": false,
+            "description": "Comma-separated Kalshi market tickers to retrieve.",
+            "schema": {
+              "type": "string",
+              "example": "KXMVESPORTSMULTIGAMEEXTENDED-S20268A776ACB3C6-43886DEE17A"
+            }
+          },
+          {
+            "name": "event_ticker",
+            "in": "query",
+            "required": false,
+            "description": "Filter by a single Kalshi event ticker.",
+            "schema": {
+              "type": "string",
+              "example": "KXMVESPORTSMULTIGAMEEXTENDED-S20268A776ACB3C6"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Search markets by keywords in title and description. Must be URL encoded (e.g., 'bitcoin%20price' for 'bitcoin price').",
+            "schema": {
+              "type": "string",
+              "example": "bitcoin"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter markets by status.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "unopened",
+                "open",
+                "paused",
+                "closed",
+                "settled"
+              ],
+              "example": "open"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Number of results per page. Defaults to 100. Maximum value is 1000.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0,
+              "maximum": 1000,
+              "default": 100,
+              "example": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Pagination cursor from the previous response.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "series_ticker",
+            "in": "query",
+            "required": false,
+            "description": "Filter by series ticker.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "min_created_ts",
+            "in": "query",
+            "required": false,
+            "description": "Filter markets created after this Unix timestamp.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "max_created_ts",
+            "in": "query",
+            "required": false,
+            "description": "Filter markets created before this Unix timestamp.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "min_updated_ts",
+            "in": "query",
+            "required": false,
+            "description": "Filter markets updated after this Unix timestamp.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "max_close_ts",
+            "in": "query",
+            "required": false,
+            "description": "Filter markets closing before this Unix timestamp.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "min_close_ts",
+            "in": "query",
+            "required": false,
+            "description": "Filter markets closing after this Unix timestamp.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "min_settled_ts",
+            "in": "query",
+            "required": false,
+            "description": "Filter markets settled after this Unix timestamp.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "max_settled_ts",
+            "in": "query",
+            "required": false,
+            "description": "Filter markets settled before this Unix timestamp.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "mve_filter",
+            "in": "query",
+            "required": false,
+            "description": "Filter by multivariate events.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "only",
+                "exclude"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Kalshi markets response with pagination",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cursor": {
+                      "type": "string",
+                      "description": "Cursor for the next page."
+                    },
+                    "markets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "ticker": {
+                            "type": "string"
+                          },
+                          "event_ticker": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "result": {
+                            "type": "string"
+                          },
+                          "market_type": {
+                            "type": "string"
+                          },
+                          "strike_type": {
+                            "type": "string"
+                          },
+                          "response_price_units": {
+                            "type": "string"
+                          },
+                          "yes_bid_dollars": {
+                            "type": "string"
+                          },
+                          "yes_ask_dollars": {
+                            "type": "string"
+                          },
+                          "no_bid_dollars": {
+                            "type": "string"
+                          },
+                          "no_ask_dollars": {
+                            "type": "string"
+                          },
+                          "last_price_dollars": {
+                            "type": "string"
+                          },
+                          "liquidity_dollars": {
+                            "type": "string"
+                          },
+                          "notional_value_dollars": {
+                            "type": "string"
+                          },
+                          "volume_fp": {
+                            "type": "string"
+                          },
+                          "volume_24h_fp": {
+                            "type": "string"
+                          },
+                          "open_interest_fp": {
+                            "type": "string"
+                          },
+                          "created_time": {
+                            "type": "string"
+                          },
+                          "updated_time": {
+                            "type": "string"
+                          },
+                          "open_time": {
+                            "type": "string"
+                          },
+                          "close_time": {
+                            "type": "string"
+                          },
+                          "expiration_time": {
+                            "type": "string"
+                          },
+                          "latest_expiration_time": {
+                            "type": "string"
+                          },
+                          "expected_expiration_time": {
+                            "type": "string"
+                          },
+                          "can_close_early": {
+                            "type": "boolean"
+                          },
+                          "fractional_trading_enabled": {
+                            "type": "boolean"
+                          },
+                          "custom_strike": {
+                            "type": "object",
+                            "additionalProperties": true
+                          },
+                          "mve_selected_legs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": true
+                            }
+                          },
+                          "rules_primary": {
+                            "type": "string"
+                          },
+                          "rules_secondary": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "markets"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid parameters or validation errors",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Invalid limit parameter"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "limit must be a number between 1 and 100"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kalshi/trades": {
+      "get": {
+        "x-aisa-pricing": {
+          "model": "per_request",
+          "currency": "USD",
+          "price_usd": 0.02,
+          "cost_tier": "med"
+        },
+        "summary": "Get Kalshi Trades",
+        "description": "Get the executed-trade tape for Kalshi markets — actual fills, not quotes. Use this when you need realized prices and traded size over a window, for example to see how conviction moved while an event unfolded; narrow with `ticker` and the `min_ts` / `max_ts` Unix-second range, and set `is_block_trade` to isolate large negotiated trades.\n\nReturns `trades[]` with `trade_id`, `ticker`, `count_fp` (contracts), `yes_price_dollars` / `no_price_dollars`, `taker_side`, and `created_time`, plus a `cursor` to page with.\n\nFor the current quotes, settlement rules, and market metadata rather than fills, use `get_kalshi_markets`.",
+        "operationId": "get_kalshi_trades",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Number of results per page. Defaults to 100. Maximum value is 1000.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0,
+              "maximum": 1000,
+              "default": 100,
+              "example": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Pagination cursor from the previous response.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ticker",
+            "in": "query",
+            "required": false,
+            "description": "Filter by Kalshi market ticker.",
+            "schema": {
+              "type": "string",
+              "example": "KXMVESPORTSMULTIGAMEEXTENDED-S20268A776ACB3C6-43886DEE17A"
+            }
+          },
+          {
+            "name": "min_ts",
+            "in": "query",
+            "required": false,
+            "description": "Filter trades after this Unix timestamp.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "max_ts",
+            "in": "query",
+            "required": false,
+            "description": "Filter trades before this Unix timestamp.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "is_block_trade",
+            "in": "query",
+            "required": false,
+            "description": "Filter trades by whether they are block trades. Omit to return all trades.",
+            "schema": {
+              "type": "boolean",
+              "example": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Kalshi trades response with pagination",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cursor": {
+                      "type": "string",
+                      "description": "Cursor for the next page."
+                    },
+                    "trades": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "trade_id": {
+                            "type": "string"
+                          },
+                          "ticker": {
+                            "type": "string"
+                          },
+                          "count_fp": {
+                            "type": "string"
+                          },
+                          "yes_price_dollars": {
+                            "type": "string"
+                          },
+                          "no_price_dollars": {
+                            "type": "string"
+                          },
+                          "taker_side": {
+                            "type": "string"
+                          },
+                          "taker_book_side": {
+                            "type": "string"
+                          },
+                          "taker_outcome_side": {
+                            "type": "string"
+                          },
+                          "created_time": {
+                            "type": "string"
+                          },
+                          "is_block_trade": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "trades"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Invalid parameters"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Invalid time range or parameters"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "AISA API Key",
+        "description": "Your AIsa API key as a Bearer token."
+      }
+    }
+  }
+}

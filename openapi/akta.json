@@ -1,91 +1,772 @@
 {
-  "openapi": "3.0.1",
-  "info": {
-    "title": "Akta Private Market Data API",
-    "description": "Private company intelligence: enrich 20M+ companies across 16 sections (firmographics, funding rounds, M&A, financial estimates, management, and more), build targeted company lists from structured filters or natural language, and resolve companies and industries from free text.",
-    "version": "1.0.0"
-  },
-  "servers": [
-    {
-      "url": "https://api.aisa.one/apis/v1/akta",
-      "description": "Production server"
-    }
-  ],
-  "tags": [
-    {
-      "name": "Company Data",
-      "description": "Enrich a single company by section: firmographics, funding, M&A, financials, management"
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
     },
-    {
-      "name": "Company Discovery",
-      "description": "Build targeted company lists from structured filters or natural language"
-    },
-    {
-      "name": "Supporting",
-      "description": "Entity resolution for companies and industries"
-    }
-  ],
-  "security": [
-    {
-      "bearerAuth": []
-    }
-  ],
-  "paths": {
-    "/company/enrichment": {
-      "get": {
-        "x-aisa-pricing": {
-          "model": "metered",
-          "formula": "per-section credits x2; e.g. firmographic (2cr) $0.16, funding_detail (3cr) $0.24, mna_and_investment (5cr) $0.40"
+    "schemas": {
+      "Response07E0D32B94E5_CompanySearchResult": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "description": "Unique Akta identifier for the company."
+          },
+          "name": {
+            "type": "string",
+            "description": "Legal or registered company name."
+          },
+          "website": {
+            "type": "string",
+            "format": "uri",
+            "description": "Primary website URL."
+          },
+          "product_category": {
+            "type": "string",
+            "description": "Primary product or service category."
+          },
+          "company_status": {
+            "type": "string",
+            "enum": [
+              "public",
+              "private",
+              "acquired",
+              "delisted",
+              "unknown"
+            ],
+            "description": "Public market status."
+          }
+        }
+      },
+      "Response10C6522D345B_IndustrySearchResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Unique industry code."
+          },
+          "industry_name": {
+            "type": "string",
+            "description": "Full name of the industry."
+          },
+          "similarity": {
+            "type": "number",
+            "format": "float",
+            "description": "Similarity score between the query and the matched industry, ranging from 0 to 1. Higher values indicate a closer match."
+          }
+        }
+      },
+      "Provider73D692Ab31Ca_TranslateQueryRequest": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Natural language description of target companies (e.g. 'series a companies in mumbai working in climate tech')."
+          }
         },
-        "tags": ["Company Data"],
+        "required": [
+          "query"
+        ]
+      },
+      "Response73D692Ab31Ca_TranslateQueryResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "filters": {
+                "type": "object",
+                "description": "Structured filters object equivalent to the input query, using dotted-path filter keys."
+              }
+            }
+          },
+          "credits_consumed": {
+            "type": "number",
+            "format": "float"
+          }
+        }
+      },
+      "Provider73D692Ab31Ca_ListGenerationRequest": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Natural language search query (e.g. 'SaaS companies in the US with Series A funding'). Cannot be used with filters."
+          },
+          "filters": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Structured filter conditions. Use the Filter Builder API to generate valid filters. Cannot be used with query. See filter options at /api-reference/listgen-api."
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Data enrichment sections to include. Values: firmographic, business_model, company_assessment, trust_signal, company_hierarchy, digital_presence, financial_estimate, location, management_profile, product_offering, strategic_signal, customer_profile, industry, technology, funding_detail (Subscription, Enterprise), mna_and_investment (Subscription, Enterprise)"
+          },
+          "sort_by": {
+            "type": "string",
+            "enum": [
+              "relevance",
+              "revenue_estimate",
+              "valuation_estimate",
+              "employee_range",
+              "total_funding",
+              "founded_year"
+            ],
+            "description": "Field to sort results by. Default: relevance"
+          },
+          "sort_order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "description": "Sort direction. Default: desc"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum companies to return. Default: 50, Max: 500"
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Number of results to skip for pagination. Default: 0"
+          }
+        }
+      },
+      "Response73D692Ab31Ca_ListGenerationResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "Company object with identity fields (uuid, name, website) plus any requested enrichment sections."
+            }
+          },
+          "count": {
+            "type": "integer",
+            "description": "Number of companies returned."
+          },
+          "total_count": {
+            "type": "integer",
+            "description": "Total matching companies. Capped at 500."
+          },
+          "credits_consumed": {
+            "type": "number",
+            "format": "float",
+            "description": "Credits consumed. Returns 0 when no enrichment sections requested."
+          }
+        }
+      },
+      "Response26Fec513Ccb9_StatusResponse": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "description": "Unique identifier of the request being tracked.",
+            "type": "string"
+          },
+          "request_type": {
+            "description": "The type of request. Example: company_addition",
+            "type": "string"
+          },
+          "status": {
+            "description": "Current status of the request. Possible values: pending, in_progress, completed, failed.",
+            "type": "string"
+          },
+          "created_at": {
+            "description": "Timestamp when the request was created, in ISO 8601 format.",
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "Timestamp when the request was last updated, in ISO 8601 format.",
+            "type": "string"
+          },
+          "detail": {
+            "$ref": "#/components/schemas/Response26Fec513Ccb9_StatusDetail"
+          }
+        }
+      },
+      "Response26Fec513Ccb9_StatusDetail": {
+        "description": "Request-type-specific details for company_addition request.",
+        "type": "object",
+        "properties": {
+          "company_addition_request_id": {
+            "description": "Identifier of the underlying request record.",
+            "type": "string"
+          },
+          "company_name": {
+            "description": "Name of the company submitted for addition.",
+            "type": "string"
+          },
+          "domain": {
+            "description": "Resolved domain of the submitted company.",
+            "type": "string"
+          },
+          "status": {
+            "description": "Status of the underlying request. Possible values: pending, in_progress, completed, failed.",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Explanation when the request did not succeed. null unless the request has failed.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "company_uuid": {
+            "description": "Akta UUID of the company once it has been added. null until the request is completed.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "description": "Timestamp when the underlying request was created, in ISO 8601 format.",
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "Timestamp when the underlying request was last updated, in ISO 8601 format.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
+  },
+  "info": {
+    "description": "",
+    "title": "Akta",
+    "version": "1",
+    "x-aisa-capabilities": {
+      "idempotency": "Idempotency-Key",
+      "max_price": "X-AISA-Max-Price-USD",
+      "quote": {
+        "header": "X-AISA-Cost-Mode",
+        "value": "quote"
+      }
+    },
+    "x-aisa-configured-paths": [
+      "/apis/v1/akta/company/addition-requests",
+      "/apis/v1/akta/company/enrichment",
+      "/apis/v1/akta/company/search",
+      "/apis/v1/akta/industry/search",
+      "/apis/v1/akta/list/filter-builder",
+      "/apis/v1/akta/list/generate/companies",
+      "/apis/v1/akta/status/{request_id}"
+    ],
+    "x-aisa-document": {
+      "facts_hash": "7ad2bb35e79170f8bebe26bf1fa819a258abc8b522c89db48b3c83294f1e6e9f",
+      "generator_version": "2",
+      "protocol_version": "1",
+      "schema_version": "1",
+      "composer_version": "13",
+      "response_pending": [],
+      "document_hash": "sha256:297b13ae403b249c39c60ae0ccc66e53cc204c8141090816e0835b4e990f3be7"
+    },
+    "x-aisa-plans": {
+      "builder": 1.0,
+      "display_plan": "payg",
+      "payg": 1.0,
+      "similarweb_payg": 1.0,
+      "team": 1.0,
+      "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
+    },
+    "x-aisa-provider": "akta",
+    "x-aisa-catalogs": {
+      "akta": {
+        "title": "Akta",
+        "description": "",
+        "x-aisa-document": {
+          "facts_hash": "7ad2bb35e79170f8bebe26bf1fa819a258abc8b522c89db48b3c83294f1e6e9f",
+          "generator_version": "2",
+          "protocol_version": "1",
+          "schema_version": "1"
+        },
+        "x-aisa-plans": {
+          "builder": 1.0,
+          "display_plan": "payg",
+          "payg": 1.0,
+          "similarweb_payg": 1.0,
+          "team": 1.0,
+          "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
+        },
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          }
+        }
+      }
+    }
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "openapi": "3.1.0",
+  "paths": {
+    "/apis/v1/akta/company/enrichment": {
+      "get": {
+        "description": "Enrich a company profile by section: firmographics, business model, assessment, trust signals, hierarchy, digital presence, financial estimate, location, management, products, strategic signals, funding, M&A.",
         "operationId": "get_akta_company_enrichment",
-        "summary": "Enrich a company",
-        "description": "Enrich one private company across 16 sections and 75+ data points. `company` accepts a website (canva.com) or a UUID from company search. `sections` is a comma-separated list; billing follows akta's per-section credits (x2 customer multiplier): firmographic/business_model/company_assessment/technology/product_offering (2cr, $0.16), strategic_signal (1.5cr, $0.12), management_profile/customer_profile/industry (1cr, $0.08), trust_signal/company_hierarchy/digital_presence/financial_estimate/location (0.5cr, $0.04), funding_detail (3cr, $0.24), mna_and_investment (5cr, $0.40). Use funding_detail for rounds, investors, and total raised; use mna_and_investment for acquisitions and investments.",
         "parameters": [
           {
-            "name": "company",
             "in": "query",
-            "description": "Company website (e.g. canva.com) or company UUID from company search.",
-            "required": true,
+            "name": "company",
+            "required": false,
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "sections",
             "in": "query",
-            "description": "Comma-separated section list. One of: firmographic, business_model, company_assessment, trust_signal, company_hierarchy, digital_presence, financial_estimate, funding_detail, location, mna_and_investment, management_profile, product_offering, strategic_signal, customer_profile, industry, technology.",
-            "required": true,
+            "name": "sections",
+            "required": false,
             "schema": {
-              "type": "string",
-              "example": "firmographic,funding_detail"
+              "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Company profile with the requested sections.",
+            "description": "Enrichment data returned",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "data": {
+                      "type": "object",
+                      "description": "Enriched company data keyed by section name."
+                    },
+                    "count": {
+                      "type": "integer",
+                      "description": "Number of sections returned."
+                    },
+                    "credits_consumed": {
+                      "type": "number",
+                      "format": "float"
+                    }
+                  }
                 }
               }
             }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
           }
-        }
+        },
+        "summary": "Company Enrichment",
+        "tags": [
+          "company-data"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "x402": false
+        },
+        "x-aisa-category": "company-data",
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 2.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.8,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "maximum_units": 200,
+          "unit": "akta_credit",
+          "unit_rate_usd": 0.04
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-response-passthrough": true,
+        "x-aisa-response-upstream-origin-sha256": "17b0c5c0d1df9d155c5ed4a4e0d358edc538efed1ea7d592e5b7122d42656f14",
+        "x-aisa-response-upstream-path-sha256": "977b7790ea3547cfc0beade3bcfc303902f4471987cc4b4b4172c2005c4380f5",
+        "x-aisa-revision": {
+          "customer_pricing_ref": "a9b52322966f",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "3d3859958421"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "runtime",
+        "x-aisa-catalog-id": "akta",
+        "x-aisa-runtime-operation": {
+          "operation_id": "get_akta_company_enrichment",
+          "method": "GET",
+          "path": "/apis/v1/akta/company/enrichment"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://docs.akta.pro/openapi.json",
+            "converter": "scripts/prepare_akta_response_bindings.py@1",
+            "fetched_at": "2026-10-09T03:44:47.193846+00:00",
+            "path_space": "public",
+            "response_only": true,
+            "upstream_path_sha256": "977b7790ea3547cfc0beade3bcfc303902f4471987cc4b4b4172c2005c4380f5",
+            "upstream_origin_sha256": "17b0c5c0d1df9d155c5ed4a4e0d358edc538efed1ea7d592e5b7122d42656f14",
+            "source_revision": "f81b180650fdc2a877e1feb5327e94da4324b4ec",
+            "source_file": "openapi/upstream/akta-official.json",
+            "source_document_sha256": "e8a0061971891051743a08793392e559128cb545c92ae9ad8ad0d88625831612",
+            "source_content_hash": "sha256:6a6263e89f7f0986a86bfab186ccaf353529ec29ab505d3ae7d1fe5af062fe12",
+            "refresh_policy": "manual",
+            "refresh_reason": "Review the official response declarations and the explicit public route/origin/path binding together; never infer a trailing-slash alias.",
+            "content_hash": "sha256:63a5bd2afde24b1eb27df5d1935740a25086e37b3b68bdeb0d625dd70b5a53f1",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:41564634c215ddbc6e62d70ff99b83f4e0e59f1121f5928b04a57be00f108f54"
+          },
+          "content_hash": "sha256:c1c494e89afbf00adbb0dd3755be6219a0e88174ec5008a15fe0cc3fe333561a"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/akta/get_company-enrichment"
       }
     },
-    "/list/generate/companies": {
-      "post": {
-        "x-aisa-pricing": {
-          "model": "per_request",
-          "cost_tier": "med"
+    "/apis/v1/akta/company/search": {
+      "get": {
+        "description": "Resolve a company by name, website or UUID; returns uuid, name, website, product_category, company_status. Free, suitable as health check.",
+        "operationId": "get_akta_company_search",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Response07E0D32B94E5_CompanySearchResult"
+                      }
+                    },
+                    "credits_consumed": {
+                      "type": "number",
+                      "format": "float",
+                      "example": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          },
+          "204": {
+            "content": {},
+            "description": "No content — no companies matched the query.",
+            "x-aisa-no-content": true
+          }
         },
-        "tags": ["Company Discovery"],
-        "operationId": "post_akta_list_generate",
-        "summary": "Generate a company list",
-        "description": "Build a targeted company list from structured filters or a natural-language query, with optional per-section enrichment. Use filter-builder first to turn plain language into a reviewable filters object, then pass it here. Pricing: base $0.05 + $0.40 per returned company when enrichment sections are requested.",
+        "summary": "Company Search",
+        "tags": [
+          "supporting"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "x402": false
+        },
+        "x-aisa-category": "supporting",
+        "x-aisa-pricing": {
+          "cost_contract": "explicit_zero",
+          "customer_pricing": "fixed_success",
+          "default_request_estimate_usd": 0.001,
+          "estimate_source": "profile_seed",
+          "evidence_source": "request_snapshot"
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-response-passthrough": true,
+        "x-aisa-response-upstream-origin-sha256": "17b0c5c0d1df9d155c5ed4a4e0d358edc538efed1ea7d592e5b7122d42656f14",
+        "x-aisa-response-upstream-path-sha256": "d23727a7291a56e2550ec55db09f9bf2649586aed7a75341f4a92340be777ab7",
+        "x-aisa-revision": {
+          "customer_pricing_ref": "aa158335e08f",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "490de6511ba2"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "runtime",
+        "x-aisa-catalog-id": "akta",
+        "x-aisa-runtime-operation": {
+          "operation_id": "get_akta_company_search",
+          "method": "GET",
+          "path": "/apis/v1/akta/company/search"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://docs.akta.pro/openapi.json",
+            "converter": "scripts/prepare_akta_response_bindings.py@1",
+            "fetched_at": "2026-10-09T03:44:47.193846+00:00",
+            "path_space": "public",
+            "response_only": true,
+            "upstream_path_sha256": "d23727a7291a56e2550ec55db09f9bf2649586aed7a75341f4a92340be777ab7",
+            "upstream_origin_sha256": "17b0c5c0d1df9d155c5ed4a4e0d358edc538efed1ea7d592e5b7122d42656f14",
+            "source_revision": "f81b180650fdc2a877e1feb5327e94da4324b4ec",
+            "source_file": "openapi/upstream/akta-official.json",
+            "source_document_sha256": "e8a0061971891051743a08793392e559128cb545c92ae9ad8ad0d88625831612",
+            "source_content_hash": "sha256:6a6263e89f7f0986a86bfab186ccaf353529ec29ab505d3ae7d1fe5af062fe12",
+            "refresh_policy": "manual",
+            "refresh_reason": "Review the official response declarations and the explicit public route/origin/path binding together; never infer a trailing-slash alias.",
+            "content_hash": "sha256:cadb6a44f66a1b32917f70f17da944e8e142c8933953a7eeb4989c3716b7b557",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:41564634c215ddbc6e62d70ff99b83f4e0e59f1121f5928b04a57be00f108f54"
+          },
+          "content_hash": "sha256:290fbee25d5538b76801aff35d870b3f4be0c64f81e92f54cc2ca88881998cff"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/akta/get_company-search"
+      }
+    },
+    "/apis/v1/akta/industry/search": {
+      "get": {
+        "description": "Resolve an industry from free text to ranked industry codes (30K+ sub-sectors, 4-level taxonomy). Free.",
+        "operationId": "get_akta_industry_search",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "level",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Industry search results returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Response10C6522D345B_IndustrySearchResult"
+                      }
+                    },
+                    "count": {
+                      "type": "integer",
+                      "description": "Number of industry objects returned in the data array."
+                    },
+                    "credits_consumed": {
+                      "type": "number",
+                      "format": "float",
+                      "example": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          },
+          "204": {
+            "content": {},
+            "description": "No content — no industries matched the query.",
+            "x-aisa-no-content": true
+          }
+        },
+        "summary": "Industry Search",
+        "tags": [
+          "supporting"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "x402": false
+        },
+        "x-aisa-category": "supporting",
+        "x-aisa-pricing": {
+          "cost_contract": "explicit_zero",
+          "customer_pricing": "fixed_success",
+          "default_request_estimate_usd": 0.001,
+          "estimate_source": "profile_seed",
+          "evidence_source": "request_snapshot"
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-response-passthrough": true,
+        "x-aisa-response-upstream-origin-sha256": "17b0c5c0d1df9d155c5ed4a4e0d358edc538efed1ea7d592e5b7122d42656f14",
+        "x-aisa-response-upstream-path-sha256": "e10543ad26995faa0468b04b8c44debbe0257831239f93aa047959d015ae22af",
+        "x-aisa-revision": {
+          "customer_pricing_ref": "5ab1e64a4c78",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "d24f304fa676"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "runtime",
+        "x-aisa-catalog-id": "akta",
+        "x-aisa-runtime-operation": {
+          "operation_id": "get_akta_industry_search",
+          "method": "GET",
+          "path": "/apis/v1/akta/industry/search"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://docs.akta.pro/openapi.json",
+            "converter": "scripts/prepare_akta_response_bindings.py@1",
+            "fetched_at": "2026-10-09T03:44:47.193846+00:00",
+            "path_space": "public",
+            "response_only": true,
+            "upstream_path_sha256": "e10543ad26995faa0468b04b8c44debbe0257831239f93aa047959d015ae22af",
+            "upstream_origin_sha256": "17b0c5c0d1df9d155c5ed4a4e0d358edc538efed1ea7d592e5b7122d42656f14",
+            "source_revision": "f81b180650fdc2a877e1feb5327e94da4324b4ec",
+            "source_file": "openapi/upstream/akta-official.json",
+            "source_document_sha256": "e8a0061971891051743a08793392e559128cb545c92ae9ad8ad0d88625831612",
+            "source_content_hash": "sha256:6a6263e89f7f0986a86bfab186ccaf353529ec29ab505d3ae7d1fe5af062fe12",
+            "refresh_policy": "manual",
+            "refresh_reason": "Review the official response declarations and the explicit public route/origin/path binding together; never infer a trailing-slash alias.",
+            "content_hash": "sha256:d5d0602c380495f518be875efc065e39bc6627a9cd2d2eff034a5e863f44a695",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:41564634c215ddbc6e62d70ff99b83f4e0e59f1121f5928b04a57be00f108f54"
+          },
+          "content_hash": "sha256:9446b1413588ad49d16271f9f309049b636fba46eb1e03a4ccaab971992ffb5c"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/akta/get_industry-search"
+      }
+    },
+    "/apis/v1/akta/list/filter-builder": {
+      "post": {
+        "description": "Convert a natural-language description of target companies into a structured filters object for the List Generation API.",
+        "operationId": "post_akta_filter_builder",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response73D692Ab31Ca_TranslateQueryResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Filter Builder",
+        "tags": [
+          "list-generation"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "x402": false
+        },
+        "x-aisa-category": "list-generation",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "fixed_success",
+          "customer_pricing": "fixed_success",
+          "default_request_estimate_usd": 0.025,
+          "estimate_source": "profile_seed",
+          "evidence_source": "request_snapshot"
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": true
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "45c5965cb677",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "519eb06b9191"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-upstream-path": "/api/v1/list/filter-builder/",
+        "x-aisa-validation": "provider",
+        "x-aisa-catalog-id": "akta",
+        "x-aisa-runtime-operation": {
+          "operation_id": "post_akta_filter_builder",
+          "method": "POST",
+          "path": "/apis/v1/akta/list/filter-builder"
+        },
         "requestBody": {
           "required": true,
           "content": {
@@ -95,208 +776,315 @@
                 "properties": {
                   "query": {
                     "type": "string",
-                    "description": "Natural-language description of target companies (adds $0.10 surcharge; prefer filters for repeatability)."
+                    "description": "Natural language description of target companies (e.g. 'series a companies in mumbai working in climate tech')."
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        },
+        "x-aisa-source": {
+          "kind": "provider_openapi",
+          "url": "https://docs.akta.pro/openapi.json",
+          "fetched_at": "2026-10-09T03:44:47.193846+00:00",
+          "content_hash": "sha256:6a6263e89f7f0986a86bfab186ccaf353529ec29ab505d3ae7d1fe5af062fe12",
+          "converter": "scripts/import_upstream.py@2",
+          "owner": "AIsa-team/docs",
+          "refresh_policy": "automatic",
+          "review_period_days": 30,
+          "refresh_interval_hours": 24,
+          "policy_revision": "sha256:870cac2f027535819f4cf4ccd7e86230355df3199dfd241ce8278975726f9957"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "provider_openapi",
+            "url": "https://docs.akta.pro/openapi.json",
+            "fetched_at": "2026-10-09T03:44:47.193846+00:00",
+            "content_hash": "sha256:6a6263e89f7f0986a86bfab186ccaf353529ec29ab505d3ae7d1fe5af062fe12",
+            "converter": "scripts/import_upstream.py@2",
+            "owner": "AIsa-team/docs",
+            "refresh_policy": "automatic",
+            "review_period_days": 30,
+            "refresh_interval_hours": 24,
+            "policy_revision": "sha256:870cac2f027535819f4cf4ccd7e86230355df3199dfd241ce8278975726f9957"
+          },
+          "content_hash": "sha256:50ff0304c85768b83a1f9727e1cdf87a1cdad24b8928556ab513e9f66dcaaf52"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/akta/post_list-filter-builder"
+      }
+    },
+    "/apis/v1/akta/list/generate/companies": {
+      "post": {
+        "description": "Build targeted company lists from structured filters or a natural-language query, with optional per-section enrichment.",
+        "operationId": "post_akta_list_generate",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response73D692Ab31Ca_ListGenerationResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "List Generation",
+        "tags": [
+          "list-generation"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "x402": false
+        },
+        "x-aisa-category": "list-generation",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "fixed_success",
+          "customer_pricing": "fixed_success",
+          "default_request_estimate_usd": 0.05,
+          "estimate_source": "profile_seed",
+          "evidence_source": "request_snapshot"
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": true
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "ab990fcf284e",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "f299b4b77c2c"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-upstream-path": "/api/v1/list/generate/companies/",
+        "x-aisa-validation": "provider",
+        "x-aisa-catalog-id": "akta",
+        "x-aisa-runtime-operation": {
+          "operation_id": "post_akta_list_generate",
+          "method": "POST",
+          "path": "/apis/v1/akta/list/generate/companies"
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "Natural language search query (e.g. 'SaaS companies in the US with Series A funding'). Cannot be used with filters."
                   },
                   "filters": {
                     "type": "object",
-                    "description": "Structured filters from filter-builder (dotted-path keys, e.g. location.hq.city, funding_detail.funding_overview.funding_stage, industry.industry)."
+                    "additionalProperties": true,
+                    "description": "Structured filter conditions. Use the Filter Builder API to generate valid filters. Cannot be used with query. See filter options at /api-reference/listgen-api."
                   },
                   "sections": {
                     "type": "array",
                     "items": {
                       "type": "string"
                     },
-                    "description": "Optional enrichment sections per returned company (same section names as company enrichment)."
+                    "description": "Data enrichment sections to include. Values: firmographic, business_model, company_assessment, trust_signal, company_hierarchy, digital_presence, financial_estimate, location, management_profile, product_offering, strategic_signal, customer_profile, industry, technology, funding_detail (Subscription, Enterprise), mna_and_investment (Subscription, Enterprise)"
+                  },
+                  "sort_by": {
+                    "type": "string",
+                    "enum": [
+                      "relevance",
+                      "revenue_estimate",
+                      "valuation_estimate",
+                      "employee_range",
+                      "total_funding",
+                      "founded_year"
+                    ],
+                    "description": "Field to sort results by. Default: relevance"
+                  },
+                  "sort_order": {
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ],
+                    "description": "Sort direction. Default: desc"
                   },
                   "limit": {
                     "type": "integer",
-                    "description": "Max companies to return (total capped at 500)."
+                    "description": "Maximum companies to return. Default: 50, Max: 500"
                   },
                   "offset": {
-                    "type": "integer"
+                    "type": "integer",
+                    "description": "Number of results to skip for pagination. Default: 0"
                   }
                 }
               }
             }
           }
         },
+        "x-aisa-source": {
+          "kind": "provider_openapi",
+          "url": "https://docs.akta.pro/openapi.json",
+          "fetched_at": "2026-10-09T03:44:47.193846+00:00",
+          "content_hash": "sha256:6a6263e89f7f0986a86bfab186ccaf353529ec29ab505d3ae7d1fe5af062fe12",
+          "converter": "scripts/import_upstream.py@2",
+          "owner": "AIsa-team/docs",
+          "refresh_policy": "automatic",
+          "review_period_days": 30,
+          "refresh_interval_hours": 24,
+          "policy_revision": "sha256:870cac2f027535819f4cf4ccd7e86230355df3199dfd241ce8278975726f9957"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "provider_openapi",
+            "url": "https://docs.akta.pro/openapi.json",
+            "fetched_at": "2026-10-09T03:44:47.193846+00:00",
+            "content_hash": "sha256:6a6263e89f7f0986a86bfab186ccaf353529ec29ab505d3ae7d1fe5af062fe12",
+            "converter": "scripts/import_upstream.py@2",
+            "owner": "AIsa-team/docs",
+            "refresh_policy": "automatic",
+            "review_period_days": 30,
+            "refresh_interval_hours": 24,
+            "policy_revision": "sha256:870cac2f027535819f4cf4ccd7e86230355df3199dfd241ce8278975726f9957"
+          },
+          "content_hash": "sha256:72562b30ca21e328950aaa531ab29638d491b63cc425f9d7afbd8af96e2be60c"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/akta/post_list-generate-companies"
+      }
+    },
+    "/apis/v1/akta/status/{request_id}": {
+      "get": {
+        "description": "Poll the status of an async request (e.g. company addition) by request_id. Free.",
+        "operationId": "get_akta_request_status",
         "responses": {
           "200": {
-            "description": "Matching companies with optional enrichment.",
+            "description": "Status response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/list/filter-builder": {
-      "post": {
-        "x-aisa-pricing": {
-          "model": "per_request",
-          "cost_tier": "low"
-        },
-        "tags": ["Company Discovery"],
-        "operationId": "post_akta_filter_builder",
-        "summary": "Build structured filters",
-        "description": "Convert a natural-language description of target companies into a structured filters object for list generation. Reviewable, tweakable, and reusable — costs the same $0.025 as the natural-language surcharge but the output can be cached and re-run. Returns no companies itself.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["query"],
-                "properties": {
-                  "query": {
-                    "type": "string",
-                    "description": "e.g. 'series a companies in mumbai working in climate tech'."
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Response26Fec513Ccb9_StatusResponse"
+                    },
+                    "credits_consumed": {
+                      "type": "number",
+                      "format": "float",
+                      "example": 0
+                    }
                   }
                 }
               }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Structured filters object.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/company/search": {
-      "get": {
-        "x-aisa-pricing": {
-          "model": "per_request",
-          "cost_tier": "free"
-        },
-        "tags": ["Supporting"],
-        "operationId": "get_akta_company_search",
-        "summary": "Resolve a company",
-        "description": "Resolve a company from a name, website, or UUID and get its core identity: uuid, name, website, product_category, company_status. The first step before enrichment when you only have a fuzzy name.",
-        "parameters": [
-          {
-            "name": "query",
-            "in": "query",
-            "description": "Company name, website, or UUID. Input type is auto-detected.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Matching companies ranked by akta_rank.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/industry/search": {
-      "get": {
-        "x-aisa-pricing": {
-          "model": "per_request",
-          "cost_tier": "free"
-        },
-        "tags": ["Supporting"],
-        "operationId": "get_akta_industry_search",
-        "summary": "Resolve an industry",
-        "description": "Resolve an industry from free text into akta's 4-level taxonomy codes (30K+ sub-sectors), ranked by similarity. Use the codes in list-generation industry filters.",
-        "parameters": [
-          {
-            "name": "query",
-            "in": "query",
-            "description": "Free-text industry or topic, e.g. 'warehouse automation'.",
-            "required": true,
-            "schema": {
-              "type": "string"
             }
           },
-          {
-            "name": "level",
-            "in": "query",
-            "description": "Taxonomy level: l1, l2, l3, l4, all, or comma-separated list. Default l4.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "l4"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Ranked industry codes with similarity scores.",
+          "default": {
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object"
-                }
+                "schema": {}
               }
-            }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
           }
-        }
-      }
-    },
-    "/status/{request_id}": {
-      "get": {
-        "x-aisa-pricing": {
-          "model": "per_request",
-          "cost_tier": "free"
         },
-        "tags": ["Supporting"],
-        "operationId": "get_akta_request_status",
-        "summary": "Get request status",
-        "description": "Poll the status of an asynchronous akta request (e.g. a company addition) by its request_id.",
-        "parameters": [
-          {
-            "name": "request_id",
-            "in": "path",
-            "description": "The request UUID returned by the originating call.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
+        "summary": "Request Status",
+        "tags": [
+          "supporting"
         ],
-        "responses": {
-          "200": {
-            "description": "Current request status and type-specific detail.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        }
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "x402": false
+        },
+        "x-aisa-category": "supporting",
+        "x-aisa-pricing": {
+          "cost_contract": "explicit_zero",
+          "customer_pricing": "fixed_success",
+          "default_request_estimate_usd": 0.001,
+          "estimate_source": "profile_seed",
+          "evidence_source": "request_snapshot"
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-response-passthrough": true,
+        "x-aisa-response-upstream-origin-sha256": "17b0c5c0d1df9d155c5ed4a4e0d358edc538efed1ea7d592e5b7122d42656f14",
+        "x-aisa-response-upstream-path-sha256": "806682d39f5c60f0effc69251d9fc5a772833dc41bed52e443c6a12cb83a3e8d",
+        "x-aisa-revision": {
+          "customer_pricing_ref": "cb37ea86af38",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "2dec4c1d10ba"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "runtime",
+        "x-aisa-catalog-id": "akta",
+        "x-aisa-runtime-operation": {
+          "operation_id": "get_akta_request_status",
+          "method": "GET",
+          "path": "/apis/v1/akta/status/{request_id}"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://docs.akta.pro/openapi.json",
+            "converter": "scripts/prepare_akta_response_bindings.py@1",
+            "fetched_at": "2026-10-09T03:44:47.193846+00:00",
+            "path_space": "public",
+            "response_only": true,
+            "upstream_path_sha256": "806682d39f5c60f0effc69251d9fc5a772833dc41bed52e443c6a12cb83a3e8d",
+            "upstream_origin_sha256": "17b0c5c0d1df9d155c5ed4a4e0d358edc538efed1ea7d592e5b7122d42656f14",
+            "source_revision": "f81b180650fdc2a877e1feb5327e94da4324b4ec",
+            "source_file": "openapi/upstream/akta-official.json",
+            "source_document_sha256": "e8a0061971891051743a08793392e559128cb545c92ae9ad8ad0d88625831612",
+            "source_content_hash": "sha256:6a6263e89f7f0986a86bfab186ccaf353529ec29ab505d3ae7d1fe5af062fe12",
+            "refresh_policy": "manual",
+            "refresh_reason": "Review the official response declarations and the explicit public route/origin/path binding together; never infer a trailing-slash alias.",
+            "content_hash": "sha256:bac0bcbc3ecd36d6ed7bb5f85cc2d5cb78211dad0d80d8768b41e3e434e50d90",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:41564634c215ddbc6e62d70ff99b83f4e0e59f1121f5928b04a57be00f108f54"
+          },
+          "content_hash": "sha256:4cac58d4f9e17cec0d6b9ae64cd42a9cb3ad37534156ce34e97fa19db71caab6"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/akta/get_request-status"
       }
     }
   },
-  "components": {
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer"
-      }
+  "security": [
+    {
+      "bearerAuth": []
     }
-  }
+  ],
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ]
 }

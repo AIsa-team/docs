@@ -386,7 +386,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                     document = read_json(upstream_path)
                     imported_source = False
                     current_source = (document or {}).get("info", {}).get("x-aisa-source", {})
-                    trusted_kind = current_source.get("kind") == "provider_openapi" or (current_source.get("kind") == "manual" and current_source.get("path_space") == "public")
+                    trusted_kind = current_source.get("kind") in {"provider_openapi", "manual"}
                     if source_url and (not trusted_kind or current_source.get("url") != source_url):
                         if readiness_context and readiness_context.get('offline'):
                             raise ValueError('upstream source mirror unavailable for offline candidate evaluation')
@@ -542,6 +542,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
     changes[root / "openapi/pending.json"] = json.dumps(pending, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     if readiness_context is not None:
         from contract_readiness import check_readiness
+        from deferred_definitions import load_deferred_definitions
         documents = dict(original_documents)
         from runtime_consolidate_openapi import SKIP_FILES
         for path, content in changes.items():
@@ -554,7 +555,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         readiness_context['report'] = check_readiness(
             facts_by_provider, documents, coverage,
             baseline_coverage=readiness_context.get('baseline_coverage'),
-            runtime_index=index)
+            runtime_index=index, deferred_definitions=load_deferred_definitions(root))
         from check_contract_candidate import assess_fresh_contracts
         assess_fresh_contracts(readiness_context['report'], documents, recomposed_documents, coverage)
     return {p: content for p, content in changes.items() if not p.exists() or p.read_text() != content}, summary

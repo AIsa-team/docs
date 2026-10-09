@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit, unquote
 
-VERSION = "12"
+VERSION = "13"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -594,6 +594,42 @@ def published_success_responses(previous: dict | None) -> dict:
     return result
 
 
+def incomplete_source_diagnostic(sources: list, upstream_path: str, method: str,
+                                 selector: dict | None = None) -> dict:
+    """Explain an omitted definition without supplying request/method authority.
+
+    Keep the historical reason classification: changing display diagnostics must
+    not change an approved pending fingerprint or turn pending into a contract.
+    """
+    if selector or not upstream_path:
+        return {}
+    details = []
+    for document in sources:
+        source = document.get("info", {}).get("x-aisa-source", {})
+        references = source.get("pending_references", [])
+        if not isinstance(references, list) or source.get("response_only") is True:
+            continue
+        for reference in references:
+            if not isinstance(reference, dict) or reference.get("path") != upstream_path:
+                continue
+            declared_method = reference.get("method")
+            reason = reference.get("reason")
+            if (not isinstance(declared_method, str) or declared_method.lower() not in METHODS
+                    or method != "ANY" and declared_method.lower() != method.lower()
+                    or not isinstance(reason, str) or not reason.strip()):
+                continue
+            detail = {"path": upstream_path, "method": declared_method.upper(),
+                      "reason": reason, "source_url": source["url"]}
+            if detail not in details:
+                details.append(detail)
+    if not details:
+        return {}
+    details.sort(key=lambda item: (item["source_url"], item["method"], item["reason"]))
+    return {"reason": "source definition incomplete: " + "; ".join(item["reason"] for item in details)
+            + " (upstream operation missing from imported definitions)",
+            "source_definition_diagnostics": details}
+
+
 def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = None,
             previous: dict | None = None, public_mirrors: dict | None = None,
             source_bindings: dict | None = None) -> tuple[dict, list]:
@@ -664,7 +700,8 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                 continue
             methods = sorted((set(upstream_item) & METHODS) | {m for (p, m), candidate in public_mirrors.items() if p == public_path and not candidate.get("response_only")}) if method == "x-aisa-any" else [method]
             if not methods:
-                pending.append({"operation_id": base_id, "path": path, "method": "ANY", "reason": "upstream selector has no matching official operation" if runtime.get("x-aisa-upstream-selector") else "upstream operation missing"})
+                pending.append({"operation_id": base_id, "path": path, "method": "ANY", "reason": "upstream selector has no matching official operation" if runtime.get("x-aisa-upstream-selector") else "upstream operation missing",
+                                **incomplete_source_diagnostic(candidates, runtime.get("x-aisa-upstream-path"), "ANY", runtime.get("x-aisa-upstream-selector"))})
             for actual_method in methods:
                 try:
                     mirror = {}
@@ -697,6 +734,11 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         else:
                             raise ValueError("upstream operation missing")
                     operation = copy.deepcopy(runtime)
+                    # Direct Runtime identity, before public ANY expansion or retained
+                    # published aliases. Consumers must not guess this binding.
+                    operation["x-aisa-runtime-operation"] = {
+                        "operation_id": base_id, "method": "ANY" if method == "x-aisa-any" else method.upper(),
+                        "path": public_path}
                     if runtime.get("x-aisa-identity-source") == "derived":
                         established_id = published_ids.get((public_path, actual_method))
                         if established_id:
@@ -835,7 +877,8 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                 except IdentityError:
                     raise
                 except (ValueError, KeyError, TypeError) as exc:
-                    pending.append({"operation_id": base_id, "path": path, "method": actual_method.upper(), "reason": str(exc)})
+                    diagnostic = incomplete_source_diagnostic(candidates, runtime.get("x-aisa-upstream-path"), actual_method.upper(), runtime.get("x-aisa-upstream-selector")) if str(exc) == "upstream operation missing" else {}
+                    pending.append({"operation_id": base_id, "path": path, "method": actual_method.upper(), "reason": str(exc), **diagnostic})
     document_meta = output["info"]["x-aisa-document"]
     document_meta["composer_version"] = VERSION
     document_meta["response_pending"] = response_gaps

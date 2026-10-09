@@ -19,6 +19,26 @@ FIXTURES = Path(__file__).parent / 'fixtures'
 
 
 class ReviewedSourceImportTests(unittest.TestCase):
+    def test_fred_official_filename_refresh_uses_canonical_provider(self):
+        from import_fred_reference import INDEX
+        from refresh_upstream import refresh
+        from source_governance import initial_policy
+        document = {'openapi': '3.1.0', 'info': {'title': 'FRED', 'version': '1'}, 'paths': {}}
+        document['info']['x-aisa-source'] = initial_policy({
+            'kind': 'provider_openapi', 'url': INDEX,
+            'content_hash': digest(document), 'fetched_at': '2026-10-09T00:00:00+00:00'})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root/'openapi/upstream').mkdir(parents=True)
+            (root/'openapi/upstream/fred-official.json').write_text(json.dumps(document))
+            with patch('import_upstream.import_fred_reference', return_value=copy.deepcopy(document)) as convert:
+                changes, report = refresh(root)
+            convert.assert_called_once_with('fred', INDEX)
+            self.assertEqual(changes, {})
+            self.assertEqual(report['failed'], {})
+            self.assertEqual(report['checked']['fred-official']['status'], 'source_unchanged')
+            self.assertEqual(len(report['receipts']), 1)
+
     def test_wrapper_dispatch_and_canonical_hashes(self):
         cases = [
             ('search', SMART_URL, ['wrapper_cloudsway_smart.html'], 'manual'),

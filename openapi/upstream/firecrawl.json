@@ -1,0 +1,941 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Firecrawl API",
+    "version": "1.0.0",
+    "description": "Unified API documentation for Firecrawl endpoints including Scrape, Search, Map, Parse, Crawl, and Batch Scrape. Scrape, Search, Map, and Parse are synchronous. Crawl and Batch Scrape are asynchronous: the caller submits a job and then polls the returned job resource for status and results.\n\nBilling is metered per Firecrawl credit consumed rather than a flat per-request price, so total cost scales with the number of pages, links, or results the job produces. Approximate credit usage: Scrape = 1 credit per page, Map = 1 credit per page, Search = about 2 credits per 10 results, Crawl = 1 credit per page, Batch Scrape = 1 credit per page. The USD rate per credit depends on your tier (normal $0.005, vip $0.004, svip $0.0034).",
+    "x-aisa-source": {
+      "kind": "manual",
+      "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/firecrawl.json",
+      "fetched_at": "2026-09-29T21:25:55+08:00",
+      "content_hash": "sha256:b31bae9104697a2e7f0c845d3e91c1184fec6092937b1c284b08483b491b17f0",
+      "converter": "scripts/import_existing_contracts.py@1",
+      "path_space": "public",
+      "owner": "AIsa-team/docs",
+      "refresh_policy": "manual",
+      "review_period_days": 30,
+      "policy_revision": "sha256:1bd26d6d0cee6a68e9b569ffd2db54c5f00f2cc0a98cf8f7497959057add3c73"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "AsyncJob": {
+        "type": "object",
+        "description": "An asynchronous integration job. Returned by the submit call (HTTP 202) and by the poll/detail call. Poll the job by its id until status is a terminal value (completed, failed, or cancelled).",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique AIsa job identifier. Use it to poll, list, or cancel the job.",
+            "example": "iaj_01HZY8Q2M4K7N9V3T6W1X0B2C3"
+          },
+          "object": {
+            "type": "string",
+            "description": "Always \"integration_async_job\".",
+            "example": "integration_async_job"
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "The submit endpoint this job belongs to.",
+            "example": "/apis/v1/firecrawl/crawl"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "description": "Customer-facing lifecycle status. queued and running are non-terminal; completed, failed, and cancelled are terminal."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the job was accepted."
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the job reached a terminal status. Null while the job is still queued or running."
+          },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "example": "USD"
+              },
+              "authorizedMicrosUSD": {
+                "type": "integer",
+                "description": "Amount authorized (held) when the job was admitted, in micro-USD. Metered jobs settle to the actual credits consumed."
+              },
+              "finalMicrosUSD": {
+                "type": "integer",
+                "nullable": true,
+                "description": "Final settled cost in micro-USD once the job is terminal. Null until settlement."
+              },
+              "billingMode": {
+                "type": "string",
+                "description": "Billing mode for the job.",
+                "example": "metered_result"
+              }
+            }
+          },
+          "output": {
+            "description": "Job result payload. Present only once status is completed. For crawl this is the array of scraped pages; for batch scrape it is the array of scraped documents.",
+            "nullable": true
+          },
+          "outputExpired": {
+            "type": "boolean",
+            "description": "True when the result has been retained past its retention window and is no longer retrievable."
+          },
+          "error": {
+            "type": "object",
+            "nullable": true,
+            "description": "Present when status is failed. Null otherwise.",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Machine-readable error code."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable error message."
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/firecrawl/scrape": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "dynamic",
+          "currency": "USD",
+          "basis": "provider_cost x 4.66853",
+          "nominal_usd": 0.005,
+          "observed_usd": {
+            "min": 0.0011,
+            "p50": 0.005,
+            "p95": 0.005,
+            "max": 0.005
+          },
+          "cost_drivers": [
+            {
+              "param": "pages/results scraped",
+              "effect": "charge scales with number of pages/results the provider returns"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
+        },
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/scrape"
+        ],
+        "summary": "Scrape a single page and return its main content as markdown.",
+        "description": "Fetch one URL and get its main content back as markdown. `url` and `proxy` are both required — `proxy` must be `basic` on the metered profile — and `formats` selects the output. Returns `success` and `data` with `markdown` plus a large `metadata` object carrying the page's og: and twitter: tags, `statusCode`, `sourceURL` and `language`. Measured at about 10 seconds for one page. ⚠️ The URL must be HTTPS and must not point at a PDF; both are rejected rather than best-effort. Use it when you have the URL and want the text. For several URLs at once `post_firecrawl_batch_scrape` runs them as one background job, and `post_tavily_extract` does a small batch synchronously. To find URLs first, `post_firecrawl_map`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "The HTTPS URL to scrape. PDF URLs are not supported on the metered profile.",
+                    "example": "https://docs.firecrawl.dev"
+                  },
+                  "proxy": {
+                    "type": "string",
+                    "enum": [
+                      "basic"
+                    ],
+                    "description": "Proxy tier. Must be explicitly set to \"basic\" on the metered profile.",
+                    "example": "basic"
+                  },
+                  "formats": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "markdown"
+                      ]
+                    },
+                    "description": "Optional output formats. When present it must be exactly [\"markdown\"].",
+                    "example": [
+                      "markdown"
+                    ]
+                  }
+                },
+                "required": [
+                  "url",
+                  "proxy"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scrape completed successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "True when the scrape succeeded."
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "markdown": {
+                          "type": "string",
+                          "description": "The scraped page content in markdown."
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "description": "Page metadata such as title, description, source URL, and HTTP status.",
+                          "properties": {
+                            "title": {
+                              "type": "string"
+                            },
+                            "description": {
+                              "type": "string"
+                            },
+                            "sourceURL": {
+                              "type": "string"
+                            },
+                            "statusCode": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "creditsUsed": {
+                      "type": "integer",
+                      "description": "Firecrawl credits consumed by the request (1 per page)."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "post_firecrawl_scrape"
+      }
+    },
+    "/firecrawl/search": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "dynamic",
+          "currency": "USD",
+          "basis": "provider_cost x 4.66853",
+          "nominal_usd": 0.005,
+          "observed_usd": {
+            "min": 0.0022,
+            "p50": 0.01,
+            "p95": 0.01,
+            "max": 0.01
+          },
+          "cost_drivers": [
+            {
+              "param": "pages/results scraped",
+              "effect": "charge scales with number of pages/results the provider returns"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
+        },
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/search"
+        ],
+        "summary": "Run a web search and return ranked results.",
+        "description": "Search the web and get back ranked results. `query` is required; `limit` sets how many. Returns `success`, `creditsUsed`, a request `id`, and `data.web[]` with `url`, `title`, `description` and `position` — **titles and snippets only, no page text**. Measured at about 15 seconds for 2 results, the slowest of the search tools here. Billed per Firecrawl credit, roughly `ceil(limit / 10) * 2`. On the AIsa metered profile only the web source is supported; `scrapeOptions`, enterprise mode and non-web sources are rejected. Reach for something else when: you want the page text in the same call — `post_tavily_search` returns it and answers in a third of the time; you already know the URLs — `post_firecrawl_scrape`; you want relevance judged by meaning rather than keywords — `post_exa_search`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "The search query. Must be non-empty and at most 500 characters.",
+                    "maxLength": 500,
+                    "example": "firecrawl web scraping api"
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "default": 10,
+                    "minimum": 1,
+                    "maximum": 100,
+                    "description": "Maximum number of results to return."
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search completed successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "True when the search succeeded."
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "web": {
+                          "type": "array",
+                          "description": "Ranked web search results.",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "title": {
+                                "type": "string",
+                                "description": "Result title."
+                              },
+                              "url": {
+                                "type": "string",
+                                "description": "Result URL."
+                              },
+                              "description": {
+                                "type": "string",
+                                "description": "Result snippet."
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "creditsUsed": {
+                      "type": "integer",
+                      "description": "Firecrawl credits consumed (about 2 per 10 results)."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "post_firecrawl_search"
+      }
+    },
+    "/firecrawl/map": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "dynamic",
+          "currency": "USD",
+          "basis": "provider_cost x 4.66853",
+          "nominal_usd": 0.005,
+          "observed_usd": {
+            "min": 0.0011,
+            "p50": 0.025,
+            "p95": 0.5,
+            "max": 2.47
+          },
+          "cost_drivers": [
+            {
+              "param": "pages/results scraped",
+              "effect": "charge scales with number of pages/results the provider returns"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
+        },
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/map"
+        ],
+        "summary": "Discover the URLs on a website.",
+        "description": "List the URLs reachable from a starting page, without fetching any content. `url` and `limit` are both required (limit 1 to 100000). Returns `success`, a request `id`, and `links[]` with `url` and `title` — note these are **objects with a title**, unlike `post_tavily_map` which returns bare strings. Measured at about 9 seconds. Billed 1 credit per discovered link, so `limit` is a cost control, not just a page control. Use it to size a site before paying to crawl it, then fetch only what matters with `post_firecrawl_scrape`. When you want content and structure in one pass, `post_firecrawl_crawl`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "The HTTPS URL to map.",
+                    "example": "https://docs.firecrawl.dev"
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000,
+                    "description": "Maximum number of links to discover. Required on the metered profile.",
+                    "example": 100
+                  }
+                },
+                "required": [
+                  "url",
+                  "limit"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Map completed successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "True when the map succeeded."
+                    },
+                    "links": {
+                      "type": "array",
+                      "description": "Discovered links.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string",
+                            "description": "A discovered URL."
+                          },
+                          "title": {
+                            "type": "string",
+                            "description": "Title of the discovered page, when available."
+                          }
+                        }
+                      }
+                    },
+                    "creditsUsed": {
+                      "type": "integer",
+                      "description": "Firecrawl credits consumed (1 per discovered link)."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "post_firecrawl_map"
+      }
+    },
+    "/firecrawl/parse": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "dynamic",
+          "currency": "USD",
+          "basis": "provider_cost x 4.66853",
+          "nominal_usd": 0.005,
+          "observed_usd": {
+            "min": 0.0011,
+            "max": 0.005
+          },
+          "cost_drivers": [
+            {
+              "param": "pages/results scraped",
+              "effect": "charge scales with number of pages/results the provider returns"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
+        },
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/parse"
+        ],
+        "summary": "Parse an uploaded HTML file into markdown.",
+        "description": "Parse an HTML file you upload and get markdown back. This is `multipart/form-data` with two fields: `file` (an HTML upload that must carry a `text/html` content type or an `.html`/`.htm` filename) and `options` (a JSON string that must set `proxy` to `basic`, may additionally set `formats` to `[\"markdown\"]`, and is capped at 64 KB). Returns `success` and `data.markdown` with `metadata`. Billed 1 Firecrawl credit. ⚠️ **Not available as an MCP tool.** A tool call carries JSON, so the file arrives as a plain form field with no filename and upstream rejects it — verified. Over MCP use `post_firecrawl_scrape` with a URL instead. This endpoint is for HTTP clients that hold an actual file.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The HTML/HTM file to parse. Must have a text/html content type or an .html/.htm filename."
+                  },
+                  "options": {
+                    "type": "string",
+                    "description": "JSON string of parse options. Must include proxy=\"basic\"; may additionally include formats=[\"markdown\"]. No other keys are allowed.",
+                    "example": "{\"proxy\":\"basic\",\"formats\":[\"markdown\"]}"
+                  }
+                },
+                "required": [
+                  "file",
+                  "options"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Parse completed successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "True when the parse succeeded."
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "markdown": {
+                          "type": "string",
+                          "description": "The parsed content in markdown."
+                        }
+                      }
+                    },
+                    "creditsUsed": {
+                      "type": "integer",
+                      "description": "Firecrawl credits consumed (1)."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "post_firecrawl_parse"
+      }
+    },
+    "/firecrawl/crawl": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "dynamic",
+          "currency": "USD",
+          "basis": "provider_cost (metered per result unit)",
+          "nominal_usd": 0.005,
+          "observed_usd": {
+            "min": 0.0011,
+            "max": 0.25
+          },
+          "cost_drivers": [
+            {
+              "param": "pages/results returned",
+              "effect": "charge scales with provider-reported units (pages/results); metered_result billing"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
+        },
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/crawl"
+        ],
+        "summary": "Submit an asynchronous crawl job.",
+        "description": "Crawl a whole site rooted at `url` and return the content of every page it keeps. `url`, `limit` and an `Idempotency-Key` are required; steer it with `includePaths`, `excludePaths`, `maxDiscoveryDepth`, `crawlEntireDomain`, `allowSubdomains`, `delay` and `maxConcurrency`. Asynchronous. Submitting returns HTTP 202 and a job envelope — `id`, `object`, `endpoint`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error` — with `output` still null. Poll `get_firecrawl_crawl_job` until `status` is `completed`, `failed` or `cancelled`; `output` is then an array of pages, each with `markdown` and `metadata`. A 3-page crawl measured 43 KB and finished in under a minute, and `pricing.billingMode` is `metered_result`, so **cost scales with what it finds** — set `limit`. Send a fresh `Idempotency-Key` per distinct crawl; reusing one returns the earlier job instead of starting a new one. For a handful of known URLs `post_firecrawl_batch_scrape` is cheaper, and for structure alone `post_firecrawl_map` costs far less.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 191
+            },
+            "description": "Unique key (1 to 191 characters) that makes the submit idempotent. Re-submitting with the same key returns the original job."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "The HTTPS root URL to crawl. PDF URLs are not supported.",
+                    "example": "https://docs.firecrawl.dev"
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000,
+                    "description": "Maximum number of pages to crawl.",
+                    "example": 50
+                  },
+                  "includePaths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 256
+                    },
+                    "maxItems": 20,
+                    "description": "Only crawl URLs whose path matches one of these patterns."
+                  },
+                  "excludePaths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 256
+                    },
+                    "maxItems": 20,
+                    "description": "Skip URLs whose path matches one of these patterns."
+                  },
+                  "maxDiscoveryDepth": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10,
+                    "description": "Maximum link-discovery depth from the root URL."
+                  },
+                  "sitemap": {
+                    "type": "string",
+                    "enum": [
+                      "skip",
+                      "include",
+                      "only"
+                    ],
+                    "description": "How the site's sitemap is used during discovery."
+                  },
+                  "ignoreQueryParameters": {
+                    "type": "boolean",
+                    "description": "Treat URLs that differ only by query string as the same page."
+                  },
+                  "crawlEntireDomain": {
+                    "type": "boolean",
+                    "description": "Crawl the whole domain rather than only the subtree under the root URL."
+                  },
+                  "allowExternalLinks": {
+                    "type": "boolean",
+                    "description": "Follow links to external domains."
+                  },
+                  "allowSubdomains": {
+                    "type": "boolean",
+                    "description": "Follow links into subdomains of the root domain."
+                  },
+                  "delay": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 30,
+                    "description": "Delay in seconds between requests (0 to 30)."
+                  },
+                  "maxConcurrency": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "Maximum number of concurrent page fetches (1 to 20)."
+                  },
+                  "scrapeOptions": {
+                    "type": "object",
+                    "description": "Per-page scrape options applied while crawling. On the metered profile output is always markdown.",
+                    "properties": {
+                      "onlyMainContent": {
+                        "type": "boolean",
+                        "description": "Return only the main content of each page.",
+                        "default": true
+                      },
+                      "includeTags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "maxLength": 128
+                        },
+                        "maxItems": 50,
+                        "description": "HTML tags/selectors to keep."
+                      },
+                      "excludeTags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "maxLength": 128
+                        },
+                        "maxItems": 50,
+                        "description": "HTML tags/selectors to drop."
+                      },
+                      "maxAge": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 31536000000,
+                        "description": "Maximum acceptable cache age in milliseconds."
+                      },
+                      "minAge": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 31536000000,
+                        "description": "Minimum cache age in milliseconds before a page is refetched."
+                      },
+                      "timeout": {
+                        "type": "integer",
+                        "minimum": 1000,
+                        "maximum": 300000,
+                        "description": "Per-page timeout in milliseconds."
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "url",
+                  "limit"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Crawl job accepted. The Location header points at the job resource; poll it until terminal.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Path of the created job resource, e.g. /apis/v1/firecrawl/crawl/{jobId}."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJob"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "post_firecrawl_crawl"
+      }
+    },
+    "/firecrawl/crawl/{jobId}": {
+      "get": {
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/crawl"
+        ],
+        "summary": "Poll a crawl job.",
+        "description": "Fetch a crawl job submitted by `post_firecrawl_crawl`, by its `jobId`. Returns the same envelope the submission returned — `id`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error`. Repeat until `status` is `completed`, `failed` or `cancelled`; on success `output` is an array of pages with `markdown` and `metadata`. Polling is cheap and fast, measured under a second. This tool only reads a job — it cannot start one.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The job id returned by the submit call."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The current state of the crawl job.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJob"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "get_firecrawl_crawl_job"
+      }
+    },
+    "/firecrawl/batch-scrape": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "dynamic",
+          "currency": "USD",
+          "basis": "provider_cost (metered per result unit)",
+          "nominal_usd": 0.005,
+          "observed_usd": {
+            "min": 0.0011,
+            "max": 0.015
+          },
+          "cost_drivers": [
+            {
+              "param": "pages/results returned",
+              "effect": "charge scales with provider-reported units (pages/results); metered_result billing"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
+        },
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/batch-scrape"
+        ],
+        "summary": "Submit an asynchronous batch scrape job.",
+        "description": "Scrape many URLs as one background job. `urls` and an `Idempotency-Key` are required; `maxConcurrency`, `onlyMainContent`, `includeTags`, `excludeTags`, `maxAge`, `minAge` and `timeout` tune it. Asynchronous. Submitting returns HTTP 202 and a job envelope — `id`, `object`, `endpoint`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error` — with `output` still null. Poll `get_firecrawl_batch_scrape_job` until terminal; `output` is then an array of documents with `markdown` and `metadata`. Use it when you have a list of URLs and do not need them immediately. When you do need them immediately, `post_tavily_extract` returns a small batch synchronously in about a second; for a single page `post_firecrawl_scrape`. Send a fresh `Idempotency-Key` per distinct batch.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 191
+            },
+            "description": "Unique key (1 to 191 characters) that makes the submit idempotent. Re-submitting with the same key returns the original job."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "urls": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000,
+                    "description": "1 to 1000 unique HTTPS URLs to scrape. PDF URLs are not supported.",
+                    "example": [
+                      "https://docs.firecrawl.dev",
+                      "https://docs.firecrawl.dev/introduction"
+                    ]
+                  },
+                  "maxConcurrency": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "Maximum number of concurrent scrapes (1 to 20)."
+                  },
+                  "onlyMainContent": {
+                    "type": "boolean",
+                    "description": "Return only the main content of each page.",
+                    "default": true
+                  },
+                  "includeTags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    "maxItems": 50,
+                    "description": "HTML tags/selectors to keep."
+                  },
+                  "excludeTags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    "maxItems": 50,
+                    "description": "HTML tags/selectors to drop."
+                  },
+                  "maxAge": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 31536000000,
+                    "description": "Maximum acceptable cache age in milliseconds."
+                  },
+                  "minAge": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 31536000000,
+                    "description": "Minimum cache age in milliseconds before a page is refetched."
+                  },
+                  "timeout": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 300000,
+                    "description": "Per-page timeout in milliseconds."
+                  }
+                },
+                "required": [
+                  "urls"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Batch scrape job accepted. The Location header points at the job resource; poll it until terminal.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Path of the created job resource, e.g. /apis/v1/firecrawl/batch-scrape/{jobId}."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJob"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "post_firecrawl_batch_scrape"
+      }
+    },
+    "/firecrawl/batch-scrape/{jobId}": {
+      "get": {
+        "tags": [
+          "https://docs.firecrawl.dev/api-reference/endpoint/batch-scrape"
+        ],
+        "summary": "Poll a batch scrape job.",
+        "description": "Fetch a batch scrape job submitted by `post_firecrawl_batch_scrape`, by its `jobId`. Returns the same envelope — `id`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error`. Repeat until `status` is terminal; on success `output` is an array of documents with `markdown` and `metadata`. Reads a job only; it cannot start one.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The job id returned by the submit call."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The current state of the batch scrape job.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJob"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "get_firecrawl_batch_scrape_job"
+      }
+    }
+  }
+}

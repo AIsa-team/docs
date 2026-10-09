@@ -2,7 +2,8 @@
 """Check real PR outputs and reproduce candidates from public runtime evidence.
 
 No production requests are made. Accepted debt comes only from the explicitly
-selected reviewed Git revision, never the candidate's current coverage file.
+selected reviewed Git revision or the code-pinned CR003 exact deferral policy,
+never the candidate's current coverage file.
 """
 from __future__ import annotations
 
@@ -159,6 +160,8 @@ def assess_candidate(root: Path, facts_dir: Path, baseline_ref: str | None = Non
                      published_ref: str | None = None):
     # Inspect committed/staged outputs before regeneration. Regeneration cannot
     # conceal a conflicting identity in the actual PR's publication graph.
+    from deferred_definitions import load_deferred_definitions
+    deferred = load_deferred_definitions(root)
     baseline = load_baseline(root, baseline_ref)
     actual = check_readiness({}, published_documents(root), {'providers': {}})
     if actual['global_errors']:
@@ -179,7 +182,7 @@ def assess_candidate(root: Path, facts_dir: Path, baseline_ref: str | None = Non
     coverage = verified_retained_coverage(root, coverage, documents, published_ref or baseline_ref)
     report = check_readiness(context['facts_by_provider'], documents,
                              coverage, baseline_coverage=baseline,
-                             runtime_index=context['runtime_index'])
+                             runtime_index=context['runtime_index'], deferred_definitions=deferred)
     assess_fresh_contracts(report, documents, context['recomposed_documents'], coverage, context['coverage'])
     staged = context['report']
     report['composed_candidate'] = staged
@@ -201,6 +204,12 @@ def main():
     args = parser.parse_args()
     try:
         report = assess_candidate(args.root, args.facts_dir or args.root / '.cache/runtime-contracts', args.baseline_ref, args.published_ref)
+        facts = args.facts_dir or args.root / '.cache/runtime-contracts'
+        if (facts / 'acquisition-receipt.json').exists():
+            from export_contract_publication import acquired_input, RUNTIME_KEYS
+            receipt, receipt_raw = acquired_input(facts)
+            report['runtime_acquisition_sha256'] = hashlib.sha256(receipt_raw).hexdigest()
+            report['runtime'] = {key: receipt[key] for key in RUNTIME_KEYS}
         from source_governance import source_report
         receipt_path = args.source_receipts or args.root / '.cache/source-reviews.json'
         saved = json.loads(receipt_path.read_text()) if receipt_path.exists() else {}
@@ -237,9 +246,17 @@ def main():
             if yaml.safe_load(raw) != expected:
                 report['status'] = 'failed'
                 report.setdefault('global_errors', []).append({'code': 'aggregate_recomposition_mismatch'})
+            from sales_catalog_projection import verify_sales_catalog
+            try:
+                verify_sales_catalog(args.root, expected, raw)
+            except ValueError as exc:
+                report['status'] = 'failed'
+                report.setdefault('global_errors', []).append({'code': 'sales_catalog_projection_mismatch', 'detail': str(exc)})
             report['publication_artifact'] = {'openapi_sha256': hashlib.sha256(raw).hexdigest(),
                 'assessment_scope': 'formal producer artifact declarations and source maintenance; no execution',
                 'source_hashes': {name: row['source_hash'] for name, row in sources['sources'].items()},
+                'source_metadata': {name: {key: json.loads((args.root / 'openapi/upstream' / name).read_text())['info']['x-aisa-source'][key]
+                    for key in ('content_hash', 'policy_revision', 'refresh_policy')} for name in sources['sources']},
                 'files_sha256': publication_hashes(args.root),
                 'baseline_ref': args.baseline_ref, 'published_ref': args.published_ref}
         else:

@@ -6,6 +6,9 @@ on:
       - '.github/workflows/**'
       - 'scripts/**'
       - 'openapi/**'
+      - 'docs/publication/**'
+      - 'docs/current-source-review-20261009/**'
+      - 'docs/response-source-review-receipts.json'
       - 'openapi.yaml'
       - 'docs.json'
       - 'api-reference.mdx'
@@ -18,6 +21,9 @@ on:
       - '.github/workflows/**'
       - 'scripts/**'
       - 'openapi/**'
+      - 'docs/publication/**'
+      - 'docs/current-source-review-20261009/**'
+      - 'docs/response-source-review-receipts.json'
       - 'openapi.yaml'
       - 'docs.json'
       - 'api-reference.mdx'
@@ -87,6 +93,11 @@ jobs:
     if: needs.changes.outputs.artifacts == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      # Reviewed production release input, not a Docs publication approval.
+      # An advancing Runtime release requires explicitly updating these pins.
+      RUNTIME_ARTIFACT_REVISION: 0182c31271fd94f07b3977d98173e67ec0dfbca74dc0eb65c5ceedd40bbdcadb
+      RUNTIME_COMPILER_REVISION: 6d9648811441d08232096808fae7ac96e6816f64
     steps:
       - uses: actions/checkout@v4
         with:
@@ -96,24 +107,30 @@ jobs:
           python-version: '3.12'
       - name: Install assessment dependencies
         run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
-      - name: Restore public runtime-contract evidence
-        uses: actions/cache/restore@v4
-        with:
-          path: .cache/runtime-contracts
-          key: runtime-contracts-pr-${{ github.run_id }}
-          restore-keys: runtime-contracts-
+      - name: Acquire the exact reviewed public Runtime release
+        run: |
+          python scripts/fetch_runtime_release.py \
+            --artifact-revision "$RUNTIME_ARTIFACT_REVISION" \
+            --compiler-revision "$RUNTIME_COMPILER_REVISION" \
+            --output /tmp/runtime-contract-evidence
       - name: Restore attributed source-maintenance receipts
         uses: actions/cache/restore@v4
         with:
           path: .cache/source-reviews.json
           key: source-reviews-assess-${{ github.run_id }}
           restore-keys: source-reviews-
+      - name: Combine reviewed source evidence with newer observations
+        run: >-
+          python scripts/prepare_source_receipts.py
+          --reviewed docs/current-source-review-20261009/merged-source-reviews.json
+          --cache .cache/source-reviews.json
       - name: Check actual candidate readiness
         env:
           REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
           PUBLISHED_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           python scripts/check_contract_candidate.py \
+            --facts-dir /tmp/runtime-contract-evidence \
             --baseline-ref "$REVIEWED_BASELINE" \
             --published-ref "$PUBLISHED_REF" \
             --report /tmp/contract-readiness.json
@@ -122,7 +139,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: candidate-contract-readiness
-          path: /tmp/contract-readiness.json
+          path: |
+            /tmp/contract-readiness.json
+            /tmp/runtime-contract-evidence/acquisition-receipt.json
           if-no-files-found: ignore
   contracts:
     # Preserve the existing required check and reject skipped formal checks

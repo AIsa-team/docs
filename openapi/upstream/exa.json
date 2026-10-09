@@ -1,0 +1,702 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Exa API",
+    "version": "1.0.0",
+    "description": "Unified API documentation for Exa neural semantic search endpoints exposed through the AIsa gateway: Search, Contents, Answer, and the asynchronous research Agent Runs.\n\nSearch, Contents, and Answer are synchronous and billed at a flat $0.08 per successful request. Agent Runs is asynchronous: the caller submits a run and then polls the returned job resource for status and results, billed at a flat $0.10 per run. Upstream 4xx responses (for example 401/403/404) are not billed. The `costDollars` field that Exa returns is the upstream cost breakdown and is informational only — customer billing follows the flat AIsa prices above.",
+    "x-aisa-source": {
+      "kind": "manual",
+      "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/exa.json",
+      "fetched_at": "2026-09-29T21:25:55+08:00",
+      "content_hash": "sha256:2fdc7f5386758781ea4d3f29516656726bd1bec9410146f473d3a55764ebb1e8",
+      "converter": "scripts/import_existing_contracts.py@1",
+      "path_space": "public",
+      "owner": "AIsa-team/docs",
+      "refresh_policy": "manual",
+      "review_period_days": 30,
+      "policy_revision": "sha256:4940b8b8ea7fdb42f87b2e6cc8e7586e3f1477d99d60c8a06ee4a6dd70fccd43"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "AsyncJob": {
+        "type": "object",
+        "description": "An asynchronous integration job. Returned by the submit call (HTTP 202) and by the poll/detail call. Poll the job by its id until status is a terminal value (completed, failed, or cancelled).",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique AIsa job identifier. Use it to poll, list, or cancel the job.",
+            "example": "iaj_01HZY8Q2M4K7N9V3T6W1X0B2C3"
+          },
+          "object": {
+            "type": "string",
+            "description": "Always \"integration_async_job\".",
+            "example": "integration_async_job"
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "The submit endpoint this job belongs to.",
+            "example": "/apis/v1/exa/agent/runs"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "description": "Customer-facing lifecycle status. queued and running are non-terminal; completed, failed, and cancelled are terminal."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the job was accepted."
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the job reached a terminal status. Null while the job is still queued or running."
+          },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "example": "USD"
+              },
+              "authorizedMicrosUSD": {
+                "type": "integer",
+                "description": "Amount authorized (held) when the job was admitted, in micro-USD. Agent Runs settle at the flat $0.10 per run."
+              },
+              "finalMicrosUSD": {
+                "type": "integer",
+                "nullable": true,
+                "description": "Final settled cost in micro-USD once the job is terminal. Null until settlement."
+              },
+              "billingMode": {
+                "type": "string",
+                "description": "Billing mode for the job.",
+                "example": "flat_per_call"
+              }
+            }
+          },
+          "output": {
+            "description": "Job result payload. Present only once status is completed. For Agent Runs this is the structured research result.",
+            "nullable": true
+          },
+          "outputExpired": {
+            "type": "boolean",
+            "description": "True when the result has been retained past its retention window and is no longer retrievable."
+          },
+          "error": {
+            "type": "object",
+            "nullable": true,
+            "description": "Present when status is failed. Null otherwise.",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Machine-readable error code."
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable error message."
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/exa/search": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "dynamic",
+          "currency": "USD",
+          "basis": "provider_cost x 1",
+          "nominal_usd": 0.08,
+          "observed_usd": {
+            "min": 0.007,
+            "p50": 0.007,
+            "p95": 0.08,
+            "max": 0.1
+          },
+          "cost_drivers": [
+            {
+              "param": "numResults / contents",
+              "effect": "charge scales with number of results and content pulls returned"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
+        },
+        "tags": [
+          "https://docs.exa.ai/reference/search"
+        ],
+        "summary": "Run a neural semantic web search.",
+        "description": "Search the web by meaning rather than by keyword. `query` is required; narrow with `category`, `includeDomains`, `excludeDomains`, `startPublishedDate`, `endPublishedDate`, and set `numResults`. Returns `requestId`, `resolvedSearchType`, `searchTime`, `costDollars` and `results[]` with `id`, `title` and `url`. **`id` is the URL**, and it is what `post_exa_contents` takes. Measured at 1.4 seconds — the fastest search here. Billed a flat $0.08 per successful request. ⚠️ Results carry **no page text** unless you ask: pass `contents`, or follow up with `post_exa_contents`. Choose it over `post_tavily_search` when the query is a description rather than keywords; choose Tavily when you want the text in the same call, and `post_exa_answer` when you want a written answer rather than a list.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "The natural-language search query.",
+                    "example": "latest evaluation frameworks for AI agents"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "fast",
+                      "instant",
+                      "deep-lite",
+                      "deep",
+                      "deep-reasoning"
+                    ],
+                    "default": "auto",
+                    "description": "Search mode. auto lets Exa choose; the deep modes trade latency for higher-quality retrieval."
+                  },
+                  "numResults": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "default": 10,
+                    "description": "Number of results to return."
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "company",
+                      "research paper",
+                      "news",
+                      "personal site",
+                      "financial report",
+                      "people"
+                    ],
+                    "description": "Optional hint about the kind of pages to prioritize."
+                  },
+                  "includeDomains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Only return results from these domains."
+                  },
+                  "excludeDomains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Exclude results from these domains."
+                  },
+                  "startPublishedDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Only return results published on or after this ISO 8601 date."
+                  },
+                  "endPublishedDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Only return results published on or before this ISO 8601 date."
+                  },
+                  "contents": {
+                    "type": "object",
+                    "description": "Content options to return alongside each result.",
+                    "properties": {
+                      "text": {
+                        "type": "boolean",
+                        "description": "Return the full page text."
+                      },
+                      "highlights": {
+                        "type": "boolean",
+                        "description": "Return highlighted relevant snippets."
+                      },
+                      "summary": {
+                        "type": "boolean",
+                        "description": "Return an AI-generated summary of the page."
+                      }
+                    }
+                  },
+                  "outputSchema": {
+                    "type": "object",
+                    "description": "JSON Schema used to synthesize a structured output from the results."
+                  },
+                  "systemPrompt": {
+                    "type": "string",
+                    "description": "Instruction that guides how the structured output is generated."
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search completed successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requestId": {
+                      "type": "string",
+                      "description": "Exa request identifier."
+                    },
+                    "results": {
+                      "type": "array",
+                      "description": "Ranked search results.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "publishedDate": {
+                            "type": "string"
+                          },
+                          "author": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "output": {
+                      "description": "Structured output, present only when outputSchema was supplied.",
+                      "nullable": true
+                    },
+                    "costDollars": {
+                      "description": "Upstream Exa cost breakdown. Informational only; customer billing is the flat $0.08.",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "post_exa_search"
+      }
+    },
+    "/exa/contents": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "dynamic",
+          "currency": "USD",
+          "basis": "provider_cost x 1",
+          "nominal_usd": 0.08,
+          "observed_usd": {
+            "min": 0.001,
+            "p50": 0.1,
+            "p95": 0.1,
+            "max": 0.1
+          },
+          "cost_drivers": [
+            {
+              "param": "numResults / contents",
+              "effect": "charge scales with number of results and content pulls returned"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
+        },
+        "tags": [
+          "https://docs.exa.ai/reference/get-contents"
+        ],
+        "summary": "Extract full page contents for a set of URLs.",
+        "description": "Fetch page text and metadata for URLs you already have. `ids` is required and takes the `id` values from `post_exa_search` — which are plain URLs, so any URL works. Toggle `text`, `highlights`, `summary`, `subpages` and `livecrawl`. Returns `results[]` with `id`, `title`, `url`, `author` and `text`, plus a **`statuses[]` array giving per-URL `status` and `source`** — read it, because a URL that could not be fetched is reported there rather than raising. Cached results are served instantly; a miss falls back to a live crawl. Measured at 1.2 seconds. Billed a flat $0.08 per successful request. For a whole site rather than a URL list, `post_firecrawl_crawl`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "The URLs (or Exa result ids) to fetch contents for.",
+                    "example": [
+                      "https://example.com/article"
+                    ]
+                  },
+                  "text": {
+                    "type": "boolean",
+                    "description": "Return the full page text."
+                  },
+                  "highlights": {
+                    "type": "boolean",
+                    "description": "Return highlighted relevant snippets."
+                  },
+                  "summary": {
+                    "type": "boolean",
+                    "description": "Return an AI-generated summary of the page."
+                  },
+                  "subpages": {
+                    "type": "integer",
+                    "description": "Number of linked subpages to also fetch."
+                  },
+                  "livecrawl": {
+                    "type": "string",
+                    "enum": [
+                      "always",
+                      "fallback",
+                      "never"
+                    ],
+                    "description": "Freshness policy: always live-crawl, fall back to live crawl on cache miss, or never live-crawl."
+                  }
+                },
+                "required": [
+                  "ids"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contents fetched successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "publishedDate": {
+                            "type": "string"
+                          },
+                          "author": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "highlights": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "summary": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "post_exa_contents"
+      }
+    },
+    "/exa/answer": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "dynamic",
+          "currency": "USD",
+          "basis": "provider_cost x 1",
+          "nominal_usd": 0.08,
+          "observed_usd": {
+            "min": 0.005,
+            "p50": 0.005,
+            "p95": 0.1,
+            "max": 0.1
+          },
+          "cost_drivers": [
+            {
+              "param": "numResults / contents",
+              "effect": "charge scales with number of results and content pulls returned"
+            }
+          ],
+          "cost_tier": "variable",
+          "note": "nominal_usd is a static reference, NOT a guaranteed minimum; actual charge = provider_cost x multiplier and can be higher or lower"
+        },
+        "tags": [
+          "https://docs.exa.ai/reference/answer"
+        ],
+        "summary": "Get a direct, cited answer to a question.",
+        "description": "Ask a question and get a written answer with citations. `query` is required; `text` includes the source text and `outputSchema` shapes a structured reply. Returns `requestId`, `answer` as prose, `citations[]` with `id`, `title` and `url`, and `costDollars`. Measured at 2.1 seconds with 8 citations. Billed a flat $0.08 per successful request. It sits between a search and a research run: faster and cheaper than `post_exa_agent_runs`, and more direct than reading `post_exa_search` results yourself. `post_perplexity_sonar` answers the same shape of question for $0.012 — reach for Exa when the retrieval needs to be semantic.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "The question to answer.",
+                    "example": "Which manufacturers had the top three global EV sales in 2025?"
+                  },
+                  "text": {
+                    "type": "boolean",
+                    "description": "Include the full page text of each citation."
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "fast",
+                      "instant",
+                      "deep-lite",
+                      "deep",
+                      "deep-reasoning"
+                    ],
+                    "description": "Retrieval mode used to gather sources before answering."
+                  },
+                  "outputSchema": {
+                    "type": "object",
+                    "description": "JSON Schema for a structured answer output."
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Answer generated successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "answer": {
+                      "description": "The generated answer. A string, or a structured object when outputSchema was supplied.",
+                      "nullable": true
+                    },
+                    "citations": {
+                      "type": "array",
+                      "description": "Sources supporting the answer.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "author": {
+                            "type": "string"
+                          },
+                          "publishedDate": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "costDollars": {
+                      "description": "Upstream Exa cost breakdown. Informational only; customer billing is the flat $0.08.",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "post_exa_answer"
+      }
+    },
+    "/exa/agent/runs": {
+      "post": {
+        "x-aisa-pricing": {
+          "model": "per_request",
+          "currency": "USD",
+          "price_usd": 0.1,
+          "cost_tier": "med"
+        },
+        "tags": [
+          "https://docs.exa.ai/reference/create-a-research-task"
+        ],
+        "summary": "Submit an asynchronous research Agent run.",
+        "description": "Hand a research task to an agent that works in the background. `query` and an `Idempotency-Key` are required; `effort` trades depth against time, `outputSchema` shapes the result, `dataSources` restricts where it looks, and `previousRunId` continues an earlier run. Asynchronous. Submitting returns HTTP 202 and a job envelope — `id`, `object`, `endpoint`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error` — with `output` still null. Poll `get_exa_agent_run` until terminal; `output` then carries `text`, `structured` and `grounding`. A one-sentence question completed in well under a minute. Billed a flat $0.10 per run — `pricing.billingMode` is `fixed_request`, so unlike a Firecrawl crawl the price does not grow with what it finds. Use it when a report is the deliverable. For an answer you read in one sitting, `post_exa_answer` returns in about two seconds. Send a fresh `Idempotency-Key` per distinct task.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 191
+            },
+            "description": "Unique key (1 to 191 characters) that makes the submit idempotent. Re-submitting with the same key and request fingerprint returns the original run."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "The natural-language research query.",
+                    "example": "Summarize the main changes in RAG evaluation methods over the past year as a bullet list."
+                  },
+                  "outputSchema": {
+                    "type": "object",
+                    "description": "JSON Schema used to validate the structured output."
+                  },
+                  "input": {
+                    "type": "object",
+                    "description": "Row-processing input: rows to process and exclusions.",
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {},
+                        "description": "Input rows for the run."
+                      },
+                      "exclusion": {
+                        "description": "Items to exclude from processing."
+                      }
+                    }
+                  },
+                  "effort": {
+                    "type": "string",
+                    "description": "Compute/depth tier for the run."
+                  },
+                  "previousRunId": {
+                    "type": "string",
+                    "description": "Continue from a previously completed run."
+                  },
+                  "dataSources": {
+                    "type": "array",
+                    "items": {},
+                    "description": "Third-party data sources (Exa Connect) the Agent is granted access to."
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Research run accepted. The Location header points at the job resource; poll it until terminal.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Path of the created job resource, e.g. /apis/v1/exa/agent/runs/{jobId}."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJob"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "idempotency_conflict — the same Idempotency-Key was reused with a different request body."
+          }
+        },
+        "operationId": "post_exa_agent_runs"
+      }
+    },
+    "/exa/agent/runs/{jobId}": {
+      "get": {
+        "tags": [
+          "https://docs.exa.ai/reference/get-a-research-task"
+        ],
+        "summary": "Poll a research Agent run.",
+        "description": "Fetch an Agent run submitted by `post_exa_agent_runs`, by its `jobId`. Returns the same envelope — `id`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error`. Repeat until `status` is `completed`, `failed` or `cancelled`; on success `output` carries `text`, `structured` and `grounding`. Reads a run only; it cannot start one.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The job id returned by the submit call."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The current state of the research run.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncJob"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "get_exa_agent_run"
+      }
+    }
+  }
+}

@@ -109,3 +109,138 @@ the workflow manually from `main` with `dispatch_tool_router` enabled.
 ## License
 
 This repository is available under the [MIT License](LICENSE).
+
+## Acquire an actual Runtime release for contract review
+
+After the Runtime operator supplies the **actual published artifact revision**
+(64 lowercase hex) and deployed compiler Git SHA (40 lowercase hex), acquire its
+public immutable files into a new local directory:
+
+```sh
+python scripts/fetch_runtime_release.py \
+  --base-url https://api.aisa.one \
+  --artifact-revision "$ACTUAL_RUNTIME_ARTIFACT_REVISION" \
+  --compiler-revision "$DEPLOYED_RUNTIME_COMPILER_SHA" \
+  --output "$ACTUAL_COMPLETE_RUNTIME_FACTS"
+
+python scripts/prepare_source_receipts.py \
+  --reviewed docs/current-source-review-20261009/merged-source-reviews.json \
+  --cache .cache/source-reviews.json
+
+python scripts/check_contract_candidate.py --root "$PWD" \
+  --facts-dir "$ACTUAL_COMPLETE_RUNTIME_FACTS" \
+  --baseline-ref "$INDEPENDENTLY_REVIEWED_BASELINE_FULL_SHA" \
+  --published-ref "$PUBLISHED_DOCS_ARTIFACT_FULL_SHA" \
+  --source-receipts .cache/source-reviews.json \
+  --report "$READINESS_REPORT"
+```
+
+The acquisition command only performs public metadata GETs. It requires a fresh,
+unchanged current pointer before and after downloading the exact immutable
+manifest; validates its revision, every file SHA/ETag and index/provider binding;
+and rejects pending or incomplete selected Runtime coverage. HTTPS verification
+is enabled, redirects and environment proxies are disabled, and acquisition is
+bounded to 180 seconds, 512 files, 8 MiB per file and 64 MiB per immutable release.
+An existing output directory is never reused. Files retain their downloaded
+bytes, with both `providers/*.json` and flat copies for the existing Docs CLI.
+
+`category.json` is fetched twice unchanged during that interval and is explicitly
+recorded as live, unversioned metadata outside the immutable release manifest.
+The receipt records the source/compiler/artifact pins and acquisition time; it
+is evidence of input acquisition, **not** Docs publication or baseline approval.
+Do not use a hypothetical overlay or historical W0 as the actual Runtime input.
+
+The final command evaluates the current checked-out Docs graph and its offline
+recomposition. Existing generated artifacts must still be regenerated through
+the normal composition gates, and outstanding request/response definition gaps
+remain subject to the strict readiness check. Source review receipts do not
+provide the independently approved baseline or prove a code-only Docs commit was
+published. See [reviewed source inputs](docs/current-source-review-20261009/README.md).
+
+### Formal publication current pointer (same commit)
+
+The existing publication workflow exports `docs/publication/current.json` only
+when the complete formal readiness gate passes. New or changed request/response
+debts, unknown source maintenance, or missing Runtime inputs prevent publication.
+Failed runs leave the published last-good pointer unchanged. Successful checks
+with the same C and unchanged source authorization retain the existing valid
+pointer and receipts; observation timestamps alone do not advance main or restart
+consumer adoption. New authority evidence, expiry or graph changes still publish
+a freshly verified bundle. This does not create another baseline, approval path,
+or fallback publication.
+
+CR003 records the user's decision to defer exactly 60 known enabled definition
+gaps (10 request, 50 response) in
+[`openapi/policies/deferred-enabled-20261010.json`](openapi/policies/deferred-enabled-20261010.json).
+The policy has a code-pinned byte hash and participates in the full C file manifest.
+It changes release blocking only: the definitions stay pending in coverage and
+provider responses. The 10 operations without request/method authority gain no
+OpenAPI methods or tools. The 50 operations with proven requests retain their
+existing response-pending representation. No schema, routing, price, or provider
+authority is inferred by this decision.
+
+Readiness reports distinguish `deferred_pending` and `deferred_response_pending`
+from the independently reviewed 93 disabled baseline items in `existing_pending`
+and `existing_response_pending`. Exact identity, binding, source, reason, status,
+and response declaration fingerprints must match; changed or additional gaps
+still fail. Each reported gap also carries `runtime_binding` copied from the same
+Runtime input (native identity, method, path, status, revision, and public pricing)
+for consumer reconciliation; it is evidence, not method or schema authority.
+The exporter checks the fixed policy and both report scopes before publishing.
+Repairing a deferred definition naturally removes it from the pending output;
+its old policy entry does not authorize a different gap.
+
+The workflow acquires one fresh immutable release before composition:
+
+```sh
+python scripts/fetch_runtime_release.py --current --output /tmp/formal-runtime-facts
+python scripts/pull_openapi.py --write --facts-dir /tmp/formal-runtime-facts \
+  --baseline-ref "$REVIEWED_BASELINE" --readiness-report /tmp/contract-readiness.json
+python scripts/runtime_consolidate_openapi.py --output openapi.yaml
+python scripts/check_contract_candidate.py --facts-dir /tmp/formal-runtime-facts \
+  --baseline-ref "$REVIEWED_BASELINE" --published-ref "$(git rev-parse HEAD)" \
+  --report /tmp/formal-contract-readiness.json
+python scripts/export_contract_publication.py --facts-dir /tmp/formal-runtime-facts \
+  --report /tmp/formal-contract-readiness.json
+```
+
+`contract_release` (C) is SHA-256 of UTF-8 JSON containing exactly
+`schema_version`, `runtime`, and `files_sha256`: object keys recursively sorted,
+no whitespace, Unicode unescaped. Runtime contains `artifact_revision`,
+`source_digest` (R), `compiler_revision`, and `generation`. The file manifest is
+the complete `publication_hashes` graph, including the exact sales view
+`docs/publication/sales-catalog.json`. Its JSON wrapper contains
+`schema_version: 1`, the full `openapi_sha256`, and a compact `document` holding
+only published identity, display metadata, server paths, revision, pricing and
+Runtime identity bridges. It omits request/response schemas and is never a
+replacement authority. The same consolidation command derives it; the formal
+check reproduces its exact bytes from the complete graph. `current.sales_catalog`
+binds its path and hash, and C includes it in `files_sha256`. The sales page reads
+this view plus the same formal report/acquisition instead of parsing the full
+schema bundle. The pointer and receipt files under `docs/publication/` remain
+outside C to avoid self-referential hashes.
+`openapi`, `formal_readiness`, and `runtime_acquisition` each give a repository
+relative `path` and exact byte `sha256`. The exporter reproduces source governance from the same attributed receipts
+and original assessment time, and compares it against current hashed source
+metadata. The formal report binds acquisition bytes
+through `runtime_acquisition_sha256` and the same four-field `runtime` identity.
+`source_authorization_expires_at` is the earliest source `review_due_at` or
+`next_acquisition_due_at`, never an invented publication TTL.
+
+The pointer, full graph, formal report and acquisition receipt are committed
+**together**. The pointer intentionally contains no Docs commit SHA. Consumers
+observe `https://raw.githubusercontent.com/AIsa-team/docs/main/docs/publication/current.json`,
+resolve current Docs main to its full Git SHA, then read that pinned commit's
+pointer, bundle and two receipts. They verify C, all three referenced byte hashes,
+the report's exact file manifest, PASS subgates, Runtime identity and source
+expiry; they retain C-to-Docs-SHA in their consumption receipt. A changed pointer
+between observation and pinned read restarts acquisition. Existing latest-main
+consumer guards remain in force. A consumer of the complete `openapi.yaml`
+bundle need not download unrelated MDX/localized/upstream files: the producer
+checks the full graph and the consumer verifies its canonical manifest and
+formal receipt. It must not publish a partial bundle.
+
+Concrete operations carry `x-aisa-runtime-operation` with the original Runtime
+`operation_id`, public `path` and uppercase `method` (including `ANY`). This is
+copied before public method expansion; it grants no missing request authority
+and lets consumers bind public aliases without guessing native identities.

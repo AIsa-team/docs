@@ -59,6 +59,8 @@ class CompositionTests(unittest.TestCase):
         self.assertFalse(pending)
         op = operation(document)
         self.assertEqual(op["operationId"], "published_identity")
+        self.assertEqual(op["x-aisa-runtime-operation"], {"operation_id": "published_identity",
+            "method": "POST", "path": "/apis/v1/similarweb/test"})
         self.assertEqual(op["summary"], "Runtime title")
         self.assertEqual(op["description"], "Editorial")
         self.assertEqual(op["x-aisa-pricing"]["default_request_estimate_usd"], 0.09)

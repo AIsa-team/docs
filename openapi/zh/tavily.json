@@ -1,37 +1,824 @@
 {
-  "openapi": "3.0.0",
-  "info": {
-    "title": "Tavily API",
-    "version": "1.0.0",
-    "description": "Tavily 端点的统一 API 文档，包括 Search、Extract、Crawl 和 Map。"
-  },
-  "servers": [
-    {
-      "url": "https://api.aisa.one/apis/v1"
-    }
-  ],
   "components": {
     "securitySchemes": {
       "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer"
+        "scheme": "bearer",
+        "type": "http"
+      }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
+  },
+  "info": {
+    "description": "",
+    "title": "Tavily",
+    "version": "1",
+    "x-aisa-capabilities": {
+      "idempotency": "Idempotency-Key",
+      "max_price": "X-AISA-Max-Price-USD",
+      "quote": {
+        "header": "X-AISA-Cost-Mode",
+        "value": "quote"
+      }
+    },
+    "x-aisa-configured-paths": [
+      "/apis/v1/tavily/crawl",
+      "/apis/v1/tavily/extract",
+      "/apis/v1/tavily/map",
+      "/apis/v1/tavily/search"
+    ],
+    "x-aisa-document": {
+      "facts_hash": "b874a486d124cbf38ed51782e2e71abafd81df93d254188ebe9f92dc7f190673",
+      "generator_version": "2",
+      "protocol_version": "1",
+      "schema_version": "1",
+      "composer_version": "13",
+      "response_pending": [],
+      "document_hash": "sha256:8d4b800f1de653e2e94d10f8c9bd2da0846cebc403812ef10643130b52f8c30f"
+    },
+    "x-aisa-plans": {
+      "builder": 1.0,
+      "display_plan": "payg",
+      "payg": 1.0,
+      "similarweb_payg": 1.0,
+      "team": 1.0,
+      "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
+    },
+    "x-aisa-provider": "tavily",
+    "x-aisa-catalogs": {
+      "tavily": {
+        "title": "Tavily",
+        "description": "",
+        "x-aisa-document": {
+          "facts_hash": "b874a486d124cbf38ed51782e2e71abafd81df93d254188ebe9f92dc7f190673",
+          "generator_version": "2",
+          "protocol_version": "1",
+          "schema_version": "1"
+        },
+        "x-aisa-plans": {
+          "builder": 1.0,
+          "display_plan": "payg",
+          "payg": 1.0,
+          "similarweb_payg": 1.0,
+          "team": 1.0,
+          "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
+        },
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          }
+        }
       }
     }
   },
-  "security": [
-    {
-      "bearerAuth": []
-    }
-  ],
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "openapi": "3.1.0",
   "paths": {
-    "/tavily/search": {
+    "/apis/v1/tavily/crawl": {
       "post": {
+        "description": "Walk a site from a root `url` and return the content of the pages it finds. Steer it with natural-language `instructions` plus regex path and domain filters, and bound it with `max_depth`, `max_breadth` and `limit`. Returns `base_url` and `results[]` with `url` and `raw_content`. Measured at about 4.5 seconds for a 3-page limit; cost and time grow with the bounds you set, so set them. Use it for broad coverage of one site — documentation, a catalogue, a competitor's blog. It answers synchronously, which `post_firecrawl_crawl` does not: that one runs as a background job and suits crawls too large to wait on. For a handful of known pages `post_tavily_extract` is far cheaper; to size a site before paying to crawl it, run `post_tavily_map` first.",
+        "operationId": "post_tavily_crawl",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "开始抓取的根 URL。",
+                    "example": "docs.tavily.com"
+                  },
+                  "instructions": {
+                    "type": "string",
+                    "description": "用于爬虫的自然语言指令。"
+                  },
+                  "chunks_per_source": {
+                    "type": "integer",
+                    "default": 3,
+                    "description": "每个来源返回的相关文本块的最大数量。",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "max_depth": {
+                    "type": "integer",
+                    "default": 1,
+                    "description": "最大抓取深度。",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "max_breadth": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "树中每一层可跟踪的最大链接数量。",
+                    "minimum": 1,
+                    "maximum": 500
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "default": 50,
+                    "description": "爬虫停止前将处理的链接总数。",
+                    "minimum": 1
+                  },
+                  "select_paths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "用于仅选择具有特定路径模式的 URL 的正则表达式模式。"
+                  },
+                  "select_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "用于选择仅抓取特定域名或子域名的正则表达式模式。"
+                  },
+                  "exclude_paths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "用于排除具有特定路径模式的 URL 的正则表达式模式。"
+                  },
+                  "exclude_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "用于从抓取中排除特定域名或子域名的正则表达式模式。"
+                  },
+                  "allow_external": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "在最终结果列表中包含外部域名链接。"
+                  },
+                  "include_images": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "在抓取结果中包含图片。"
+                  },
+                  "extract_depth": {
+                    "type": "string",
+                    "enum": [
+                      "basic",
+                      "advanced"
+                    ],
+                    "default": "basic",
+                    "description": "提取过程的深度。"
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "markdown",
+                      "text"
+                    ],
+                    "default": "markdown",
+                    "description": "提取的网页内容格式。"
+                  },
+                  "include_favicon": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "为每个结果包含 favicon URL。"
+                  },
+                  "timeout": {
+                    "type": "number",
+                    "format": "float",
+                    "default": 150,
+                    "description": "等待抓取操作完成的最长时间（秒）。",
+                    "minimum": 10,
+                    "maximum": 150
+                  },
+                  "include_usage": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "在响应中包含信用额度用量信息。"
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已成功返回抓取结果。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "base_url": {
+                      "type": "string",
+                      "description": "已抓取的基础 URL。"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string",
+                            "description": "已抓取页面的 URL。"
+                          },
+                          "raw_content": {
+                            "type": "string",
+                            "description": "从页面中提取的原始内容。"
+                          },
+                          "favicon": {
+                            "type": "string",
+                            "description": "已抓取页面的 Favicon URL。"
+                          }
+                        }
+                      }
+                    },
+                    "response_time": {
+                      "type": "number",
+                      "format": "float",
+                      "description": "完成请求所用的时间（秒）。"
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "credits": {
+                          "type": "integer",
+                          "description": "请求的额度使用详情。"
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "description": "唯一请求标识符。"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Start Crawl Process",
         "tags": [
-          "https://docs.tavily.com/documentation/api-reference/endpoint/search"
+          "default"
         ],
-        "summary": "使用 Tavily Search 执行搜索查询。",
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "x402": false
+        },
+        "x-aisa-category": "2",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.024,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "tavily_credit",
+          "unit_rate_usd": 0.008
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "6fdf99584383",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "1a27f6963d0e"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-upstream-path": "/crawl",
+        "x-aisa-validation": "provider",
+        "x-aisa-catalog-id": "tavily",
+        "x-aisa-runtime-operation": {
+          "operation_id": "post_tavily_crawl",
+          "method": "ANY",
+          "path": "/apis/v1/tavily/crawl"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+          "fetched_at": "2026-09-29T21:25:55+08:00",
+          "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+          "converter": "scripts/import_existing_contracts.py@1",
+          "path_space": "public",
+          "owner": "AIsa-team/docs",
+          "refresh_policy": "manual",
+          "review_period_days": 30,
+          "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+            "fetched_at": "2026-09-29T21:25:55+08:00",
+            "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+            "converter": "scripts/import_existing_contracts.py@1",
+            "path_space": "public",
+            "owner": "AIsa-team/docs",
+            "refresh_policy": "manual",
+            "review_period_days": 30,
+            "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+          },
+          "content_hash": "sha256:d39c6cb9a3b6cde0fb1f999983df26caed1c32f56ff0a4ac6cd61db7a89e21fe"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/search/post_tavily-crawl"
+      }
+    },
+    "/apis/v1/tavily/extract": {
+      "post": {
+        "description": "Fetch clean, parsed content for URLs you already have — from a search result, a sitemap, or a user. `urls` is required and takes several at once. Returns `results[]` with `url`, `title`, `raw_content` and `images`, plus a `failed_results[]` array — **read that one**, because a page that could not be fetched is reported there rather than raising an error. Choose `format` (markdown or text) and `extract_depth`. Measured at about 1 second for one page. Use this instead of `post_tavily_search` whenever you can already name the pages; searching for pages you can name costs more and may not return them. For a long list that can wait, `post_firecrawl_batch_scrape` runs it as a background job. To discover the URLs of a whole site first, use `post_tavily_map`.",
+        "operationId": "post_tavily_extract",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "urls": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    ],
+                    "description": "要从中提取内容的 URL。支持单个 URL 字符串和 URL 字符串数组。",
+                    "example": [
+                      "https://en.wikipedia.org/wiki/Artificial_intelligence"
+                    ]
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "用于对提取的内容块进行重新排序的用户意图。"
+                  },
+                  "chunks_per_source": {
+                    "type": "integer",
+                    "default": 3,
+                    "description": "每个来源返回的相关内容块的最大数量。仅在提供 query 时可用。",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "extract_depth": {
+                    "type": "string",
+                    "enum": [
+                      "basic",
+                      "advanced"
+                    ],
+                    "default": "basic",
+                    "description": "提取过程的深度。"
+                  },
+                  "include_images": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "包含从 URL 中提取的图片列表。"
+                  },
+                  "include_favicon": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "为每个结果包含 favicon URL。"
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "markdown",
+                      "text"
+                    ],
+                    "default": "markdown",
+                    "description": "提取的网页内容格式。"
+                  },
+                  "timeout": {
+                    "type": "number",
+                    "format": "float",
+                    "description": "等待 URL 提取的最长时间（秒）。如果省略，默认超时时间取决于 extract_depth：basic 为 10 秒，advanced 为 30 秒。",
+                    "minimum": 1,
+                    "maximum": 60
+                  },
+                  "include_usage": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "在响应中包含信用额度用量信息。"
+                  }
+                },
+                "required": [
+                  "urls"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已成功返回提取结果。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string",
+                            "description": "已提取内容的 URL。"
+                          },
+                          "title": {
+                            "type": "string",
+                            "description": "所提取页面的标题。"
+                          },
+                          "raw_content": {
+                            "type": "string",
+                            "description": "从 URL 提取的原始内容。"
+                          },
+                          "images": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "当 include_images 为 true 时从 URL 中提取的图片。"
+                          },
+                          "favicon": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "所提取内容的 Favicon URL。"
+                          }
+                        }
+                      }
+                    },
+                    "failed_results": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "无法处理的 URL 列表。"
+                    },
+                    "response_time": {
+                      "type": "number",
+                      "format": "float",
+                      "description": "完成请求所用的时间（秒）。"
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "credits": {
+                          "type": "integer",
+                          "description": "请求的额度使用详情。"
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "description": "唯一请求标识符。"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Extract Data",
+        "tags": [
+          "default"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "x402": false
+        },
+        "x-aisa-category": "2",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.024,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "tavily_credit",
+          "unit_rate_usd": 0.008
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "6fdf99584383",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "c0c8c25d410a"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-upstream-path": "/extract",
+        "x-aisa-validation": "provider",
+        "x-aisa-catalog-id": "tavily",
+        "x-aisa-runtime-operation": {
+          "operation_id": "post_tavily_extract",
+          "method": "ANY",
+          "path": "/apis/v1/tavily/extract"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+          "fetched_at": "2026-09-29T21:25:55+08:00",
+          "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+          "converter": "scripts/import_existing_contracts.py@1",
+          "path_space": "public",
+          "owner": "AIsa-team/docs",
+          "refresh_policy": "manual",
+          "review_period_days": 30,
+          "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+            "fetched_at": "2026-09-29T21:25:55+08:00",
+            "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+            "converter": "scripts/import_existing_contracts.py@1",
+            "path_space": "public",
+            "owner": "AIsa-team/docs",
+            "refresh_policy": "manual",
+            "review_period_days": 30,
+            "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+          },
+          "content_hash": "sha256:575b97ed182809bbc8fe1c42faf3930b43b8ee784ad88b40fe077e3ebfbd5a85"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/search/post_tavily-extract"
+      }
+    },
+    "/apis/v1/tavily/map": {
+      "post": {
+        "description": "List a site's URLs from a root `url` without fetching any page content. Steer it with natural-language `instructions` and regex `select_paths` / `exclude_paths` / `select_domains` filters. Returns `base_url` and `results` — **a flat array of URL strings, not objects** — with `response_time` and `request_id`. Fast and cheap: measured at about 1.5 seconds. Use it to size a site before committing to a crawl, then fetch only the parts that matter with `post_tavily_extract`. When you want the content rather than the shape, `post_tavily_crawl` does both in one call.",
+        "operationId": "post_tavily_map",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "开始映射的根 URL。",
+                    "example": "docs.tavily.com"
+                  },
+                  "instructions": {
+                    "type": "string",
+                    "description": "用于爬虫的自然语言指令。"
+                  },
+                  "max_depth": {
+                    "type": "integer",
+                    "default": 1,
+                    "description": "映射的最大深度。",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "max_breadth": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "树中每一层可跟踪的最大链接数量。",
+                    "minimum": 1,
+                    "maximum": 500
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "default": 50,
+                    "description": "爬虫停止前将处理的链接总数。",
+                    "minimum": 1
+                  },
+                  "select_paths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "用于仅选择具有特定路径模式的 URL 的正则表达式模式。"
+                  },
+                  "select_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "用于选择仅抓取特定域名或子域名的正则表达式模式。"
+                  },
+                  "exclude_paths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "用于排除具有特定路径模式的 URL 的正则表达式模式。"
+                  },
+                  "exclude_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "用于从映射中排除特定域名或子域名的正则表达式模式。"
+                  },
+                  "allow_external": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "在最终结果列表中包含外部域名链接。"
+                  },
+                  "timeout": {
+                    "type": "number",
+                    "format": "float",
+                    "default": 150,
+                    "description": "等待 map 操作完成的最长时间（秒）。",
+                    "minimum": 10,
+                    "maximum": 150
+                  },
+                  "include_usage": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "在响应中包含信用额度用量信息。"
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已成功返回地图结果。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "base_url": {
+                      "type": "string",
+                      "description": "已映射的基础 URL。"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "description": "映射期间发现的 URL。"
+                      }
+                    },
+                    "response_time": {
+                      "type": "number",
+                      "format": "float",
+                      "description": "完成请求所用的时间（秒）。"
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "credits": {
+                          "type": "integer",
+                          "description": "请求的额度使用详情。"
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "description": "唯一请求标识符。"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Get Map Data",
+        "tags": [
+          "default"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "x402": false
+        },
+        "x-aisa-category": "2",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.064,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "tavily_credit",
+          "unit_rate_usd": 0.008
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "6fdf99584383",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "66f1a81c236a"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-upstream-path": "/map",
+        "x-aisa-validation": "provider",
+        "x-aisa-catalog-id": "tavily",
+        "x-aisa-runtime-operation": {
+          "operation_id": "post_tavily_map",
+          "method": "ANY",
+          "path": "/apis/v1/tavily/map"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+          "fetched_at": "2026-09-29T21:25:55+08:00",
+          "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+          "converter": "scripts/import_existing_contracts.py@1",
+          "path_space": "public",
+          "owner": "AIsa-team/docs",
+          "refresh_policy": "manual",
+          "review_period_days": 30,
+          "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+            "fetched_at": "2026-09-29T21:25:55+08:00",
+            "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+            "converter": "scripts/import_existing_contracts.py@1",
+            "path_space": "public",
+            "owner": "AIsa-team/docs",
+            "refresh_policy": "manual",
+            "review_period_days": 30,
+            "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+          },
+          "content_hash": "sha256:298acba6fc21d45fdee3f47bdfa79a4567d011c786e84cec16853f9d5bff6396"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/search/post_tavily-map"
+      }
+    },
+    "/apis/v1/tavily/search": {
+      "post": {
+        "description": "Search the web and get back ranked results with the page text already extracted, so there is no second call to fetch content. `query` is required. Returns `results[]` with `url`, `title`, `content` (the extracted excerpt), `score` and optionally `raw_content`, alongside `query`, `images`, `response_time` and `request_id`; set `include_answer` to also get a one-paragraph `answer`. Filter with `topic` (general/news/finance), `time_range` or explicit `start_date`/`end_date`, and trade cost against depth with `search_depth`. Measured at roughly 6 seconds for 2 results. This is the default choice for open-web research, and the only search here that returns ranked results and page text in one call. Reach past it when: you already know the URLs — `post_tavily_extract` is cheaper and exact; the query is a description rather than keywords — `post_exa_search` matches on meaning; you want a written answer rather than a list to iterate — `post_perplexity_sonar`; you want peer-reviewed papers — `post_scholar_search_scholar`.",
         "operationId": "post_tavily_search",
-        "description": "搜索网页，返回的排序结果里已经带好页面正文，不需要再调一次抓取。`query` 必填。返回 `results[]`，每条含 `url`、`title`、`content`（提取出的正文片段）、`score`，以及可选的 `raw_content`；顶层还有 `query`、`images`、`response_time` 和 `request_id`。设 `include_answer` 可以额外拿到一段 `answer`。可用 `topic`（general/news/finance）、`time_range` 或明确的 `start_date`/`end_date` 过滤，用 `search_depth` 在成本与深度之间取舍。实测取 2 条结果约 6 秒。开放网页检索优先选它，也是这里唯一在一次调用里同时给出排序结果和页面正文的搜索。什么时候该换：已经知道 URL —— `post_tavily_extract` 更便宜也更准确；查询是一段描述而不是关键词 —— `post_exa_search` 按语义匹配；想要一段带引用的答案而不是可遍历的列表 —— `post_perplexity_sonar`；要的是同行评审论文 —— `post_scholar_search_scholar`。",
         "requestBody": {
           "required": true,
           "content": {
@@ -376,9 +1163,11 @@
                       "description": "已执行的搜索查询。"
                     },
                     "answer": {
-                      "type": "string",
-                      "description": "由 LLM 生成的简短回答。当 include_answer 为 false 或未生成回答时，此字段为 null。",
-                      "nullable": true
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "由 LLM 生成的简短回答。当 include_answer 为 false 或未生成回答时，此字段为 null。"
                     },
                     "images": {
                       "type": "array",
@@ -419,13 +1208,17 @@
                             "description": "搜索结果的相关性得分。"
                           },
                           "favicon": {
-                            "type": "string",
-                            "description": "搜索结果的 Favicon URL。",
-                            "nullable": true
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "搜索结果的 Favicon URL。"
                           },
                           "raw_content": {
-                            "type": "string",
-                            "nullable": true,
+                            "type": [
+                              "string",
+                              "null"
+                            ],
                             "description": "已清理并解析的源内容。除非请求了 include_raw_content 或没有可用的原始内容，否则为 Null。"
                           }
                         }
@@ -453,507 +1246,100 @@
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "/tavily/extract": {
-      "post": {
-        "tags": [
-          "https://docs.tavily.com/documentation/api-reference/endpoint/extract"
-        ],
-        "summary": "使用 Tavily Extract 从指定 URL 提取网页内容。",
-        "operationId": "post_tavily_extract",
-        "description": "取回你已经拿到的 URL 的干净正文 —— 来自搜索结果、站点地图或用户输入。`urls` 必填，可一次传多个。返回 `results[]`，含 `url`、`title`、`raw_content` 和 `images`，另有一个 `failed_results[]` 数组 —— **这个一定要读**，取不到的页面会被记在那里，而不是抛错。可选 `format`（markdown 或 text）与 `extract_depth`。实测取 1 个页面约 1 秒。只要页面能点得出名字，就用它而不是 `post_tavily_search` —— 为已知页面去搜索既贵又未必搜得到。如果是一长串 URL 且不急，`post_firecrawl_batch_scrape` 会作为后台任务跑完。想先摸清整站有哪些 URL，用 `post_tavily_map`。",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "urls": {
-                    "oneOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    ],
-                    "description": "要从中提取内容的 URL。支持单个 URL 字符串和 URL 字符串数组。",
-                    "example": [
-                      "https://en.wikipedia.org/wiki/Artificial_intelligence"
-                    ]
-                  },
-                  "query": {
-                    "type": "string",
-                    "description": "用于对提取的内容块进行重新排序的用户意图。"
-                  },
-                  "chunks_per_source": {
-                    "type": "integer",
-                    "default": 3,
-                    "description": "每个来源返回的相关内容块的最大数量。仅在提供 query 时可用。",
-                    "minimum": 1,
-                    "maximum": 5
-                  },
-                  "extract_depth": {
-                    "type": "string",
-                    "enum": [
-                      "basic",
-                      "advanced"
-                    ],
-                    "default": "basic",
-                    "description": "提取过程的深度。"
-                  },
-                  "include_images": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "包含从 URL 中提取的图片列表。"
-                  },
-                  "include_favicon": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "为每个结果包含 favicon URL。"
-                  },
-                  "format": {
-                    "type": "string",
-                    "enum": [
-                      "markdown",
-                      "text"
-                    ],
-                    "default": "markdown",
-                    "description": "提取的网页内容格式。"
-                  },
-                  "timeout": {
-                    "type": "number",
-                    "format": "float",
-                    "description": "等待 URL 提取的最长时间（秒）。如果省略，默认超时时间取决于 extract_depth：basic 为 10 秒，advanced 为 30 秒。",
-                    "minimum": 1,
-                    "maximum": 60
-                  },
-                  "include_usage": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "在响应中包含信用额度用量信息。"
-                  }
-                },
-                "required": [
-                  "urls"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "已成功返回提取结果。",
+          },
+          "default": {
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "results": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "url": {
-                            "type": "string",
-                            "description": "已提取内容的 URL。"
-                          },
-                          "title": {
-                            "type": "string",
-                            "description": "所提取页面的标题。"
-                          },
-                          "raw_content": {
-                            "type": "string",
-                            "description": "从 URL 提取的原始内容。"
-                          },
-                          "images": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            },
-                            "description": "当 include_images 为 true 时从 URL 中提取的图片。"
-                          },
-                          "favicon": {
-                            "type": "string",
-                            "description": "所提取内容的 Favicon URL。",
-                            "nullable": true
-                          }
-                        }
-                      }
-                    },
-                    "failed_results": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      },
-                      "description": "无法处理的 URL 列表。"
-                    },
-                    "response_time": {
-                      "type": "number",
-                      "format": "float",
-                      "description": "完成请求所用的时间（秒）。"
-                    },
-                    "usage": {
-                      "type": "object",
-                      "properties": {
-                        "credits": {
-                          "type": "integer",
-                          "description": "请求的额度使用详情。"
-                        }
-                      }
-                    },
-                    "request_id": {
-                      "type": "string",
-                      "description": "唯一请求标识符。"
-                    }
-                  }
-                }
+                "schema": {}
               }
-            }
-          }
-        }
-      }
-    },
-    "/tavily/crawl": {
-      "post": {
-        "tags": [
-          "https://docs.tavily.com/documentation/api-reference/endpoint/crawl"
-        ],
-        "summary": "使用 Tavily Crawl、基于图的网站遍历工具。",
-        "operationId": "post_tavily_crawl",
-        "description": "从根 `url` 遍历站点并返回沿途页面的正文。可用自然语言 `instructions` 加正则路径/域名过滤引导，并用 `max_depth`、`max_breadth`、`limit` 限定范围。返回 `base_url` 和 `results[]`，每条含 `url` 与 `raw_content`。实测限制 3 个页面时约 4.5 秒；成本和耗时随你设的上限增长，所以务必设。适合需要覆盖某一个站点的场景 —— 文档站、商品目录、竞品博客。它是同步返回的，而 `post_firecrawl_crawl` 不是：那个作为后台任务跑，适合大到等不起的爬取。若只是几个已知页面，`post_tavily_extract` 便宜得多；想在付费爬取前先看看站有多大，先跑 `post_tavily_map`。",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "url": {
-                    "type": "string",
-                    "description": "开始抓取的根 URL。",
-                    "example": "docs.tavily.com"
-                  },
-                  "instructions": {
-                    "type": "string",
-                    "description": "用于爬虫的自然语言指令。"
-                  },
-                  "chunks_per_source": {
-                    "type": "integer",
-                    "default": 3,
-                    "description": "每个来源返回的相关文本块的最大数量。",
-                    "minimum": 1,
-                    "maximum": 5
-                  },
-                  "max_depth": {
-                    "type": "integer",
-                    "default": 1,
-                    "description": "最大抓取深度。",
-                    "minimum": 1,
-                    "maximum": 5
-                  },
-                  "max_breadth": {
-                    "type": "integer",
-                    "default": 20,
-                    "description": "树中每一层可跟踪的最大链接数量。",
-                    "minimum": 1,
-                    "maximum": 500
-                  },
-                  "limit": {
-                    "type": "integer",
-                    "default": 50,
-                    "description": "爬虫停止前将处理的链接总数。",
-                    "minimum": 1
-                  },
-                  "select_paths": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "用于仅选择具有特定路径模式的 URL 的正则表达式模式。"
-                  },
-                  "select_domains": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "用于选择仅抓取特定域名或子域名的正则表达式模式。"
-                  },
-                  "exclude_paths": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "用于排除具有特定路径模式的 URL 的正则表达式模式。"
-                  },
-                  "exclude_domains": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "用于从抓取中排除特定域名或子域名的正则表达式模式。"
-                  },
-                  "allow_external": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "在最终结果列表中包含外部域名链接。"
-                  },
-                  "include_images": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "在抓取结果中包含图片。"
-                  },
-                  "extract_depth": {
-                    "type": "string",
-                    "enum": [
-                      "basic",
-                      "advanced"
-                    ],
-                    "default": "basic",
-                    "description": "提取过程的深度。"
-                  },
-                  "format": {
-                    "type": "string",
-                    "enum": [
-                      "markdown",
-                      "text"
-                    ],
-                    "default": "markdown",
-                    "description": "提取的网页内容格式。"
-                  },
-                  "include_favicon": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "为每个结果包含 favicon URL。"
-                  },
-                  "timeout": {
-                    "type": "number",
-                    "format": "float",
-                    "default": 150,
-                    "description": "等待抓取操作完成的最长时间（秒）。",
-                    "minimum": 10,
-                    "maximum": 150
-                  },
-                  "include_usage": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "在响应中包含信用额度用量信息。"
-                  }
-                },
-                "required": [
-                  "url"
-                ]
-              }
-            }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
           }
         },
-        "responses": {
-          "200": {
-            "description": "已成功返回抓取结果。",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "base_url": {
-                      "type": "string",
-                      "description": "已抓取的基础 URL。"
-                    },
-                    "results": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "url": {
-                            "type": "string",
-                            "description": "已抓取页面的 URL。"
-                          },
-                          "raw_content": {
-                            "type": "string",
-                            "description": "从页面中提取的原始内容。"
-                          },
-                          "favicon": {
-                            "type": "string",
-                            "description": "已抓取页面的 Favicon URL。"
-                          }
-                        }
-                      }
-                    },
-                    "response_time": {
-                      "type": "number",
-                      "format": "float",
-                      "description": "完成请求所用的时间（秒）。"
-                    },
-                    "usage": {
-                      "type": "object",
-                      "properties": {
-                        "credits": {
-                          "type": "integer",
-                          "description": "请求的额度使用详情。"
-                        }
-                      }
-                    },
-                    "request_id": {
-                      "type": "string",
-                      "description": "唯一请求标识符。"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/tavily/map": {
-      "post": {
+        "summary": "Search Tavily Data",
         "tags": [
-          "https://docs.tavily.com/documentation/api-reference/endpoint/map"
+          "default"
         ],
-        "summary": "使用 Tavily Map 生成全面的站点地图。",
-        "operationId": "post_tavily_map",
-        "description": "从根 `url` 列出站点的 URL 结构，不抓取任何页面正文。可用自然语言 `instructions` 和正则 `select_paths` / `exclude_paths` / `select_domains` 过滤。返回 `base_url` 和 `results` —— **是一个扁平的 URL 字符串数组，不是对象数组** —— 以及 `response_time`、`request_id`。又快又便宜，实测约 1.5 秒。用它在决定爬取之前先估算站点规模，再用 `post_tavily_extract` 只取需要的那部分。如果要的是内容而不是结构，`post_tavily_crawl` 一次调用就能同时给到。",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "url": {
-                    "type": "string",
-                    "description": "开始映射的根 URL。",
-                    "example": "docs.tavily.com"
-                  },
-                  "instructions": {
-                    "type": "string",
-                    "description": "用于爬虫的自然语言指令。"
-                  },
-                  "max_depth": {
-                    "type": "integer",
-                    "default": 1,
-                    "description": "映射的最大深度。",
-                    "minimum": 1,
-                    "maximum": 5
-                  },
-                  "max_breadth": {
-                    "type": "integer",
-                    "default": 20,
-                    "description": "树中每一层可跟踪的最大链接数量。",
-                    "minimum": 1,
-                    "maximum": 500
-                  },
-                  "limit": {
-                    "type": "integer",
-                    "default": 50,
-                    "description": "爬虫停止前将处理的链接总数。",
-                    "minimum": 1
-                  },
-                  "select_paths": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "用于仅选择具有特定路径模式的 URL 的正则表达式模式。"
-                  },
-                  "select_domains": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "用于选择仅抓取特定域名或子域名的正则表达式模式。"
-                  },
-                  "exclude_paths": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "用于排除具有特定路径模式的 URL 的正则表达式模式。"
-                  },
-                  "exclude_domains": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "用于从映射中排除特定域名或子域名的正则表达式模式。"
-                  },
-                  "allow_external": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "在最终结果列表中包含外部域名链接。"
-                  },
-                  "timeout": {
-                    "type": "number",
-                    "format": "float",
-                    "default": 150,
-                    "description": "等待 map 操作完成的最长时间（秒）。",
-                    "minimum": 10,
-                    "maximum": 150
-                  },
-                  "include_usage": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "在响应中包含信用额度用量信息。"
-                  }
-                },
-                "required": [
-                  "url"
-                ]
-              }
-            }
-          }
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "x402": true
         },
-        "responses": {
-          "200": {
-            "description": "已成功返回地图结果。",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "base_url": {
-                      "type": "string",
-                      "description": "已映射的基础 URL。"
-                    },
-                    "results": {
-                      "type": "array",
-                      "items": {
-                        "type": "string",
-                        "description": "映射期间发现的 URL。"
-                      }
-                    },
-                    "response_time": {
-                      "type": "number",
-                      "format": "float",
-                      "description": "完成请求所用的时间（秒）。"
-                    },
-                    "usage": {
-                      "type": "object",
-                      "properties": {
-                        "credits": {
-                          "type": "integer",
-                          "description": "请求的额度使用详情。"
-                        }
-                      }
-                    },
-                    "request_id": {
-                      "type": "string",
-                      "description": "唯一请求标识符。"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+        "x-aisa-category": "2",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.016,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "tavily_credit",
+          "unit_rate_usd": 0.008
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "6fdf99584383",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "4f15131e5221"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-upstream-path": "/search",
+        "x-aisa-validation": "provider",
+        "x-aisa-catalog-id": "tavily",
+        "x-aisa-runtime-operation": {
+          "operation_id": "post_tavily_search",
+          "method": "ANY",
+          "path": "/apis/v1/tavily/search"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+          "fetched_at": "2026-09-29T21:25:55+08:00",
+          "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+          "converter": "scripts/import_existing_contracts.py@1",
+          "path_space": "public",
+          "owner": "AIsa-team/docs",
+          "refresh_policy": "manual",
+          "review_period_days": 30,
+          "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+            "fetched_at": "2026-09-29T21:25:55+08:00",
+            "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+            "converter": "scripts/import_existing_contracts.py@1",
+            "path_space": "public",
+            "owner": "AIsa-team/docs",
+            "refresh_policy": "manual",
+            "review_period_days": 30,
+            "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+          },
+          "content_hash": "sha256:b840a7f34ee5905ef50526a7906d208b0e0445f7c05fc2e74b42c893504009cf"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/search/post_tavily-search"
       }
     }
-  }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ]
 }

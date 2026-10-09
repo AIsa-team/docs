@@ -8,6 +8,8 @@ import sys
 import yaml
 
 from compose_openapi import METHODS
+from deferred_definitions import POLICY_PATH
+from sales_catalog_projection import SALES_CATALOG_PATH
 from runtime_localize_openapi_zh import strip_translatable
 from identity_compatibility import published_history, validate_document_identities, canonicalize_localized
 
@@ -15,7 +17,7 @@ from identity_compatibility import published_history, validate_document_identiti
 def publication_files(root):
     root = Path(root)
     files = {p for p in (root / 'openapi.yaml', root / 'docs.json', root / 'openapi/registry.yaml',
-                        root / 'api-reference.mdx', root / 'zh/api-reference.mdx') if p.is_file()}
+                        root / 'api-reference.mdx', root / 'zh/api-reference.mdx', root / POLICY_PATH, root / SALES_CATALOG_PATH) if p.is_file()}
     for pattern in ('openapi/*.json', 'openapi/upstream/*.json', 'openapi/zh/*.json',
                     'api-reference/**/*.mdx', 'zh/api-reference/**/*.mdx'):
         files.update(root.glob(pattern))
