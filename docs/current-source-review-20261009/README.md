@@ -104,3 +104,10 @@ The AgentMail composite receipt is in
 independent review of both raw inputs and exactly eleven success replacements;
 the hosted200/owning204 conflict and preserved request graph are recorded there.
 This replaces the active source key without deleting historical receipts.
+
+After explicitly approved D1/D2 SQL, the actual public Runtime is generation4,
+artifact `f31344e2851df34e7f2c5feeb9bc5d745767d8ed2493ea0cf78f5b4a21d85258`, source `f04c0fa166386259559fba77a1875de2a60ead1e68a2a536860e640477210a8a`,
+with unchanged compiler8d4. Both API snapshots/durable publication and all56 public
+files passed actual SHA/200/304 readback. CI now pins this actual release.
+The four Akta response-only sources remain bound to their exact canonical targets.
+This input update does not approve a pending baseline or publish the Docs graph.
