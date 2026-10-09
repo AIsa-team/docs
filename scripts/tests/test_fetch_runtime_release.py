@@ -80,6 +80,34 @@ class PublicReleaseTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 acquire(revision, compiler, reader)
 
+    def test_exact_weak_sha_etag_is_accepted_with_unchanged_bytes(self):
+        revision, compiler, original, *_ = self.fixture()
+        def reader(path):
+            raw, headers = original(path)
+            if '/releases/' in path:
+                headers = {'etag': 'W/' + headers['etag']}
+            return raw, headers
+        result = acquire(revision, compiler, reader)
+        self.assertEqual(result[-1]['artifact_revision'], revision)
+
+    def test_weak_tag_never_replaces_exact_sha_or_body_check(self):
+        variants = ('wrong-sha', 'unquoted', 'lowercase', 'list', 'body-mismatch')
+        for variant in variants:
+            revision, compiler, original, *_ = self.fixture()
+            def reader(path):
+                raw, headers = original(path)
+                if '/releases/' in path:
+                    tag = headers['etag']
+                    malformed = {'wrong-sha': 'W/"wrong"', 'unquoted': 'W/' + tag.strip('"'),
+                                 'lowercase': 'w/' + tag, 'list': 'W/' + tag + ', ' + tag,
+                                 'body-mismatch': 'W/' + tag}
+                    headers = {'etag': malformed[variant]}
+                    if variant == 'body-mismatch':
+                        raw += b' '
+                return raw, headers
+            with self.subTest(variant=variant), self.assertRaises(ValueError):
+                acquire(revision, compiler, reader)
+
     def test_pending_or_incomplete_or_unbound_index_cannot_export(self):
         for mutation in (lambda i: i.update(pending_endpoints=[{'id': 1}]),
                          lambda i: i['coverage'].update(selected_endpoint_count=2),

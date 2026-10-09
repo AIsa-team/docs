@@ -111,7 +111,10 @@ def acquire(revision, compiler, reader):
         raw, headers = reader('/public/api-contract/releases/' + revision + '/' + row['name'])
         total += len(raw)
         require(len(raw) <= MAX_FILE and total <= MAX_TOTAL, 'Release byte limit exceeded')
-        require(sha(raw) == row['sha256'] and headers.get('etag') == '"' + row['sha256'] + '"',
+        tag = '"' + row['sha256'] + '"'
+        # Public intermediaries may weaken the validator without changing bytes.
+        # Accept only this exact manifest SHA; body hashing remains mandatory.
+        require(sha(raw) == row['sha256'] and headers.get('etag') in (tag, 'W/' + tag),
                 'Immutable file hash or ETag mismatch')
         decode(raw)
         contents[row['name']] = raw
