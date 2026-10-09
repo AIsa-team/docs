@@ -156,3 +156,57 @@ the normal composition gates, and outstanding request/response definition gaps
 remain subject to the strict readiness check. Source review receipts do not
 provide the independently approved baseline or prove a code-only Docs commit was
 published. See [reviewed source inputs](docs/current-source-review-20261009/README.md).
+
+### Formal publication current pointer (same commit)
+
+The existing publication workflow exports `docs/publication/current.json` only
+when the complete formal readiness gate passes. Enabled request/response debts,
+unknown source maintenance, or missing Runtime inputs still prevent publication.
+Failed runs leave the published last-good pointer unchanged. This does not create
+another baseline, approval path, or fallback publication.
+
+The workflow acquires one fresh immutable release before composition:
+
+```sh
+python scripts/fetch_runtime_release.py --current --output /tmp/formal-runtime-facts
+python scripts/pull_openapi.py --write --facts-dir /tmp/formal-runtime-facts \
+  --baseline-ref "$REVIEWED_BASELINE" --readiness-report /tmp/contract-readiness.json
+python scripts/runtime_consolidate_openapi.py --output openapi.yaml
+python scripts/check_contract_candidate.py --facts-dir /tmp/formal-runtime-facts \
+  --baseline-ref "$REVIEWED_BASELINE" --published-ref "$(git rev-parse HEAD)" \
+  --report /tmp/formal-contract-readiness.json
+python scripts/export_contract_publication.py --facts-dir /tmp/formal-runtime-facts \
+  --report /tmp/formal-contract-readiness.json
+```
+
+`contract_release` (C) is SHA-256 of UTF-8 JSON containing exactly
+`schema_version`, `runtime`, and `files_sha256`: object keys recursively sorted,
+no whitespace, Unicode unescaped. Runtime contains `artifact_revision`,
+`source_digest` (R), `compiler_revision`, and `generation`. The file manifest is
+the existing complete `publication_hashes` graph. Metadata under
+`docs/publication/` is outside that graph, avoiding self-referential hashes.
+`openapi`, `formal_readiness`, and `runtime_acquisition` each give a repository
+relative `path` and exact byte `sha256`. The exporter reproduces source governance from the same attributed receipts
+and original assessment time, and compares it against current hashed source
+metadata. The formal report binds acquisition bytes
+through `runtime_acquisition_sha256` and the same four-field `runtime` identity.
+`source_authorization_expires_at` is the earliest source `review_due_at` or
+`next_acquisition_due_at`, never an invented publication TTL.
+
+The pointer, full graph, formal report and acquisition receipt are committed
+**together**. The pointer intentionally contains no Docs commit SHA. Consumers
+observe `https://raw.githubusercontent.com/AIsa-team/docs/main/docs/publication/current.json`,
+resolve current Docs main to its full Git SHA, then read that pinned commit's
+pointer, bundle and two receipts. They verify C, all three referenced byte hashes,
+the report's exact file manifest, PASS subgates, Runtime identity and source
+expiry; they retain C-to-Docs-SHA in their consumption receipt. A changed pointer
+between observation and pinned read restarts acquisition. Existing latest-main
+consumer guards remain in force. A consumer of the complete `openapi.yaml`
+bundle need not download unrelated MDX/localized/upstream files: the producer
+checks the full graph and the consumer verifies its canonical manifest and
+formal receipt. It must not publish a partial bundle.
+
+Concrete operations carry `x-aisa-runtime-operation` with the original Runtime
+`operation_id`, public `path` and uppercase `method` (including `ANY`). This is
+copied before public method expansion; it grants no missing request authority
+and lets consumers bind public aliases without guessing native identities.

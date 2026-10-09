@@ -201,6 +201,12 @@ def main():
     args = parser.parse_args()
     try:
         report = assess_candidate(args.root, args.facts_dir or args.root / '.cache/runtime-contracts', args.baseline_ref, args.published_ref)
+        facts = args.facts_dir or args.root / '.cache/runtime-contracts'
+        if (facts / 'acquisition-receipt.json').exists():
+            from export_contract_publication import acquired_input, RUNTIME_KEYS
+            receipt, receipt_raw = acquired_input(facts)
+            report['runtime_acquisition_sha256'] = hashlib.sha256(receipt_raw).hexdigest()
+            report['runtime'] = {key: receipt[key] for key in RUNTIME_KEYS}
         from source_governance import source_report
         receipt_path = args.source_receipts or args.root / '.cache/source-reviews.json'
         saved = json.loads(receipt_path.read_text()) if receipt_path.exists() else {}
@@ -240,6 +246,8 @@ def main():
             report['publication_artifact'] = {'openapi_sha256': hashlib.sha256(raw).hexdigest(),
                 'assessment_scope': 'formal producer artifact declarations and source maintenance; no execution',
                 'source_hashes': {name: row['source_hash'] for name, row in sources['sources'].items()},
+                'source_metadata': {name: {key: json.loads((args.root / 'openapi/upstream' / name).read_text())['info']['x-aisa-source'][key]
+                    for key in ('content_hash', 'policy_revision', 'refresh_policy')} for name in sources['sources']},
                 'files_sha256': publication_hashes(args.root),
                 'baseline_ref': args.baseline_ref, 'published_ref': args.published_ref}
         else:

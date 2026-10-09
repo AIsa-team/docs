@@ -214,14 +214,26 @@ def save(output, acquisition):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base-url', default='https://api.aisa.one')
-    parser.add_argument('--artifact-revision', required=True)
-    parser.add_argument('--compiler-revision', required=True)
+    parser.add_argument('--artifact-revision')
+    parser.add_argument('--compiler-revision')
+    parser.add_argument('--current', action='store_true', help='Discover current pins, then use the same strict immutable acquisition')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         require(not args.output.exists() and not args.output.is_symlink(), 'Output directory already exists')
-        result = acquire(args.artifact_revision, args.compiler_revision,
-                         PublicReader(args.base_url, time.monotonic() + 180))
+        require((args.current and not args.artifact_revision and not args.compiler_revision) or
+                (not args.current and args.artifact_revision and args.compiler_revision),
+                'Choose current discovery or both explicit revision pins')
+        reader = PublicReader(args.base_url, time.monotonic() + 180)
+        revision, compiler = args.artifact_revision, args.compiler_revision
+        discovered = None
+        if args.current:
+            discovered = decode(reader('/public/api-contract/current')[0])
+            revision, compiler = discovered.get('artifact_revision', ''), discovered.get('compiler_revision', '')
+            validate_current(discovered, revision, compiler)
+        result = acquire(revision, compiler, reader)
+        if discovered is not None:
+            require(decode(result[2]) == discovered, 'Current release changed after discovery')
         save(args.output, result)
         print(json.dumps(result[-1], sort_keys=True))
     except Exception as exc:

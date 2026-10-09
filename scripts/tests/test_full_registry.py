@@ -202,6 +202,9 @@ class FullRegistryTests(unittest.TestCase):
         methods = generated['paths']['/apis/v1/alpha/test']
         self.assertEqual(methods['get']['operationId'], 'published_read')
         self.assertEqual(methods['post']['operationId'], 'published_write')
+        for method in ['get', 'post']:
+            self.assertEqual(methods[method]['x-aisa-runtime-operation'], {
+                'operation_id': 'published_write', 'method': 'ANY', 'path': '/apis/v1/alpha/test'})
         self.assertEqual(methods['get']['responses']['200']['content'], first['responses']['200']['content'])
         self.assertEqual(methods['get']['x-aisa-source']['kind'], 'manual')
         self.assertEqual(methods['get']['x-aisa-docs-url'], 'https://aisa.one/docs/api-reference/old-split/get_original-slug')

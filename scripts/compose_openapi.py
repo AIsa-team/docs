@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit, unquote
 
-VERSION = "12"
+VERSION = "13"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -697,6 +697,11 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         else:
                             raise ValueError("upstream operation missing")
                     operation = copy.deepcopy(runtime)
+                    # Direct Runtime identity, before public ANY expansion or retained
+                    # published aliases. Consumers must not guess this binding.
+                    operation["x-aisa-runtime-operation"] = {
+                        "operation_id": base_id, "method": "ANY" if method == "x-aisa-any" else method.upper(),
+                        "path": public_path}
                     if runtime.get("x-aisa-identity-source") == "derived":
                         established_id = published_ids.get((public_path, actual_method))
                         if established_id:

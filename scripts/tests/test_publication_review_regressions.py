@@ -136,6 +136,9 @@ class PublicationRaceTests(unittest.TestCase):
         candidate = root / 'candidate'
         self.git(root, 'clone', '-q', '-b', 'main', str(remote), str(candidate))
         (candidate / 'openapi/example.json').write_text('assessed candidate\n')
+        metadata = candidate / 'docs/publication/current.json'
+        metadata.parent.mkdir(parents=True)
+        metadata.write_text('assessed same-commit pointer\n')
         return seed, candidate
 
     def publish(self, candidate, root):
@@ -166,6 +169,8 @@ class PublicationRaceTests(unittest.TestCase):
             self.assertEqual(published, self.git(candidate, 'rev-parse', 'HEAD'))
             self.assertEqual(self.git(root, '--git-dir=remote.git', 'show', 'main:openapi/example.json'), 'assessed candidate')
             self.assertIn('docs_commit=' + published, (root / 'output').read_text())
+            self.assertEqual(self.git(root, '--git-dir=remote.git', 'show', 'main:docs/publication/current.json'),
+                             'assessed same-commit pointer')
 
     def test_source_maintenance_has_its_own_bounded_schedule(self):
         workflow = yaml.safe_load((REPO / '.github/workflows/refresh-upstream.yml').read_text())
