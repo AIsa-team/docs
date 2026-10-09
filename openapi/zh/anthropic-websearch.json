@@ -1,0 +1,303 @@
+{
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
+  },
+  "info": {
+    "description": "",
+    "title": "Anthropic Web Search (GEO)",
+    "version": "1",
+    "x-aisa-capabilities": {
+      "idempotency": "Idempotency-Key",
+      "max_price": "X-AISA-Max-Price-USD",
+      "quote": {
+        "header": "X-AISA-Cost-Mode",
+        "value": "quote"
+      }
+    },
+    "x-aisa-configured-paths": [
+      "/apis/v1/anthropic-websearch/search"
+    ],
+    "x-aisa-document": {
+      "facts_hash": "e3d5f9a703c8d366ca020ec0f3448f9eaf4c587cb6b5308212f542844e64741f",
+      "generator_version": "2",
+      "protocol_version": "1",
+      "schema_version": "1",
+      "composer_version": "13",
+      "response_pending": [],
+      "document_hash": "sha256:f9a965927400ae2f38c9e41cee20c796bec21eaec15c271d4d93346b1bcbb1f8"
+    },
+    "x-aisa-plans": {
+      "builder": 1.0,
+      "display_plan": "payg",
+      "payg": 1.0,
+      "similarweb_payg": 1.0,
+      "team": 1.0,
+      "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
+    },
+    "x-aisa-provider": "anthropic-websearch",
+    "x-aisa-catalogs": {
+      "anthropic-websearch": {
+        "title": "Anthropic Web Search (GEO)",
+        "description": "",
+        "x-aisa-document": {
+          "facts_hash": "e3d5f9a703c8d366ca020ec0f3448f9eaf4c587cb6b5308212f542844e64741f",
+          "generator_version": "2",
+          "protocol_version": "1",
+          "schema_version": "1"
+        },
+        "x-aisa-plans": {
+          "builder": 1.0,
+          "display_plan": "payg",
+          "payg": 1.0,
+          "similarweb_payg": 1.0,
+          "team": 1.0,
+          "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
+        },
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          }
+        }
+      }
+    }
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "openapi": "3.1.0",
+  "paths": {
+    "/apis/v1/anthropic-websearch/search": {
+      "post": {
+        "description": "Ask a question and get an answer that Claude wrote after searching the live web. Send a normal Messages request — a `messages` array plus `max_tokens` — and the endpoint injects a fixed, server-pinned model and the `web_search` tool for you; you cannot override the model or add tools, which keeps cost bounded. Claude decides when to search (up to `max_uses` searches, default 5), reads the results, and answers with inline citations. The response is a standard Anthropic Messages object: `content[]` contains `server_tool_use` (the queries issued), `web_search_tool_result` (the sources found) and `text` blocks (the answer with `citations`), and `usage.server_tool_use.web_search_requests` reports how many searches were billed. Billing is pay-as-you-go at exact cost: `web_search_requests × $0.01` plus the model's own token cost, with no markup; a failed search (HTTP 200 `web_search_tool_result_error`) is not billed. Use this when you want a written, cited answer grounded in current web content — for open-web research that returns ranked links and page text in one call use [`post_tavily_search`](/api-reference/search/post_tavily-search) instead, and for the OpenAI-model equivalent see [`post_openai_websearch_search`](/api-reference/search/post_openai-websearch-search).",
+        "operationId": "post_anthropic_websearch_search",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "messages",
+                  "max_tokens"
+                ],
+                "properties": {
+                  "messages": {
+                    "type": "array",
+                    "description": "Conversation messages, same format as the Anthropic Messages API. The user turn holds your question.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "assistant"
+                          ]
+                        },
+                        "content": {
+                          "type": "string",
+                          "description": "Message text. Structured content blocks are also accepted."
+                        }
+                      }
+                    },
+                    "example": [
+                      {
+                        "role": "user",
+                        "content": "What are the three biggest AI announcements this week? Give one sentence each with sources."
+                      }
+                    ]
+                  },
+                  "max_tokens": {
+                    "type": "integer",
+                    "description": "Maximum number of tokens to generate in the answer. Required by the upstream Messages API.",
+                    "default": 1024,
+                    "example": 1024
+                  },
+                  "system": {
+                    "type": "string",
+                    "description": "Optional system prompt to steer the answer's tone or format."
+                  }
+                }
+              },
+              "example": {
+                "max_tokens": 1024,
+                "messages": [
+                  {
+                    "role": "user",
+                    "content": "What are the three biggest AI announcements this week? Give one sentence each with sources."
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A standard Anthropic Messages response. `content[]` interleaves the searches performed and the cited answer; `usage.server_tool_use.web_search_requests` is the billed search count.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "example": "message"
+                    },
+                    "role": {
+                      "type": "string",
+                      "example": "assistant"
+                    },
+                    "stop_reason": {
+                      "type": "string",
+                      "example": "end_turn"
+                    },
+                    "content": {
+                      "type": "array",
+                      "description": "Ordered blocks: server_tool_use (search queries), web_search_tool_result (sources), and text (the cited answer).",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "input_tokens": {
+                          "type": "integer"
+                        },
+                        "output_tokens": {
+                          "type": "integer"
+                        },
+                        "cache_read_input_tokens": {
+                          "type": "integer"
+                        },
+                        "cache_creation_input_tokens": {
+                          "type": "integer"
+                        },
+                        "server_tool_use": {
+                          "type": "object",
+                          "properties": {
+                            "web_search_requests": {
+                              "type": "integer",
+                              "description": "Billed web search count."
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Anthropic Web Search",
+        "tags": [
+          "websearch"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "x402": true
+        },
+        "x-aisa-category": "search",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_components",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.3,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body"
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": true,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "c54ab9d59f9b",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "974d32d4cfa5"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-upstream-path": "/v1/messages",
+        "x-aisa-validation": "provider",
+        "x-aisa-catalog-id": "anthropic-websearch",
+        "x-aisa-runtime-operation": {
+          "operation_id": "post_anthropic_websearch_search",
+          "method": "ANY",
+          "path": "/apis/v1/anthropic-websearch/search"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/websearch.json",
+          "fetched_at": "2026-09-29T21:25:55+08:00",
+          "content_hash": "sha256:2216c80c42a2a3f3c14365c1e05d8d8beedac01286ef5240b08b4b4219e490a3",
+          "converter": "scripts/import_existing_contracts.py@1",
+          "path_space": "public",
+          "owner": "AIsa-team/docs",
+          "refresh_policy": "manual",
+          "review_period_days": 30,
+          "policy_revision": "sha256:a5c3ad6b8722c55296ff05c07a1c8bccf1650bd6d81e8ddd78d41a77af0aeeff"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/websearch.json",
+            "fetched_at": "2026-09-29T21:25:55+08:00",
+            "content_hash": "sha256:2216c80c42a2a3f3c14365c1e05d8d8beedac01286ef5240b08b4b4219e490a3",
+            "converter": "scripts/import_existing_contracts.py@1",
+            "path_space": "public",
+            "owner": "AIsa-team/docs",
+            "refresh_policy": "manual",
+            "review_period_days": 30,
+            "policy_revision": "sha256:a5c3ad6b8722c55296ff05c07a1c8bccf1650bd6d81e8ddd78d41a77af0aeeff"
+          },
+          "content_hash": "sha256:003cac4f595cbaa04a9eed380e2791f325bb3127f5d6cc940e50f8b6ab127de2"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/search/post_anthropic-websearch-search"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ]
+}

@@ -214,19 +214,22 @@ def gap_key(row):
     return tuple(str(row[key]).upper() if key == 'method' else row[key] for key in required) + (tuple(sorted(row.get('statuses', []))), row.get('runtime_status'))
 
 
-def assess_response_gaps(report, facts, documents, coverage, baseline):
+def assess_response_gaps(report, facts, documents, coverage, baseline, deferred_definitions=None):
     """Separate response debt from request completeness, exact identity comparison."""
     if coverage.get('schema_version') != 2:
         return  # Legacy unit inputs; staged publication always uses version 2.
     for provider, result in report['providers'].items():
         current = response_gap_rows(documents.get(provider, {}), facts.get(provider, {}), coverage['providers'].get(provider, []))
         declared = coverage.get('response_gaps', {}).get(provider)
-        result.update(new_response_pending=[], existing_response_pending=[])
+        result.update(new_response_pending=[], existing_response_pending=[], deferred_response_pending=[])
         if declared != current:
             result['errors'].append({'code': 'response_gap_accounting_mismatch', 'provider': provider})
         approved = {gap_key(row) for row in (baseline or {}).get('response_gaps', {}).get(provider, [])} - {None}
         for row in current:
-            result['existing_response_pending' if gap_key(row) in approved else 'new_response_pending'].append(row)
+            target = 'existing_response_pending' if gap_key(row) in approved else 'new_response_pending'
+            if target == 'new_response_pending' and deferred_definitions is not None and deferred_definitions.matches(provider, 'response', gap_key(row)):
+                target = 'deferred_response_pending'
+            result[target].append(row)
         if result['errors'] or result['new_response_pending']:
             result['status'] = report['status'] = 'failed'
             if provider not in report['blocked_providers']:

@@ -32,6 +32,7 @@ import sys
 from urllib.parse import urlparse
 from urllib.parse import unquote
 from source_json import load as source_json_load
+from sales_catalog_projection import SALES_CATALOG_PATH, sales_catalog_bytes
 
 try:
     import yaml
@@ -652,6 +653,9 @@ def main():
         os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
         with open(args.output, "w") as f:
             f.write(output)
+        sales_path = Path(args.output).resolve().parent / SALES_CATALOG_PATH
+        sales_path.parent.mkdir(parents=True, exist_ok=True)
+        sales_path.write_bytes(sales_catalog_bytes(unified, output.encode("utf-8")))
         size_kb = os.path.getsize(args.output) / 1024
         print(f"Written to: {args.output} ({size_kb:.1f} KB)", file=sys.stderr)
     else:

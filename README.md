@@ -160,10 +160,31 @@ published. See [reviewed source inputs](docs/current-source-review-20261009/READ
 ### Formal publication current pointer (same commit)
 
 The existing publication workflow exports `docs/publication/current.json` only
-when the complete formal readiness gate passes. Enabled request/response debts,
-unknown source maintenance, or missing Runtime inputs still prevent publication.
+when the complete formal readiness gate passes. New or changed request/response
+debts, unknown source maintenance, or missing Runtime inputs prevent publication.
 Failed runs leave the published last-good pointer unchanged. This does not create
 another baseline, approval path, or fallback publication.
+
+CR003 records the user's decision to defer exactly 60 known enabled definition
+gaps (10 request, 50 response) in
+[`openapi/policies/deferred-enabled-20261010.json`](openapi/policies/deferred-enabled-20261010.json).
+The policy has a code-pinned byte hash and participates in the full C file manifest.
+It changes release blocking only: the definitions stay pending in coverage and
+provider responses. The 10 operations without request/method authority gain no
+OpenAPI methods or tools. The 50 operations with proven requests retain their
+existing response-pending representation. No schema, routing, price, or provider
+authority is inferred by this decision.
+
+Readiness reports distinguish `deferred_pending` and `deferred_response_pending`
+from the independently reviewed 93 disabled baseline items in `existing_pending`
+and `existing_response_pending`. Exact identity, binding, source, reason, status,
+and response declaration fingerprints must match; changed or additional gaps
+still fail. Each reported gap also carries `runtime_binding` copied from the same
+Runtime input (native identity, method, path, status, revision, and public pricing)
+for consumer reconciliation; it is evidence, not method or schema authority.
+The exporter checks the fixed policy and both report scopes before publishing.
+Repairing a deferred definition naturally removes it from the pending output;
+its old policy entry does not authorize a different gap.
 
 The workflow acquires one fresh immutable release before composition:
 
@@ -183,8 +204,17 @@ python scripts/export_contract_publication.py --facts-dir /tmp/formal-runtime-fa
 `schema_version`, `runtime`, and `files_sha256`: object keys recursively sorted,
 no whitespace, Unicode unescaped. Runtime contains `artifact_revision`,
 `source_digest` (R), `compiler_revision`, and `generation`. The file manifest is
-the existing complete `publication_hashes` graph. Metadata under
-`docs/publication/` is outside that graph, avoiding self-referential hashes.
+the complete `publication_hashes` graph, including the exact sales view
+`docs/publication/sales-catalog.json`. Its JSON wrapper contains
+`schema_version: 1`, the full `openapi_sha256`, and a compact `document` holding
+only published identity, display metadata, server paths, revision, pricing and
+Runtime identity bridges. It omits request/response schemas and is never a
+replacement authority. The same consolidation command derives it; the formal
+check reproduces its exact bytes from the complete graph. `current.sales_catalog`
+binds its path and hash, and C includes it in `files_sha256`. The sales page reads
+this view plus the same formal report/acquisition instead of parsing the full
+schema bundle. The pointer and receipt files under `docs/publication/` remain
+outside C to avoid self-referential hashes.
 `openapi`, `formal_readiness`, and `runtime_acquisition` each give a repository
 relative `path` and exact byte `sha256`. The exporter reproduces source governance from the same attributed receipts
 and original assessment time, and compares it against current hashed source

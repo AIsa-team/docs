@@ -1,48 +1,824 @@
 {
-  "openapi": "3.0.0",
-  "info": {
-    "title": "Tavily API",
-    "version": "1.0.0",
-    "description": "Unified API documentation for Tavily endpoints including Search, Extract, Crawl, and Map."
-  },
-  "servers": [
-    {
-      "url": "https://api.aisa.one/apis/v1"
-    }
-  ],
   "components": {
     "securitySchemes": {
       "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer"
+        "scheme": "bearer",
+        "type": "http"
+      }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
+  },
+  "info": {
+    "description": "",
+    "title": "Tavily",
+    "version": "1",
+    "x-aisa-capabilities": {
+      "idempotency": "Idempotency-Key",
+      "max_price": "X-AISA-Max-Price-USD",
+      "quote": {
+        "header": "X-AISA-Cost-Mode",
+        "value": "quote"
+      }
+    },
+    "x-aisa-configured-paths": [
+      "/apis/v1/tavily/crawl",
+      "/apis/v1/tavily/extract",
+      "/apis/v1/tavily/map",
+      "/apis/v1/tavily/search"
+    ],
+    "x-aisa-document": {
+      "facts_hash": "b874a486d124cbf38ed51782e2e71abafd81df93d254188ebe9f92dc7f190673",
+      "generator_version": "2",
+      "protocol_version": "1",
+      "schema_version": "1",
+      "composer_version": "13",
+      "response_pending": [],
+      "document_hash": "sha256:8d4b800f1de653e2e94d10f8c9bd2da0846cebc403812ef10643130b52f8c30f"
+    },
+    "x-aisa-plans": {
+      "builder": 1.0,
+      "display_plan": "payg",
+      "payg": 1.0,
+      "similarweb_payg": 1.0,
+      "team": 1.0,
+      "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
+    },
+    "x-aisa-provider": "tavily",
+    "x-aisa-catalogs": {
+      "tavily": {
+        "title": "Tavily",
+        "description": "",
+        "x-aisa-document": {
+          "facts_hash": "b874a486d124cbf38ed51782e2e71abafd81df93d254188ebe9f92dc7f190673",
+          "generator_version": "2",
+          "protocol_version": "1",
+          "schema_version": "1"
+        },
+        "x-aisa-plans": {
+          "builder": 1.0,
+          "display_plan": "payg",
+          "payg": 1.0,
+          "similarweb_payg": 1.0,
+          "team": 1.0,
+          "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
+        },
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          }
+        }
       }
     }
   },
-  "security": [
-    {
-      "bearerAuth": []
-    }
-  ],
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "openapi": "3.1.0",
   "paths": {
-    "/tavily/search": {
+    "/apis/v1/tavily/crawl": {
       "post": {
-        "x-aisa-pricing": {
-          "model": "dynamic",
-          "cost_drivers": [
-            {
-              "param": "results / pages",
-              "effect": "charge scales with number of results (search) or pages (crawl/extract) returned"
+        "description": "Walk a site from a root `url` and return the content of the pages it finds. Steer it with natural-language `instructions` plus regex path and domain filters, and bound it with `max_depth`, `max_breadth` and `limit`. Returns `base_url` and `results[]` with `url` and `raw_content`. Measured at about 4.5 seconds for a 3-page limit; cost and time grow with the bounds you set, so set them. Use it for broad coverage of one site — documentation, a catalogue, a competitor's blog. It answers synchronously, which `post_firecrawl_crawl` does not: that one runs as a background job and suits crawls too large to wait on. For a handful of known pages `post_tavily_extract` is far cheaper; to size a site before paying to crawl it, run `post_tavily_map` first.",
+        "operationId": "post_tavily_crawl",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "The root URL to begin the crawl.",
+                    "example": "docs.tavily.com"
+                  },
+                  "instructions": {
+                    "type": "string",
+                    "description": "Natural language instructions for the crawler."
+                  },
+                  "chunks_per_source": {
+                    "type": "integer",
+                    "default": 3,
+                    "description": "Maximum number of relevant chunks returned per source.",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "max_depth": {
+                    "type": "integer",
+                    "default": 1,
+                    "description": "Max depth of the crawl.",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "max_breadth": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "Max number of links to follow per level of the tree.",
+                    "minimum": 1,
+                    "maximum": 500
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "default": 50,
+                    "description": "Total number of links the crawler will process before stopping.",
+                    "minimum": 1
+                  },
+                  "select_paths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to select only URLs with specific path patterns."
+                  },
+                  "select_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to select crawling to specific domains or subdomains."
+                  },
+                  "exclude_paths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to exclude URLs with specific path patterns."
+                  },
+                  "exclude_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to exclude specific domains or subdomains from crawling."
+                  },
+                  "allow_external": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Include external domain links in the final results list."
+                  },
+                  "include_images": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include images in the crawl results."
+                  },
+                  "extract_depth": {
+                    "type": "string",
+                    "enum": [
+                      "basic",
+                      "advanced"
+                    ],
+                    "default": "basic",
+                    "description": "Depth of the extraction process."
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "markdown",
+                      "text"
+                    ],
+                    "default": "markdown",
+                    "description": "Format of the extracted web page content."
+                  },
+                  "include_favicon": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include the favicon URL for each result."
+                  },
+                  "timeout": {
+                    "type": "number",
+                    "format": "float",
+                    "default": 150,
+                    "description": "Maximum time in seconds to wait for the crawl operation.",
+                    "minimum": 10,
+                    "maximum": 150
+                  },
+                  "include_usage": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include credit usage information in the response."
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              }
             }
-          ],
-          "cost_tier": "variable",
-          "note": "The charge varies with usage (see cost_drivers)."
+          }
         },
+        "responses": {
+          "200": {
+            "description": "Crawl results returned successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "base_url": {
+                      "type": "string",
+                      "description": "The base URL that was crawled."
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string",
+                            "description": "URL of the crawled page."
+                          },
+                          "raw_content": {
+                            "type": "string",
+                            "description": "Extracted raw content from the page."
+                          },
+                          "favicon": {
+                            "type": "string",
+                            "description": "Favicon URL of the crawled page."
+                          }
+                        }
+                      }
+                    },
+                    "response_time": {
+                      "type": "number",
+                      "format": "float",
+                      "description": "Time in seconds it took to complete the request."
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "credits": {
+                          "type": "integer",
+                          "description": "Credit usage details for the request."
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "description": "Unique request identifier."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Start Crawl Process",
         "tags": [
-          "https://docs.tavily.com/documentation/api-reference/endpoint/search"
+          "default"
         ],
-        "summary": "Execute a search query using Tavily Search.",
-        "operationId": "post_tavily_search",
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "x402": false
+        },
+        "x-aisa-category": "2",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.024,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "tavily_credit",
+          "unit_rate_usd": 0.008
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "6fdf99584383",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "1a27f6963d0e"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-upstream-path": "/crawl",
+        "x-aisa-validation": "provider",
+        "x-aisa-catalog-id": "tavily",
+        "x-aisa-runtime-operation": {
+          "operation_id": "post_tavily_crawl",
+          "method": "ANY",
+          "path": "/apis/v1/tavily/crawl"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+          "fetched_at": "2026-09-29T21:25:55+08:00",
+          "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+          "converter": "scripts/import_existing_contracts.py@1",
+          "path_space": "public",
+          "owner": "AIsa-team/docs",
+          "refresh_policy": "manual",
+          "review_period_days": 30,
+          "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+            "fetched_at": "2026-09-29T21:25:55+08:00",
+            "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+            "converter": "scripts/import_existing_contracts.py@1",
+            "path_space": "public",
+            "owner": "AIsa-team/docs",
+            "refresh_policy": "manual",
+            "review_period_days": 30,
+            "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+          },
+          "content_hash": "sha256:d39c6cb9a3b6cde0fb1f999983df26caed1c32f56ff0a4ac6cd61db7a89e21fe"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/search/post_tavily-crawl"
+      }
+    },
+    "/apis/v1/tavily/extract": {
+      "post": {
+        "description": "Fetch clean, parsed content for URLs you already have — from a search result, a sitemap, or a user. `urls` is required and takes several at once. Returns `results[]` with `url`, `title`, `raw_content` and `images`, plus a `failed_results[]` array — **read that one**, because a page that could not be fetched is reported there rather than raising an error. Choose `format` (markdown or text) and `extract_depth`. Measured at about 1 second for one page. Use this instead of `post_tavily_search` whenever you can already name the pages; searching for pages you can name costs more and may not return them. For a long list that can wait, `post_firecrawl_batch_scrape` runs it as a background job. To discover the URLs of a whole site first, use `post_tavily_map`.",
+        "operationId": "post_tavily_extract",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "urls": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    ],
+                    "description": "The URL or URLs to extract content from. A single URL string and an array of URL strings are both accepted.",
+                    "example": [
+                      "https://en.wikipedia.org/wiki/Artificial_intelligence"
+                    ]
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "User intent for reranking extracted content chunks."
+                  },
+                  "chunks_per_source": {
+                    "type": "integer",
+                    "default": 3,
+                    "description": "Maximum number of relevant chunks returned per source. Available only when query is provided.",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "extract_depth": {
+                    "type": "string",
+                    "enum": [
+                      "basic",
+                      "advanced"
+                    ],
+                    "default": "basic",
+                    "description": "Depth of the extraction process."
+                  },
+                  "include_images": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include a list of images extracted from the URLs."
+                  },
+                  "include_favicon": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include the favicon URL for each result."
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "markdown",
+                      "text"
+                    ],
+                    "default": "markdown",
+                    "description": "Format of the extracted web page content."
+                  },
+                  "timeout": {
+                    "type": "number",
+                    "format": "float",
+                    "description": "Maximum time in seconds to wait for URL extraction. If omitted, default timeouts depend on extract_depth: 10 seconds for basic and 30 seconds for advanced.",
+                    "minimum": 1,
+                    "maximum": 60
+                  },
+                  "include_usage": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include credit usage information in the response."
+                  }
+                },
+                "required": [
+                  "urls"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Extraction results returned successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "url": {
+                            "type": "string",
+                            "description": "URL of the extracted content."
+                          },
+                          "title": {
+                            "type": "string",
+                            "description": "Title of the extracted page."
+                          },
+                          "raw_content": {
+                            "type": "string",
+                            "description": "Extracted raw content from the URL."
+                          },
+                          "images": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "Images extracted from the URL when include_images is true."
+                          },
+                          "favicon": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "Favicon URL of the extracted content."
+                          }
+                        }
+                      }
+                    },
+                    "failed_results": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "List of URLs that could not be processed."
+                    },
+                    "response_time": {
+                      "type": "number",
+                      "format": "float",
+                      "description": "Time in seconds it took to complete the request."
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "credits": {
+                          "type": "integer",
+                          "description": "Credit usage details for the request."
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "description": "Unique request identifier."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Extract Data",
+        "tags": [
+          "default"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "x402": false
+        },
+        "x-aisa-category": "2",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.024,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "tavily_credit",
+          "unit_rate_usd": 0.008
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "6fdf99584383",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "c0c8c25d410a"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-upstream-path": "/extract",
+        "x-aisa-validation": "provider",
+        "x-aisa-catalog-id": "tavily",
+        "x-aisa-runtime-operation": {
+          "operation_id": "post_tavily_extract",
+          "method": "ANY",
+          "path": "/apis/v1/tavily/extract"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+          "fetched_at": "2026-09-29T21:25:55+08:00",
+          "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+          "converter": "scripts/import_existing_contracts.py@1",
+          "path_space": "public",
+          "owner": "AIsa-team/docs",
+          "refresh_policy": "manual",
+          "review_period_days": 30,
+          "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+            "fetched_at": "2026-09-29T21:25:55+08:00",
+            "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+            "converter": "scripts/import_existing_contracts.py@1",
+            "path_space": "public",
+            "owner": "AIsa-team/docs",
+            "refresh_policy": "manual",
+            "review_period_days": 30,
+            "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+          },
+          "content_hash": "sha256:575b97ed182809bbc8fe1c42faf3930b43b8ee784ad88b40fe077e3ebfbd5a85"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/search/post_tavily-extract"
+      }
+    },
+    "/apis/v1/tavily/map": {
+      "post": {
+        "description": "List a site's URLs from a root `url` without fetching any page content. Steer it with natural-language `instructions` and regex `select_paths` / `exclude_paths` / `select_domains` filters. Returns `base_url` and `results` — **a flat array of URL strings, not objects** — with `response_time` and `request_id`. Fast and cheap: measured at about 1.5 seconds. Use it to size a site before committing to a crawl, then fetch only the parts that matter with `post_tavily_extract`. When you want the content rather than the shape, `post_tavily_crawl` does both in one call.",
+        "operationId": "post_tavily_map",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "The root URL to begin the mapping.",
+                    "example": "docs.tavily.com"
+                  },
+                  "instructions": {
+                    "type": "string",
+                    "description": "Natural language instructions for the crawler."
+                  },
+                  "max_depth": {
+                    "type": "integer",
+                    "default": 1,
+                    "description": "Max depth of the mapping.",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "max_breadth": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "Max number of links to follow per level of the tree.",
+                    "minimum": 1,
+                    "maximum": 500
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "default": 50,
+                    "description": "Total number of links the crawler will process before stopping.",
+                    "minimum": 1
+                  },
+                  "select_paths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to select only URLs with specific path patterns."
+                  },
+                  "select_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to select crawling to specific domains or subdomains."
+                  },
+                  "exclude_paths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to exclude URLs with specific path patterns."
+                  },
+                  "exclude_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Regex patterns to exclude specific domains or subdomains from mapping."
+                  },
+                  "allow_external": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Include external domain links in the final results list."
+                  },
+                  "timeout": {
+                    "type": "number",
+                    "format": "float",
+                    "default": 150,
+                    "description": "Maximum time in seconds to wait for the map operation.",
+                    "minimum": 10,
+                    "maximum": 150
+                  },
+                  "include_usage": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include credit usage information in the response."
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Map results returned successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "base_url": {
+                      "type": "string",
+                      "description": "The base URL that was mapped."
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "description": "URLs discovered during the mapping."
+                      }
+                    },
+                    "response_time": {
+                      "type": "number",
+                      "format": "float",
+                      "description": "Time in seconds it took to complete the request."
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "credits": {
+                          "type": "integer",
+                          "description": "Credit usage details for the request."
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "description": "Unique request identifier."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Get Map Data",
+        "tags": [
+          "default"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "x402": false
+        },
+        "x-aisa-category": "2",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.064,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "tavily_credit",
+          "unit_rate_usd": 0.008
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "6fdf99584383",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "66f1a81c236a"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-upstream-path": "/map",
+        "x-aisa-validation": "provider",
+        "x-aisa-catalog-id": "tavily",
+        "x-aisa-runtime-operation": {
+          "operation_id": "post_tavily_map",
+          "method": "ANY",
+          "path": "/apis/v1/tavily/map"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+          "fetched_at": "2026-09-29T21:25:55+08:00",
+          "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+          "converter": "scripts/import_existing_contracts.py@1",
+          "path_space": "public",
+          "owner": "AIsa-team/docs",
+          "refresh_policy": "manual",
+          "review_period_days": 30,
+          "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+            "fetched_at": "2026-09-29T21:25:55+08:00",
+            "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+            "converter": "scripts/import_existing_contracts.py@1",
+            "path_space": "public",
+            "owner": "AIsa-team/docs",
+            "refresh_policy": "manual",
+            "review_period_days": 30,
+            "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+          },
+          "content_hash": "sha256:298acba6fc21d45fdee3f47bdfa79a4567d011c786e84cec16853f9d5bff6396"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/search/post_tavily-map"
+      }
+    },
+    "/apis/v1/tavily/search": {
+      "post": {
         "description": "Search the web and get back ranked results with the page text already extracted, so there is no second call to fetch content. `query` is required. Returns `results[]` with `url`, `title`, `content` (the extracted excerpt), `score` and optionally `raw_content`, alongside `query`, `images`, `response_time` and `request_id`; set `include_answer` to also get a one-paragraph `answer`. Filter with `topic` (general/news/finance), `time_range` or explicit `start_date`/`end_date`, and trade cost against depth with `search_depth`. Measured at roughly 6 seconds for 2 results. This is the default choice for open-web research, and the only search here that returns ranked results and page text in one call. Reach past it when: you already know the URLs — `post_tavily_extract` is cheaper and exact; the query is a description rather than keywords — `post_exa_search` matches on meaning; you want a written answer rather than a list to iterate — `post_perplexity_sonar`; you want peer-reviewed papers — `post_scholar_search_scholar`.",
+        "operationId": "post_tavily_search",
         "requestBody": {
           "required": true,
           "content": {
@@ -387,9 +1163,11 @@
                       "description": "The search query that was executed."
                     },
                     "answer": {
-                      "type": "string",
-                      "description": "A short LLM-generated answer. Present as null when include_answer is false or no answer is generated.",
-                      "nullable": true
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "A short LLM-generated answer. Present as null when include_answer is false or no answer is generated."
                     },
                     "images": {
                       "type": "array",
@@ -430,13 +1208,17 @@
                             "description": "Relevance score of the search result."
                           },
                           "favicon": {
-                            "type": "string",
-                            "description": "Favicon URL of the search result.",
-                            "nullable": true
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "Favicon URL of the search result."
                           },
                           "raw_content": {
-                            "type": "string",
-                            "nullable": true,
+                            "type": [
+                              "string",
+                              "null"
+                            ],
                             "description": "Cleaned and parsed source content. Null unless include_raw_content is requested or no raw content is available."
                           }
                         }
@@ -464,540 +1246,100 @@
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "/tavily/extract": {
-      "post": {
-        "x-aisa-pricing": {
-          "model": "dynamic",
-          "cost_drivers": [
-            {
-              "param": "results / pages",
-              "effect": "charge scales with number of results (search) or pages (crawl/extract) returned"
-            }
-          ],
-          "cost_tier": "variable",
-          "note": "The charge varies with usage (see cost_drivers)."
-        },
-        "tags": [
-          "https://docs.tavily.com/documentation/api-reference/endpoint/extract"
-        ],
-        "summary": "Extract web page content from specified URLs using Tavily Extract.",
-        "operationId": "post_tavily_extract",
-        "description": "Fetch clean, parsed content for URLs you already have — from a search result, a sitemap, or a user. `urls` is required and takes several at once. Returns `results[]` with `url`, `title`, `raw_content` and `images`, plus a `failed_results[]` array — **read that one**, because a page that could not be fetched is reported there rather than raising an error. Choose `format` (markdown or text) and `extract_depth`. Measured at about 1 second for one page. Use this instead of `post_tavily_search` whenever you can already name the pages; searching for pages you can name costs more and may not return them. For a long list that can wait, `post_firecrawl_batch_scrape` runs it as a background job. To discover the URLs of a whole site first, use `post_tavily_map`.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "urls": {
-                    "oneOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    ],
-                    "description": "The URL or URLs to extract content from. A single URL string and an array of URL strings are both accepted.",
-                    "example": [
-                      "https://en.wikipedia.org/wiki/Artificial_intelligence"
-                    ]
-                  },
-                  "query": {
-                    "type": "string",
-                    "description": "User intent for reranking extracted content chunks."
-                  },
-                  "chunks_per_source": {
-                    "type": "integer",
-                    "default": 3,
-                    "description": "Maximum number of relevant chunks returned per source. Available only when query is provided.",
-                    "minimum": 1,
-                    "maximum": 5
-                  },
-                  "extract_depth": {
-                    "type": "string",
-                    "enum": [
-                      "basic",
-                      "advanced"
-                    ],
-                    "default": "basic",
-                    "description": "Depth of the extraction process."
-                  },
-                  "include_images": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Include a list of images extracted from the URLs."
-                  },
-                  "include_favicon": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Include the favicon URL for each result."
-                  },
-                  "format": {
-                    "type": "string",
-                    "enum": [
-                      "markdown",
-                      "text"
-                    ],
-                    "default": "markdown",
-                    "description": "Format of the extracted web page content."
-                  },
-                  "timeout": {
-                    "type": "number",
-                    "format": "float",
-                    "description": "Maximum time in seconds to wait for URL extraction. If omitted, default timeouts depend on extract_depth: 10 seconds for basic and 30 seconds for advanced.",
-                    "minimum": 1,
-                    "maximum": 60
-                  },
-                  "include_usage": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Include credit usage information in the response."
-                  }
-                },
-                "required": [
-                  "urls"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Extraction results returned successfully.",
+          },
+          "default": {
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "results": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "url": {
-                            "type": "string",
-                            "description": "URL of the extracted content."
-                          },
-                          "title": {
-                            "type": "string",
-                            "description": "Title of the extracted page."
-                          },
-                          "raw_content": {
-                            "type": "string",
-                            "description": "Extracted raw content from the URL."
-                          },
-                          "images": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            },
-                            "description": "Images extracted from the URL when include_images is true."
-                          },
-                          "favicon": {
-                            "type": "string",
-                            "description": "Favicon URL of the extracted content.",
-                            "nullable": true
-                          }
-                        }
-                      }
-                    },
-                    "failed_results": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      },
-                      "description": "List of URLs that could not be processed."
-                    },
-                    "response_time": {
-                      "type": "number",
-                      "format": "float",
-                      "description": "Time in seconds it took to complete the request."
-                    },
-                    "usage": {
-                      "type": "object",
-                      "properties": {
-                        "credits": {
-                          "type": "integer",
-                          "description": "Credit usage details for the request."
-                        }
-                      }
-                    },
-                    "request_id": {
-                      "type": "string",
-                      "description": "Unique request identifier."
-                    }
-                  }
-                }
+                "schema": {}
               }
-            }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
           }
-        }
-      }
-    },
-    "/tavily/crawl": {
-      "post": {
-        "x-aisa-pricing": {
-          "model": "dynamic",
-          "cost_drivers": [
-            {
-              "param": "results / pages",
-              "effect": "charge scales with number of results (search) or pages (crawl/extract) returned"
-            }
-          ],
-          "cost_tier": "variable",
-          "note": "The charge varies with usage (see cost_drivers)."
         },
+        "summary": "Search Tavily Data",
         "tags": [
-          "https://docs.tavily.com/documentation/api-reference/endpoint/crawl"
+          "default"
         ],
-        "summary": "Graph-based website traversal tool using Tavily Crawl.",
-        "operationId": "post_tavily_crawl",
-        "description": "Walk a site from a root `url` and return the content of the pages it finds. Steer it with natural-language `instructions` plus regex path and domain filters, and bound it with `max_depth`, `max_breadth` and `limit`. Returns `base_url` and `results[]` with `url` and `raw_content`. Measured at about 4.5 seconds for a 3-page limit; cost and time grow with the bounds you set, so set them. Use it for broad coverage of one site — documentation, a catalogue, a competitor's blog. It answers synchronously, which `post_firecrawl_crawl` does not: that one runs as a background job and suits crawls too large to wait on. For a handful of known pages `post_tavily_extract` is far cheaper; to size a site before paying to crawl it, run `post_tavily_map` first.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "url": {
-                    "type": "string",
-                    "description": "The root URL to begin the crawl.",
-                    "example": "docs.tavily.com"
-                  },
-                  "instructions": {
-                    "type": "string",
-                    "description": "Natural language instructions for the crawler."
-                  },
-                  "chunks_per_source": {
-                    "type": "integer",
-                    "default": 3,
-                    "description": "Maximum number of relevant chunks returned per source.",
-                    "minimum": 1,
-                    "maximum": 5
-                  },
-                  "max_depth": {
-                    "type": "integer",
-                    "default": 1,
-                    "description": "Max depth of the crawl.",
-                    "minimum": 1,
-                    "maximum": 5
-                  },
-                  "max_breadth": {
-                    "type": "integer",
-                    "default": 20,
-                    "description": "Max number of links to follow per level of the tree.",
-                    "minimum": 1,
-                    "maximum": 500
-                  },
-                  "limit": {
-                    "type": "integer",
-                    "default": 50,
-                    "description": "Total number of links the crawler will process before stopping.",
-                    "minimum": 1
-                  },
-                  "select_paths": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "Regex patterns to select only URLs with specific path patterns."
-                  },
-                  "select_domains": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "Regex patterns to select crawling to specific domains or subdomains."
-                  },
-                  "exclude_paths": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "Regex patterns to exclude URLs with specific path patterns."
-                  },
-                  "exclude_domains": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "Regex patterns to exclude specific domains or subdomains from crawling."
-                  },
-                  "allow_external": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Include external domain links in the final results list."
-                  },
-                  "include_images": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Include images in the crawl results."
-                  },
-                  "extract_depth": {
-                    "type": "string",
-                    "enum": [
-                      "basic",
-                      "advanced"
-                    ],
-                    "default": "basic",
-                    "description": "Depth of the extraction process."
-                  },
-                  "format": {
-                    "type": "string",
-                    "enum": [
-                      "markdown",
-                      "text"
-                    ],
-                    "default": "markdown",
-                    "description": "Format of the extracted web page content."
-                  },
-                  "include_favicon": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Include the favicon URL for each result."
-                  },
-                  "timeout": {
-                    "type": "number",
-                    "format": "float",
-                    "default": 150,
-                    "description": "Maximum time in seconds to wait for the crawl operation.",
-                    "minimum": 10,
-                    "maximum": 150
-                  },
-                  "include_usage": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Include credit usage information in the response."
-                  }
-                },
-                "required": [
-                  "url"
-                ]
-              }
-            }
-          }
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "x402": true
         },
-        "responses": {
-          "200": {
-            "description": "Crawl results returned successfully.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "base_url": {
-                      "type": "string",
-                      "description": "The base URL that was crawled."
-                    },
-                    "results": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "url": {
-                            "type": "string",
-                            "description": "URL of the crawled page."
-                          },
-                          "raw_content": {
-                            "type": "string",
-                            "description": "Extracted raw content from the page."
-                          },
-                          "favicon": {
-                            "type": "string",
-                            "description": "Favicon URL of the crawled page."
-                          }
-                        }
-                      }
-                    },
-                    "response_time": {
-                      "type": "number",
-                      "format": "float",
-                      "description": "Time in seconds it took to complete the request."
-                    },
-                    "usage": {
-                      "type": "object",
-                      "properties": {
-                        "credits": {
-                          "type": "integer",
-                          "description": "Credit usage details for the request."
-                        }
-                      }
-                    },
-                    "request_id": {
-                      "type": "string",
-                      "description": "Unique request identifier."
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/tavily/map": {
-      "post": {
+        "x-aisa-category": "2",
+        "x-aisa-passthrough": true,
         "x-aisa-pricing": {
-          "model": "dynamic",
-          "cost_drivers": [
-            {
-              "param": "results / pages",
-              "effect": "charge scales with number of results (search) or pages (crawl/extract) returned"
-            }
-          ],
-          "cost_tier": "variable",
-          "note": "The charge varies with usage (see cost_drivers)."
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.016,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "tavily_credit",
+          "unit_rate_usd": 0.008
         },
-        "tags": [
-          "https://docs.tavily.com/documentation/api-reference/endpoint/map"
-        ],
-        "summary": "Generate comprehensive site maps using Tavily Map.",
-        "operationId": "post_tavily_map",
-        "description": "List a site's URLs from a root `url` without fetching any page content. Steer it with natural-language `instructions` and regex `select_paths` / `exclude_paths` / `select_domains` filters. Returns `base_url` and `results` — **a flat array of URL strings, not objects** — with `response_time` and `request_id`. Fast and cheap: measured at about 1.5 seconds. Use it to size a site before committing to a crawl, then fetch only the parts that matter with `post_tavily_extract`. When you want the content rather than the shape, `post_tavily_crawl` does both in one call.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "url": {
-                    "type": "string",
-                    "description": "The root URL to begin the mapping.",
-                    "example": "docs.tavily.com"
-                  },
-                  "instructions": {
-                    "type": "string",
-                    "description": "Natural language instructions for the crawler."
-                  },
-                  "max_depth": {
-                    "type": "integer",
-                    "default": 1,
-                    "description": "Max depth of the mapping.",
-                    "minimum": 1,
-                    "maximum": 5
-                  },
-                  "max_breadth": {
-                    "type": "integer",
-                    "default": 20,
-                    "description": "Max number of links to follow per level of the tree.",
-                    "minimum": 1,
-                    "maximum": 500
-                  },
-                  "limit": {
-                    "type": "integer",
-                    "default": 50,
-                    "description": "Total number of links the crawler will process before stopping.",
-                    "minimum": 1
-                  },
-                  "select_paths": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "Regex patterns to select only URLs with specific path patterns."
-                  },
-                  "select_domains": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "Regex patterns to select crawling to specific domains or subdomains."
-                  },
-                  "exclude_paths": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "Regex patterns to exclude URLs with specific path patterns."
-                  },
-                  "exclude_domains": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "Regex patterns to exclude specific domains or subdomains from mapping."
-                  },
-                  "allow_external": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Include external domain links in the final results list."
-                  },
-                  "timeout": {
-                    "type": "number",
-                    "format": "float",
-                    "default": 150,
-                    "description": "Maximum time in seconds to wait for the map operation.",
-                    "minimum": 10,
-                    "maximum": 150
-                  },
-                  "include_usage": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Include credit usage information in the response."
-                  }
-                },
-                "required": [
-                  "url"
-                ]
-              }
-            }
-          }
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
         },
-        "responses": {
-          "200": {
-            "description": "Map results returned successfully.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "base_url": {
-                      "type": "string",
-                      "description": "The base URL that was mapped."
-                    },
-                    "results": {
-                      "type": "array",
-                      "items": {
-                        "type": "string",
-                        "description": "URLs discovered during the mapping."
-                      }
-                    },
-                    "response_time": {
-                      "type": "number",
-                      "format": "float",
-                      "description": "Time in seconds it took to complete the request."
-                    },
-                    "usage": {
-                      "type": "object",
-                      "properties": {
-                        "credits": {
-                          "type": "integer",
-                          "description": "Credit usage details for the request."
-                        }
-                      }
-                    },
-                    "request_id": {
-                      "type": "string",
-                      "description": "Unique request identifier."
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+        "x-aisa-revision": {
+          "customer_pricing_ref": "6fdf99584383",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "4f15131e5221"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-upstream-path": "/search",
+        "x-aisa-validation": "provider",
+        "x-aisa-catalog-id": "tavily",
+        "x-aisa-runtime-operation": {
+          "operation_id": "post_tavily_search",
+          "method": "ANY",
+          "path": "/apis/v1/tavily/search"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+          "fetched_at": "2026-09-29T21:25:55+08:00",
+          "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+          "converter": "scripts/import_existing_contracts.py@1",
+          "path_space": "public",
+          "owner": "AIsa-team/docs",
+          "refresh_policy": "manual",
+          "review_period_days": 30,
+          "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/tavily.json",
+            "fetched_at": "2026-09-29T21:25:55+08:00",
+            "content_hash": "sha256:81398ca500647609f3db1421d6382864a7f5fba830bdb6d35060438f730ade1a",
+            "converter": "scripts/import_existing_contracts.py@1",
+            "path_space": "public",
+            "owner": "AIsa-team/docs",
+            "refresh_policy": "manual",
+            "review_period_days": 30,
+            "policy_revision": "sha256:f0b5c0b8f7884e9d591f9305973b28597816793356548bf14ceb1db9ff039c36"
+          },
+          "content_hash": "sha256:b840a7f34ee5905ef50526a7906d208b0e0445f7c05fc2e74b42c893504009cf"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/search/post_tavily-search"
       }
     }
-  }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ]
 }

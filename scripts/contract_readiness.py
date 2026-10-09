@@ -6,6 +6,7 @@ publication_state='retained'; they do not prove fresh composition.
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import re
@@ -294,17 +295,19 @@ def _runtime_accounting(index, facts, errors, missing, retained_providers, cover
 
 
 def check_readiness(facts_by_provider, documents_by_provider, coverage,
-                    baseline_coverage=None, runtime_index=None):
+                    baseline_coverage=None, runtime_index=None, deferred_definitions=None):
     """Assess actual candidates. Provider failures do not imply global abort.
 
     status=failed means structural errors or new/changed pending items. Existing
     reviewed pending remains visible. Missing/retained inputs yield not_assessed;
-    only global_errors require globally stopping publication. No publish policy
-    or baseline trust decision is implemented here.
+    only global_errors require globally stopping publication. The caller supplies
+    the independently reviewed baseline and optional code-pinned exact deferrals.
     """
     baseline_ok = isinstance(baseline_coverage, dict) and isinstance(baseline_coverage.get('providers'), dict)
     report = dict(schema_version=1, status='passed', global_errors=[], blocked_providers=[],
                   providers={}, baseline_assessed=baseline_ok, missing_inputs=[], legacy_route_overlaps=[])
+    if deferred_definitions is not None:
+        report['deferred_definitions'] = deferred_definitions.metadata
     if not isinstance(facts_by_provider, dict) or not isinstance(documents_by_provider, dict) or not isinstance(coverage, dict) or not isinstance(coverage.get('providers'), dict):
         report.update(status='not_assessed', missing_inputs=['facts/documents/coverage'])
         return report
@@ -353,7 +356,7 @@ def check_readiness(facts_by_provider, documents_by_provider, coverage,
     retained_providers = set()
     index_pending_providers = {row.get('id') for row in (runtime_index or {}).get('pending_providers', [])} if isinstance(runtime_index, dict) else set()
     for provider in names:
-        result = dict(status='passed', errors=[], new_pending=[], existing_pending=[], missing_inputs=[])
+        result = dict(status='passed', errors=[], new_pending=[], existing_pending=[], deferred_pending=[], missing_inputs=[])
         report['providers'][provider] = result
         document, fact_document = documents.get(provider), facts.get(provider)
         rows = rows_by_provider.get(provider)
@@ -402,6 +405,10 @@ def check_readiness(facts_by_provider, documents_by_provider, coverage,
                 if row.get('binding_hash') is not None and row['binding_hash'] != computed_binding:
                     result['errors'].append(_error('candidate_binding_hash_mismatch', provider, path, method))
                 row['binding_hash'] = computed_binding
+                if 'runtime_status' in row or 'x-aisa-status' in fact:
+                    if 'runtime_status' in row and row['runtime_status'] != fact.get('x-aisa-status'):
+                        result['errors'].append(_error('candidate_runtime_status_mismatch', provider, path, method))
+                    row['runtime_status'] = fact.get('x-aisa-status')
             else:
                 # Without current facts, a candidate-provided hash is not
                 # evidence that an earlier reviewed binding is unchanged.
@@ -413,6 +420,8 @@ def check_readiness(facts_by_provider, documents_by_provider, coverage,
                 row['reason_code'] = computed_reason
                 row['method'] = method.upper()
                 target = 'existing_pending' if _pending_key(row) in existing else 'new_pending'
+                if target == 'new_pending' and deferred_definitions is not None and deferred_definitions.matches(provider, 'request', _pending_key(row)):
+                    target = 'deferred_pending'
                 result[target].append(row)
                 if not row.get('reason') and not original.get('reason_code'):
                     result['errors'].append(_error('pending_without_reason', provider, path, method))
@@ -483,7 +492,24 @@ def check_readiness(facts_by_provider, documents_by_provider, coverage,
         from .gap_evidence import assess_response_gaps
     except ImportError:
         from gap_evidence import assess_response_gaps
-    assess_response_gaps(report, facts, documents, coverage, baseline_coverage)
+    assess_response_gaps(report, facts, documents, coverage, baseline_coverage, deferred_definitions)
+    # Consumer evidence only: preserve native ANY/identity and exact current
+    # public pricing/revision. Never derive method or schema authority from debt.
+    for provider, result in report['providers'].items():
+        fact_ops = dict(_operations(facts.get(provider, {}), True))
+        for field in ('new_pending', 'existing_pending', 'deferred_pending',
+                      'new_response_pending', 'existing_response_pending', 'deferred_response_pending'):
+            for row in result.get(field, []):
+                method, path = str(row.get('method', '')).lower(), row.get('path')
+                native_method = method if (path, method) in fact_ops else 'x-aisa-any'
+                fact = fact_ops.get((path, native_method))
+                if fact is not None:
+                    row['runtime_binding'] = copy.deepcopy({
+                        'operation_id': fact.get('operationId'),
+                        'provider': fact.get('x-aisa-catalog-id', provider),
+                        'method': 'ANY' if native_method == 'x-aisa-any' else native_method.upper(),
+                        'path': path, 'status': fact.get('x-aisa-status'),
+                        'revision': fact.get('x-aisa-revision'), 'pricing': fact.get('x-aisa-pricing')})
     if report['global_errors'] or report['blocked_providers']:
         report['status'] = 'failed'
     elif report['missing_inputs']:

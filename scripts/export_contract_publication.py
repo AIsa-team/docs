@@ -9,7 +9,9 @@ import os
 
 from fetch_runtime_release import acquire, decode, require, sha, HEX64
 from publication_surface import publication_hashes
+from deferred_definitions import validate_report_deferrals
 from source_governance import source_report
+from sales_catalog_projection import SALES_CATALOG_PATH
 
 RUNTIME_KEYS = ('artifact_revision', 'source_digest', 'compiler_revision', 'generation')
 PUBLICATION = 'docs/publication/'
@@ -82,6 +84,7 @@ def prepare(root, facts, report_raw, now=None, source_receipts=None):
     for scope in (report, report['composed_candidate']):
         require(not scope.get('global_errors') and not scope.get('missing_inputs') and
                 not scope.get('blocked_providers'), 'Formal readiness contains blockers')
+    validate_report_deferrals(root, report)
     hashes = publication_hashes(root)
     artifact = report.get('publication_artifact', {})
     require(hashes and artifact.get('files_sha256') == hashes and
@@ -110,9 +113,14 @@ def prepare(root, facts, report_raw, now=None, source_receipts=None):
     require(report.get('runtime_acquisition_sha256') == sha(receipt_raw), 'Formal assessment used different Runtime inputs')
     runtime = {key: receipt[key] for key in RUNTIME_KEYS}
     require(report.get('runtime') == runtime, 'Formal Runtime identity mismatch')
+    sales_raw = (root / SALES_CATALOG_PATH).read_bytes()
+    sales = decode(sales_raw)
+    require(type(sales.get('schema_version')) is int and sales['schema_version'] == 1 and sales.get('openapi_sha256') == hashes.get('openapi.yaml') and
+            hashes.get(SALES_CATALOG_PATH) == sha(sales_raw), 'Sales projection is outside the assessed graph')
     core = {'schema_version': 1, 'runtime': runtime, 'files_sha256': hashes}
     current = {**core, 'status': 'passed', 'contract_release': sha(canonical(core)),
                'openapi': {'path': 'openapi.yaml', 'sha256': hashes['openapi.yaml']},
+               'sales_catalog': {'path': SALES_CATALOG_PATH, 'sha256': hashes[SALES_CATALOG_PATH]},
                'formal_readiness': {'path': PUBLICATION + 'formal-contract-readiness.json', 'sha256': sha(report_raw)},
                'runtime_acquisition': {'path': PUBLICATION + 'runtime-acquisition.json', 'sha256': sha(receipt_raw)},
                'source_authorization_expires_at': source_expiry(report, now)}

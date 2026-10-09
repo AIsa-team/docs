@@ -10,10 +10,11 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from check_contract_candidate import main
 from source_governance import acquisition_receipt, initial_policy, receipt_key
+from sales_catalog_projection import SALES_CATALOG_PATH, sales_catalog_bytes
 
 
 class FormalReceiptTests(unittest.TestCase):
-    def run_check(self, source_receipt=True, tamper=False, unresolved=False, surfaces=False, surface_mutation=None):
+    def run_check(self, source_receipt=True, tamper=False, unresolved=False, surfaces=False, surface_mutation=None, sales_mutation=None):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             upstream = root / 'openapi/upstream'; upstream.mkdir(parents=True)
@@ -29,6 +30,11 @@ class FormalReceiptTests(unittest.TestCase):
                 expected['components'] = {'schemas': {'Input': {'$ref': '#/components/schemas/Missing'}}}
                 raw = json.dumps(expected).encode()
             (root / 'openapi.yaml').write_bytes(raw if not tamper else raw + b'info: {title: altered}\n')
+            sales = root / SALES_CATALOG_PATH
+            sales.parent.mkdir(parents=True)
+            sales.write_bytes(sales_catalog_bytes(expected, raw))
+            if sales_mutation:
+                sales_mutation(sales)
             if surfaces:
                 from pull_openapi import generate_pages
                 document = {'openapi': '3.1.0', 'info': {'title': 'Fixture', 'x-aisa-document': {'document_hash': 'h'}},
@@ -58,6 +64,12 @@ class FormalReceiptTests(unittest.TestCase):
         self.assertEqual(report['publication_artifact']['openapi_sha256'], sha)
         self.assertEqual(report['publication_artifact']['source_hashes'], {'p.json': 'sha256:fixture'})
         self.assertIn('openapi/upstream/p.json', report['publication_artifact']['files_sha256'])
+
+    def test_missing_or_changed_sales_projection_blocks_formal_receipt(self):
+        for mutation in (lambda p: p.unlink(), lambda p: p.write_text('{}')):
+            status, report, _ = self.run_check(sales_mutation=mutation)
+            self.assertEqual((status, report['status']), (1, 'failed'))
+            self.assertIn('sales_catalog_projection_mismatch', {e['code'] for e in report['global_errors']})
 
     def test_missing_source_receipt_is_nonzero_not_assessed(self):
         status, report, _ = self.run_check(source_receipt=False)

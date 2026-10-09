@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from export_contract_publication import prepare, export, acquired_input, canonical, RUNTIME_KEYS
 from fetch_runtime_release import acquire, save, sha, main
 from publication_surface import publication_hashes
+from sales_catalog_projection import SALES_CATALOG_PATH, sales_catalog_bytes
 import test_fetch_runtime_release as fetch_tests
 from source_governance import initial_policy, acquisition_receipt, receipt_key, source_report
 
@@ -23,6 +24,9 @@ class PublicationTests(unittest.TestCase):
         revision, compiler, self.reader, _, _, _ = fetch_tests.PublicReleaseTests().fixture()
         save(self.facts, acquire(revision, compiler, self.reader))
         (self.root / 'openapi.yaml').write_text('openapi: 3.1.0\npaths: {}\n')
+        sales = self.root / SALES_CATALOG_PATH
+        sales.parent.mkdir(parents=True)
+        sales.write_bytes(sales_catalog_bytes({'openapi': '3.1.0', 'paths': {}}, (self.root / 'openapi.yaml').read_bytes()))
         self.now = datetime.now(timezone.utc)
         self.metadata = initial_policy({'kind': 'provider_openapi', 'content_hash': 'sha256:' + 'a' * 64,
                          'url': 'https://official.example.invalid/openapi.json', 'refresh_policy': 'automatic'})
@@ -62,14 +66,16 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(current['formal_readiness']['sha256'], sha(files['formal-contract-readiness.json']))
         self.assertEqual(current['runtime_acquisition']['sha256'], sha(files['runtime-acquisition.json']))
         self.assertEqual(current['source_authorization_expires_at'], self.report['source_governance']['sources']['source.json']['next_acquisition_due_at'])
-        destination = self.root / 'docs/publication'; destination.mkdir(parents=True)
+        destination = self.root / 'docs/publication'; destination.mkdir(parents=True, exist_ok=True)
         for name, raw in files.items():
             (destination / name).write_bytes(raw)
         self.assertEqual(publication_hashes(self.root), current['files_sha256'])
 
     def test_runtime_or_graph_change_changes_c(self):
         old = json.loads(self.prepared()['current.json'])['contract_release']
-        (self.root / 'openapi.yaml').write_text('changed graph')
+        (self.root / 'openapi.yaml').write_text('openapi: 3.1.0\ninfo: {version: changed}\npaths: {}\n')
+        (self.root / SALES_CATALOG_PATH).write_bytes(sales_catalog_bytes(
+            {'openapi': '3.1.0', 'info': {'version': 'changed'}, 'paths': {}}, (self.root / 'openapi.yaml').read_bytes()))
         self.report['publication_artifact'].update({'files_sha256': publication_hashes(self.root),
             'openapi_sha256': sha((self.root / 'openapi.yaml').read_bytes())})
         self.assertNotEqual(old, json.loads(self.prepared()['current.json'])['contract_release'])
@@ -129,7 +135,7 @@ class PublicationTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.prepared()
 
     def test_failure_preserves_lastgood_files(self):
-        destination = self.root / 'docs/publication'; destination.mkdir(parents=True)
+        destination = self.root / 'docs/publication'; destination.mkdir(parents=True, exist_ok=True)
         (destination / 'current.json').write_bytes(b'lastgood')
         report = self.root / 'report.json'; report.write_text('{"status":"failed"}')
         with self.assertRaises(ValueError): export(self.root, self.facts, report)
