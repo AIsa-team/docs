@@ -10,6 +10,17 @@ from contract_change_scope import git_requires_artifact_check, verify_required_j
 
 
 class ChangeScopeTests(unittest.TestCase):
+    def test_publication_projection_and_receipts_require_formal_gate(self):
+        workflow = yaml.safe_load((Path(__file__).resolve().parents[2] /
+                                   '.github/workflows/test-runtime-contracts.yml').read_text())
+        triggers = workflow.get('on', workflow.get(True))
+        for name in ('sales-catalog.json', 'current.json', 'formal-contract-readiness.json',
+                     'runtime-acquisition.json'):
+            self.assertTrue(requires_artifact_check(['docs/publication/' + name]))
+        for event in ('push', 'pull_request'):
+            self.assertIn('docs/publication/**', triggers[event]['paths'])
+        self.assertFalse(requires_artifact_check(['docs/publication-notes.md']))
+
     def test_exact_overview_pages_require_formal_gate_and_both_ci_triggers(self):
         workflow = yaml.safe_load((Path(__file__).resolve().parents[2] /
                                    '.github/workflows/test-runtime-contracts.yml').read_text())

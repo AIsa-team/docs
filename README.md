@@ -162,8 +162,12 @@ published. See [reviewed source inputs](docs/current-source-review-20261009/READ
 The existing publication workflow exports `docs/publication/current.json` only
 when the complete formal readiness gate passes. New or changed request/response
 debts, unknown source maintenance, or missing Runtime inputs prevent publication.
-Failed runs leave the published last-good pointer unchanged. This does not create
-another baseline, approval path, or fallback publication.
+Failed runs leave the published last-good pointer unchanged. Successful checks
+with the same C and unchanged source authorization retain the existing valid
+pointer and receipts; observation timestamps alone do not advance main or restart
+consumer adoption. New authority evidence, expiry or graph changes still publish
+a freshly verified bundle. This does not create another baseline, approval path,
+or fallback publication.
 
 CR003 records the user's decision to defer exactly 60 known enabled definition
 gaps (10 request, 50 response) in

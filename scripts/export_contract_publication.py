@@ -6,8 +6,9 @@ import json
 from pathlib import Path
 import tempfile
 import os
+import subprocess
 
-from fetch_runtime_release import acquire, decode, require, sha, HEX64
+from fetch_runtime_release import acquire, decode, require, sha, HEX64, HEX40
 from publication_surface import publication_hashes
 from deferred_definitions import validate_report_deferrals
 from source_governance import source_report
@@ -128,10 +129,87 @@ def prepare(root, facts, report_raw, now=None, source_receipts=None):
             'current.json': json.dumps(current, indent=2, sort_keys=True, ensure_ascii=False).encode() + b'\n'}
 
 
-def export(root, facts, report, source_receipts=None):
-    # Finish every validation before touching last-good publication metadata.
-    files = prepare(root, facts, report.read_bytes(), source_receipts=source_receipts)
+def retained_publication(root, destination, files, now):
+    """Keep an equivalent authorized receipt, never reuse it instead of prepare.
+
+    Observations belong in the current workflow artifact. Updating their clocks
+    alone must not invalidate consumers' exact-main adoption guards. Unknown
+    fields are compared too; only these explicit observation fields may differ.
+    """
+    try:
+        paths = {name: destination / name for name in files}
+        if any(not path.is_file() or path.is_symlink() for path in paths.values()):
+            return None
+        previous = {name: path.read_bytes() for name, path in paths.items()}
+        old_current, new_current = (decode(packet['current.json']) for packet in (previous, files))
+        old_report, new_report = (decode(packet['formal-contract-readiness.json']) for packet in (previous, files))
+        old_receipt, new_receipt = (decode(packet['runtime-acquisition.json']) for packet in (previous, files))
+        # Reconstruct every pointer field with old receipt bytes. The new pointer
+        # is already fully validated; this also proves C, inventory and expiry.
+        expected = decode(files['current.json'])
+        expected['formal_readiness']['sha256'] = sha(previous['formal-contract-readiness.json'])
+        expected['runtime_acquisition']['sha256'] = sha(previous['runtime-acquisition.json'])
+        require(canonical(old_current) == canonical(expected), 'Existing publication pointer differs')
+        require(source_expiry(old_report, now) == new_current['source_authorization_expires_at'],
+                'Existing source authorization differs or expired')
+        require(old_report['runtime_acquisition_sha256'] == sha(previous['runtime-acquisition.json']),
+                'Existing report acquisition binding differs')
+
+        old_base = old_report['publication_artifact'].get('published_ref')
+        new_base = new_report['publication_artifact'].get('published_ref')
+        if old_base is not None or new_base is not None:
+            require(HEX40.fullmatch(str(old_base)) and HEX40.fullmatch(str(new_base)),
+                    'Invalid published assessment base')
+            ancestry = subprocess.run(['git', '-C', str(root), 'merge-base', '--is-ancestor', old_base, new_base],
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+            require(ancestry.returncode == 0, 'Previous assessment base is not in current Git lineage')
+
+        def report_semantics(report):
+            value = decode(canonical(report))
+            value.pop('runtime_acquisition_sha256')
+            governance = value['source_governance']
+            governance.pop('checked_at')
+            for source in governance['sources'].values():
+                source.pop('checked_at')
+            # The previous assessed base naturally differs after publishing its
+            # generated commit. This is Git provenance, not source authorization.
+            artifact = value['publication_artifact']
+            if 'published_ref' in artifact:
+                require(HEX40.fullmatch(str(artifact['published_ref'])), 'Invalid published assessment base')
+                artifact['published_ref'] = '<verified-git-ancestor>'
+            return value
+
+        require(canonical(report_semantics(old_report)) == canonical(report_semantics(new_report)),
+                'Existing assessment authority differs')
+
+        def acquisition_semantics(receipt):
+            value = decode(canonical(receipt))
+            start, end = (datetime.fromisoformat(value.pop(key)) for key in ('started_at', 'completed_at'))
+            require(start.tzinfo is not None and end.tzinfo is not None and start <= end <= now,
+                    'Invalid acquisition observation chronology')
+            for key in ('category_sha256', 'category_after_sha256'):
+                require(HEX64.fullmatch(str(value.pop(key))), 'Invalid category observation hash')
+            return value
+
+        # Full immutable files, Runtime identity, coverage and semantic category
+        # digest must be identical; only cache-construction raw bytes may differ.
+        require(canonical(acquisition_semantics(old_receipt)) == canonical(acquisition_semantics(new_receipt)),
+                'Existing acquisition semantics differ')
+        return old_current
+    except (ValueError, KeyError, TypeError, OSError, AttributeError, subprocess.TimeoutExpired):
+        # A damaged/missing/expired old bundle cannot authorize reuse. The caller
+        # may publish the newly validated bundle, never relabel old bytes passed.
+        return None
+
+
+def export(root, facts, report, source_receipts=None, *, now=None):
+    # Finish every validation before touching or reusing last-good metadata.
+    now = now or datetime.now(timezone.utc)
+    files = prepare(root, facts, report.read_bytes(), now, source_receipts)
     destination = root / PUBLICATION
+    retained = retained_publication(root, destination, files, now)
+    if retained is not None:
+        return retained
     destination.mkdir(parents=True, exist_ok=True)
     for name, raw in files.items():
         with tempfile.NamedTemporaryFile(dir=destination, delete=False) as temporary:
