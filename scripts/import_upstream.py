@@ -130,6 +130,13 @@ def import_source(provider, url):
             if raw.lstrip().startswith((b'{', b'[')):
                 source_json_loads(raw)  # Validate before specialized source converters parse it.
             return raw
+    # The AgentMail composite keeps the locked hosted request graph and only
+    # the reviewed owning success declarations. Never import the broader owning
+    # file wholesale: its request dialect and authentication declarations differ.
+    from prepare_agentmail_response_reference import URL as AGENTMAIL_RESPONSE_URL
+    if url == AGENTMAIL_RESPONSE_URL:
+        from prepare_agentmail_response_reference import BASE_URL, prepare
+        return prepare(fetch(BASE_URL), fetch(url), datetime.now(timezone.utc).isoformat())
     metadata = {}
     if url == PARALLEL_LEGACY_URL:
         document = extract_parallel_legacy(fetch(url))
