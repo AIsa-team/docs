@@ -60,11 +60,19 @@ failed fetch still blocks readiness. Conflicting equal-time observations and
 malformed packets stop preparation. This step never creates an approval or
 changes a timestamp. Receipt-only changes require the formal artifact check.
 
-A cold CI cache still needs locked actual public Runtime facts. The published
-artifact reference and independently reviewed pending baseline remain separate
-inputs. Recompose provider files/pages and the aggregate from those inputs before
-formal assessment; this source packet cannot approve the existing aggregate or
-the outstanding request/response definition gaps.
+The PR artifact check now acquires the exact production Runtime release selected
+by its tracked artifact/compiler pins, using `fetch_runtime_release.py`. It no
+longer depends on a previously populated Runtime cache. Every immutable file is
+hash-checked, the complete provider graph is checked, and the current release
+must remain fresh and pinned before and after acquisition. A changed release or
+failed acquisition stops the job; there is no stale-cache fallback. The dated
+acquisition receipt is retained with the readiness report.
+
+The published artifact reference and independently reviewed pending baseline
+remain separate inputs. Recompose provider files/pages and the aggregate from
+those inputs before formal assessment; acquiring real Runtime facts cannot
+approve the existing aggregate or the outstanding definition gaps. The tracked
+Runtime pins must be explicitly updated when selecting a later release.
 
 The facts directory layout consumed by the existing CLI is `index.json`,
 `category.json`, and one `<catalog-id>.json` per Runtime index provider (flatten

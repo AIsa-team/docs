@@ -91,6 +91,11 @@ jobs:
     if: needs.changes.outputs.artifacts == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      # Reviewed production release input, not a Docs publication approval.
+      # An advancing Runtime release requires explicitly updating these pins.
+      RUNTIME_ARTIFACT_REVISION: a16e49bbde4db3b28a751d97b9d3b4a8485926a5bdca4fe79f44c961f854c381
+      RUNTIME_COMPILER_REVISION: 8d4c909af80a6fc335787f3b0d63c81495e1c886
     steps:
       - uses: actions/checkout@v4
         with:
@@ -100,12 +105,12 @@ jobs:
           python-version: '3.12'
       - name: Install assessment dependencies
         run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
-      - name: Restore public runtime-contract evidence
-        uses: actions/cache/restore@v4
-        with:
-          path: .cache/runtime-contracts
-          key: runtime-contracts-pr-${{ github.run_id }}
-          restore-keys: runtime-contracts-
+      - name: Acquire the exact reviewed public Runtime release
+        run: |
+          python scripts/fetch_runtime_release.py \
+            --artifact-revision "$RUNTIME_ARTIFACT_REVISION" \
+            --compiler-revision "$RUNTIME_COMPILER_REVISION" \
+            --output /tmp/runtime-contract-evidence
       - name: Restore attributed source-maintenance receipts
         uses: actions/cache/restore@v4
         with:
@@ -123,6 +128,7 @@ jobs:
           PUBLISHED_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           python scripts/check_contract_candidate.py \
+            --facts-dir /tmp/runtime-contract-evidence \
             --baseline-ref "$REVIEWED_BASELINE" \
             --published-ref "$PUBLISHED_REF" \
             --report /tmp/contract-readiness.json
@@ -131,7 +137,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: candidate-contract-readiness
-          path: /tmp/contract-readiness.json
+          path: |
+            /tmp/contract-readiness.json
+            /tmp/runtime-contract-evidence/acquisition-receipt.json
           if-no-files-found: ignore
   contracts:
     # Preserve the existing required check and reject skipped formal checks
