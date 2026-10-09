@@ -1,0 +1,281 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Financial Datasets API — Macro Interest Rates",
+    "version": "1.0.0",
+    "description": "Central bank interest rate data (historical series + real-time snapshot), proxied through AIsa.",
+    "x-aisa-source": {
+      "kind": "manual",
+      "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/macro_snapshot.json",
+      "fetched_at": "2026-09-29T21:25:55+08:00",
+      "content_hash": "sha256:ab83247884214ede8eb258de7bccb941ea29ad0c961aaedea19475069af00289",
+      "converter": "scripts/import_existing_contracts.py@1",
+      "path_space": "public",
+      "owner": "AIsa-team/docs",
+      "refresh_policy": "manual",
+      "review_period_days": 30,
+      "policy_revision": "sha256:ea93b5361ba7e2366915b56935c00e96587319d62c27f74c9f8fec3eafb302be"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one/apis/v1/financial",
+      "description": "Production API"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "InterestRatesResponse": {
+        "type": "object",
+        "properties": {
+          "interest_rates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InterestRate"
+            }
+          }
+        }
+      },
+      "InterestRate": {
+        "type": "object",
+        "properties": {
+          "bank": {
+            "type": "string",
+            "description": "The symbol of the central bank."
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the central bank."
+          },
+          "rate": {
+            "type": "number",
+            "description": "The interest rate of the central bank."
+          },
+          "date": {
+            "type": "string",
+            "description": "The date of the interest rate in YYYY-MM-DD format."
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "A short error message."
+          },
+          "message": {
+            "type": "string",
+            "description": "A more detailed error message."
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequestError": {
+        "description": "Bad request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Bad Request",
+              "message": "Invalid request parameters"
+            }
+          }
+        }
+      },
+      "NotFoundError": {
+        "description": "The specified resource was not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Not Found",
+              "message": "Ticker XXXX not found"
+            }
+          }
+        }
+      },
+      "PaymentRequiredError": {
+        "description": "The request requires a paid subscription",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Payment Required",
+              "message": "This endpoint requires a paid subscription. Please upgrade your plan."
+            }
+          }
+        }
+      },
+      "UnauthorizedError": {
+        "description": "Unauthorized",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": "Unauthorized",
+              "message": "Invalid API key provided"
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/macro/interest-rates": {
+      "get": {
+        "x-aisa-pricing": {
+          "model": "per_request",
+          "currency": "USD",
+          "price_usd": 0.024,
+          "cost_tier": "med"
+        },
+        "summary": "Interest Rates (Historical)",
+        "description": "One central bank's policy rate over time, as an `interest_rates` array of `bank`, `name`, `date` and `rate`. `bank` is required and bound by `start_date` and `end_date`. Trap worth knowing: the code is case-sensitive and must be uppercase — FED works, fed returns HTTP 404 with \"No data found\", which reads like an empty result rather than a bad argument. Valid codes are FED, ECB, BOJ, BOE, BOC, RBA, PBOC, SNB, RBI and BOK; `get_financial_macro_interest_rates_snapshot` with no arguments lists them all.",
+        "operationId": "get_financial_macro_interest_rates",
+        "parameters": [
+          {
+            "name": "bank",
+            "in": "query",
+            "description": "The bank whose interest rates to return. Use the /macro/interest-rates/banks endpoint to get a list of available banks. Case-sensitive: must be uppercase. A lowercase code returns HTTP 404 \"No data found\", which reads like an empty result rather than a bad argument.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FED",
+                "ECB",
+                "BOJ",
+                "BOE",
+                "BOC",
+                "RBA",
+                "PBOC",
+                "SNB",
+                "RBI",
+                "BOK"
+              ]
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "The start date of the interest rates to return in YYYY-MM-DD format.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "The end date of the interest rates to return in YYYY-MM-DD format.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Interest rates response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterestRatesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequiredError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      }
+    },
+    "/macro/interest-rates/snapshot": {
+      "get": {
+        "x-aisa-pricing": {
+          "model": "per_request",
+          "currency": "USD",
+          "price_usd": 0.024,
+          "cost_tier": "med"
+        },
+        "summary": "Interest Rates (Real-Time)",
+        "description": "Current policy rates for the ten central banks tracked here, as an `interest_rates` array of `bank`, `name`, `rate` and `date`. `bank` is optional — omit it to get all ten at once, which is also how you discover the valid codes: FED, ECB, BOJ, BOE, BOC, RBA, PBOC, SNB, RBI and BOK. Use it for the current rate backdrop. For one bank's rate path over time use `get_financial_macro_interest_rates`.",
+        "operationId": "get_financial_macro_interest_rates_snapshot",
+        "parameters": [
+          {
+            "name": "bank",
+            "in": "query",
+            "description": "Optional central bank code (e.g., FED, ECB, BOJ). AIsa also accepts this endpoint without `bank` and returns the latest snapshot for all major central banks. Case-sensitive: must be uppercase. A lowercase code returns HTTP 404 \"No data found\", which reads like an empty result rather than a bad argument.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FED",
+                "ECB",
+                "BOJ",
+                "BOE",
+                "BOC",
+                "RBA",
+                "PBOC",
+                "SNB",
+                "RBI",
+                "BOK"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Interest rates snapshot response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterestRatesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequiredError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      }
+    }
+  }
+}
