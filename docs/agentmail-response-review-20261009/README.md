@@ -51,3 +51,16 @@ The importer rejects different raw hashes, missing or aliased methods/paths,
 additional successful statuses, or payload-bearing 204 declarations. No new
 source review is inferred from regeneration. Independent approval and a receipt
 bound to the new composite content/policy hashes remain separate steps.
+
+Reproduce the exact provider replay, including existing public request mirrors
+(the two metrics ANY routes need those unchanged method authorities):
+
+```sh
+python docs/agentmail-response-review-20261009/replay.py \
+  --facts /path/to/actual-public-runtime-20261009/agentmail.json \
+  --base /path/to/agentmail-locked-before.json
+```
+
+This uses no previous document or overlay; both sides use the same current
+`public_mirror_index`. The script validates the recorded actual facts file hash
+and exact base raw hash before comparing every generated request operation.
