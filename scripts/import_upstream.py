@@ -119,7 +119,9 @@ def import_source(provider, url):
     if not KEY.fullmatch(provider) or not url.startswith('https://'):
         raise ValueError('provider id and HTTPS source URL are required')
     if url == FRED_INDEX_URL:
-        result = import_fred_reference(provider, url)
+        # The registry may name the mirror fred-official.json; the canonical
+        # authority URL fixes the converter's provider independently of filename.
+        result = import_fred_reference('fred', url)
         result['info']['x-aisa-source'] = initial_policy(result['info']['x-aisa-source'])
         return result
     def fetch(source_url):
