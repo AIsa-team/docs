@@ -109,3 +109,50 @@ the workflow manually from `main` with `dispatch_tool_router` enabled.
 ## License
 
 This repository is available under the [MIT License](LICENSE).
+
+## Acquire an actual Runtime release for contract review
+
+After the Runtime operator supplies the **actual published artifact revision**
+(64 lowercase hex) and deployed compiler Git SHA (40 lowercase hex), acquire its
+public immutable files into a new local directory:
+
+```sh
+python scripts/fetch_runtime_release.py \
+  --base-url https://api.aisa.one \
+  --artifact-revision "$ACTUAL_RUNTIME_ARTIFACT_REVISION" \
+  --compiler-revision "$DEPLOYED_RUNTIME_COMPILER_SHA" \
+  --output "$ACTUAL_COMPLETE_RUNTIME_FACTS"
+
+python scripts/prepare_source_receipts.py \
+  --reviewed docs/current-source-review-20261009/merged-source-reviews.json \
+  --cache .cache/source-reviews.json
+
+python scripts/check_contract_candidate.py --root "$PWD" \
+  --facts-dir "$ACTUAL_COMPLETE_RUNTIME_FACTS" \
+  --baseline-ref "$INDEPENDENTLY_REVIEWED_BASELINE_FULL_SHA" \
+  --published-ref "$PUBLISHED_DOCS_ARTIFACT_FULL_SHA" \
+  --source-receipts .cache/source-reviews.json \
+  --report "$READINESS_REPORT"
+```
+
+The acquisition command only performs public metadata GETs. It requires a fresh,
+unchanged current pointer before and after downloading the exact immutable
+manifest; validates its revision, every file SHA/ETag and index/provider binding;
+and rejects pending or incomplete selected Runtime coverage. HTTPS verification
+is enabled, redirects and environment proxies are disabled, and acquisition is
+bounded to 180 seconds, 512 files, 8 MiB per file and 64 MiB per immutable release.
+An existing output directory is never reused. Files retain their downloaded
+bytes, with both `providers/*.json` and flat copies for the existing Docs CLI.
+
+`category.json` is fetched twice unchanged during that interval and is explicitly
+recorded as live, unversioned metadata outside the immutable release manifest.
+The receipt records the source/compiler/artifact pins and acquisition time; it
+is evidence of input acquisition, **not** Docs publication or baseline approval.
+Do not use a hypothetical overlay or historical W0 as the actual Runtime input.
+
+The final command evaluates the current checked-out Docs graph and its offline
+recomposition. Existing generated artifacts must still be regenerated through
+the normal composition gates, and outstanding request/response definition gaps
+remain subject to the strict readiness check. Source review receipts do not
+provide the independently approved baseline or prove a code-only Docs commit was
+published. See [reviewed source inputs](docs/current-source-review-20261009/README.md).
