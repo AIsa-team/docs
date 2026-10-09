@@ -1,11 +1,12 @@
 """Whole documentation catalog regression, not whole-runtime contract coverage."""
 import copy
+import io
 import json
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tempfile
+import tarfile
 import unittest
 from unittest.mock import patch
 
@@ -21,14 +22,26 @@ def effective_operations(document):
     }
 
 
+# This exercises the original legacy-to-runtime cutover. Current generated
+# documents carry real Git identity proofs and are not a legacy fixture that can
+# be copied into an unrelated empty repository. Keep the full input immutable;
+# the actual current graph is assessed separately by the formal artifact gate.
+LEGACY_CATALOG_REF = "e0ee9af05d7407976af62a72ac4e3499703a4f6a"
+
+
 class FullCatalogCutoverTests(unittest.TestCase):
     def test_pilot_cutover_and_legacy_pin_preserve_every_other_operation(self):
         repository = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "openapi").mkdir()
-            for source in (repository / "openapi").glob("*.json"):
-                shutil.copy2(source, root / "openapi" / source.name)
+            raw = subprocess.check_output(
+                ["git", "archive", "--format=tar", LEGACY_CATALOG_REF, "--", "openapi"], cwd=repository)
+            with tarfile.open(fileobj=io.BytesIO(raw), mode="r:") as archive:
+                for member in archive:
+                    name = Path(member.name)
+                    if member.isfile() and name.parent == Path("openapi") and name.suffix == ".json":
+                        (root / name).write_bytes(archive.extractfile(member).read())
             output = root / "openapi/similarweb.json"
             previous = json.loads(output.read_text())
             original_bytes = output.read_bytes()
