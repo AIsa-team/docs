@@ -2,13 +2,13 @@
   "openapi": "3.0.0",
   "info": {
     "title": "Kalshi Trade API Manual Endpoints",
-    "version": "3.31.0",
+    "version": "3.34.0",
     "description": "Manually defined OpenAPI spec for endpoints being migrated to spec-first approach",
     "x-aisa-source": {
       "kind": "provider_openapi",
       "url": "https://docs.kalshi.com/openapi.yaml",
-      "fetched_at": "2026-09-29T18:14:43.366677+00:00",
-      "content_hash": "sha256:a38548b7d60bd47fce253733d38f6f756b64ae8c1820eea73ec166f66bb8b9e1",
+      "fetched_at": "2026-10-09T03:12:07.345823+00:00",
+      "content_hash": "sha256:998a8d669fa38c88e7118b3f97ae0f86b1ad4a044c87fead31beaeca9d53932d",
       "converter": "scripts/import_upstream.py@2",
       "owner": "AIsa-team/docs",
       "refresh_policy": "automatic",
@@ -2735,7 +2735,7 @@
       "get": {
         "operationId": "GetPositions",
         "summary": "Get Positions",
-        "description": "Restricts the positions to those with any of following fields with non-zero values, as a comma separated list. The following values are accepted: position, total_traded.\nRegistered partners may also use a user OAuth access token with the explicitly granted read::compliance_partner scope.\n",
+        "description": "Returns unsettled positions by default. Set `settlement_status=settled` to page through settled positions that are still in the live data set, or `settlement_status=all` for both live states. Positions already archived are available via `GET /historical/positions`.\nSettled and all-state positions are paginated by event ticker to keep large histories bounded. Cursors are specific to the selected settlement status.\n`count_filter` restricts positions to those with a non-zero position or total traded count.\nRegistered partners may also use a user OAuth access token with the explicitly granted read::compliance_partner scope.\n",
         "tags": [
           "portfolio"
         ],
@@ -2758,6 +2758,9 @@
           },
           {
             "$ref": "#/components/parameters/CountFilterQuery"
+          },
+          {
+            "$ref": "#/components/parameters/PositionSettlementStatusQuery"
           },
           {
             "$ref": "#/components/parameters/TickerQuery"
@@ -2799,7 +2802,7 @@
       "get": {
         "operationId": "GetSettlements",
         "summary": "Get Settlements",
-        "description": " Endpoint for getting the member's settlements historical track.",
+        "description": "Returns settlement records still in the live data set. Archived positions are available via `GET /historical/positions`, which has different fields; this endpoint does not return archived settlement records.",
         "tags": [
           "portfolio"
         ],
@@ -3003,7 +3006,13 @@
         ],
         "parameters": [
           {
-            "$ref": "#/components/parameters/TickerQuery"
+            "name": "ticker",
+            "in": "query",
+            "description": "Filter by market ticker. Accepts a comma-separated list of up to 100 market tickers.",
+            "schema": {
+              "type": "string",
+              "x-go-type-skip-optional-pointer": true
+            }
           },
           {
             "$ref": "#/components/parameters/OrderIdQuery"
@@ -6125,7 +6134,7 @@
       "get": {
         "operationId": "GetHistoricalCutoff",
         "summary": "Get Historical Cutoff Timestamps",
-        "description": "Returns the cutoff timestamps that define the boundary between **live** and **historical** data.\n\n## Cutoff fields\n- `market_settled_ts` : Markets that **settled** before this timestamp, and their candlesticks, must be accessed via `GET /historical/markets` and `GET /historical/markets/{ticker}/candlesticks`.\n- `trades_created_ts` : Trades that were **filled** before this timestamp must be accessed via `GET /historical/fills`.\n- `orders_updated_ts` : Orders that were **canceled or fully executed** before this timestamp must be accessed via `GET /historical/orders`. Resting (active) orders are always available in `GET /portfolio/orders`.\n- `market_positions_last_updated_ts` : Settled positions **archived from the live data set** before this timestamp must be accessed via `GET /historical/positions`. Unsettled positions are always available in `GET /portfolio/positions`.\n",
+        "description": "Returns the archive's cutoff timestamps. For positions, the cutoff is the backfill horizon; visibility in the historical API waits for a buffered, whole-event handoff.\n\n## Cutoff fields\n- `market_settled_ts` : Markets that **settled** before this timestamp, and their candlesticks, must be accessed via `GET /historical/markets` and `GET /historical/markets/{ticker}/candlesticks`.\n- `trades_created_ts` : Trades that were **filled** before this timestamp must be accessed via `GET /historical/fills`.\n- `orders_updated_ts` : Orders that were **canceled or fully executed** before this timestamp must be accessed via `GET /historical/orders`. Resting (active) orders are always available in `GET /portfolio/orders`.\n- `market_positions_last_updated_ts` : Backfill horizon for settled positions, not a guaranteed archive-visibility boundary. An event moves to `GET /historical/positions` only after its buffered handoff completes. Until then, its settled positions remain available via `GET /portfolio/positions?settlement_status=settled`. Unsettled positions remain available in `GET /portfolio/positions`.\n",
         "tags": [
           "historical"
         ],
@@ -6351,7 +6360,7 @@
       "get": {
         "operationId": "GetHistoricalPositions",
         "summary": "Get Historical Positions",
-        "description": " Endpoint for getting settled market positions that have been archived to the historical database. Positions whose markets were archived before `market_positions_last_updated_ts` on `GET /historical/cutoff` are available via this endpoint. Positions are archived per whole event: a settled event's positions move here together and are never split between this endpoint and `GET /portfolio/positions`. Unsettled positions are always available via `GET /portfolio/positions`.",
+        "description": "Returns settled market positions after their event completes the live-to-historical handoff. Until then, settled positions remain available via `GET /portfolio/positions?settlement_status=settled`. The `market_positions_last_updated_ts` value on `GET /historical/cutoff` is the backfill horizon, not a guarantee that every older position has moved. Unsettled positions are available via `GET /portfolio/positions`.",
         "tags": [
           "historical"
         ],
@@ -6819,6 +6828,20 @@
         "description": "Restricts the positions to those with any of following fields with non-zero values, as a comma separated list. The following values are accepted - position, total_traded",
         "schema": {
           "type": "string"
+        }
+      },
+      "PositionSettlementStatusQuery": {
+        "name": "settlement_status",
+        "in": "query",
+        "description": "Return unsettled positions by default, settled positions that have not yet been archived, or all positions in the live data set.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "unsettled",
+            "settled",
+            "all"
+          ],
+          "default": "unsettled"
         }
       },
       "OrderIdQuery": {
@@ -10303,6 +10326,11 @@
           "amount"
         ],
         "properties": {
+          "client_transfer_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Client ID for duplicate prevention. Reuse only for identical requests. Scoped to the user and both exchange instances and shards. Accepted transfers cannot be repeated with the same ID on the same route.\nOnly supported for primary accounts. Transfers involving numbered subaccounts reject this field. If omitted, each request creates a new transfer.\n"
+          },
           "source": {
             "$ref": "#/components/schemas/ExchangeInstance",
             "description": "The source exchange instance"
@@ -10913,7 +10941,7 @@
           },
           "creator_id": {
             "type": "string",
-            "description": "Public communications ID of the RFQ creator (anonymized). Set to \"0\" for other users when obscure_creator_id is enabled."
+            "description": "Public communications ID of the RFQ creator (pseudonymous). When obscure_creator_id is enabled, other users receive the shared placeholder \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\" (SHA-256 of empty input). The creator sees their normal ID. After successful quote execution, subsequent RFQ responses show the normal public communications ID to all viewers."
           },
           "market_ticker": {
             "type": "string",
@@ -11061,7 +11089,7 @@
           },
           "obscure_creator_id": {
             "type": "boolean",
-            "description": "Hide the RFQ creator ID from other users until successful execution. The creator always sees their own ID.",
+            "description": "Replace the RFQ creator's public communications ID with a shared empty-input SHA-256 hash for other users. Applies to RFQ responses and broadcasts, and to quotes before successful execution. Successful execution reveals the normal ID in subsequent RFQ responses and in the executed quote. Accepting or confirming a quote does not reveal the ID. The creator always sees their normal ID. See the RFQ guide for the placeholder and visibility rules.",
             "default": false,
             "x-go-type-skip-optional-pointer": true
           },
@@ -11128,7 +11156,7 @@
           },
           "rfq_creator_id": {
             "type": "string",
-            "description": "Public communications ID of the RFQ creator (anonymized). Set to \"0\" for other users when obscure_creator_id is enabled.",
+            "description": "Public communications ID of the RFQ creator (pseudonymous). When obscure_creator_id is enabled, other users receive the shared placeholder \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\" (SHA-256 of empty input). The creator sees their normal ID. After this quote executes successfully, its counterparty sees the normal public communications ID.",
             "x-go-type-skip-optional-pointer": true
           },
           "market_ticker": {
@@ -12445,7 +12473,9 @@
           "is_all_yes",
           "size_min",
           "size_max",
-          "functional_description"
+          "functional_description",
+          "price_level_structure",
+          "price_ranges"
         ],
         "properties": {
           "collection_ticker": {
@@ -12523,6 +12553,17 @@
           "functional_description": {
             "type": "string",
             "description": "A functional description of the collection describing how inputs affect the output."
+          },
+          "price_level_structure": {
+            "type": "string",
+            "description": "Price level structure used for new markets created in this collection. Existing markets may differ; use the market's price_level_structure and price_ranges for its current pricing."
+          },
+          "price_ranges": {
+            "type": "array",
+            "description": "Price bands and tick sizes in fixed-point dollars for new markets created in this collection. Use these ranges to determine valid prices rather than hardcoding the structure name.",
+            "items": {
+              "$ref": "#/components/schemas/PriceRange"
+            }
           }
         }
       },

@@ -17,8 +17,8 @@
     "x-aisa-source": {
       "kind": "provider_openapi",
       "url": "https://docs.financialdatasets.ai/api/openapi.json",
-      "fetched_at": "2026-09-29T18:17:23.056482+00:00",
-      "content_hash": "sha256:a0eeab28dd7bbdf114b13e1533748d91c34949b39016f3fc586dcb679acc1507",
+      "fetched_at": "2026-10-09T03:03:34.670372+00:00",
+      "content_hash": "sha256:d63f20dafe846df9e8885088aba082df3351764dc22faaf120439c33aecc790a",
       "converter": "scripts/import_upstream.py@2",
       "owner": "AIsa-team/docs",
       "refresh_policy": "automatic",
@@ -101,6 +101,10 @@
     {
       "name": "Agent Account",
       "description": "Self-serve account creation and funding for AI agents."
+    },
+    {
+      "name": "Search",
+      "description": "Search financial documents with one question and get cited passages back"
     }
   ],
   "security": [
@@ -4722,6 +4726,159 @@
           }
         }
       }
+    },
+    "/search": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "search",
+        "summary": "Search financial documents",
+        "description": "Ask one question in plain English and get the passages of financial documents that answer it, each with a citation that opens the document at the passage. Alpha: access is by invitation.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              },
+              "example": {
+                "query": "clawback policy for incentive compensation",
+                "filters": {
+                  "identifiers": {
+                    "ticker": [
+                      "AAPL"
+                    ]
+                  }
+                },
+                "limit": 1
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The passages that answer, one result per document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                },
+                "example": {
+                  "search_id": "48805604-29b5-431f-ae85-7a405d576984",
+                  "results": [
+                    {
+                      "title": "Apple Inc · DEF 14A 2026",
+                      "url": "https://www.sec.gov/Archives/edgar/data/320193/000130817926000008/aapl014016-def14a.htm",
+                      "date": "2026-01-08",
+                      "source": "sec.gov",
+                      "excerpts": [
+                        {
+                          "text": "Governance and Other Considerations\nRecoupment of Compensation\nThe terms of all outstanding time-based and performance-based RSU awards held by our named executive officers in 2025 allow us to recoup any shares or other ...",
+                          "citation": {
+                            "document": "0001308179-26-000008",
+                            "date": "2026-01-08",
+                            "section": "Compensation > Compensation Discussion and Analysis > Governance and Other Considerations > Recoupment of Compensation",
+                            "link": "https://www.sec.gov/Archives/edgar/data/320193/000130817926000008/aapl014016-def14a.htm#:~:text=Governance%20and%20Other,to%20limited%20exceptions."
+                          },
+                          "attributes": {
+                            "kind": "text"
+                          }
+                        }
+                      ],
+                      "entities": [
+                        {
+                          "name": "Apple Inc",
+                          "identifiers": {
+                            "cik": "0000320193",
+                            "ticker": "AAPL"
+                          }
+                        }
+                      ],
+                      "attributes": {
+                        "document_type": "DEF 14A"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not valid. The message names the field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "message": "limit: Input should be less than or equal to 100"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequiredError"
+          },
+          "404": {
+            "description": "The caller does not have access during the alpha",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "error": "The endpoint /search does not exist."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The question names a company the search cannot identify. Send filters.identifiers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchRefusalResponse"
+                },
+                "example": {
+                  "search_id": "e38104d5-6bd7-4d82-bc4e-0a21179d1f77",
+                  "error": {
+                    "reason": "unresolved_company",
+                    "message": "A company named in the query matched no listing, or several.",
+                    "fix": "Send filters.identifiers."
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Search is temporarily unavailable. Try again shortly.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchErrorResponse"
+                },
+                "example": {
+                  "search_id": "e38104d5-6bd7-4d82-bc4e-0a21179d1f77",
+                  "error": {
+                    "message": "Search is temporarily unavailable. Try again shortly."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5611,16 +5768,6 @@
             "nullable": true,
             "description": "Name of the held security."
           },
-          "cusip": {
-            "type": "string",
-            "nullable": true,
-            "description": "9-character CUSIP, when available."
-          },
-          "isin": {
-            "type": "string",
-            "nullable": true,
-            "description": "12-character ISIN, when available."
-          },
           "weight": {
             "type": "number",
             "nullable": true,
@@ -5662,16 +5809,6 @@
                 "type": "string",
                 "nullable": true,
                 "description": "Security name (null when no fund holds it)."
-              },
-              "cusip": {
-                "type": "string",
-                "nullable": true,
-                "description": "9-character CUSIP, when available."
-              },
-              "isin": {
-                "type": "string",
-                "nullable": true,
-                "description": "12-character ISIN, when available."
               },
               "total_funds": {
                 "type": "integer",
@@ -7122,10 +7259,6 @@
           "name_of_issuer": {
             "type": "string",
             "description": "Issuer name as reported on the 13F."
-          },
-          "cusip": {
-            "type": "string",
-            "description": "9-character CUSIP of the held security."
           },
           "report_period": {
             "type": "string",
@@ -9140,6 +9273,314 @@
           "attribution": {
             "type": "string",
             "description": "The source credit to keep when displaying the data: the Computable GPU Index."
+          }
+        }
+      },
+      "SearchCitation": {
+        "type": "object",
+        "description": "Where a passage was read, and the link that opens the document there.",
+        "required": [
+          "document",
+          "date"
+        ],
+        "properties": {
+          "document": {
+            "type": "string",
+            "description": "The document's id at its source: the accession number for an SEC filing."
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The day the document became public."
+          },
+          "section": {
+            "type": "string",
+            "description": "The headings above the passage, outermost first. Absent when the passage sits under no heading."
+          },
+          "link": {
+            "type": "string",
+            "description": "Opens the document at the passage, highlighted, or the document itself when a highlighted link is not available."
+          }
+        }
+      },
+      "SearchExcerpt": {
+        "type": "object",
+        "description": "One passage of the document that answers the question, with its own citation.",
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The passage, verbatim from the document."
+          },
+          "citation": {
+            "$ref": "#/components/schemas/SearchCitation"
+          },
+          "attributes": {
+            "type": "object",
+            "description": "What is true of this passage.",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "table"
+                ],
+                "description": "Whether the passage is running text or a table."
+              },
+              "part": {
+                "type": "string",
+                "description": "The part of a table this passage covers, for example \"1 of 2\". Absent for text and for a table returned whole."
+              }
+            }
+          }
+        }
+      },
+      "SearchEntity": {
+        "type": "object",
+        "description": "A company the result is about.",
+        "required": [
+          "name",
+          "identifiers"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The company's name."
+          },
+          "identifiers": {
+            "type": "object",
+            "description": "The company's identifiers by scheme. The same schemes filters.identifiers accepts.",
+            "properties": {
+              "cik": {
+                "type": "string",
+                "description": "The SEC Central Index Key, zero-padded to 10 digits."
+              },
+              "ticker": {
+                "type": "string",
+                "description": "The ticker symbol."
+              }
+            }
+          }
+        }
+      },
+      "SearchResult": {
+        "type": "object",
+        "description": "One document, with the passages in it that answer the question.",
+        "required": [
+          "title",
+          "url",
+          "date",
+          "source",
+          "excerpts",
+          "entities",
+          "attributes"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The company and the document, for example \"Apple Inc · DEF 14A 2026\"."
+          },
+          "url": {
+            "type": "string",
+            "description": "The document itself."
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The day the document became public."
+          },
+          "source": {
+            "type": "string",
+            "description": "The site the document came from. Today always \"sec.gov\"."
+          },
+          "excerpts": {
+            "type": "array",
+            "description": "The passages of this document that answer, best first. At most 10.",
+            "items": {
+              "$ref": "#/components/schemas/SearchExcerpt"
+            }
+          },
+          "entities": {
+            "type": "array",
+            "description": "The companies the result is about.",
+            "items": {
+              "$ref": "#/components/schemas/SearchEntity"
+            }
+          },
+          "attributes": {
+            "type": "object",
+            "description": "What is true of the document.",
+            "properties": {
+              "document_type": {
+                "type": "string",
+                "description": "The kind of document, for example \"DEF 14A\"."
+              }
+            }
+          }
+        }
+      },
+      "SearchRequest": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "description": "One question in plain English, 1 to 300 characters."
+          },
+          "filters": {
+            "type": "object",
+            "description": "Constraints on which documents are searched. Nothing outside a filter is returned.",
+            "properties": {
+              "identifiers": {
+                "type": "object",
+                "description": "The companies the search is about, by scheme. Results come only from these companies. An identifier no listed company has is a 400.",
+                "properties": {
+                  "ticker": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Ticker symbols, for example [\"AAPL\", \"MSFT\"]."
+                  },
+                  "cik": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "SEC Central Index Keys. Leading zeros are optional."
+                  }
+                }
+              },
+              "date": {
+                "type": "object",
+                "description": "A window on the document's date, the day it became public. Both bounds are inclusive. Send either or both. A window keeps every document inside it in scope.",
+                "properties": {
+                  "after": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Only documents made public on or after this day."
+                  },
+                  "before": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Only documents made public on or before this day."
+                  }
+                }
+              }
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 10,
+            "description": "How many results to return. A result is one document."
+          }
+        }
+      },
+      "SearchResponse": {
+        "type": "object",
+        "required": [
+          "search_id",
+          "results"
+        ],
+        "properties": {
+          "search_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of this search. Keep it when you report a result."
+          },
+          "results": {
+            "type": "array",
+            "description": "One result per document, best first. At most `limit`.",
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "description": "What a partial answer is missing. Absent when nothing is.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "A code you can branch on."
+                },
+                "message": {
+                  "type": "string",
+                  "description": "What is missing."
+                },
+                "fix": {
+                  "type": "string",
+                  "description": "What to send instead."
+                }
+              }
+            }
+          }
+        }
+      },
+      "SearchErrorResponse": {
+        "type": "object",
+        "properties": {
+          "search_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of this search. Absent when the request was refused before a search began."
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string",
+                "description": "What is wrong. A 400 names the field."
+              }
+            }
+          }
+        }
+      },
+      "SearchRefusalResponse": {
+        "type": "object",
+        "required": [
+          "search_id",
+          "error"
+        ],
+        "properties": {
+          "search_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "error": {
+            "type": "object",
+            "required": [
+              "reason",
+              "message",
+              "fix"
+            ],
+            "properties": {
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "ambiguous_symbol",
+                  "unresolved_company"
+                ],
+                "description": "Why the search was refused. A code you can branch on."
+              },
+              "message": {
+                "type": "string",
+                "description": "What the question left unclear."
+              },
+              "fix": {
+                "type": "string",
+                "description": "What to send so the search can run."
+              }
+            }
           }
         }
       }
