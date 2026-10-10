@@ -37,6 +37,33 @@ class RevisionTests(unittest.TestCase):
                 {'x-aisa-document': {'providers': {'alpha': {'document_hash': 'doc'}}}},
                 {'provider_document_hashes': {'alpha': 'doc'}, 'docs_commit': 'a' * 40})
 
+    def test_only_verified_same_c_refs_can_differ_and_other_checks_remain(self):
+        values = list(self.fixture())
+        values[3]['docs_commit'] = 'b' * 40
+        version = {'mode': 'formal', 'docsRevision': 'b' * 40, 'contentHash': 'd' * 64}
+        proof = {'status': 'passed', 'expected_docs_ref': 'a' * 40, 'contract_release': 'c' * 64,
+                 'clock_docs_ref': 'f' * 40, 'publications': {'b' * 40: {}}}
+        self.assertEqual(self.assess(*values, expected_docs_ref='a' * 40, website_version=version)['status'], 'failed')
+        result = self.assess(*values, expected_docs_ref='a' * 40, website_version=version, formal_provenance=proof)
+        self.assertEqual(result['status'], 'passed')
+        version['contentHash'] = 'e' * 64
+        self.assertEqual(self.assess(*values, expected_docs_ref='a' * 40, website_version=version,
+                                    formal_provenance=proof)['status'], 'failed')
+        proof['status'] = 'failed'
+        with self.assertRaises(ValueError):
+            self.assess(*values, expected_docs_ref='a' * 40, website_version=version, formal_provenance=proof)
+
+    def test_metadata_refresh_preserves_observation_identity_without_waiving_deadline(self):
+        from check_contract_revisions import publication_identity
+        proof = {'status': 'passed', 'contract_release': 'c' * 64, 'clock_docs_ref': 'f' * 40}
+        assessment = {'formal_provenance': proof}
+        first = publication_identity(assessment, 'a' * 40, 'd' * 64, '2026-10-10T16:56:34Z', 'convergence')
+        later = publication_identity(assessment, 'b' * 40, 'd' * 64, '2026-10-10T16:56:34Z', 'convergence')
+        self.assertEqual(first, later)
+        other = publication_identity({'formal_provenance': dict(proof, contract_release='e' * 64)},
+                                     'b' * 40, 'd' * 64, '2026-10-10T16:56:34Z', 'convergence')
+        self.assertNotEqual(first, other)
+
     def test_empty_legacy_catalog_cannot_pass_acceptance(self):
         result = assess({'legacy': {}}, {}, {}, {})
         self.assertEqual(result['status'], 'not_assessed')

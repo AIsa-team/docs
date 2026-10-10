@@ -62,7 +62,7 @@ def retain_assessment_history(state, previous, assessment, identity):
 
 
 def monitor_timing(assessment, current, previous, expected_ref, source_hash):
-    """Retain first on-time completion only for this exact release identity.
+    """Retain first on-time completion only for this verified contract and clock.
 
     Every current public surface is still checked. This cache only avoids
     treating a completed release as forever overdue; strict acceptance ignores it.
@@ -70,8 +70,7 @@ def monitor_timing(assessment, current, previous, expected_ref, source_hash):
     from contract_activation import deadline
     if not expected_ref:
         return current, None
-    identity = {'docs_ref': expected_ref, 'openapi_sha256': source_hash,
-                'budget_start': current['budget_start'], 'phase': current['phase']}
+    identity = publication_identity(assessment, expected_ref, source_hash, current['budget_start'], current['phase'])
     observed = previous.get('convergence_observation', {})
     retained = None
     if observed.get('identity') == identity:
@@ -95,9 +94,20 @@ def monitor_timing(assessment, current, previous, expected_ref, source_hash):
     return current, retained
 
 
+def publication_identity(assessment, expected_ref, source_hash, budget_start, phase):
+    proof = assessment.get("formal_provenance")
+    identity = {"openapi_sha256": source_hash, "budget_start": budget_start, "phase": phase}
+    if proof and proof.get("status") == "passed":
+        identity["contract_release"] = proof["contract_release"]
+        identity["clock_docs_ref"] = proof["clock_docs_ref"]
+    else:
+        identity["docs_ref"] = expected_ref
+    return identity
+
+
 def assess(documents, runtime=None, website=None, router=None,
            expected_docs_ref=None, failures=(), website_version=None,
-           expected_openapi_sha256=None):
+           expected_openapi_sha256=None, formal_provenance=None):
     """Strict, dated convergence evidence, separate from monitor escalation."""
     verified = {key: value for key, value in documents.items() if value.get('document_hash')}
     missing = list(failures)
@@ -106,6 +116,11 @@ def assess(documents, runtime=None, website=None, router=None,
     surfaces = dict(runtime=runtime, website=website, router=router)
     missing.extend(f'{key}:publication_metadata_unavailable' for key, value in surfaces.items()
                    if not isinstance(value, dict))
+    accepted_refs = {expected_docs_ref}
+    if formal_provenance is not None:
+        if formal_provenance.get('status') != 'passed' or formal_provenance.get('expected_docs_ref') != expected_docs_ref:
+            raise ValueError('Invalid independently verified formal provenance')
+        accepted_refs.update(formal_provenance['publications'])
     errors = []
     if expected_docs_ref and not re.fullmatch(r'[0-9a-f]{40}', expected_docs_ref):
         raise ValueError('expected docs revision must be a full Git SHA')
@@ -127,12 +142,12 @@ def assess(documents, runtime=None, website=None, router=None,
         for provider in runtime.get('pending_providers', []):
             missing.append(f"runtime:{provider['id']}:projection_pending")
         if expected_docs_ref:
-            if router.get('docs_commit') != expected_docs_ref:
+            if router.get('docs_commit') not in accepted_refs:
                 errors.append('tool-router:docs_revision_mismatch')
         if expected_docs_ref or expected_openapi_sha256:
             if website_version.get('mode') != 'formal':
                 errors.append('website:source_mode_not_formal')
-            if expected_docs_ref and website_version.get('docsRevision') != expected_docs_ref:
+            if expected_docs_ref and website_version.get('docsRevision') not in accepted_refs:
                 errors.append('website:docs_revision_mismatch')
             if website_version.get('contentHash') != expected_openapi_sha256:
                 errors.append('website:aggregate_content_hash_mismatch')
@@ -142,6 +157,7 @@ def assess(documents, runtime=None, website=None, router=None,
             'verified_providers': len(verified),
             'legacy_providers': len(documents) - len(verified),
             'expected_docs_ref': expected_docs_ref,
+            'formal_provenance': formal_provenance,
             'expected_openapi_sha256': expected_openapi_sha256,
             'missing_inputs': sorted(set(missing)), 'mismatches': sorted(set(errors))}
 
@@ -152,7 +168,7 @@ def main():
     parser.add_argument('--state', type=Path, default=Path('.cache/contract-revisions/state.json'))
     parser.add_argument('--acceptance', action='store_true', help='Fail immediately on missing evidence or any mismatch; does not update monitor state')
     parser.add_argument('--evidence-dir', type=Path, help='Offline public metadata: runtime.json, website.json, router.json')
-    parser.add_argument('--expected-docs-ref', help='Full immutable docs SHA required in Website and Router publication metadata')
+    parser.add_argument('--expected-docs-ref', help='Immutable formal Docs SHA; older consumer refs require full same-contract provenance')
     parser.add_argument('--report', type=Path, help='Save dated assessment JSON; contains no provider requests')
     parser.add_argument('--budget-start', help='UTC start recorded by the release owner; no inferred/reset deadline')
     parser.add_argument('--budget-phase', choices=('candidate', 'convergence'), default='convergence')
@@ -215,7 +231,15 @@ def main():
             results[key] = json.loads((args.evidence_dir / f'{filename}.json').read_text()) if args.evidence_dir else read_public(url)
         except Exception as exc:
             failures.append(f'{key}:unavailable:{type(exc).__name__}')
-    assessment = assess(documents, **results, expected_docs_ref=args.expected_docs_ref,
+    provenance = None
+    if args.expected_docs_ref and args.budget_start and not args.evidence_dir and not failures:
+        from publication_origin import verify_consumer_refs
+        try:
+            provenance = verify_consumer_refs(args.root, args.expected_docs_ref,
+                [results["router"].get("docs_commit"), results["website_version"].get("docsRevision")], args.budget_start)
+        except Exception as exc:
+            failures.append(f"formal_provenance:unavailable:{type(exc).__name__}")
+    assessment = assess(documents, **results, formal_provenance=provenance, expected_docs_ref=args.expected_docs_ref,
                         expected_openapi_sha256=source_hash if args.expected_docs_ref else None,
                         failures=failures)
     # Strict acceptance neither reads nor writes prior monitor observations.
@@ -241,8 +265,7 @@ def main():
     failures = sorted(set(assessment['mismatches'] + assessment['missing_inputs']))
     state = update_state(failures, previous)
     retain_assessment_history(state, previous, assessment,
-                              {'docs_ref': args.expected_docs_ref, 'openapi_sha256': source_hash,
-                               'budget_start': args.budget_start, 'phase': args.budget_phase})
+                              publication_identity(assessment, args.expected_docs_ref, source_hash, args.budget_start, args.budget_phase))
     if observation:
         state['convergence_observation'] = observation
     args.state.parent.mkdir(parents=True, exist_ok=True)
