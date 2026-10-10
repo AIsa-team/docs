@@ -95,6 +95,65 @@ class RevisionTests(unittest.TestCase):
             self.assertEqual(report['mismatches'], ['website:docs_revision_mismatch'])
             self.assertEqual(report['expected_openapi_sha256'], urls[version_url]['contentHash'])
 
+    def test_invalid_router_provider_hash_map_is_a_structured_failure(self):
+        for invalid in (None, [], ['alpha'], 'invalid', 1, False):
+            with self.subTest(metadata=invalid):
+                values = list(self.fixture())
+                values[3]['provider_document_hashes'] = invalid
+                result = self.assess(*values, expected_docs_ref='a' * 40)
+                self.assertEqual(result['status'], 'failed')
+                self.assertEqual(result['mismatches'], [
+                    'alpha:tool-router:document_hash_mismatch',
+                    'tool-router:provider_document_hashes_invalid'])
+
+    def test_null_router_hashes_strict_cli_writes_failure_without_state_mutation(self):
+        import json
+        import tempfile
+        from unittest.mock import patch
+        documents, *surfaces = self.fixture()
+        surfaces[2]['provider_document_hashes'] = None
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'openapi.yaml').write_text(yaml.safe_dump({'info': {'x-aisa-document': {'providers': documents}}}))
+            for name, value in zip(('runtime', 'website', 'router'), surfaces):
+                (root / f'{name}.json').write_text(json.dumps(value))
+            self.write_website_version(root)
+            state = root / 'state.json'
+            state.write_text('{"consecutive":{"old":1}}')
+            report = root / 'report.json'
+            with patch.object(sys, 'argv', ['monitor', '--root', str(root), '--acceptance',
+                    '--evidence-dir', str(root), '--state', str(state),
+                    '--expected-docs-ref', 'a' * 40, '--report', str(report)]), \
+                    patch('builtins.print'), \
+                    patch('check_contract_revisions.read_public', side_effect=AssertionError('network')):
+                self.assertEqual(main(), 1)
+            self.assertEqual(state.read_text(), '{"consecutive":{"old":1}}')
+            assessment = json.loads(report.read_text())
+            self.assertEqual(assessment['status'], 'failed')
+            self.assertIn('tool-router:provider_document_hashes_invalid', assessment['mismatches'])
+
+    def test_null_router_hashes_monitor_escalates_and_recovers(self):
+        import copy
+        import tempfile
+        documents, *values = self.fixture()
+        healthy = dict(zip(('runtime', 'website', 'router'), values))
+        incomplete = copy.deepcopy(healthy)
+        incomplete['router']['provider_document_hashes'] = None
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first, report, state = self.run_monitor(root, documents, incomplete)
+            self.assertEqual(first, 0)
+            self.assertEqual(report['status'], 'failed')
+            self.assertEqual(state['consecutive']['tool-router:provider_document_hashes_invalid'], 1)
+            second, report, state = self.run_monitor(root, documents, incomplete)
+            self.assertEqual(second, 1)
+            self.assertEqual(report['status'], 'failed')
+            self.assertEqual(state['consecutive']['tool-router:provider_document_hashes_invalid'], 2)
+            recovered, report, state = self.run_monitor(root, documents, healthy)
+            self.assertEqual(recovered, 0)
+            self.assertEqual(report['status'], 'passed')
+            self.assertEqual(state['consecutive'], {})
+
     def test_matching_hashes_do_not_hide_wrong_consumer_revision(self):
         values = list(self.fixture())
         values[3]['docs_commit'] = 'b' * 40

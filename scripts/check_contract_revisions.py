@@ -17,6 +17,11 @@ def compare(documents, runtime, website, router):
     index = {provider['id']: provider.get('facts_hash') for provider in runtime.get('providers', [])}
     web = website.get('x-aisa-document', {}).get('providers', {})
     router_hashes = router.get('provider_document_hashes', {})
+    if not isinstance(router_hashes, dict):
+        # Unpublished/legacy Router metadata can encode this map as null.
+        # Keep the failure in the assessment and continue per-provider checks.
+        errors.append('tool-router:provider_document_hashes_invalid')
+        router_hashes = {}
     for provider, metadata in documents.items():
         expected = metadata.get('document_hash')
         if not expected:
