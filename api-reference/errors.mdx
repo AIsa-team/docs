@@ -24,6 +24,16 @@ For support, retain `X-Request-ID` when returned, and `request_id` when present 
 
 A `503` does not by itself identify an upstream failure. A `404` can refer to a route or an upstream resource; authentication can run before route lookup, so a missing credential is not proof that a route is absent. `403`, `422`, and `429` remain endpoint-specific: do not assume a universal code list or rate-limit headers. Honor `Retry-After` when it is actually returned.
 
+## Documentation and sales-source availability
+
+The Website's contract and sales-data endpoints report source availability separately from Integration API execution errors.
+
+To inspect a published contract, read `https://aisa.one/api/contracts/version`. Its `contentHash` identifies the OpenAPI bytes and `docsRevision` identifies the immutable Docs input. Request `/api/contracts/source?hash=<contentHash>&bundled=1` for those bytes, or `/api/contracts/source?hash=<contentHash>&operation_id=<operationId>` for one operation. A mismatched hash returns `409`; unavailable verified bundled content can return `503`. Check the response's `X-AISA-Contract-Hash` and `X-AISA-Docs-Revision` against the selected version. `mode: formal` describes the bundled declarations; it does not establish that dynamic prices, availability, or every consumer are fresh.
+
+A definition marked `pending` remains incomplete. Do not invent missing request fields or treat an unavailable request definition as a ready-to-call contract. A pending response definition remains unknown even when the existing endpoint can be called.
+
+The sales JSON endpoint `/api/sales-api-data` can return HTTP `503` with `freshness: unavailable` and `reason_code: verified_sales_source_unavailable` when it cannot acquire a verified sales snapshot. This response is a documentation/source-availability result; it is not evidence that a Provider request was executed, authentication failed, or a charge settled. Retain a previously verified snapshot only with its original observation time and an explicit stale state; never relabel a static snapshot as fresh. Recheck the source and release identities before treating recovery as current data.
+
 ## Observed gateway examples
 
 These examples preserve the actual error shapes. The request ID is illustrative.

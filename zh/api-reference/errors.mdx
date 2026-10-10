@@ -24,6 +24,16 @@ Integration API 保留多种兼容错误格式。`error` 可以是字符串或�
 
 仅凭 `503` 不能判定为上游故障。`404` 可能指路由或上游资源；认证可能先于路由查找，因此缺少凭据不能证明路由不存在。`403`、`422`、`429` 的具体含义仍由端点决定，不要假定统一错误代码或限流响应头。实际返回 `Retry-After` 时应遵守该值。
 
+## 文档与销售数据源的可用性
+
+Website 的契约和销售数据端点单独报告来源可用性，不与 Integration API 的执行错误混淆。
+
+核查已发布契约时，先读取 `https://aisa.one/api/contracts/version`。`contentHash` 标识 OpenAPI 字节，`docsRevision` 标识不可变的 Docs 输入。通过 `/api/contracts/source?hash=<contentHash>&bundled=1` 读取对应字节，或通过 `/api/contracts/source?hash=<contentHash>&operation_id=<operationId>` 读取单个操作。哈希不匹配返回 `409`；经过校验的打包内容不可用时可能返回 `503`。将响应的 `X-AISA-Contract-Hash`、`X-AISA-Docs-Revision` 与选定版本核对。`mode: formal` 描述打包的声明，不证明动态价格、可用状态或所有消费者都已更新。
+
+标为 `pending` 的定义仍不完整。不要编造缺失的请求字段，也不要将不可用的请求定义视为可直接调用的完整契约。响应定义处于 pending 时仍属未知，即使现有端点可以调用。
+
+销售 JSON 端点 `/api/sales-api-data` 无法取得经过校验的销售快照时，可能返回 HTTP `503`，其中 `freshness: unavailable`、`reason_code: verified_sales_source_unavailable`。这是文档/来源可用性结果，不能据此认定 Provider 请求已执行、认证失败或费用已结算。保留此前合格快照时，必须保留原始观测时间并明确显示 stale；不能将静态快照重新标为 fresh。恢复后先核对来源与发布身份，再将其视为当前数据。
+
 ## 网关实际格式示例
 
 下方示例保留真实错误结构，请求 ID 仅作示意。
