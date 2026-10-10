@@ -74,7 +74,11 @@ class ActivationTests(unittest.TestCase):
                 if acceptance: argv.append('--acceptance')
                 with patch.object(sys, 'argv', argv), patch('contract_activation.datetime', wraps=datetime) as clock, \
                         patch('check_contract_revisions.time.time', return_value=now.timestamp()), \
-                        patch('check_contract_revisions.read_public', side_effect=lambda url: urls[url]), patch('builtins.print'):
+                        patch('check_contract_revisions.read_public', side_effect=lambda url: urls[url]), \
+                        patch('publication_origin.verify_consumer_refs', side_effect=lambda root, expected, refs, budget: {
+                            'status': 'passed', 'expected_docs_ref': expected, 'contract_release': expected + '0' * 24,
+                            'clock_docs_ref': expected, 'budget_start': budget, 'publications': {expected: {}}}), \
+                        patch('builtins.print'):
                     clock.now.return_value = now
                     status = main()
                 return status, json.loads(report.read_text())
@@ -122,8 +126,9 @@ class ActivationTests(unittest.TestCase):
 
     def test_real_monitor_entry_selects_missed_dispatch_source_then_recovers_without_deadline_reset(self):
         # Actual selector CLI -> actual monitor CLI -> immutable Git source.
-        # Public metadata is the only mocked boundary; no attributed receipts
-        # or publication approvals are created by this code recovery test.
+        # Public metadata and the independent provenance gate are mocked here;
+        # publication_origin tests exercise the actual producer and full graph.
+        # No attributed receipts are minted by this monitor recovery test.
         documents, *values = test_contract_revisions.RevisionTests().fixture()
         surfaces = dict(zip(('runtime', 'website', 'router'), values))
         start = datetime.now(timezone.utc) - timedelta(minutes=10)
@@ -157,7 +162,11 @@ class ActivationTests(unittest.TestCase):
                 argv = ['monitor', '--root', str(root), '--state', str(root/'state.json'), '--require-budget',
                         '--expected-docs-ref', expected, '--selection-file', str(selection_file),
                         '--budget-start', began.isoformat(), '--report', str(report)]
-                with patch.object(sys, 'argv', argv), patch('check_contract_revisions.read_public', side_effect=lambda url: urls[url]), patch('builtins.print'):
+                with patch.object(sys, 'argv', argv), patch('check_contract_revisions.read_public', side_effect=lambda url: urls[url]), \
+                        patch('publication_origin.verify_consumer_refs', side_effect=lambda root, expected, refs, budget: {
+                            'status': 'passed', 'expected_docs_ref': expected, 'contract_release': expected + '0' * 24,
+                            'clock_docs_ref': expected, 'budget_start': budget, 'publications': {expected: {}}}), \
+                        patch('builtins.print'):
                     return main(), json.loads(report.read_text())
             status, failed = run(start)
             self.assertEqual(failed['status'], 'failed')
