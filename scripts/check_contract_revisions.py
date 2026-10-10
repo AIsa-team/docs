@@ -12,18 +12,17 @@ from urllib.request import Request, urlopen
 import yaml
 
 
-def compare(documents, runtime, website, mcp, router):
+def compare(documents, runtime, website, router):
     errors = []
     index = {provider['id']: provider.get('facts_hash') for provider in runtime.get('providers', [])}
     web = website.get('x-aisa-document', {}).get('providers', {})
-    mcp_hashes = mcp.get('documentHashes', {})
     router_hashes = router.get('provider_document_hashes', {})
     for provider, metadata in documents.items():
         expected = metadata.get('document_hash')
         if not expected:
             continue  # Legacy is explicitly not a verified runtime projection.
         for surface, actual in [('website', web.get(provider, {}).get('document_hash')),
-                                ('mcp', mcp_hashes.get(provider)), ('tool-router', router_hashes.get(provider))]:
+                                ('tool-router', router_hashes.get(provider))]:
             if actual != expected:
                 errors.append(f'{provider}:{surface}:document_hash_mismatch')
         catalogs = metadata.get('catalogs') or {provider: {'x-aisa-document': {'facts_hash': metadata.get('facts_hash')}}}
@@ -78,7 +77,7 @@ def monitor_timing(assessment, current, previous, expected_ref, source_hash):
     return current, retained
 
 
-def assess(documents, runtime=None, website=None, mcp=None, router=None,
+def assess(documents, runtime=None, website=None, router=None,
            expected_docs_ref=None, failures=(), website_version=None,
            expected_openapi_sha256=None):
     """Strict, dated convergence evidence, separate from monitor escalation."""
@@ -86,7 +85,7 @@ def assess(documents, runtime=None, website=None, mcp=None, router=None,
     missing = list(failures)
     if not verified:
         missing.append('docs:no_runtime_composed_provider_metadata')
-    surfaces = dict(runtime=runtime, website=website, mcp=mcp, router=router)
+    surfaces = dict(runtime=runtime, website=website, router=router)
     missing.extend(f'{key}:publication_metadata_unavailable' for key, value in surfaces.items()
                    if not isinstance(value, dict))
     errors = []
@@ -110,8 +109,6 @@ def assess(documents, runtime=None, website=None, mcp=None, router=None,
         for provider in runtime.get('pending_providers', []):
             missing.append(f"runtime:{provider['id']}:projection_pending")
         if expected_docs_ref:
-            if mcp.get('docsRefs') != [expected_docs_ref]:
-                errors.append('mcp:docs_revision_mismatch')
             if router.get('docs_commit') != expected_docs_ref:
                 errors.append('tool-router:docs_revision_mismatch')
         if expected_docs_ref or expected_openapi_sha256:
@@ -136,8 +133,8 @@ def main():
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--state', type=Path, default=Path('.cache/contract-revisions/state.json'))
     parser.add_argument('--acceptance', action='store_true', help='Fail immediately on missing evidence or any mismatch; does not update monitor state')
-    parser.add_argument('--evidence-dir', type=Path, help='Offline public metadata: runtime.json, website.json, mcp.json, router.json')
-    parser.add_argument('--expected-docs-ref', help='Full immutable docs SHA required in MCP and Router publication metadata')
+    parser.add_argument('--evidence-dir', type=Path, help='Offline public metadata: runtime.json, website.json, router.json')
+    parser.add_argument('--expected-docs-ref', help='Full immutable docs SHA required in Website and Router publication metadata')
     parser.add_argument('--report', type=Path, help='Save dated assessment JSON; contains no provider requests')
     parser.add_argument('--budget-start', help='UTC start recorded by the release owner; no inferred/reset deadline')
     parser.add_argument('--budget-phase', choices=('candidate', 'convergence'), default='convergence')
@@ -189,7 +186,6 @@ def main():
     targets = {
         'runtime': 'https://api.aisa.one/info/openapi.json',
         'website': 'https://aisa.one/.well-known/agent-card.json',
-        'mcp': 'https://mcp.aisa.one/.well-known/mcp.json',
         'router': 'https://tools.aisa.one/.well-known/catalog.json',
     }
     if args.expected_docs_ref:
