@@ -439,19 +439,32 @@ temporary test candidate; they do not alter W0 or become production authority.
 The generated `diagnostic-docs.lock.json` binds actual aggregate bytes and marks
 the result unapproved and non-activatable. Its code SHA is not a publication SHA.
 
-`contract_activation.json` defaults to `activation_enabled: false`. The 10-minute
-pull and hourly monitor schedule definitions stay dormant unless both the tracked
-plan and `RUNTIME_CONTRACT_ACTIVATION_ENABLED=true` are enabled by the release
-owner. Manual dry-run defaults remain available. Activated monitoring requires
-an independently selected `RUNTIME_CONTRACT_EXPECTED_DOCS_REF` and recorded
-`RUNTIME_CONTRACT_BUDGET_START`; missing/invalid inputs fail before fetching.
-Scheduled recovery selects that exact Git source and validates its aggregate
-hash. The original budget start is retained: 3600 seconds for a candidate and
-14400 seconds for convergence, with the first deadline breach failing immediately.
-After an on-time complete observation, the monitor retains its latency for that
-exact Docs SHA, aggregate hash, budget start and phase while rechecking all live
-surfaces. A new version/start or a later mismatch cannot reuse that healthy
-result. Strict acceptance ignores the monitor cache.
+The 10-minute pull and hourly monitor remain gated by both the tracked
+`contract_activation.json` plan and `RUNTIME_CONTRACT_ACTIVATION_ENABLED=true`.
+Manual dry runs remain available. For each actual formal publication, the sole
+publisher records `docs/publication/release-origin.json` in the same guarded
+commit, after detecting real staged changes. It binds C, pointer bytes, the
+assessed parent, the producer run/attempt and its original publish-step UTC T0.
+No-change retries do not rewrite this receipt or start a new budget.
+
+Scheduled monitoring selects the latest formal-origin commit reachable on main,
+not a later unassessed code commit. Using only the existing GitHub token with
+Actions read permission, it verifies the original producer attempt, compose and
+publish step, the T0 step window, the exact authenticated formal artifact, full
+graph and current source authorization. Missing, expired or invalid evidence
+fails closed. Fixed repository variables no longer strand the monitor on an
+older publication. Manual acceptance still requires explicit immutable SHA/T0.
+
+The budget identity is the exact published Docs SHA and receipt, not C alone.
+An independently verified metadata renewal can keep C while creating a new Docs
+SHA and a real new publish T0; observations and retries of the same publication
+cannot reset that clock. The prior publication's last assessment, including an
+unresolved deadline failure, remains in monitor history. Candidate and convergence
+limits remain3600 and14400 seconds. First on-time completion is retained only for
+the exact identity while every live surface is rechecked; strict acceptance ignores
+that success cache. The origin receipt is outside the content graph to avoid a
+self-reference and is authenticated through the producer rather than trusted alone.
+
 Operator/CDN limits and real normal/lost-dispatch timing receipts remain W4 work.
 The legacy `sync-openapi` writer exits 3 when a runtime registry exists, directing
 publication to the single strictly assessed `pull-openapi` path. Without a

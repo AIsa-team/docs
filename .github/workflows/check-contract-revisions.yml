@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 jobs:
   activation-plan:
     runs-on: ubuntu-latest
@@ -53,19 +54,15 @@ jobs:
           ACCEPTANCE: ${{ inputs.acceptance }}
           EXPECTED_DOCS_REF: ${{ inputs.expected_docs_ref }}
           BUDGET_START: ${{ inputs.budget_start }}
-          CONFIGURED_DOCS_REF: ${{ vars.RUNTIME_CONTRACT_EXPECTED_DOCS_REF }}
-          CONFIGURED_BUDGET_START: ${{ vars.RUNTIME_CONTRACT_BUDGET_START }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           args=(--report /tmp/contract-revisions-report.json)
           if [ "$GITHUB_EVENT_NAME" = schedule ]; then
-            EXPECTED_DOCS_REF="$CONFIGURED_DOCS_REF"
-            BUDGET_START="$CONFIGURED_BUDGET_START"
+            python scripts/publication_origin.py select --output /tmp/publication-selection.json
+            EXPECTED_DOCS_REF=$(python -c 'import json; print(json.load(open("/tmp/publication-selection.json"))["expected_docs_ref"])')
+            BUDGET_START=$(python -c 'import json; print(json.load(open("/tmp/publication-selection.json"))["budget_start"])')
             args+=(--require-budget)
-            if [ -z "$EXPECTED_DOCS_REF" ] || [ -z "$BUDGET_START" ]; then
-              python scripts/check_contract_revisions.py --require-budget \
-                --report /tmp/contract-revisions-report.json
-            fi
           fi
           if [ -n "$BUDGET_START" ]; then args+=(--budget-start "$BUDGET_START" --require-budget); fi
           if [ -n "$EXPECTED_DOCS_REF" ]; then
@@ -83,7 +80,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: public-contract-convergence
-          path: /tmp/contract-revisions-report.json
+          path: |
+            /tmp/contract-revisions-report.json
+            /tmp/publication-selection.json
           if-no-files-found: ignore
       - uses: actions/cache/save@v4
         if: always()
