@@ -244,3 +244,25 @@ Concrete operations carry `x-aisa-runtime-operation` with the original Runtime
 `operation_id`, public `path` and uppercase `method` (including `ANY`). This is
 copied before public method expansion; it grants no missing request authority
 and lets consumers bind public aliases without guessing native identities.
+
+### Upstream maintenance credentials
+
+`refresh-upstream.yml` acquires official automatic sources every 12 hours and
+retains hash-bound successful observations in the source-review cache. Source
+changes remain a review PR on `automation/upstream-contract-refresh`; this job
+does not publish contracts or merge source changes.
+
+PR creation uses the existing `TOOL_ROUTER_DISPATCH_APP_ID` variable and
+`TOOL_ROUTER_DISPATCH_APP_PRIVATE_KEY` secret, scoped to the `docs` repository
+with Contents and Pull requests write permissions. The App installation must
+include `docs` and approve these permissions. The job's `GITHUB_TOKEN` only
+needs Contents read. This avoids depending on the separate repository setting
+that permits GitHub Actions to create pull requests, and lets the App-created
+PR run the existing contract checks.
+
+A successful acquisition alone does not renew published consumer evidence.
+The sole `pull-openapi.yml` publisher must assess and export the fresh receipts.
+Its scheduled path requires both tracked activation and the operator variable
+`RUNTIME_CONTRACT_ACTIVATION_ENABLED=true`; a manual `publish=true` dispatch
+uses the same assessment and publication gates. Failed or changed acquisitions
+must not be relabeled as an unchanged-source review.
