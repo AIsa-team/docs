@@ -54,7 +54,7 @@ class ActivationTests(unittest.TestCase):
 
     def test_actual_monitor_retains_only_same_release_on_time_observation(self):
         documents, *values = test_contract_revisions.RevisionTests().fixture()
-        surfaces = dict(zip(('runtime', 'website', 'mcp', 'router'), values))
+        surfaces = dict(zip(('runtime', 'website', 'router'), values))
         began = datetime(2026, 1, 2, tzinfo=timezone.utc)
         early = began + timedelta(hours=1)
         late = began + timedelta(seconds=14401)
@@ -65,7 +65,7 @@ class ActivationTests(unittest.TestCase):
             source.write_text(original)
             state = root / 'state.json'; report = root / 'report.json'
             urls = dict(zip(('https://api.aisa.one/info/openapi.json', 'https://aisa.one/.well-known/agent-card.json',
-                'https://mcp.aisa.one/.well-known/mcp.json', 'https://tools.aisa.one/.well-known/catalog.json'), surfaces.values()))
+                'https://tools.aisa.one/.well-known/catalog.json'), surfaces.values()))
             urls['https://aisa.one/api/contracts/version'] = {'mode': 'formal', 'docsRevision': 'a' * 40,
                 'contentHash': hashlib.sha256(original.encode()).hexdigest()}
             def run(now, start=began, expected='a'*40, acceptance=False):
@@ -98,24 +98,22 @@ class ActivationTests(unittest.TestCase):
                     expected = 'a'*40
                     start = began
                     source.write_text(original)
-                    surfaces['mcp']['docsRefs'] = [expected]
                     surfaces['router']['docs_commit'] = expected
-                    surfaces['mcp']['documentHashes']['alpha'] = 'doc'
+                    surfaces['router']['provider_document_hashes']['alpha'] = 'doc'
                     if changed == 'version':
                         expected = 'b'*40
-                        surfaces['mcp']['docsRefs'] = [expected]
                         surfaces['router']['docs_commit'] = expected
                     elif changed == 'source_bytes':
                         source.write_text(original + '# distinct fixed aggregate bytes\n')
                     elif changed == 'budget_start':
                         start -= timedelta(seconds=1)
                     elif changed == 'late_drift':
-                        surfaces['mcp']['documentHashes']['alpha'] = 'different'
+                        surfaces['router']['provider_document_hashes']['alpha'] = 'different'
                     status, failed = run(late, start, expected)
                     self.assertEqual((status, failed['status']), (1, 'failed'))
                     self.assertIn('timing:deadline_breached', failed['mismatches'])
                     if changed == 'late_drift':
-                        self.assertIn('alpha:mcp:document_hash_mismatch', failed['mismatches'])
+                        self.assertIn('alpha:tool-router:document_hash_mismatch', failed['mismatches'])
         for start in ('unparseable', '2026-01-02', '2099-01-01T00:00:00Z'):
             with patch.object(sys, 'argv', ['monitor', '--require-budget', '--expected-docs-ref', 'a'*40,
                                            '--budget-start', start]), \
@@ -127,7 +125,7 @@ class ActivationTests(unittest.TestCase):
         # Public metadata is the only mocked boundary; no attributed receipts
         # or publication approvals are created by this code recovery test.
         documents, *values = test_contract_revisions.RevisionTests().fixture()
-        surfaces = dict(zip(('runtime', 'website', 'mcp', 'router'), values))
+        surfaces = dict(zip(('runtime', 'website', 'router'), values))
         start = datetime.now(timezone.utc) - timedelta(minutes=10)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -149,9 +147,9 @@ class ActivationTests(unittest.TestCase):
             selection = json.loads(selection_file.read_text())['selection']
             self.assertEqual(selection['docs_ref'], expected)
             self.assertFalse(selection['publication_verified'])
-            surfaces['mcp']['docsRefs'] = [old]; surfaces['router']['docs_commit'] = old
+            surfaces['router']['docs_commit'] = old
             urls = dict(zip(('https://api.aisa.one/info/openapi.json', 'https://aisa.one/.well-known/agent-card.json',
-                'https://mcp.aisa.one/.well-known/mcp.json', 'https://tools.aisa.one/.well-known/catalog.json'), surfaces.values()))
+                'https://tools.aisa.one/.well-known/catalog.json'), surfaces.values()))
             urls['https://aisa.one/api/contracts/version'] = {'mode': 'formal', 'docsRevision': expected,
                 'contentHash': digest}
             report = root / 'report.json'
@@ -163,9 +161,8 @@ class ActivationTests(unittest.TestCase):
                     return main(), json.loads(report.read_text())
             status, failed = run(start)
             self.assertEqual(failed['status'], 'failed')
-            self.assertIn('mcp:docs_revision_mismatch', failed['mismatches'])
+            self.assertIn('tool-router:docs_revision_mismatch', failed['mismatches'])
             surfaces['website']['x-aisa-document']['providers']['alpha']['document_hash'] = 'newdoc'
-            surfaces['mcp'].update(docsRefs=[expected], documentHashes={'alpha': 'newdoc'})
             surfaces['router'].update(docs_commit=expected, provider_document_hashes={'alpha': 'newdoc'})
             status, recovered = run(start)
             self.assertEqual((status, recovered['status']), (0, 'passed'))

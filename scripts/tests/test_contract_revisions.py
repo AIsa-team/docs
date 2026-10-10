@@ -21,11 +21,10 @@ class RevisionTests(unittest.TestCase):
         documents = {'group': {'document_hash': 'document', 'catalogs': {'a': {'x-aisa-document': {'facts_hash': 'facts'}}}}, 'legacy': {}}
         runtime = {'providers': [{'id': 'a', 'facts_hash': 'facts'}]}
         website = {'x-aisa-document': {'providers': {'group': {'document_hash': 'document'}}}}
-        mcp = {'documentHashes': {'group': 'document'}}
         router = {'provider_document_hashes': {'group': 'document'}}
-        self.assertEqual(compare(documents, runtime, website, mcp, router), [])
+        self.assertEqual(compare(documents, runtime, website, router), [])
         runtime['providers'][0]['facts_hash'] = 'changed'
-        self.assertEqual(compare(documents, runtime, website, mcp, router), ['group:a:facts_hash_mismatch'])
+        self.assertEqual(compare(documents, runtime, website, router), ['group:a:facts_hash_mismatch'])
     def test_only_consecutive_failures_escalate(self):
         first = update_state(['a'], {})
         self.assertEqual(first['consecutive'], {'a': 1})
@@ -36,11 +35,10 @@ class RevisionTests(unittest.TestCase):
         return ({'alpha': {'document_hash': 'doc', 'facts_hash': 'facts'}, 'legacy': {}},
                 {'providers': [{'id': 'alpha', 'facts_hash': 'facts'}]},
                 {'x-aisa-document': {'providers': {'alpha': {'document_hash': 'doc'}}}},
-                {'documentHashes': {'alpha': 'doc'}, 'docsRefs': ['a' * 40]},
                 {'provider_document_hashes': {'alpha': 'doc'}, 'docs_commit': 'a' * 40})
 
     def test_empty_legacy_catalog_cannot_pass_acceptance(self):
-        result = assess({'legacy': {}}, {}, {}, {}, {})
+        result = assess({'legacy': {}}, {}, {}, {})
         self.assertEqual(result['status'], 'not_assessed')
         self.assertEqual(result['verified_providers'], 0)
         self.assertIn('docs:no_runtime_composed_provider_metadata', result['missing_inputs'])
@@ -83,7 +81,6 @@ class RevisionTests(unittest.TestCase):
             (root / 'openapi.yaml').write_text(raw)
             urls = dict(zip(('https://api.aisa.one/info/openapi.json',
                 'https://aisa.one/.well-known/agent-card.json',
-                'https://mcp.aisa.one/.well-known/mcp.json',
                 'https://tools.aisa.one/.well-known/catalog.json'), values))
             version_url = 'https://aisa.one/api/contracts/version'
             urls[version_url] = {'mode': 'formal', 'docsRevision': 'b' * 40,
@@ -100,11 +97,10 @@ class RevisionTests(unittest.TestCase):
 
     def test_matching_hashes_do_not_hide_wrong_consumer_revision(self):
         values = list(self.fixture())
-        values[3]['docsRefs'].append('b' * 40)
-        values[4]['docs_commit'] = 'b' * 40
+        values[3]['docs_commit'] = 'b' * 40
         result = self.assess(*values, expected_docs_ref='a' * 40)
         self.assertEqual(result['status'], 'failed')
-        self.assertEqual(result['mismatches'], ['mcp:docs_revision_mismatch', 'tool-router:docs_revision_mismatch'])
+        self.assertEqual(result['mismatches'], ['tool-router:docs_revision_mismatch'])
 
     def test_new_runtime_catalog_cannot_be_absent_from_every_consumer(self):
         values = list(self.fixture())
@@ -134,11 +130,11 @@ class RevisionTests(unittest.TestCase):
         from unittest.mock import patch
         import yaml
         documents, *surfaces = self.fixture()
-        surfaces[3]['docs_commit'] = 'b' * 40
+        surfaces[2]['docs_commit'] = 'b' * 40
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / 'openapi.yaml').write_text(yaml.safe_dump({'info': {'x-aisa-document': {'providers': documents}}}))
-            for name, value in zip(('runtime', 'website', 'mcp', 'router'), surfaces):
+            for name, value in zip(('runtime', 'website', 'router'), surfaces):
                 (root / f'{name}.json').write_text(json.dumps(value))
             self.write_website_version(root)
             state = root / 'state.json'
@@ -169,7 +165,6 @@ class RevisionTests(unittest.TestCase):
         urls = {
             'https://api.aisa.one/info/openapi.json': 'runtime',
             'https://aisa.one/.well-known/agent-card.json': 'website',
-            'https://mcp.aisa.one/.well-known/mcp.json': 'mcp',
             'https://tools.aisa.one/.well-known/catalog.json': 'router',
         }
         def read_fixture(url):
@@ -188,7 +183,7 @@ class RevisionTests(unittest.TestCase):
         import copy
         import tempfile
         documents, *values = self.fixture()
-        healthy = dict(zip(('runtime', 'website', 'mcp', 'router'), values))
+        healthy = dict(zip(('runtime', 'website', 'router'), values))
         incomplete = copy.deepcopy(healthy)
         incomplete['runtime']['providers'].append({'id': 'new_provider', 'facts_hash': 'newfacts'})
         with tempfile.TemporaryDirectory() as tmp:
@@ -212,12 +207,12 @@ class RevisionTests(unittest.TestCase):
         import copy
         import tempfile
         documents, *values = self.fixture()
-        healthy = dict(zip(('runtime', 'website', 'mcp', 'router'), values))
+        healthy = dict(zip(('runtime', 'website', 'router'), values))
         for failure, error in [
                 ('pending', 'runtime:new_provider:projection_pending'),
-                ('missing_surface', 'mcp:publication_metadata_unavailable'),
-                ('missing_hash', 'alpha:mcp:document_hash_mismatch'),
-                ('fetch_failure', 'mcp:unavailable:TimeoutError'),
+                ('missing_surface', 'router:publication_metadata_unavailable'),
+                ('missing_hash', 'alpha:tool-router:document_hash_mismatch'),
+                ('fetch_failure', 'router:unavailable:TimeoutError'),
                 ('legacy_only', 'docs:no_runtime_composed_provider_metadata')]:
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
@@ -226,11 +221,11 @@ class RevisionTests(unittest.TestCase):
                 if failure == 'pending':
                     incomplete['runtime']['pending_providers'] = [{'id': 'new_provider', 'endpoint_count': 1}]
                 elif failure == 'missing_surface':
-                    incomplete['mcp'] = None
+                    incomplete['router'] = None
                 elif failure == 'missing_hash':
-                    incomplete['mcp']['documentHashes'] = {}
+                    incomplete['router']['provider_document_hashes'] = {}
                 elif failure == 'fetch_failure':
-                    incomplete['mcp'] = TimeoutError('Private details must not enter public reports')
+                    incomplete['router'] = TimeoutError('Private details must not enter public reports')
                 else:
                     candidate = {'legacy': {}}
                 first, _, state = self.run_monitor(root, candidate, incomplete)
@@ -245,6 +240,22 @@ class RevisionTests(unittest.TestCase):
                 self.assertEqual(assessment['status'], 'passed')
                 self.assertEqual(state['consecutive'], {})
 
+    def test_retired_mcp_does_not_block_current_consumers_or_retain_old_alarm(self):
+        import json
+        import tempfile
+        documents, *values = self.fixture()
+        # Real CLI calls the three public targets through run_monitor. Its URL
+        # map deliberately has no retired MCP endpoint; any fetch would fail.
+        healthy = dict(zip(('runtime', 'website', 'router'), values))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'state.json').write_text(json.dumps({'consecutive': {
+                'mcp:unavailable:TimeoutError': 4,
+                'alpha:mcp:document_hash_mismatch': 4}}))
+            status, assessment, state = self.run_monitor(root, documents, healthy)
+            self.assertEqual((status, assessment['status']), (0, 'passed'))
+            self.assertEqual(state['consecutive'], {})
+
     def test_strict_success_does_not_clear_scheduled_monitor_state(self):
         import json
         import tempfile
@@ -254,7 +265,7 @@ class RevisionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / 'openapi.yaml').write_text(yaml.safe_dump({'info': {'x-aisa-document': {'providers': documents}}}))
-            for name, value in zip(('runtime', 'website', 'mcp', 'router'), values):
+            for name, value in zip(('runtime', 'website', 'router'), values):
                 (root / f'{name}.json').write_text(json.dumps(value))
             self.write_website_version(root)
             state = root / 'state.json'
