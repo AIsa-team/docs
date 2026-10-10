@@ -191,7 +191,7 @@ def verify_consumer_refs(root, expected_ref, refs, budget_start):
     selected = select(root)
     latest_ref = selected['expected_docs_ref']
     require(remote_formal_ref() == latest_ref, 'Official formal publication changed; reselect before assessment')
-    require(selected['budget_start'] == budget_start, 'Genuine contract clock differs')
+    require(instant(selected['budget_start']) == instant(budget_start), 'Genuine contract clock differs')
     proofs = {}
     for ref in set(refs) | {expected_ref}:
         require(re.fullmatch('[0-9a-f]{40}', str(ref)), 'Consumer publication ref is invalid')
