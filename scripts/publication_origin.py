@@ -193,7 +193,7 @@ def verify_consumer_refs(root, expected_ref, refs, budget_start):
     require(remote_formal_ref() == latest_ref, 'Official formal publication changed; reselect before assessment')
     require(instant(selected['budget_start']) == instant(budget_start), 'Genuine contract clock differs')
     proofs = {}
-    for ref in set(refs) | {expected_ref}:
+    for ref in sorted(set(refs) | {expected_ref}, key=str):
         require(re.fullmatch('[0-9a-f]{40}', str(ref)), 'Consumer publication ref is invalid')
         candidate = selected if ref == latest_ref else inspect_publication(root, ref)
         require(subprocess.run(['git', 'merge-base', '--is-ancestor', ref, latest_ref], cwd=root).returncode == 0

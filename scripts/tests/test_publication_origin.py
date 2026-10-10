@@ -155,7 +155,8 @@ class OriginTests(unittest.TestCase):
 
     def test_consumer_failed_full_inspection_is_not_equivalence(self):
         selected = {'expected_docs_ref': self.ref, 'contract_release': 'c' * 64,
-                    'budget_start': self.receipt['budget_start']}
+                    'budget_start': self.receipt['budget_start'], 'authorization_fingerprint': {},
+                    'authorization_expires_at': '2099-01-01T00:00:00Z'}
         with patch.object(origin, 'remote_formal_ref', return_value=self.ref), \
              patch.object(origin, 'select', return_value=selected), \
              patch.object(origin, 'inspect_publication', side_effect=ValueError('Authenticated graph failed')):
