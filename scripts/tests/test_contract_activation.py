@@ -19,9 +19,9 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 
 
 class ActivationTests(unittest.TestCase):
-    def test_dormant_plan_and_workflow_double_gate_have_frozen_cadence(self):
+    def test_ready_plan_and_workflow_double_gate_have_frozen_cadence(self):
         config = json.loads((SCRIPTS / 'contract_activation.json').read_text())
-        self.assertFalse(validate_config(config)['activation_enabled'])
+        self.assertTrue(validate_config(config)['activation_enabled'])
         for change in ({'candidate_interval_seconds': 601}, {'candidate_budget_seconds': 3601},
                        {'consumer_budget_seconds': 14401}, {'monitor_interval_seconds': 3601},
                        {'version_cache_max_seconds': 301}, {'activation_enabled': 'true'}):

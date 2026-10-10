@@ -14,10 +14,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install 'PyYAML>=6,<7'
+      - run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
       - name: Restore source review receipts
         uses: actions/cache/restore@v4
         with:
@@ -79,6 +81,43 @@ jobs:
                   if row['freshness'] != 'fresh':
                       body.write(f"- {source}: {row['status']} / {row['freshness']}; owner {row['owner']}; review due {row['review_due_at']}\n")
           PY
+      - name: Detect source candidate changes
+        id: source-changes
+        run: |
+          if git diff --quiet -- openapi/upstream; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Acquire fresh Runtime inputs for the review candidate
+        if: steps.source-changes.outputs.changed == 'true'
+        run: python scripts/fetch_runtime_release.py --current --output /tmp/source-review-runtime
+      - name: Compose and assess the complete source review candidate
+        if: steps.source-changes.outputs.changed == 'true'
+        env:
+          REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
+        run: |
+          python scripts/pull_openapi.py --write --facts-dir /tmp/source-review-runtime \
+            --baseline-ref "$REVIEWED_BASELINE" --readiness-mode pr \
+            --readiness-report /tmp/source-review-composition.json
+          python scripts/runtime_consolidate_openapi.py --output openapi.yaml
+          python scripts/validate_runtime_api_reference_slugs.py --generated-only
+          python scripts/check_contract_candidate.py --facts-dir /tmp/source-review-runtime \
+            --baseline-ref "$REVIEWED_BASELINE" --published-ref "$(git rev-parse HEAD)" \
+            --report /tmp/source-review-readiness.json
+          # This is a review candidate. Only pull-openapi exports formal receipts.
+          git diff --exit-code -- docs/publication/current.json \
+            docs/publication/formal-contract-readiness.json docs/publication/runtime-acquisition.json
+      - name: Retain composed source candidate assessment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-review-candidate-readiness
+          path: |
+            /tmp/source-review-composition.json
+            /tmp/source-review-readiness.json
+            /tmp/source-review-runtime/acquisition-receipt.json
+          if-no-files-found: ignore
       - name: Generate scoped source review token
         id: review-token
         uses: actions/create-github-app-token@v3
@@ -96,7 +135,13 @@ jobs:
           title: 'chore: review upstream contract changes'
           commit-message: 'chore: refresh upstream contract mirrors for review'
           body-path: /tmp/upstream-body.md
-          add-paths: openapi/upstream/*.json
+          add-paths: |
+            openapi
+            api-reference
+            zh/api-reference
+            docs.json
+            openapi.yaml
+            docs/publication/sales-catalog.json
       - name: Report acquisition, policy or missing/overdue review failures
         if: steps.refresh.outcome == 'failure'
         run: exit 1
