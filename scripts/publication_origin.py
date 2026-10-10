@@ -114,9 +114,11 @@ def gh_json(endpoint):
     return json.loads(subprocess.check_output(['gh', 'api', endpoint], timeout=30))
 
 
-def select(root, output):
-    # Later code commits on main do not replace the last formal publication.
-    ref = subprocess.check_output(['git', 'log', '-1', '--format=%H', 'HEAD', '--', ORIGIN], cwd=root, text=True).strip()
+def inspect_publication(root, ref, historical=False):
+    require(subprocess.run(["git", "merge-base", "--is-ancestor", ref, "HEAD"], cwd=root).returncode == 0,
+            "Formal publication is not an ancestor of monitor main")
+    attributed = subprocess.check_output(["git", "log", "-1", "--format=%H", ref, "--", ORIGIN], cwd=root, text=True).strip()
+    require(attributed == ref, "Requested ref is not an attributed publication commit")
     require(re.fullmatch('[0-9a-f]{40}', ref), 'No attributed formal publication on main')
     parents = subprocess.check_output(['git', 'show', '-s', '--format=%P', ref], cwd=root, text=True).split()
     require(len(parents) == 1, 'Formal publication must have one assessed parent')
@@ -139,11 +141,78 @@ def select(root, output):
                         '--name', 'formal-contract-readiness', '--dir', str(artifacts)], check=True, timeout=60)
         files = list(artifacts.rglob('formal-contract-readiness.json'))
         require(len(files) == 1, 'Expected one authenticated formal report')
-        current = verify_graph(fixed, origin, files[0].read_bytes())
+        current = verify_graph(fixed, origin, files[0].read_bytes(),
+                               now=instant(origin["budget_start"]) if historical else None)
+        report = json.loads(files[0].read_bytes())
+        policy = {name: {key: row.get(key) for key in ("source_hash", "policy_revision", "policy")}
+                  for name, row in report["source_governance"]["sources"].items()}
     selected = {'expected_docs_ref': ref, 'budget_start': origin['budget_start'],
-                'contract_release': current['contract_release'], 'producer_origin': origin}
-    output.write_text(json.dumps(selected, indent=2, sort_keys=True) + '\n')
+                'contract_release': current['contract_release'], 'producer_origin': origin,
+                'authorization_fingerprint': policy,
+                'authorization_expires_at': current['source_authorization_expires_at']}
     return selected
+
+
+def first_contract_ref(root, contract_release):
+    require(subprocess.check_output(['git', 'rev-parse', '--is-shallow-repository'], cwd=root, text=True).strip() == 'false',
+            'Complete publication history required; never reset the contract clock')
+    refs = subprocess.check_output(['git', 'log', '--format=%H', 'HEAD', '--', ORIGIN], cwd=root, text=True).split()
+    first = None
+    for ref in refs:
+        pointer = json.loads(subprocess.check_output(['git', 'show', ref + ':docs/publication/current.json'], cwd=root))
+        if pointer.get('contract_release') != contract_release:
+            break
+        first = ref
+    require(first is not None, 'Current contract has no attributed clock')
+    return first
+
+
+def select(root, output=None):
+    # Metadata-only publication refreshes cannot restart a genuine contract clock.
+    ref = subprocess.check_output(['git', 'log', '-1', '--format=%H', 'HEAD', '--', ORIGIN], cwd=root, text=True).strip()
+    selected = inspect_publication(root, ref)
+    first_ref = first_contract_ref(root, selected['contract_release'])
+    first = selected if first_ref == ref else inspect_publication(root, first_ref, historical=True)
+    selected.update(budget_start=first['budget_start'], clock_docs_ref=first_ref,
+                    clock_producer_origin=first['producer_origin'])
+    if output is not None:
+        output.write_text(json.dumps(selected, indent=2, sort_keys=True) + '\n')
+    return selected
+
+
+def remote_formal_ref():
+    rows = gh_json(f"repos/{REPOSITORY}/commits?sha=main&path={ORIGIN}&per_page=1")
+    require(isinstance(rows, list) and len(rows) == 1 and re.fullmatch("[0-9a-f]{40}", str(rows[0].get("sha"))),
+            "Latest official publication unavailable")
+    return rows[0]["sha"]
+
+
+def verify_consumer_refs(root, expected_ref, refs, budget_start):
+    require(remote_formal_ref() == expected_ref, 'Official formal publication changed; reselect before assessment')
+    selected = select(root)
+    require(selected['expected_docs_ref'] == expected_ref and selected['budget_start'] == budget_start,
+            'Expected publication or genuine contract clock differs')
+    proofs = {}
+    for ref in set(refs):
+        require(re.fullmatch('[0-9a-f]{40}', str(ref)), 'Consumer publication ref is invalid')
+        candidate = selected if ref == expected_ref else inspect_publication(root, ref)
+        require(subprocess.run(['git', 'merge-base', '--is-ancestor', ref, expected_ref], cwd=root).returncode == 0
+                and candidate['contract_release'] == selected['contract_release']
+                and candidate['authorization_fingerprint'] == selected['authorization_fingerprint'],
+                'Consumer contract or active source authorization differs')
+        proofs[ref] = candidate
+    # Each graph assessment can be slow. Revalidate active authorization after all
+    # inspections, and reject a formal publication advance; code-only main
+    # commits do not change remote_formal_ref. Never advance the recorded clock.
+    for candidate in proofs.values():
+        require(instant(candidate['authorization_expires_at']) > datetime.now(timezone.utc),
+                'Consumer source authorization expired during assessment')
+    require(instant(selected['authorization_expires_at']) > datetime.now(timezone.utc),
+            'Latest source authorization expired during assessment')
+    require(remote_formal_ref() == expected_ref, 'Official formal publication changed during assessment')
+    return {'status': 'passed', 'expected_docs_ref': expected_ref,
+            'contract_release': selected['contract_release'], 'budget_start': selected['budget_start'],
+            'clock_docs_ref': selected['clock_docs_ref'], 'publications': proofs}
 
 
 def main():
