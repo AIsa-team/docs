@@ -127,12 +127,23 @@ jobs:
       - name: Commit contract mirrors and coverage
         id: publish
         if: github.ref == 'refs/heads/main' && steps.pull.outputs.available == 'true' && (inputs.publish == true || (github.event_name != 'workflow_dispatch' && vars.RUNTIME_CONTRACT_PUBLISH != 'false'))
+        env:
+          PUBLISH_RUN_ID: ${{ github.run_id }}
+          PUBLISH_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git add openapi api-reference zh/api-reference docs.json openapi.yaml docs/publication
           if git diff --cached --quiet; then exit 0; fi
+          # Export deliberately retains an equivalent authorized publication.
+          # Non-graph observations alone cannot create a new consumer identity.
+          if git diff --cached --quiet -- docs/publication/current.json docs/publication/formal-contract-readiness.json docs/publication/runtime-acquisition.json; then
+            echo 'Formal publication unchanged; retaining original identity and budget.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           assessed_base=$(git rev-parse HEAD)
+          python scripts/publication_origin.py record --run-id "$PUBLISH_RUN_ID" --attempt "$PUBLISH_RUN_ATTEMPT"
+          git add docs/publication/release-origin.json
           git commit -m 'chore: regenerate runtime API contract mirrors'
           # The formal receipt describes this exact graph. Never incorporate
           # concurrent main changes after assessment; retry from new inputs.

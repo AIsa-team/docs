@@ -43,6 +43,19 @@ def update_state(errors, previous):
     return {'checked_at': int(time.time()), 'consecutive': {error: counts.get(error, 0) + 1 for error in errors}}
 
 
+def retain_assessment_history(state, previous, assessment, identity):
+    """Keep the prior publication outcome when a new exact publication is selected."""
+    history = list(previous.get('publication_history', []))
+    old = previous.get('latest_publication_assessment')
+    if previous and not old and 'publication_history' not in previous:
+        history.append({'legacy_monitor_state': previous, 'status': 'historical_not_reclassified'})
+    if old and old.get('identity') != identity:
+        history.append(old)
+    state['publication_history'] = history
+    state['latest_publication_assessment'] = {'identity': identity, 'assessment': assessment}
+    return state
+
+
 def monitor_timing(assessment, current, previous, expected_ref, source_hash):
     """Retain first on-time completion only for this exact release identity.
 
@@ -222,6 +235,9 @@ def main():
     # acceptance, retaining only its existing two-consecutive-check escalation.
     failures = sorted(set(assessment['mismatches'] + assessment['missing_inputs']))
     state = update_state(failures, previous)
+    retain_assessment_history(state, previous, assessment,
+                              {'docs_ref': args.expected_docs_ref, 'openapi_sha256': source_hash,
+                               'budget_start': args.budget_start, 'phase': args.budget_phase})
     if observation:
         state['convergence_observation'] = observation
     args.state.parent.mkdir(parents=True, exist_ok=True)

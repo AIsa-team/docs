@@ -138,14 +138,19 @@ class PublicationRaceTests(unittest.TestCase):
         (candidate / 'openapi/example.json').write_text('assessed candidate\n')
         metadata = candidate / 'docs/publication/current.json'
         metadata.parent.mkdir(parents=True)
-        metadata.write_text('assessed same-commit pointer\n')
+        metadata.write_text(json.dumps({'contract_release': 'a'*64})+'\n')
+        # Run the real origin writer in the actual publish-step race fixture.
+        import shutil
+        shutil.copytree(REPO/'scripts', candidate/'scripts', ignore=shutil.ignore_patterns('__pycache__', 'tests'))
         return seed, candidate
 
     def publish(self, candidate, root):
         workflow = yaml.safe_load((REPO / '.github/workflows/pull-openapi.yml').read_text())
         script = next(step['run'] for step in workflow['jobs']['compose']['steps'] if step.get('id') == 'publish')
+        script = script.replace('python scripts/', __import__('shlex').quote(sys.executable)+' scripts/')
         return subprocess.run(['bash', '-e', '-c', script], cwd=candidate,
-                              env={**os.environ, 'GITHUB_OUTPUT': str(root / 'output')}, capture_output=True, text=True)
+                              env={**os.environ, 'GITHUB_OUTPUT': str(root / 'output'),
+                                   'PUBLISH_RUN_ID':'123', 'PUBLISH_RUN_ATTEMPT':'1'}, capture_output=True, text=True)
 
     def test_concurrent_main_change_cannot_enter_unassessed_publication(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -170,7 +175,9 @@ class PublicationRaceTests(unittest.TestCase):
             self.assertEqual(self.git(root, '--git-dir=remote.git', 'show', 'main:openapi/example.json'), 'assessed candidate')
             self.assertIn('docs_commit=' + published, (root / 'output').read_text())
             self.assertEqual(self.git(root, '--git-dir=remote.git', 'show', 'main:docs/publication/current.json'),
-                             'assessed same-commit pointer')
+                             json.dumps({'contract_release': 'a'*64}))
+            receipt = json.loads(self.git(root, '--git-dir=remote.git', 'show', 'main:docs/publication/release-origin.json'))
+            self.assertEqual(receipt['run_id'], '123')
 
     def test_source_maintenance_has_its_own_bounded_schedule(self):
         workflow = yaml.safe_load((REPO / '.github/workflows/refresh-upstream.yml').read_text())
