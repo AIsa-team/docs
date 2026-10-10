@@ -266,3 +266,15 @@ Its scheduled path requires both tracked activation and the operator variable
 `RUNTIME_CONTRACT_ACTIVATION_ENABLED=true`; a manual `publish=true` dispatch
 uses the same assessment and publication gates. Failed or changed acquisitions
 must not be relabeled as an unchanged-source review.
+
+Source maintenance stages the complete proposed graph with the same existing
+composer, consolidation and artifact checker before opening a review PR. This
+includes generated schemas, pages and sales projection, while the formal
+publication pointer and assessment receipts stay unchanged. Missing Runtime
+inputs or failed candidate checks prevent an incomplete source PR from being
+updated. Only the existing `pull-openapi.yml` publisher exports new formal
+receipts after reviewed changes reach main.
+
+The tracked publication plan is ready; the existing operator activation variable
+still controls whether scheduled publication and revision monitoring run. No
+cadence, receipt lifetime, acceptance baseline or pending policy is relaxed.
