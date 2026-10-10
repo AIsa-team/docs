@@ -180,5 +180,54 @@ class PublicationRaceTests(unittest.TestCase):
         self.assertNotIn('RUNTIME_CONTRACT_ACTIVATION_ENABLED', workflow['jobs']['refresh'].get('if', ''))
 
 
+class SourceReviewWorkflowTests(unittest.TestCase):
+    def run_candidate_step(self, fail_at='', change_pointer=False):
+        workflow = yaml.safe_load((REPO / '.github/workflows/refresh-upstream.yml').read_text())
+        step = next(step for step in workflow['jobs']['refresh']['steps']
+                    if step.get('name') == 'Compose and assess the complete source review candidate')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            publication = root / 'docs/publication'
+            publication.mkdir(parents=True)
+            for name in ('current.json', 'formal-contract-readiness.json', 'runtime-acquisition.json'):
+                (publication / name).write_text('original')
+            def git(*args):
+                return subprocess.run(['git', *args], cwd=root, check=True, capture_output=True)
+            git('init', '-q'); git('config', 'user.name', 'fixture'); git('config', 'user.email', 'fixture@example.invalid')
+            git('add', '.'); git('commit', '-qm', 'existing formal publication')
+            executable = root / 'bin/python'
+            executable.parent.mkdir()
+            executable.write_text('#!/bin/sh\nprintf "%s\\n" "$1" >> "$CALLS"\n'
+                                  'if [ "$1" = "$FAIL_AT" ]; then exit 17; fi\n'
+                                  'if [ "$CHANGE_POINTER" = 1 ]; then echo changed > docs/publication/current.json; fi\n')
+            executable.chmod(0o755)
+            calls = root / 'calls'
+            result = subprocess.run(['bash', '--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', step['run']],
+                                    cwd=root, capture_output=True, text=True,
+                                    env={**os.environ, 'PATH': str(executable.parent) + os.pathsep + os.environ['PATH'],
+                                         'CALLS': str(calls), 'FAIL_AT': fail_at,
+                                         'CHANGE_POINTER': '1' if change_pointer else '0',
+                                         'REVIEWED_BASELINE': 'a' * 40})
+            return result, calls.read_text().splitlines()
+
+    def test_candidate_requires_every_stage_before_accepting_graph(self):
+        result, calls = self.run_candidate_step()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, ['scripts/pull_openapi.py', 'scripts/runtime_consolidate_openapi.py',
+                                 'scripts/validate_runtime_api_reference_slugs.py', 'scripts/check_contract_candidate.py'])
+
+    def test_failed_composition_or_formal_assessment_stops_candidate(self):
+        for failure in ('scripts/pull_openapi.py', 'scripts/check_contract_candidate.py'):
+            with self.subTest(failure=failure):
+                result, calls = self.run_candidate_step(fail_at=failure)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(calls[-1], failure)
+
+    def test_candidate_cannot_replace_formal_publication_pointer(self):
+        result, _ = self.run_candidate_step(change_pointer=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('docs/publication/current.json', result.stdout)
+
+
 if __name__ == '__main__':
     unittest.main()
