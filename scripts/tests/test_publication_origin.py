@@ -89,7 +89,7 @@ class OriginTests(unittest.TestCase):
                 with patch.object(origin, 'inspect_publication', return_value=changed):
                     with self.assertRaisesRegex(ValueError, 'Consumer contract or active'):
                         origin.verify_consumer_refs(self.root, self.ref, [self.base], selected['budget_start'])
-            with self.assertRaisesRegex(ValueError, 'genuine contract clock'):
+            with self.assertRaisesRegex(ValueError, 'Genuine contract clock'):
                 origin.verify_consumer_refs(self.root, self.ref, [self.base], '2099-01-01T00:00:00Z')
             with self.assertRaises(ValueError):
                 origin.verify_consumer_refs(self.root, self.ref, ['not-a-ref'], selected['budget_start'])
@@ -118,6 +118,26 @@ class OriginTests(unittest.TestCase):
         # the history walk selects a clock, it does not authorize publication.
         with self.assertRaises(ValueError):
             origin.verify_graph(self.root, json.loads((self.root / origin.ORIGIN).read_bytes()), self.artifact, self.end)
+
+    def test_fixed_original_expected_ref_accepts_only_fully_verified_current_same_c(self):
+        selected = {'expected_docs_ref': self.ref, 'contract_release': 'c' * 64,
+                    'budget_start': self.receipt['budget_start'], 'clock_docs_ref': self.base,
+                    'authorization_fingerprint': {}, 'authorization_expires_at': '2099-01-01T00:00:00Z'}
+        original = dict(selected, expected_docs_ref=self.base)
+        with patch.object(origin, 'remote_formal_ref', return_value=self.ref), \
+             patch.object(origin, 'select', return_value=selected), \
+             patch.object(origin, 'inspect_publication', return_value=original) as inspect:
+            proof = origin.verify_consumer_refs(self.root, self.base, [self.ref], selected['budget_start'])
+            self.assertEqual(proof['expected_docs_ref'], self.base)
+            self.assertEqual(proof['latest_docs_ref'], self.ref)
+            self.assertEqual(proof['clock_docs_ref'], self.base)
+            inspect.assert_called_once_with(self.root, self.base)
+            with patch.object(origin, 'inspect_publication', return_value=dict(original, contract_release='d' * 64)):
+                with self.assertRaisesRegex(ValueError, 'Consumer contract or active'):
+                    origin.verify_consumer_refs(self.root, self.base, [self.ref], selected['budget_start'])
+            with patch.object(origin, 'inspect_publication', side_effect=ValueError('Code-only ref')):
+                with self.assertRaisesRegex(ValueError, 'Code-only ref'):
+                    origin.verify_consumer_refs(self.root, self.base, [self.ref], selected['budget_start'])
 
     def test_formal_advance_and_expiry_during_assessment_fail_closed(self):
         selected = {'expected_docs_ref': self.ref, 'contract_release': 'c' * 64,

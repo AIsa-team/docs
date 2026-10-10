@@ -188,15 +188,15 @@ def remote_formal_ref():
 
 
 def verify_consumer_refs(root, expected_ref, refs, budget_start):
-    require(remote_formal_ref() == expected_ref, 'Official formal publication changed; reselect before assessment')
     selected = select(root)
-    require(selected['expected_docs_ref'] == expected_ref and selected['budget_start'] == budget_start,
-            'Expected publication or genuine contract clock differs')
+    latest_ref = selected['expected_docs_ref']
+    require(remote_formal_ref() == latest_ref, 'Official formal publication changed; reselect before assessment')
+    require(selected['budget_start'] == budget_start, 'Genuine contract clock differs')
     proofs = {}
-    for ref in set(refs):
+    for ref in set(refs) | {expected_ref}:
         require(re.fullmatch('[0-9a-f]{40}', str(ref)), 'Consumer publication ref is invalid')
-        candidate = selected if ref == expected_ref else inspect_publication(root, ref)
-        require(subprocess.run(['git', 'merge-base', '--is-ancestor', ref, expected_ref], cwd=root).returncode == 0
+        candidate = selected if ref == latest_ref else inspect_publication(root, ref)
+        require(subprocess.run(['git', 'merge-base', '--is-ancestor', ref, latest_ref], cwd=root).returncode == 0
                 and candidate['contract_release'] == selected['contract_release']
                 and candidate['authorization_fingerprint'] == selected['authorization_fingerprint'],
                 'Consumer contract or active source authorization differs')
@@ -209,8 +209,8 @@ def verify_consumer_refs(root, expected_ref, refs, budget_start):
                 'Consumer source authorization expired during assessment')
     require(instant(selected['authorization_expires_at']) > datetime.now(timezone.utc),
             'Latest source authorization expired during assessment')
-    require(remote_formal_ref() == expected_ref, 'Official formal publication changed during assessment')
-    return {'status': 'passed', 'expected_docs_ref': expected_ref,
+    require(remote_formal_ref() == latest_ref, 'Official formal publication changed during assessment')
+    return {'status': 'passed', 'expected_docs_ref': expected_ref, 'latest_docs_ref': latest_ref,
             'contract_release': selected['contract_release'], 'budget_start': selected['budget_start'],
             'clock_docs_ref': selected['clock_docs_ref'], 'publications': proofs}
 
