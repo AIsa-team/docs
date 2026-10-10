@@ -7,8 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 jobs:
   refresh:
     runs-on: ubuntu-latest
@@ -80,8 +79,19 @@ jobs:
                   if row['freshness'] != 'fresh':
                       body.write(f"- {source}: {row['status']} / {row['freshness']}; owner {row['owner']}; review due {row['review_due_at']}\n")
           PY
+      - name: Generate scoped source review token
+        id: review-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.TOOL_ROUTER_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.TOOL_ROUTER_DISPATCH_APP_PRIVATE_KEY }}
+          owner: AIsa-team
+          repositories: docs
+          permission-contents: write
+          permission-pull-requests: write
       - uses: peter-evans/create-pull-request@v7
         with:
+          token: ${{ steps.review-token.outputs.token }}
           branch: automation/upstream-contract-refresh
           title: 'chore: review upstream contract changes'
           commit-message: 'chore: refresh upstream contract mirrors for review'
