@@ -1,0 +1,136 @@
+---
+title: "Use AIsa in Antigravity"
+description: "Connect Google Antigravity's agy CLI to AIsa capabilities through remote MCP."
+---
+
+Google Antigravity's model list is fixed by Google — it has no custom base URL or bring-your-own-key setting, so AIsa cannot replace its built-in model. Instead, you add AIsa as a remote MCP server, and Antigravity's agent can call AIsa capabilities — web research, finance, social, SEO, sales, and more — as tools.
+
+AIsa MCP endpoint:
+
+```txt
+https://mcp.aisa.one/mcp
+```
+
+## Prerequisites
+
+Before you start, make sure you have:
+
+- An AIsa API key ([console.aisa.one/api-keys](https://console.aisa.one/api-keys))
+- A terminal on macOS, Linux, or Windows
+
+## 1. Install the agy CLI
+
+```bash
+# macOS / Linux
+curl -fsSL https://antigravity.google/cli/install.sh | bash
+
+# Windows (PowerShell)
+irm https://antigravity.google/cli/install.ps1 | iex
+```
+
+Verify the installation:
+
+```bash
+agy --version
+```
+
+## 2. Add AIsa to the MCP config
+
+Open the global MCP config (create it if it does not exist):
+
+| OS | Path |
+| --- | --- |
+| macOS / Linux | `~/.gemini/config/mcp_config.json` |
+| Windows | `%USERPROFILE%\.gemini\config\mcp_config.json` |
+
+Add an `aisa` entry, replacing `sk-aisa-...` with your real key:
+
+```json
+{
+  "mcpServers": {
+    "aisa": {
+      "serverUrl": "https://mcp.aisa.one/mcp",
+      "headers": {
+        "Authorization": "Bearer sk-aisa-..."
+      }
+    }
+  }
+}
+```
+
+<Warning>
+  Three details trip up most setups:
+
+  - **Use `serverUrl`, not `url`.** Antigravity ignores `url` and `httpUrl` for remote servers.
+  - **Paste the key itself.** Antigravity does not expand environment variables in `headers` — `"Bearer ${AISA_API_KEY}"` is sent literally and fails with 401.
+  - **Use the API key, not browser sign-in.** Antigravity's OAuth flow did not complete against AIsa in our testing; the `Authorization` header is the reliable path.
+</Warning>
+
+Because the file now holds a plaintext key, restrict it to your user:
+
+```bash
+chmod 600 ~/.gemini/config/mcp_config.json
+```
+
+<Tip>
+  Create a dedicated key labeled `antigravity` so you can rotate or revoke it independently. See [Authentication](/guides/authentication).
+</Tip>
+
+## 3. Start a new session and verify
+
+Antigravity loads MCP servers when a session starts, so open a new `agy` session after editing the config. Confirm the server is registered:
+
+```bash
+agy mcp list
+```
+
+```txt
+NAME  TYPE  STATUS   COMMAND/URL
+aisa  http  enabled  https://mcp.aisa.one/mcp
+```
+
+`agy mcp list` only shows the config, and Antigravity caches tool definitions under `~/.gemini/antigravity-cli/mcp/aisa/` — so seeing the five tools does not prove the key works. Verify with a real request in the next step.
+
+## 4. Use AIsa capabilities
+
+In an `agy` session, try:
+
+```txt
+Use AIsa to check the price of BTC today.
+```
+
+Antigravity searches the AIsa catalog, reads the matching operation's schema, then runs it under a `max_price_usd` cap. Discovery (`list_categories`, `search`, `get_details`) is free; `use` and `batch_use` are billed per call.
+
+## Quick reference
+
+| Item | Value |
+| --- | --- |
+| Config file | `~/.gemini/config/mcp_config.json` |
+| Server key | `serverUrl` (not `url`) |
+| Server URL | `https://mcp.aisa.one/mcp` |
+| Auth | `"Authorization": "Bearer sk-aisa-..."` — literal key, no env vars |
+| File permissions | `chmod 600` |
+| Check registration | `agy mcp list` |
+
+## Troubleshooting
+
+| Problem | Fix |
+| --- | --- |
+| Tools are listed but calls fail with 401 | The header is wrong or still contains `${AISA_API_KEY}` — paste the literal key, then start a new session |
+| `aisa` missing from `agy mcp list` | Confirm the JSON is valid and uses `serverUrl` |
+| Tools missing in the current session | Start a new `agy` session; config changes are not picked up mid-session |
+| Want AIsa models in Antigravity | Not possible — Antigravity does not accept a custom model endpoint. Use [Claude Code](/guides/tutorials/use-aisa-in-claude-code), [Codex](/guides/tutorials/use-aisa-in-codex), or [Cursor](/guides/tutorials/use-aisa-in-cursor) to run AIsa models |
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Use AIsa in Grok Build" icon="terminal" href="/guides/tutorials/use-aisa-in-grok">
+    The same MCP setup in xAI's Grok CLI.
+  </Card>
+  <Card title="Authentication" icon="key" href="/guides/authentication">
+    API key creation, rotation, and storage best practices.
+  </Card>
+  <Card title="Agent Skills" icon="puzzle-piece" href="/agent-skills">
+    Browse the capabilities AIsa exposes to agents.
+  </Card>
+</CardGroup>

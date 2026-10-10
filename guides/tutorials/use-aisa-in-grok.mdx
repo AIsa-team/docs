@@ -1,0 +1,127 @@
+---
+title: "Use AIsa in Grok Build"
+description: "Add AIsa as a remote MCP server in xAI's Grok Build CLI with a few lines of config."
+---
+
+Grok Build (the `grok` CLI) connects to remote MCP servers natively. Add AIsa to `~/.grok/config.toml`, and Grok can discover and call AIsa capabilities — web research, finance, social, SEO, sales, and more.
+
+AIsa MCP endpoint:
+
+```txt
+https://mcp.aisa.one/mcp
+```
+
+## Prerequisites
+
+Before you start, make sure you have:
+
+- An AIsa API key ([console.aisa.one/api-keys](https://console.aisa.one/api-keys))
+- A terminal on macOS, Linux, or Windows
+
+## 1. Install Grok Build
+
+```bash
+# macOS / Linux / Git Bash
+curl -fsSL https://x.ai/cli/install.sh | bash
+
+# Windows (PowerShell)
+irm https://x.ai/cli/install.ps1 | iex
+```
+
+Verify the installation:
+
+```bash
+grok --version
+```
+
+## 2. Export your AIsa key
+
+Grok reads the key from an environment variable, so it never lands in the config file. Add this to `~/.zshrc` or `~/.bashrc`:
+
+```bash
+export AISA_API_KEY="sk-aisa-..."
+```
+
+Open a new terminal, or `source` the file, before starting Grok.
+
+## 3. Ask Grok to connect AIsa
+
+Start `grok` and send:
+
+```txt
+Read https://aisa.one/llms.txt and help me connect to AIsa.
+```
+
+Grok reads AIsa's agent-facing instructions and adds the AIsa MCP server to `~/.grok/config.toml`.
+
+<Tip>
+  Prefer to do it yourself? Add this block to `~/.grok/config.toml`:
+
+  ```toml
+  [mcp_servers.aisa]
+  url = "https://mcp.aisa.one/mcp"
+  enabled = true
+  bearer_token_env_var = "AISA_API_KEY"
+  ```
+</Tip>
+
+## 4. Verify the connection
+
+```bash
+grok mcp doctor aisa
+```
+
+You should see:
+
+```txt
+aisa (http: https://mcp.aisa.one/mcp)
+  ✓ server started
+  ✓ handshake OK
+  ✓ 5 tools discovered
+```
+
+If you edited the config while Grok was running, run `/mcps` and press `r` to refresh the server list.
+
+## 5. Use AIsa capabilities
+
+Ask Grok for anything AIsa can fetch, for example:
+
+```txt
+Use AIsa to check the recent posts of Sam Altman.
+```
+
+Grok searches the AIsa catalog, reads the matching operation's schema, then runs it under a `max_price_usd` cap. Discovery (`list_categories`, `search`, `get_details`) is free; `use` and `batch_use` are billed per call.
+
+## Quick reference
+
+| Item | Value |
+| --- | --- |
+| Config file | `~/.grok/config.toml` (or `.grok/config.toml` in a project) |
+| Section | `[mcp_servers.aisa]` |
+| `url` | `https://mcp.aisa.one/mcp` |
+| Auth | `bearer_token_env_var = "AISA_API_KEY"` |
+| Verify | `grok mcp doctor aisa` |
+| Refresh in a running session | `/mcps` → `r` |
+
+## Troubleshooting
+
+| Problem | Fix |
+| --- | --- |
+| `grok mcp doctor aisa` reports 401 | Confirm `echo $AISA_API_KEY` prints your key in the shell that starts Grok, and the key is valid in the [dashboard](https://console.aisa.one) |
+| Server shows `folder untrusted` | Project-scoped servers need a trusted folder — move the block to `~/.grok/config.toml`, or trust the folder when Grok asks |
+| A different `aisa` server appears | Grok also loads MCP servers from `.mcp.json` and Claude / Cursor configs; the `[mcp_servers.aisa]` entry in Grok's own config takes precedence |
+| AIsa tools missing in the current session | Run `/mcps` and press `r`, or start a new Grok session |
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Use AIsa in Pi" icon="terminal" href="/guides/tutorials/use-aisa-in-pi">
+    The same MCP setup in the Pi coding agent.
+  </Card>
+  <Card title="Authentication" icon="key" href="/guides/authentication">
+    API key creation, rotation, and storage best practices.
+  </Card>
+  <Card title="Agent Skills" icon="puzzle-piece" href="/agent-skills">
+    Browse the capabilities AIsa exposes to agents.
+  </Card>
+</CardGroup>

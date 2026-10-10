@@ -1,0 +1,120 @@
+---
+title: "在 Pi 中使用 AIsa"
+description: "一条命令，把 AIsa 添加为 Pi coding agent 的远程 MCP server。"
+---
+
+Pi 内置 MCP client。把 AIsa 添加为远程 MCP server，并用你的 AIsa API key 认证，Pi 的 agent 就能发现并调用 AIsa 能力——网页研究、金融、社交、SEO、销售等。
+
+AIsa MCP endpoint：
+
+```txt
+https://mcp.aisa.one/mcp
+```
+
+## 前置条件
+
+开始前，请确认你已经具备：
+
+- AIsa API key（[console.aisa.one/api-keys](https://console.aisa.one/api-keys)）
+- 已安装 [Pi](https://pi.dev)，且支持内置 MCP（`pi mcp --help` 可用）
+
+## 1. 导出 AIsa key
+
+Pi 从环境变量读取 key，不会写进配置文件。把这一行加入 `~/.zshrc` 或 `~/.bashrc`：
+
+```bash
+export AISA_API_KEY="sk-aisa-..."
+```
+
+启动 Pi 前，打开新的 terminal 或 `source` 该文件。
+
+## 2. 让 Pi 连接 AIsa
+
+启动 `pi` 并发送：
+
+```txt
+Read https://aisa.one/llms.txt and help me connect to AIsa.
+```
+
+Pi 会读取 AIsa 面向 agent 的说明，并用你的 `AISA_API_KEY` 在全局注册 AIsa MCP server。
+
+<Tip>
+  想自己动手？运行 Pi 执行的同一条命令：
+
+  ```bash
+  pi mcp add aisa \
+    --url https://mcp.aisa.one/mcp \
+    --bearer-token-env-var AISA_API_KEY \
+    --description "AIsa capability layer: discover and call APIs across web, finance, social, SEO, sales, and more."
+  ```
+</Tip>
+
+## 3. 验证并重新加载
+
+检查连接：
+
+```bash
+pi mcp list
+```
+
+应当看到：
+
+```txt
+aisa: connected, 5 tools (codemode, global)
+  https://mcp.aisa.one/mcp
+  tools: list_categories, search, get_details, use, batch_use
+```
+
+如果是在运行中的 Pi 会话里添加的 server，输入 `/reload` 让当前会话加载新工具。
+
+## 4. 使用 AIsa 能力
+
+让 Pi 获取任何 AIsa 能提供的数据，例如：
+
+```txt
+Use AIsa to check the recent posts of Sam Altman.
+```
+
+Pi 会搜索 AIsa 目录、读取匹配操作的 schema，然后执行并报告费用。五个工具的分工如下：
+
+| 工具 | 作用 | 计费 |
+| --- | --- | --- |
+| `list_categories` | 列出能力分类 | 免费 |
+| `search` | 按自然语言任务查找操作 | 免费 |
+| `get_details` | 返回操作的 schema、价格和注意事项 | 免费 |
+| `use` | 执行单个操作，受 `max_price_usd` 上限约束 | 计费 |
+| `batch_use` | 批量执行多个操作，受 `max_price_usd` 上限约束 | 计费 |
+
+## 快速参考
+
+| 项目 | 值 |
+| --- | --- |
+| MCP URL | `https://mcp.aisa.one/mcp` |
+| 认证 | 来自 `AISA_API_KEY` 的 Bearer token |
+| 添加命令 | `pi mcp add aisa --url https://mcp.aisa.one/mcp --bearer-token-env-var AISA_API_KEY` |
+| 全局配置 | `~/.pi/agent/mcp.json` |
+| 验证 | `pi mcp list` |
+| 加载到运行中的会话 | `/reload` |
+
+## 故障排查
+
+| 问题 | 解决方法 |
+| --- | --- |
+| `pi mcp list` 显示认证错误（401） | 在启动 Pi 的 shell 中确认 `echo $AISA_API_KEY` 能打印出 key，并在[控制台](https://console.aisa.one)确认 key 有效 |
+| 当前会话里没有 AIsa 工具 | 输入 `/reload`，或开启新的 Pi 会话 |
+| 没有 `pi mcp` 命令 | 把 Pi 升级到支持内置 MCP 的版本 |
+| 只想在某个项目中启用 AIsa | 把 server 添加到项目的 `.pi/mcp.json`，而不是全局配置 |
+
+## 相关页面
+
+<CardGroup cols={3}>
+  <Card title="在 Claude Code 中使用 AIsa" icon="terminal" href="/zh/guides/tutorials/use-aisa-in-claude-code">
+    在 Claude Code 中通过 AIsa 运行 Claude 模型。
+  </Card>
+  <Card title="认证" icon="key" href="/zh/guides/authentication">
+    API key 创建、轮换和存储最佳实践。
+  </Card>
+  <Card title="Agent Skills" icon="puzzle-piece" href="/zh/agent-skills">
+    浏览 AIsa 向 agent 开放的能力。
+  </Card>
+</CardGroup>
