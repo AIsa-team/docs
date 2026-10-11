@@ -15,6 +15,8 @@ Typical workflow:
 """
 from __future__ import annotations
 
+from readable_contract_notes import strip_generated_block, update_readable_block
+
 import argparse
 import copy
 import fcntl
@@ -138,6 +140,10 @@ def iter_spec_strings(node: Any, path: tuple[str, ...] = ()) -> Iterator[tuple[t
             yield from iter_spec_strings(value, child)
     elif isinstance(node, list):
         for index, value in enumerate(node):
+            # Only extract these source notes for readable MDX translation.
+            # localize_tree keeps the machine contract metadata unchanged.
+            if path[-2:] == ("x-aisa-constraints", "notes") and isinstance(value, str):
+                yield path + (str(index),), value
             yield from iter_spec_strings(value, path + (str(index),))
 
 
@@ -204,6 +210,7 @@ def extract() -> None:
     for mdx_path in sorted(API_DIR.rglob("*.mdx")):
         text = mdx_path.read_text()
         frontmatter, body = split_frontmatter(text)
+        body = strip_generated_block(body)
         if "openapi:" not in frontmatter:
             continue
         for field in ("title", "description", "excerpt"):
@@ -403,6 +410,7 @@ def generate(published_ref=None) -> None:
     for mdx_path in sorted(API_DIR.rglob("*.mdx")):
         text = mdx_path.read_text()
         frontmatter, body = split_frontmatter(text)
+        body = strip_generated_block(body)
         if "openapi:" not in frontmatter:
             continue
         title = frontmatter_value(frontmatter, "title")
@@ -421,6 +429,7 @@ def generate(published_ref=None) -> None:
             count=1,
             flags=re.M,
         )
+        operation = {}
         reference = re.search(r'^openapi:\s*["\']?openapi/zh/([^"\'\s]+)\s+(\w+)\s+([^"\'\s]+)', frontmatter, re.M)
         if reference:
             spec = json.loads((ZH_OPENAPI_DIR / reference[1]).read_text())
@@ -435,6 +444,12 @@ def generate(published_ref=None) -> None:
         # Route links between localized API pages to the canonical Chinese mirror.
         localized_body = localized_body.replace("](/api-reference/", "](/zh/api-reference/")
         localized_body = localized_body.replace('href="/api-reference/', 'href="/zh/api-reference/')
+        def translated_note(note):
+            try:
+                return translation(catalog, note)
+            except KeyError:
+                return note
+        localized_body = update_readable_block(localized_body, operation, "zh", translated_note)
         target = ZH_API_DIR / mdx_path.relative_to(API_DIR)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(f"---\n{frontmatter}\n---\n{localized_body}")

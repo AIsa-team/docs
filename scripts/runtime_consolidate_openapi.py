@@ -402,20 +402,8 @@ def build_unified_spec():
             "license": {"name": "MIT", "url": "https://opensource.org/licenses/MIT"},
             "termsOfService": "https://aisa.one/tos",
         },
-        # Four-server setup. Data API ops inherit the top-level list,
-        # so OpenAPI consumers can pick /apis/v1 (Bearer) or /apis/v2
-        # (x402 pay-per-call) at call time. LLM ops have an
-        # operation-level override that pins them to /v1 or /v1beta.
-        #
-        #   * /apis/v1 — default server for data APIs (Bearer)
-        #   * /apis/v2 — same data API surface, mirrored for x402
-        #     pay-per-call. No registration; receive HTTP 402 challenge,
-        #     settle with stablecoin micropayment. Spec: x402.org
-        #   * /v1     — LLM inference (OpenAI-compatible)
-        #   * /v1beta — Gemini-compatible generateContent
-        #
-        # Path keys stay relative to whichever server applies, matching
-        # the per-file spec convention.
+        # Root servers describe available surfaces, not universal route support.
+        # Honor per-operation servers and explicitly declared capabilities.
         "servers": [
             {
                 "url": "https://api.aisa.one/apis/v1",
@@ -426,9 +414,10 @@ def build_unified_spec():
             {
                 "url": "https://api.aisa.one/apis/v2",
                 "description": (
-                    "AIsa Data APIs (x402 pay-per-call) — same surface as "
-                    "/apis/v1, mirrored. No registration; receive HTTP 402 "
-                    "challenge, settle with stablecoin micropayment. "
+                    "AIsa Data APIs (x402 pay-per-call) for explicitly supported operations only. "
+                    "Follow each operation\'s servers and x402 capability declaration; "
+                    "this server does not imply that every /apis/v1 route is available. "
+                    "Supported operations use an HTTP 402 payment challenge. "
                     "Spec: https://www.x402.org. "
                     "Open-source gateway implementation: "
                     "https://github.com/AIsa-team/aisa-proxy"
