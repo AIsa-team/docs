@@ -75,6 +75,9 @@ def retain_unregistered_history(document: dict, facts: dict, history: dict) -> l
         document["paths"].setdefault(path, {})[method] = operation
         retained.append({"path": path, "method": method.upper(), "operation_id": operation["operationId"], "reason": "not_in_runtime_contract"})
     if retained:
+        from source_provenance import merge_provenance, validate_document
+        merge_provenance(document, history)
+        validate_document(document)
         metadata = document["info"]["x-aisa-document"]
         metadata["document_hash"] = digest({"composed": metadata["document_hash"], "retained": {row["operation_id"]: document["paths"][row["path"]][row["method"].lower()] for row in retained}})
     return retained

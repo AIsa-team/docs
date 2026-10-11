@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit, unquote
 
-VERSION = "13"
+VERSION = "14"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -883,4 +883,5 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
     document_meta["composer_version"] = VERSION
     document_meta["response_pending"] = response_gaps
     document_meta["document_hash"] = digest({"facts_hash": meta["facts_hash"], "upstream": upstream, "overlay": overlay, "composer_version": VERSION, "published_success_responses": retained_responses, "public_mirrors": used_mirrors, "source_bindings": source_bindings})
-    return output, pending
+    from source_provenance import compact_document
+    return compact_document(output), pending

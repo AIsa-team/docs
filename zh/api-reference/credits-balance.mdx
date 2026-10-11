@@ -27,16 +27,23 @@ curl -sS https://api.aisa.one/v1/credits/balance \
     "active": true,
     "balance_micros_usd": 750000,
     "trial_balance_micros_usd": 250000,
-    "trial_expires_at": "2026-09-30T12:00:00Z",
-    "subscription_balance_micros_usd": 500000,
+    "trial_expires_at": "2026-10-31T12:00:00Z",
+    "subscription_balance_micros_usd": 400000,
+    "subscription_addon_balance_micros_usd": 100000,
+    "subscription_addon_available_micros_usd": 100000,
+    "subscription_addon_frozen_micros_usd": 0,
     "expires_at": "2026-10-31T12:00:00Z"
+  },
+  "media_promo": {
+    "balance_micros_usd": 200000,
+    "next_expires_at": "2026-10-31T12:00:00Z"
   },
   "api_key": {
     "unlimited": false,
     "remaining_micros_usd": 1000000,
     "used_micros_usd": 300000
   },
-  "as_of": "2026-08-03T12:00:00Z"
+  "as_of": "2026-10-12T12:00:00Z"
 }
 ```
 
@@ -52,6 +59,7 @@ curl -sS https://api.aisa.one/v1/credits/balance \
 | `available_balance_micros_usd` | integer | 当前认证 API Key 可用的 PAYG 余额与 GTM 余额之和。 |
 | `go_to_market_balance_micros_usd` | integer | GTM 总余额，与 `gtm.balance_micros_usd` 相同。 |
 | `gtm` | object | GTM 余额明细，包括试用余额和订阅余额。 |
+| `media_promo` | object | 限定提供商的媒体赠额，单独报告，不计入通用可用余额。 |
 | `api_key` | object | 当前 API Key 的剩余额度和已使用额度。 |
 | `as_of` | string | 该余额快照对应的 UTC 时间。 |
 
@@ -64,7 +72,14 @@ curl -sS https://api.aisa.one/v1/credits/balance \
 | `trial_balance_micros_usd` | integer | 未过期的 GTM 试用余额。 |
 | `trial_expires_at` | string | GTM 试用余额的 UTC 到期时间；没有适用的试用到期时间时省略。 |
 | `subscription_balance_micros_usd` | integer | GTM 订阅余额。 |
+| `subscription_addon_balance_micros_usd` | integer | 加购余额总额，包含可用和冻结部分。 |
+| `subscription_addon_available_micros_usd` | integer | 有效付费订阅周期内可使用的加购余额，计入 GTM 余额。 |
+| `subscription_addon_frozen_micros_usd` | integer | 没有有效付费订阅周期时冻结的加购余额，不计入可用余额或 GTM 总额。 |
 | `expires_at` | string | 当前 GTM 订阅周期的 UTC 到期时间；没有适用订阅周期时省略。 |
+
+### 媒体赠额字段
+
+`media_promo.balance_micros_usd` 仅能用于赠额批次指定的提供商，不计入通用账户余额及可用余额。`next_expires_at` 是最近一批赠额的到期时间，无适用时间时省略。媒体赠额为正，不代表任意 API 请求都可由其支付。
 
 ### 余额计算
 
@@ -72,7 +87,7 @@ PAYG 余额是有效 cash、Trial、promo 和 credit 余额之和。已经过期
 不会计入。
 
 `go_to_market_balance_micros_usd` 是 GTM 余额。该金额也会作为
-`gtm.balance_micros_usd` 返回，`gtm` 对象还包含试用余额和订阅余额明细。
+`gtm.balance_micros_usd` 返回，`gtm` 对象还包含试用、订阅及可用加购余额明细。冻结的加购余额单独展示，不计入这一总额。
 
 `account_balance_micros_usd` 是 PAYG 余额与
 `go_to_market_balance_micros_usd` 之和。

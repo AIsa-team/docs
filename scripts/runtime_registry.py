@@ -182,6 +182,9 @@ def previous_for_facts(facts, documents, provider):
                                                      'previous_response_' + name + '.json', preserve_refs=True)
                         response['content'] = converted['content']
                         operation['responses'][status] = response
+        from source_provenance import merge_provenance, validate_document
+        validate_document(document)
+        merge_provenance(result, document)
         merge_components(result, document, name + '.json')
         for path, item in document['paths'].items():
             target = result['paths'].setdefault(path, {})
