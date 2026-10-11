@@ -43,6 +43,93 @@ def read_public(url):
         return json.load(response)
 
 
+
+def read_public_bytes(url):
+    with urlopen(Request(url, headers={'Accept': 'application/yaml, application/json'}), timeout=60) as response:
+        return response.read()
+
+
+def website_metadata(raw, expected_sha256):
+    """Bind the actual served aggregate before inspecting its provider metadata."""
+    if hashlib.sha256(raw).hexdigest() != expected_sha256:
+        raise ValueError('Website aggregate bytes differ from selected formal publication')
+    spec = yaml.safe_load(raw)
+    providers = spec.get('info', {}).get('x-aisa-document', {}).get('providers')
+    if not isinstance(providers, dict):
+        raise ValueError('Website formal aggregate provider metadata is missing')
+    return {'x-aisa-document': {'providers': providers}}
+
+
+def verified_empty_catalogs(root, ref, source_hash, runtime, documents, provider_reader=None):
+    """Prove only omitted, disabled-only catalogs from the fixed formal graph.
+
+    A missing provider is never waived by an empty paths map alone. Every
+    coverage row must match an accepted disabled pending row in the hash-bound
+    formal assessment. Other exclusions remain failures until explicitly modeled.
+    """
+    represented = set()
+    for provider, metadata in documents.items():
+        if metadata.get('document_hash'):
+            represented.update(metadata.get('catalogs') or {provider: {}})
+    absent = [p for p in runtime.get('providers', []) if p['id'] not in represented]
+    if not absent or not ref:
+        return {}
+    def fixed(path):
+        return subprocess.check_output(['git', 'show', ref + ':' + path], cwd=root)
+    current = json.loads(fixed('docs/publication/current.json'))
+    if current.get('status') != 'passed' or current.get('openapi') != {'path': 'openapi.yaml', 'sha256': source_hash} or current.get('files_sha256', {}).get('openapi.yaml') != source_hash:
+        raise ValueError('Empty catalog proof differs from selected formal aggregate')
+    def bound(path, expected):
+        raw = fixed(path)
+        if not expected or hashlib.sha256(raw).hexdigest() != expected:
+            raise ValueError('Empty catalog proof artifact hash differs: ' + path)
+        return json.loads(raw)
+    coverage = bound('openapi/coverage.json', current['files_sha256'].get('openapi/coverage.json'))
+    report_binding = current['formal_readiness']
+    report = bound('docs/publication/formal-contract-readiness.json', report_binding.get('sha256'))
+    if report_binding.get('path') != 'docs/publication/formal-contract-readiness.json' or report.get('status') != 'passed':
+        raise ValueError('Empty catalog formal assessment is not passed')
+    proofs = {}
+    for provider in absent:
+        name = provider['id']
+        if not re.fullmatch(r'[a-z0-9_-]+', name):
+            continue
+        path = f'openapi/{name}.json'
+        expected = current['files_sha256'].get(path)
+        if not expected:
+            continue
+        spec = bound(path, expected)
+        rows = coverage.get('providers', {}).get(name, [])
+        assessment = report.get('providers', {}).get(name, {})
+        metadata = spec.get('info', {}).get('x-aisa-document', {})
+        if (spec.get('paths') != {} or not metadata.get('document_hash') or
+                metadata.get('facts_hash') != provider.get('facts_hash') or
+                assessment.get('status') != 'passed' or not rows or
+                len(rows) != provider.get('operation_count')):
+            continue
+        accepted = assessment.get('existing_pending', [])
+        if any(assessment.get(key) for key in ('errors', 'new_pending', 'missing_inputs')):
+            continue
+        # Compare every coverage field, including binding hashes and identity,
+        # against the producer-accepted record; additional runtime_binding is OK.
+        if len({row.get('operation_id') for row in rows}) != len(rows):
+            continue
+        if not all(row.get('catalog') == name and row.get('status') == 'pending' and
+                   row.get('runtime_status') == 'disabled' and
+                   any(all(item.get(key) == value for key, value in row.items()) and
+                       item.get('runtime_binding', {}).get('status') == 'disabled'
+                       for item in accepted) for row in rows):
+            continue
+        public_raw = (provider_reader(name) if provider_reader else
+                      read_public_bytes(f'https://aisa.one/docs/openapi/{name}.json'))
+        if hashlib.sha256(public_raw).hexdigest() != expected:
+            raise ValueError('Public empty provider bytes differ from formal publication: ' + name)
+        proofs[name] = {'reason': 'formal_disabled_only_no_public_operations',
+                        'coverage_rows': len(rows), 'provider_sha256': expected,
+                        'facts_hash': metadata['facts_hash'], 'document_hash': metadata['document_hash'], 'docs_ref': ref}
+    return proofs
+
+
 def update_state(errors, previous):
     counts = previous.get('consecutive', {})
     return {'checked_at': int(time.time()), 'consecutive': {error: counts.get(error, 0) + 1 for error in errors}}
@@ -107,7 +194,7 @@ def publication_identity(assessment, expected_ref, source_hash, budget_start, ph
 
 def assess(documents, runtime=None, website=None, router=None,
            expected_docs_ref=None, failures=(), website_version=None,
-           expected_openapi_sha256=None, formal_provenance=None):
+           expected_openapi_sha256=None, formal_provenance=None, empty_catalogs=None):
     """Strict, dated convergence evidence, separate from monitor escalation."""
     verified = {key: value for key, value in documents.items() if value.get('document_hash')}
     missing = list(failures)
@@ -137,8 +224,12 @@ def assess(documents, runtime=None, website=None, router=None,
         for provider, metadata in verified.items():
             represented.update(metadata.get('catalogs') or {provider: {}})
         for provider in runtime.get('providers', []):
-            if provider['id'] not in represented:
+            if provider['id'] not in represented and provider['id'] not in (empty_catalogs or {}):
                 errors.append(f"{provider['id']}:docs:catalog_missing")
+        router_hashes = router.get('provider_document_hashes')
+        for name, proof in (empty_catalogs or {}).items():
+            if not isinstance(router_hashes, dict) or router_hashes.get(name) != proof.get('document_hash'):
+                errors.append(f'{name}:tool-router:document_hash_mismatch')
         for provider in runtime.get('pending_providers', []):
             missing.append(f"runtime:{provider['id']}:projection_pending")
         if expected_docs_ref:
@@ -156,6 +247,7 @@ def assess(documents, runtime=None, website=None, router=None,
             'scope': 'public_contract_convergence',
             'verified_providers': len(verified),
             'legacy_providers': len(documents) - len(verified),
+            'verified_empty_catalogs': empty_catalogs or {},
             'expected_docs_ref': expected_docs_ref,
             'formal_provenance': formal_provenance,
             'expected_openapi_sha256': expected_openapi_sha256,
@@ -167,7 +259,7 @@ def main():
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--state', type=Path, default=Path('.cache/contract-revisions/state.json'))
     parser.add_argument('--acceptance', action='store_true', help='Fail immediately on missing evidence or any mismatch; does not update monitor state')
-    parser.add_argument('--evidence-dir', type=Path, help='Offline public metadata: runtime.json, website.json, router.json')
+    parser.add_argument('--evidence-dir', type=Path, help='Offline public evidence: runtime.json, website.yaml (raw aggregate), router.json')
     parser.add_argument('--expected-docs-ref', help='Immutable formal Docs SHA; older consumer refs require full same-contract provenance')
     parser.add_argument('--report', type=Path, help='Save dated assessment JSON; contains no provider requests')
     parser.add_argument('--budget-start', help='UTC start recorded by the release owner; no inferred/reset deadline')
@@ -219,7 +311,7 @@ def main():
     documents = spec.get('info', {}).get('x-aisa-document', {}).get('providers', {})
     targets = {
         'runtime': 'https://api.aisa.one/info/openapi.json',
-        'website': 'https://aisa.one/.well-known/agent-card.json',
+        'website': 'https://aisa.one/openapi.yaml',
         'router': 'https://tools.aisa.one/.well-known/catalog.json',
     }
     if args.expected_docs_ref:
@@ -228,7 +320,12 @@ def main():
     for key, url in targets.items():
         try:
             filename = 'website-version' if key == 'website_version' else key
-            results[key] = json.loads((args.evidence_dir / f'{filename}.json').read_text()) if args.evidence_dir else read_public(url)
+            if key == 'website':
+                website_raw = ((args.evidence_dir / 'website.yaml').read_bytes() if args.evidence_dir
+                               else read_public_bytes(url))
+                results[key] = website_metadata(website_raw, source_hash)
+            else:
+                results[key] = json.loads((args.evidence_dir / f'{filename}.json').read_text()) if args.evidence_dir else read_public(url)
         except Exception as exc:
             failures.append(f'{key}:unavailable:{type(exc).__name__}')
     provenance = None
@@ -239,7 +336,16 @@ def main():
                 [results["router"].get("docs_commit"), results["website_version"].get("docsRevision")], args.budget_start)
         except Exception as exc:
             failures.append(f"formal_provenance:unavailable:{type(exc).__name__}")
-    assessment = assess(documents, **results, formal_provenance=provenance, expected_docs_ref=args.expected_docs_ref,
+    empty_catalogs = {}
+    if not failures and args.expected_docs_ref:
+        try:
+            empty_catalogs = verified_empty_catalogs(args.root, args.expected_docs_ref, source_hash,
+                                                    results['runtime'], documents,
+                provider_reader=(lambda name: (args.evidence_dir / f'{name}.json').read_bytes())
+                if args.evidence_dir else None)
+        except Exception as exc:
+            failures.append(f'empty_catalog_proof:unavailable:{type(exc).__name__}')
+    assessment = assess(documents, **results, formal_provenance=provenance, empty_catalogs=empty_catalogs, expected_docs_ref=args.expected_docs_ref,
                         expected_openapi_sha256=source_hash if args.expected_docs_ref else None,
                         failures=failures)
     # Strict acceptance neither reads nor writes prior monitor observations.
