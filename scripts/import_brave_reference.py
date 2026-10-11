@@ -132,14 +132,14 @@ def convert_specs(rows):
             for sample in spec.get('codeSamples', []):
                 if sample.get('label', '').lower() != 'curl':
                     continue
-                urls = re.findall(r'https://[^"\s]+', sample.get('source', ''))
+                urls = re.findall(r"https://[^\"'\s]+", sample.get('source', ''))
                 expected = spec['serverUrl'].rstrip('/') + path
                 matching = [url for url in urls if url.split('?', 1)[0] == expected]
                 if len(matching) != 1:
                     continue
                 query = parse_qsl(urlsplit(matching[0]).query, keep_blank_values=True)
                 declared = {p['name']: p for p in operation['parameters'] if p['in'] == 'query'}
-                if len(dict(query)) != len(query) or any(name not in declared for name, value in query):
+                if len(query) != 1 or query[0][0] != 'q' or 'q' not in declared:
                     continue
                 for name, value in query:
                     # This sample currently contains the string query q only.

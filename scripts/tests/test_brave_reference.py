@@ -34,6 +34,18 @@ def spec(method="GET"):
 
 
 class BraveReferenceTests(unittest.TestCase):
+    def test_web_get_sample_is_bound_to_official_operation(self):
+        row = spec(); row['path'] = '/v1/web/search'; row['queryParams'][0].pop('examples')
+        row['codeSamples'] = [{'label':'cURL','source':'curl "https://api.search.brave.com/res/v1/web/search?q=brave+search"'}]
+        operation=convert_specs({'official':row})['paths']['/v1/web/search']['get']
+        self.assertEqual(operation['parameters'][0]['examples'], {'default':{'value':'brave search'}})
+        self.assertNotIn('default', operation['parameters'][0]['schema'])
+        row['codeSamples'][0]['source']="curl 'https://api.search.brave.com/res/v1/web/search?q=brave+search'"
+        self.assertEqual(convert_specs({'official':row})['paths']['/v1/web/search']['get']['parameters'][0]['examples']['default']['value'], 'brave search')
+        for url in ['https://untrusted.example/res/v1/web/search?q=bad', 'https://api.search.brave.com/res/v1/web/search?q=one&q=two', 'https://api.search.brave.com/res/v1/web/search?unknown=x']:
+            row['codeSamples'][0]['source']='curl "'+url+'"'
+            self.assertNotIn('default', convert_specs({'official':row})['paths']['/v1/web/search']['get']['parameters'][0].get('examples',{}))
+
     def test_decodes_only_plain_schema_data_and_omits_undefined(self):
         original = spec()
         encoded = payload(original)
