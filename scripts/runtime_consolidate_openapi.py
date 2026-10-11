@@ -503,6 +503,9 @@ def build_unified_spec():
                 "x-aisa-plans": spec["info"].get("x-aisa-plans", {}),
                 "x-aisa-capabilities": spec["info"].get("x-aisa-capabilities", {}),
             }
+        from source_provenance import merge_provenance, validate_document
+        validate_document(spec)
+        merge_provenance(unified, spec)
         merge_components(unified, spec, filename)
 
         # Register tag

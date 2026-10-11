@@ -28,16 +28,23 @@ does not accept MPP payment authorization.
     "active": true,
     "balance_micros_usd": 750000,
     "trial_balance_micros_usd": 250000,
-    "trial_expires_at": "2026-09-30T12:00:00Z",
-    "subscription_balance_micros_usd": 500000,
+    "trial_expires_at": "2026-10-31T12:00:00Z",
+    "subscription_balance_micros_usd": 400000,
+    "subscription_addon_balance_micros_usd": 100000,
+    "subscription_addon_available_micros_usd": 100000,
+    "subscription_addon_frozen_micros_usd": 0,
     "expires_at": "2026-10-31T12:00:00Z"
+  },
+  "media_promo": {
+    "balance_micros_usd": 200000,
+    "next_expires_at": "2026-10-31T12:00:00Z"
   },
   "api_key": {
     "unlimited": false,
     "remaining_micros_usd": 1000000,
     "used_micros_usd": 300000
   },
-  "as_of": "2026-08-03T12:00:00Z"
+  "as_of": "2026-10-12T12:00:00Z"
 }
 ```
 
@@ -53,6 +60,7 @@ microdollars. This avoids floating-point rounding in automated clients.
 | `available_balance_micros_usd` | integer | PAYG balance available to the authenticated API key plus the GTM balance. |
 | `go_to_market_balance_micros_usd` | integer | Total GTM balance. This equals `gtm.balance_micros_usd`. |
 | `gtm` | object | GTM balance details, including trial and subscription balances. |
+| `media_promo` | object | Provider-scoped media credit, reported separately from general available balance. |
 | `api_key` | object | Remaining and used balance for this API key. |
 | `as_of` | string | UTC timestamp for the balance snapshot. |
 
@@ -65,7 +73,14 @@ microdollars. This avoids floating-point rounding in automated clients.
 | `trial_balance_micros_usd` | integer | Unexpired GTM trial balance. |
 | `trial_expires_at` | string | UTC expiry of the GTM trial balance. Omitted when no trial expiry applies. |
 | `subscription_balance_micros_usd` | integer | GTM subscription balance. |
+| `subscription_addon_balance_micros_usd` | integer | Total add-on credit, including available and frozen parts. |
+| `subscription_addon_available_micros_usd` | integer | Add-on credit spendable during an active paid plan period; included in GTM balance. |
+| `subscription_addon_frozen_micros_usd` | integer | Add-on credit currently frozen without an active paid plan period; excluded from available and GTM totals. |
 | `expires_at` | string | UTC expiry of the current GTM subscription period. Omitted when no period applies. |
+
+### Media promo fields
+
+`media_promo.balance_micros_usd` is credit restricted to the providers named by its credit lots. It is excluded from both general account and available balance totals. `next_expires_at` is the next lot expiry and is omitted when none applies. A positive media promo balance does not imply that an unrelated API request can be funded.
 
 ### Balance calculation
 
@@ -73,8 +88,8 @@ The PAYG balance is the sum of the effective cash, Trial, promo, and credit
 buckets. An expired Trial balance is excluded.
 
 `go_to_market_balance_micros_usd` is the GTM balance. It is also exposed as
-`gtm.balance_micros_usd`, with its trial and subscription components in the
-`gtm` object.
+`gtm.balance_micros_usd`, with its trial, subscription, and available add-on components in the
+`gtm` object. Frozen add-on credit is reported separately and excluded from this total.
 
 `account_balance_micros_usd` is the PAYG balance plus
 `go_to_market_balance_micros_usd`.

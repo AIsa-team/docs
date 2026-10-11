@@ -377,6 +377,11 @@ def check_readiness(facts_by_provider, documents_by_provider, coverage,
             doc_ops = {}
         else:
             doc_ops = dict(_operations(document))
+            from source_provenance import validate_document
+            try:
+                validate_document(document)
+            except ValueError as exc:
+                result['errors'].append(_error('invalid_source_provenance', provider, detail=str(exc)))
         baseline_rows = baseline_coverage['providers'].get(provider, []) if baseline_ok else []
         baseline_ids = {(row.get('path'), str(row.get('method', '')).lower()): row.get('operation_id') for row in baseline_rows if row.get('status') == 'composed'}
         existing = {_pending_key(row) for row in baseline_rows if row.get('status') == 'pending'} - {None}
