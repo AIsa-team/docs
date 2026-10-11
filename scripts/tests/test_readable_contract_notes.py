@@ -138,11 +138,12 @@ class ReadableNotesTests(unittest.TestCase):
 
     def test_real_firecrawl_json_body_limit_is_public(self):
         spec = json.loads((ROOT/'openapi/firecrawl.json').read_text())
-        op = next(op for item in spec['paths'].values() for op in item.values()
-                  if isinstance(op, dict) and op.get('operationId') == 'post_firecrawl_search')
-        rendered = readable_block(op)
-        self.assertIn('Public request parameter', rendered)
-        self.assertNotIn('public mapping not declared', rendered)
+        for operation_id in ['post_firecrawl_search', 'post_firecrawl_map']:
+            op = next(op for item in spec['paths'].values() for op in item.values()
+                      if isinstance(op, dict) and op.get('operationId') == operation_id)
+            rendered = readable_block(op)
+            self.assertIn('Public request parameter', rendered)
+            self.assertNotIn('public mapping not declared', rendered)
         unknown = {'requestBody': {'$ref':'#/components/requestBodies/Request'},
                    'x-aisa-pricing': {'reserve_plan_units': {'input':'limit','input_multiplier':2}}}
         self.assertIn('public mapping not declared', readable_block(unknown))
