@@ -7,9 +7,29 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from contract_change_scope import git_requires_artifact_check, verify_required_jobs, requires_artifact_check
+from identity_compatibility import PublishedHistory
 
 
 class ChangeScopeTests(unittest.TestCase):
+    def test_manual_assessment_requires_explicit_published_identity_baseline(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = yaml.safe_load((root / '.github/workflows/test-runtime-contracts.yml').read_text())
+        triggers = workflow.get('on', workflow.get(True))
+        field = triggers['workflow_dispatch']['inputs']['published_ref']
+        self.assertIs(field['required'], True)
+        self.assertEqual(field['type'], 'string')
+        self.assertNotIn('default', field)  # Never silently choose the candidate as history.
+        step = next(step for step in workflow['jobs']['artifact-contracts']['steps']
+                    if step.get('name') == 'Check actual candidate readiness')
+        self.assertEqual(step['env']['PUBLISHED_REF'],
+                         "${{ github.event_name == 'workflow_dispatch' && inputs.published_ref || "
+                         "github.event.pull_request.base.sha || github.event.before }}")
+        self.assertIn('--published-ref "$PUBLISHED_REF"', step['run'])
+        # The explicit input still enters the existing strict history validator.
+        for invalid in ('', 'main', 'abc1234', 'g' * 40, 'a' * 39, 'a' * 41):
+            with self.subTest(ref=invalid), self.assertRaisesRegex(ValueError, 'full published Git SHA'):
+                PublishedHistory(root, invalid)
+
     def test_publication_projection_and_receipts_require_formal_gate(self):
         workflow = yaml.safe_load((Path(__file__).resolve().parents[2] /
                                    '.github/workflows/test-runtime-contracts.yml').read_text())

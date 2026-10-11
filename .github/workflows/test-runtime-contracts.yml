@@ -31,6 +31,11 @@ on:
       - 'api-reference/**'
       - 'zh/api-reference/**'
   workflow_dispatch:
+    inputs:
+      published_ref:
+        description: Full 40-character Git SHA of the known published identity baseline
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -127,7 +132,7 @@ jobs:
       - name: Check actual candidate readiness
         env:
           REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
-          PUBLISHED_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+          PUBLISHED_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.published_ref || github.event.pull_request.base.sha || github.event.before }}
         run: |
           python scripts/check_contract_candidate.py \
             --facts-dir /tmp/runtime-contract-evidence \
