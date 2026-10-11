@@ -8,11 +8,49 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SEMANTIC_BINDING_ALGORITHM = 'sha256-json-except-composer-metadata-v1'
+
+
+def canonical_json(value):
+    return json.dumps(value, sort_keys=True, separators=(',', ':'),
+                      ensure_ascii=True, allow_nan=False).encode('utf-8')
+
+
+def source_semantic_sha256(source):
+    """Bind all source content except two reviewed generator bookkeeping values.
+
+    The exclusion is code-defined, never supplied by evidence. In particular,
+    facts hashes, routes, schemas, prices, auth and capabilities remain bound.
+    """
+    semantic = copy.deepcopy(source)
+    metadata = semantic.get('info', {}).get('x-aisa-document')
+    if isinstance(metadata, dict):
+        metadata.pop('composer_version', None)
+        metadata.pop('document_hash', None)
+    return hashlib.sha256(canonical_json(semantic)).hexdigest()
+
+
+def verify_source_binding(source, evidence, source_bytes):
+    if canonical_json(json.loads(source_bytes)) != canonical_json(source):
+        raise ValueError('Source object does not match source bytes')
+    binding = evidence.get('source_semantic_binding')
+    if 'source_semantic_binding' not in evidence:
+        # Legacy evidence retains the original exact-byte review requirement.
+        matches = hashlib.sha256(source_bytes).hexdigest() == evidence['source_sha256']
+    else:
+        if (not isinstance(binding, dict)
+                or set(binding) != {'algorithm', 'sha256'}
+                or binding.get('algorithm') != SEMANTIC_BINDING_ALGORITHM
+                or not isinstance(binding.get('sha256'), str)
+                or not re.fullmatch(r'[0-9a-f]{64}', binding['sha256'])):
+            raise ValueError('Invalid reviewed source semantic binding')
+        matches = source_semantic_sha256(source) == binding['sha256']
+    if not matches:
+        raise ValueError('Source changed; review schemas and refresh payment evidence first')
 
 
 def build(source, evidence, source_bytes):
-    if hashlib.sha256(source_bytes).hexdigest() != evidence['source_sha256']:
-        raise ValueError('Source changed; review schemas and refresh payment evidence first')
+    verify_source_binding(source, evidence, source_bytes)
     doc = {
         'openapi': '3.1.0',
         'info': {
