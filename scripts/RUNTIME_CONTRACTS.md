@@ -535,7 +535,7 @@ translation authority. Missing note translations retain the exact source text.
 
 This projection does not calculate a quote or change request defaults. It shows
 reference values, declared unit drivers, constraints and reservation inputs;
-undeclared request inputs are explicitly internal. Scaled reservation metadata
+reservation inputs without a direct public mapping are labeled as unmapped. Scaled reservation metadata
 is displayed as its declared terms, because the public projection may lack the
 Runtime discriminators required to determine the evaluation order. Unknown
 operators never become an inferred formula. Complete request quotes and settled

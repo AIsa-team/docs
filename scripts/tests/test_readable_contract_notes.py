@@ -51,7 +51,7 @@ class ReadableNotesTests(unittest.TestCase):
                 self.assertIn('0.', block)
             if route == 'website-top-geographies':
                 block = readable_block(op)
-                self.assertIn('Internal reservation input (not a request parameter)', block)
+                self.assertIn('Reservation input (public mapping not declared)', block)
                 self.assertNotIn('Public request parameter', block)
 
     def test_public_reservation_and_bilingual_projection(self):
@@ -135,6 +135,17 @@ class ReadableNotesTests(unittest.TestCase):
         self.assertEqual(published['parameters'], op['parameters'])
         self.assertIn('age_bucket must be provided exactly once', html.unescape(readable_block(published)))
         self.assertNotIn('content', published['responses']['200'])
+
+    def test_real_firecrawl_json_body_limit_is_public(self):
+        spec = json.loads((ROOT/'openapi/firecrawl.json').read_text())
+        op = next(op for item in spec['paths'].values() for op in item.values()
+                  if isinstance(op, dict) and op.get('operationId') == 'post_firecrawl_search')
+        rendered = readable_block(op)
+        self.assertIn('Public request parameter', rendered)
+        self.assertNotIn('public mapping not declared', rendered)
+        unknown = {'requestBody': {'$ref':'#/components/requestBodies/Request'},
+                   'x-aisa-pricing': {'reserve_plan_units': {'input':'limit','input_multiplier':2}}}
+        self.assertIn('public mapping not declared', readable_block(unknown))
 
     def test_guides_distinguish_reference_quote_settlement(self):
         for prefix in ['', 'zh/']:

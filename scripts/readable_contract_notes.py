@@ -81,9 +81,13 @@ def readable_block(operation, language="en", translate=None):
                             lines.append(line(label, formula[name]))
                 names = (formula or {}).get("inputs", [(formula or {}).get("input")])
                 public = {p.get("name") for p in operation.get("parameters", []) if isinstance(p, dict)}
+                # Only direct public JSON properties are unambiguous here. A
+                # missing mapping is not evidence that a complex body is private.
+                body_schema = operation.get("requestBody", {}).get("content", {}).get("application/json", {}).get("schema", {})
+                public.update(body_schema.get("properties", {}))
                 for name in names:
                     if isinstance(name, str):
-                        lines.append(line(t("Public request parameter" if name in public else "Internal reservation input (not a request parameter)", "公开请求参数" if name in public else "内部预留输入（不是请求参数）"), name))
+                        lines.append(line(t("Public request parameter" if name in public else "Reservation input (public mapping not declared)", "公开请求参数" if name in public else "预留输入（未声明公开映射）"), name))
             for item in declaration.get("inputs", []) if key == "request_cost_drivers" else []:
                 if not isinstance(item, dict):
                     continue
