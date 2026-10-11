@@ -7,7 +7,7 @@ import tempfile
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from deferred_definitions import (DeferredDefinitions, load_deferred_definitions, POLICY_PATH,
-                                  POLICY_SHA256, validate_report_deferrals)
+                                  POLICY_SHA256, REBINDING_PATH, REBINDING_SHA256, validate_report_deferrals)
 from contract_readiness import check_readiness, _pending_key, binding_hash
 from gap_evidence import gap_key, response_gap_rows
 from publication_surface import publication_hashes
@@ -30,7 +30,11 @@ class DeferredDefinitionTests(unittest.TestCase):
         items = json.loads(raw)['items']
         self.assertEqual(len(items), 60)
         self.assertEqual(sum(row['kind'] == 'request' for row in items), 10)
+        rebinding = json.loads((ROOT / REBINDING_PATH).read_text())['rebindings'][0]
         for item in items:
+            if item['gate_identity'] == rebinding['old_gate_identity']:
+                self.assertFalse(policy.matches(item['provider'], item['kind'], item['gate_identity']))
+                item = {**item, 'gate_identity': rebinding['new_gate_identity']}
             provider, kind, key = item['provider'], item['kind'], item['gate_identity']
             self.assertTrue(policy.matches(provider, kind, key))
             self.assertFalse(policy.matches(provider + '-other', kind, key))
@@ -47,8 +51,32 @@ class DeferredDefinitionTests(unittest.TestCase):
             p = root / POLICY_PATH; p.parent.mkdir(parents=True)
             raw = (ROOT / POLICY_PATH).read_bytes(); p.write_bytes(raw)
             self.assertEqual(publication_hashes(root)[POLICY_PATH], POLICY_SHA256)
+            binding = root / REBINDING_PATH; binding.parent.mkdir(parents=True, exist_ok=True)
+            binding.write_bytes((ROOT / REBINDING_PATH).read_bytes())
             for changed in (raw + b' ', b'{}', raw.replace(b'"enabled"', b'"disabled"', 1)):
                 p.write_bytes(changed)
+                with self.assertRaises(ValueError):
+                    load_deferred_definitions(root)
+
+    def test_exact_rebinding_is_hashed_and_cannot_expand_or_survive_tampering(self):
+        policy = load_deferred_definitions(ROOT)
+        self.assertEqual(len(policy.keys), 60)
+        self.assertEqual(publication_hashes(ROOT)[REBINDING_PATH], REBINDING_SHA256)
+        self.assertEqual(policy.metadata['rebinding'], {'path': REBINDING_PATH, 'sha256': REBINDING_SHA256})
+        raw = (ROOT / REBINDING_PATH).read_bytes()
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            p = root / POLICY_PATH; p.parent.mkdir(parents=True)
+            p.write_bytes((ROOT / POLICY_PATH).read_bytes())
+            with self.assertRaisesRegex(ValueError, 'Missing exact'):
+                load_deferred_definitions(root)
+            binding = root / REBINDING_PATH; binding.parent.mkdir(parents=True)
+            value = json.loads(raw)
+            expanded = copy.deepcopy(value)
+            expanded['rebindings'].append(copy.deepcopy(expanded['rebindings'][0]))
+            for changed in (raw + b' ', b'{}', json.dumps(expanded).encode(),
+                            raw.replace(b'"enabled"', b'"disabled"', 1)):
+                binding.write_bytes(changed)
                 with self.assertRaises(ValueError):
                     load_deferred_definitions(root)
 

@@ -9,6 +9,8 @@ from pathlib import Path
 
 POLICY_PATH = 'openapi/policies/deferred-enabled-20261010.json'
 POLICY_SHA256 = '004d82c4dd026ed5ebf326ba9ce10bbea77e836e00f89f63931be28bcc8c32ee'
+REBINDING_PATH = 'docs/deferred-age-response-rebinding-20261012.json'
+REBINDING_SHA256 = '92137542ef16cea002f25b2f5033406dc88d6d28d39efd23d6f94401d2dc4c50'
 
 
 def canonical_key(provider, kind, key):
@@ -37,6 +39,29 @@ def load_deferred_definitions(root):
     policy = DeferredDefinitions(value)
     if len(policy.keys) != 60 or value['scope'] != {'request': 10, 'response': 50}:
         raise ValueError('Invalid enabled definition deferral scope')
+    # A separately reviewed exact replacement retains the original 60-item
+    # approval bytes. It never grants both identities or a pattern exemption.
+    binding_path = Path(root) / REBINDING_PATH
+    if not binding_path.is_file():
+        raise ValueError('Missing exact response deferral rebinding')
+    binding_raw = binding_path.read_bytes()
+    if hashlib.sha256(binding_raw).hexdigest() != REBINDING_SHA256:
+        raise ValueError('Response deferral rebinding differs from reviewed exact bytes')
+    record = json.loads(binding_raw)
+    if record.get('schema_version') != 1 or len(record.get('rebindings', [])) != 1:
+        raise ValueError('Invalid response deferral rebinding scope')
+    item = record['rebindings'][0]
+    old, new = item['old_gate_identity'], item['new_gate_identity']
+    if (item['kind'] != 'response' or len(old) != 10 or len(new) != 10
+            or old[:4] != new[:4] or old[7:] != new[7:]
+            or old[-1] != 'enabled' or old == new):
+        raise ValueError('Response deferral rebinding changed protected identity')
+    old_key = canonical_key(item['provider'], item['kind'], old)
+    new_key = canonical_key(item['provider'], item['kind'], new)
+    if old_key not in policy.keys or new_key in policy.keys:
+        raise ValueError('Response deferral rebinding must replace exactly one existing key')
+    policy.keys = (policy.keys - {old_key}) | {new_key}
+    policy.metadata['rebinding'] = {'path': REBINDING_PATH, 'sha256': REBINDING_SHA256}
     return policy
 
 
