@@ -523,3 +523,24 @@ whole batch. Examples, enum, const and default literals remain significant.
 Only missing locale pricing is copied, exactly from root; root specs, prose,
 pages, identity metadata and historical Git proof bytes remain unchanged.
 This repair does not add approval, publish a receipt, or enable activation.
+
+### Readable cost and constraint projection
+
+Composer 18 writes a managed `aisa-contract-details` block into endpoint MDX
+from the operation's existing `x-aisa-pricing` and `x-aisa-constraints.notes`.
+Editorial prose stays outside this block. Both page staging and the Chinese
+localization command use `readable_contract_notes.py`; translation extraction
+excludes generated blocks so changing reference prices does not create a second
+translation authority. Missing note translations retain the exact source text.
+
+This projection does not calculate a quote or change request defaults. It shows
+reference values, declared unit drivers, constraints and reservation inputs;
+reservation inputs without a direct public mapping are labeled as unmapped. Scaled reservation metadata
+is displayed as its declared terms, because the public projection may lack the
+Runtime discriminators required to determine the evaluation order. Unknown
+operators never become an inferred formula. Complete request quotes and settled
+amounts remain separate from these reference declarations.
+
+Validate with `python3 -m unittest discover -s scripts/tests -v`. Publish generated
+MDX and consolidated OpenAPI through the normal producer, not a separate manual
+page edit or a handwritten publication manifest.

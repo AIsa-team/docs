@@ -22,6 +22,7 @@ from compose_openapi import METHODS, compose, digest, resolve_fragment
 from import_upstream import import_source
 from runtime_registry import discover, combine_facts, public_mirror_index, published_documents, previous_for_facts, coverage_rows
 from source_json import loads as source_json_loads, load as source_json_load, UnsupportedNumericPrecision
+from readable_contract_notes import update_readable_block
 from identity_compatibility import published_history, attach_history, localize_identities, validate_document_identities
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -200,10 +201,19 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                 # A small managed notice can change with status while all user prose
                 # remains intact, including on pre-existing pages.
                 begin, end = "{/* aisa-contract-status:start */}", "{/* aisa-contract-status:end */}"
-                text = re.sub(re.escape(begin) + r".*?" + re.escape(end) + r"\n?", "", text, flags=re.S)
+                pattern = re.escape(begin) + r".*?" + re.escape(end) + r"\n?"
                 if operation.get("x-aisa-status") == "disabled":
                     notice = "当前未启用。" if language == "zh" else "Currently disabled."
-                    text += f"{begin}\n{notice}\n{end}\n"
+                    block = f"{begin}\n{notice}\n{end}\n"
+                    text = re.sub(pattern, lambda _: block, text, flags=re.S) if re.search(pattern, text, re.S) else text + block
+                else:
+                    text = re.sub(pattern, "", text, flags=re.S)
+                def translated_note(note):
+                    try:
+                        return localization.translation(catalog, note)
+                    except KeyError:
+                        return note
+                text = update_readable_block(text, operation, language, translated_note)
                 if not destination.exists() or text != destination.read_text():
                     changes[destination] = text
     for language in docs.get("navigation", {}).get("languages", []):

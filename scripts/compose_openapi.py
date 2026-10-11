@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit, unquote
 
-VERSION = "17"
+VERSION = "18"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
