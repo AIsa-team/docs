@@ -64,7 +64,7 @@ class ActivationTests(unittest.TestCase):
             original = yaml.safe_dump({'info': {'x-aisa-document': {'providers': documents}}})
             source.write_text(original)
             state = root / 'state.json'; report = root / 'report.json'
-            urls = dict(zip(('https://api.aisa.one/info/openapi.json', 'https://aisa.one/.well-known/agent-card.json',
+            urls = dict(zip(('https://api.aisa.one/info/openapi.json', 'https://aisa.one/openapi.yaml',
                 'https://tools.aisa.one/.well-known/catalog.json'), surfaces.values()))
             urls['https://aisa.one/api/contracts/version'] = {'mode': 'formal', 'docsRevision': 'a' * 40,
                 'contentHash': hashlib.sha256(original.encode()).hexdigest()}
@@ -75,6 +75,7 @@ class ActivationTests(unittest.TestCase):
                 with patch.object(sys, 'argv', argv), patch('contract_activation.datetime', wraps=datetime) as clock, \
                         patch('check_contract_revisions.time.time', return_value=now.timestamp()), \
                         patch('check_contract_revisions.read_public', side_effect=lambda url: urls[url]), \
+                        patch('check_contract_revisions.read_public_bytes', side_effect=lambda url: source.read_bytes()), \
                         patch('publication_origin.verify_consumer_refs', side_effect=lambda root, expected, refs, budget: {
                             'status': 'passed', 'expected_docs_ref': expected, 'contract_release': expected + '0' * 24,
                             'clock_docs_ref': expected, 'budget_start': budget, 'publications': {expected: {}}}), \
@@ -153,7 +154,7 @@ class ActivationTests(unittest.TestCase):
             self.assertEqual(selection['docs_ref'], expected)
             self.assertFalse(selection['publication_verified'])
             surfaces['router']['docs_commit'] = old
-            urls = dict(zip(('https://api.aisa.one/info/openapi.json', 'https://aisa.one/.well-known/agent-card.json',
+            urls = dict(zip(('https://api.aisa.one/info/openapi.json', 'https://aisa.one/openapi.yaml',
                 'https://tools.aisa.one/.well-known/catalog.json'), surfaces.values()))
             urls['https://aisa.one/api/contracts/version'] = {'mode': 'formal', 'docsRevision': expected,
                 'contentHash': digest}
@@ -163,14 +164,16 @@ class ActivationTests(unittest.TestCase):
                         '--expected-docs-ref', expected, '--selection-file', str(selection_file),
                         '--budget-start', began.isoformat(), '--report', str(report)]
                 with patch.object(sys, 'argv', argv), patch('check_contract_revisions.read_public', side_effect=lambda url: urls[url]), \
+                        patch('check_contract_revisions.read_public_bytes', side_effect=lambda url: yaml.safe_dump(
+                            {'info': {'x-aisa-document': {'providers': {name: dict(meta, **surfaces['website']['x-aisa-document']['providers'].get(name, {})) for name, meta in documents.items()}}}}).encode()), \
                         patch('publication_origin.verify_consumer_refs', side_effect=lambda root, expected, refs, budget: {
                             'status': 'passed', 'expected_docs_ref': expected, 'contract_release': expected + '0' * 24,
                             'clock_docs_ref': expected, 'budget_start': budget, 'publications': {expected: {}}}), \
                         patch('builtins.print'):
                     return main(), json.loads(report.read_text())
             status, failed = run(start)
-            self.assertEqual(failed['status'], 'failed')
-            self.assertIn('tool-router:docs_revision_mismatch', failed['mismatches'])
+            self.assertEqual(failed['status'], 'not_assessed')
+            self.assertIn('website:unavailable:ValueError', failed['missing_inputs'])
             surfaces['website']['x-aisa-document']['providers']['alpha']['document_hash'] = 'newdoc'
             surfaces['router'].update(docs_commit=expected, provider_document_hashes={'alpha': 'newdoc'})
             status, recovered = run(start)
