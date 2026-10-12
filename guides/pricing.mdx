@@ -56,7 +56,43 @@ A catalog `default_request_estimate_usd` describes a reference request; it is no
 
 `billing_multiplier_ppm` expresses the account multiplier in parts per million: divide by 1,000,000 to obtain the multiplier. For example, 1,000,000 means 1×, not one million times the price. A published reference multiplier does not replace the multiplier in your authenticated quote.
 
-After execution, distinguish an estimate from settlement. `X-AISA-Cost-Mode: settled` identifies settled cost metadata; `cost_estimate` in a Tool result remains an estimate. Where returned, `X-AISA-Cost-Micros-USD` and `customer_cost_micros_usd` use integer micro-USD (1 USD = 1,000,000 micro-USD). Reconcile settled amounts with Usage Logs and your balance; do not treat a catalog estimate or a quote as proof of a charge. Cost metadata availability varies by response path.
+After execution, the REST response header `X-AISA-Customer-Cost-Micros-USD` and a successful native Tool result's `customer_cost_micros_usd` report customer cost when present. Both use integer micro-USD (1 USD = 1,000,000 micro-USD). Missing cost metadata means unknown, not free. A Tool `cost_estimate` remains an estimate; provider cost is not the customer debit. Reconcile actual charges with [Usage Logs](/guides/dashboard/usage-logs) and your balance. Availability varies by response path; see the [API reference](/api-reference#settled-call-cost) for parsing and browser-header details.
+
+
+## Quote, review, then execute
+
+Use the complete URL and parameters from the current endpoint reference. The following GET example applies to endpoints that declare quote and maximum-price support. For POST or other methods, preserve the same method and body as well as the URL in both steps. Set `AISA_API_KEY` and `AISA_REQUEST_URL` in your environment; keep the same account and request parameters for both steps.
+
+First, request a free quote:
+
+```bash
+curl --fail-with-body --silent --show-error "${AISA_REQUEST_URL:?Set AISA_REQUEST_URL}" \
+  --header "Authorization: Bearer ${AISA_API_KEY:?Set AISA_API_KEY}" \
+  --header "X-AISA-Cost-Mode: quote" \
+  --output quote.json
+```
+
+Check that the response has `object: cost_estimate`. Convert `estimated_cost_micros_usd` to USD by dividing by 1,000,000 without rounding down. Review that estimate and set `AISA_MAX_PRICE_USD` to your approved decimal USD amount. This is an admission check: if the execution estimate exceeds your limit, the gateway rejects the request with 402 before provider execution. It does not turn the estimate into a final bill.
+
+Only after review, execute the same request **without** the quote header:
+
+```bash
+curl --fail-with-body --silent --show-error "${AISA_REQUEST_URL:?Set AISA_REQUEST_URL}" \
+  --header "Authorization: Bearer ${AISA_API_KEY:?Set AISA_API_KEY}" \
+  --header "X-AISA-Max-Price-USD: ${AISA_MAX_PRICE_USD:?Set AISA_MAX_PRICE_USD}"
+```
+
+### Idempotency for synchronous Similarweb calls
+
+For the synchronous Similarweb routes that declare `Idempotency-Key`, generate one unique key for a logical execution and keep it with your request record. Add this header to the execution command above:
+
+```bash
+--header "Idempotency-Key: ${AISA_IDEMPOTENCY_KEY:?Set AISA_IDEMPOTENCY_KEY}"
+```
+
+Reusing a key for an already admitted request returns 409, such as `{"error":"idempotent request already admitted"}`. This prevents duplicate admission; it does **not replay the original response**. If the first response was lost, check Usage Logs and the recorded request ID when available. Do not change the key to bypass a conflict or blindly retry an uncertain paid operation. A deliberately new operation needs a new key. Async jobs and other API families have their own contracts.
+
+For date inputs, follow the individual operation's constraints. Classic Similarweb Traffic & Engagement also accepts complete dates such as `2026-09-01` through `2026-09-30`; this does not extend the `YYYY-MM` month-only format of managed trend and snapshot requests. Some validation errors include a `supported` object with allowed values or bounds. Use those details when present, but do not assume every error contains this field.
 
 ## Choosing the Correct Pricing Model
 
@@ -71,7 +107,7 @@ The [Models catalog](https://aisa.one/models) shows per-token prices. Provider p
 
 All API activity, whether token-based or per-call, is recorded in:
 
-* **Usage Logs**
+* **[Usage Logs](/guides/dashboard/usage-logs)**
 * Account billing summaries
 
 You can review:
