@@ -1,0 +1,35 @@
+name: Docs checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Navigation, orphan pages, and redirects
+        run: python scripts/check_nav_integrity.py
+      - name: API reference slugs
+        run: python scripts/validate_runtime_api_reference_slugs.py --generated-only
+      # Only MDX pages: Markdown under scripts/tests/fixtures is frozen
+      # acceptance input whose relative links are not site routes.
+      - name: Broken links and redirect destinations
+        run: npx --yes mint@4.2.1006 broken-links --files '**/*.mdx' --check-redirects
