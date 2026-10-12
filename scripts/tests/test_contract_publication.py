@@ -13,6 +13,7 @@ from fetch_runtime_release import acquire, save, sha, main
 from publication_surface import publication_hashes
 from sales_catalog_projection import SALES_CATALOG_PATH, sales_catalog_bytes
 import test_fetch_runtime_release as fetch_tests
+from payment_fixture import install_payment_fixture
 from source_governance import initial_policy, acquisition_receipt, receipt_key, source_report
 
 
@@ -21,6 +22,7 @@ class PublicationTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
+        install_payment_fixture(self.root)
         self.facts = self.root / 'facts'
         revision, compiler, self.reader, _, _, _ = fetch_tests.PublicReleaseTests().fixture()
         save(self.facts, acquire(revision, compiler, self.reader))
@@ -36,7 +38,7 @@ class PublicationTests(unittest.TestCase):
         receipt_raw = (self.facts / 'acquisition-receipt.json').read_bytes()
         receipt = json.loads(receipt_raw)
         self.report = {'status': 'passed', 'evaluation': 'actual_publication_graph_and_offline_composed_candidate', 'composed_candidate': {'status': 'passed'},
-                       'publication_surfaces': {'status': 'passed'},
+                       'publication_surfaces': {'status': 'passed'}, 'payment_discovery': {'status': 'passed'},
                        'runtime': {key: receipt[key] for key in RUNTIME_KEYS},
                        'runtime_acquisition_sha256': sha(receipt_raw),
                        'publication_artifact': {'source_metadata': {'source.json': {key: self.metadata[key] for key in ('content_hash', 'policy_revision', 'refresh_policy')}},
@@ -82,7 +84,7 @@ class PublicationTests(unittest.TestCase):
         self.assertNotEqual(old, json.loads(self.prepared()['current.json'])['contract_release'])
 
     def test_failed_pending_or_unassessed_subgate_never_exports(self):
-        for section in (None, 'composed_candidate', 'publication_surfaces', 'source_governance'):
+        for section in (None, 'composed_candidate', 'publication_surfaces', 'payment_discovery', 'source_governance'):
             for status in ('failed', 'not_assessed'):
                 report = copy.deepcopy(self.report)
                 (report if section is None else report[section])['status'] = status
@@ -98,6 +100,19 @@ class PublicationTests(unittest.TestCase):
             with self.assertRaises(ValueError): self.prepared(report)
         (self.root / 'openapi.yaml').write_text('drift')
         with self.assertRaises(ValueError): self.prepared()
+
+    def test_payment_files_cannot_change_after_assessment_or_bypass_subgate(self):
+        for name in ('discovery/openapi.json', 'discovery/payment-evidence.json'):
+            path = self.root / name
+            original = path.read_bytes()
+            path.write_bytes(original + b' ')
+            with self.subTest(file=name), self.assertRaisesRegex(ValueError, 'publication graph changed'):
+                self.prepared()
+            path.write_bytes(original)
+        report = copy.deepcopy(self.report)
+        report.pop('payment_discovery')
+        with self.assertRaisesRegex(ValueError, 'Formal subgate did not pass'):
+            self.prepared(report)
 
     def test_flat_fact_drift_and_incomplete_manifest_rejected(self):
         path = self.facts / 'example.json'; original = path.read_bytes()

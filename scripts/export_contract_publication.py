@@ -80,7 +80,7 @@ def prepare(root, facts, report_raw, now=None, source_receipts=None):
     require(report.get('status') == 'passed', 'Formal readiness did not pass')
     require(report.get('evaluation') == 'actual_publication_graph_and_offline_composed_candidate',
             'Unsupported formal assessment scope')
-    for key in ('composed_candidate', 'publication_surfaces'):
+    for key in ('composed_candidate', 'publication_surfaces', 'payment_discovery'):
         require(report.get(key, {}).get('status') == 'passed', 'Formal subgate did not pass')
     for scope in (report, report['composed_candidate']):
         require(not scope.get('global_errors') and not scope.get('missing_inputs') and

@@ -22,6 +22,17 @@ class ChangeScopeTests(unittest.TestCase):
             'guides/pricing.mdx', 'zh/guides/pricing.mdx',
             'guides/dashboard/usage-logs.mdx', 'zh/guides/dashboard/usage-logs.mdx']))
 
+    def test_payment_review_inputs_have_candidate_check_and_outputs_require_formal_gate(self):
+        workflow = yaml.safe_load((Path(__file__).resolve().parents[2] /
+                                   '.github/workflows/test-runtime-contracts.yml').read_text())
+        triggers = workflow.get('on', workflow.get(True))
+        for event in ('push', 'pull_request'):
+            self.assertIn('discovery/**', triggers[event]['paths'])
+        self.assertTrue(requires_artifact_check(['discovery/openapi.json']))
+        self.assertFalse(requires_artifact_check(['discovery/payment-evidence.json']))
+        self.assertIn('python scripts/generate_payment_discovery.py --check',
+                      [step.get('run') for step in workflow['jobs']['code-contracts']['steps']])
+
     def test_manual_assessment_requires_explicit_published_identity_baseline(self):
         root = Path(__file__).resolve().parents[2]
         workflow = yaml.safe_load((root / '.github/workflows/test-runtime-contracts.yml').read_text())

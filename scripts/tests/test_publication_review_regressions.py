@@ -127,7 +127,7 @@ class PublicationRaceTests(unittest.TestCase):
         self.git(seed, 'init', '-q', '-b', 'main')
         self.git(seed, 'config', 'user.name', 'fixture')
         self.git(seed, 'config', 'user.email', 'fixture@example.invalid')
-        for relative in ('openapi/example.json', 'api-reference/page.mdx', 'zh/api-reference/page.mdx', 'docs.json', 'openapi.yaml'):
+        for relative in ('openapi/example.json', 'api-reference/page.mdx', 'zh/api-reference/page.mdx', 'docs.json', 'openapi.yaml', 'discovery/payment-evidence.json', 'discovery/openapi.json'):
             path = seed / relative; path.parent.mkdir(parents=True, exist_ok=True); path.write_text('original\n')
         self.git(seed, 'add', '.')
         self.git(seed, 'commit', '-qm', 'initial')

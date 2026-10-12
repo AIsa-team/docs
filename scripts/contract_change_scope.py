@@ -10,7 +10,7 @@ def requires_artifact_check(paths):
     return any(path.startswith(('openapi/', 'api-reference/', 'zh/api-reference/',
                                'docs/publication/',
                                'docs/current-source-review-20261009/'))
-               or path in ('openapi.yaml', 'docs.json', 'api-reference.mdx',
+               or path in ('discovery/openapi.json', 'openapi.yaml', 'docs.json', 'api-reference.mdx',
                            'zh/api-reference.mdx', 'docs/response-source-review-receipts.json') for path in paths)
 
 
