@@ -24,6 +24,18 @@ For support, retain `X-Request-ID` when returned, and `request_id` when present 
 
 A `503` does not by itself identify an upstream failure. A `404` can refer to a route or an upstream resource; authentication can run before route lookup, so a missing credential is not proof that a route is absent. `403`, `422`, and `429` remain endpoint-specific: do not assume a universal code list or rate-limit headers. Honor `Retry-After` when it is actually returned.
 
+## Missing credentials can follow different paths
+
+For `GET /apis/v1/similarweb/website/traffic-engagement`, the following responses have been observed with otherwise valid request parameters:
+
+| Credential and mode | Observed response |
+| --- | --- |
+| No API key, ordinary execution request | `404` with `{"error":"api endpoint not found"}` |
+| No API key, `X-AISA-Cost-Mode: quote` | `401` with a structured authentication error |
+| Invalid API key, ordinary execution request | `401` with top-level `code: invalid_api_key` |
+
+For this path, a `404` without credentials does not establish that the endpoint is absent. Supply the AISA credential before diagnosing route availability, and distinguish quote mode from execution. These observations do not promise the same authentication status or error layout for every endpoint.
+
 ## Documentation and sales-source availability
 
 The Website's contract and sales-data endpoints report source availability separately from Integration API execution errors.
