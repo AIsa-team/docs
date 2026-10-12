@@ -219,6 +219,12 @@ def main():
             if report['status'] != 'failed':
                 report['status'] = sources['status']
             report.setdefault('missing_inputs', []).append('current source-maintenance evidence')
+        from generate_payment_discovery import verify_payment_catalog
+        try:
+            report['payment_discovery'] = verify_payment_catalog(args.root)
+        except (ValueError, KeyError, TypeError, OSError) as exc:
+            report['status'] = 'failed'
+            report.setdefault('global_errors', []).append({'code': 'payment_discovery_mismatch', 'detail': str(exc)})
         from publication_surface import validate_surfaces, publication_hashes
         try:
             report['publication_surfaces'] = validate_surfaces(args.root, args.published_ref)
