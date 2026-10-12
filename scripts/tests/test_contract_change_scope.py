@@ -11,6 +11,17 @@ from identity_compatibility import PublishedHistory
 
 
 class ChangeScopeTests(unittest.TestCase):
+    def test_guide_only_edits_run_protocol_checks_without_republishing_contracts(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = yaml.safe_load((root / '.github/workflows/test-runtime-contracts.yml').read_text())
+        triggers = workflow.get('on', workflow.get(True))
+        for event in ('push', 'pull_request'):
+            self.assertIn('guides/**', triggers[event]['paths'])
+            self.assertIn('zh/guides/**', triggers[event]['paths'])
+        self.assertFalse(requires_artifact_check([
+            'guides/pricing.mdx', 'zh/guides/pricing.mdx',
+            'guides/dashboard/usage-logs.mdx', 'zh/guides/dashboard/usage-logs.mdx']))
+
     def test_manual_assessment_requires_explicit_published_identity_baseline(self):
         root = Path(__file__).resolve().parents[2]
         workflow = yaml.safe_load((root / '.github/workflows/test-runtime-contracts.yml').read_text())

@@ -151,5 +151,5 @@ class ReadableNotesTests(unittest.TestCase):
     def test_guides_distinguish_reference_quote_settlement(self):
         for prefix in ['', 'zh/']:
             guide = (ROOT/(prefix+'guides/pricing.mdx')).read_text()
-            for field in ['billing_multiplier_ppm','1,000,000','X-AISA-Cost-Mode: settled','cost_estimate','customer_cost_micros_usd']:
+            for field in ['billing_multiplier_ppm','1,000,000','X-AISA-Customer-Cost-Micros-USD','cost_estimate','customer_cost_micros_usd']:
                 self.assertIn(field, guide)

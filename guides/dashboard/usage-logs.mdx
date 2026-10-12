@@ -74,6 +74,31 @@ If nothing matches, the table says so rather than showing an empty grid — wide
 * **Check streaming behavior** — filter to Streaming and compare time to first token against total latency
 * **Audit key activity** — search a key name to see everything it has done in the window
 
+## Query usage with an API key
+
+`GET https://api.aisa.one/v1/usage` returns aggregate usage for the authenticated key by default. Use the same key that made the calls. It is not a per-request log; use the Console above to inspect individual calls.
+
+```bash
+# Positive Unix seconds in UTC; this example selects the last 24 hours.
+start_time=$(python3 -c 'import time; print(int(time.time()) - 86400)')
+curl --fail-with-body --silent --show-error --get \
+  "https://api.aisa.one/v1/usage" \
+  --header "Authorization: Bearer ${AISA_API_KEY:?Set AISA_API_KEY}" \
+  --data-urlencode "start_time=$start_time" \
+  --data-urlencode "bucket_width=1d" \
+  --data-urlencode "scope=key"
+```
+
+| Parameter | Meaning |
+| --- | --- |
+| `start_time` | Required positive Unix timestamp in **seconds**, not milliseconds or a date string. |
+| `end_time` | Optional Unix seconds; defaults to the current time. Must be later than start_time. The interval includes start and excludes end: `[start_time, end_time)`. |
+| Window | At most **31 days** (31 × 24 hours); split longer periods into adjacent windows. |
+| `bucket_width` | Only `1d` is supported, with UTC daily buckets. |
+| `scope` | Defaults to `key`. `account` requires OAuth authentication; an ordinary API key cannot request account scope. |
+
+`totals.charged_micros_usd` is the actual charged amount; divide integer micro-USD by 1,000,000 for USD. `totals.usage_value_micros_usd` is usage value and can differ from the charge. Compare the same key, time window and currency when reconciling. This aggregate does not prove the outcome of a specific request or that a historical top-up succeeded.
+
 ## Related
 
 <CardGroup cols={3}>
