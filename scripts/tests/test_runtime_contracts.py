@@ -407,6 +407,26 @@ class ConsolidationTests(unittest.TestCase):
         self.assertEqual(consolidate.inject_x402_annotations(legacy), 1)
         self.assertEqual(legacy["paths"]["/old"]["get"]["x-x402"]["path"], "/apis/v2/old")
 
+    def test_full_v1_path_maps_to_v2_without_doubling(self):
+        spec = {"paths": {"/apis/v1/agentmail/threads/search": {"get": {"operationId": "search"}}}}
+        self.assertEqual(consolidate.inject_x402_annotations(spec), 1)
+        self.assertEqual(spec["paths"]["/apis/v1/agentmail/threads/search"]["get"]["x-x402"]["path"],
+                         "/apis/v2/agentmail/threads/search")
+
+    def test_gateway_404_paths_are_not_annotated_in_either_path_form(self):
+        spec = {"paths": {
+            "/apis/v1/coingecko/news": {"get": {"operationId": "news", "x-x402": {"path": "stale"}}},
+            "/twitter/spaces/detail": {"get": {"operationId": "spaces"}},
+            "/apis/v1/services/aigc/video": {"post": {"operationId": "video"}},
+            "/apis/v1/coingecko/news-feed": {"get": {"operationId": "feed"}},
+        }}
+        self.assertEqual(consolidate.inject_x402_annotations(spec), 1)
+        self.assertNotIn("x-x402", spec["paths"]["/apis/v1/coingecko/news"]["get"])
+        self.assertNotIn("x-x402", spec["paths"]["/twitter/spaces/detail"]["get"])
+        self.assertNotIn("x-x402", spec["paths"]["/apis/v1/services/aigc/video"]["post"])
+        self.assertEqual(spec["paths"]["/apis/v1/coingecko/news-feed"]["get"]["x-x402"]["path"],
+                         "/apis/v2/coingecko/news-feed")
+
     def test_component_collisions_rewrite_references(self):
         unified = {"components": {"schemas": {"Error": {"type": "string"}}}}
         spec = {"components": {"schemas": {"Error": {"type": "object"}}}, "paths": {"/foo": {"get": {"responses": {"400": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}}}}

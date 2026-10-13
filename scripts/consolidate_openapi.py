@@ -140,14 +140,31 @@ COMPONENT_SECTIONS = (
 #     aisa-proxy's pricing catalog; the payment lifecycle for async
 #     long-running jobs differs from per-call x402 settlement.
 #
-# Add to this list only after confirming the runtime gateway returns
-# 404 (not 402) for the endpoint at /apis/v2.
+#   /coingecko/news, /twitter/spaces/detail — served at /apis/v1 but
+#     the gateway returns 404 at /apis/v2 (probed 2026-10-13), while the
+#     same providers' other endpoints answer 402 there.
+#
+# Entries are relative to /apis/v2. Add to this list only after confirming
+# the runtime gateway returns 404 (not 402) for the endpoint at /apis/v2.
 V2_MIRROR_DENYLIST_PREFIXES = ("/services/aigc/",)
+V2_MIRROR_DENYLIST_PATHS = frozenset({"/coingecko/news", "/twitter/spaces/detail"})
+
+
+def x402_relative_path(path_key):
+    """Return the path below /apis/v2 for a data-API path key.
+
+    Path keys are either relative to the /apis/v1 server or carry the full
+    /apis/v1 prefix (formal contract operations pinned to the bare host);
+    both map to the same /apis/v2 route.
+    """
+    return path_key[len("/apis/v1"):] if path_key.startswith("/apis/v1/") else path_key
 
 
 def is_v2_excluded(path_key):
     """Return True if path_key is on the v2-mirror denylist."""
-    return any(path_key.startswith(prefix) for prefix in V2_MIRROR_DENYLIST_PREFIXES)
+    relative = x402_relative_path(path_key)
+    return relative in V2_MIRROR_DENYLIST_PATHS or any(
+        relative.startswith(prefix) for prefix in V2_MIRROR_DENYLIST_PREFIXES)
 
 
 def is_llm_op(operation):
@@ -185,7 +202,7 @@ def inject_x402_annotations(spec):
                 op.pop("x-x402", None)
                 continue
             op["x-x402"] = {
-                "path": f"/apis/v2{path_key}",
+                "path": f"/apis/v2{x402_relative_path(path_key)}",
                 "source": X402_IMPLEMENTATION_URL,
             }
             annotated += 1
