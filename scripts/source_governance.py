@@ -142,6 +142,37 @@ def acquisition_receipt(source, checked_at):
             "compatibility": "not_assessed"}
 
 
+SCOPE_METHOD = "operation_source_content_hash"
+FAILED = {"overdue", "fetch_failed"}
+
+
+def source_scope(root, hashes):
+    """Attribute sources to providers from committed bytes only.
+
+    A source belongs to provider P iff an operation in openapi/P.json cites its
+    content hash through x-aisa-source or x-aisa-response-source.source
+    (interned x-aisa-source-provenance is expanded first). A source cited by any
+    non-provider document, cited by nobody, or any unreadable document makes
+    attribution global ([]), which keeps today's whole-publication strictness.
+    """
+    from runtime_registry import published_documents
+    from source_provenance import expand_source, source_slots
+    cited = {}
+    try:
+        coverage = root / "openapi/coverage.json"
+        providers = set(json.loads(coverage.read_text())["providers"]) if coverage.is_file() else set()
+        for name, document in published_documents(root).items():
+            for parent, key in source_slots(document):
+                cited.setdefault(expand_source(parent[key], document).get("content_hash"), set()).add(name)
+    except (ValueError, KeyError, TypeError, AttributeError, OSError):
+        cited = {}
+    scope = {}
+    for name, digest in sorted(hashes.items()):
+        owners = cited.get(digest, set()) if isinstance(digest, str) and digest else set()
+        scope[name] = sorted(owners) if owners and owners <= providers else []
+    return {"schema_version": 1, "method": SCOPE_METHOD, "sources": scope}
+
+
 def source_report(root, receipts=None, checked_at=None, attempts=None):
     checked_at = checked_at or datetime.now(timezone.utc)
     receipts = receipts or {}
@@ -155,7 +186,19 @@ def source_report(root, receipts=None, checked_at=None, attempts=None):
         failed_latest = attempt.get('status') == 'fetch_failed' and attempted_at and attempted_at <= checked_at and (not reviewed_at or attempted_at > reviewed_at)
         sources[path.name] = observation(source, receipts, checked_at, 'fetch_failed' if failed_latest else None)
     errors = {name: row['policy_errors'] for name, row in sources.items() if row['policy_errors']}
-    failed = bool(errors) or any(row['freshness'] in {'overdue', 'fetch_failed'} for row in sources.values())
+    scope = source_scope(root, {name: row['source_hash'] for name, row in sources.items()})
+    # Only an attributed, policy-valid source with a real (possibly past) due
+    # time can be confined to its providers; everything else stays global.
+    scoped = {name for name, row in sources.items()
+              if scope['sources'][name] and not row['policy_errors'] and row['review_due_at']}
+    scoped_failures = {}
+    for name in sorted(scoped):
+        if sources[name]['freshness'] in FAILED:
+            for provider in scope['sources'][name]:
+                scoped_failures.setdefault(provider, []).append(name)
+    global_rows = [row for name, row in sources.items() if name not in scoped]
+    failed = bool(errors) or any(row['freshness'] in FAILED for row in global_rows)
     return {"schema_version": 1, "checked_at": checked_at.isoformat(), "sources": sources, 'policy_errors': errors,
-            "status": 'failed' if failed else ("passed" if sources and all(row["freshness"] == "fresh" for row in sources.values()) else "not_assessed"),
+            "source_scope": scope, "scoped_failures": scoped_failures,
+            "status": 'failed' if failed else ("passed" if sources and all(row["freshness"] == "fresh" for row in global_rows) else "not_assessed"),
             "scope": "source maintenance evidence only; not provider compatibility or execution"}

@@ -9,7 +9,7 @@ from unittest.mock import Mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.source_governance import (acquisition_receipt, initial_policy, observation,
-    policy_errors, receipt_key, source_report)
+    policy_errors, receipt_key, source_report, source_scope)
 from scripts.refresh_upstream import refresh
 
 
@@ -142,6 +142,41 @@ class GovernanceTests(unittest.TestCase):
         self.assertTrue(all(not row['policy_errors'] for row in report['sources'].values()))
         self.assertTrue(all(row['freshness'] == 'unknown' for row in report['sources'].values()))
         self.assertEqual('not_assessed', report['status'])
+
+    def scoped_root(self, temp, source, document):
+        root = Path(temp)
+        (root / 'openapi/upstream').mkdir(parents=True)
+        (root / 'openapi/upstream/p.json').write_text(json.dumps({'info': {'x-aisa-source': source}}))
+        (root / 'openapi/coverage.json').write_text(json.dumps({'providers': {'prov': []}}))
+        (root / 'openapi/prov.json').write_text(json.dumps(document))
+        return root
+
+    def test_scoped_source_is_confined_only_with_a_real_due_time(self):
+        source = self.source()
+        operation = {'paths': {'/x': {'post': {'x-aisa-source': {'content_hash': source['content_hash']}}}}}
+        with tempfile.TemporaryDirectory() as temp:
+            root = self.scoped_root(temp, source, operation)
+            self.assertEqual({'p.json': ['prov']}, source_scope(root, {'p.json': source['content_hash']})['sources'])
+            overdue = {receipt_key(source): self.manual_receipt(source, self.now - timedelta(days=31))}
+            report = source_report(root, overdue, self.now)
+            self.assertEqual(('passed', {'prov': ['p.json']}), (report['status'], report['scoped_failures']))
+            # No valid receipt means no due time to bound the provider: global.
+            report = source_report(root, {}, self.now)
+            self.assertEqual(('not_assessed', {}), (report['status'], report['scoped_failures']))
+            # Policy errors are always global failures.
+            broken = dict(source, owner='')
+            (root / 'openapi/upstream/p.json').write_text(json.dumps({'info': {'x-aisa-source': broken}}))
+            self.assertEqual('failed', source_report(root, overdue, self.now)['status'])
+
+    def test_unreadable_provenance_makes_every_source_global(self):
+        source = self.source()
+        operation = {'paths': {'/x': {'get': {'x-aisa-source': {'content_hash': source['content_hash'],
+                     'provenance_ref': '#/info/x-aisa-source-provenance/' + 'f' * 64, 'provenance_sha256': 'f' * 64}}}}}
+        with tempfile.TemporaryDirectory() as temp:
+            root = self.scoped_root(temp, source, operation)
+            self.assertEqual({'p.json': []}, source_scope(root, {'p.json': source['content_hash']})['sources'])
+            overdue = {receipt_key(source): self.manual_receipt(source, self.now - timedelta(days=31))}
+            self.assertEqual('failed', source_report(root, overdue, self.now)['status'])
 
     def test_new_source_without_owner_policy_fails_governance(self):
         errors = policy_errors({'kind': 'manual', 'url': 'https://official.example.invalid'})

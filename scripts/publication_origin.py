@@ -11,7 +11,7 @@ import tempfile
 from export_contract_publication import canonical, source_expiry
 from fetch_runtime_release import require, sha
 from publication_surface import publication_hashes
-from source_governance import policy_errors, policy_revision
+from source_governance import policy_errors, policy_revision, source_scope
 
 REPOSITORY = 'AIsa-team/docs'
 WORKFLOW = '.github/workflows/pull-openapi.yml'
@@ -94,8 +94,13 @@ def verify_graph(root, origin, artifact, now=None):
     acquisition = json.loads((root / 'docs/publication/runtime-acquisition.json').read_bytes())
     require(report.get('runtime_acquisition_sha256') == current['runtime_acquisition']['sha256']
             and all(acquisition.get(k) == v for k, v in current['runtime'].items()), 'Acquisition identity differs')
-    require(source_expiry(report, now) == current.get('source_authorization_expires_at'), 'Source authorization differs')
+    require(source_expiry(report, now) == (current.get('source_authorization_expires_at'),
+                                           current.get('provider_authorization_expires_at')), 'Source authorization differs')
     sources = report['source_governance']['sources']
+    # Provider attribution must be reproducible from this commit's own bytes.
+    if 'source_scope' in report['source_governance']:
+        require(report['source_governance']['source_scope'] == source_scope(
+            root, {name: row.get('source_hash') for name, row in sources.items()}), 'Source scope differs')
     paths = {p.name: p for p in (root / 'openapi/upstream').glob('*.json')}
     require(set(sources) == set(paths) and binding.get('source_hashes') ==
             {name: row.get('source_hash') for name, row in sources.items()}, 'Source graph differs')
@@ -150,6 +155,8 @@ def inspect_publication(root, ref, historical=False):
                 'contract_release': current['contract_release'], 'producer_origin': origin,
                 'authorization_fingerprint': policy,
                 'authorization_expires_at': current['source_authorization_expires_at']}
+    if 'provider_authorization_expires_at' in current:
+        selected['provider_authorization_expires_at'] = current['provider_authorization_expires_at']
     return selected
 
 

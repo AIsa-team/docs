@@ -224,8 +224,25 @@ relative `path` and exact byte `sha256`. The exporter reproduces source governan
 and original assessment time, and compares it against current hashed source
 metadata. The formal report binds acquisition bytes
 through `runtime_acquisition_sha256` and the same four-field `runtime` identity.
-`source_authorization_expires_at` is the earliest source `review_due_at` or
-`next_acquisition_due_at`, never an invented publication TTL.
+Source authorization is provider scoped. `source_governance.source_scope`
+(`schema_version: 1`, `method: operation_source_content_hash`) maps every source
+file to the providers whose operations in `openapi/<provider>.json` cite its
+`content_hash` through `x-aisa-source` or `x-aisa-response-source.source`
+(interned `x-aisa-source-provenance` expanded first). A source cited by no
+operation, by a document that is not a `coverage.json` provider, or whose
+documents cannot be read maps to `[]` and is **global**. Policy errors, and any
+source without a valid review receipt, stay global. Governance `failed` means a
+global source is `overdue`/`fetch_failed` or any policy error exists; overdue or
+failed attributed sources are listed in `scoped_failures` per provider instead.
+`source_authorization_expires_at` is the earliest `review_due_at` or
+`next_acquisition_due_at` over global sources only, never an invented publication
+TTL; export refuses when it is already due. `provider_authorization_expires_at`
+holds one entry per readiness provider: the minimum of that global time and the
+due times of the provider's attributed sources, which are never extended and may
+already be past. Consumers recompute both fields from the hash-bound report and
+stop presenting a provider once its own time passes. A report without
+`source_scope` (and a pointer without the provider map) keeps the old meaning:
+every source is global.
 
 The pointer, full graph, formal report and acquisition receipt are committed
 **together**. The pointer intentionally contains no Docs commit SHA. Consumers
