@@ -169,6 +169,18 @@ class OriginTests(unittest.TestCase):
         self.assertEqual(current['contract_release'], self.receipt['contract_release'])
         self.assertNotIn(origin.ORIGIN, current['files_sha256'])
 
+    def test_provider_authorization_and_scope_are_reverified(self):
+        current = origin.verify_graph(self.root, self.receipt, self.artifact, self.end)
+        self.assertEqual(current['provider_authorization_expires_at'], {})
+        report = json.loads(self.artifact)
+        self.assertEqual(report['source_governance']['source_scope']['sources'], {'source.json': []})
+        with patch.object(origin, 'source_scope', return_value={'schema_version': 1, 'sources': {}}), \
+             self.assertRaisesRegex(ValueError, 'Source scope differs'):
+            origin.verify_graph(self.root, self.receipt, self.artifact, self.end)
+        with patch.object(origin, 'source_expiry', return_value=(current['source_authorization_expires_at'], None)), \
+             self.assertRaisesRegex(ValueError, 'Source authorization differs'):
+            origin.verify_graph(self.root, self.receipt, self.artifact, self.end)
+
     def test_no_change_retry_does_not_rewrite_budget_or_commit(self):
         raw = (self.root / origin.ORIGIN).read_bytes()
         self.assertIsNone(origin.record(self.root, '456', 2, self.now + timedelta(hours=1)))

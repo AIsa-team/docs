@@ -11,7 +11,7 @@ import subprocess
 from fetch_runtime_release import acquire, decode, require, sha, HEX64, HEX40
 from publication_surface import publication_hashes
 from deferred_definitions import validate_report_deferrals
-from source_governance import source_report
+from source_governance import FAILED, SCOPE_METHOD, source_report
 from sales_catalog_projection import SALES_CATALOG_PATH
 
 RUNTIME_KEYS = ('artifact_revision', 'source_digest', 'compiler_revision', 'generation')
@@ -51,14 +51,46 @@ def acquired_input(facts):
     return receipt, raw
 
 
+def source_scope_owners(report):
+    """Validated provider attribution; an absent scope means every source is global."""
+    governance = report.get('source_governance', {})
+    scope = governance.get('source_scope')
+    if scope is None:
+        require('scoped_failures' not in governance, 'Scoped failures without source scope')
+        return None
+    providers = report.get('providers', {})
+    require(isinstance(scope, dict) and scope.get('schema_version') == 1 and scope.get('method') == SCOPE_METHOD
+            and isinstance(scope.get('sources'), dict) and set(scope['sources']) <= set(governance['sources'])
+            and isinstance(providers, dict), 'Invalid source scope')
+    for owners in scope['sources'].values():
+        require(isinstance(owners, list) and all(isinstance(p, str) and p in providers for p in owners)
+                and owners == sorted(set(owners)), 'Invalid source scope')
+    return {name: owners for name, owners in scope['sources'].items() if owners}
+
+
 def source_expiry(report, now):
+    """Return (global expiry, provider expiries or None for the legacy shape).
+
+    Global sources must be fresh and unexpired. A provider-scoped source may be
+    overdue/fetch_failed or already due; it only shortens its providers' expiry
+    to its own existing due time, never extended and never past the global one.
+    """
     governance = report.get('source_governance', {})
     require(governance.get('status') == 'passed' and governance.get('sources'), 'Source maintenance is not passed')
     checked = datetime.fromisoformat(governance['checked_at'])
     require(checked.tzinfo is not None and checked <= now, 'Source assessment time is invalid')
-    due = []
-    for source in governance['sources'].values():
-        require(source.get('freshness') == 'fresh' and not source.get('policy_errors'), 'Source is not fresh')
+    owners = source_scope_owners(report)
+    due, scoped_due, failures = [], {}, {}
+    for name, source in governance['sources'].items():
+        scoped = (owners or {}).get(name)
+        require(not source.get('policy_errors'), 'Source is not fresh')
+        if scoped:
+            require(source.get('freshness') in {'fresh', *FAILED}, 'Source is not fresh')
+            if source['freshness'] != 'fresh':
+                for provider in scoped:
+                    failures.setdefault(provider, []).append(name)
+        else:
+            require(source.get('freshness') == 'fresh', 'Source is not fresh')
         require(source.get('review_due_at'), 'Source review expiry missing')
         observed = datetime.fromisoformat(source['checked_at'])
         reviewed = datetime.fromisoformat(source['last_successful_review_at'])
@@ -69,9 +101,21 @@ def source_expiry(report, now):
         for key in ('review_due_at', 'next_acquisition_due_at'):
             if source.get(key):
                 value = datetime.fromisoformat(source[key])
-                require(value.tzinfo is not None and value > now, 'Source authorization expired')
-                due.append(value)
-    return min(due).isoformat()
+                require(value.tzinfo is not None, 'Source authorization expiry lacks timezone')
+                if scoped:
+                    for provider in scoped:
+                        scoped_due.setdefault(provider, []).append(value)
+                else:
+                    require(value > now, 'Source authorization expired')
+                    due.append(value)
+    require(due, 'No global source authorization')
+    expiry = min(due)
+    if owners is None:
+        return expiry.isoformat(), None
+    require(governance.get('scoped_failures') == {p: sorted(names) for p, names in failures.items()},
+            'Scoped source failures differ')
+    return expiry.isoformat(), {provider: min([expiry, *scoped_due.get(provider, [])]).isoformat()
+                                for provider in sorted(report.get('providers', {}))}
 
 
 def prepare(root, facts, report_raw, now=None, source_receipts=None):
@@ -119,12 +163,15 @@ def prepare(root, facts, report_raw, now=None, source_receipts=None):
     require(type(sales.get('schema_version')) is int and sales['schema_version'] == 1 and sales.get('openapi_sha256') == hashes.get('openapi.yaml') and
             hashes.get(SALES_CATALOG_PATH) == sha(sales_raw), 'Sales projection is outside the assessed graph')
     core = {'schema_version': 1, 'runtime': runtime, 'files_sha256': hashes}
+    expiry, provider_expiry = source_expiry(report, now)
     current = {**core, 'status': 'passed', 'contract_release': sha(canonical(core)),
                'openapi': {'path': 'openapi.yaml', 'sha256': hashes['openapi.yaml']},
                'sales_catalog': {'path': SALES_CATALOG_PATH, 'sha256': hashes[SALES_CATALOG_PATH]},
                'formal_readiness': {'path': PUBLICATION + 'formal-contract-readiness.json', 'sha256': sha(report_raw)},
                'runtime_acquisition': {'path': PUBLICATION + 'runtime-acquisition.json', 'sha256': sha(receipt_raw)},
-               'source_authorization_expires_at': source_expiry(report, now)}
+               'source_authorization_expires_at': expiry}
+    if provider_expiry is not None:
+        current['provider_authorization_expires_at'] = provider_expiry
     return {'formal-contract-readiness.json': report_raw, 'runtime-acquisition.json': receipt_raw,
             'current.json': json.dumps(current, indent=2, sort_keys=True, ensure_ascii=False).encode() + b'\n'}
 
@@ -150,7 +197,8 @@ def retained_publication(root, destination, files, now):
         expected['formal_readiness']['sha256'] = sha(previous['formal-contract-readiness.json'])
         expected['runtime_acquisition']['sha256'] = sha(previous['runtime-acquisition.json'])
         require(canonical(old_current) == canonical(expected), 'Existing publication pointer differs')
-        require(source_expiry(old_report, now) == new_current['source_authorization_expires_at'],
+        require(source_expiry(old_report, now) == (new_current['source_authorization_expires_at'],
+                                                   new_current.get('provider_authorization_expires_at')),
                 'Existing source authorization differs or expired')
         require(old_report['runtime_acquisition_sha256'] == sha(previous['runtime-acquisition.json']),
                 'Existing report acquisition binding differs')
