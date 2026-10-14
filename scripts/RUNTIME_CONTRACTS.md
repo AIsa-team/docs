@@ -341,6 +341,10 @@ import, consumer pin or deployment.
 
 `test-runtime-contracts.yml` retains the existing `contracts` required check as
 the final summary of code checks and all applicable artifact checks.
+`artifact-contracts` acquires the Runtime release recorded by the latest formal
+publication on `origin/main` (`docs/publication/runtime-acquisition.json`), not a
+hand-edited pin; a Runtime release newer than that publication fails acquisition
+until the scheduled publication catches up, then a re-run passes.
 `artifact-contracts` is additional whenever the fixed base-to-head Git
 diff changes any `openapi/` file (including source policy metadata and deleted
 files), `openapi.yaml`, localized reference pages or `docs.json`. An unknown base
