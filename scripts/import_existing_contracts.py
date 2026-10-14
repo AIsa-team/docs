@@ -15,7 +15,7 @@ def import_existing(root: Path, revision: str = 'HEAD') -> dict:
     names = subprocess.check_output(['git', 'ls-tree', '--name-only', f'{commit}:openapi'], cwd=root, text=True).splitlines()
     changes = {}
     for name in names:
-        if not name.endswith('.json') or name in {'openapi.json', 'pending.json', 'coverage.json', 'coverage-sources.json'}:
+        if not name.endswith('.json') or name in {'openapi.json', 'pending.json', 'coverage.json', 'coverage-sources.json', 'nav-groups.json'}:
             continue
         raw = subprocess.check_output(['git', 'show', f'{commit}:openapi/{name}'], cwd=root, text=True)
         source = json.loads(raw)

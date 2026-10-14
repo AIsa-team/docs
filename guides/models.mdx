@@ -1,307 +1,127 @@
 ---
-title: AIsa LLM Model Catalog - API Endpoints, Capabilities, Context Windows
-description: >-
-  Complete AIsa LLM and media model catalog for llms.txt: exact model IDs, providers, API endpoints, capabilities, context windows, and billing for all 124 models — GPT, Claude, Gemini, Grok, DeepSeek, Qwen, Kimi, MiniMax, GLM, Seed, Seedream, Dreamina, Wan, Hunyuan, StepFun, MiMo, and Jina — through https://api.aisa.one/v1.
+title: "AIsa Model Catalog: Model IDs, Routes, and Capabilities"
+sidebarTitle: "Model Catalog"
+icon: "list"
+description: "Find current AIsa model IDs, supported endpoints, and capabilities via GET /v1/models or the live catalog at aisa.one/models."
 ---
 
-AIsa's Model Gateway routes LLM and media-generation requests through one API key. This guide is the stable Markdown source for agents that read [llms.txt](https://aisa.one/docs/llms.txt) and need to understand which AIsa model IDs exist, which endpoint each model uses, and what each model can do.
+AIsa routes LLM, image, video, and embedding models through a single API key. Because models are frequently added and retired, this page explains how to query the catalog dynamically rather than maintaining a static list.
 
-The live catalog is [aisa.one/models](https://aisa.one/models). The tables below cover all 124 models in the gateway as of September 30, 2026, and list how each model is billed, not its price. Current prices and availability are on the live catalog; use it as the final source of truth before production routing.
+<CardGroup cols={2}>
+  <Card title="GET /v1/models" icon="terminal" href="#list-models-with-the-api">
+    Machine-readable list of model IDs, routes, and capability tags for applications and agents.
+  </Card>
+  <Card title="aisa.one/models" icon="arrow-up-right-from-square" href="https://aisa.one/models">
+    Browse, filter, and compare models, with current prices.
+  </Card>
+</CardGroup>
 
-## How to call models
+## List models with the API
 
-Use your `AISA_API_KEY` as a Bearer token. For OpenAI-compatible SDKs, set the base URL to `https://api.aisa.one/v1`.
+Send your API key as a Bearer token. Listing models is free; requests without an API key return `402`.
+
+```bash
+curl https://api.aisa.one/v1/models \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+The response follows the standard OpenAI list format, extended with an `aisa` metadata object for each model:
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "claude-fable-5-1",
+      "object": "model",
+      "created": 1788315984,
+      "owned_by": "Anthropic",
+      "aisa": {
+        "display_name": "claude-fable-5-1",
+        "model_type": "text",
+        "capabilities": ["chat", "long-context", "reasoning", "tools"],
+        "preferred_route": "anthropic",
+        "routes": [
+          { "key": "openai", "path": "/v1/chat/completions", "method": "POST" },
+          { "key": "anthropic", "path": "/v1/messages", "method": "POST", "preferred": true }
+        ]
+      }
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `id` | The exact string to pass as `model`. |
+| `owned_by` | Upstream provider, such as `OpenAI`, `Anthropic`, or `Alibaba`. |
+| `aisa.model_type` | `text`, `image`, `video`, or `embedding`. |
+| `aisa.capabilities` | Capability tags, such as `chat`, `tools`, `reasoning`, `vision`, `image`, `videos`, or `embeddings`. |
+| `aisa.routes` | Every AIsa endpoint serving this model, specified as `method` + `path`. |
+| `aisa.preferred_route` | Present on some models. The `key` of the recommended route (which also has `"preferred": true`). |
+
+Filter the list with `jq`:
+
+```bash
+# Models served by the Anthropic-compatible /v1/messages endpoint
+curl -s https://api.aisa.one/v1/models -H "Authorization: Bearer $AISA_API_KEY" \
+  | jq -r '.data[] | select(any(.aisa.routes[]; .path == "/v1/messages")) | .id'
+
+# Image models
+curl -s https://api.aisa.one/v1/models -H "Authorization: Bearer $AISA_API_KEY" \
+  | jq -r '.data[] | select(.aisa.model_type == "image") | .id'
+```
+
+## Endpoints by model type
+
+| Model type | Endpoints | Notes |
+| --- | --- | --- |
+| Text | `POST /v1/chat/completions`, `POST /v1/messages`, `POST /v1/responses` | Most text models serve both OpenAI- and Anthropic-compatible routes. Check `routes` before switching protocols. |
+| Image | `POST /v1/images/generations`, `POST /v1/images/edits` | Not every image model supports edits. |
+| Video | `POST /v1/video/generations`, then `GET /v1/video/generations/{task_id}` | Asynchronous: submit a job, then poll for the result. |
+| Embedding | `POST /v1/embeddings` | |
+
+Calling a model on an unsupported route returns `400` with `error.code` set to `model_route_not_supported`; `error.supported_routes` lists the routes that work. Request and response schemas for each endpoint are documented in the [API Reference](/api-reference/chat/post_chat-completions).
+
+## Call a model
+
+Point any OpenAI-compatible SDK at `https://api.aisa.one/v1` and pass a model `id` from the catalog:
 
 ```python
 from openai import OpenAI
 
-client = OpenAI(
-    api_key="YOUR_AISA_API_KEY",
-    base_url="https://api.aisa.one/v1"
-)
+client = OpenAI(api_key="YOUR_AISA_API_KEY", base_url="https://api.aisa.one/v1")
 
 response = client.chat.completions.create(
     model="qwen3.7-max",
-    messages=[{"role": "user", "content": "Compare these model options for a coding agent."}]
+    messages=[{"role": "user", "content": "Compare these model options for a coding agent."}],
 )
 print(response.choices[0].message.content)
 ```
 
-## Endpoint types
+For the Anthropic SDK and other clients, see [OpenAI / Anthropic SDK](/get-started/sdk-compatibility).
 
-| Endpoint | Current model count |
-| --- | ---: |
-| `POST /v1/chat/completions` | 101 |
-| `POST /v1/messages` | 89 |
-| `POST /v1/responses` | 80 |
-| `POST /v1/video/generations` | 9 |
-| `POST /v1/images/generations` | 6 |
-| `POST /v1/images/edits` | 5 |
-| `POST /v1/embeddings` | 4 |
-| `POST /v1beta/models/{model}:generateContent` | 1 |
-| `POST /v1/classify` | 1 |
-| `POST /v1/rerank` | 1 |
-| `POST /v1/systemone` | 1 |
+## Browse and compare on aisa.one
 
-Most text, vision, and coding models accept both OpenAI-style `chat/completions` and Anthropic-compatible `messages`, so the same model ID works from either SDK. `POST /v1/responses` is now served by most text models — the table above counts the routes from the August 5, 2026 metadata export combined with those reported by the live gateway pricing feed on September 30, 2026. The live feed can omit routes a model actually serves, so newly added models may be missing `messages` or `responses` in their Endpoint(s) column. Calling a model on a route it does not serve returns `400 model_route_not_supported` with the supported routes listed, so probe before switching protocols. Gemini models additionally expose `generateContent`. Image models use `images/generations` and `images/edits`. Video models are asynchronous: submit the job to `POST /v1/video/generations`, then poll `/v1/video/generations/{task_id}` for the result. Embedding models use `/v1/embeddings`; the Jina reranker uses `/v1/rerank`. Always pass the exact model string shown below.
+For interactive browsing, visit [aisa.one/models](https://aisa.one/models). You can search by model, provider, or endpoint, filter by provider and capability, and compare models side by side. It also displays each model's current price, which these docs do not list.
 
-## Capability vocabulary
+## How models are billed
 
-| Capability | What it means in AIsa Model Gateway |
-| --- | --- |
-| Text | Natural-language generation, summarization, analysis, translation, and long-context reasoning. |
-| Coding | Code reasoning, code completion, software-agent planning, and tool-use workflows. |
-| Vision | Image/document understanding, visual coding, and spatial reasoning over visual inputs. |
-| Audio | Audio understanding or speech-to-speech style interaction where supported by the upstream model. |
-| Image | Image generation, image editing, image consistency, or rendering text in images. |
-| Video | Video understanding, temporal reasoning, long-video work, image-to-video, or omni/video workflows. |
+Models draw on the same prepaid balance as data APIs. The billing unit depends on the model:
 
-## Provider summary
+- **Text and embedding models:** Billed per token, with separate rates for input and output, and for cache reads or writes where caching is supported.
+- **Image models:** Billed per token, per request, or per image (sometimes varying by image size), depending on the model.
+- **Video models:** Billed per output second or per token, by resolution.
 
-| Provider | Models | Types | Example model IDs |
-| --- | ---: | --- | --- |
-| OpenAI | 29 | Embeddings, Image, Text | `gpt-4.1-mini`, `gpt-4o`, `gpt-4o-mini`, `gpt-5-nano` ... |
-| Anthropic | 13 | Text | `claude-fable-5`, `claude-fable-5-1`, `claude-haiku-4-5-20251001`, `claude-opus-4-5-20251101` ... |
-| Google Gemini | 1 | Text | `gemini-3.5-flash` |
-| xAI | 7 | Text | `grok-4.20-0309-non-reasoning`, `grok-4.20-0309-reasoning`, `grok-4.3`, `grok-4.5` ... |
-| DeepSeek | 10 | Text | `deepseek-r1`, `deepseek-v3`, `deepseek-v3.1`, `deepseek-v3.2` ... |
-| Alibaba | 24 | Image, Text, Video | `qwen-flash`, `qwen-mt-flash`, `qwen-mt-lite`, `qwen-plus-2025-12-01` ... |
-| Moonshot | 5 | Text | `kimi-k2-thinking`, `kimi-k2.5`, `kimi-k2.6`, `kimi-k2.7-code` ... |
-| MiniMax | 4 | Text | `MiniMax-M2.5`, `MiniMax-M2.7`, `MiniMax-M2.7-highspeed`, `MiniMax-M3` |
-| Zhipu GLM | 6 | Text | `glm-5`, `glm-5.1`, `glm-5.2`, `glm-5.3` ... |
-| ByteDance | 10 | Image, Text, Video | `dreamina-seedance-2-0-260128`, `dreamina-seedance-2-0-fast-260128`, `dreamina-seedance-2-5`, `seed-1-6-250915` ... |
-| Tencent | 2 | Text | `hy3`, `hy4-preview` |
-| Xiaomi | 3 | Text | `mimo-v2.6-flash`, `mimo-v2.6-pro`, `mimo-v2.6-pro-ultraspeed` |
-| StepFun | 3 | Text | `step-3.5-flash`, `step-3.5-flash-2603`, `step-3.7-flash` |
-| HappyHorse | 3 | Video | `happyhorse-1.1-i2v`, `happyhorse-1.1-r2v`, `happyhorse-1.1-t2v` |
-| Jina | 3 | Embeddings | `jina-embeddings-v3`, `jina-embeddings-v5-text-small`, `jina-reranker-v3` |
-| TypeSafe | 1 | Text | `jev-latest` |
+The live catalog shows each model's billing type and current price. The final charge for each call is recorded in your usage logs. See [Billing & Credits](/guides/pricing) for balances, spend limits, and quotes.
 
-## Complete model details
+## Chinese models
 
-Context windows and capability tags come from the last Model Gateway metadata export. Models added since then show `—` for context and only their base type in Capabilities — check [aisa.one/models](https://aisa.one/models) for their current limits and capability tags.
-
-### OpenAI
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `gpt-4.1-mini` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `gpt-4o` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `gpt-4o-mini` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `gpt-5-nano` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `gpt-5-pro` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output |
-| `gpt-5-search-api` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `gpt-5.1` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `gpt-5.2` | 400,000 | Coding, Text, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `gpt-5.2-chat-latest` | 400,000 | Coding, Text, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `gpt-5.2-pro` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output |
-| `gpt-5.3-chat-latest` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `gpt-5.3-codex` | 1,000,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `gpt-5.4` | 1,050,000 | Coding, Text, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `gpt-5.4-mini` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `gpt-5.4-nano` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `gpt-5.4-pro` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output |
-| `gpt-5.5` | 400,000 | Coding, Text, Vision; code reasoning, long context, reasoning, vision | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `gpt-5.5-pro` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output |
-| `gpt-5.6-luna` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `gpt-5.6-sol` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `gpt-5.6-terra` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `gpt-6-astra` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `gpt-6-luna` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `gpt-6-sol` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `gpt-image-2` | N/A | Image, Vision; image editing, image generation, text in images, vision | `/v1/images/generations`, `/v1/images/edits` | Per 1M tokens: input, output, cache write; Per request; Per image, by size |
-| `gpt-image-2.5-flare` | — | Image | `/v1/images/generations`, `/v1/images/edits` | Per 1M tokens: input, output, cache read |
-| `gpt-image-2.5-sunburst` | — | Image | `/v1/images/generations`, `/v1/images/edits` | Per 1M tokens: input, output, cache read |
-| `text-embedding-3-large` | — | Embeddings | `/v1/embeddings` | Per 1M tokens: input |
-| `text-embedding-3-small` | — | Embeddings | `/v1/embeddings` | Per 1M tokens: input |
-
-### Anthropic
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `claude-fable-5` | — | Text | `/v1/chat/completions`, `/v1/messages` | Per 1M tokens: input, output, cache read, cache write |
-| `claude-fable-5-1` | — | Text | `/v1/messages` | Per 1M tokens: input, output, cache write |
-| `claude-haiku-4-5-20251001` | 200,000 | Coding, Text, Vision; reasoning, long context, spatial vision, document vision, visual coding, code reasoning, agentic coding | `/v1/chat/completions`, `/v1/messages` | Per 1M tokens: input, output, cache read, cache write |
-| `claude-opus-4-5-20251101` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, document vision, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages` | Per 1M tokens: input, output, cache read, cache write |
-| `claude-opus-4-6` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, document vision, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages` | Per 1M tokens: input, output, cache read, cache write |
-| `claude-opus-4-7` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `claude-opus-4-8` | 1,000,000 | Coding, Text, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages` | Per 1M tokens: input, output, cache read, cache write |
-| `claude-opus-5` | — | Text | `/v1/chat/completions`, `/v1/messages` | Per 1M tokens: input, output, cache read, cache write |
-| `claude-opus-5-5` | — | Text | `/v1/messages` | Per 1M tokens: input, output, cache read, cache write |
-| `claude-sonnet-4-5-20250929` | 200,000 | Coding, Text, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages` | Per 1M tokens: input, output, cache read, cache write |
-| `claude-sonnet-4-6` | — | Text | `/v1/chat/completions`, `/v1/messages` | Per 1M tokens: input, output, cache read, cache write |
-| `claude-sonnet-5` | — | Text | `/v1/chat/completions`, `/v1/messages` | Per 1M tokens: input, output, cache read, cache write |
-| `claude-sonnet-5-5` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-
-### Google Gemini
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `gemini-3.5-flash` | N/A | Text; long context, creative writing | `/v1/chat/completions`, `/v1beta/models/{model}:generateContent` | Per 1M tokens: input, output, cache read |
-
-### xAI
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `grok-4.20-0309-non-reasoning` | 1,000,000 | Text, Vision; long context, creative writing, spatial vision, document vision | `/v1/chat/completions` | Per 1M tokens: input, output |
-| `grok-4.20-0309-reasoning` | 1,000,000 | Text, Vision; reasoning, long context, creative writing, spatial vision, document vision | `/v1/chat/completions` | Per 1M tokens: input, output |
-| `grok-4.3` | 1,000,000 | Text, Vision; reasoning, long context, creative writing, spatial vision, document vision | `/v1/chat/completions` | Per 1M tokens: input, output |
-| `grok-4.5` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache write |
-| `grok-4.6` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `grok-4.7` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `grok-build-0.1` | 256,000 | Coding, Text, Vision; reasoning, long context, visual coding, code reasoning, code completion, agentic coding | `/v1/chat/completions` | Per 1M tokens: input, output |
-
-### DeepSeek
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `deepseek-r1` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `deepseek-v3` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `deepseek-v3.1` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `deepseek-v3.2` | 128,000 | Coding, Text; reasoning, long context, creative writing, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `deepseek-v4-flash` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `deepseek-v4-flash-0731` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache write |
-| `deepseek-v4-flash-vision-exp` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache write |
-| `deepseek-v4-pro` | 262,144 | Coding, Text; code reasoning, long context, reasoning | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `deepseek-v4-pro-0813` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache write |
-| `deepseek-v4.1-flash` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache write |
-
-### Alibaba
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `qwen-flash` | 1,000,000 | Audio, Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, speech-to-speech, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `qwen-mt-flash` | 1,000,000 | Text; long context, translation | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `qwen-mt-lite` | 1,000,000 | Text; translation | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `qwen-plus-2025-12-01` | 1,000,000 | Audio, Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, speech-to-speech, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions` | Per 1M tokens: input, output, cache read |
-| `qwen3-coder-480b-a35b-instruct` | 262,144 | Coding, Text; reasoning, long context, code reasoning, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `qwen3-coder-flash` | 1,000,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `qwen3-coder-plus` | 1,000,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `qwen3-max` | 262,144 | Audio, Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, speech-to-speech, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `qwen3-vl-flash` | 131,072 | Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `qwen3-vl-flash-2025-10-15` | 131,072 | Coding, Text, Video, Vision; reasoning, long context, translation, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `qwen3-vl-plus` | 131,072 | Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `qwen3.6-plus` | 1,000,000 | Coding, Text, Video, Vision; reasoning, long context, translation, creative writing, spatial vision, document vision, visual coding, omni/video understanding, long video, temporal video, code reasoning, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `qwen3.6-plus-2026-04-02` | 262,144 | Coding, Text, Vision; code reasoning, long context, reasoning, vision | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `qwen3.7-flash` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `qwen3.7-flash-2026-07-15` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `qwen3.7-max` | 1,000,000 | Coding, Text; reasoning, long context, translation, creative writing, code reasoning, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `qwen3.7-max-2026-06-08` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `qwen3.7-plus` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `qwen3.8-max` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `wan2.7-i2v` | — | Video | `/v1/video/generations` | Per output second, by resolution |
-| `wan2.7-image` | N/A | Image, Text, Vision; reasoning, vision, image generation, image editing, text in images, image consistency | `/v1/images/generations`, `/v1/images/edits` | Per request |
-| `wan2.7-image-pro` | N/A | Image, Text, Video, Vision; reasoning, long context, vision, image generation, image editing, text in images, image consistency, image-to-video | `/v1/images/generations`, `/v1/images/edits` | Per request |
-| `wan2.7-r2v` | — | Video | `/v1/video/generations` | Per output second, by resolution |
-| `wan2.7-t2v` | — | Video | `/v1/video/generations` | Per output second, by resolution |
-
-### Moonshot
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `kimi-k2-thinking` | 256,000 | Coding, Text; reasoning, long context, code reasoning, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `kimi-k2.5` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, spatial vision, document vision, visual coding, omni/video understanding, long video, code reasoning, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `kimi-k2.6` | 128,000 | Text; long context, reasoning | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `kimi-k2.7-code` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `kimi-k3` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-
-### MiniMax
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `MiniMax-M2.5` | 262,144 | Coding, Text; reasoning, long context, creative writing, code reasoning, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `MiniMax-M2.7` | — | Text | `/v1/chat/completions`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `MiniMax-M2.7-highspeed` | — | Text | `/v1/chat/completions`, `/v1/responses` | Per 1M tokens: input, output, cache read, cache write |
-| `MiniMax-M3` | 1,000,000 | Coding, Text, Video, Vision; reasoning, long context, code reasoning, agentic coding, vision, long video | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-
-### Zhipu GLM
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `glm-5` | 128,000 | Coding, Text; reasoning, long context, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `glm-5.1` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `glm-5.2` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `glm-5.3` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `glm-5.3-flash` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `glm-5v-turbo` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-
-### ByteDance
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `dreamina-seedance-2-0-260128` | — | Video | `/v1/video/generations` | Per 1M tokens, by resolution |
-| `dreamina-seedance-2-0-fast-260128` | — | Video | `/v1/video/generations` | Per 1M tokens, by resolution |
-| `dreamina-seedance-2-5` | — | Video | `/v1/video/generations` | Per 1M tokens, by resolution |
-| `seed-1-6-250915` | 262,144 | Text, Video, Vision; reasoning, long context, creative writing, vision, omni/video understanding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `seed-1-6-flash-250715` | 262,144 | Text, Video, Vision; reasoning, long context, spatial vision, omni/video understanding, temporal video | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `seed-1-8-251228` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `seed-2-0-lite-260228` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, creative writing, spatial vision, document vision, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `seed-2-0-mini-260215` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, spatial vision, document vision, omni/video understanding, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions` | Per 1M tokens: input, output, cache read |
-| `seed-2-0-pro-260328` | 262,144 | Coding, Text, Video, Vision; reasoning, long context, creative writing, spatial vision, document vision, visual coding, omni/video understanding, long video, temporal video, code reasoning, code completion, agentic coding | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `seedream-5-0-260128` | 262,144 | Image, Vision; image editing, image generation, text in images, vision | `/v1/images/generations` | Per request |
-
-### Tencent
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `hy3` | — | Text | `/v1/chat/completions`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-| `hy4-preview` | — | Text | `/v1/chat/completions`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-
-### Xiaomi
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `mimo-v2.6-flash` | — | Text | `/v1/chat/completions` | Per 1M tokens: input, output, cache read |
-| `mimo-v2.6-pro` | — | Text | `/v1/chat/completions` | Per 1M tokens: input, output, cache read |
-| `mimo-v2.6-pro-ultraspeed` | — | Text | `/v1/chat/completions` | Per 1M tokens: input, output, cache read |
-
-### StepFun
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `step-3.5-flash` | — | Text | `/v1/chat/completions`, `/v1/messages` | Per 1M tokens: input, output, cache read |
-| `step-3.5-flash-2603` | — | Text | `/v1/chat/completions`, `/v1/messages` | Per 1M tokens: input, output, cache read |
-| `step-3.7-flash` | — | Text | `/v1/chat/completions`, `/v1/messages`, `/v1/responses` | Per 1M tokens: input, output, cache read |
-
-### HappyHorse
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `happyhorse-1.1-i2v` | — | Video | `/v1/video/generations` | Per output second, by resolution |
-| `happyhorse-1.1-r2v` | — | Video | `/v1/video/generations` | Per output second, by resolution |
-| `happyhorse-1.1-t2v` | — | Video | `/v1/video/generations` | Per output second, by resolution |
-
-### Jina
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `jina-embeddings-v3` | — | Embeddings | `/v1/embeddings`, `/v1/classify` | Per 1M tokens: input (provider-reported total) |
-| `jina-embeddings-v5-text-small` | — | Embeddings | `/v1/embeddings` | Per 1M tokens: input (provider-reported total) |
-| `jina-reranker-v3` | — | Rerank | `/v1/rerank` | Per 1M tokens: input (provider-reported total) |
-
-### TypeSafe
-
-| Model ID | Context | Capabilities | Endpoint(s) | Billed by |
-| --- | ---: | --- | --- | --- |
-| `jev-latest` | — | Text | `/v1/systemone` | Per 1M tokens: input |
-
-## Choosing a model
-
-| Need | Start with | Why |
-| --- | --- | --- |
-| Frontier text + vision | `gpt-5.5`, `claude-opus-4-8`, `gpt-5.4` | Strong reasoning and broad multimodal/coding coverage. |
-| Agentic coding | `gpt-5.3-codex`, `claude-opus-4-8`, `qwen3-coder-plus`, `MiniMax-M3` | Coding, long-context, and agentic sub-capabilities. |
-| Low-cost high-volume text | `qwen-flash`, `deepseek-v4-flash`, `qwen-mt-flash` | Very low input/output pricing for routine tasks. |
-| Long-context Chinese or bilingual work | `qwen3.6-plus`, `qwen3.7-max`, `MiniMax-M3` | 1M-token context options with Chinese-language strength. |
-| Visual/document tasks | `qwen3-vl-plus`, `claude-opus-4-8`, `gpt-5.4` | Vision/document/spatial capability tags. |
-| Image generation | `gpt-image-2`, `seedream-5-0-260128`, `wan2.7-image-pro` | Image-generation and image-editing model IDs with per-request billing. |
-
-Models added since the last capability export show only their base type in the Capabilities column above; check the live catalog for their full capability tags before routing production traffic to them.
+Qwen, DeepSeek, Kimi, GLM, ByteDance Seed, MiniMax, and other Chinese models use the same endpoints. See [Chinese AI Models](/guides/chinese-llms) for per-family guides.
 
 ## Notes for agents
 
-- Do not invent AIsa model IDs. Use the exact `model` strings in the tables.
-- Do not assume a model supports every modality its upstream family supports. Use the capability tags listed here or check the live model page.
-- If a model appears in [aisa.one/models](https://aisa.one/models) but not in a static table, the pricing API has likely enabled it at runtime; prefer the live catalog.
-- This page does not list prices. Current prices are on [aisa.one/models](https://aisa.one/models); the final billed amount appears in AIsa Usage Logs and may include workspace-level pricing rules.
-- A `—` in the Context column means the current metadata export does not publish that model's context window. Do not assume a default; read the live catalog.
+- Use only model IDs dynamically returned by `GET /v1/models`. Do not guess model IDs or reuse them from memory.
+- Select the endpoint from the model's `routes` list; prioritize the route marked `"preferred": true` when present.
+- Do not assume a model supports a modality simply because its upstream family does. Always check `model_type` and `capabilities`.
+- Listing models via `GET /v1/models` is free and allowed before the user approves any spend. Current prices are listed on [aisa.one/models](https://aisa.one/models), not in these docs.

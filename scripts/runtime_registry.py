@@ -148,7 +148,7 @@ def public_mirror_index(root: Path, overrides: dict | None = None):
 
 
 def published_documents(root: Path):
-    return {p.stem: source_json_loads(p.read_text()) for p in sorted((root / 'openapi').glob('*.json')) if p.name not in {'openapi.json', 'pending.json', 'coverage.json', 'coverage-sources.json'}}
+    return {p.stem: source_json_loads(p.read_text()) for p in sorted((root / 'openapi').glob('*.json')) if p.name not in {'openapi.json', 'pending.json', 'coverage.json', 'coverage-sources.json', 'nav-groups.json'}}
 
 
 def previous_for_facts(facts, documents, provider):

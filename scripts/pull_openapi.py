@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 
 import yaml
 
+import api_nav_groups
 from compose_openapi import METHODS, compose, digest, resolve_fragment
 from import_upstream import import_source
 from runtime_registry import discover, combine_facts, public_mirror_index, published_documents, previous_for_facts, coverage_rows
@@ -216,6 +217,8 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                 text = update_readable_block(text, operation, language, translated_note)
                 if not destination.exists() or text != destination.read_text():
                     changes[destination] = text
+    nav_config = api_nav_groups.load(root)
+    nav_labels = read_json(root / "translations/openapi-nav-zh.json", {})
     for language in docs.get("navigation", {}).get("languages", []):
         prefix = "zh/" if language.get("language") == "zh" else ""
         for tab in language.get("tabs", []):
@@ -236,6 +239,13 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
             if additions:
                 group_name = document["info"].get("title", provider)
                 groups = tab.setdefault("groups", [])
+                # Mapped providers land in their category -> vendor group; only
+                # unmapped titles fall back to a top-level group of their own.
+                target = api_nav_groups.target_for(nav_config, group_name)
+                if target:
+                    label = (lambda name: nav_labels.get(name) or name) if prefix else (lambda name: name)
+                    api_nav_groups.locate(groups, nav_config, target, label).extend(additions)
+                    continue
                 group = next((g for g in groups if g.get("group") == group_name), None)
                 if group is None:
                     group = {"group": group_name, "pages": []}

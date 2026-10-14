@@ -66,7 +66,7 @@ def publication_yaml(document):
                      allow_unicode=True, width=120)
 
 # The Mintlify placeholder spec — skip it
-SKIP_FILES = {"openapi.json", "pending.json", "coverage.json", "coverage-sources.json"}
+SKIP_FILES = {"openapi.json", "pending.json", "coverage.json", "coverage-sources.json", "nav-groups.json"}
 
 # Map each spec file to a category tag
 FILE_TAG_MAP = {

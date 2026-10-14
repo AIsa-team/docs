@@ -40,7 +40,7 @@ REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 OPENAPI_DIR = os.path.join(REPO_ROOT, "openapi")
 
 # The Mintlify placeholder spec — skip it
-SKIP_FILES = {"openapi.json"}
+SKIP_FILES = {"openapi.json", "nav-groups.json"}
 
 # Map each spec file to a category tag
 FILE_TAG_MAP = {
