@@ -1,69 +1,60 @@
 ---
-title: Security & Data Privacy – AIsa Unified LLM API
-excerpt: >-
-  Learn how AIsa handles API requests, data processing, and security. AIsa
-  follows a no-storage policy for prompts and outputs, with HTTPS transport
-  and API key authentication across all 100+ AI model endpoints.
+title: "Security & Data Privacy"
+sidebarTitle: "Security & Privacy"
+icon: "shield"
+description: >-
+  How AIsa handles your requests: no storage of prompts or outputs, limited
+  operational metadata, authenticated HTTPS access, upstream-provider
+  boundaries, and the controls to put around agent writes and spend.
 ---
-AIsa provides unified APIs across multiple AI and data providers, and is designed to minimize data persistence while enabling secure access to upstream services.
+AIsa routes requests to upstream model and data providers and is designed to keep as little of your data as possible.
 
-## Data Processing Model
+## Data processing
 
-AIsa processes API requests in real time to fulfill user requests.
+- Requests are processed in real time to route each call to the right upstream provider, and responses are returned directly to you.
+- AIsa does not use your data for training or analytics.
 
-* Requests are handled synchronously to route calls to the appropriate upstream provider
-* Responses are returned directly to the client
-* AIsa does not use user data for training or analytics
+## Prompt and output retention
 
-## Prompt and Output Retention
+AIsa follows a **no-storage policy** for request content:
 
-AIsa follows a **no-storage policy** for request content.
+- **Prompts and inputs are not stored.**
+- **Responses and outputs are not stored.**
+- Request payloads are processed transiently and discarded when the request completes.
 
-* **Prompts are not stored**
-* **API responses and outputs are not stored**
-* Request payloads are processed transiently and discarded after the request completes
+This applies to every API: models, embeddings, video, social, web search, scholar, and finance.
 
-This applies across all supported APIs, including AI models, embeddings, video, social platforms, web search, scholar, and finance integrations.
+## Operational metadata
 
-## Logging and Metadata
+AIsa keeps limited metadata needed to run and protect the platform - request timestamps, API key identifiers, endpoint and model, token counts and cost, rate-limit counters, and status or error information. This metadata does **not** include prompts, inputs, or outputs, and is not used for training or content analysis. It is what you see in [Usage & Logs](/guides/dashboard/overview#usage-and-logs).
 
-AIsa may retain **limited operational metadata** required to operate and protect the platform, such as:
+## Authentication and transport
 
-* Request timestamps
-* API key identifiers
-* Rate-limiting counters
-* Error and status information
+- Every request is authenticated with an API key or an OAuth session; unauthenticated requests are rejected. See [Authentication](/guides/authentication).
+- With MCP and the CLI, OAuth tokens are held by the client and refreshed automatically. Agents must not read, copy, or reuse a client's OAuth tokens.
+- All endpoints are served over HTTPS only. Protocol versions and cipher configuration are managed at the infrastructure level.
 
-This metadata:
+You are responsible for keeping API keys secret, limiting what each key may spend, and rotating keys.
 
-* Does **not** include prompts, inputs, or generated outputs
-* Is not used for model training or content analysis
+## Upstream providers
 
-## API Authentication
+To fulfil a call, AIsa forwards the data that call needs to the selected provider, and nothing more. AIsa does not persist request content before or after forwarding. Data handling by the provider is governed by that provider's terms; review them when your use case requires it.
 
-All AIsa APIs require authentication.
+For sensitive workloads, decide which fields are sent, whether they can be minimized or redacted, which regulatory or contractual rules apply, and whether the result itself may contain sensitive data.
 
-* Access is controlled using **API keys**
-* Each request must include a valid API key
-* Requests without valid authentication are rejected
+## Agent safety controls
 
-Users are responsible for keeping API keys secure and rotating them as needed.
+- **State-changing actions:** For operations that create, update, delete, or send data externally, ensure your agent confirms the target and intended changes with the user before executing. Never enable unrestricted automatic retries on side-effecting operations, and verify the result in the external system before reporting success. Permission to read is never permission to write.
+- **Budget boundaries:** Give each agent its own API key with a spending limit; that limit is the hard ceiling. On endpoints that declare maximum-price support, and in MCP `use`, a maximum price also rejects a call whose estimate is too high before any provider is called. It checks the estimate and does not cap the final charge. See [Billing & Credits](/guides/pricing).
+- **Operational resilience:** In production, configure timeouts, handle rate limits gracefully, alert on low balances, and avoid printing raw credentials in application logs.
 
-## Transport Security
+## Questions for a security review
 
-AIsa APIs are accessed over secure network connections.
+- Which capability and upstream provider will process the request?
+- What data is sent, and what is logged?
+- Which credentials and permissions are required?
+- Does the operation have an external side effect?
+- How are spend and retries bounded?
+- What evidence verifies the final result?
 
-* API endpoints are served over HTTPS
-* Secure transport is required for all requests and responses
-
-Specific protocol versions and cryptographic configurations are managed at the infrastructure level and are not exposed publicly.
-
-## Third-Party Providers
-
-AIsa integrates with multiple upstream providers to deliver unified access through a single API.
-
-* Requests are forwarded only as necessary to fulfill the API call
-* AIsa does not persist the request content before or after forwarding
-* Data handling by upstream providers is governed by their respective terms and policies
-
-Users should review the policies of underlying providers when required by their use case.
+Answer capability-specific questions from the exact endpoint or Skill page, not from a general platform description.

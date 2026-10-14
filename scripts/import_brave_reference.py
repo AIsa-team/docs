@@ -2,14 +2,14 @@
 import copy
 import json
 import re
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qsl
 
 from compose_openapi import METHODS, digest
 from source_json import loads as source_json_loads
 
 INDEX_URL = "https://api-dashboard.search.brave.com/llms.txt"
 ORIGIN = "https://api-dashboard.search.brave.com"
-VERSION = "scripts/import_brave_reference.py@2"
+VERSION = "scripts/import_brave_reference.py@3"
 
 
 def canonical(value):
@@ -126,6 +126,26 @@ def convert_specs(rows):
             operation["responses"][str(response["statusCode"])] = {
                 "description": response["description"],
                 "content": {"application/json": {"schema": response["schema"]}}}
+        if method == 'get' and path == '/v1/web/search':
+            # The same structured official page includes a complete cURL request.
+            # Project its declared query values; never execute the sample.
+            for sample in spec.get('codeSamples', []):
+                if sample.get('label', '').lower() != 'curl':
+                    continue
+                urls = re.findall(r"https://[^\"'\s]+", sample.get('source', ''))
+                expected = spec['serverUrl'].rstrip('/') + path
+                matching = [url for url in urls if url.split('?', 1)[0] == expected]
+                if len(matching) != 1:
+                    continue
+                query = parse_qsl(urlsplit(matching[0]).query, keep_blank_values=True)
+                declared = {p['name']: p for p in operation['parameters'] if p['in'] == 'query'}
+                if len(query) != 1 or query[0][0] != 'q' or 'q' not in declared:
+                    continue
+                for name, value in query:
+                    # This sample currently contains the string query q only.
+                    if declared[name].get('schema', {}).get('type') == 'string':
+                        declared[name].setdefault('examples', {})['default'] = {'value': value}
+                break
         existing = document["paths"].setdefault(path, {}).setdefault(method, operation)
         if canonical(existing) != canonical(operation):
             raise ValueError("conflicting official operation documents")

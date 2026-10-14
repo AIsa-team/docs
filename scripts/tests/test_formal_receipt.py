@@ -9,14 +9,18 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from check_contract_candidate import main
+from payment_fixture import install_payment_fixture
 from source_governance import acquisition_receipt, initial_policy, receipt_key
 from sales_catalog_projection import SALES_CATALOG_PATH, sales_catalog_bytes
 
 
 class FormalReceiptTests(unittest.TestCase):
-    def run_check(self, source_receipt=True, tamper=False, unresolved=False, surfaces=False, surface_mutation=None, sales_mutation=None):
+    def run_check(self, source_receipt=True, tamper=False, unresolved=False, surfaces=False, surface_mutation=None, sales_mutation=None, payment_mutation=None):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
+            install_payment_fixture(root)
+            if payment_mutation:
+                payment_mutation(root)
             upstream = root / 'openapi/upstream'; upstream.mkdir(parents=True)
             source = initial_policy({'kind': 'provider_openapi', 'url': 'https://official.invalid/spec', 'content_hash': 'sha256:fixture'})
             (upstream / 'p.json').write_text(json.dumps({'info': {'x-aisa-source': source}}))
@@ -64,6 +68,21 @@ class FormalReceiptTests(unittest.TestCase):
         self.assertEqual(report['publication_artifact']['openapi_sha256'], sha)
         self.assertEqual(report['publication_artifact']['source_hashes'], {'p.json': 'sha256:fixture'})
         self.assertIn('openapi/upstream/p.json', report['publication_artifact']['files_sha256'])
+
+    def test_payment_evidence_output_and_source_are_one_formal_candidate(self):
+        for mutation in (lambda r: (r / 'discovery/openapi.json').unlink(),
+                         lambda r: (r / 'discovery/openapi.json').write_text('{}'),
+                         lambda r: (r / 'discovery/payment-evidence.json').unlink(),
+                         lambda r: (r / 'openapi/polymarket-data.json').write_text('{}')):
+            with self.subTest(mutation=mutation):
+                status, report, _ = self.run_check(payment_mutation=mutation)
+                self.assertEqual((status, report['status']), (1, 'failed'))
+                self.assertIn('payment_discovery_mismatch', {e['code'] for e in report['global_errors']})
+        status, report, _ = self.run_check()
+        self.assertEqual(status, 0)
+        self.assertEqual(report['payment_discovery'], {'status': 'passed', 'operations': 3})
+        self.assertTrue({'discovery/openapi.json', 'discovery/payment-evidence.json'} <=
+                        report['publication_artifact']['files_sha256'].keys())
 
     def test_missing_or_changed_sales_projection_blocks_formal_receipt(self):
         for mutation in (lambda p: p.unlink(), lambda p: p.write_text('{}')):

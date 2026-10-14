@@ -1,6 +1,6 @@
 ---
 title: "Usage Logs - 追踪 API 请求、Token 与账单"
-excerpt: >-
+description: >-
   最近 30 天 AIsa API 流量的逐条请求记录——端点、密钥、模型、延迟、Token、缓存命中、用量价值和状态，并提供搜索与筛选，用于审计消费和排查失败。
 ---
 
@@ -86,3 +86,28 @@ excerpt: >-
     请求数和 token 速率如何影响你的流量。
   </Card>
 </CardGroup>
+
+## 使用 API key 查询用量
+
+`GET https://api.aisa.one/v1/usage` 默认返回当前认证 key 的汇总用量。请使用实际发起调用的同一枚 key。这不是逐笔请求日志；单笔详情仍在上方 Console 页面查看。
+
+```bash
+# UTC Unix 秒，示例查询最近 24 小时。
+start_time=$(python3 -c 'import time; print(int(time.time()) - 86400)')
+curl --fail-with-body --silent --show-error --get \
+  "https://api.aisa.one/v1/usage" \
+  --header "Authorization: Bearer ${AISA_API_KEY:?Set AISA_API_KEY}" \
+  --data-urlencode "start_time=$start_time" \
+  --data-urlencode "bucket_width=1d" \
+  --data-urlencode "scope=key"
+```
+
+| 参数 | 含义 |
+| --- | --- |
+| `start_time` | 必填的正 Unix 时间戳，单位为**秒**，不是毫秒或日期字符串。 |
+| `end_time` | 可选 Unix 秒，默认当前时间，必须晚于 start_time。区间含起点、不含终点：`[start_time, end_time)`。 |
+| 查询窗口 | 最多 **31 天**（31 × 24 小时）；更长时段需拆成相邻窗口。 |
+| `bucket_width` | 仅支持 `1d`，按 UTC 日聚合。 |
+| `scope` | 默认 `key`。`account` 要求 OAuth 认证，普通 API key 不能查询 account 范围。 |
+
+`totals.charged_micros_usd` 是实际扣费，将整数 micro-USD 除以 1,000,000 可换算为 USD。`totals.usage_value_micros_usd` 是用量价值，可能与扣费不同。对账时应保持相同 key、时间窗口和币种；汇总数据不能单独证明某次请求的结果或历史充值是否成功。

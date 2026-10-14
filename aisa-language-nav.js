@@ -1,52 +1,17 @@
-// Group Mintlify's native theme-preference and language selectors into one
-// pill control in the right-side topbar, matching the aisa.one website design:
-// [ theme ˅ | 🌐 EN ˅ ]  [ Get Started ]  ← CTA stays at the far right.
-// Only container elements are moved — the React-managed triggers stay inside
-// their own parents so Radix/React re-renders never lose their DOM nodes.
+// Rearrange Mintlify's native topbar selectors, Mintlify-docs style:
+// [logo] [English ˅] ........ [Search] [Get Started] [theme ◐]
+// The language selector sits flat right of the logo; the theme selector is a
+// round icon button at the far right. Only wrapper elements are moved — the
+// React-managed triggers stay inside their own parents so Radix/React
+// re-renders never lose their DOM nodes.
 (function () {
   if (typeof window === "undefined" || typeof document === "undefined") return;
 
-  var ITEM_ID = "aisa-header-controls";
+  var THEME_ITEM_ID = "aisa-theme-control";
 
+  // Production serves the docs under /docs, so zh pages live at /docs/zh/...
   function isZh() {
-    return window.location.pathname.indexOf("/zh") === 0;
-  }
-
-  function svgEl(tag, attrs) {
-    var el = document.createElementNS("http://www.w3.org/2000/svg", tag);
-    Object.keys(attrs).forEach(function (key) {
-      el.setAttribute(key, attrs[key]);
-    });
-    return el;
-  }
-
-  function ensureEarthIcon(trigger) {
-    if (trigger.querySelector(".aisa-language-earth-icon")) return;
-
-    var icon = svgEl("svg", {
-      class: "aisa-language-earth-icon",
-      xmlns: "http://www.w3.org/2000/svg",
-      width: "24",
-      height: "24",
-      viewBox: "0 0 24 24",
-      fill: "none",
-      stroke: "currentColor",
-      "stroke-width": "2",
-      "stroke-linecap": "round",
-      "stroke-linejoin": "round",
-      "aria-hidden": "true"
-    });
-
-    [
-      ["path", { d: "M21.54 15H17a2 2 0 0 0-2 2v4.54" }],
-      ["path", { d: "M7 3.34V5a3 3 0 0 0 3 3a2 2 0 0 1 2 2c0 1.1.9 2 2 2a2 2 0 0 0 2-2c0-1.1.9-2 2-2h3.17" }],
-      ["path", { d: "M11 21.95V18a2 2 0 0 0-2-2a2 2 0 0 1-2-2v-1a2 2 0 0 0-2-2H2.05" }],
-      ["circle", { cx: "12", cy: "12", r: "10" }]
-    ].forEach(function (node) {
-      icon.appendChild(svgEl(node[0], node[1]));
-    });
-
-    trigger.insertBefore(icon, trigger.firstChild);
+    return /^(?:\/docs)?\/zh(?:\/|$)/.test(window.location.pathname);
   }
 
   function setText(node, value) {
@@ -57,31 +22,26 @@
     if (el.getAttribute(name) !== value) el.setAttribute(name, value);
   }
 
-  function setCompactLabel(trigger) {
+  function setLanguageLabel(trigger) {
     var label = trigger.querySelector("span");
     if (!label) return;
 
-    var current = (label.textContent || "").trim().toLowerCase();
-    if (current.indexOf("中文") !== -1 || current === "zh" || current === "中") {
-      setText(label, "中");
+    if (isZh()) {
+      setText(label, "简体中文");
       setAttr(trigger, "aria-label", "语言");
     } else {
-      setText(label, "EN");
+      setText(label, "English");
       setAttr(trigger, "aria-label", "Language");
     }
-
-    ensureEarthIcon(trigger);
-    setAttr(trigger, "title", trigger.getAttribute("aria-label"));
   }
 
-  // "System" reads as "Follow system" in the reference design; localize for zh.
   function relabelThemeMenu() {
     var menu = document.getElementById("theme-preference-menu-content");
     if (!menu) return;
 
     var labels = isZh()
       ? { system: "跟随系统", light: "浅色", dark: "深色" }
-      : { system: "Follow system", light: "Light", dark: "Dark" };
+      : { system: "System", light: "Light", dark: "Dark" };
 
     var map = {
       "system": labels.system,
@@ -103,65 +63,38 @@
     });
   }
 
-  function ensureGroupItem() {
-    var item = document.getElementById(ITEM_ID);
-    if (item) return item;
-
-    item = document.createElement("li");
-    item.id = ITEM_ID;
-    var group = document.createElement("div");
-    group.className = "aisa-control-group";
-    item.appendChild(group);
-    return item;
-  }
-
-  function syncHeaderControls() {
-    var navbar = document.getElementById("navbar");
-    var langTrigger = document.getElementById("localization-select-trigger");
-    var themeTrigger = document.getElementById("theme-preference-menu-trigger");
-    var cta = document.getElementById("topbar-cta-button");
-    if (!navbar || !langTrigger) return;
-
-    setCompactLabel(langTrigger);
+  function placeLanguage(navbar, langTrigger) {
+    setLanguageLabel(langTrigger);
 
     var langWrap = langTrigger.parentElement;
-    if (!langWrap) return;
+    var logo = navbar.querySelector("img") && navbar.querySelector("img").closest("a");
+    var logoBox = logo && logo.parentElement;
+    if (!langWrap || !logoBox) return;
+
     langWrap.classList.add("aisa-language-wrapper");
-
-    // Move the trigger's own wrapper div, never the React-managed button.
-    var themeWrap = null;
-    if (themeTrigger) {
-      themeWrap = themeTrigger.parentElement;
-      if (themeWrap) themeWrap.classList.add("aisa-theme-wrapper");
+    if (langWrap.parentNode !== logoBox || langWrap.previousElementSibling !== logo) {
+      logoBox.insertBefore(langWrap, logo.nextSibling);
     }
+  }
 
-    var item = ensureGroupItem();
-    var group = item.querySelector(".aisa-control-group");
+  function placeTheme(navbar, themeTrigger) {
+    var themeWrap = themeTrigger.parentElement;
+    if (!themeWrap) return;
+    themeWrap.classList.add("aisa-theme-wrapper");
 
-    var divider = group.querySelector(".aisa-control-divider");
-    if (!divider) {
-      divider = document.createElement("span");
-      divider.className = "aisa-control-divider";
-      divider.setAttribute("aria-hidden", "true");
+    var item = document.getElementById(THEME_ITEM_ID);
+    if (!item) {
+      item = document.createElement("li");
+      item.id = THEME_ITEM_ID;
     }
+    if (themeWrap.parentNode !== item) item.appendChild(themeWrap);
 
-    // Desired order inside the pill: theme | divider | language.
-    var desired = themeWrap ? [themeWrap, divider, langWrap] : [langWrap];
-    var needsReflow = desired.some(function (node, index) {
-      return node.parentNode !== group || group.children[index] !== node;
-    });
-    if (needsReflow) {
-      desired.forEach(function (node) {
-        group.appendChild(node);
-      });
-    }
-
-    // Place the pill right before the CTA so "Get Started" stays last.
+    // Keep the theme button last, right after the CTA.
+    var cta = document.getElementById("topbar-cta-button");
     var ctaItem = cta && (cta.tagName === "LI" ? cta : cta.closest("li"));
     if (ctaItem && ctaItem.parentNode) {
-      var parent = ctaItem.parentNode;
-      if (item.parentNode !== parent || item.nextElementSibling !== ctaItem) {
-        parent.insertBefore(item, ctaItem);
+      if (item.parentNode !== ctaItem.parentNode || ctaItem.nextElementSibling !== item) {
+        ctaItem.parentNode.insertBefore(item, ctaItem.nextSibling);
       }
     } else if (!item.parentNode) {
       var fallback =
@@ -170,6 +103,18 @@
         navbar;
       fallback.appendChild(item);
     }
+  }
+
+  function syncHeaderControls() {
+    var navbar = document.getElementById("navbar");
+    if (!navbar) return;
+
+    // Only the desktop topbar triggers (inside lg:flex areas); mobile menus may
+    // render their own copies, which must stay where Mintlify puts them.
+    var langTrigger = navbar.querySelector('[class~="lg:flex"] #localization-select-trigger');
+    var themeTrigger = navbar.querySelector('[class~="lg:flex"] #theme-preference-menu-trigger');
+    if (langTrigger) placeLanguage(navbar, langTrigger);
+    if (themeTrigger) placeTheme(navbar, themeTrigger);
 
     relabelThemeMenu();
   }

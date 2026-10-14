@@ -3,18 +3,31 @@
   "info": {
     "title": "Exa API",
     "version": "1.0.0",
-    "description": "Unified API documentation for Exa neural semantic search endpoints exposed through the AIsa gateway: Search, Contents, Answer, and the asynchronous research Agent Runs.\n\nSearch, Contents, and Answer are synchronous and billed at a flat $0.08 per successful request. Agent Runs is asynchronous: the caller submits a run and then polls the returned job resource for status and results, billed at a flat $0.10 per run. Upstream 4xx responses (for example 401/403/404) are not billed. The `costDollars` field that Exa returns is the upstream cost breakdown and is informational only — customer billing follows the flat AIsa prices above.",
+    "description": "Unified API documentation for Exa neural semantic search endpoints exposed through the AIsa gateway: Search, Contents, Answer, and the asynchronous research Agent Runs.\n\nSearch, Contents, and Answer are synchronous. Agent Runs is asynchronous: submit a run, then poll its job resource. Use the published endpoint pricing and a fresh quote for the concrete request. The upstream `costDollars` field is informational and is not an AIsa charge.",
     "x-aisa-source": {
       "kind": "manual",
       "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/exa.json",
       "fetched_at": "2026-09-29T21:25:55+08:00",
-      "content_hash": "sha256:2fdc7f5386758781ea4d3f29516656726bd1bec9410146f473d3a55764ebb1e8",
-      "converter": "scripts/import_existing_contracts.py@1",
+      "content_hash": "sha256:993b2b5db5bdf685523d6b1774e68ff776cd11f38238067c69ab426379a83528",
+      "converter": "reviewed-public-description-amendment@1",
       "path_space": "public",
       "owner": "AIsa-team/docs",
       "refresh_policy": "manual",
       "review_period_days": 30,
-      "policy_revision": "sha256:4940b8b8ea7fdb42f87b2e6cc8e7586e3f1477d99d60c8a06ee4a6dd70fccd43"
+      "policy_revision": "sha256:4940b8b8ea7fdb42f87b2e6cc8e7586e3f1477d99d60c8a06ee4a6dd70fccd43",
+      "prior_source": {
+        "kind": "manual",
+        "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/exa.json",
+        "fetched_at": "2026-09-29T21:25:55+08:00",
+        "content_hash": "sha256:2fdc7f5386758781ea4d3f29516656726bd1bec9410146f473d3a55764ebb1e8",
+        "converter": "scripts/import_existing_contracts.py@1",
+        "path_space": "public",
+        "owner": "AIsa-team/docs",
+        "refresh_policy": "manual",
+        "review_period_days": 30,
+        "policy_revision": "sha256:4940b8b8ea7fdb42f87b2e6cc8e7586e3f1477d99d60c8a06ee4a6dd70fccd43"
+      },
+      "scope": "Remove obsolete AIsa fixed-price claims only; request and response validation schemas unchanged."
     }
   },
   "servers": [
@@ -80,7 +93,7 @@
               },
               "authorizedMicrosUSD": {
                 "type": "integer",
-                "description": "Amount authorized (held) when the job was admitted, in micro-USD. Agent Runs settle at the flat $0.10 per run."
+                "description": "Amount authorized (held) when the job was admitted, in micro-USD. Use the returned pricing and current quote for this run."
               },
               "finalMicrosUSD": {
                 "type": "integer",
@@ -153,7 +166,7 @@
           "https://docs.exa.ai/reference/search"
         ],
         "summary": "Run a neural semantic web search.",
-        "description": "Search the web by meaning rather than by keyword. `query` is required; narrow with `category`, `includeDomains`, `excludeDomains`, `startPublishedDate`, `endPublishedDate`, and set `numResults`. Returns `requestId`, `resolvedSearchType`, `searchTime`, `costDollars` and `results[]` with `id`, `title` and `url`. **`id` is the URL**, and it is what `post_exa_contents` takes. Measured at 1.4 seconds — the fastest search here. Billed a flat $0.08 per successful request. ⚠️ Results carry **no page text** unless you ask: pass `contents`, or follow up with `post_exa_contents`. Choose it over `post_tavily_search` when the query is a description rather than keywords; choose Tavily when you want the text in the same call, and `post_exa_answer` when you want a written answer rather than a list.",
+        "description": "Search the web by meaning rather than by keyword. `query` is required; narrow with `category`, `includeDomains`, `excludeDomains`, `startPublishedDate`, `endPublishedDate`, and set `numResults`. Returns `requestId`, `resolvedSearchType`, `searchTime`, `costDollars` and `results[]` with `id`, `title` and `url`. **`id` is the URL**, and it is what `post_exa_contents` takes. Measured at 1.4 seconds — the fastest search here. Use current endpoint pricing and a fresh quote for this request. ⚠️ Results carry **no page text** unless you ask: pass `contents`, or follow up with `post_exa_contents`. Choose it over `post_tavily_search` when the query is a description rather than keywords; choose Tavily when you want the text in the same call, and `post_exa_answer` when you want a written answer rather than a list.",
         "requestBody": {
           "required": true,
           "content": {
@@ -297,7 +310,7 @@
                       "nullable": true
                     },
                     "costDollars": {
-                      "description": "Upstream Exa cost breakdown. Informational only; customer billing is the flat $0.08.",
+                      "description": "Upstream Exa cost breakdown. Informational only; it is not the AIsa customer charge. Use a fresh quote for the actual request.",
                       "nullable": true
                     }
                   }
@@ -335,7 +348,7 @@
           "https://docs.exa.ai/reference/get-contents"
         ],
         "summary": "Extract full page contents for a set of URLs.",
-        "description": "Fetch page text and metadata for URLs you already have. `ids` is required and takes the `id` values from `post_exa_search` — which are plain URLs, so any URL works. Toggle `text`, `highlights`, `summary`, `subpages` and `livecrawl`. Returns `results[]` with `id`, `title`, `url`, `author` and `text`, plus a **`statuses[]` array giving per-URL `status` and `source`** — read it, because a URL that could not be fetched is reported there rather than raising. Cached results are served instantly; a miss falls back to a live crawl. Measured at 1.2 seconds. Billed a flat $0.08 per successful request. For a whole site rather than a URL list, `post_firecrawl_crawl`.",
+        "description": "Fetch page text and metadata for URLs you already have. `ids` is required and takes the `id` values from `post_exa_search` — which are plain URLs, so any URL works. Toggle `text`, `highlights`, `summary`, `subpages` and `livecrawl`. Returns `results[]` with `id`, `title`, `url`, `author` and `text`, plus a **`statuses[]` array giving per-URL `status` and `source`** — read it, because a URL that could not be fetched is reported there rather than raising. Cached results are served instantly; a miss falls back to a live crawl. Measured at 1.2 seconds. Use current endpoint pricing and a fresh quote for this request. For a whole site rather than a URL list, `post_firecrawl_crawl`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -467,7 +480,7 @@
           "https://docs.exa.ai/reference/answer"
         ],
         "summary": "Get a direct, cited answer to a question.",
-        "description": "Ask a question and get a written answer with citations. `query` is required; `text` includes the source text and `outputSchema` shapes a structured reply. Returns `requestId`, `answer` as prose, `citations[]` with `id`, `title` and `url`, and `costDollars`. Measured at 2.1 seconds with 8 citations. Billed a flat $0.08 per successful request. It sits between a search and a research run: faster and cheaper than `post_exa_agent_runs`, and more direct than reading `post_exa_search` results yourself. `post_perplexity_sonar` answers the same shape of question for $0.012 — reach for Exa when the retrieval needs to be semantic.",
+        "description": "Ask a question and get a written answer with citations. `query` is required; `text` includes the source text and `outputSchema` shapes a structured reply. Returns `requestId`, `answer` as prose, `citations[]` with `id`, `title` and `url`, and `costDollars`. Measured at 2.1 seconds with 8 citations. Use current endpoint pricing and a fresh quote for this request. It sits between a search and a research run: faster and cheaper than `post_exa_agent_runs`, and more direct than reading `post_exa_search` results yourself. Reach for Exa when the retrieval needs to be semantic; compare current quotes when choosing a provider.",
         "requestBody": {
           "required": true,
           "content": {
@@ -551,7 +564,7 @@
                       }
                     },
                     "costDollars": {
-                      "description": "Upstream Exa cost breakdown. Informational only; customer billing is the flat $0.08.",
+                      "description": "Upstream Exa cost breakdown. Informational only; it is not the AIsa customer charge. Use a fresh quote for the actual request.",
                       "nullable": true
                     }
                   }
@@ -575,7 +588,7 @@
           "https://docs.exa.ai/reference/create-a-research-task"
         ],
         "summary": "Submit an asynchronous research Agent run.",
-        "description": "Hand a research task to an agent that works in the background. `query` and an `Idempotency-Key` are required; `effort` trades depth against time, `outputSchema` shapes the result, `dataSources` restricts where it looks, and `previousRunId` continues an earlier run. Asynchronous. Submitting returns HTTP 202 and a job envelope — `id`, `object`, `endpoint`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error` — with `output` still null. Poll `get_exa_agent_run` until terminal; `output` then carries `text`, `structured` and `grounding`. A one-sentence question completed in well under a minute. Billed a flat $0.10 per run — `pricing.billingMode` is `fixed_request`, so unlike a Firecrawl crawl the price does not grow with what it finds. Use it when a report is the deliverable. For an answer you read in one sitting, `post_exa_answer` returns in about two seconds. Send a fresh `Idempotency-Key` per distinct task.",
+        "description": "Hand a research task to an agent that works in the background. `query` and an `Idempotency-Key` are required; `effort` trades depth against time, `outputSchema` shapes the result, `dataSources` restricts where it looks, and `previousRunId` continues an earlier run. Asynchronous. Submitting returns HTTP 202 and a job envelope — `id`, `object`, `endpoint`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error` — with `output` still null. Poll `get_exa_agent_run` until terminal; `output` then carries `text`, `structured` and `grounding`. A one-sentence question completed in well under a minute. Check the current quote and returned `pricing` for the run. Use it when a report is the deliverable. For an answer you read in one sitting, `post_exa_answer` returns in about two seconds. Send a fresh `Idempotency-Key` per distinct task.",
         "parameters": [
           {
             "in": "header",

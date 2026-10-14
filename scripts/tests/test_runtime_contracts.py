@@ -10,6 +10,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from compose_openapi import compose, digest
 from pull_openapi import assert_identities, stage
+from readable_contract_notes import strip_generated_block
 import runtime_consolidate_openapi as consolidate
 
 
@@ -320,7 +321,7 @@ class PullTests(unittest.TestCase):
             self.assertEqual(len(list((self.root / "api-reference/similarweb").glob("*.mdx"))), 23)
             self.assertEqual(len(list((self.root / "zh/api-reference/similarweb").glob("*.mdx"))), 23)
             for page in pages:
-                self.assertEqual(split_frontmatter(page.read_text())[1], bodies[page])
+                self.assertEqual(strip_generated_block(split_frontmatter(page.read_text())[1]), strip_generated_block(bodies[page]))
                 reference = json.loads(re.search(r"^openapi:\s*(.*)$", page.read_text(), re.M)[1])
                 name, method, path = reference.split()
                 document = json.loads((self.root / name).read_text())
@@ -416,6 +417,26 @@ class ConsolidationTests(unittest.TestCase):
         legacy = {"paths": {"/old": {"get": {"operationId": "old"}}}}
         self.assertEqual(consolidate.inject_x402_annotations(legacy), 1)
         self.assertEqual(legacy["paths"]["/old"]["get"]["x-x402"]["path"], "/apis/v2/old")
+
+    def test_full_v1_path_maps_to_v2_without_doubling(self):
+        spec = {"paths": {"/apis/v1/agentmail/threads/search": {"get": {"operationId": "search"}}}}
+        self.assertEqual(consolidate.inject_x402_annotations(spec), 1)
+        self.assertEqual(spec["paths"]["/apis/v1/agentmail/threads/search"]["get"]["x-x402"]["path"],
+                         "/apis/v2/agentmail/threads/search")
+
+    def test_gateway_404_paths_are_not_annotated_in_either_path_form(self):
+        spec = {"paths": {
+            "/apis/v1/coingecko/news": {"get": {"operationId": "news", "x-x402": {"path": "stale"}}},
+            "/twitter/spaces/detail": {"get": {"operationId": "spaces"}},
+            "/apis/v1/services/aigc/video": {"post": {"operationId": "video"}},
+            "/apis/v1/coingecko/news-feed": {"get": {"operationId": "feed"}},
+        }}
+        self.assertEqual(consolidate.inject_x402_annotations(spec), 1)
+        self.assertNotIn("x-x402", spec["paths"]["/apis/v1/coingecko/news"]["get"])
+        self.assertNotIn("x-x402", spec["paths"]["/twitter/spaces/detail"]["get"])
+        self.assertNotIn("x-x402", spec["paths"]["/apis/v1/services/aigc/video"]["post"])
+        self.assertEqual(spec["paths"]["/apis/v1/coingecko/news-feed"]["get"]["x-x402"]["path"],
+                         "/apis/v2/coingecko/news-feed")
 
     def test_component_collisions_rewrite_references(self):
         unified = {"components": {"schemas": {"Error": {"type": "string"}}}}
@@ -551,7 +572,7 @@ class FullSimilarwebCutoverTests(unittest.TestCase):
                 self.assertEqual(current["parameters"], runtime["paths"][legacy_prefix + path][method]["parameters"])
                 self.assertEqual(current["x-aisa-pricing"], runtime["paths"][legacy_prefix + path][method]["x-aisa-pricing"])
             for page in original_pages:
-                self.assertEqual(page.read_text().split("---", 2)[2], original_bodies[page])
+                self.assertEqual(strip_generated_block(page.read_text().split("---", 2)[2]), original_bodies[page])
                 self.assertIn('title: "Runtime ', page.read_text())
             changes, _ = stage(root, root / "facts", "unused")
             self.assertEqual(changes, {}, "retained success payloads must not change the hash on the next pull")

@@ -1,14 +1,79 @@
 """Execute the published parser against independent int64 wire cases."""
 import re
+import shlex
+import os
+import subprocess
 from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 PATTERN = r'\{/\* settled-cost-parser \*/\}\s*```python\n(.*?)\n```'
 HEADER = 'X-AISA-Customer-Cost-Micros-USD'
+# EN merged Usage Logs into the Console page; zh keeps its own page until the mirror.
+USAGE_LOGS = {'': 'guides/dashboard/overview#usage-and-logs', 'zh/': 'guides/dashboard/usage-logs'}
 
 
 class CostDeclarationTests(unittest.TestCase):
+    def test_pricing_guides_use_the_actual_customer_cost_protocol(self):
+        for prefix in ('', 'zh/'):
+            with self.subTest(language=prefix):
+                page = (ROOT / (prefix + 'guides/pricing.mdx')).read_text()
+                self.assertIn(HEADER, page)
+                self.assertIn('customer_cost_micros_usd', page)
+                self.assertNotIn('X-AISA-Cost-Micros-USD', page)
+                self.assertNotRegex(page, r'X-AISA-Cost-Mode:\s*settled')
+                self.assertIn('/' + prefix + USAGE_LOGS[prefix], page)
+
+    def test_bilingual_quote_and_execution_keep_the_same_request(self):
+        for prefix in ('', 'zh/'):
+            page = (ROOT / (prefix + 'guides/pricing.mdx')).read_text()
+            blocks = re.findall(r'```bash\n(.*?)\n```', page, re.S)
+            commands = [shlex.split(block.replace('\\\n', ' '))
+                        for block in blocks if block.startswith('curl ')]
+            self.assertEqual(len(commands), 2)
+            quote, execute = commands
+            for command in commands:
+                self.assertIn('${AISA_REQUEST_URL:?Set AISA_REQUEST_URL}', command)
+                self.assertIn('Authorization: Bearer ${AISA_API_KEY:?Set AISA_API_KEY}', command)
+            self.assertIn('X-AISA-Cost-Mode: quote', quote)
+            self.assertFalse(any('X-AISA-Cost-Mode' in part for part in execute))
+            self.assertIn('X-AISA-Max-Price-USD: ${AISA_MAX_PRICE_USD:?Set AISA_MAX_PRICE_USD}', execute)
+
+    def test_usage_examples_are_key_scoped_and_use_unix_seconds(self):
+        for prefix in ('', 'zh/'):
+            page = (ROOT / (prefix + USAGE_LOGS[prefix].split('#')[0] + '.mdx')).read_text()
+            blocks = re.findall(r'```bash\n(.*?)\n```', page, re.S)
+            example = next(block for block in blocks if '/v1/usage' in block)
+            self.assertIn('int(time.time()) - 86400', example)
+            for argument in ('start_time=$start_time', 'bucket_width=1d', 'scope=key'):
+                self.assertIn(argument, example)
+            for term in ('31', 'OAuth', 'totals.charged_micros_usd',
+                         'totals.usage_value_micros_usd', '[start_time, end_time)'):
+                self.assertIn(term, page)
+
+    def test_execution_example_never_calls_curl_without_a_reviewed_limit(self):
+        for prefix in ('', 'zh/'):
+            page = (ROOT / (prefix + 'guides/pricing.mdx')).read_text()
+            execute = next(block for block in re.findall(r'```bash\n(.*?)\n```', page, re.S)
+                           if 'X-AISA-Max-Price-USD:' in block)
+            # A shell function intercepts curl: no credentials or network are used.
+            script = 'curl() { printf "CALLED\\n"; };\n' + execute
+            env = {k: v for k, v in os.environ.items() if not k.startswith('AISA_')}
+            env.update(AISA_API_KEY='test-only', AISA_REQUEST_URL='https://example.invalid')
+            for value in (None, ''):
+                candidate = dict(env)
+                if value is not None:
+                    candidate['AISA_MAX_PRICE_USD'] = value
+                result = subprocess.run(['bash', '-c', script], env=candidate,
+                                        text=True, capture_output=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn('CALLED', result.stdout)
+            env['AISA_MAX_PRICE_USD'] = '0.075'
+            result = subprocess.run(['bash', '-c', script], env=env,
+                                    text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, 'CALLED\n')
+
     def setUp(self):
         self.pages = [(ROOT / p).read_text() for p in ('api-reference.mdx', 'zh/api-reference.mdx')]
         code = [re.findall(PATTERN, p, re.S) for p in self.pages]

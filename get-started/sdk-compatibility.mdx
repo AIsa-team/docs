@@ -1,0 +1,132 @@
+---
+title: "Use AIsa with the OpenAI, Anthropic, and Gemini SDKs"
+sidebarTitle: "OpenAI / Anthropic SDK"
+icon: "arrows-rotate"
+description: "Keep your existing SDK and point it at AIsa: change the base URL and the API key. Covers OpenAI Chat Completions and Responses, Anthropic Messages, and Gemini generateContent."
+---
+
+AIsa is compatible with standard OpenAI, Anthropic, and Gemini SDK formats. You can use your existing code and libraries by changing two settings: the **base URL** and your **API key**.
+
+| SDK | Base URL | Supported Routes | Auth Header |
+| --- | --- | --- | --- |
+| OpenAI | `https://api.aisa.one/v1` | `/chat/completions`, `/responses`, `/embeddings`, `/images/generations` | `Authorization: Bearer $AISA_API_KEY` |
+| Anthropic | `https://api.aisa.one` | `/v1/messages` | `x-api-key: $AISA_API_KEY` |
+| Google Gen AI (Gemini) | `https://api.aisa.one` | `/v1beta/models/{model}:generateContent` | Pass `x-api-key: $AISA_API_KEY` in headers |
+
+Not every model supports every route. The [model catalog](/guides/models) lists supported routes per model; calling an unsupported route returns `400 model_route_not_supported`.
+
+## OpenAI SDK
+
+<CodeGroup>
+
+```python Python
+from openai import OpenAI
+import os
+
+client = OpenAI(api_key=os.environ["AISA_API_KEY"], base_url="https://api.aisa.one/v1")
+
+chat = client.chat.completions.create(
+    model="gpt-5.4-mini",
+    messages=[{"role": "user", "content": "Say hello in five words."}],
+)
+print(chat.choices[0].message.content)
+
+# The Responses API works on the same client.
+resp = client.responses.create(model="gpt-5.4-mini", input="Say hello in five words.")
+print(resp.output_text)
+```
+
+```typescript TypeScript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.AISA_API_KEY,
+  baseURL: "https://api.aisa.one/v1",
+});
+
+const chat = await client.chat.completions.create({
+  model: "gpt-5.4-mini",
+  messages: [{ role: "user", content: "Say hello in five words." }],
+});
+console.log(chat.choices[0].message.content);
+```
+
+</CodeGroup>
+
+Models from other families - Claude, Gemini, DeepSeek, Qwen, and more - are also reachable through Chat Completions with their AIsa model ID.
+
+## Anthropic SDK
+
+The Anthropic SDK appends `/v1/messages` itself, so the base URL has no `/v1`.
+
+<CodeGroup>
+
+```python Python
+import anthropic
+import os
+
+client = anthropic.Anthropic(api_key=os.environ["AISA_API_KEY"], base_url="https://api.aisa.one")
+
+message = client.messages.create(
+    model="claude-haiku-4-5-20251001",
+    max_tokens=256,
+    messages=[{"role": "user", "content": "Say hello in five words."}],
+)
+print("".join(block.text for block in message.content if block.type == "text"))
+```
+
+```typescript TypeScript
+import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic({
+  apiKey: process.env.AISA_API_KEY,
+  baseURL: "https://api.aisa.one",
+});
+
+const message = await client.messages.create({
+  model: "claude-haiku-4-5-20251001",
+  max_tokens: 256,
+  messages: [{ role: "user", content: "Say hello in five words." }],
+});
+for (const block of message.content) {
+  if (block.type === "text") console.log(block.text);
+}
+```
+
+</CodeGroup>
+
+The same setting works for tools built on the Anthropic SDK, such as Claude Code: see [Use AIsa in Claude Code](/guides/tutorials/use-aisa-in-claude-code).
+
+## Google Gen AI SDK (Gemini)
+
+AIsa reads the key from `Authorization: Bearer` or `x-api-key`, not from Google's `x-goog-api-key` header, so pass it as an extra header.
+
+```python Python
+from google import genai
+from google.genai import types
+import os
+
+key = os.environ["AISA_API_KEY"]
+client = genai.Client(
+    api_key=key,
+    http_options=types.HttpOptions(base_url="https://api.aisa.one", headers={"x-api-key": key}),
+)
+
+response = client.models.generate_content(model="gemini-3.5-flash", contents="Say hello in five words.")
+print(response.text)
+```
+
+## Other frameworks
+
+Any framework that lets you set an OpenAI-compatible base URL - LangChain, LlamaIndex, the Vercel AI SDK, LiteLLM - works the same way: base URL `https://api.aisa.one/v1`, key `AISA_API_KEY`.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Model catalog" icon="microchip" href="/guides/models">
+    Model IDs, routes, and context windows.
+  </Card>
+  <Card title="Chat Completions reference" icon="code" href="/api-reference/chat/post_chat-completions">
+    Every parameter, with an interactive playground.
+  </Card>
+</CardGroup>
