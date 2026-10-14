@@ -1,128 +1,78 @@
 ---
-title: Getting Started with AIsa - Unified LLM API for AI Agents
-description: >-
-  Quickstart guide for the AIsa unified model gateway. Create an account, get
-  your API key, and make your first OpenAI-compatible request to the live model catalog with
-  your free $1 credit.
+title: "Get an API Key and Make Your First Call"
+sidebarTitle: "API Key & First Call"
+icon: "key"
+description: "Create an AIsa account, generate an API key, and make your first request to a model and a data API with curl."
 ---
-This technical guide outlines the process of creating your first authenticated request using the AIsa Unified Model Gateway. Upon completion, you will be capable of calling AIsa's live model catalog through a single API endpoint using standard OpenAI-compatible tooling.
 
-## Prerequisites
+This page takes you from no account to a working request in a few minutes. Everything here uses one API key and plain HTTP.
 
-To complete this quickstart, you must possess the following:
+## 1. Create an account and a key
 
-1. An active AIsa account.
-2. A valid API key generated from the AIsa dashboard.
-3. A foundational understanding of OpenAI-style Chat Completions APIs.
+1. Sign up at [console.aisa.one](https://console.aisa.one) with email, Google, or GitHub. New accounts start with free credit for testing.
+2. Open [API Keys](https://console.aisa.one/api-keys). A key has already been created for you; copy it. Keys start with `sk-`.
+3. Store it as an environment variable rather than in code:
 
-All newly registered accounts automatically receive a **\$1.00 free credit balance**. These funds are immediately available for testing within the browser-based Model Playground or via direct REST API calls.
-
-## Step 1: Account Creation and API Key Generation
-
-The first step requires establishing an identity on the platform and generating a secure authentication token.
-
-1. Navigate to the [AIsa registration portal](https://console.aisa.one/) and create an account. The platform supports standard email registration, which requires verifying your email address before setting a password, as well as Single Sign-On (SSO) via Google OAuth and GitHub OAuth. Either path lands you in the dashboard once the account is active.
-
-2. Upon successful registration, you are directed to the API Keys page, where a key has already been generated for you. Copy and store this key securely, it authenticates all requests and is tied to your usage and billing profile.
-
-3. To create additional API keys or set spending limits, return to the API Keys page at any time. When creating or editing a key, you can assign it a quota, the maximum amount that key is permitted to spend, or enable unlimited quota to remove the cap entirely.
-
-> Note: A key's quota is a spending cap on that specific key, not your total funds. Your credit balance is the overall amount available in your account wallet; a key can only spend up to whichever is lower, its quota or your remaining balance. This is useful when sharing keys across projects or team members, as it prevents any single key from consuming your entire balance.
-
-A practical pattern is one key per service or environment — for example a development key with a small quota, and a production key with a larger one — so that revoking or rotating a single key never interrupts your other integrations. See [Authentication](/guides/authentication) for the full set of key-management practices.
-
-Your API key authenticates all requests and is strictly tied to your usage metering and billing profile. It is critical to maintain the security of this key; never expose it in client-side code, public repositories, or unsecured environment variables.
-
-## Step 2: Executing Your First API Call
-
-AIsa exposes a single API endpoint (`https://api.aisa.one/v1`) that dynamically routes requests to multiple providers based on the specified model parameter.
-
-Because the AIsa gateway is fully compliant with OpenAI's Chat Completions API specification, developers only need to modify three variables in their existing codebases:
-
-* `base_url`: Must point to the AIsa endpoint.
-* `api_key`: Must be your generated AIsa token.
-* `model`: Must be a valid model identifier supported by AIsa.
-
-### Example: REST API Request via cURL
-
-The following example demonstrates a standard HTTP POST request to the completions endpoint.
-
-```curl
-curl --request POST \
-  --url https://api.aisa.one/v1/chat/completions \
-  --header 'Authorization: Bearer <your_aisa_api_key>' \
-  --header 'Content-Type: application/json' \
-  --data '
-{
-  "model": "gpt-5.4-mini",
-  "messages": [
-    {
-      "role": "user",
-      "content": "Explain the concept of an AI gateway in one concise sentence."
-    }
-  ],
-  "stream": false
-}'
+```bash
+export AISA_API_KEY="sk-..."
 ```
 
-The response format mirrors the standard OpenAI schema, returning a JSON object containing the `choices` array, the generated `message`, and detailed token usage metrics for billing transparency.
+You can create more keys later - one per app or environment is a good habit - and cap how much each key may spend. See [Authentication](/guides/authentication).
 
-## Step 3: Integrating with Official SDKs
+## 2. Call a model
 
-Due to its strict API compatibility, AIsa integrates natively with official OpenAI SDKs, eliminating the need for custom libraries.
-
-### Python SDK Integration
-
-To utilize AIsa via Python, install the `openai` package and instantiate the client with your AIsa credentials.
-
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    api_key="<your_aisa_api_key>",
-    base_url="https://api.aisa.one/v1"
-)
-
-response = client.chat.completions.create(
-    model="gpt-5.4-mini",
-    messages=[
-        {"role": "user", "content": "Explain the concept of an AI gateway in one concise sentence."}
-    ],
-    stream=False
-)
-
-print(response.choices[0].message.content)
+```bash
+curl https://api.aisa.one/v1/chat/completions \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-5.4-mini",
+    "messages": [{"role": "user", "content": "Explain an AI gateway in one sentence."}]
+  }'
 ```
 
-### TypeScript SDK Integration
+The response follows the OpenAI Chat Completions format: the answer is in `choices[0].message.content`, and `usage` reports the tokens that were billed. Swap `model` for any ID from the [model catalog](/guides/models) - `claude-haiku-4-5-20251001`, `deepseek-v4-flash`, `gemini-3.5-flash` - without changing anything else.
 
-Similarly, Node.js environments can leverage the official `openai` NPM package.
+<Note>
+  Always send `Content-Type: application/json` with a JSON body; without it the request is rejected.
+</Note>
 
-```typescript
-import OpenAI from "openai";
+## 3. Call a data API
 
-const client = new OpenAI({
-  apiKey: process.env.AISA_API_KEY,
-  baseURL: "https://api.aisa.one/v1",
-});
+Data APIs live under `https://api.aisa.one/apis/v1` and use the same API key. For example, to run a web search:
 
-async function main() {
-  const response = await client.chat.completions.create({
-    model: "gpt-5.4-mini",
-    messages: [
-      { role: "user", content: "Explain the concept of an AI gateway in one concise sentence." }
-    ],
-    stream: false,
-  });
-
-  console.log(response.choices[0].message.content);
-}
-
-main();
+```bash
+curl https://api.aisa.one/apis/v1/tavily/search \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "latest developments in AI agents"}'
 ```
 
-## Next Steps
+Browse the [API Reference](/api-reference) for the full list of endpoints (finance, social, search, SEO, and more), each with an interactive playground. Data API calls are billed: some endpoints charge a flat fee per call, others are metered by what the request returns. See [Billing & Credits](/guides/pricing) for details on quotes and spending caps.
 
-With your authentication established and the basic integration pattern confirmed, you can proceed to explore more advanced platform features.
+## 4. Check what you spent
 
-Developers are encouraged to utilize the [Model Playground](/guides/dashboard/playground) to visually inspect request payloads, test multimodal inputs, and compare the outputs of different models prior to deploying code into production environments. For detailed cost calculations regarding token consumption, review the [AI Model Pricing](/guides/pricing/ai-model-pricing-llm-inference) documentation.
+Every call appears in [Console → Usage & Logs](https://console.aisa.one/logs) with its endpoint, model, tokens, and cost. To read the same totals from code:
+
+```bash
+curl --get https://api.aisa.one/v1/usage \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  --data-urlencode "start_time=$(($(date +%s) - 86400))"
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="OpenAI / Anthropic SDK" icon="arrows-rotate" href="/get-started/sdk-compatibility">
+    Use your existing SDK by changing the base URL and key.
+  </Card>
+  <Card title="Connect your agent" icon="plug" href="/agent-quickstart">
+    Give Claude Code, Codex, or Cursor AIsa as a tool over MCP.
+  </Card>
+  <Card title="Billing & Credits" icon="credit-card" href="/guides/pricing">
+    How tokens and calls are billed, quotes, and spend caps.
+  </Card>
+  <Card title="Console" icon="gauge-high" href="/guides/dashboard/overview">
+    Balance, keys, playground, and per-request logs.
+  </Card>
+</CardGroup>

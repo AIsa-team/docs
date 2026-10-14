@@ -20,7 +20,7 @@ class ChangeScopeTests(unittest.TestCase):
             self.assertIn('zh/guides/**', triggers[event]['paths'])
         self.assertFalse(requires_artifact_check([
             'guides/pricing.mdx', 'zh/guides/pricing.mdx',
-            'guides/dashboard/usage-logs.mdx', 'zh/guides/dashboard/usage-logs.mdx']))
+            'guides/dashboard/overview.mdx', 'zh/guides/dashboard/usage-logs.mdx']))
 
     def test_payment_review_inputs_have_candidate_check_and_outputs_require_formal_gate(self):
         workflow = yaml.safe_load((Path(__file__).resolve().parents[2] /

@@ -1,38 +1,59 @@
 ---
-title: Frequently Asked Questions - AIsa Unified API
-description: >-
-  Common questions about AIsa's agent capability layer, including how it
-  differs from a plain LLM gateway, OpenAI compatibility, and pricing details.
+title: "Frequently Asked Questions"
+sidebarTitle: "FAQ"
+icon: "circle-question"
+description: "Common questions about AIsa: how to connect an agent, OpenAI and Anthropic compatibility, billing, models, Skills versus direct APIs, and data handling."
 ---
-This page answers common questions about the AIsa unified model gateway, compatibility, pricing, and infrastructure.
+
+## What is AIsa?
+
+AIsa is the resource and payment layer for AI agents: one account and one balance to discover, call, and pay for live LLM and media models and 100+ data APIs - search, finance, social, SEO, sales, and more. See [How It Works](/how-it-works).
 
 ## How is AIsa different from an LLM gateway?
 
-An LLM gateway only puts multiple models behind a single API. AIsa is an agent capability layer: alongside model inference, it integrates 100+ non-LLM data APIs (Twitter, Financial, Search), reusable Agent Skills, an MCP server, and native stablecoin micropayments for autonomous agents. See [Model gateway vs. agent capability layer](/concepts/model-gateway-vs-capability-layer).
+An LLM gateway puts several models behind one API. AIsa does that, and adds the data APIs agents act on, an MCP server and Skills so agents can find and call them, and per-call billing with spend caps so agents can pay for what they use. If your workload only needs one model provider, a direct integration can be simpler; AIsa helps once an agent needs several providers.
 
-AIsa is specifically built as the infrastructure layer for the agentic economy, where agents not only need to think (LLMs) but also act (data APIs) and transact (Machine-to-Machine Payments).
+## Which way should I connect?
 
-## Do I need to change my existing OpenAI code?
+- **An agent (Claude Code, Codex, Cursor, …):** [Connect via MCP](/agent-quickstart). OAuth in the browser, no key to paste.
+- **A coding agent that should learn AIsa's workflow:** add the [Agent Skill](/get-started/agent-skill) on top.
+- **A terminal, script, or CI job without MCP:** [Use the CLI](/get-started/cli).
+- **Your own code:** an [API key](/guides/getting-started-with-aisa) over HTTP or [your existing SDK](/get-started/sdk-compatibility).
 
-No. AIsa is fully API-compatible with the OpenAI specification. 
+## Do I need to change my OpenAI or Anthropic code?
 
-If you are using the official OpenAI Python or TypeScript SDKs, you only need to change your `base_url` to `https://api.aisa.one/v1` and authenticate using an [AIsa API Key](/guides/dashboard/overview). All standard parameters like `temperature`, `top_p`, and streaming responses work exactly as expected.
+No. Change the base URL and the key: `https://api.aisa.one/v1` for the OpenAI SDK, `https://api.aisa.one` for the Anthropic SDK. Standard parameters and streaming work as before. See [OpenAI / Anthropic SDK](/get-started/sdk-compatibility).
 
-## How is pricing calculated?
+## What tools does the MCP server expose?
 
-AIsa uses a unified usage-based billing system. You can pay as you go or choose a subscription plan (Builder or Team); see [aisa.one/pricing](https://aisa.one/pricing) for plan details.
+Five: `search` and `list_categories` to find an operation, `get_details` for its contract and a quote, and `use` or `batch_use` to run it. The first three are free; `use` and `batch_use` are billed per call. Your agent reaches the whole data catalog through these five instead of loading hundreds of tools.
 
-* **LLM inference** is billed per token.
-* **Data APIs** are billed per request: some at a fixed per-call rate (e.g. Open-Meteo, CoinGecko), others metered from the provider's cost, so the price can vary with what a call returns (e.g. Twitter, Tavily, Search, Financial).
+## Should my agent use a Skill or call APIs directly?
 
-All usage is deducted from your single, centralized account balance. See the [Pricing Overview](/guides/pricing) for how billing works; current model prices are on [aisa.one/models](https://aisa.one/models).
+Use a Skill when an existing one already covers the outcome - it encodes which tools to call, in what order, and how to present the result. Call APIs directly (over HTTP or MCP `use`) when your application needs its own sequencing, retries, or data processing. You can combine both: a Skill for the common path, direct calls for the rest.
 
-## What models are available on AIsa?
+## How is usage billed?
 
-AIsa provides a single gateway for the live model catalog — 124 models as of September 30, 2026. Current families include OpenAI GPT, Anthropic Claude, Google Gemini, xAI Grok, DeepSeek, Alibaba Qwen and Wan, Moonshot Kimi, MiniMax, Zhipu GLM, ByteDance Seed, Seedream and Dreamina, Tencent Hunyuan, StepFun, Xiaomi MiMo, and Jina embeddings.
+Models are billed per token; data APIs per request, either a fixed rate per call or metered from what the request returns. Everything draws on one prepaid balance, and discovery - docs, `/v1/models`, MCP `search` and `get_details` - is free. The docs explain billing rules but do not list prices; see [aisa.one/models](https://aisa.one/models) and [aisa.one/api](https://aisa.one/api), and [Billing & Credits](/guides/pricing) for quotes and spend caps.
 
-For a complete and up-to-date list of exact model IDs, context windows, endpoints, capabilities, and billing notes, visit the [supported model catalog](/guides/models) and [AI Model Pricing](/guides/pricing/ai-model-pricing-llm-inference) documentation.
+## Can I cap what an agent spends?
+
+Yes. Give each agent its own API key with a spending limit in the Console. That limit is the hard ceiling on what the key can spend.
+
+For a single call, endpoints that declare maximum-price support accept `X-AISA-Max-Price-USD` over HTTP, and MCP `use` and `batch_use` accept `max_price_usd`. If the cost estimate exceeds your maximum, the gateway rejects the request with `402` before calling the provider. This checks the estimate; it does not cap the final charge. Model routes such as `/v1/chat/completions` do not apply this header, so bound their cost with `max_tokens` and the key's spending limit. See [Billing & Credits](/guides/pricing#quote-review-then-execute).
+
+## Does every endpoint support x402 payments?
+
+No. Only endpoints that declare support accept the x402 machine-payment protocol; check the endpoint's reference page. See [Machine payments for agents](/concepts/machine-payments-for-agents).
+
+## Which models are available?
+
+GPT, Claude, Gemini, Grok, DeepSeek, Qwen and Wan, Kimi, MiniMax, GLM, ByteDance Seed and Seedream, Hunyuan, MiMo, and more, plus embedding, image, and video models. The catalog changes often: `GET https://api.aisa.one/v1/models` and [aisa.one/models](https://aisa.one/models) are always current, and the [model catalog](/guides/models) lists IDs and routes.
+
+## Does AIsa store my prompts or outputs?
+
+No. Request content is processed transiently and discarded; AIsa keeps only operational metadata such as timestamps, key identifiers, token counts, cost, and status. See [Security & Privacy](/guides/security).
 
 ## How do I get started?
 
-Proceed to the [Getting Started Guide](/guides/getting-started-with-aisa) to create an account, generate an API key, and make your first unified API call using your free \$1 signup credit.
+Follow [API Key & First Call](/guides/getting-started-with-aisa) for code, or [Connect via MCP](/agent-quickstart) for an agent.
