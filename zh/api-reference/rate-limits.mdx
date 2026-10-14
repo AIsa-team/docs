@@ -1,130 +1,94 @@
 ---
 title: "速率限制"
-description: "AIsa API 的每分钟请求数、每分钟 Token 数和并发限制，以及速率限制响应头和额度提升申请说明。"
+description: "AIsa 如何限流：部分模型的成功调用次数限制、上游提供商返回的 429，以及如何根据 Retry-After 处理 429 响应。"
 ---
 
-AIsa API 的每个端点都会应用速率限制，以保护网关和上游提供商。限制按 API Key 执行。本页介绍默认限制、速率限制响应头的读取方式，以及如何妥善处理限流。
+AIsa 不公布固定的每分钟请求数（RPM）、每分钟 Token 数（TPM）或并发档位，响应中也没有 `X-RateLimit-*` 响应头。`429 Too Many Requests` 可能来自下面几种来源。无论哪种，只要有 `Retry-After` 就先等待，再退避重试。
 
-## 限制维度
+## 429 的来源
 
-AIsa 在三个维度上限制容量：
-
-| 维度 | 适用范围 | 衡量内容 |
+| 来源 | 适用范围 | 如何识别 |
 | --- | --- | --- |
-| **RPM** | 所有端点 | 每分钟请求数 |
-| **TPM** | LLM 推理端点 | 每分钟输入和输出 Token 总数 |
-| **并发数** | 流式和长时间运行的端点 | 同时进行中的请求数 |
+| 按模型的成功调用限制 | 仅配置了限制的模型 | `error.code = "model_success_rate_limit_exceeded"`，并带 `Retry-After` 响应头 |
+| 上游提供商 | 任意模型或数据 API | 上游限流且没有可用的回退尝试；响应体遵循[该端点的错误格式](/zh/api-reference/errors) |
+| 异步容量 | 异步数据 API 任务 | `{"error": "integration async capacity is unavailable"}`，并带 `Retry-After: 2` |
 
-<Note>
-  TPM 会合并计算**输入和输出** Token。发送 10K Token 并生成 5K Token 的请求会消耗 15K TPM。
-</Note>
+### 按模型的成功调用限制
 
-## 各套餐的默认限制
+部分模型会限制同一账户在以小时计的滚动窗口内对该模型的**成功**调用次数。失败的调用不计入。大多数模型没有这类限制。
 
-| 套餐 | RPM | TPM | 并发数 | 适用条件 |
-| --- | ---: | ---: | ---: | --- |
-| **免费版** | 60 | 60,000 | 5 | 包含 1 美元注册额度的新账户 |
-| **入门版** | 600 | 600,000 | 20 | 首次付费充值后 |
-| **成长版** | 3,000 | 3,000,000 | 50 | 累计充值 500 美元以上或申请获批 |
-| **企业版** | 自定义 | 自定义 | 自定义 | 联系销售团队 |
+达到上限时，网关返回 `429`，带 `Retry-After` 响应头（秒），响应体如下：
 
-<Tip>
-  首次为 Wallet 充值后，系统会自动从**免费版升级到入门版**。更高套餐需要提交额度提升申请，详见[申请提高额度](#申请提高额度)。
-</Tip>
-
-### 端点级覆盖限制
-
-由于上游提供商会限制吞吐量，部分端点的默认限制比账户套餐更严格：
-
-| 端点组 | 默认覆盖限制 |
-| --- | --- |
-| `POST /chat/completions`（GPT-5.4） | RPM 不超过上游额度 |
-| `POST /messages`（Claude Opus） | RPM 不超过上游额度 |
-| `POST /perplexity/sonar-deep-research` | 每个密钥 5 RPM（长时间运行） |
-| `/v1beta/models/*:generateContent` | 每个密钥 30 RPM |
-
-## 读取速率限制响应头
-
-每个响应（包括 `429`）都会包含以下响应头：
-
-```
-X-RateLimit-Limit-Requests:    600
-X-RateLimit-Remaining-Requests: 587
-X-RateLimit-Limit-Tokens:      600000
-X-RateLimit-Remaining-Tokens:  592104
-X-RateLimit-Reset-Requests:    1745012400
-X-RateLimit-Reset-Tokens:      1745012400
-Retry-After:                   3
+```json
+{
+  "error": {
+    "message": "model <model-id> is limited to 100 successful calls per 1h0m0s for this user",
+    "code": "model_success_rate_limit_exceeded",
+    "model": "<model-id>",
+    "limit": 100,
+    "window_seconds": 3600,
+    "retry_after_seconds": 812,
+    "reset_at": "2026-10-14T09:30:00Z"
+  }
+}
 ```
 
-| 响应头 | 含义 |
-| --- | --- |
-| `X-RateLimit-Limit-Requests` | RPM 上限 |
-| `X-RateLimit-Remaining-Requests` | 本分钟剩余请求数 |
-| `X-RateLimit-Limit-Tokens` | TPM 上限 |
-| `X-RateLimit-Remaining-Tokens` | 本分钟剩余 Token 数 |
-| `X-RateLimit-Reset-Requests` | 请求计数器重置时的 UNIX 时间戳 |
-| `X-RateLimit-Reset-Tokens` | Token 计数器重置时的 UNIX 时间戳 |
-| `Retry-After` | 仅用于 429；允许重试前需要等待的秒数 |
+以上数值仅为示例。`reset_at` 是窗口内最早一次计数调用移出窗口、空出名额的时间。
 
 ## 处理 429 响应
 
 <Steps>
-  <Step title="检测 429">
-    响应体遵循标准[错误结构](/zh/api-reference/errors)，其中 `error.type = "rate_limit_error"`，`code` 为 `rate_limit_exceeded`、`upstream_rate_limit` 或 `quota_exceeded`。
-  </Step>
   <Step title="遵守 `Retry-After`">
-    下次尝试前，始终至少等待 `Retry-After` 指定的秒数，切勿立即重试。
+    有该响应头时，至少等待对应秒数再发起下一次请求。不要立即重试。
   </Step>
-  <Step title="使用指数退避和抖动">
-    完成首次等待后，每次再次遇到 429 都将延迟翻倍，并添加 ±25% 抖动，上限为 30 秒。请参阅[重试示例](/zh/api-reference/errors#重试指南)。
+  <Step title="使用指数退避加抖动">
+    没有 `Retry-After` 时，从约 1 秒开始，每次连续遇到 429 将延迟翻倍，加 ±25% 抖动，并设置上限。请参阅[重试指南](/zh/api-reference/errors#重试指南)。
   </Step>
-  <Step title="优先排队，而不是反复重试">
-    不要使用紧密的重试循环。将请求放入队列，并以低于 RPM 的速率处理。采用 `RPM/60` 每秒泄漏速率的简单令牌桶即可稳定工作。
+  <Step title="成功调用限制可换模型">
+    `model_success_rate_limit_exceeded` 按模型计算。如果不能等到 `reset_at`，可以改用其他模型。
   </Step>
-  <Step title="保持在上限以内">
-    监控每个响应中的 `X-RateLimit-Remaining-*`。剩余额度低于限制的 10% 时主动降速，从而避免触发 429。
+  <Step title="用队列代替循环重试">
+    批量任务应先入队，再以稳定速率消费，不要在紧密循环里反复重试。
   </Step>
 </Steps>
 
-## 示例：保持在限制以内
+## 示例：遇到 429 时重试
 
 ```python
-from openai import OpenAI
+import time
+from openai import OpenAI, RateLimitError
 
 client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
 
-response = client.chat.completions.with_raw_response.create(
-    model="gpt-4.1-mini",
+def create_with_retry(max_attempts=5, **kwargs):
+    delay = 1.0
+    for attempt in range(max_attempts):
+        try:
+            return client.chat.completions.create(**kwargs)
+        except RateLimitError as err:
+            if attempt == max_attempts - 1:
+                raise
+            retry_after = err.response.headers.get("retry-after")
+            time.sleep(float(retry_after) if retry_after else delay)
+            delay = min(delay * 2, 30)
+
+response = create_with_retry(
+    model="qwen3.7-flash",
     messages=[{"role": "user", "content": "Hello"}],
 )
-remaining = int(response.headers.get("x-ratelimit-remaining-requests", 1000))
-if remaining < 50:
-    # Throttle preemptively — sleep a bit before the next call
-    time.sleep(1.0)
-body = response.parse()
 ```
 
-## 申请提高额度
+## 需要更多容量？
 
-如果生产流量需要更高限制：
-
-1. 为 Wallet 充值，系统会自动从免费版升级到入门版。
-2. 如需成长版或企业版，请发送邮件至 [developer@aisa.one](mailto:developer@aisa.one)，并提供：
-   - 工作区 ID
-   - 预期的峰值 RPM 和 TPM
-   - 需要提高额度的模型或端点
-   - 使用场景的简要说明
-
-成长版申请通常会在一个工作日内获批；企业版方案由专属客户团队协商。
+如果按模型的限制或上游限流影响了生产负载，请发邮件至 [developer@aisa.one](mailto:developer@aisa.one)，说明模型或端点、预期峰值请求速率，以及使用场景的简要描述。
 
 ## 相关页面
 
 <CardGroup cols={2}>
   <Card title="错误代码" icon="triangle-exclamation" href="/zh/api-reference/errors">
-    HTTP 状态码完整列表和建议的处理方式。
+    响应格式与重试指南。
   </Card>
   <Card title="用量日志" icon="chart-line" href="/zh/guides/dashboard/usage-logs">
-    控制台中的单次请求计费和速率限制遥测数据。
+    控制台中的单次请求状态与计费。
   </Card>
 </CardGroup>
