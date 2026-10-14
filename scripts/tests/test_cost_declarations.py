@@ -9,6 +9,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 PATTERN = r'\{/\* settled-cost-parser \*/\}\s*```python\n(.*?)\n```'
 HEADER = 'X-AISA-Customer-Cost-Micros-USD'
+# EN merged Usage Logs into the Console page; zh keeps its own page until the mirror.
+USAGE_LOGS = {'': 'guides/dashboard/overview#usage-and-logs', 'zh/': 'guides/dashboard/usage-logs'}
 
 
 class CostDeclarationTests(unittest.TestCase):
@@ -20,7 +22,7 @@ class CostDeclarationTests(unittest.TestCase):
                 self.assertIn('customer_cost_micros_usd', page)
                 self.assertNotIn('X-AISA-Cost-Micros-USD', page)
                 self.assertNotRegex(page, r'X-AISA-Cost-Mode:\s*settled')
-                self.assertIn('/' + prefix + 'guides/dashboard/usage-logs', page)
+                self.assertIn('/' + prefix + USAGE_LOGS[prefix], page)
 
     def test_bilingual_quote_and_execution_keep_the_same_request(self):
         for prefix in ('', 'zh/'):
@@ -39,7 +41,7 @@ class CostDeclarationTests(unittest.TestCase):
 
     def test_usage_examples_are_key_scoped_and_use_unix_seconds(self):
         for prefix in ('', 'zh/'):
-            page = (ROOT / (prefix + 'guides/dashboard/usage-logs.mdx')).read_text()
+            page = (ROOT / (prefix + USAGE_LOGS[prefix].split('#')[0] + '.mdx')).read_text()
             blocks = re.findall(r'```bash\n(.*?)\n```', page, re.S)
             example = next(block for block in blocks if '/v1/usage' in block)
             self.assertIn('int(time.time()) - 86400', example)

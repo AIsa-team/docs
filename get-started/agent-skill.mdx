@@ -1,0 +1,66 @@
+---
+title: "Install the AIsa Agent Skill"
+sidebarTitle: "Install the Agent Skill"
+icon: "wand-magic-sparkles"
+description: "Install the official aisa skill so Claude Code, Codex, Cursor, and other coding agents know how to find and call AIsa tools."
+---
+
+An Agent Skill is a set of instructions your coding agent loads when working on a relevant task. The official `aisa` skill teaches your agent how to search AIsa's tool catalog, check pricing, and execute calls within your budget.
+
+To perform actions, the skill uses an active connection: either MCP (recommended) or the AIsa CLI.
+
+<Steps>
+  <Step title="Install the skill">
+    ```bash
+    npx skills add AIsa-team/agent-skills --skill aisa --agent claude-code --global
+    ```
+
+    Set `--agent` to your tool (`claude-code`, `codex`, `cursor`, etc.). Omit `--global` to install for the current workspace only. Requires Node.js 22.20 or later.
+
+    If you already have the AIsa CLI installed, you can also run:
+    ```bash
+    aisa skills install aisa
+    ```
+  </Step>
+  <Step title="Connect and sign in">
+    Add the MCP server and approve browser OAuth; see [Connect via MCP](/agent-quickstart). In terminal-only environments without MCP, use the CLI: `npm install -g @aisa-one/cli && aisa login` ([Use the CLI](/get-started/cli)).
+  </Step>
+  <Step title="Test in your agent">
+    Paste this into your agent:
+
+    ```txt wrap
+    Use the aisa skill to check my AIsa balance, then find three recent public updates about a company of your choice with source links. Ask me before any paid call.
+    ```
+  </Step>
+</Steps>
+
+Installing the skill teaches your agent the workflow; it is not approval to spend. Your agent still quotes each paid call and waits for your approval before running it.
+
+## Manual install without npx
+
+If `npx skills` is unavailable, download the skill files directly into your agent's skills directory. This example targets Codex (`~/.agents/skills/aisa`); change `aisa_skill_parent` for other agents.
+
+```sh
+set -e
+aisa_skill_target="$HOME/.agents/skills/aisa"
+aisa_skill_parent="$HOME/.agents/skills"
+aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/68f63a3af4840e999f680e966f7a935d712b796d/platform/aisa"
+if [ -e "$aisa_skill_target" ] || [ -L "$aisa_skill_target" ]; then
+  echo "Target already exists, skipping: $aisa_skill_target"
+  echo "Not assumed official; inspect it before treating it as the AIsa skill."
+  exit 0
+fi
+aisa_skill_tmp="$(mktemp -d)"
+trap 'rm -rf "$aisa_skill_tmp"' EXIT
+mkdir -p "$aisa_skill_tmp/aisa/agents" "$aisa_skill_parent"
+curl -fSL "$aisa_skill_base/SKILL.md" -o "$aisa_skill_tmp/aisa/SKILL.md"
+curl -fSL "$aisa_skill_base/LICENSE" -o "$aisa_skill_tmp/aisa/LICENSE"
+curl -fSL "$aisa_skill_base/agents/openai.yaml" -o "$aisa_skill_tmp/aisa/agents/openai.yaml"
+mv "$aisa_skill_tmp/aisa" "$aisa_skill_target"
+```
+
+Agents: use this path only when the CLI gate in [Use the CLI](/get-started/cli) holds, `npx skills` cannot run, and the official skill is still needed on disk. Preserve an existing official or custom skill, including a symlink.
+
+## Browse more skills
+
+The core `aisa` skill covers the general catalog. Specialized skills for market research, SEO, social intelligence, and search are in the [Agent Skills catalog](/agent-skills). You can install them anytime via `npx skills add AIsa-team/agent-skills --skill <name>` or `aisa skills install <name>`. Source: [AIsa-team/agent-skills](https://github.com/AIsa-team/agent-skills).
