@@ -734,6 +734,9 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         else:
                             raise ValueError("upstream operation missing")
                     operation = copy.deepcopy(runtime)
+                    capabilities = operation.get("x-aisa-capabilities", {})
+                    if "mpp_methods" in capabilities:
+                        capabilities["mpp"] = capabilities.get("mpp") is True and actual_method.upper() in capabilities["mpp_methods"]
                     # Direct Runtime identity, before public ANY expansion or retained
                     # published aliases. Consumers must not guess this binding.
                     operation["x-aisa-runtime-operation"] = {

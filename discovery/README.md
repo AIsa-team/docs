@@ -20,6 +20,15 @@ account-specific pricing/authentication metadata, and adds canonical
 `x-payment-info.offers` and a `402` response. The existing consolidated YAML
 and its publication workflow are unchanged.
 
+MPPScan additionally expects `x-payment-info.price` and `protocols`. The
+generator emits these alongside canonical `offers`, plus `info.x-guidance`.
+USD price hints use the reviewed source's fixed USD estimate; raw token units
+are not treated as USD. GET input schemas remain query parameters, not invented
+JSON request bodies. Both forms are understood by `@agentcash/discovery` 1.7.5.
+After deploying, run `npx --yes @agentcash/discovery@1.7.5 discover https://api.aisa.one`
+and ensure every pilot route has an MPP protocol and a price. The mppx validator
+alone does not check MPPScan's additional classification requirements.
+
 ## Pricing evidence and limitations
 
 `payment-evidence.json` records public, unauthenticated HTTP 402 observations
@@ -62,3 +71,46 @@ the generator and evidence model, not copying these prices to other routes.
    listing; the latter has its own submission process.
 
 Reference: https://mpp.dev/advanced/discovery
+
+## Multi-provider expansion (v2)
+
+The implementation and candidate inventory are maintained in
+`AIsaServices/docs/mpp-fixed-rollout.md` and
+`AIsaServices/packages/mppcatalog/allowlist.json`. The existing pilot artifact
+remains the published fallback until runtime activation is verified.
+
+After backend `mpp-catalog verify` and refreshing/composing runtime source docs:
+
+1. Run `scripts/probe_payment_discovery.py --runtime-plan <plan.json>
+   --allowlist <runtime-allowlist.json> --server https://api.aisa.one
+   --environment production --output <new-evidence.json>`. No payment is sent.
+2. Run `scripts/generate_payment_discovery.py --allowlist <runtime-allowlist.json>
+   --runtime-plan <plan.json> --evidence <new-evidence.json>
+   --output <candidate.json> --report <report.json>`.
+3. Validate with `mppx@0.13.4 discover validate <candidate.json>` and
+   `node scripts/validate_payment_catalog.mjs <candidate.json>
+   <path-to-@agentcash/discovery@1.7.5/dist/index.js>`.
+4. Review per-provider counts, blockers, source hashes/revisions, deterministic
+   runtime pricing provenance and output SHA. Only then copy into the runtime's
+   static deployment directory through the normal release workflow.
+
+V2 requires matching runtime profile, pricing and PAYG policy revisions. It
+never reads an estimated docs price as the final USD quote. Known Tempo token,
+chain and six-decimal denomination are validated against every observed 402.
+Provider-specific component namespaces preserve refs without collisions. GET
+parameters and real read-only POST bodies retain their schemas and serialization
+rules. ANY-method runtime facts expose `mpp_methods`; the composer applies that
+list separately to each public operation.
+
+Known MPPScan UI GET-input warnings remain separate from parser correctness;
+no synthetic GET body is introduced. Challenge observations are not proof of a
+successful paid call. Live paid acceptance uses a separately approved wallet and
+budget. The original no-argument generator is retained only to reproduce the
+three-operation pilot from its historical evidence; it does not expand scope.
+
+The initial review identified 182 read-only candidates. The executable allowlist
+contains 149 operations across 18 providers; the sibling `blocked.json` records
+33 schema blockers (FRED and Financial analyst-estimates). When present beside
+the allowlist, these blockers are included in the generation report. Missing
+public upstream metadata on runtime-validated Semrush operations is checked
+against the verified runtime plan and matching contract revisions.

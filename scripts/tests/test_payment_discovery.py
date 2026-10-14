@@ -28,6 +28,20 @@ class PaymentDiscoveryTests(unittest.TestCase):
             self.assertIn('402', op['responses'])
             self.assertNotIn('x-aisa-pricing', op)
             self.assertEqual(op['x-payment-info']['offers'][0]['amount'], '440')
+            self.assertEqual(op['x-payment-info']['price'], {
+                'mode': 'fixed', 'currency': 'USD', 'amount': '0.00044'})
+            self.assertEqual(op['x-payment-info']['protocols'][0]['mpp']['method'], 'tempo')
+        self.assertTrue(doc['info']['x-guidance'])
+        self.assertEqual(doc['info']['contact']['email'], 'developer@aisa.one')
+        for item in doc['paths'].values():
+            self.assertNotIn('requestBody', item['get'])
+
+    def test_invalid_usd_price_is_rejected(self):
+        path = self.evidence['operations'][0]['path']
+        for price in [None, 'NaN', 'Infinity', -1]:
+            self.source['paths'][path]['get']['x-aisa-pricing']['default_request_estimate_usd'] = price
+            with self.subTest(price=price), self.assertRaises(ValueError):
+                module.build(self.source, self.evidence, self.raw)
 
     def test_changed_source_requires_review(self):
         with self.assertRaises(ValueError):

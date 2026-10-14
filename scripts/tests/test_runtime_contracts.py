@@ -52,6 +52,17 @@ def operation(document):
 
 
 class CompositionTests(unittest.TestCase):
+    def test_any_mpp_permission_is_projected_per_method(self):
+        runtime, upstream = facts("provider", "x-aisa-any"), mirror()
+        operation(runtime)["x-aisa-capabilities"] = {"mpp": True, "mpp_methods": ["GET"]}
+        upstream["paths"]["/provider/test"]["get"] = copy.deepcopy(upstream["paths"]["/provider/test"]["post"])
+        upstream["paths"]["/provider/test"]["get"].pop("requestBody")
+        doc, pending = compose(runtime, upstream)
+        self.assertFalse(pending)
+        item = doc["paths"]["/apis/v1/similarweb/test"]
+        self.assertTrue(item["get"]["x-aisa-capabilities"]["mpp"])
+        self.assertFalse(item["post"]["x-aisa-capabilities"]["mpp"])
+
     def test_runtime_authority_overlay_and_disabled(self):
         source = facts()
         operation(source)["x-aisa-status"] = "disabled"

@@ -5,6 +5,7 @@ import copy
 import hashlib
 import json
 import re
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,6 +18,12 @@ def build(source, evidence, source_bytes):
         'openapi': '3.1.0',
         'info': {
             'title': 'AIsa MPP Data APIs', 'version': '1.0.0',
+            'contact': {'url': 'https://aisa.one', 'email': 'developer@aisa.one'},
+            'x-guidance': 'Use GET query parameters, not a JSON body. Holders requires '
+                          'market condition IDs; live-volume requires an event id; '
+                          'oi optionally accepts market condition IDs. Inspect the '
+                          '402 WWW-Authenticate challenge before paying with Tempo MPP '
+                          'and retry with Authorization: Payment <credential>.',
             'description': 'Initial Polymarket data catalog. Prices are advisory; '
                            'the runtime 402 challenge is authoritative. Payment is '
                            'submitted through Authorization: Payment <credential>.',
@@ -63,7 +70,19 @@ def build(source, evidence, source_bytes):
             'headers': {'WWW-Authenticate': {
                 'description': 'MPP payment challenge', 'schema': {'type': 'string'}}},
         }
-        op['x-payment-info'] = {'offers': [copy.deepcopy(offer)]}
+        # MPPScan requires price/protocols in addition to canonical MPP offers.
+        # Use the reviewed USD price, not raw token units as a dollar amount.
+        try:
+            price = Decimal(str(original['x-aisa-pricing']['default_request_estimate_usd']))
+        except (KeyError, InvalidOperation):
+            raise ValueError('Missing reviewed fixed USD price') from None
+        if not price.is_finite() or price < 0:
+            raise ValueError('Invalid reviewed fixed USD price')
+        op['x-payment-info'] = {
+            'offers': [copy.deepcopy(offer)],
+            'price': {'mode': 'fixed', 'currency': 'USD', 'amount': format(price, 'f')},
+            'protocols': [{'mpp': {key: offer[key] for key in ('method', 'intent', 'currency')}}],
+        }
         if method in doc['paths'].get(path, {}):
             raise ValueError('Duplicate operation')
         doc['paths'].setdefault(path, {})[method] = op
@@ -97,8 +116,25 @@ def build(source, evidence, source_bytes):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=ROOT / 'discovery/openapi.json')
+    parser.add_argument('--allowlist', type=Path, help='Runtime packages/mppcatalog/allowlist.json')
+    parser.add_argument('--evidence', type=Path, default=ROOT / 'discovery/payment-evidence.json')
+    parser.add_argument('--runtime-plan', type=Path)
+    parser.add_argument('--report', type=Path)
     args = parser.parse_args()
-    evidence = json.loads((ROOT / 'discovery/payment-evidence.json').read_text())
+    if args.allowlist:
+        from payment_catalog import build_catalog
+        if not args.runtime_plan or not args.report:
+            parser.error('--allowlist requires --runtime-plan and --report')
+        blocked_path = args.allowlist.with_name('blocked.json')
+        blocked = json.loads(blocked_path.read_bytes()) if blocked_path.exists() else []
+        doc, report = build_catalog(ROOT, json.loads(args.allowlist.read_bytes()),
+                                    json.loads(args.evidence.read_bytes()), args.runtime_plan.read_bytes(), blocked)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(doc, indent=2, ensure_ascii=True) + '\n')
+        args.report.write_text(json.dumps(report, indent=2, ensure_ascii=True) + '\n')
+        print(json.dumps(report['providers'], indent=2))
+        return
+    evidence = json.loads(args.evidence.read_text())
     source_bytes = (ROOT / evidence['source']).read_bytes()
     doc = build(json.loads(source_bytes), evidence, source_bytes)
     args.output.parent.mkdir(parents=True, exist_ok=True)
