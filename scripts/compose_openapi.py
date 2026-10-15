@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit, unquote
 
-VERSION = "18"
+VERSION = "20"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -895,4 +895,6 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                 elif method in {"post", "put", "patch"}:
                     add_body_code_sample(operation, method, path, operation.get("servers", item.get("servers", output.get("servers", []))))
     from source_provenance import compact_document
+    from pricing_prose import clean_document
+    output = clean_document(output)
     return compact_document(output), pending

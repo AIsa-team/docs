@@ -214,6 +214,8 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                         return localization.translation(catalog, note)
                     except KeyError:
                         return note
+                from pricing_prose import clean_page
+                text = clean_page(text, language)
                 text = update_readable_block(text, operation, language, translated_note)
                 if not destination.exists() or text != destination.read_text():
                     changes[destination] = text
