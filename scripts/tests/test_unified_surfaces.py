@@ -14,6 +14,20 @@ from readable_contract_notes import readable_block, update_readable_block
 
 
 class UnifiedSurfacesTests(unittest.TestCase):
+    def test_bound_llms_is_staged_with_every_generated_candidate(self):
+        root = Path(__file__).resolve().parents[2]
+        publish = yaml.safe_load((root / '.github/workflows/pull-openapi.yml').read_text())
+        script = next(step['run'] for step in publish['jobs']['compose']['steps'] if step.get('id') == 'publish')
+        staging = next(line.split() for line in script.splitlines() if line.strip().startswith('git add openapi '))
+        self.assertIn('llms.txt', staging)
+        refresh = yaml.safe_load((root / '.github/workflows/refresh-upstream.yml').read_text())
+        candidate = next(step for step in refresh['jobs']['refresh']['steps'] if 'add-paths' in step.get('with', {}))
+        self.assertIn('llms.txt', candidate['with']['add-paths'].splitlines())
+        workflow = yaml.safe_load((root / '.github/workflows/test-runtime-contracts.yml').read_text())
+        trigger = workflow.get('on', workflow.get(True))
+        for event in ('pull_request', 'push'):
+            self.assertIn('llms.txt', trigger[event]['paths'])
+
     def test_request_context_constraints_auth_recursion_and_numeric_values(self):
         operation = {'operationId': 'one', 'parameters': [
             {'name': 'target', 'in': 'query', 'required': True,
