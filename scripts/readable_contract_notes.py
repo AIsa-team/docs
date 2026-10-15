@@ -62,12 +62,17 @@ def request_details(operation, document, method, path, spec_path, language="en")
         for name in requirement:
             scheme = document.get("components", {}).get("securitySchemes", {}).get(name)
             if scheme is None:
+                if operation.get("x-aisa-status") == "disabled" and operation.get("x-aisa-contract-state") == "retained_legacy":
+                    request.setdefault("x-aisa-documentation-limitations", []).append("unresolved_security_scheme:" + name)
+                    continue
                 raise ValueError("unresolved request security scheme: " + name)
             components.setdefault("securitySchemes", {})[name] = effective_object(scheme, document)
     if components:
         request["components"] = components
     lines = ["## " + t("Request contract", "请求规范"), "",
              "- **" + t("Method and path", "方法与路径") + ":** " + safe(method.upper() + " " + path)]
+    for limitation in request.get("x-aisa-documentation-limitations", []):
+        lines.append("- **" + t("Incomplete historical declaration (disabled)", "未启用的历史声明不完整") + ":** " + safe(limitation))
     for server in request["servers"]:
         if isinstance(server, dict) and isinstance(server.get("url"), str):
             lines.append("- **" + t("Request URL template", "请求 URL 模板") + ":** " + safe(server["url"].rstrip("/") + path))
