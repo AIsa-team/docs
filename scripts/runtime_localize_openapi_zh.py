@@ -456,6 +456,11 @@ def generate(published_ref=None) -> None:
                 return translation(catalog, note)
             except KeyError:
                 return note
+        if reference:
+            # Canonical request JSON is shared across locales; only labels and
+            # editorial prose translate. The page header retains proven aliases.
+            spec = sources[OPENAPI_DIR / reference[1]]
+            operation = spec.get('paths', {}).get(reference[3], {}).get(reference[2].lower(), {})
         localized_body = update_readable_block(localized_body, operation, "zh", translated_note,
             **({"document": spec, "method": reference[2], "path": reference[3],
                 "spec_path": "openapi/zh/" + reference[1]} if reference else {}))

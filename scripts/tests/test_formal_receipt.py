@@ -15,7 +15,7 @@ from sales_catalog_projection import SALES_CATALOG_PATH, sales_catalog_bytes
 
 
 class FormalReceiptTests(unittest.TestCase):
-    def run_check(self, source_receipt=True, tamper=False, unresolved=False, surfaces=False, surface_mutation=None, sales_mutation=None, payment_mutation=None, json_mutation=None):
+    def run_check(self, source_receipt=True, tamper=False, unresolved=False, surfaces=False, surface_mutation=None, sales_mutation=None, payment_mutation=None, json_mutation=None, llms_mutation=None):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             install_payment_fixture(root)
@@ -37,6 +37,11 @@ class FormalReceiptTests(unittest.TestCase):
             (root / 'openapi/openapi.json').write_text(json.dumps(expected))
             if json_mutation:
                 json_mutation(root / 'openapi/openapi.json')
+            from runtime_consolidate_openapi import discovery_index_block
+            index_path = root / 'llms.txt'
+            index_path.write_text(discovery_index_block(raw))
+            if llms_mutation:
+                llms_mutation(index_path)
             sales = root / SALES_CATALOG_PATH
             sales.parent.mkdir(parents=True)
             sales.write_bytes(sales_catalog_bytes(expected, raw))
@@ -64,6 +69,13 @@ class FormalReceiptTests(unittest.TestCase):
                  patch.object(sys, 'argv', ['check', '--root', str(root), '--report', str(report_path)]), patch('builtins.print'):
                 result = main()
             return result, json.loads(report_path.read_text()), hashlib.sha256(raw).hexdigest()
+
+    def test_missing_or_stale_llms_index_cannot_receive_formal_receipt(self):
+        for mutate in (lambda p: p.unlink(), lambda p: p.write_text('stale index')):
+            with self.subTest(mutate=mutate):
+                status, report, _ = self.run_check(llms_mutation=mutate)
+                self.assertEqual(status, 1)
+                self.assertIn({'code': 'llms_index_provenance_mismatch'}, report['global_errors'])
 
     def test_missing_or_stale_json_cannot_receive_formal_receipt(self):
         for mutate in (lambda p: p.unlink(), lambda p: p.write_text('{"paths":{"/plants":{}}}')):

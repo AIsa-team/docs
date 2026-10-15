@@ -82,6 +82,11 @@ class UnifiedSurfacesTests(unittest.TestCase):
         rendered = update_readable_block('Human prose.\n', operation, **context)
         self.assertEqual(update_readable_block(rendered, operation, **context), rendered)
         self.assertIn('"security": []', rendered)
+        request = json.loads(re.search(r'```json\n(.*?)\n```', rendered, re.S)[1])
+        self.assertEqual(request['x-aisa-pricing'], {'default_request_estimate_usd': 0})
+        operation['x-aisa-pricing']['request_cost_drivers'] = {'kind': 'plan_units', 'formula': {'input': 'count', 'unit_scale': 10}}
+        changed_price = update_readable_block(rendered, operation, **context)
+        self.assertIn('"unit_scale": 10', changed_price)
         operation['parameters'] = [{'name': 'date', 'in': 'query', 'required': True, 'schema': {'type': 'string', 'format': 'date'}}]
         changed = update_readable_block(rendered, operation, **context)
         self.assertIn('**date:** query; required', changed)

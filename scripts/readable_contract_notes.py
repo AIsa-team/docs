@@ -55,6 +55,8 @@ def request_details(operation, document, method, path, spec_path, language="en")
         request["security"] = operation.get("security", document.get("security"))
     if "requestBody" in operation:
         request["requestBody"] = operation["requestBody"]
+    if "x-aisa-pricing" in operation:
+        request["x-aisa-pricing"] = operation["x-aisa-pricing"]
     # Reuse the composer's instance-aware closure: example/default values that
     # happen to contain a "$ref" are data, and discriminator mappings are refs.
     components = referenced_components(request, document)
@@ -83,7 +85,7 @@ def request_details(operation, document, method, path, spec_path, language="en")
     if revision.get("facts_hash"):
         lines.append("- **" + t("Runtime facts", "Runtime 事实版本") + ":** " + safe(revision["facts_hash"]))
     lines += ["", "[" + t("Complete OpenAPI definition", "完整 OpenAPI 定义") + "](https://aisa.one/docs/" + spec_path + ")", "",
-              t("Effective request declaration (including authentication and referenced schemas):", "有效请求声明（包括认证和引用的 schema）："), ""]
+              t("Effective request and pricing declaration (including authentication and referenced schemas):", "有效请求与价格声明（包括认证和引用的 schema）："), ""]
     serialized = json.dumps(request, ensure_ascii=False, indent=2, allow_nan=False)
     # A source string cannot terminate this fenced code block.
     fence = "`" * max(3, 1 + max((len(run) for run in re.findall(r"`+", serialized)), default=0))
