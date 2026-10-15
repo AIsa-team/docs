@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from router_surface_checks import (METADATA, SCHEMAS, PublicSchemaReader, canonical,
-    check_router_surface, contract_fields, digest, fixed_router_contracts, reference_targets)
+    check_router_surface, contract_fields, digest, fixed_router_contracts, in_scope, reference_targets)
 
 
 class RouterSurfaceTests(unittest.TestCase):
@@ -164,6 +164,18 @@ class RouterSurfaceTests(unittest.TestCase):
         for method, url in [('POST', METADATA), ('GET', SCHEMAS), ('POST', 'https://tools.aisa.one/execute')]:
             with self.assertRaises(ValueError):
                 reader(method, url)
+
+    def test_discovery_scope_matches_router_root_servers_not_operation_override(self):
+        document = copy.deepcopy(self.document)
+        document['paths']['/item']['get']['servers'] = [{'url': 'https://other.example/v1'}]
+        self.assertTrue(in_scope(document))
+        document['servers'] = [{'url': 'https://api.aisa.one/v1'}]
+        document['paths']['/item']['get']['servers'] = [{'url': 'https://api.aisa.one/apis/v1'}]
+        self.assertFalse(in_scope(document))
+        document.pop('servers')
+        self.assertTrue(in_scope(document))
+        document['servers'] = [{'url': 'https://api.aisa.one:443/apis/v1'}]
+        self.assertFalse(in_scope(document))
 
 
 class FixedSourceTests(unittest.TestCase):

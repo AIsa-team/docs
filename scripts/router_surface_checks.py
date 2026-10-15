@@ -2,6 +2,8 @@
 
 This checks published documentation, not executable binder/body equivalence or
 provider execution. No second endpoint inventory: scope comes from bound specs.
+It checks presence and fields of expected operations, not extra online operation
+IDs: Router exposes bounded search and batch lookup, but no full public ID list.
 
 Integration: call check_router_surface(root, fixed_formal_sha) after the existing
 publication receipt checks. Merge missing_inputs/mismatches into the monitor's
@@ -104,6 +106,8 @@ def contract_fields(document, path, method):
 
 def in_scope(document):
     """Router's documented synchronous API namespace, not a provider allowlist."""
+    # Router internal/catalog/compiler/compiler.go discoverInScopeOperations
+    # intentionally reads root rawSpec.Servers, not operation-level overrides.
     servers = document.get('servers', [])
     return not servers or any(urlsplit(row.get('url', '')).netloc == 'api.aisa.one'
                               and (urlsplit(row['url']).path in ('', '/', '/apis/v1')
@@ -194,7 +198,7 @@ def check_router_surface(root, ref, *, read_json=None, expected=None, accepted_r
         raise ValueError('Invalid bounded Router audit concurrency')
     started = datetime.now(timezone.utc).isoformat()
     report = {'docs_ref': ref,
-              'scope': 'hash-bound Router public documentation; effective request declarations and full local ref closure; no executable binder or provider execution claim',
+              'scope': 'expected operations presence and fields from hash-bound Router public documentation, including effective requests and full local ref closure; extra online operation IDs are not verified (no public full inventory); no executable binder or provider execution claim',
               'observed_at': started, 'missing_inputs': [], 'mismatches': [], 'observations': {}, 'exclusions': []}
     try:
         source = expected if expected is not None else fixed_router_contracts(root, ref)
