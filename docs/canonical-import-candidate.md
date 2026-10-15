@@ -4,8 +4,9 @@
 [canonical input assessment](canonical-input-assessment.md). It does not select
 the production workflow path, publish a pointer, change consumer verifier pins,
 or authorize a release. The existing production composition path remains the
-default. The new evaluation is deliberately not accepted by the existing formal
-exporter or receipt verifiers.
+default. These candidate reports are not accepted by the formal exporter or
+receipt verifiers. The separate [formal compatibility layer](canonical-formal-compatibility.md)
+requires complete replay and a distinct formal scope before export.
 
 ## Data flow and authority
 
@@ -80,8 +81,8 @@ retain their existing provider-expiry behavior. Candidate expiry is labeled as
 derived, unpublished authorization, not an active formal release.
 
 Before production activation, the formal candidate/export/origin path must
-explicitly accept and recheck this distinct assessment, including final metadata,
-source authorization, payment evidence and live acquisition. Website, MCP and
+recheck this distinct assessment through the explicit formal replay, including
+final metadata, source authorization, payment evidence and live acquisition. Website, MCP and
 Router receipt verifiers must support both precise evaluation shapes. MPP's
 separately pinned Docs verifier code and workflow ref must be updated. A new Docs
 main or formal commit alone does not deliver that verifier change. These switches

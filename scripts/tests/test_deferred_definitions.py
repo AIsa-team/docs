@@ -167,5 +167,21 @@ class DeferredDefinitionTests(unittest.TestCase):
                     {**report, 'providers': {'p': {'deferred_pending': [{'runtime_status': 'enabled'}]}}}):
             with self.assertRaises(ValueError): validate_report_deferrals(ROOT, bad)
 
+    def test_canonical_report_checks_exact_deferrals_without_inventing_composed_scope(self):
+        from formal_assessment import CANONICAL
+        policy = load_deferred_definitions(ROOT)
+        item = next(row for row in json.loads((ROOT / POLICY_PATH).read_text())['items'] if row['kind'] == 'request')
+        fields = ('catalog', 'operation_id', 'path', 'method', 'binding_hash', 'reason_code', 'source_binding_hash', 'runtime_status')
+        row = dict(zip(fields, item['gate_identity']))
+        report = {'evaluation': CANONICAL, 'deferred_definitions': policy.metadata,
+                  'providers': {item['provider']: {'deferred_pending': [row]}}}
+        validate_report_deferrals(ROOT, report)
+        for mutate in (lambda r: r.pop('deferred_definitions'),
+                       lambda r: r['providers'][item['provider']]['deferred_pending'].append(copy.deepcopy(row)),
+                       lambda r: r['providers'][item['provider']]['deferred_pending'][0].update(binding_hash='changed')):
+            bad = copy.deepcopy(report); mutate(bad)
+            with self.assertRaises(ValueError):
+                validate_report_deferrals(ROOT, bad)
+
 
 if __name__ == '__main__': unittest.main()

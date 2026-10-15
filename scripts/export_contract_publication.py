@@ -13,6 +13,7 @@ from publication_surface import publication_hashes
 from deferred_definitions import validate_report_deferrals
 from source_governance import FAILED, SCOPE_METHOD, source_report
 from sales_catalog_projection import SALES_CATALOG_PATH
+from formal_assessment import CANONICAL, COMPOSED, validate_formal_assessment
 
 RUNTIME_KEYS = ('artifact_revision', 'source_digest', 'compiler_revision', 'generation')
 PUBLICATION = 'docs/publication/'
@@ -124,13 +125,16 @@ def prepare(root, facts, report_raw, now=None, source_receipts=None):
     now = now or datetime.now(timezone.utc)
     report = decode(report_raw)
     require(report.get('status') == 'passed', 'Formal readiness did not pass')
-    require(report.get('evaluation') == 'actual_publication_graph_and_offline_composed_candidate',
+    require(report.get('evaluation') in {COMPOSED, CANONICAL},
             'Unsupported formal assessment scope')
-    for key in ('composed_candidate', 'publication_surfaces', 'payment_discovery'):
+    mode = report['evaluation']
+    for key in (('composed_candidate' if mode == COMPOSED else 'canonical_runtime_import'),
+                'publication_surfaces', 'payment_discovery'):
         require(report.get(key, {}).get('status') == 'passed', 'Formal subgate did not pass')
-    for scope in (report, report['composed_candidate']):
-        require(not scope.get('global_errors') and not scope.get('missing_inputs') and
-                not scope.get('blocked_providers'), 'Formal readiness contains blockers')
+    validate_formal_assessment(report)
+    if mode == CANONICAL:
+        from canonical_formal import replay_formal_canonical
+        replay_formal_canonical(root, facts, report, source_receipts=source_receipts)
     validate_report_deferrals(root, report)
     hashes = publication_hashes(root)
     artifact = report.get('publication_artifact', {})
@@ -157,6 +161,7 @@ def prepare(root, facts, report_raw, now=None, source_receipts=None):
             artifact.get('source_hashes') == {name: row['content_hash'] for name, row in metadata.items()},
             'Formal source metadata mismatch')
     receipt, receipt_raw = acquired_input(facts)
+    validate_formal_assessment(report, receipt)
     require(report.get('runtime_acquisition_sha256') == sha(receipt_raw), 'Formal assessment used different Runtime inputs')
     runtime = {key: receipt[key] for key in RUNTIME_KEYS}
     require(report.get('runtime') == runtime, 'Formal Runtime identity mismatch')
