@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the reviewed MPP pilot catalog; no network requests or payments."""
+"""Build the reviewed payment publication; no network requests or payments."""
 import argparse
 import copy
 import hashlib
@@ -263,6 +263,9 @@ def build(source, evidence, source_bytes):
 def candidate(root):
     root = Path(root)
     evidence = json.loads((root / PAYMENT_FILES[0]).read_text())
+    if evidence.get('version') == 3:
+        from payment_catalog import build_publication
+        return build_publication(root, evidence)[0]
     # A review input cannot make the candidate reader leave the provider tree.
     if evidence.get('source') != 'openapi/polymarket-data.json':
         raise ValueError('Unexpected payment source')
@@ -273,7 +276,7 @@ def candidate(root):
 def verify_payment_catalog(root):
     expected = candidate(root)
     actual = json.loads((Path(root) / PAYMENT_FILES[1]).read_text())
-    if actual != expected:
+    if canonical_json(actual) != canonical_json(expected):
         raise ValueError('Payment catalog does not match reviewed current source')
     return {'status': 'passed', 'operations': sum(len(item) for item in expected['paths'].values())}
 

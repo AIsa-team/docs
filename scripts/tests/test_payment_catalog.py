@@ -54,9 +54,9 @@ class CatalogTests(unittest.TestCase):
         self.assertFalse(get['parameters'][0]['explode'])
         self.assertEqual(get['parameters'][0]['schema']['default'], ['one'])
         self.assertTrue(post['requestBody']['required'])
-        self.assertEqual(post['requestBody']['content']['application/json']['schema']['$ref'], '#/components/schemas/beta__Input')
-        self.assertEqual(doc['components']['schemas']['alpha__Input']['properties']['q']['default'], 'alpha')
-        self.assertEqual(doc['components']['schemas']['beta__Input']['properties']['q']['default'], 'beta')
+        self.assertEqual(post['requestBody']['content']['application/json']['schema']['$ref'], '#/components/schemas/beta_174725b552aa__Input')
+        self.assertEqual(doc['components']['schemas']['alpha_0921f3dfaf21__Input']['properties']['q']['default'], 'alpha')
+        self.assertEqual(doc['components']['schemas']['beta_174725b552aa__Input']['properties']['q']['default'], 'beta')
         self.assertEqual(post['x-payment-info']['price']['amount'], '0.000165')
 
     def test_runtime_validated_hidden_target_uses_pinned_plan(self):
