@@ -265,7 +265,7 @@ def assess(documents, runtime=None, website=None, router=None,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--all-surfaces', action='store_true', help='Also require public complete JSON, llms request/price content and MCP loaded source')
+    parser.add_argument('--all-surfaces', action='store_true', help='Also require complete JSON, llms request/price content, MCP loaded source and all Router schema declarations')
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--state', type=Path, default=Path('.cache/contract-revisions/state.json'))
     parser.add_argument('--acceptance', action='store_true', help='Fail immediately on missing evidence or any mismatch; does not update monitor state')
@@ -397,6 +397,24 @@ def main():
         assessment['public_surfaces'] = extra
         assessment['missing_inputs'] = sorted(set(assessment['missing_inputs'] + extra['missing_inputs']))
         assessment['mismatches'] = sorted(set(assessment['mismatches'] + extra['mismatches']))
+        from router_surface_checks import check_router_surface, METADATA, digest
+        router_reads = 0
+        def router_reader(method, url, payload=None):
+            # Offline evidence is raw lookup output, never a pre-assessed pass.
+            # Catalog snapshots bracket deterministically named schema batches.
+            nonlocal router_reads
+            if url == METADATA:
+                router_reads += 1
+                filename = 'router-schema-' + ('before' if router_reads == 1 else 'after') + '.json'
+            else:
+                filename = 'router-schema-batch-' + digest(payload['tools']) + '.json'
+            from source_json import loads
+            return loads((args.evidence_dir / filename).read_bytes())
+        router_schema = check_router_surface(args.root, args.expected_docs_ref,
+            read_json=router_reader if args.evidence_dir else None, accepted_refs=accepted_refs)
+        assessment['router_schemas'] = router_schema
+        assessment['missing_inputs'] = sorted(set(assessment['missing_inputs'] + router_schema['missing_inputs']))
+        assessment['mismatches'] = sorted(set(assessment['mismatches'] + router_schema['mismatches']))
         assessment['status'] = ('not_assessed' if assessment['missing_inputs'] else
                                 'failed' if assessment['mismatches'] else 'passed')
     # Strict acceptance neither reads nor writes prior monitor observations.

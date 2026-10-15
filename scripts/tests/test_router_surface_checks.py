@@ -108,6 +108,18 @@ class RouterSurfaceTests(unittest.TestCase):
         self.assertTrue(self.audit()['mismatches'])
         self.assertEqual(len(self.calls), 1)
 
+    def test_proven_same_contract_ref_still_checks_fields_and_exact_batch_identity(self):
+        self.metadata['docs_commit'] = 'b' * 40
+        self.row['documentation']['provenance']['docs_sha'] = 'b' * 40
+        def check():
+            return check_router_surface('.', self.ref, expected=self.expected, read_json=self.read,
+                                        accepted_refs={'b' * 40})
+        self.assertEqual(check()['mismatches'], [])
+        self.row['documentation']['openapi']['paths']['/item']['get']['description'] = 'wrong'
+        self.assertIn('router-schema:get_item:description_mismatch', check()['mismatches'])
+        self.row['documentation']['provenance']['docs_sha'] = self.ref
+        self.assertIn('router-schema:get_item:docs_sha_mismatch', check()['mismatches'])
+
     def test_missing_or_malformed_metadata_and_batch_fail_closed(self):
         for malformed in (None, [], {'docs_commit': self.ref, 'build_id': 'build-1', 'provider_document_hashes': None}):
             with self.subTest(metadata=malformed):

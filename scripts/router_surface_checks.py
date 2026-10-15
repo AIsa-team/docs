@@ -182,11 +182,13 @@ class PublicSchemaReader:
         return loads(raw)
 
 
-def check_router_surface(root, ref, *, read_json=None, expected=None, workers=2, batch_size=20):
+def check_router_surface(root, ref, *, read_json=None, expected=None, accepted_refs=None, workers=2, batch_size=20):
     """Return independent missing evidence and field drift; never execute tools.
 
     Only explicit formal disabled declarations are excluded. An unavailable
     legacy operation remains missing even when live Runtime lacks its route.
+    Alternate accepted_refs must already have authenticated same-contract
+    provenance from the monitor; they do not change the fixed expected fields.
     """
     if not 1 <= batch_size <= 20 or not 1 <= workers <= 4:
         raise ValueError('Invalid bounded Router audit concurrency')
@@ -202,6 +204,7 @@ def check_router_surface(root, ref, *, read_json=None, expected=None, workers=2,
         report['missing_inputs'].append('router-schema:fixed_formal_source:' + type(exc).__name__)
         return report
     read = read_json or PublicSchemaReader(time.monotonic() + 300)
+    accepted_refs = set(accepted_refs or ()) | {ref}
     ids = sorted(source['operations'])
     report['exclusions'] = source['excluded']
     report['expected_operations'] = len(ids)
@@ -211,7 +214,7 @@ def check_router_surface(root, ref, *, read_json=None, expected=None, workers=2,
     try:
         before = read('GET', METADATA)
         report['observations']['metadata_before'] = before
-        if before.get('docs_commit') != ref or not before.get('build_id'):
+        if before.get('docs_commit') not in accepted_refs or not before.get('build_id'):
             report['mismatches'].append('router-schema:fixed_source_or_build_mismatch')
         actual_hashes = before.get('provider_document_hashes', {})
         if set(actual_hashes) != set(source['provider_document_hashes']):
@@ -245,7 +248,7 @@ def check_router_surface(root, ref, *, read_json=None, expected=None, workers=2,
                 continue
             documentation = row.get('documentation', {})
             provenance = documentation.get('provenance', {})
-            for field, value in [('docs_sha', ref), ('source_file', expected_row['source_file']), ('source_hash', expected_row['source_hash'])]:
+            for field, value in [('docs_sha', before['docs_commit']), ('source_file', expected_row['source_file']), ('source_hash', expected_row['source_hash'])]:
                 if provenance.get(field) != value:
                     mismatches.append(label + ':' + field + '_mismatch')
             if expected_row['document_hash'] and provenance.get('document_hash') != expected_row['document_hash']:
