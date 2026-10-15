@@ -43,6 +43,37 @@ def discover(registry, category):
     return registry
 
 
+def source_configurations(provider, entry):
+    """Validate source selection once for composition and metadata projection."""
+    configured = entry.get('upstream')
+    configurations = configured if isinstance(configured, list) else [configured]
+    rows, bindings = [], {}
+    for configuration in configurations:
+        url = configuration.get('url') if isinstance(configuration, dict) else configuration
+        if configuration and (not isinstance(url, str) or not url.startswith('https://')):
+            raise ValueError('upstream requires an HTTPS source URL')
+        paths = configuration.get('public_paths', []) if isinstance(configuration, dict) else []
+        if not isinstance(paths, list) or any(not isinstance(path, str) or not path.startswith('/')
+                or any(char in path for char in '?# ') for path in paths):
+            raise ValueError('upstream public_paths must be exact public path templates')
+        for path in paths:
+            if path in bindings:
+                raise ValueError('duplicate public operation source binding')
+            bindings[path] = url
+        name = configuration.get('file', provider + '.json') if isinstance(configuration, dict) else provider + '.json'
+        if not isinstance(name, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_.-]*\.json', name):
+            raise ValueError('upstream file must name a JSON mirror within openapi/upstream')
+        rows.append((url, name))
+    return rows, bindings
+
+
+def legacy_coverage_row(source, path, method, operation_id, disabled=False):
+    """Presentation metadata only; never changes Runtime availability."""
+    return {'source': f'openapi/{source}.json', 'path': path, 'method': method.upper(),
+            'operation_id': operation_id, 'status': 'retained_legacy',
+            'reason': 'runtime_explicitly_disabled' if disabled else 'not_in_composed_runtime_contract'}
+
+
 def disabled_legacy_paths(registry, index, facts_by_provider):
     """Explicit Runtime tombstones for known legacy owners, never path guesses.
 
