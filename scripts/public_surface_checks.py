@@ -77,6 +77,20 @@ def fixed_request_blocks(root, ref):
     return expected
 
 
+def fixed_payment_bytes(root, ref):
+    """Select the payment subset from the same hash-bound formal graph."""
+    pointer = loads(subprocess.check_output(['git', 'show', ref + ':docs/publication/current.json'], cwd=root))
+    path = 'discovery/openapi.json'
+    raw = subprocess.check_output(['git', 'show', ref + ':' + path], cwd=root)
+    if (pointer.get('status') != 'passed' or
+            hashlib.sha256(raw).hexdigest() != pointer.get('files_sha256', {}).get(path)):
+        raise ValueError('Expected payment discovery is not formally bound')
+    value = loads(raw)
+    if not isinstance(value, dict) or not value.get('paths'):
+        raise ValueError('Expected payment discovery has no operations')
+    return raw
+
+
 def compare_llms(expected, actual):
     """Require coverage and reject contradictory records for known operations.
 
@@ -107,7 +121,8 @@ def compare_llms(expected, actual):
     return sorted(set(errors))
 
 
-def check_surfaces(spec, expected_hash, accepted_refs, *, read_bytes, expected_requests):
+def check_surfaces(spec, expected_hash, accepted_refs, *, read_bytes, expected_requests,
+                   expected_payment=None):
     """Return every independent failure; an unavailable surface cannot pass."""
     mismatches, missing, observations = [], [], {}
     for name, url in JSON_SURFACES.items():
@@ -119,6 +134,22 @@ def check_surfaces(spec, expected_hash, accepted_refs, *, read_bytes, expected_r
                 mismatches.append(name + ':complete_openapi_mismatch')
         except Exception as exc:
             missing.append(name + ':unavailable:' + type(exc).__name__)
+    # API root remains the reviewed payment subset, never the full ordinary API.
+    if expected_payment is None:
+        missing.append('mpp-json:fixed_formal_discovery_missing')
+    else:
+        try:
+            url = 'https://api.aisa.one/openapi.json'
+            raw = read_bytes('mpp-json', url)
+            actual = loads(raw)
+            observations['mpp-json'] = {'url': url, 'sha256': hashlib.sha256(raw).hexdigest(),
+                'expected_sha256': hashlib.sha256(expected_payment).hexdigest()}
+            if raw != expected_payment:
+                mismatches.append('mpp-json:formal_bytes_mismatch')
+            if not same_json(actual, loads(expected_payment)):
+                mismatches.append('mpp-json:payment_contract_mismatch')
+        except Exception as exc:
+            missing.append('mpp-json:unavailable:' + type(exc).__name__)
     mcp = None
     try:
         url = 'https://mcp.aisa.one/contract-version'
@@ -163,5 +194,5 @@ def check_surfaces(spec, expected_hash, accepted_refs, *, read_bytes, expected_r
             missing.append(name + ':unavailable:' + type(exc).__name__)
     if not expected_requests:
         missing.append('docs-llms-full:fixed_readable_request_declarations_missing')
-    return {'scope': 'complete JSON; hash-bound English llms requests and price summaries; MCP loaded source and index',
+    return {'scope': 'complete JSON; exact formal MPP subset; hash-bound English llms requests and price summaries; MCP loaded source and index',
             'observations': observations, 'missing_inputs': sorted(set(missing)), 'mismatches': sorted(set(mismatches))}
