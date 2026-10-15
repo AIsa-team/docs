@@ -310,6 +310,26 @@ class FullRegistryTests(unittest.TestCase):
         old = json.loads((self.root / 'openapi/alpha.json').read_text())
         self.assertEqual(old['paths']['/apis/v1/beta/test']['get']['x-aisa-status'], 'disabled')
 
+    def test_explicit_disabled_runtime_row_updates_unmatched_legacy_and_replays(self):
+        fixture = json.loads((Path(__file__).parent / 'fixtures/disabled-twitter-spaces.json').read_text())
+        legacy = fixture['legacy_document']
+        target = self.root / 'openapi/twitter-trend.json'
+        target.write_text(json.dumps(legacy))
+        registry = {'auto_register': True, **fixture['registry']}
+        (self.root / 'openapi/registry.yaml').write_text(yaml.safe_dump(registry))
+        (self.root / 'facts/index.json').write_text(json.dumps(fixture['runtime_index']))
+        self.sources({'twitter': contract('twitter')})
+        changes, _ = self.pull()
+        staged = json.loads(changes[target])
+        before = legacy['paths']['/twitter/spaces/detail']['get']
+        after = staged['paths']['/twitter/spaces/detail']['get']
+        self.assertEqual(after, {**before, 'x-aisa-status': 'disabled'})
+        self.publish(changes)
+        coverage = json.loads((self.root / 'openapi/coverage.json').read_text())
+        row = next(row for row in coverage['legacy_operations'] if row['operation_id'] == 'get_twitter_spaces_detail')
+        self.assertEqual(row['reason'], 'runtime_explicitly_disabled')
+        self.assertEqual(self.pull()[0], {})
+
     def test_removed_runtime_route_retains_link_as_disabled_history(self):
         previous = contract('alpha')
         old = copy.deepcopy(operation(previous))

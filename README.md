@@ -212,6 +212,18 @@ The exporter checks the fixed policy and both report scopes before publishing.
 Repairing a deferred definition naturally removes it from the pending output;
 its old policy entry does not authorize a different gap.
 
+Unmatched legacy operations keep their historical IDs and descriptions. A known
+registry owner (or explicit catalog group) may project `x-aisa-status: disabled`
+only when the current Runtime index explicitly excludes that exact valid public
+path as disabled. A projected, pending, active or unknown-status Runtime operation
+at the same path prevents this projection, including conflicts from another
+catalog or HTTP method. Missing Runtime authority and unrelated legacy paths are
+left unchanged. Consumers can therefore filter a proven disabled legacy route
+without inferring removal from absence alone. The real Twitter Spaces regression
+fixture records its immutable Docs and Runtime provenance. Validate this boundary
+with `python3 -m unittest discover -s scripts/tests -p test_disabled_legacy.py`
+and `python3 -m unittest discover -s scripts/tests -p test_full_registry.py`.
+
 The workflow acquires one fresh immutable release before composition:
 
 ```sh
