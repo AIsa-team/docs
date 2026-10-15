@@ -129,6 +129,8 @@ class PublicationRaceTests(unittest.TestCase):
         self.git(seed, 'config', 'user.email', 'fixture@example.invalid')
         for relative in ('openapi/example.json', 'api-reference/page.mdx', 'zh/api-reference/page.mdx', 'docs.json', 'openapi.yaml', 'discovery/payment-evidence.json', 'discovery/openapi.json'):
             path = seed / relative; path.parent.mkdir(parents=True, exist_ok=True); path.write_text('original\n')
+        from runtime_consolidate_openapi import discovery_index_block
+        (seed / 'llms.txt').write_text(discovery_index_block((seed / 'openapi.yaml').read_bytes()) + '\n')
         self.git(seed, 'add', '.')
         self.git(seed, 'commit', '-qm', 'initial')
         self.git(seed, 'remote', 'add', 'origin', str(remote))
@@ -173,6 +175,8 @@ class PublicationRaceTests(unittest.TestCase):
             published = self.git(root, '--git-dir=remote.git', 'rev-parse', 'main')
             self.assertEqual(published, self.git(candidate, 'rev-parse', 'HEAD'))
             self.assertEqual(self.git(root, '--git-dir=remote.git', 'show', 'main:openapi/example.json'), 'assessed candidate')
+            self.assertEqual(self.git(root, '--git-dir=remote.git', 'show', 'main:llms.txt'),
+                             (candidate / 'llms.txt').read_text().strip())
             self.assertIn('docs_commit=' + published, (root / 'output').read_text())
             self.assertEqual(self.git(root, '--git-dir=remote.git', 'show', 'main:docs/publication/current.json'),
                              json.dumps({'contract_release': 'a'*64}))

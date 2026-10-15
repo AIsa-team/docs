@@ -216,7 +216,8 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                         return note
                 from pricing_prose import clean_page
                 text = clean_page(text, language)
-                text = update_readable_block(text, operation, language, translated_note)
+                text = update_readable_block(text, operation, language, translated_note,
+                    document=document, method=method, path=path, spec_path=spec_path)
                 if not destination.exists() or text != destination.read_text():
                     changes[destination] = text
     nav_config = api_nav_groups.load(root)
@@ -264,6 +265,42 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
     localized = localization.localize_tree(document, catalog, allow_untranslated=True)
     localized = localize_identities(localized)
     changes[root / f"openapi/zh/{provider}.json"] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
+
+
+def refresh_legacy_page_blocks(root, documents, changes, catalog):
+    """Update only already bound pages; never create pages or navigation."""
+    import runtime_localize_openapi_zh as localization
+    def translated_note(note):
+        try:
+            return localization.translation(catalog, note)
+        except KeyError:
+            return note
+    for language, directory in (("en", "api-reference"), ("zh", "zh/api-reference")):
+        for page in (root / directory).rglob("*.mdx"):
+            text = changes.get(page, page.read_text())
+            if not text.startswith("---\n"):
+                continue
+            header, _ = localization.split_frontmatter(text)
+            reference = (yaml.safe_load(header) or {}).get("openapi", "")
+            match = re.fullmatch(r"openapi/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)", reference)
+            if not match or match[2] not in documents:
+                continue
+            document = documents[match[2]]
+            if document.get("info", {}).get("x-aisa-document", {}).get("document_hash"):
+                continue  # Runtime page generation owns these pages.
+            method, path = match[3].lower(), match[4]
+            operation = document.get("paths", {}).get(path, {}).get(method)
+            if method not in METHODS or not isinstance(operation, dict):
+                raise ValueError("legacy page references missing operation: " + str(page))
+            if bool(match[1]) != (language == "zh"):
+                raise ValueError("legacy page references wrong language: " + str(page))
+            if language == "zh":
+                localized_path = root / reference.split()[0]
+                if not localized_path.exists() and localized_path not in changes:
+                    localized = localize_identities(localization.localize_tree(document, catalog, allow_untranslated=True))
+                    changes[localized_path] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
+            changes[page] = update_readable_block(text, operation, language, translated_note,
+                document=document, method=method, path=path, spec_path=reference.split()[0])
 
 
 def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = True,
@@ -557,6 +594,23 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
     for path, content in changes.items():
         if path.parent == root / 'openapi' and path.suffix == '.json' and path.name not in SKIP_FILES:
             documents[path.stem] = json.loads(content)
+    if with_pages:
+        # Keep previously published locale URLs, but refresh their content from
+        # the current canonical document even after pages move to a new owner.
+        import runtime_localize_openapi_zh as localization
+        catalog = read_json(root / "translations/openapi-zh.json", {"entries": {}})
+        for name, document in documents.items():
+            target = root / f"openapi/zh/{name}.json"
+            if target.exists() and target not in changes:
+                source = copy.deepcopy(document)
+                attach_history(source, identity_history)
+                if source != document:
+                    changes[root / f"openapi/{name}.json"] = json.dumps(source, indent=2, ensure_ascii=False) + "\n"
+                    documents[name] = source
+                localized = localize_identities(localization.localize_tree(source, catalog, allow_untranslated=True))
+                changes[target] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
+    if with_pages:
+        refresh_legacy_page_blocks(root, documents, changes, catalog)
     from gap_evidence import response_gap_rows
     validate_document_identities(documents, identity_history)
     coverage['response_gaps'] = {provider: response_gap_rows(documents.get(provider, {}), facts_by_provider.get(provider, {}), rows)

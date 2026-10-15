@@ -110,6 +110,28 @@ the workflow manually from `main` with `dispatch_tool_router` enabled.
 
 This repository is available under the [MIT License](LICENSE).
 
+## Contract candidate CI and Runtime freshness
+
+Artifact-changing PRs acquire Runtime's public `current` release using
+`fetch_runtime_release.py --current`. The importer discovers its exact pins,
+verifies the immutable manifest and file hashes, and requires the same fresh
+current pointer before and after acquisition. The PR cannot select an older
+Runtime release by editing a Docs receipt. Main's last-good Docs acquisition is
+not the acquisition pin: Docs may lag Runtime while a source fix is under review,
+so requiring that old pin to still be current would block the repair itself.
+
+CI checks the actual committed PR graph against those inputs. It does not
+regenerate or rewrite the PR before assessing it. The independently reviewed
+coverage baseline, published identity baseline, source-maintenance evidence,
+payment binding and formal artifact checks remain required. If Runtime advances
+and the PR graph no longer matches, regenerate the complete candidate from a new
+verified acquisition, review the diff and rerun CI. Do not alter a formal
+publication receipt or accept new pending debt to make the check pass.
+
+The formal publisher separately acquires a fresh release and assesses the exact
+staged graph before exporting its publication pointer. Candidate CI success does
+not authorize a formal release or assert that consumers have converged.
+
 ## Acquire an actual Runtime release for contract review
 
 After the Runtime operator supplies the **actual published artifact revision**
@@ -295,3 +317,34 @@ receipts after reviewed changes reach main.
 The tracked publication plan is ready; the existing operator activation variable
 still controls whether scheduled publication and revision monitoring run. No
 cadence, receipt lifetime, acceptance baseline or pending policy is relaxed.
+
+### Unified JSON and readable request projection
+
+The Runtime consolidator writes `openapi.yaml` and `openapi/openapi.json` from
+one aggregate object. The JSON is excluded from provider input scans to prevent
+recursive aggregation, included in the formal file manifest, and checked against
+the same offline recomposition. It replaces the old Plant Store placeholder.
+Neither this full contract nor its compatibility redirects changes the API
+host's `/openapi.json`, which remains the MPP payment subset.
+
+The existing managed MDX block now includes effective method/path, server URL
+templates, parameter requiredness, request body, authentication and the reachable
+request schema closure. It is ordinary Markdown/JSON so Mintlify's llms-full
+output can carry it without expanding OpenAPI frontmatter. Rendering reuses the
+compositor's instance-aware reference traversal, preserves native numbers and
+recursive schemas, and does not copy response schemas. Historical locale URLs
+remain present, with their content refreshed from the current English source.
+
+Deploy and verify the website's `/openapi.json` first, then publish the Docs
+root and nested JSON redirects. As with YAML, the oversized JSON is excluded
+from Mintlify ingestion; the immutable Git file remains manifest-bound. Root
+JSON redirects reuse the existing `redirects` / `permanent` configuration.
+
+Validate with `python -m unittest discover -s scripts/tests -v`, followed by
+actual Runtime candidate composition and the formal artifact check. Check live
+`llms-full.txt` for the generated request blocks after Mintlify publication;
+source Markdown alone does not prove platform rendering. Measure total and
+largest generated blocks on the actual candidate. A frozen historical fixture
+with duplicate legacy pages produced 7,282 request blocks (22.43 MB total,
+75.4 KB largest) before the final renderer review; it is a sizing diagnostic,
+not the size or acceptance result of the current live publication.

@@ -17,7 +17,7 @@ from identity_compatibility import published_history, validate_document_identiti
 
 def publication_files(root):
     root = Path(root)
-    files = {p for p in (root / 'openapi.yaml', root / 'docs.json', root / 'openapi/registry.yaml',
+    files = {p for p in (root / 'openapi.yaml', root / 'llms.txt', root / 'docs.json', root / 'openapi/registry.yaml',
                         root / 'api-reference.mdx', root / 'zh/api-reference.mdx', root / POLICY_PATH, root / REBINDING_PATH, root / SALES_CATALOG_PATH) if p.is_file()}
     files.update(root / name for name in PAYMENT_FILES if (root / name).is_file())
     for pattern in ('openapi/*.json', 'openapi/upstream/*.json', 'openapi/zh/*.json',
@@ -51,6 +51,8 @@ def validate_surfaces(root, published_ref=None):
     root = Path(root)
     documents, all_documents = {}, {}
     for path in (root / 'openapi').glob('*.json'):
+        if path.name == 'openapi.json':
+            continue  # aggregate output, not an independent provider
         document = json.loads(path.read_text())
         all_documents[path.stem] = document
         if document.get('info', {}).get('x-aisa-document', {}).get('document_hash'):
@@ -61,6 +63,15 @@ def validate_surfaces(root, published_ref=None):
     history = published_history(root, published_ref)
     validate_document_identities(all_documents, history)
     localized_documents = {}
+    from readable_contract_notes import BEGIN, END, readable_block
+    from runtime_localize_openapi_zh import translation
+    catalog_path = root / 'translations/openapi-zh.json'
+    catalog = json.loads(catalog_path.read_text()) if catalog_path.is_file() else {'entries': {}}
+    def translated_note(note):
+        try:
+            return translation(catalog, note)
+        except KeyError:
+            return note
 
     def localized_document(provider):
         # Scope the cache to this assessment. Repeated pages of a large
@@ -112,22 +123,32 @@ def validate_surfaces(root, published_ref=None):
                     raise ValueError('runtime page has no operation reference: ' + str(path))
                 continue
             match = re.fullmatch(r'openapi/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)', reference)
-            if not match or match[2] not in documents:
+            if not match or match[2] not in all_documents:
                 if header.get('x-aisa-operation-id') in identities:
                     raise ValueError('runtime page references an unknown document: ' + str(path))
                 continue
             if bool(match[1]) != (language == 'zh'):
                 raise ValueError('page references wrong language: ' + str(path))
             provider, method, route = match[2], match[3].lower(), match[4]
-            source_document = documents[provider]
+            source_document = all_documents[provider]
             if language == 'zh':
                 source_document = localized_document(provider)
             operation = source_document.get('paths', {}).get(route, {}).get(method)
             if method not in METHODS or not isinstance(operation, dict):
                 raise ValueError('page references missing operation: ' + str(path))
             identity = operation.get('operationId')
-            if not identity or header.get('x-aisa-operation-id') != identity:
+            if (provider in documents or 'x-aisa-operation-id' in header) and (not identity or header.get('x-aisa-operation-id') != identity):
                 raise ValueError('page operation identity mismatch: ' + str(path))
+            # A correct frontmatter binding cannot certify stale or edited
+            # machine declarations in the body that llms-full will expose.
+            canonical_source = all_documents[provider]
+            canonical_operation = canonical_source['paths'][route][method]
+            expected_block = readable_block(canonical_operation, language, translated_note,
+                document=canonical_source, method=method, path=route,
+                spec_path=f"openapi/{'zh/' if language == 'zh' else ''}{provider}.json")
+            actual_blocks = re.findall(re.escape(BEGIN) + r".*?" + re.escape(END), text, re.S)
+            if actual_blocks != [expected_block]:
+                raise ValueError('page readable contract differs from provider: ' + str(path))
             page = path.relative_to(root).with_suffix('').as_posix()
             canonical = operation.get('x-aisa-identity', {}).get('canonical_operation_id', identity)
             found[language].setdefault((provider, route, method, canonical), set()).add(page)
@@ -146,6 +167,14 @@ def validate_surfaces(root, published_ref=None):
                 chinese = found['zh'].get(key, set()) & set(nav['zh'])
                 if not english or {'zh/' + page for page in english} != chinese:
                     raise ValueError('runtime operation missing matching bilingual navigation: ' + repr(key))
+    # Existing legacy URLs remain public even after their pages move. Their
+    # locale copies must not retain removed operations or obsolete prices.
+    for name, source in all_documents.items():
+        target = root / 'openapi/zh' / (name + '.json')
+        if name not in documents and target.is_file():
+            localized = json.loads(target.read_text())
+            if strip_translatable(source) != strip_translatable(canonicalize_localized(localized, history)):
+                raise ValueError('localized legacy protocol changed: ' + name)
     return {'status': 'passed', 'scope': 'actual EN/ZH schemas, page identities and navigation closure',
             'providers': len(documents), 'operations': count,
             'files': len(publication_files(root))}

@@ -39,9 +39,9 @@
       "generator_version": "3",
       "protocol_version": "1",
       "schema_version": "1",
-      "composer_version": "18",
+      "composer_version": "20",
       "response_pending": [],
-      "document_hash": "sha256:6a22374fcb67d9ba1b90a7257283eaf370da1302c16a866c024b4d28816a6428"
+      "document_hash": "sha256:5e61aeb528b016518f468a9d86d5e8a1ba3b2f62ce235be6c3886798f42d5b8b"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -83,10 +83,20 @@
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
   "paths": {
     "/apis/v1/tavily/crawl": {
       "post": {
-        "description": "Walk a site from a root `url` and return the content of the pages it finds. Steer it with natural-language `instructions` plus regex path and domain filters, and bound it with `max_depth`, `max_breadth` and `limit`. Returns `base_url` and `results[]` with `url` and `raw_content`. Measured at about 4.5 seconds for a 3-page limit; cost and time grow with the bounds you set, so set them. Use it for broad coverage of one site — documentation, a catalogue, a competitor's blog. It answers synchronously, which `post_firecrawl_crawl` does not: that one runs as a background job and suits crawls too large to wait on. For a handful of known pages `post_tavily_extract` is far cheaper; to size a site before paying to crawl it, run `post_tavily_map` first.",
+        "description": "Walk a site from a root `url` and return the content of the pages it finds. Steer it with natural-language `instructions` plus regex path and domain filters, and bound it with `max_depth`, `max_breadth` and `limit`. Returns `base_url` and `results[]` with `url` and `raw_content`. Measured at about 4.5 seconds for a 3-page limit; cost and time grow with the bounds you set, so set them. Use it for broad coverage of one site — documentation, a catalogue, a competitor's blog. It answers synchronously, which `post_firecrawl_crawl` does not: that one runs as a background job and suits crawls too large to wait on. For a handful of known pages `post_tavily_extract` is far cheaper; to size a site before paying to crawl it, run `post_tavily_map` first.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.024 USD (not a fixed price). Declared unit rate: $0.008 USD per tavily_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
         "operationId": "post_tavily_crawl",
         "requestBody": {
           "required": true,
@@ -362,7 +372,7 @@
     },
     "/apis/v1/tavily/extract": {
       "post": {
-        "description": "Fetch clean, parsed content for URLs you already have — from a search result, a sitemap, or a user. `urls` is required and takes several at once. Returns `results[]` with `url`, `title`, `raw_content` and `images`, plus a `failed_results[]` array — **read that one**, because a page that could not be fetched is reported there rather than raising an error. Choose `format` (markdown or text) and `extract_depth`. Measured at about 1 second for one page. Use this instead of `post_tavily_search` whenever you can already name the pages; searching for pages you can name costs more and may not return them. For a long list that can wait, `post_firecrawl_batch_scrape` runs it as a background job. To discover the URLs of a whole site first, use `post_tavily_map`.",
+        "description": "Fetch clean, parsed content for URLs you already have — from a search result, a sitemap, or a user. `urls` is required and takes several at once. Returns `results[]` with `url`, `title`, `raw_content` and `images`, plus a `failed_results[]` array — **read that one**, because a page that could not be fetched is reported there rather than raising an error. Choose `format` (markdown or text) and `extract_depth`. Measured at about 1 second for one page. Use this instead of `post_tavily_search` whenever you can already name the pages; searching for pages you can name costs more and may not return them. For a long list that can wait, `post_firecrawl_batch_scrape` runs it as a background job. To discover the URLs of a whole site first, use `post_tavily_map`.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.024 USD (not a fixed price). Declared unit rate: $0.008 USD per tavily_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
         "operationId": "post_tavily_extract",
         "requestBody": {
           "required": true,
@@ -613,7 +623,7 @@
     },
     "/apis/v1/tavily/map": {
       "post": {
-        "description": "List a site's URLs from a root `url` without fetching any page content. Steer it with natural-language `instructions` and regex `select_paths` / `exclude_paths` / `select_domains` filters. Returns `base_url` and `results` — **a flat array of URL strings, not objects** — with `response_time` and `request_id`. Fast and cheap: measured at about 1.5 seconds. Use it to size a site before committing to a crawl, then fetch only the parts that matter with `post_tavily_extract`. When you want the content rather than the shape, `post_tavily_crawl` does both in one call.",
+        "description": "List a site's URLs from a root `url` without fetching any page content. Steer it with natural-language `instructions` and regex `select_paths` / `exclude_paths` / `select_domains` filters. Returns `base_url` and `results` — **a flat array of URL strings, not objects** — with `response_time` and `request_id`. Fast and cheap: measured at about 1.5 seconds. Use it to size a site before committing to a crawl, then fetch only the parts that matter with `post_tavily_extract`. When you want the content rather than the shape, `post_tavily_crawl` does both in one call.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.064 USD (not a fixed price). Declared unit rate: $0.008 USD per tavily_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
         "operationId": "post_tavily_map",
         "requestBody": {
           "required": true,
@@ -841,7 +851,7 @@
     },
     "/apis/v1/tavily/search": {
       "post": {
-        "description": "Search the web and get back ranked results with the page text already extracted, so there is no second call to fetch content. `query` is required. Returns `results[]` with `url`, `title`, `content` (the extracted excerpt), `score` and optionally `raw_content`, alongside `query`, `images`, `response_time` and `request_id`; set `include_answer` to also get a one-paragraph `answer`. Filter with `topic` (general/news/finance), `time_range` or explicit `start_date`/`end_date`, and trade cost against depth with `search_depth`. Measured at roughly 6 seconds for 2 results. This is the default choice for open-web research, and the only search here that returns ranked results and page text in one call. Reach past it when: you already know the URLs — `post_tavily_extract` is cheaper and exact; the query is a description rather than keywords — `post_exa_search` matches on meaning; you want a written answer rather than a list to iterate — `post_perplexity_sonar`; you want peer-reviewed papers — `post_scholar_search_scholar`.",
+        "description": "Search the web and get back ranked results with the page text already extracted, so there is no second call to fetch content. `query` is required. Returns `results[]` with `url`, `title`, `content` (the extracted excerpt), `score` and optionally `raw_content`, alongside `query`, `images`, `response_time` and `request_id`; set `include_answer` to also get a one-paragraph `answer`. Filter with `topic` (general/news/finance), `time_range` or explicit `start_date`/`end_date`, and trade cost against depth with `search_depth`. Measured at roughly 6 seconds for 2 results. This is the default choice for open-web research, and the only search here that returns ranked results and page text in one call. Reach past it when: you already know the URLs — `post_tavily_extract` is cheaper and exact; the query is a description rather than keywords — `post_exa_search` matches on meaning; you want a written answer rather than a list to iterate — `post_perplexity_sonar`; you want peer-reviewed papers — `post_scholar_search_scholar`.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.016 USD (not a fixed price). Declared unit rate: $0.008 USD per tavily_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
         "operationId": "post_tavily_search",
         "requestBody": {
           "required": true,
@@ -1363,15 +1373,5 @@
         "x-aisa-docs-url": "https://aisa.one/docs/api-reference/search/post_tavily-search"
       }
     }
-  },
-  "security": [
-    {
-      "bearerAuth": []
-    }
-  ],
-  "servers": [
-    {
-      "url": "https://api.aisa.one"
-    }
-  ]
+  }
 }

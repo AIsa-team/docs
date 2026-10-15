@@ -55,6 +55,51 @@ class PublicationSurfaceTests(unittest.TestCase):
         page.write_text(page.read_text() + 'Different prose\n')
         self.assertNotEqual(hashes[page.relative_to(self.root).as_posix()], publication_hashes(self.root)[page.relative_to(self.root).as_posix()])
 
+    def test_legacy_bound_pages_render_without_runtime_ids_or_invented_prices(self):
+        from pull_openapi import refresh_legacy_page_blocks
+        from runtime_registry import published_documents
+        source = {'openapi': '3.1.0', 'info': {'title': 'Account'},
+                  'servers': [{'url': 'https://api.aisa.one/v1'}],
+                  'paths': {'/usage': {'get': {'operationId': 'accountUsage',
+                  'parameters': [{'name': 'scope', 'in': 'query', 'schema': {'type': 'string', 'enum': ['key', 'account']}}],
+                  'responses': {'200': {'description': 'Usage'}}}}}}
+        (self.root / 'openapi/account.json').write_text(json.dumps(source))
+        originals = {}
+        for language in ('en', 'zh'):
+            prefix = 'zh/' if language == 'zh' else ''
+            page = self.root / (prefix + 'api-reference/account-usage.mdx')
+            originals[page] = '---\ntitle: Usage\nopenapi: "openapi/' + prefix + 'account.json GET /usage"\n---\nManual example stays.\n'
+            page.write_text(originals[page])
+        navigation = (self.root / 'docs.json').read_text()
+        changes = {}
+        refresh_legacy_page_blocks(self.root, published_documents(self.root), changes, {'entries': {}})
+        for page, text in originals.items():
+            self.assertTrue(changes[page].startswith(text))
+            self.assertIn('"operationId": "accountUsage"', changes[page])
+            self.assertNotIn('x-aisa-pricing', changes[page])
+            self.assertNotIn('x-aisa-operation-id:', changes[page])
+        for path, text in changes.items():
+            path.parent.mkdir(parents=True, exist_ok=True); path.write_text(text)
+        self.assertEqual((self.root / 'docs.json').read_text(), navigation)
+        validate_surfaces(self.root)
+        page = self.root / 'api-reference/account-usage.mdx'
+        page.write_text(page.read_text().replace('"method": "GET"', '"method": "POST"'))
+        with self.assertRaisesRegex(ValueError, 'readable contract differs'):
+            validate_surfaces(self.root)
+
+    def test_missing_or_tampered_readable_request_cannot_pass_formal_surface_check(self):
+        from readable_contract_notes import strip_generated_block
+        for prefix in ('', 'zh/'):
+            page = self.root / (prefix + 'api-reference/fixture/one.mdx')
+            original = page.read_text()
+            for changed in (original.replace('"method": "GET"', '"method": "POST"'),
+                            original.replace('"parameters": []', '"parameters": [{"name":"hidden","in":"query","required":true}]'),
+                            strip_generated_block(original)):
+                page.write_text(changed)
+                with self.subTest(prefix=prefix), self.assertRaisesRegex(ValueError, 'readable contract differs'):
+                    validate_surfaces(self.root)
+                page.write_text(original)
+
     def test_translated_prose_is_allowed_but_literal_schema_data_is_not(self):
         self.change_json('openapi/zh/fixture.json', lambda d: d['paths']['/one']['get']['responses']['200'].update(description='成功'))
         validate_surfaces(self.root)

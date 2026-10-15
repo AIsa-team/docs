@@ -22,6 +22,8 @@ class OriginTests(unittest.TestCase):
         for name in ('api-reference', 'zh/api-reference'):
             directory=self.root/name; directory.mkdir(parents=True); (directory/'.keep').write_text('')
         (self.root/'docs.json').write_text('{}')
+        from runtime_consolidate_openapi import discovery_index_block
+        (self.root/'llms.txt').write_text(discovery_index_block((self.root/'openapi.yaml').read_bytes()) + '\n')
         self.fixture.report['publication_artifact']['files_sha256'] = origin.publication_hashes(self.root)
         self.now = self.fixture.now.replace(microsecond=0) + timedelta(seconds=2)
         self.git('init', '-q')

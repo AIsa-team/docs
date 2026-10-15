@@ -11,6 +11,7 @@ on:
       - 'docs/current-source-review-20261009/**'
       - 'docs/response-source-review-receipts.json'
       - 'openapi.yaml'
+      - 'llms.txt'
       - 'docs.json'
       - 'api-reference.mdx'
       - 'zh/api-reference.mdx'
@@ -29,6 +30,7 @@ on:
       - 'docs/current-source-review-20261009/**'
       - 'docs/response-source-review-receipts.json'
       - 'openapi.yaml'
+      - 'llms.txt'
       - 'docs.json'
       - 'api-reference.mdx'
       - 'zh/api-reference.mdx'
@@ -110,34 +112,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      # Pin the Runtime release that the latest formal publication on main
-      # acquired and verified (docs/publication/runtime-acquisition.json), not a
-      # hand-edited constant. Read from origin/main so a PR cannot choose its own
-      # pin. It is still not a Docs publication approval; a Runtime release newer
-      # than main's publication fails acquisition until the publication catches up.
-      - name: Resolve the Runtime release of main's latest formal publication
-        run: |
-          python3 - <<'PY' >> "$GITHUB_ENV"
-          import json, re, subprocess
-          raw = subprocess.check_output(['git', 'show', 'origin/main:docs/publication/runtime-acquisition.json'])
-          acquisition = json.loads(raw)
-          artifact, compiler = acquisition.get('artifact_revision'), acquisition.get('compiler_revision')
-          if not (isinstance(artifact, str) and re.fullmatch('[0-9a-f]{64}', artifact) and
-                  isinstance(compiler, str) and re.fullmatch('[0-9a-f]{40}', compiler)):
-              raise SystemExit('Invalid Runtime identity in main publication acquisition')
-          print(f'RUNTIME_ARTIFACT_REVISION={artifact}')
-          print(f'RUNTIME_COMPILER_REVISION={compiler}')
-          PY
+      # Acquire Runtime's fresh public current release independently of the PR
+      # and main's last-good Docs publication. The latter can legitimately lag
+      # Runtime, so using it as a fresh-current pin deadlocks source repairs.
+      # Acquisition still verifies immutable bytes and unchanged current before/
+      # after download. This does not approve or rewrite the actual PR graph.
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Install assessment dependencies
         run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
-      - name: Acquire the exact reviewed public Runtime release
+      - name: Acquire one complete fresh immutable Runtime release
         run: |
-          python scripts/fetch_runtime_release.py \
-            --artifact-revision "$RUNTIME_ARTIFACT_REVISION" \
-            --compiler-revision "$RUNTIME_COMPILER_REVISION" \
+          python scripts/fetch_runtime_release.py --current \
             --output /tmp/runtime-contract-evidence
       - name: Restore attributed source-maintenance receipts
         uses: actions/cache/restore@v4

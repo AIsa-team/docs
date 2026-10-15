@@ -51,11 +51,27 @@ flags: [true, True, TRUE, false, False, FALSE]
         self.assertEqual([type(value) for value in document['values']],
                          [int, int, float, bool, type(None), str, str, str])
 
-    def test_ambiguous_numbers_and_dates_still_fail_closed(self):
+    def test_ambiguous_numbers_still_fail_closed(self):
         for token in ('0123', '0xFF', '1_000', '1:20', '.nan', '.inf', '1e400',
-                      '1e-400', '1.0000000000000001', '2026-10-03'):
+                      '1e-400', '1.0000000000000001'):
             with self.subTest(token=token), self.assertRaisesRegex(ValueError, 'unsupported_'):
                 self.import_yaml('value: ' + token + '\n')
+
+    def test_plain_dates_are_exact_json_strings_including_invalid_examples(self):
+        tokens = ['2026-48-12', '2026-10-03', '2026-10-03T12:34:56Z',
+                  '2026-10-03 12:34:56.123 +02:00']
+        for token in tokens:
+            with self.subTest(token=token):
+                document = self.import_yaml('example: ' + token + '\n')
+                self.assertEqual(document['example'], token)
+                self.assertIs(type(document['example']), str)
+                self.assertEqual(json.loads(json.dumps(document))['example'], token)
+        self.assertNotIsInstance(yaml.safe_load('value: 2026-10-03')['value'], str)
+
+    def test_explicit_timestamp_tags_remain_unsupported(self):
+        for token in ['2026-10-03', '2026-48-12']:
+            with self.subTest(token=token), self.assertRaisesRegex(ValueError, 'unsupported_yaml_scalar'):
+                self.import_yaml('example: !!timestamp ' + token + '\n')
 
     def test_explicit_duplicate_json_member_names_rejected_at_any_depth(self):
         for body in ('value: 1\nvalue: 2\n', 'value: {x: 1, x: 2}\n',

@@ -21,7 +21,163 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
 
 {/* aisa-contract-details:start */}
 
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/exa/search
+- **请求 URL 模板:** https://api.aisa.one/apis/v1/exa/search
+- **Runtime 事实版本:** d10529a4463a002dd39ad505e0bc30212230a00b2034082221e854d90728a9b8
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/exa.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_exa_search",
+  "method": "POST",
+  "path": "/apis/v1/exa/search",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "required": true,
+    "content": {
+      "application/json": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "The natural-language search query.",
+              "example": "latest evaluation frameworks for AI agents"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "fast",
+                "instant",
+                "deep-lite",
+                "deep",
+                "deep-reasoning"
+              ],
+              "default": "auto",
+              "description": "Search mode. auto lets Exa choose; the deep modes trade latency for higher-quality retrieval."
+            },
+            "numResults": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10,
+              "description": "Number of results to return."
+            },
+            "category": {
+              "type": "string",
+              "enum": [
+                "company",
+                "research paper",
+                "news",
+                "personal site",
+                "financial report",
+                "people"
+              ],
+              "description": "Optional hint about the kind of pages to prioritize."
+            },
+            "includeDomains": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Only return results from these domains."
+            },
+            "excludeDomains": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Exclude results from these domains."
+            },
+            "startPublishedDate": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return results published on or after this ISO 8601 date."
+            },
+            "endPublishedDate": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return results published on or before this ISO 8601 date."
+            },
+            "contents": {
+              "type": "object",
+              "description": "Content options to return alongside each result.",
+              "properties": {
+                "text": {
+                  "type": "boolean",
+                  "description": "Return the full page text."
+                },
+                "highlights": {
+                  "type": "boolean",
+                  "description": "Return highlighted relevant snippets."
+                },
+                "summary": {
+                  "type": "boolean",
+                  "description": "Return an AI-generated summary of the page."
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "description": "JSON Schema used to synthesize a structured output from the results."
+            },
+            "systemPrompt": {
+              "type": "string",
+              "description": "Instruction that guides how the structured output is generated."
+            },
+            "stream": {
+              "default": false,
+              "enum": [
+                false
+              ],
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      }
+    }
+  },
+  "x-aisa-pricing": {
+    "cost_contract": "response_usd",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.017,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## 费用与请求规则
+
+按用量计费；默认请求预估费用：$0.017 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 
