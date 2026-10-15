@@ -17,7 +17,7 @@ class UnifiedSurfacesTests(unittest.TestCase):
     def test_bound_llms_is_staged_with_every_generated_candidate(self):
         root = Path(__file__).resolve().parents[2]
         publish = yaml.safe_load((root / '.github/workflows/pull-openapi.yml').read_text())
-        script = next(step['run'] for step in publish['jobs']['compose']['steps'] if step.get('id') == 'publish')
+        script = next(step['run'] for step in publish['jobs']['compose']['steps'] if step.get('id') == 'prepare')
         staging = next(line.split() for line in script.splitlines() if line.strip().startswith('git add openapi '))
         self.assertIn('llms.txt', staging)
         refresh = yaml.safe_load((root / '.github/workflows/refresh-upstream.yml').read_text())

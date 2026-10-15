@@ -139,7 +139,7 @@ jobs:
         if: steps.pull.outputs.available == 'true'
         run: git diff --stat >> "$GITHUB_STEP_SUMMARY"
       - name: Commit contract mirrors and coverage
-        id: publish
+        id: prepare
         if: github.ref == 'refs/heads/main' && steps.pull.outputs.available == 'true' && (inputs.publish == true || (github.event_name != 'workflow_dispatch' && vars.RUNTIME_CONTRACT_PUBLISH != 'false'))
         env:
           PUBLISH_RUN_ID: ${{ github.run_id }}
@@ -159,10 +159,44 @@ jobs:
           python scripts/publication_origin.py record --run-id "$PUBLISH_RUN_ID" --attempt "$PUBLISH_RUN_ATTEMPT"
           git add docs/publication/release-origin.json
           git commit -m 'chore: regenerate runtime API contract mirrors'
+          echo "candidate_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "assessed_base=$assessed_base" >> "$GITHUB_OUTPUT"
+      - name: Export and verify original schema inputs for the local formal commit
+        if: steps.prepare.outputs.candidate_commit != ''
+        env:
+          CANDIDATE_COMMIT: ${{ steps.prepare.outputs.candidate_commit }}
+          PUBLISH_RUN_ID: ${{ github.run_id }}
+          PUBLISH_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: >-
+          python scripts/schema_bundle_supply.py build
+          --repo . --docs-ref "$CANDIDATE_COMMIT"
+          --source-receipts .cache/source-reviews.json
+          --run-id "$PUBLISH_RUN_ID" --run-attempt "$PUBLISH_RUN_ATTEMPT"
+          --output "$RUNNER_TEMP/schema-bundle-supply"
+      - name: Retain immutable schema input candidate before publication
+        id: schema_bundle
+        if: steps.prepare.outputs.candidate_commit != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-input-bundle-v2-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/schema-bundle-supply/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Push the assessed commit after schema supply succeeds
+        id: publish
+        if: steps.prepare.outputs.candidate_commit != ''
+        env:
+          CANDIDATE_COMMIT: ${{ steps.prepare.outputs.candidate_commit }}
+          ASSESSED_BASE: ${{ steps.prepare.outputs.assessed_base }}
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$CANDIDATE_COMMIT" ] || [ "$(git show -s --format=%P HEAD)" != "$ASSESSED_BASE" ]; then
+            echo 'Local publication commit changed after schema export.' >&2
+            exit 1
+          fi
           # The formal receipt describes this exact graph. Never incorporate
           # concurrent main changes after assessment; retry from new inputs.
           git fetch origin main
-          if [ "$(git rev-parse origin/main)" != "$assessed_base" ]; then
+          if [ "$(git rev-parse origin/main)" != "$ASSESSED_BASE" ]; then
             echo 'Main changed after contract assessment; publication must be retried.' >&2
             exit 1
           fi

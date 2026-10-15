@@ -148,11 +148,22 @@ class PublicationRaceTests(unittest.TestCase):
 
     def publish(self, candidate, root):
         workflow = yaml.safe_load((REPO / '.github/workflows/pull-openapi.yml').read_text())
-        script = next(step['run'] for step in workflow['jobs']['compose']['steps'] if step.get('id') == 'publish')
-        script = script.replace('python scripts/', __import__('shlex').quote(sys.executable)+' scripts/')
+        steps = workflow['jobs']['compose']['steps']
+        prepare = next(step['run'] for step in steps if step.get('id') == 'prepare')
+        prepare = prepare.replace('python scripts/', __import__('shlex').quote(sys.executable)+' scripts/')
+        result = subprocess.run(['bash', '-e', '-c', prepare], cwd=candidate,
+                                env={**os.environ, 'GITHUB_OUTPUT': str(root / 'prepared'),
+                                     'PUBLISH_RUN_ID':'123', 'PUBLISH_RUN_ATTEMPT':'1'}, capture_output=True, text=True)
+        if result.returncode:
+            return result
+        outputs = dict(line.split('=', 1) for line in (root / 'prepared').read_text().splitlines())
+        script = next(step['run'] for step in steps if step.get('id') == 'publish')
+        # Supply generation/upload is separately tested; this fixture exercises
+        # the actual two Git steps against a real concurrent remote main.
         return subprocess.run(['bash', '-e', '-c', script], cwd=candidate,
                               env={**os.environ, 'GITHUB_OUTPUT': str(root / 'output'),
-                                   'PUBLISH_RUN_ID':'123', 'PUBLISH_RUN_ATTEMPT':'1'}, capture_output=True, text=True)
+                                   'CANDIDATE_COMMIT':outputs['candidate_commit'],
+                                   'ASSESSED_BASE':outputs['assessed_base']}, capture_output=True, text=True)
 
     def test_concurrent_main_change_cannot_enter_unassessed_publication(self):
         with tempfile.TemporaryDirectory() as directory:
