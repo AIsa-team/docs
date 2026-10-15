@@ -122,6 +122,13 @@ file hashes without interpreting the internal payment evidence version.
 No extra manifest path or consumer schema migration is required. The Docs
 producer is responsible for the v3 semantics before issuing its formal receipt.
 
+The public `api.aisa.one/openapi.json` is currently served by the Services/nginx
+rollout static file. This PR does not deploy or replace that file, and the current
+Docs notification targets do not synchronize it. Consuming the formally bound
+Docs discovery artifact at that existing deployment boundary remains a separate
+explicit integration step; this PR alone does not claim end-to-end updates of
+that public payment catalogue.
+
 ## Validation
 
 Payment tests cover default generation and verification; real-quote price
