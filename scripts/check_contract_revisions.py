@@ -256,6 +256,7 @@ def assess(documents, runtime=None, website=None, router=None,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--all-surfaces', action='store_true', help='Also require public complete JSON, llms request/price content and MCP loaded source')
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--state', type=Path, default=Path('.cache/contract-revisions/state.json'))
     parser.add_argument('--acceptance', action='store_true', help='Fail immediately on missing evidence or any mismatch; does not update monitor state')
@@ -329,11 +330,19 @@ def main():
         except Exception as exc:
             failures.append(f'{key}:unavailable:{type(exc).__name__}')
     provenance = None
+    surface_cache = {}
     if args.expected_docs_ref and args.budget_start and not args.evidence_dir and not failures:
         from publication_origin import verify_consumer_refs
         try:
+            consumer_refs = [results["router"].get("docs_commit"), results["website_version"].get("docsRevision")]
+            if args.all_surfaces:
+                surface_cache['mcp-version'] = read_public_bytes('https://mcp.aisa.one/contract-version')
+                mcp_refs = json.loads(surface_cache['mcp-version']).get('docsRefs')
+                if not isinstance(mcp_refs, list) or len(mcp_refs) != 1:
+                    raise ValueError('MCP does not identify one loaded source')
+                consumer_refs.extend(mcp_refs)
             provenance = verify_consumer_refs(args.root, args.expected_docs_ref,
-                [results["router"].get("docs_commit"), results["website_version"].get("docsRevision")], args.budget_start)
+                consumer_refs, args.budget_start)
         except Exception as exc:
             failures.append(f"formal_provenance:unavailable:{type(exc).__name__}")
     empty_catalogs = {}
@@ -348,6 +357,32 @@ def main():
     assessment = assess(documents, **results, formal_provenance=provenance, empty_catalogs=empty_catalogs, expected_docs_ref=args.expected_docs_ref,
                         expected_openapi_sha256=source_hash if args.expected_docs_ref else None,
                         failures=failures)
+    if args.all_surfaces:
+        from public_surface_checks import check_surfaces, fixed_request_blocks
+        accepted_refs = {args.expected_docs_ref} if args.expected_docs_ref else set()
+        if provenance:
+            accepted_refs.update(provenance.get('publications', {}))
+        expected_requests = {}
+        try:
+            if not args.expected_docs_ref:
+                raise ValueError('All-surface verification requires a fixed formal publication')
+            expected_requests = fixed_request_blocks(args.root, args.expected_docs_ref)
+        except Exception as exc:
+            assessment['missing_inputs'].append('fixed_llms_requests:unavailable:' + type(exc).__name__)
+        def surface_reader(name, url):
+            if name in surface_cache:
+                return surface_cache[name]
+            if args.evidence_dir:
+                extension = '.json' if name.endswith(('json', 'version')) else '.txt'
+                return (args.evidence_dir / (name + extension)).read_bytes()
+            return read_public_bytes(url)
+        extra = check_surfaces(spec, source_hash, accepted_refs, read_bytes=surface_reader,
+                               expected_requests=expected_requests)
+        assessment['public_surfaces'] = extra
+        assessment['missing_inputs'] = sorted(set(assessment['missing_inputs'] + extra['missing_inputs']))
+        assessment['mismatches'] = sorted(set(assessment['mismatches'] + extra['mismatches']))
+        assessment['status'] = ('not_assessed' if assessment['missing_inputs'] else
+                                'failed' if assessment['mismatches'] else 'passed')
     # Strict acceptance neither reads nor writes prior monitor observations.
     previous = json.loads(args.state.read_text()) if not args.acceptance and args.state.exists() else {}
     observation = None
