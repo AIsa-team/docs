@@ -17,7 +17,7 @@ import yaml
 from identity_compatibility import PublishedHistory
 from presentation_page_bindings import MEMBER as PRESENTATION_MEMBER, export_bindings
 from schema_input_bundle import (AUTHORITY, HEX40, REVIEWED_BASELINE, SINGLETONS, MAX_FILE,
-                                 regular_read,
+                                 regular_read, formal_input_paths,
                                  canonical, require, role_for, safe_name, sha, UniqueLoader,
                                  reject_unimplemented_inputs,
                                  strict_json, validate_bundle)
@@ -70,13 +70,8 @@ def export_bundle(repo, docs_ref, baseline_ref, source_receipts, output, *, bund
     registry = yaml.load(source.read(docs_ref, 'openapi/registry.yaml'), Loader=UniqueLoader)
     reject_unimplemented_inputs(registry, pointer_paths=source.trees[docs_ref])
     files = {}
-    for name in pointer['files_sha256']:
-        member = 'input/' + name
-        try:
-            role_for(member)
-        except ValueError:
-            continue
-        files[member] = source.read(docs_ref, name)
+    for name in formal_input_paths(pointer['files_sha256']):
+        files['input/' + name] = source.read(docs_ref, name)
     for member in SINGLETONS:
         if member.startswith('input/'):
             files[member] = source.read(docs_ref, member.removeprefix('input/'))
