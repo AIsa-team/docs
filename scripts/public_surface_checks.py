@@ -16,6 +16,7 @@ from source_json import loads
 JSON_SURFACES = {
     'website-json': 'https://aisa.one/openapi.json',
     'docs-json': 'https://aisa.one/docs/openapi/openapi.json',
+    'docs-root-json': 'https://aisa.one/docs/openapi.json',
 }
 TEXT_SURFACES = {
     'website-llms': 'https://aisa.one/llms.txt',
@@ -131,9 +132,11 @@ def check_surfaces(spec, expected_hash, accepted_refs, *, read_bytes, expected_r
             if name == 'website-llms':
                 if expected_hash not in text or not any(ref in text for ref in accepted_refs):
                     mismatches.append(name + ':formal_version_missing')
-                if '/openapi/openapi.json' not in text:
-                    mismatches.append(name + ':immutable_json_link_missing')
+                if 'https://aisa.one/openapi.json' not in text or not any('/' + ref + '/openapi.yaml' in text for ref in accepted_refs):
+                    mismatches.append(name + ':versioned_schema_links_missing')
             elif name == 'docs-llms':
+                if expected_hash not in text:
+                    mismatches.append(name + ':formal_version_missing')
                 if 'openapi' not in text.lower() or '.json' not in text.lower():
                     mismatches.append(name + ':json_discovery_missing')
             elif name == 'mcp-llms':
