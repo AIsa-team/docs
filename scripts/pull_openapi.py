@@ -21,7 +21,7 @@ import yaml
 import api_nav_groups
 from compose_openapi import METHODS, compose, digest, resolve_fragment
 from import_upstream import import_source
-from runtime_registry import discover, combine_facts, public_mirror_index, published_documents, previous_for_facts, coverage_rows
+from runtime_registry import discover, combine_facts, public_mirror_index, published_documents, previous_for_facts, coverage_rows, disabled_legacy_paths
 from source_json import loads as source_json_loads, load as source_json_load, UnsupportedNumericPrecision
 from readable_contract_notes import update_readable_block
 from identity_compatibility import published_history, attach_history, localize_identities, validate_document_identities
@@ -567,6 +567,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
     # Retire only operations successfully moved to another output. Keeping
     # unmatched legacy operations avoids deleting docs outside runtime scope.
     from urllib.parse import urlsplit
+    disabled_paths = disabled_legacy_paths(registry, index, facts_by_provider)
     for name, original in original_documents.items():
         output_path = root / f"openapi/{name}.json"
         staged = json.loads(changes[output_path]) if output_path in changes else original
@@ -586,7 +587,15 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                     if not (set(retained["paths"][retained_path]) & METHODS):
                         del retained["paths"][retained_path]
             elif not targets:
-                coverage["legacy_operations"].append({"source": f"openapi/{name}.json", "path": prefix + path, "method": method.upper(), "operation_id": op.get("operationId"), "status": "retained_legacy", "reason": "not_in_composed_runtime_contract"})
+                reason = "not_in_composed_runtime_contract"
+                if prefix + path in disabled_paths.get(name, set()):
+                    retained_prefix = urlsplit((retained.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
+                    retained_path = (prefix + path).removeprefix(retained_prefix)
+                    operation = retained.get("paths", {}).get(retained_path, {}).get(method)
+                    if operation is not None:
+                        operation["x-aisa-status"] = "disabled"
+                        reason = "runtime_explicitly_disabled"
+                coverage["legacy_operations"].append({"source": f"openapi/{name}.json", "path": prefix + path, "method": method.upper(), "operation_id": op.get("operationId"), "status": "retained_legacy", "reason": reason})
         if retained != staged:
             changes[output_path] = json.dumps(retained, indent=2, ensure_ascii=False) + "\n"
     documents = dict(original_documents)

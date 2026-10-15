@@ -43,6 +43,48 @@ def discover(registry, category):
     return registry
 
 
+def disabled_legacy_paths(registry, index, facts_by_provider):
+    """Explicit Runtime tombstones for known legacy owners, never path guesses.
+
+    An excluded row is path-wide authority only when status is disabled. Any
+    current/pending/conflicting Runtime row at the path prevents projection.
+    """
+    def valid_path(path):
+        return (isinstance(path, str) and
+                re.fullmatch(r"/apis/v1/(?:[A-Za-z0-9_.:-]+|\{[A-Za-z0-9_]+\})(?:/(?:[A-Za-z0-9_.:-]+|\{[A-Za-z0-9_]+\}))*", path)
+                and not any(part in {'.', '..'} for part in path.split('/')))
+
+    owners = {}
+    for provider, entry in registry['providers'].items():
+        entry = entry or {}
+        for source in {provider, *entry.get('legacy_sources', [])}:
+            owners.setdefault(source, []).append(provider)
+    coverage = index.get('coverage', {})
+    excluded = coverage.get('excluded_endpoints', [])
+    conflicts = {row.get('path') for row in coverage.get('projected_endpoints', [])
+                 + index.get('pending_endpoints', []) if isinstance(row, dict) and valid_path(row.get('path'))}
+    conflicts.update(row['path'] for row in excluded if isinstance(row, dict)
+                     and valid_path(row.get('path')) and row.get('status') != 'disabled')
+    for document in facts_by_provider.values():
+        prefix = urlsplit((document.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
+        for path, item in document.get('paths', {}).items():
+            if any(method in METHODS | {'x-aisa-any'} and op.get('x-aisa-status') != 'disabled'
+                   for method, op in item.items() if isinstance(op, dict)):
+                conflicts.add(prefix + path)
+    disabled = {}
+    for source, candidates in owners.items():
+        if len(candidates) != 1:
+            continue
+        owner = candidates[0]
+        catalogs = (registry['providers'][owner] or {}).get('group', [owner])
+        paths = {row['path'] for row in excluded if isinstance(row, dict)
+                 and row.get('provider') in catalogs and row.get('status') == 'disabled'
+                 and valid_path(row.get('path')) and row['path'] not in conflicts}
+        if paths:
+            disabled[source] = paths
+    return disabled
+
+
 def combine_facts(documents, provider):
     first = copy.deepcopy(next(iter(documents.values())))
     first['paths'] = {}
