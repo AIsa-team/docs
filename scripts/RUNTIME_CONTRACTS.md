@@ -22,6 +22,27 @@ list individual endpoints when that catalog's runtime projection is unavailable.
 Runtime facts require `info.x-aisa-document.facts_hash`. Public facts use the
 root server and full paths. `x-aisa-any` is a path-item extension, not a method.
 
+### Prices in prose
+
+Runtime `x-aisa-pricing` owns published reference prices. The composer removes
+obsolete monetary rate clauses from upstream/runtime descriptions, summaries,
+and nested request/response documentation before localization, consolidation,
+and the sales projection. It does not turn estimates into fixed charges.
+Provider sources and source review receipts remain unchanged. JSON examples,
+defaults, enums, extension metadata, monetary units, product-price filters, and
+financial transaction amounts are not rate claims and remain intact.
+
+Existing endpoint pages are cleaned before their managed cost block is rendered
+from the same Runtime operation. Handwritten price columns retain their useful
+section/parameter columns and refer readers to the current pricing block.
+Translation memory cannot reintroduce obsolete monetary rates. New composer
+versions regenerate these projections even when Runtime facts have not changed.
+
+Validate with `python -m unittest discover -s scripts/tests -p test_pricing_prose.py -v`
+and the full test command below. Generated contracts and pages must still pass
+the existing formal publication workflow; a code change is not evidence that
+the website or downstream consumers have adopted the regenerated artifacts.
+
 Each output operation has `x-aisa-catalog-id` identifying its original runtime
 catalog. Grouped policies remain under `info.x-aisa-catalogs[catalog]`; the
 consolidated spec retains them under

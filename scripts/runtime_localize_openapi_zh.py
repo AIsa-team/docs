@@ -345,7 +345,8 @@ def translation(catalog: dict[str, Any], source: str) -> str:
     entry = catalog["entries"].get(key_for(source))
     if not entry or entry.get("source") != source or not entry.get("translation"):
         raise KeyError(f"missing translation: {source[:100]!r}")
-    return entry["translation"]
+    from pricing_prose import clean_text
+    return clean_text(entry["translation"], 'zh')
 
 
 def localize_tree(node: Any, catalog: dict[str, Any], path: tuple[str, ...] = (), *, allow_untranslated: bool = False) -> Any:
