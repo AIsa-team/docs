@@ -15,7 +15,7 @@ from sales_catalog_projection import SALES_CATALOG_PATH, sales_catalog_bytes
 
 
 class FormalReceiptTests(unittest.TestCase):
-    def run_check(self, source_receipt=True, tamper=False, unresolved=False, surfaces=False, surface_mutation=None, sales_mutation=None, payment_mutation=None):
+    def run_check(self, source_receipt=True, tamper=False, unresolved=False, surfaces=False, surface_mutation=None, sales_mutation=None, payment_mutation=None, json_mutation=None):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             install_payment_fixture(root)
@@ -34,6 +34,9 @@ class FormalReceiptTests(unittest.TestCase):
                 expected['components'] = {'schemas': {'Input': {'$ref': '#/components/schemas/Missing'}}}
                 raw = json.dumps(expected).encode()
             (root / 'openapi.yaml').write_bytes(raw if not tamper else raw + b'info: {title: altered}\n')
+            (root / 'openapi/openapi.json').write_text(json.dumps(expected))
+            if json_mutation:
+                json_mutation(root / 'openapi/openapi.json')
             sales = root / SALES_CATALOG_PATH
             sales.parent.mkdir(parents=True)
             sales.write_bytes(sales_catalog_bytes(expected, raw))
@@ -61,6 +64,13 @@ class FormalReceiptTests(unittest.TestCase):
                  patch.object(sys, 'argv', ['check', '--root', str(root), '--report', str(report_path)]), patch('builtins.print'):
                 result = main()
             return result, json.loads(report_path.read_text()), hashlib.sha256(raw).hexdigest()
+
+    def test_missing_or_stale_json_cannot_receive_formal_receipt(self):
+        for mutate in (lambda p: p.unlink(), lambda p: p.write_text('{"paths":{"/plants":{}}}')):
+            with self.subTest(mutate=mutate):
+                status, report, _ = self.run_check(json_mutation=mutate)
+                self.assertEqual(status, 1)
+                self.assertIn({'code': 'aggregate_json_recomposition_mismatch'}, report['global_errors'])
 
     def test_formal_report_binds_verified_aggregate_and_source_evidence(self):
         status, report, sha = self.run_check()

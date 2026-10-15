@@ -17,7 +17,7 @@ from identity_compatibility import published_history, validate_document_identiti
 
 def publication_files(root):
     root = Path(root)
-    files = {p for p in (root / 'openapi.yaml', root / 'docs.json', root / 'openapi/registry.yaml',
+    files = {p for p in (root / 'openapi.yaml', root / 'llms.txt', root / 'docs.json', root / 'openapi/registry.yaml',
                         root / 'api-reference.mdx', root / 'zh/api-reference.mdx', root / POLICY_PATH, root / REBINDING_PATH, root / SALES_CATALOG_PATH) if p.is_file()}
     files.update(root / name for name in PAYMENT_FILES if (root / name).is_file())
     for pattern in ('openapi/*.json', 'openapi/upstream/*.json', 'openapi/zh/*.json',
@@ -51,6 +51,8 @@ def validate_surfaces(root, published_ref=None):
     root = Path(root)
     documents, all_documents = {}, {}
     for path in (root / 'openapi').glob('*.json'):
+        if path.name == 'openapi.json':
+            continue  # aggregate output, not an independent provider
         document = json.loads(path.read_text())
         all_documents[path.stem] = document
         if document.get('info', {}).get('x-aisa-document', {}).get('document_hash'):
@@ -146,6 +148,14 @@ def validate_surfaces(root, published_ref=None):
                 chinese = found['zh'].get(key, set()) & set(nav['zh'])
                 if not english or {'zh/' + page for page in english} != chinese:
                     raise ValueError('runtime operation missing matching bilingual navigation: ' + repr(key))
+    # Existing legacy URLs remain public even after their pages move. Their
+    # locale copies must not retain removed operations or obsolete prices.
+    for name, source in all_documents.items():
+        target = root / 'openapi/zh' / (name + '.json')
+        if name not in documents and target.is_file():
+            localized = json.loads(target.read_text())
+            if strip_translatable(source) != strip_translatable(canonicalize_localized(localized, history)):
+                raise ValueError('localized legacy protocol changed: ' + name)
     return {'status': 'passed', 'scope': 'actual EN/ZH schemas, page identities and navigation closure',
             'providers': len(documents), 'operations': count,
             'files': len(publication_files(root))}
