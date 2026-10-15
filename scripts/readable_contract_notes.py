@@ -40,7 +40,7 @@ def request_details(operation, document, method, path, spec_path, language="en")
     """Render effective request declarations and exact, cycle-safe ref closure."""
     zh = language == "zh"
     def t(en, cn): return cn if zh else en
-    from compose_openapi import effective_object, referenced_components
+    from compose_openapi import effective_object, effective_security, referenced_components
     def resolve(value):
         return effective_object(value, document)
     item = document.get("paths", {}).get(path, {})
@@ -62,15 +62,12 @@ def request_details(operation, document, method, path, spec_path, language="en")
     # Reuse the composer's instance-aware closure: example/default values that
     # happen to contain a "$ref" are data, and discriminator mappings are refs.
     components = referenced_components(request, document)
-    for requirement in request.get("security", []):
-        for name in requirement:
-            scheme = document.get("components", {}).get("securitySchemes", {}).get(name)
-            if scheme is None:
-                if operation.get("x-aisa-status") == "disabled" and operation.get("x-aisa-contract-state") == "retained_legacy":
-                    request.setdefault("x-aisa-documentation-limitations", []).append("unresolved_security_scheme:" + name)
-                    continue
-                raise ValueError("unresolved request security scheme: " + name)
-            components.setdefault("securitySchemes", {})[name] = effective_object(scheme, document)
+    schemes, missing_schemes = effective_security(operation, document)
+    if schemes:
+        components.setdefault("securitySchemes", {}).update(schemes)
+    if missing_schemes:
+        request["x-aisa-documentation-limitations"] = [
+            "unresolved_security_scheme:" + name for name in missing_schemes]
     if components:
         request["components"] = components
     lines = ["## " + t("Request contract", "请求规范"), "",

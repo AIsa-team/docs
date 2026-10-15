@@ -131,6 +131,32 @@ def effective_object(value: dict, document: dict) -> dict:
     return result
 
 
+
+def effective_security(operation: dict, document: dict) -> tuple[dict, list[str]]:
+    """Resolve effective auth; retain only the established disabled legacy debt."""
+    requirements = operation.get("security", document.get("security", []))
+    if not isinstance(requirements, list):
+        raise ValueError("invalid public security requirements")
+    schemes = document.get("components", {}).get("securitySchemes", {})
+    if not isinstance(schemes, dict):
+        raise ValueError("invalid public security schemes")
+    selected, missing = {}, []
+    for requirement in requirements:
+        if not isinstance(requirement, dict):
+            raise ValueError("invalid public security requirement")
+        for name, scopes in requirement.items():
+            if not isinstance(scopes, list) or any(not isinstance(scope, str) for scope in scopes):
+                raise ValueError("invalid public security scopes")
+            scheme = schemes.get(name)
+            if scheme is None:
+                if operation.get("x-aisa-status") == "disabled" and operation.get("x-aisa-contract-state") == "retained_legacy":
+                    missing.append(name)
+                    continue
+                raise ValueError("unresolved request security scheme: " + name)
+            selected[name] = effective_object(scheme, document)
+    return selected, missing
+
+
 def effective_parameters(path_item: dict, operation: dict, document: dict) -> list:
     """Operation parameters override Path Item parameters only at (in, name)."""
     selected = {}
