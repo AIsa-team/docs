@@ -125,24 +125,8 @@ def category_content(raw):
     return json.dumps(content, sort_keys=True, separators=(',', ':')).encode()
 
 
-def acquire(revision, compiler, reader):
-    require(HEX64.fullmatch(revision) and HEX40.fullmatch(compiler), 'Full artifact and compiler revisions required')
-    started = datetime.now(timezone.utc).isoformat()
-    before_raw, _ = reader('/public/api-contract/current')
-    before = decode(before_raw)
-    validate_current(before, revision, compiler)
-    contents, total = {}, 0
-    for row in before['files']:
-        raw, headers = reader('/public/api-contract/releases/' + revision + '/' + row['name'])
-        total += len(raw)
-        require(len(raw) <= MAX_FILE and total <= MAX_TOTAL, 'Release byte limit exceeded')
-        tag = '"' + row['sha256'] + '"'
-        # Public intermediaries may weaken the validator without changing bytes.
-        # Accept only this exact manifest SHA; body hashing remains mandatory.
-        require(sha(raw) == row['sha256'] and headers.get('etag') in (tag, 'W/' + tag),
-                'Immutable file hash or ETag mismatch')
-        decode(raw)
-        contents[row['name']] = raw
+def validate_release_files(contents):
+    """Validate the closed immutable facts graph without performing acquisition."""
     index = decode(contents['index.json'])
     require(index.get('pending_endpoints') == [] and index.get('pending_providers') == [],
             'Runtime release still has pending projections')
@@ -165,6 +149,29 @@ def acquire(revision, compiler, reader):
         require(HEX64.fullmatch(str(provider.get('facts_hash', ''))) and
                 meta.get('facts_hash') == provider['facts_hash'], 'Index/provider facts hash mismatch')
     require(expected == set(contents), 'Manifest contains an unindexed provider')
+    return index, providers, selected
+
+
+def acquire(revision, compiler, reader):
+    require(HEX64.fullmatch(revision) and HEX40.fullmatch(compiler), 'Full artifact and compiler revisions required')
+    started = datetime.now(timezone.utc).isoformat()
+    before_raw, _ = reader('/public/api-contract/current')
+    before = decode(before_raw)
+    validate_current(before, revision, compiler)
+    contents, total = {}, 0
+    for row in before['files']:
+        raw, headers = reader('/public/api-contract/releases/' + revision + '/' + row['name'])
+        total += len(raw)
+        require(len(raw) <= MAX_FILE and total <= MAX_TOTAL, 'Release byte limit exceeded')
+        tag = '"' + row['sha256'] + '"'
+        # Public intermediaries may weaken the validator without changing bytes.
+        # Accept only this exact manifest SHA; body hashing remains mandatory.
+        require(sha(raw) == row['sha256'] and headers.get('etag') in (tag, 'W/' + tag),
+                'Immutable file hash or ETag mismatch')
+        decode(raw)
+        contents[row['name']] = raw
+    index, providers, selected = validate_release_files(contents)
+    coverage = index['coverage']
     category, _ = reader('/info/apis/category')
     catalog = category_content(category)
     category_after, _ = reader('/info/apis/category')
