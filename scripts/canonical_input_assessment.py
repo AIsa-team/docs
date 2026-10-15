@@ -26,7 +26,7 @@ CURRENT_INPUT_ROLES = {'registry', 'reviewed_deferral_policy',
                        'reviewed_deferral_rebinding', 'upstream_schema'}
 
 
-def assess_canonical_inputs(root, facts, *, source_receipts=None, checked_at=None):
+def assess_canonical_inputs(root, facts, *, source_receipts=None, checked_at=None, repository=None):
     """Pure, replayable gate; production workflows do not yet call this function."""
     root, facts = Path(root), Path(facts)
     receipt, receipt_raw = acquired_input(facts)
@@ -49,9 +49,10 @@ def assess_canonical_inputs(root, facts, *, source_receipts=None, checked_at=Non
     docs_ref = live['docs_ref']
     # This uses the existing successful producer run/artifact and main ancestry
     # verification, not a caller-provided boolean or a self-described Git hash.
-    provenance = inspect_publication(root, docs_ref, historical=True)
+    repository = Path(repository) if repository else root
+    provenance = inspect_publication(repository, docs_ref, historical=True)
     require(provenance.get('expected_docs_ref') == docs_ref, 'Formal source provenance differs')
-    git = GitSource(root, docs_ref)
+    git = GitSource(repository, docs_ref)
     pointer_raw = git.read(docs_ref, 'docs/publication/current.json')
     pointer = strict_json(pointer_raw)
     require(pointer.get('contract_release') == provenance.get('contract_release'),

@@ -21,7 +21,7 @@ import yaml
 import api_nav_groups
 from compose_openapi import METHODS, compose, digest, resolve_fragment
 from import_upstream import import_source
-from runtime_registry import discover, combine_facts, public_mirror_index, published_documents, previous_for_facts, coverage_rows, disabled_legacy_paths
+from runtime_registry import discover, combine_facts, public_mirror_index, published_documents, previous_for_facts, coverage_rows, disabled_legacy_paths, source_configurations, legacy_coverage_row
 from source_json import loads as source_json_loads, load as source_json_load, UnsupportedNumericPrecision
 from readable_contract_notes import update_readable_block
 from identity_compatibility import published_history, attach_history, localize_identities, validate_document_identities
@@ -126,7 +126,7 @@ def existing_page_references(root: Path):
     return references
 
 
-def generate_pages(root: Path, provider: str, document: dict, changes: dict, previous: dict | None = None, decorate_links: bool = True, page_references=None) -> None:
+def generate_pages(root: Path, provider: str, document: dict, changes: dict, previous: dict | None = None, decorate_links: bool = True, page_references=None, require_existing_links: bool = False) -> None:
     """Append pages/navigation, reusing existing method/path references and prose."""
     docs_path = root / "docs.json"
     if not docs_path.exists():
@@ -162,6 +162,11 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
         if identity:
             known_ids.setdefault(identity, set()).add(page)
     selected_pages = select_pages(provider, document, known_ids, known)
+    if require_existing_links:
+        from contract_page_links import DOCS_PREFIX
+        for _, _, operation in operations(document):
+            if operation.get('x-aisa-docs-url') != DOCS_PREFIX + selected_pages[operation['operationId']][-1]:
+                raise ValueError('Canonical page binding differs from existing presentation selection')
     paths = []
     for path, method, operation in operations(document):
         page_names = selected_pages[operation['operationId']]
@@ -298,6 +303,22 @@ def refresh_legacy_page_blocks(root, documents, changes, catalog):
                 document=document, method=method, path=path, spec_path=reference.split()[0])
 
 
+def refresh_localized_documents(root, documents, changes, catalog, identity_history=None):
+    """Project existing locale aliases, preserving complete canonical declarations."""
+    import runtime_localize_openapi_zh as localization
+    for name, document in documents.items():
+        target = root / f"openapi/zh/{name}.json"
+        if target.exists() and target not in changes:
+            source = copy.deepcopy(document)
+            if identity_history is not None:
+                attach_history(source, identity_history)
+            if source != document:
+                changes[root / f"openapi/{name}.json"] = json.dumps(source, indent=2, ensure_ascii=False) + "\n"
+                documents[name] = source
+            localized = localize_identities(localization.localize_tree(source, catalog, allow_untranslated=True))
+            changes[target] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
+
+
 def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = True,
           readiness_context: dict | None = None, *, identity_history=_AUTO_HISTORY,
           page_link_index=None, reuse_unchanged_documents=True) -> tuple[dict, dict]:
@@ -426,23 +447,9 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             unresolved = []
             try:
                 configured = entry.get("upstream")
-                configurations = configured if isinstance(configured, list) else [configured]
+                configurations, source_bindings = source_configurations(provider, entry)
                 upstream_documents = []
-                source_bindings = {}
-                for configuration in configurations:
-                    source_url = configuration.get("url") if isinstance(configuration, dict) else configuration
-                    if configuration and (not isinstance(source_url, str) or not source_url.startswith("https://")):
-                        raise ValueError("upstream requires an HTTPS source URL")
-                    public_paths = configuration.get("public_paths", []) if isinstance(configuration, dict) else []
-                    if not isinstance(public_paths, list) or any(not isinstance(path, str) or not path.startswith("/") or any(char in path for char in "?# ") for path in public_paths):
-                        raise ValueError("upstream public_paths must be exact public path templates")
-                    for public_path in public_paths:
-                        if public_path in source_bindings:
-                            raise ValueError("duplicate public operation source binding")
-                        source_bindings[public_path] = source_url
-                    upstream_file = configuration.get("file", provider + ".json") if isinstance(configuration, dict) else provider + ".json"
-                    if not isinstance(upstream_file, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_.-]*\.json", upstream_file):
-                        raise ValueError("upstream file must name a JSON mirror within openapi/upstream")
+                for source_url, upstream_file in configurations:
                     upstream_path = root / "openapi/upstream" / upstream_file
                     document = read_json(upstream_path)
                     imported_source = False
@@ -598,7 +605,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                     if operation is not None:
                         operation["x-aisa-status"] = "disabled"
                         reason = "runtime_explicitly_disabled"
-                coverage["legacy_operations"].append({"source": f"openapi/{name}.json", "path": prefix + path, "method": method.upper(), "operation_id": op.get("operationId"), "status": "retained_legacy", "reason": reason})
+                coverage["legacy_operations"].append(legacy_coverage_row(name, prefix + path, method, op.get("operationId"), reason == "runtime_explicitly_disabled"))
         if retained != staged:
             changes[output_path] = json.dumps(retained, indent=2, ensure_ascii=False) + "\n"
     documents = dict(original_documents)
@@ -607,20 +614,8 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         if path.parent == root / 'openapi' and path.suffix == '.json' and path.name not in SKIP_FILES:
             documents[path.stem] = json.loads(content)
     if with_pages:
-        # Keep previously published locale URLs, but refresh their content from
-        # the current canonical document even after pages move to a new owner.
-        import runtime_localize_openapi_zh as localization
         catalog = read_json(root / "translations/openapi-zh.json", {"entries": {}})
-        for name, document in documents.items():
-            target = root / f"openapi/zh/{name}.json"
-            if target.exists() and target not in changes:
-                source = copy.deepcopy(document)
-                attach_history(source, identity_history)
-                if source != document:
-                    changes[root / f"openapi/{name}.json"] = json.dumps(source, indent=2, ensure_ascii=False) + "\n"
-                    documents[name] = source
-                localized = localize_identities(localization.localize_tree(source, catalog, allow_untranslated=True))
-                changes[target] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
+        refresh_localized_documents(root, documents, changes, catalog, identity_history)
     if with_pages:
         refresh_legacy_page_blocks(root, documents, changes, catalog)
     from gap_evidence import response_gap_rows

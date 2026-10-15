@@ -38,7 +38,10 @@ Here `root` means the input workspace before import. If metadata projection
 changes registry display fields, a later exporter must revalidate the preserved
 input view bound to its assessed base and separately validate the resulting
 registry. Generated output must not be passed off as the original schema input.
-Upstream and reviewed policy bytes remain unchanged by rendering.
+Upstream and reviewed policy bytes remain unchanged by rendering. The
+[candidate importer](canonical-import-candidate.md) implements this separate
+input view and validates registry lineage across successive publications; it
+does not enable the new assessment in production.
 
 No extra upstream inventory or per-run 60 MB bundle download is needed. This does
 **not** recompute the full bundle manifest digest from Git: original external
