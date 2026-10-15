@@ -87,6 +87,16 @@ class SurfaceChecks(unittest.TestCase):
         rendered = self.text.replace('````json', '````json theme={null}').replace('$0', r'\$0')
         self.assertEqual(compare_llms(self.expected, request_blocks(rendered)), [])
 
+    def test_llms_availability_cannot_be_omitted_or_changed(self):
+        expected = request_blocks(self.block({**self.request, 'x-aisa-status': 'disabled'}))
+        for status in (None, 'enabled'):
+            changed = dict(self.request)
+            if status is not None:
+                changed['x-aisa-status'] = status
+            self.assertTrue(any('request_declaration_mismatch' in error
+                for error in compare_llms(expected, request_blocks(self.block(changed)))))
+        self.assertEqual(compare_llms(expected, expected), [])
+
     def test_all_request_fields_and_price_change_fail(self):
         for field, value in [('method', 'POST'), ('path', '/other'), ('parameters', []), ('requestBody', {})]:
             with self.subTest(field=field):

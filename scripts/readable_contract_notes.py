@@ -55,6 +55,8 @@ def request_details(operation, document, method, path, spec_path, language="en")
         request["security"] = operation.get("security", document.get("security"))
     if "requestBody" in operation:
         request["requestBody"] = operation["requestBody"]
+    if "x-aisa-status" in operation:
+        request["x-aisa-status"] = operation["x-aisa-status"]
     if "x-aisa-pricing" in operation:
         request["x-aisa-pricing"] = operation["x-aisa-pricing"]
     # Reuse the composer's instance-aware closure: example/default values that
@@ -73,6 +75,11 @@ def request_details(operation, document, method, path, spec_path, language="en")
         request["components"] = components
     lines = ["## " + t("Request contract", "请求规范"), "",
              "- **" + t("Method and path", "方法与路径") + ":** " + safe(method.upper() + " " + path)]
+    if "x-aisa-status" in operation:
+        lines.append("- **" + t("Availability", "可用状态") + ":** " + safe(operation["x-aisa-status"]))
+    if operation.get("x-aisa-status") == "disabled":
+        lines += ["", t("**This endpoint is disabled and cannot be called. Its historical request, schema and pricing declarations are retained for reference.**",
+                        "**此接口已停用，无法调用。历史请求、schema 和价格声明仅保留供参考。**"), ""]
     for limitation in request.get("x-aisa-documentation-limitations", []):
         lines.append("- **" + t("Incomplete historical declaration (disabled)", "未启用的历史声明不完整") + ":** " + safe(limitation))
     for server in request["servers"]:
