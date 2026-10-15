@@ -49,6 +49,21 @@ class EnvelopeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'authority'):
             self.validate()
 
+    def test_v2_requires_presentation_member(self):
+        self.manifest['schema_version'] = 2
+        with patch.object(bundle, 'SINGLETONS', {}), self.assertRaisesRegex(ValueError, 'mandatory in v2'):
+            self.validate()
+
+    def test_v1_rejects_v2_presentation_role(self):
+        name, raw = 'presentation/page-bindings.json', b'{}'
+        path = self.root / name
+        path.parent.mkdir()
+        path.write_bytes(raw)
+        self.manifest['files'].append({'path': name, 'role': 'historical_presentation_bindings',
+                                      'sha256': bundle.sha(raw), 'bytes': len(raw)})
+        with patch.object(bundle, 'SINGLETONS', {}), self.assertRaisesRegex(ValueError, 'require bundle v2'):
+            self.validate()
+
     def test_duplicate_member_rejected(self):
         self.manifest['files'] *= 2
         with self.assertRaisesRegex(ValueError, 'Duplicate member'):

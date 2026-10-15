@@ -24,6 +24,7 @@ from runtime_consolidate_openapi import SKIP_FILES, validate_reference_closure
 from runtime_registry import discover
 from source_governance import source_report, timestamp
 from source_json import checked_float
+from presentation_page_bindings import MEMBER as PRESENTATION_MEMBER, validate_bindings
 
 REVIEWED_BASELINE = '78ef376841ead8cde10a79651958790be5a0531c'
 REVIEWED_BASELINE_SHA256 = 'e0ef2fdf591d0f6b400d6bf1107bf32a31cc1a3453784dc3962cb66a15d16dbd'
@@ -108,6 +109,8 @@ def safe_name(name):
 
 def role_for(name):
     safe_name(name)
+    if name == PRESENTATION_MEMBER:
+        return 'historical_presentation_bindings'
     if name in SINGLETONS:
         return SINGLETONS[name]
     if re.fullmatch('input/openapi/upstream/' + SPEC_NAME, name):
@@ -190,7 +193,7 @@ def load_bundle(root, *, expected_manifest_sha256, expected_docs_ref,
     manifest = strict_json(raw)
     require(set(manifest) == {'schema_version', 'kind', 'docs_ref', 'baseline_ref', 'authority', 'files'},
             'Unsupported manifest fields')
-    require(type(manifest['schema_version']) is int and manifest['schema_version'] == 1 and
+    require(type(manifest['schema_version']) is int and manifest['schema_version'] in (1, 2) and
             manifest['kind'] == 'aisa-schema-input-bundle' and canonical(manifest['authority']) == canonical(AUTHORITY),
             'Unsupported schema bundle authority')
     require(manifest['docs_ref'] == expected_docs_ref and
@@ -216,6 +219,8 @@ def load_bundle(root, *, expected_manifest_sha256, expected_docs_ref,
         verified_bytes[name] = content
     require(list(members) == sorted(members), 'Manifest members are not sorted')
     require(set(SINGLETONS) <= set(members), 'Required bundle inputs are missing')
+    require((PRESENTATION_MEMBER in members) == (manifest['schema_version'] == 2),
+            'Presentation bindings require bundle v2 and are mandatory in v2')
     present = set()
     for path in root.rglob('*'):
         require(not path.is_symlink(), 'Bundle symlink is forbidden')
@@ -292,6 +297,8 @@ def load_bundle(root, *, expected_manifest_sha256, expected_docs_ref,
     require(actual_inputs == expected_inputs, 'Formal input membership differs')
     require(all(members[name]['sha256'] == hashes[name.removeprefix('input/')] for name in actual_inputs),
             'Input differs from historical formal file binding')
+    if manifest['schema_version'] == 2:
+        validate_bindings(load(PRESENTATION_MEMBER), expected_docs_ref, hashes, docs)
     require(members['baseline/openapi/coverage.json']['sha256'] == REVIEWED_BASELINE_SHA256,
             'Independent reviewed baseline bytes differ')
     baseline = load('baseline/openapi/coverage.json')

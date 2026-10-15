@@ -12,6 +12,10 @@ from fetch_runtime_release import (MAX_FILE, MAX_TOTAL, category_content,
                                    validate_current, validate_release_files)
 from pull_openapi import stage
 from runtime_registry import published_documents
+from presentation_page_bindings import (MEMBER as PRESENTATION_MEMBER,
+                                        aggregate_links, link_index)
+from runtime_consolidate_openapi import (build_unified_spec, inject_x402_annotations,
+                                        remove_v2_path_mirrors, validate_reference_closure)
 from schema_input_bundle import (HEX40, HEX64, canonical, load_bundle, regular_read,
                                  require, sha, strict_json)
 
@@ -78,10 +82,12 @@ def compile_shadow(bundle_root, runtime_root, *, bundle_sha256, docs_ref,
         for name, raw in facts.items():
             (facts_dir / name).write_bytes(raw)
         original = published_documents(inputs)
-        links = historical_link_index(original)
+        presentation = (strict_json(bundle.contents[PRESENTATION_MEMBER])
+                        if PRESENTATION_MEMBER in bundle.contents else None)
+        links = link_index(presentation, original) if presentation else historical_link_index(original)
         context = {'offline': True,
                    'baseline_coverage': strict_json(bundle.contents['baseline/openapi/coverage.json'])}
-        _, summary = stage(inputs, facts_dir, 'https://api.aisa.one', with_pages=False,
+        changes, summary = stage(inputs, facts_dir, 'https://api.aisa.one', with_pages=False,
             readiness_context=context, identity_history=bundle.history, page_link_index=links,
             reuse_unchanged_documents=False)
         report = context['report']
@@ -90,17 +96,34 @@ def compile_shadow(bundle_root, runtime_root, *, bundle_sha256, docs_ref,
                 not any(row.get('blocked') for row in summary.values()),
                 'Offline native graph did not pass existing readiness gates')
         documents = context['documents']
-        require_historical_primary_links(original, {name: documents[name] for name in summary})
+        if presentation is None:
+            require_historical_primary_links(original, {name: documents[name] for name in summary})
         require(set(summary) <= set(context['recomposed_documents']) and set(original) <= set(documents),
                 'Shadow did not independently compose every provider and retain the native graph')
         payload = {'native/' + name + '.json': canonical(document)
                    for name, document in sorted(documents.items())}
         payload['readiness.json'] = canonical(report)
-        manifest = {'schema_version': 1, 'kind': 'aisa-offline-shadow-native-graph',
+        if presentation is not None:
+            # The consolidator reads the final composed graph and registry, not
+            # the original documents which happened to be bundle inputs.
+            for name, document in documents.items():
+                (inputs / 'openapi' / (name + '.json')).write_bytes(canonical(document))
+            registry_path = inputs / 'openapi/registry.yaml'
+            if registry_path in changes:
+                registry_path.write_text(changes[registry_path])
+            aggregate = build_unified_spec(root=inputs, page_links=aggregate_links(presentation, documents))
+            inject_x402_annotations(aggregate)
+            remove_v2_path_mirrors(aggregate)
+            validate_reference_closure(aggregate)
+            payload['aggregate/openapi.json'] = canonical(aggregate)
+        manifest = {'schema_version': 2 if presentation is not None else 1,
+            'kind': ('aisa-offline-shadow-contract-graph' if presentation is not None
+                     else 'aisa-offline-shadow-native-graph'),
             'scope': 'existing_composer_offline_shadow_only_not_formal_publication',
             'bundle': bundle.validation, 'runtime': runtime,
-            'pages_generated': False, 'aggregate_generated': False,
-            'aggregate_gap': 'complete MDX page-reference inventory is not in schema bundle v1',
+            'pages_generated': False, 'aggregate_generated': presentation is not None,
+            'aggregate_gap': (None if presentation is not None else
+                              'complete MDX page-reference inventory is not in schema bundle v1'),
             'providers_recomposed': sorted(context['recomposed_documents']),
             'files': [{'path': name, 'sha256': sha(raw), 'bytes': len(raw)}
                       for name, raw in sorted(payload.items())]}
