@@ -53,6 +53,13 @@ class UnifiedSurfacesTests(unittest.TestCase):
         document['security'] = [{'Missing': []}]
         with self.assertRaisesRegex(ValueError, 'unresolved request security'):
             readable_block(operation, **context)
+        operation.update({'x-aisa-status': 'disabled', 'x-aisa-contract-state': 'retained_legacy'})
+        block = readable_block(operation, **context)
+        self.assertIn('Incomplete historical declaration (disabled)', block)
+        self.assertIn('unresolved_security_scheme:Missing', block)
+        request = json.loads(re.search(r'```json\n(.*?)\n```', block, re.S)[1])
+        self.assertEqual(request['security'], [{'Missing': []}])
+        self.assertNotIn('securitySchemes', request.get('components', {}))
 
     def test_request_and_price_refresh_are_idempotent_and_keep_auth_override(self):
         operation = {'operationId': 'free', 'security': [], 'x-aisa-pricing': {'default_request_estimate_usd': 0}}
