@@ -265,7 +265,8 @@ def assess(documents, runtime=None, website=None, router=None,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--all-surfaces', action='store_true', help='Also require complete JSON, llms request/price content, MCP loaded source and all Router schema declarations')
+    parser.add_argument('--all-surfaces', action='store_true', help='Also require complete JSON, llms content, visible bilingual page samples, MCP loaded source and all Router schemas')
+    parser.add_argument('--all-doc-pages', action='store_true', help='With --all-surfaces, read every formal bilingual HTML page instead of sampling')
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--state', type=Path, default=Path('.cache/contract-revisions/state.json'))
     parser.add_argument('--acceptance', action='store_true', help='Fail immediately on missing evidence or any mismatch; does not update monitor state')
@@ -277,6 +278,8 @@ def main():
     parser.add_argument('--require-budget', action='store_true', help='Activated monitoring cannot run without the independently recorded start and expected SHA')
     parser.add_argument('--selection-file', type=Path, help='Actual fixed source selected by the scheduled/manual recovery workflow')
     args = parser.parse_args()
+    if args.all_doc_pages and not args.all_surfaces:
+        parser.error('--all-doc-pages requires --all-surfaces')
     if args.require_budget and (not args.budget_start or not args.expected_docs_ref):
         assessment = {'status': 'not_assessed', 'missing_inputs': ['recorded budget start and independently selected Docs SHA'],
                       'scope': 'activated monitor; no network or deadline inference'}
@@ -397,6 +400,31 @@ def main():
         assessment['public_surfaces'] = extra
         assessment['missing_inputs'] = sorted(set(assessment['missing_inputs'] + extra['missing_inputs']))
         assessment['mismatches'] = sorted(set(assessment['mismatches'] + extra['mismatches']))
+        from rendered_page_checks import fixed_pages, check_rendered_pages
+        try:
+            pages = fixed_pages(args.root, args.expected_docs_ref)
+            def page_reader(name, url):
+                if args.evidence_dir:
+                    return (args.evidence_dir / (name + '.html')).read_bytes()
+                with urlopen(Request(url, headers={'Accept': 'text/html'}), timeout=20) as response:
+                    started, size, chunks = time.monotonic(), 0, []
+                    while True:
+                        if time.monotonic() - started > 30:
+                            raise TimeoutError('Rendered page read exceeded time budget')
+                        chunk = response.read(65536)
+                        if not chunk:
+                            return b''.join(chunks)
+                        size += len(chunk)
+                        if size > 16 * 1024 * 1024:
+                            raise ValueError('Rendered page exceeds byte limit')
+                        chunks.append(chunk)
+            rendered = check_rendered_pages(pages, read_bytes=page_reader, full=args.all_doc_pages)
+        except Exception as exc:
+            rendered = {'status': 'not_assessed', 'missing_inputs': [
+                'fixed_rendered_pages:unavailable:' + type(exc).__name__], 'mismatches': []}
+        assessment['rendered_docs_pages'] = rendered
+        assessment['missing_inputs'] = sorted(set(assessment['missing_inputs'] + rendered['missing_inputs']))
+        assessment['mismatches'] = sorted(set(assessment['mismatches'] + rendered['mismatches']))
         from router_surface_checks import check_router_surface, METADATA, digest
         router_reads = 0
         def router_reader(method, url, payload=None):
