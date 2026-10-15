@@ -253,7 +253,7 @@ def main():
                 report['status'] = 'failed'
                 report.setdefault('global_errors', []).append({'code': 'aggregate_recomposition_mismatch'})
             index_path = args.root / 'llms.txt'
-            if index_path.is_file() and consolidate.discovery_index_block(raw) not in index_path.read_text():
+            if not index_path.is_file() or consolidate.discovery_index_block(raw) not in index_path.read_text():
                 report['status'] = 'failed'
                 report.setdefault('global_errors', []).append({'code': 'llms_index_provenance_mismatch'})
             json_path = args.root / 'openapi/openapi.json'
