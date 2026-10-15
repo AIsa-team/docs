@@ -33,7 +33,7 @@ components:
             document = import_source('provider', 'https://provider.example/openapi.yaml')
         self.assertEqual(document['components']['schemas']['Filter']['enum'], ['=', '<>'])
         self.assertIs(document['components']['schemas']['Switch']['default'], False)
-        self.assertEqual(document['info']['x-aisa-source']['converter'], 'scripts/import_upstream.py@2')
+        self.assertEqual(document['info']['x-aisa-source']['converter'], 'scripts/import_upstream.py@3')
 
     def test_candidate_sources_are_official_unmodified_documents_with_resolvable_refs(self):
         urls = {

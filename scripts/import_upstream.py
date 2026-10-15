@@ -21,7 +21,7 @@ from source_json import loads as source_json_loads, checked_float, UnsupportedNu
 
 
 class OfficialSourceLoader(yaml.SafeLoader):
-    """Read JSON-safe provider YAML without YAML 1.1 boolean coercion."""
+    """Read JSON-safe provider YAML without implicit boolean/date coercion."""
 
     def __init__(self, stream):
         super().__init__(stream)
@@ -64,10 +64,12 @@ class OfficialSourceLoader(yaml.SafeLoader):
                 for key, value in node.value}
 
 
-# Resolve boolean words only as YAML 1.2 booleans. Copy the resolver lists so
-# this provider reader never changes PyYAML's other callers or global loader.
+# OpenAPI/JSON has no date scalar type: preserve plain date-like tokens as
+# strings, including invalid provider examples. Explicit !!timestamp tags still
+# fail closed below. Resolve boolean words only as YAML 1.2 booleans; copying
+# the lists leaves PyYAML's other callers and global loader unchanged.
 OfficialSourceLoader.yaml_implicit_resolvers = {
-    char: [(tag, pattern) for tag, pattern in entries if tag != 'tag:yaml.org,2002:bool']
+    char: [(tag, pattern) for tag, pattern in entries if tag not in {'tag:yaml.org,2002:bool', 'tag:yaml.org,2002:timestamp'}]
     for char, entries in yaml.SafeLoader.yaml_implicit_resolvers.items()
 }
 OfficialSourceLoader.add_implicit_resolver(
@@ -162,7 +164,7 @@ def import_source(provider, url):
     document.setdefault('info', {})['x-aisa-source'] = {
         'kind': 'provider_openapi', 'url': url,
         'fetched_at': datetime.now(timezone.utc).isoformat(),
-        'content_hash': source_hash, 'converter': 'scripts/import_upstream.py@2', **metadata,
+        'content_hash': source_hash, 'converter': 'scripts/import_upstream.py@3', **metadata,
     }
     document['info']['x-aisa-source'] = initial_policy(document['info']['x-aisa-source'])
     return document
