@@ -65,6 +65,25 @@ class SurfaceChecks(unittest.TestCase):
         duplicated = request_blocks(self.text + self.block(self.request, 'old price'))
         self.assertTrue(compare_llms(self.expected, duplicated))
 
+    def test_correct_copy_cannot_hide_stale_required_or_wrong_identity(self):
+        stale = copy.deepcopy(self.request)
+        stale['parameters'][0]['required'] = False
+        for changed, code in [(stale, 'request_declaration_mismatch'),
+                              ({**self.request, 'method': 'POST'}, 'unexpected_operation_identity'),
+                              ({**self.request, 'path': '/wrong'}, 'unexpected_operation_identity')]:
+            with self.subTest(changed=changed):
+                observed = request_blocks(self.text + self.block(changed))
+                self.assertTrue(any(code in error for error in compare_llms(self.expected, observed)))
+
+    def test_only_explicitly_declared_alias_identities_are_accepted(self):
+        alias = {**self.request, 'path': '/alias'}
+        selected = request_blocks(self.text + self.block(alias))
+        observed = request_blocks(self.text + self.block(alias) + self.text)
+        self.assertEqual(compare_llms(selected, observed), [])
+        unexpected = {**alias, 'method': 'POST'}
+        observed = request_blocks(self.text + self.block(alias) + self.block(unexpected))
+        self.assertTrue(any('unexpected_operation_identity' in error for error in compare_llms(selected, observed)))
+
     def test_unverified_mcp_cannot_pass_even_when_router_source_would_match(self):
         self.payloads['mcp-version'] = json.dumps({'state': 'unverified', 'docsRefs': [self.ref], 'documentHashes': {}}).encode()
         self.assertIn('mcp:loaded_provenance_unverified', self.check()['mismatches'])

@@ -78,19 +78,32 @@ def fixed_request_blocks(root, ref):
 
 
 def compare_llms(expected, actual):
+    """Require coverage and reject contradictory records for known operations.
+
+    A correctly rendered copy cannot conceal a stale duplicate elsewhere in the
+    same text. Multiple identities for an operation are allowed only when every
+    identity is explicitly present in the selected publication (e.g. aliases).
+    """
     errors = []
+    known_ids = {identity[0] for identity in expected}
+    for identity in actual:
+        if identity[0] in known_ids and identity not in expected:
+            errors.append(':'.join(identity) + ':unexpected_operation_identity')
     for identity, records in expected.items():
         candidates = actual.get(identity, [])
         label = ':'.join(identity)
         if not candidates:
             errors.append(label + ':request_missing')
             continue
-        for record in records:
-            matches = [row for row in candidates if same_json(row['request'], record['request'])]
-            if not matches:
-                errors.append(label + ':request_declaration_mismatch')
-            elif any(row['price_summary'] != record['price_summary'] for row in matches):
-                errors.append(label + ':price_summary_mismatch')
+        # Check both directions: all expected declarations must appear, and
+        # every observed declaration for this identity must be authoritative.
+        for source, target in ((records, candidates), (candidates, records)):
+            for record in source:
+                matches = [row for row in target if same_json(row['request'], record['request'])]
+                if not matches:
+                    errors.append(label + ':request_declaration_mismatch')
+                elif not any(row['price_summary'] == record['price_summary'] for row in matches):
+                    errors.append(label + ':price_summary_mismatch')
     return sorted(set(errors))
 
 
