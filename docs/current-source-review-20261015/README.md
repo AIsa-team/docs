@@ -121,3 +121,26 @@ To complete this part without changing payment enablement:
 
 This PR intentionally does not turn on payments, synthesize quote/evidence
 records, accept new debt, or remove formal readiness gates.
+
+## Candidate CI acquisition repair
+
+PR #184 exposed a second, independent blocker in the artifact CI job. It read
+Runtime pins from main's last-good Docs publication (`906ecf50...`, compiler
+`cfbe0505...`) and passed them to an acquisition helper that requires a fresh
+matching current pointer. Runtime had advanced, so the real CI run
+`38752364325`, job `116481991348`, failed before downloading artifacts with
+`Current release does not match fresh pinned revision`. The same command failed
+locally. Adding generated files alone cannot resolve this cycle.
+
+The artifact CI job now uses the existing trusted public `--current` discovery
+path, as the formal publisher and source-review workflow already do. It still
+checks actual PR bytes, independent debt/identity baselines and all formal
+gates. No generated file, formal receipt or acquisition validation was changed
+by this CI repair. A source-only PR remains incomplete until its actual generated
+candidate is committed and assessed. If Runtime moves again, regenerate and
+review; CI must not silently regenerate away a stale PR graph.
+
+The targeted change-scope, acquisition and receipt-preparation suites pass
+27 tests, including new assertions that current discovery rejects stale or
+unpublished Runtime generations and CI never writes/regenerates candidate
+artifacts before checking them.

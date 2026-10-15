@@ -33,6 +33,28 @@ class ChangeScopeTests(unittest.TestCase):
         self.assertIn('python scripts/generate_payment_discovery.py --check',
                       [step.get('run') for step in workflow['jobs']['code-contracts']['steps']])
 
+    def test_artifact_check_acquires_current_without_overwriting_candidate_or_baselines(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = yaml.safe_load((root / '.github/workflows/test-runtime-contracts.yml').read_text())
+        steps = workflow['jobs']['artifact-contracts']['steps']
+        commands = [step.get('run', '') for step in steps]
+        acquire = next(command for command in commands if 'fetch_runtime_release.py' in command)
+        self.assertIn('--current', acquire)
+        self.assertNotIn('--artifact-revision', acquire)
+        self.assertNotIn('--compiler-revision', acquire)
+        self.assertNotIn('origin/main:docs/publication/runtime-acquisition.json', '\n'.join(commands))
+        check = next(step for step in steps if step.get('name') == 'Check actual candidate readiness')
+        self.assertEqual(check['env']['REVIEWED_BASELINE'], '${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}')
+        self.assertIn('--facts-dir /tmp/runtime-contract-evidence', check['run'])
+        self.assertIn('--baseline-ref "$REVIEWED_BASELINE"', check['run'])
+        self.assertIn('--published-ref "$PUBLISHED_REF"', check['run'])
+        # CI must inspect committed PR bytes. Regenerating first could hide a
+        # stale or tampered request/schema/price in the actual proposed graph.
+        for command in commands:
+            for writer in ('pull_openapi.py', 'runtime_consolidate_openapi.py', 'export_contract_publication.py'):
+                self.assertNotIn(writer, command)
+        self.assertNotIn('continue-on-error', check)
+
     def test_manual_assessment_requires_explicit_published_identity_baseline(self):
         root = Path(__file__).resolve().parents[2]
         workflow = yaml.safe_load((root / '.github/workflows/test-runtime-contracts.yml').read_text())
