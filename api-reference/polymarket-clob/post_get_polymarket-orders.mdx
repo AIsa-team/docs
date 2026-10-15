@@ -35,21 +35,142 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
-    "required": true,
     "content": {
       "application/json": {
+        "examples": {
+          "example": {
+            "summary": "Send multiple orders example",
+            "value": [
+              {
+                "deferExec": false,
+                "order": {
+                  "builder": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                  "expiration": "1735689600",
+                  "maker": "0x1234567890123456789012345678901234567890",
+                  "makerAmount": "100000000",
+                  "metadata": "",
+                  "salt": 1234567890,
+                  "side": "BUY",
+                  "signature": "0x1234abcd...",
+                  "signatureType": 0,
+                  "signer": "0x1234567890123456789012345678901234567890",
+                  "takerAmount": "200000000",
+                  "timestamp": "1735689600000",
+                  "tokenId": "0xabc123def456..."
+                },
+                "orderType": "GTC",
+                "owner": "f4f247b7-4ac7-ff29-a152-04fda0a8755a",
+                "postOnly": false
+              },
+              {
+                "deferExec": false,
+                "order": {
+                  "builder": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                  "expiration": "1735689600",
+                  "maker": "0x1234567890123456789012345678901234567890",
+                  "makerAmount": "200000000",
+                  "metadata": "",
+                  "salt": 1234567891,
+                  "side": "SELL",
+                  "signature": "0x5678efgh...",
+                  "signatureType": 0,
+                  "signer": "0x1234567890123456789012345678901234567890",
+                  "takerAmount": "100000000",
+                  "timestamp": "1735689600000",
+                  "tokenId": "0xdef456abc789..."
+                },
+                "orderType": "GTC",
+                "owner": "f4f247b7-4ac7-ff29-a152-04fda0a8755a",
+                "postOnly": false
+              }
+            ]
+          }
+        },
         "schema": {
-          "type": "array",
           "items": {
-            "type": "object",
-            "required": [
-              "order",
-              "owner"
-            ],
             "properties": {
+              "deferExec": {
+                "default": false,
+                "description": "Whether to defer execution",
+                "type": "boolean"
+              },
               "order": {
-                "type": "object",
                 "description": "Order payload submitted to the CLOB API. In CLOB V2, `expiration` remains in\nthe POST /order wire body for GTD/order-expiry handling, but it is not part\nof the EIP-712 signed order struct.\n",
+                "properties": {
+                  "builder": {
+                    "description": "Builder code (bytes32) for integrator attribution. `0x` + 64 hex chars or empty.",
+                    "example": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    "type": "string"
+                  },
+                  "expiration": {
+                    "description": "Unix timestamp when the order expires. Present in the API wire body; not part of the CLOB V2 EIP-712 signed order struct.",
+                    "example": "1735689600",
+                    "type": "string"
+                  },
+                  "maker": {
+                    "description": "Ethereum address of the maker (In the default case, this is your proxy address)",
+                    "example": "0x1234567890123456789012345678901234567890",
+                    "type": "string"
+                  },
+                  "makerAmount": {
+                    "description": "Amount the maker is providing in fixed-math with 6 decimals",
+                    "example": "100000000",
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "description": "Reserved for future use",
+                    "example": "",
+                    "type": "string"
+                  },
+                  "salt": {
+                    "description": "Random salt for order uniqueness",
+                    "example": 1234567890,
+                    "type": "integer"
+                  },
+                  "side": {
+                    "description": "Order side",
+                    "enum": [
+                      "BUY",
+                      "SELL"
+                    ],
+                    "example": "BUY",
+                    "type": "string"
+                  },
+                  "signature": {
+                    "description": "Cryptographic signature of the order",
+                    "example": "0x1234abcd...",
+                    "type": "string"
+                  },
+                  "signatureType": {
+                    "description": "Type of signature (0 = EOA, 1 = POLY_PROXY, 2 = POLY_GNOSIS_SAFE)",
+                    "enum": [
+                      0,
+                      1,
+                      2
+                    ],
+                    "type": "integer"
+                  },
+                  "signer": {
+                    "description": "Ethereum address of the signer",
+                    "example": "0x1234567890123456789012345678901234567890",
+                    "type": "string"
+                  },
+                  "takerAmount": {
+                    "description": "Amount the taker is providing in fixed-math with 6 decimals",
+                    "example": "200000000",
+                    "type": "string"
+                  },
+                  "timestamp": {
+                    "description": "Unix timestamp in milliseconds when the order was created (used for order uniqueness)",
+                    "example": "1735689600000",
+                    "type": "string"
+                  },
+                  "tokenId": {
+                    "description": "Token ID (asset ID) for the order",
+                    "example": "0xabc123def456...",
+                    "type": "string"
+                  }
+                },
                 "required": [
                   "maker",
                   "signer",
@@ -64,89 +185,10 @@ Effective request and pricing declaration (including authentication and referenc
                   "salt",
                   "signatureType"
                 ],
-                "properties": {
-                  "maker": {
-                    "type": "string",
-                    "description": "Ethereum address of the maker (In the default case, this is your proxy address)",
-                    "example": "0x1234567890123456789012345678901234567890"
-                  },
-                  "signer": {
-                    "type": "string",
-                    "description": "Ethereum address of the signer",
-                    "example": "0x1234567890123456789012345678901234567890"
-                  },
-                  "tokenId": {
-                    "type": "string",
-                    "description": "Token ID (asset ID) for the order",
-                    "example": "0xabc123def456..."
-                  },
-                  "makerAmount": {
-                    "type": "string",
-                    "description": "Amount the maker is providing in fixed-math with 6 decimals",
-                    "example": "100000000"
-                  },
-                  "takerAmount": {
-                    "type": "string",
-                    "description": "Amount the taker is providing in fixed-math with 6 decimals",
-                    "example": "200000000"
-                  },
-                  "side": {
-                    "type": "string",
-                    "description": "Order side",
-                    "enum": [
-                      "BUY",
-                      "SELL"
-                    ],
-                    "example": "BUY"
-                  },
-                  "expiration": {
-                    "type": "string",
-                    "description": "Unix timestamp when the order expires. Present in the API wire body; not part of the CLOB V2 EIP-712 signed order struct.",
-                    "example": "1735689600"
-                  },
-                  "timestamp": {
-                    "type": "string",
-                    "description": "Unix timestamp in milliseconds when the order was created (used for order uniqueness)",
-                    "example": "1735689600000"
-                  },
-                  "metadata": {
-                    "type": "string",
-                    "description": "Reserved for future use",
-                    "example": ""
-                  },
-                  "builder": {
-                    "type": "string",
-                    "description": "Builder code (bytes32) for integrator attribution. `0x` + 64 hex chars or empty.",
-                    "example": "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  },
-                  "signature": {
-                    "type": "string",
-                    "description": "Cryptographic signature of the order",
-                    "example": "0x1234abcd..."
-                  },
-                  "salt": {
-                    "type": "integer",
-                    "description": "Random salt for order uniqueness",
-                    "example": 1234567890
-                  },
-                  "signatureType": {
-                    "type": "integer",
-                    "description": "Type of signature (0 = EOA, 1 = POLY_PROXY, 2 = POLY_GNOSIS_SAFE)",
-                    "enum": [
-                      0,
-                      1,
-                      2
-                    ]
-                  }
-                }
-              },
-              "owner": {
-                "type": "string",
-                "description": "UUID of the API key owner",
-                "example": "f4f247b7-4ac7-ff29-a152-04fda0a8755a"
+                "type": "object"
               },
               "orderType": {
-                "type": "string",
+                "default": "GTC",
                 "description": "Time in force",
                 "enum": [
                   "GTC",
@@ -154,73 +196,31 @@ Effective request and pricing declaration (including authentication and referenc
                   "GTD",
                   "FAK"
                 ],
-                "default": "GTC"
+                "type": "string"
               },
-              "deferExec": {
-                "type": "boolean",
-                "description": "Whether to defer execution",
-                "default": false
+              "owner": {
+                "description": "UUID of the API key owner",
+                "example": "f4f247b7-4ac7-ff29-a152-04fda0a8755a",
+                "type": "string"
               },
               "postOnly": {
-                "type": "boolean",
+                "default": false,
                 "description": "Whether the order must rest on the book and not match immediately. Only supported for GTC and GTD orders.",
-                "default": false
+                "type": "boolean"
               }
-            }
+            },
+            "required": [
+              "order",
+              "owner"
+            ],
+            "type": "object"
           },
-          "maxItems": 15
-        },
-        "examples": {
-          "example": {
-            "summary": "Send multiple orders example",
-            "value": [
-              {
-                "order": {
-                  "maker": "0x1234567890123456789012345678901234567890",
-                  "signer": "0x1234567890123456789012345678901234567890",
-                  "tokenId": "0xabc123def456...",
-                  "makerAmount": "100000000",
-                  "takerAmount": "200000000",
-                  "side": "BUY",
-                  "expiration": "1735689600",
-                  "timestamp": "1735689600000",
-                  "metadata": "",
-                  "builder": "0x0000000000000000000000000000000000000000000000000000000000000000",
-                  "signature": "0x1234abcd...",
-                  "salt": 1234567890,
-                  "signatureType": 0
-                },
-                "owner": "f4f247b7-4ac7-ff29-a152-04fda0a8755a",
-                "orderType": "GTC",
-                "deferExec": false,
-                "postOnly": false
-              },
-              {
-                "order": {
-                  "maker": "0x1234567890123456789012345678901234567890",
-                  "signer": "0x1234567890123456789012345678901234567890",
-                  "tokenId": "0xdef456abc789...",
-                  "makerAmount": "200000000",
-                  "takerAmount": "100000000",
-                  "side": "SELL",
-                  "expiration": "1735689600",
-                  "timestamp": "1735689600000",
-                  "metadata": "",
-                  "builder": "0x0000000000000000000000000000000000000000000000000000000000000000",
-                  "signature": "0x5678efgh...",
-                  "salt": 1234567891,
-                  "signatureType": 0
-                },
-                "owner": "f4f247b7-4ac7-ff29-a152-04fda0a8755a",
-                "orderType": "GTC",
-                "deferExec": false,
-                "postOnly": false
-              }
-            ]
-          }
+          "maxItems": 15,
+          "type": "array"
         }
       }
-    }
+    },
+    "required": true
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

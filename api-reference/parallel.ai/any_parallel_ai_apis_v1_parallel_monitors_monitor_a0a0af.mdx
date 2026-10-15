@@ -31,12 +31,12 @@ Effective request and pricing declaration (including authentication and referenc
   ],
   "parameters": [
     {
-      "name": "monitor_id",
       "in": "path",
+      "name": "monitor_id",
       "required": true,
       "schema": {
-        "type": "string",
-        "title": "Monitor Id"
+        "title": "Monitor Id",
+        "type": "string"
       }
     }
   ],
@@ -46,30 +46,11 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
-    "required": true,
     "content": {
       "application/json": {
         "schema": {
+          "description": "Request body to update a monitor.\n\nOnly fields that are explicitly included in the request body are updated.\n`null` clears a field, and is accepted only for the fields that can be\ncleared: `webhook`, `metadata`, and `settings.advanced_settings`. Every\nother field rejects `null`; omit it to leave the current value unchanged.\nTo update type-specific settings on an `event_stream` monitor, include\n`type` and `settings`; pass `settings.query` to update the prompt. If\n`settings` is provided, `type` is required to identify the settings shape.\nThe request must still include at least one field to update; empty updates\nfail validation.",
           "properties": {
-            "type": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "enum": [
-                    "event_stream",
-                    "snapshot"
-                  ]
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Type",
-              "description": "Type of the monitor being updated. Required when `settings` is provided; must be `event_stream` (snapshot monitors have no updatable type-specific settings). Omit when `settings` is not provided; `null` is rejected.",
-              "examples": [
-                "event_stream"
-              ]
-            },
             "frequency": {
               "anyOf": [
                 {
@@ -79,7 +60,6 @@ Effective request and pricing declaration (including authentication and referenc
                   "type": "null"
                 }
               ],
-              "title": "Frequency",
               "description": "Frequency of the monitor. Format: '<number><unit>' where unit is 'h' (hours), 'd' (days), or 'w' (weeks). Must be between 1h and 30d (inclusive). Omit to keep the current frequency; `null` is rejected.",
               "examples": [
                 "1h",
@@ -87,66 +67,8 @@ Effective request and pricing declaration (including authentication and referenc
                 "1d",
                 "7d",
                 "30d"
-              ]
-            },
-            "processor": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "enum": [
-                    "lite",
-                    "base"
-                  ]
-                },
-                {
-                  "type": "null"
-                }
               ],
-              "title": "Processor",
-              "description": "Processor to use for subsequent monitor runs. `lite` is faster and cheaper; `base` performs more thorough analysis at higher cost and latency. Omit to keep the current processor; `null` is rejected.",
-              "examples": [
-                "lite",
-                "base"
-              ]
-            },
-            "webhook": {
-              "anyOf": [
-                {
-                  "properties": {
-                    "url": {
-                      "type": "string",
-                      "title": "Url",
-                      "description": "URL for the webhook.",
-                      "examples": [
-                        "https://example.com/webhook"
-                      ]
-                    },
-                    "event_types": {
-                      "items": {
-                        "type": "string",
-                        "enum": [
-                          "monitor.event.detected",
-                          "monitor.execution.completed",
-                          "monitor.execution.failed"
-                        ]
-                      },
-                      "type": "array",
-                      "title": "Event Types",
-                      "description": "Event types to send the webhook notifications for."
-                    }
-                  },
-                  "type": "object",
-                  "required": [
-                    "url"
-                  ],
-                  "title": "MonitorWebhook",
-                  "description": "Webhook configuration for a monitor."
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Webhook to receive notifications about the monitor's execution."
+              "title": "Frequency"
             },
             "metadata": {
               "anyOf": [
@@ -160,63 +82,85 @@ Effective request and pricing declaration (including authentication and referenc
                   "type": "null"
                 }
               ],
-              "title": "Metadata",
               "description": "User-provided metadata stored with the monitor and echoed back in webhook notifications and GET responses, so you can map events to objects in your application. Keys: max 16 chars; values: max 512 chars.",
               "examples": [
                 {
                   "slack_thread_id": "1234567890.123456",
                   "user_id": "U123ABC"
                 }
-              ]
+              ],
+              "title": "Metadata"
+            },
+            "processor": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "lite",
+                    "base"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Processor to use for subsequent monitor runs. `lite` is faster and cheaper; `base` performs more thorough analysis at higher cost and latency. Omit to keep the current processor; `null` is rejected.",
+              "examples": [
+                "lite",
+                "base"
+              ],
+              "title": "Processor"
             },
             "settings": {
               "anyOf": [
                 {
+                  "description": "Type-specific update settings for an `event_stream` monitor.",
                   "properties": {
-                    "query": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "title": "Query",
-                      "description": "Updated search query for the monitor. Use this for minor updates to prompts and instructions only. Major changes to the query may lead to unexpected results in change detection, as the monitor compares new results with what was previously seen. Omit to keep the current query; `null` is rejected.",
-                      "examples": [
-                        "Extract recent news about AI"
-                      ]
-                    },
                     "advanced_settings": {
                       "anyOf": [
                         {
+                          "description": "Advanced monitor configuration.",
                           "properties": {
+                            "location": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "ISO 3166-1 alpha-2 country code for geo-targeted monitor results.",
+                              "examples": [
+                                "us",
+                                "gb",
+                                "de",
+                                "jp"
+                              ],
+                              "title": "Location"
+                            },
                             "source_policy": {
                               "anyOf": [
                                 {
+                                  "description": "Source policy for web search results.\n\nPlain domains match that domain and its subdomains. Domain/path entries use\ncase-sensitive path matching at segment boundaries; trailing slashes are ignored,\ndot segments are normalized, and other percent-encoded path spelling is preserved.\nEntries omit schemes, ports, query strings, and fragments. When include_domains is\nnon-empty, it defines the complete allowlist and exclude_domains is ignored.",
                                   "properties": {
-                                    "include_domains": {
-                                      "items": {
-                                        "type": "string"
-                                      },
-                                      "type": "array",
-                                      "title": "Include Domains",
-                                      "description": "List of domains or domain/path prefixes to restrict results to. If specified, only matching sources will be included and exclude_domains will be ignored. Accepts plain domains (e.g., wikipedia.org), domain/path prefixes (e.g., docs.python.org/3), or bare domain extensions (e.g., .gov, .edu, .co.uk). The combined number of entries in include_domains and exclude_domains cannot exceed 200.",
+                                    "after_date": {
+                                      "anyOf": [
+                                        {
+                                          "format": "date",
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "description": "Optional start date for filtering search results. Results will be limited to content published on or after this date. Provided as an RFC 3339 date string (YYYY-MM-DD).",
                                       "examples": [
-                                        [
-                                          "wikipedia.org",
-                                          "docs.python.org/3",
-                                          ".edu"
-                                        ]
-                                      ]
+                                        "2024-01-01"
+                                      ],
+                                      "title": "After Date"
                                     },
                                     "exclude_domains": {
-                                      "items": {
-                                        "type": "string"
-                                      },
-                                      "type": "array",
-                                      "title": "Exclude Domains",
                                       "description": "List of domains or domain/path prefixes to exclude from results. Applied only when include_domains is empty. If specified, matching sources will be excluded. Accepts plain domains (e.g., reddit.com), domain/path prefixes (e.g., youtube.com/shorts), or bare domain extensions (e.g., .gov, .edu, .co.uk). The combined number of entries in include_domains and exclude_domains cannot exceed 200.",
                                       "examples": [
                                         [
@@ -224,28 +168,31 @@ Effective request and pricing declaration (including authentication and referenc
                                           "youtube.com/shorts",
                                           ".ai"
                                         ]
-                                      ]
-                                    },
-                                    "after_date": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string",
-                                          "format": "date"
-                                        },
-                                        {
-                                          "type": "null"
-                                        }
                                       ],
-                                      "title": "After Date",
-                                      "description": "Optional start date for filtering search results. Results will be limited to content published on or after this date. Provided as an RFC 3339 date string (YYYY-MM-DD).",
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "title": "Exclude Domains",
+                                      "type": "array"
+                                    },
+                                    "include_domains": {
+                                      "description": "List of domains or domain/path prefixes to restrict results to. If specified, only matching sources will be included and exclude_domains will be ignored. Accepts plain domains (e.g., wikipedia.org), domain/path prefixes (e.g., docs.python.org/3), or bare domain extensions (e.g., .gov, .edu, .co.uk). The combined number of entries in include_domains and exclude_domains cannot exceed 200.",
                                       "examples": [
-                                        "2024-01-01"
-                                      ]
+                                        [
+                                          "wikipedia.org",
+                                          "docs.python.org/3",
+                                          ".edu"
+                                        ]
+                                      ],
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "title": "Include Domains",
+                                      "type": "array"
                                     }
                                   },
-                                  "type": "object",
                                   "title": "SourcePolicy",
-                                  "description": "Source policy for web search results.\n\nPlain domains match that domain and its subdomains. Domain/path entries use\ncase-sensitive path matching at segment boundaries; trailing slashes are ignored,\ndot segments are normalized, and other percent-encoded path spelling is preserved.\nEntries omit schemes, ports, query strings, and fragments. When include_domains is\nnon-empty, it defines the complete allowlist and exclude_domains is ignored."
+                                  "type": "object"
                                 },
                                 {
                                   "type": "null"
@@ -268,54 +215,107 @@ Effective request and pricing declaration (including authentication and referenc
                                   ]
                                 }
                               ]
-                            },
-                            "location": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ],
-                              "title": "Location",
-                              "description": "ISO 3166-1 alpha-2 country code for geo-targeted monitor results.",
-                              "examples": [
-                                "us",
-                                "gb",
-                                "de",
-                                "jp"
-                              ]
                             }
                           },
-                          "type": "object",
                           "title": "AdvancedMonitorSettings",
-                          "description": "Advanced monitor configuration."
+                          "type": "object"
                         },
                         {
                           "type": "null"
                         }
                       ],
                       "description": "Advanced monitor configuration. Pass `null` to clear it."
+                    },
+                    "query": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Updated search query for the monitor. Use this for minor updates to prompts and instructions only. Major changes to the query may lead to unexpected results in change detection, as the monitor compares new results with what was previously seen. Omit to keep the current query; `null` is rejected.",
+                      "examples": [
+                        "Extract recent news about AI"
+                      ],
+                      "title": "Query"
                     }
                   },
-                  "type": "object",
                   "title": "UpdateMonitorEventStreamSettings",
-                  "description": "Type-specific update settings for an `event_stream` monitor."
+                  "type": "object"
                 },
                 {
                   "type": "null"
                 }
               ],
               "description": "Type-specific settings to update. Only valid when `type` is `event_stream`. Pass `settings.query` to update the prompt, or `null` for `settings.advanced_settings` to clear it. Omit to leave type-specific settings unchanged; `null` is rejected."
+            },
+            "type": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "event_stream",
+                    "snapshot"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Type of the monitor being updated. Required when `settings` is provided; must be `event_stream` (snapshot monitors have no updatable type-specific settings). Omit when `settings` is not provided; `null` is rejected.",
+              "examples": [
+                "event_stream"
+              ],
+              "title": "Type"
+            },
+            "webhook": {
+              "anyOf": [
+                {
+                  "description": "Webhook configuration for a monitor.",
+                  "properties": {
+                    "event_types": {
+                      "description": "Event types to send the webhook notifications for.",
+                      "items": {
+                        "enum": [
+                          "monitor.event.detected",
+                          "monitor.execution.completed",
+                          "monitor.execution.failed"
+                        ],
+                        "type": "string"
+                      },
+                      "title": "Event Types",
+                      "type": "array"
+                    },
+                    "url": {
+                      "description": "URL for the webhook.",
+                      "examples": [
+                        "https://example.com/webhook"
+                      ],
+                      "title": "Url",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ],
+                  "title": "MonitorWebhook",
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Webhook to receive notifications about the monitor's execution."
             }
           },
-          "type": "object",
           "title": "UpdateMonitorRequest",
-          "description": "Request body to update a monitor.\n\nOnly fields that are explicitly included in the request body are updated.\n`null` clears a field, and is accepted only for the fields that can be\ncleared: `webhook`, `metadata`, and `settings.advanced_settings`. Every\nother field rejects `null`; omit it to leave the current value unchanged.\nTo update type-specific settings on an `event_stream` monitor, include\n`type` and `settings`; pass `settings.query` to update the prompt. If\n`settings` is provided, `type` is required to identify the settings shape.\nThe request must still include at least one field to update; empty updates\nfail validation."
+          "type": "object"
         }
       }
-    }
+    },
+    "required": true
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

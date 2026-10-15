@@ -39,44 +39,25 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
-    "required": true,
     "content": {
       "application/json": {
         "schema": {
-          "type": "object",
-          "required": [
-            "model",
-            "max_tokens",
-            "messages"
-          ],
           "properties": {
-            "model": {
-              "type": "string",
-              "description": "Claude model identifier. Examples: claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5-20251001.",
-              "example": "claude-sonnet-4-6"
-            },
             "max_tokens": {
-              "type": "integer",
               "description": "Maximum number of tokens to generate before stopping.",
-              "example": 1024
+              "example": 1024,
+              "type": "integer"
             },
             "messages": {
-              "type": "array",
               "description": "Conversation turns.",
+              "example": [
+                {
+                  "content": "Hello, Claude",
+                  "role": "user"
+                }
+              ],
               "items": {
-                "type": "object",
-                "required": [
-                  "role",
-                  "content"
-                ],
                 "properties": {
-                  "role": {
-                    "type": "string",
-                    "enum": [
-                      "user",
-                      "assistant"
-                    ]
-                  },
                   "content": {
                     "description": "String or array of content blocks.",
                     "oneOf": [
@@ -84,21 +65,62 @@ Effective request and pricing declaration (including authentication and referenc
                         "type": "string"
                       },
                       {
-                        "type": "array",
                         "items": {
                           "type": "object"
-                        }
+                        },
+                        "type": "array"
                       }
                     ]
+                  },
+                  "role": {
+                    "enum": [
+                      "user",
+                      "assistant"
+                    ],
+                    "type": "string"
                   }
+                },
+                "required": [
+                  "role",
+                  "content"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "metadata": {
+              "properties": {
+                "user_id": {
+                  "description": "External user ID (no PII).",
+                  "type": "string"
                 }
               },
-              "example": [
-                {
-                  "role": "user",
-                  "content": "Hello, Claude"
-                }
-              ]
+              "type": "object"
+            },
+            "model": {
+              "description": "Claude model identifier. Examples: claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5-20251001.",
+              "example": "claude-sonnet-4-6",
+              "type": "string"
+            },
+            "service_tier": {
+              "default": "auto",
+              "enum": [
+                "auto",
+                "standard_only"
+              ],
+              "type": "string"
+            },
+            "stop_sequences": {
+              "description": "Custom sequences that stop generation.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "stream": {
+              "default": false,
+              "description": "Enable SSE streaming.",
+              "type": "boolean"
             },
             "system": {
               "description": "System prompt. String or array of text blocks.",
@@ -107,143 +129,121 @@ Effective request and pricing declaration (including authentication and referenc
                   "type": "string"
                 },
                 {
-                  "type": "array",
                   "items": {
                     "type": "object"
-                  }
+                  },
+                  "type": "array"
                 }
               ]
             },
             "temperature": {
-              "type": "number",
-              "format": "float",
-              "minimum": 0.0,
-              "maximum": 1.0,
               "default": 1.0,
-              "description": "Randomness. 0 = deterministic, 1 = creative."
-            },
-            "top_p": {
-              "type": "number",
+              "description": "Randomness. 0 = deterministic, 1 = creative.",
               "format": "float",
-              "description": "Nucleus sampling. Use instead of temperature."
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
             },
-            "top_k": {
-              "type": "integer",
-              "description": "Only sample from the top K options for each token."
-            },
-            "stop_sequences": {
-              "type": "array",
-              "items": {
-                "type": "string"
+            "thinking": {
+              "description": "Enable extended thinking for complex reasoning.",
+              "properties": {
+                "budget_tokens": {
+                  "example": 10000,
+                  "type": "integer"
+                },
+                "display": {
+                  "enum": [
+                    "summarized",
+                    "omitted"
+                  ],
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "enabled"
+                  ],
+                  "type": "string"
+                }
               },
-              "description": "Custom sequences that stop generation."
+              "type": "object"
             },
-            "stream": {
-              "type": "boolean",
-              "default": false,
-              "description": "Enable SSE streaming."
+            "tool_choice": {
+              "description": "How the model uses tools.",
+              "properties": {
+                "disable_parallel_tool_use": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "name": {
+                  "description": "Required when type is tool.",
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "auto",
+                    "any",
+                    "tool",
+                    "none"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
             },
             "tools": {
-              "type": "array",
               "description": "Tools the model may use.",
               "items": {
-                "type": "object",
-                "required": [
-                  "name",
-                  "input_schema"
-                ],
                 "properties": {
-                  "name": {
-                    "type": "string"
-                  },
                   "description": {
                     "type": "string"
                   },
                   "input_schema": {
                     "type": "object"
                   },
+                  "name": {
+                    "type": "string"
+                  },
                   "type": {
-                    "type": "string",
-                    "example": "custom"
+                    "example": "custom",
+                    "type": "string"
                   }
-                }
-              }
-            },
-            "tool_choice": {
-              "type": "object",
-              "description": "How the model uses tools.",
-              "properties": {
-                "type": {
-                  "type": "string",
-                  "enum": [
-                    "auto",
-                    "any",
-                    "tool",
-                    "none"
-                  ]
                 },
-                "name": {
-                  "type": "string",
-                  "description": "Required when type is tool."
-                },
-                "disable_parallel_tool_use": {
-                  "type": "boolean",
-                  "default": false
-                }
-              }
+                "required": [
+                  "name",
+                  "input_schema"
+                ],
+                "type": "object"
+              },
+              "type": "array"
             },
-            "thinking": {
-              "type": "object",
-              "description": "Enable extended thinking for complex reasoning.",
-              "properties": {
-                "type": {
-                  "type": "string",
-                  "enum": [
-                    "enabled"
-                  ]
-                },
-                "budget_tokens": {
-                  "type": "integer",
-                  "example": 10000
-                },
-                "display": {
-                  "type": "string",
-                  "enum": [
-                    "summarized",
-                    "omitted"
-                  ]
-                }
-              }
+            "top_k": {
+              "description": "Only sample from the top K options for each token.",
+              "type": "integer"
             },
-            "metadata": {
-              "type": "object",
-              "properties": {
-                "user_id": {
-                  "type": "string",
-                  "description": "External user ID (no PII)."
-                }
-              }
-            },
-            "service_tier": {
-              "type": "string",
-              "enum": [
-                "auto",
-                "standard_only"
-              ],
-              "default": "auto"
+            "top_p": {
+              "description": "Nucleus sampling. Use instead of temperature.",
+              "format": "float",
+              "type": "number"
             }
-          }
+          },
+          "required": [
+            "model",
+            "max_tokens",
+            "messages"
+          ],
+          "type": "object"
         }
       }
-    }
+    },
+    "required": true
   },
   "components": {
     "securitySchemes": {
       "BearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
         "bearerFormat": "AISA API Key",
-        "description": "Your AIsa API key as a Bearer token."
+        "description": "Your AIsa API key as a Bearer token.",
+        "scheme": "bearer",
+        "type": "http"
       }
     }
   }
