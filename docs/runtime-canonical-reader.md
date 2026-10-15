@@ -31,7 +31,6 @@ The canonical manifest has exactly these fields:
 ```json
 {
   "protocol_version": "aisa-runtime-canonical-v1",
-  "generation": 864,
   "source_digest": "<64 hex>",
   "compiler_revision": "<40 hex Services revision>",
   "bundle_manifest_sha256": "<64 hex>",
@@ -48,9 +47,12 @@ The canonical manifest has exactly these fields:
 
 `files` is sorted, complete, and excludes the canonical manifest itself, which
 is bound by the outer manifest. It uses full paths and no duplicate role or
-endpoint inventory. Generation is uint64, not boolean. Generation, Services
-compiler, and source digest must equal the acquired outer current identity;
-all remaining pins require their complete lowercase hexadecimal representation.
+endpoint inventory. Services compiler and source digest must equal the acquired
+outer current identity; all remaining pins require their complete lowercase
+hexadecimal representation. Generation is deliberately absent from immutable
+canonical bytes: the same source/compiler artifact can be republished at a newer
+Runtime generation without changing its revision. The live current-before/after
+and receipt still bind the observed generation and require published freshness.
 
 ## Validation and authority
 
@@ -154,3 +156,12 @@ the shared authentication helper left all 4,014 English/Chinese request blocks
 byte-for-byte unchanged. Missing auth on enabled/ordinary-disabled operations,
 forged freeform limitation text, and different IDs hidden in Path Item references
 are negative regressions, not silently accepted forms.
+
+The immutable-generation correction was replayed separately, preserving those
+prior observations: removing only the inner `generation` field gives 133 files
+and 40,486,501 bytes, revision
+`cf689b5de2af61db748ee9ff584bf40bb71a33a7f8528bda3f5b667514274f16`.
+Acquisitions at synthetic generations 864 and 865 both passed with identical
+immutable bytes/revision and the same explicit historical security debt. An
+unpublished generation still fails. These remain offline fixtures, not actual
+production generation or publication claims.

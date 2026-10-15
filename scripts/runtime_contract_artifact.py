@@ -16,7 +16,7 @@ NATIVE = re.compile(r'contracts/native/[a-z0-9][a-z0-9_.-]*\.json')
 HEX64 = re.compile(r'[0-9a-f]{64}')
 HEX40 = re.compile(r'[0-9a-f]{40}')
 METHODS = {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'}
-FIELDS = {'protocol_version', 'generation', 'source_digest', 'compiler_revision',
+FIELDS = {'protocol_version', 'source_digest', 'compiler_revision',
           'bundle_manifest_sha256', 'docs_ref', 'composer_revision', 'source_manifest_sha256', 'files'}
 
 
@@ -102,8 +102,6 @@ def validate_canonical_files(contents, current):
     manifest = strict_json(contents[MANIFEST])
     require(isinstance(manifest, dict) and set(manifest) == FIELDS and
             manifest['protocol_version'] == PROTOCOL, 'Unsupported canonical Runtime protocol')
-    require(type(manifest['generation']) is int and 0 <= manifest['generation'] < 1 << 64 and
-            manifest['generation'] == current['generation'], 'Canonical generation differs')
     for key in ('source_digest', 'bundle_manifest_sha256', 'source_manifest_sha256'):
         require(isinstance(manifest[key], str) and HEX64.fullmatch(manifest[key]), 'Invalid canonical digest')
     for key in ('compiler_revision', 'docs_ref', 'composer_revision'):

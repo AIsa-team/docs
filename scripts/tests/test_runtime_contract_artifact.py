@@ -26,7 +26,7 @@ class CanonicalArtifactTests(unittest.TestCase):
         self.contents.update({'contracts/native/example.json': encoded(native()),
                              contract.AGGREGATE: encoded(native()), contract.READINESS: encoded({
                                  'status': 'passed', 'global_errors': [], 'missing_inputs': [], 'blocked_providers': []})})
-        self.manifest = {'protocol_version': contract.PROTOCOL, 'generation': self.current['generation'],
+        self.manifest = {'protocol_version': contract.PROTOCOL,
             'source_digest': self.current['source_digest'], 'compiler_revision': self.compiler,
             'bundle_manifest_sha256': 'd' * 64, 'docs_ref': 'e' * 40,
             'composer_revision': 'f' * 40, 'source_manifest_sha256': 'a' * 64}
@@ -85,6 +85,22 @@ class CanonicalArtifactTests(unittest.TestCase):
     def test_fact_only_receipt_has_no_canonical_claim(self):
         revision, compiler, reader, *_ = public_tests.PublicReleaseTests().fixture()
         self.assertNotIn('canonical_validation', fetch.acquire(revision, compiler, reader)[-1])
+
+    def test_same_immutable_artifact_can_be_republished_at_a_later_generation(self):
+        original = self.contents.copy()
+        revision = self.revision
+        first = self.acquire()
+        self.current['generation'] += 1
+        self.current['published_generation'] = self.current['generation']
+        second = self.acquire()
+        self.assertEqual(self.contents, original)
+        self.assertEqual(self.revision, revision)
+        self.assertEqual(first[-1]['artifact_revision'], second[-1]['artifact_revision'])
+        self.assertEqual(first[-1]['canonical_validation'], second[-1]['canonical_validation'])
+        self.assertEqual(first[-1]['generation'] + 1, second[-1]['generation'])
+        self.current['generation'] += 1
+        with self.assertRaisesRegex(ValueError, 'generation is not published'):
+            self.acquire()
 
     def test_canonical_roles_cannot_relax_fact_graph(self):
         value = json.loads(self.contents['index.json'])
