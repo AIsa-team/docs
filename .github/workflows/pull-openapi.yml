@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  actions: read # Authenticate the fixed original schema/registry publisher artifacts.
 
 concurrency:
   group: pull-openapi
@@ -50,6 +51,11 @@ jobs:
         run: python -m unittest discover -s scripts/tests -v
       - name: Acquire one complete fresh immutable Runtime release
         run: python scripts/fetch_runtime_release.py --current --output /tmp/formal-runtime-facts
+      - name: Select the verified Runtime publication mode
+        id: runtime_mode
+        run: |
+          mode=$(python scripts/runtime_publication.py mode --facts-dir /tmp/formal-runtime-facts)
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
       - name: Restore attributed source maintenance evidence
         uses: actions/cache/restore@v4
         with:
@@ -65,11 +71,21 @@ jobs:
         id: pull
         env:
           REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
+          RUNTIME_MODE: ${{ steps.runtime_mode.outputs.mode }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set +e
-          python scripts/pull_openapi.py --write --facts-dir /tmp/formal-runtime-facts \
-            --baseline-ref "$REVIEWED_BASELINE" \
-            --readiness-report /tmp/contract-readiness.json
+          if [ "$RUNTIME_MODE" = canonical ]; then
+            python scripts/runtime_publication.py stage --write --facts-dir /tmp/formal-runtime-facts \
+              --baseline-ref "$REVIEWED_BASELINE" --report /tmp/contract-readiness.json
+          elif [ "$RUNTIME_MODE" = facts ]; then
+            python scripts/pull_openapi.py --write --facts-dir /tmp/formal-runtime-facts \
+              --baseline-ref "$REVIEWED_BASELINE" \
+              --readiness-report /tmp/contract-readiness.json
+          else
+            echo 'Unverified Runtime mode; refusing fallback.' >&2
+            exit 1
+          fi
           status=$?
           set -e
           if [ "$status" -eq 2 ]; then
@@ -95,7 +111,7 @@ jobs:
         if: steps.pull.outputs.available == 'false'
         run: echo 'Runtime contracts were unavailable. Published files were preserved.' >> "$GITHUB_STEP_SUMMARY"
       - name: Consolidate generated contracts
-        if: steps.pull.outputs.available == 'true'
+        if: steps.pull.outputs.available == 'true' && steps.runtime_mode.outputs.mode == 'facts'
         run: python scripts/runtime_consolidate_openapi.py --output openapi.yaml
       - name: Generate payment discovery from the same staged contracts
         if: steps.pull.outputs.available == 'true'
@@ -117,11 +133,21 @@ jobs:
         if: steps.pull.outputs.available == 'true'
         env:
           REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
+          RUNTIME_MODE: ${{ steps.runtime_mode.outputs.mode }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python scripts/check_contract_candidate.py --facts-dir /tmp/formal-runtime-facts \
-            --baseline-ref "$REVIEWED_BASELINE" \
-            --published-ref "$(git rev-parse HEAD)" \
-            --report /tmp/formal-contract-readiness.json
+          if [ "$RUNTIME_MODE" = canonical ]; then
+            python scripts/runtime_publication.py assess --facts-dir /tmp/formal-runtime-facts \
+              --baseline-ref "$REVIEWED_BASELINE" --report /tmp/formal-contract-readiness.json
+          elif [ "$RUNTIME_MODE" = facts ]; then
+            python scripts/check_contract_candidate.py --facts-dir /tmp/formal-runtime-facts \
+              --baseline-ref "$REVIEWED_BASELINE" \
+              --published-ref "$(git rev-parse HEAD)" \
+              --report /tmp/formal-contract-readiness.json
+          else
+            echo 'Unverified Runtime mode; refusing fallback.' >&2
+            exit 1
+          fi
       - name: Retain formal publication assessment
         if: always()
         uses: actions/upload-artifact@v4
@@ -131,6 +157,8 @@ jobs:
           if-no-files-found: ignore
       - name: Export the passed same-commit publication pointer
         if: steps.pull.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: >-
           python scripts/export_contract_publication.py
           --facts-dir /tmp/formal-runtime-facts
