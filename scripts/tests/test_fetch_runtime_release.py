@@ -20,6 +20,12 @@ def encoded(value):
 
 
 class PublicReleaseTests(unittest.TestCase):
+    def test_pending_count_boolean_is_not_an_integer_zero(self):
+        revision, compiler, reader, *_ = self.fixture(
+            mutate_index=lambda index: index['coverage'].update(pending_endpoint_count=False))
+        with self.assertRaisesRegex(AcquisitionRejected, 'Incomplete Runtime selected coverage'):
+            acquire(revision, compiler, reader)
+
     def test_cli_unexpected_protocol_error_omits_untrusted_exception_text(self):
         with tempfile.TemporaryDirectory() as temp:
             stderr = io.StringIO()

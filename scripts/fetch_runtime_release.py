@@ -133,7 +133,8 @@ def validate_release_files(contents):
     coverage = index.get('coverage', {})
     selected, projected = coverage.get('selected_endpoint_count'), coverage.get('projected_endpoint_count')
     require(type(selected) is int and selected >= 0 and type(projected) is int and selected == projected and
-            coverage.get('pending_endpoint_count') == 0, 'Incomplete Runtime selected coverage')
+            type(coverage.get('pending_endpoint_count')) is int and
+            coverage['pending_endpoint_count'] == 0, 'Incomplete Runtime selected coverage')
     providers = index.get('providers')
     require(isinstance(providers, list), 'Missing Runtime provider index')
     expected = {'index.json'}

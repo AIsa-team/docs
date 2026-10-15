@@ -67,6 +67,17 @@ def compile_shadow(bundle_root, runtime_root, *, bundle_sha256, docs_ref,
     bundle = load_bundle(bundle_root, expected_manifest_sha256=bundle_sha256, expected_docs_ref=docs_ref)
     facts, runtime = load_runtime(runtime_root, artifact_revision=artifact_revision,
         compiler_revision=compiler_revision, receipt_sha256=runtime_receipt_sha256)
+    return compile_verified_inputs(bundle, facts, runtime, output=output)
+
+
+def compile_verified_inputs(bundle, facts, runtime, *, output, input_kind='public_historical_acquisition'):
+    """Single composition core; callers must first verify all original input bytes.
+
+    This internal Python API is not an authentication boundary. Public and private
+    transport loaders enforce their own independent pins before calling it.
+    """
+    require(input_kind in ('public_historical_acquisition', 'internal_publication_snapshot'),
+            'Unsupported shadow input kind')
     output = Path(output)
     require(not output.exists() and not output.is_symlink() and output.parent.is_dir(),
             'Shadow output must be a new directory with an existing parent')
@@ -117,8 +128,11 @@ def compile_shadow(bundle_root, runtime_root, *, bundle_sha256, docs_ref,
             validate_reference_closure(aggregate)
             payload['aggregate/openapi.json'] = canonical(aggregate)
         manifest = {'schema_version': 2 if presentation is not None else 1,
-            'kind': ('aisa-offline-shadow-contract-graph' if presentation is not None
-                     else 'aisa-offline-shadow-native-graph'),
+            'kind': (('aisa-internal-snapshot-shadow-contract-graph' if presentation is not None
+                      else 'aisa-internal-snapshot-shadow-native-graph')
+                     if input_kind == 'internal_publication_snapshot' else
+                     ('aisa-offline-shadow-contract-graph' if presentation is not None
+                      else 'aisa-offline-shadow-native-graph')),
             'scope': 'existing_composer_offline_shadow_only_not_formal_publication',
             'bundle': bundle.validation, 'runtime': runtime,
             'pages_generated': False, 'aggregate_generated': presentation is not None,
