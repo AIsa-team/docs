@@ -129,6 +129,23 @@ class SupplyEnvelopeTests(unittest.TestCase):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 self.verify()
 
+    def test_run_identifier_matches_build_lock_positive_24_digit_limit(self):
+        for value in ['0', '01', '', '1' * 25, '-1', '+1', '1\n', '１２', 1, True]:
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'Invalid producer pins'):
+                self.verify(run_id=value)
+            with self.subTest(build=value), patch.object(supply, 'GitSource') as git:
+                with self.assertRaisesRegex(ValueError, 'Invalid producer pins'):
+                    supply.build_supply('.', self.ref, 'receipt.json', self.root / 'new',
+                                        run_id=value, run_attempt=1)
+                git.assert_not_called()
+        verified = SimpleNamespace(contents={'evidence/source-receipts.json': self.receipts},
+                                   validation={'source_checked_at': self.clock})
+        with patch.object(supply, 'unpack_bundle'), patch.object(supply, 'load_bundle', return_value=verified):
+            for value in ['1', '9' * 24]:
+                self.packet['producer']['run_id'] = value
+                self.save()
+                self.assertEqual(self.verify(run_id=value)['status'], 'passed')
+
     def test_duplicate_envelope_and_undeclared_files(self):
         raw = canonical(self.packet).replace(b'"schema_version":1', b'"schema_version":0,"schema_version":1')
         (self.root / 'supply.json').write_bytes(raw)

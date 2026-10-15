@@ -58,7 +58,7 @@ The artifact contains only `supply.json` and `bundle.tar.gz`. The envelope is:
   "producer": {
     "repository": "AIsa-team/docs",
     "workflow": ".github/workflows/pull-openapi.yml",
-    "run_id": "<numeric run ID>",
+    "run_id": "<positive run ID, at most 24 digits, no leading zero>",
     "run_attempt": 1,
     "assessed_base": "<full parent SHA>",
     "origin_sha256": "<original release-origin.json SHA-256>"

@@ -621,7 +621,9 @@ class PublicationWorkflowTests(unittest.TestCase):
         import yaml
         workflow = yaml.safe_load((Path(__file__).resolve().parents[2] / ".github/workflows/pull-openapi.yml").read_text())
         steps = workflow["jobs"]["compose"]["steps"]
+        prepare = next(step for step in steps if step.get("id") == "prepare")
         publish = next(step for step in steps if step.get("id") == "publish")
+        self.assertEqual(publish["if"], "steps.prepare.outputs.candidate_commit != ''")
         stage_step = next(step for step in steps if step.get("name") == "Stage contracts")
         self.assertNotIn("if", stage_step, "feature branches must retain dry-run staging")
         self.assertIn("github.event_name == 'workflow_dispatch'", workflow["jobs"]["compose"]["if"],
@@ -638,7 +640,7 @@ class PublicationWorkflowTests(unittest.TestCase):
             with self.subTest(ref=ref, event=event, manual=manual, configured=configured, available=available):
                 # The tested workflow expression uses only literals, comparisons
                 # and boolean operators; substitute its actual event inputs.
-                condition = publish["if"]
+                condition = prepare["if"]
                 for name, value in {"github.ref": ref, "github.event_name": event,
                                     "inputs.publish": manual, "vars.RUNTIME_CONTRACT_PUBLISH": configured,
                                     "steps.pull.outputs.available": available}.items():

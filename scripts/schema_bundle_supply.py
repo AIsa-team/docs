@@ -6,6 +6,7 @@ import gzip
 import io
 import json
 from pathlib import Path
+import re
 import subprocess
 import tarfile
 import tempfile
@@ -20,6 +21,7 @@ SCOPE = 'verified_build_input_not_publication_or_current_source_authorization'
 KIND = 'aisa-schema-bundle-supply-candidate'
 ARCHIVE = 'bundle.tar.gz'
 MAX_ARCHIVE = MAX_TOTAL + (1 << 20)
+POSITIVE_IDENTIFIER = re.compile(r'[1-9][0-9]{0,23}')
 
 
 def pack_bundle(root, destination):
@@ -90,7 +92,7 @@ def verify_supply(root, *, bundle_sha256, archive_sha256, docs_ref, run_id, run_
             {p.name for p in root.iterdir()} == {'supply.json', ARCHIVE}, 'Unexpected supply members')
     require(all(isinstance(value, str) and HEX64.fullmatch(value) for value in (bundle_sha256, archive_sha256))
             and isinstance(docs_ref, str) and HEX40.fullmatch(docs_ref), 'Independent supply pins required')
-    require(isinstance(run_id, str) and run_id.isascii() and run_id.isdigit() and
+    require(isinstance(run_id, str) and POSITIVE_IDENTIFIER.fullmatch(run_id) and
             type(run_attempt) is int and run_attempt > 0, 'Invalid producer pins')
     raw_packet = regular_read(root, 'supply.json')
     require(len(raw_packet) <= 1 << 20, 'Supply metadata exceeds limit')
@@ -136,6 +138,8 @@ def build_supply(repo, docs_ref, source_receipts, output, *, run_id, run_attempt
     output = Path(output)
     require(output.parent.is_dir() and not output.exists() and not output.is_symlink(),
             'Supply output must be a new directory')
+    require(isinstance(run_id, str) and POSITIVE_IDENTIFIER.fullmatch(run_id) and
+            type(run_attempt) is int and run_attempt > 0, 'Invalid producer pins')
     source = GitSource(repo, docs_ref)
     origin_raw = source.read(docs_ref, ORIGIN)
     origin = strict_json(origin_raw)
