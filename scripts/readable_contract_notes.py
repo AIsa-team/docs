@@ -115,7 +115,11 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
         lines += ["## " + t("Cost and request rules", "费用与请求规则"), ""]
     if pricing:
         from pricing_prose import pricing_summary
-        lines += [pricing_summary(pricing, language), ""]
+        summary = pricing_summary(pricing, language)
+        # Paired currency signs would become inline math in Mintlify MDX.
+        if summary.count("$") >= 2:
+            summary = summary.replace("$", r"\$")
+        lines += [summary, ""]
         lines += [t("Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.", "公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。"), ""]
         labels = {
             "default_request_estimate_usd": t("Default request reference estimate (USD)", "默认请求参考估价（USD）"),
