@@ -21,7 +21,11 @@ class SurfaceChecks(unittest.TestCase):
                         'requestBody': self.spec['paths']['/example']['get']['requestBody']}
         self.text = self.block(self.request)
         self.expected = request_blocks(self.text)
+        self.payment = json.dumps({'openapi': '3.1.0', 'paths': {'/paid': {'get': {
+            'parameters': [{'name': 'target', 'in': 'query', 'required': True}],
+            'x-payment-info': {'price': {'amount': '0.08', 'currency': 'USD'}}}}}}).encode()
         self.payloads = {
+            'mpp-json': self.payment,
             'website-json': json.dumps(self.spec).encode(), 'docs-json': json.dumps(self.spec).encode(),
             'docs-root-json': json.dumps(self.spec).encode(),
             'mcp-version': json.dumps({'state': 'loaded', 'docsRefs': [self.ref], 'documentHashes': {'example': 'c' * 64}}).encode(),
@@ -34,7 +38,36 @@ class SurfaceChecks(unittest.TestCase):
 
     def check(self):
         return check_surfaces(self.spec, self.digest, {self.ref},
+            read_bytes=lambda name, url: self.payloads[name], expected_requests=self.expected,
+            expected_payment=self.payment)
+
+    def test_payment_subset_drift_is_detected_independently_of_other_surfaces(self):
+        for field in ('price', 'parameters', 'method', 'path'):
+            with self.subTest(field=field):
+                changed = json.loads(self.payment)
+                operation = changed['paths']['/paid']['get']
+                if field == 'price':
+                    operation['x-payment-info']['price']['amount'] = '0.02'
+                elif field == 'parameters':
+                    operation['parameters'][0]['required'] = False
+                elif field == 'method':
+                    changed['paths']['/paid'] = {'post': operation}
+                else:
+                    changed['paths'] = {'/wrong': {'get': operation}}
+                self.payloads['mpp-json'] = json.dumps(changed).encode()
+                self.payloads.pop('docs-json', None)
+                result = self.check()
+                self.assertIn('mpp-json:payment_contract_mismatch', result['mismatches'])
+                self.assertTrue(result['missing_inputs'])
+
+    def test_payment_mirror_requires_exact_bytes_and_missing_evidence_cannot_pass(self):
+        self.payloads['mpp-json'] = self.payment + b'\n'
+        result = self.check()
+        self.assertIn('mpp-json:formal_bytes_mismatch', result['mismatches'])
+        self.assertNotIn('mpp-json:payment_contract_mismatch', result['mismatches'])
+        result = check_surfaces(self.spec, self.digest, {self.ref},
             read_bytes=lambda name, url: self.payloads[name], expected_requests=self.expected)
+        self.assertIn('mpp-json:fixed_formal_discovery_missing', result['missing_inputs'])
 
     def test_independently_declared_complete_surfaces_pass(self):
         result = self.check()

@@ -77,6 +77,44 @@ class RevisionTests(unittest.TestCase):
         self.assertEqual(result['scope'], 'public_contract_convergence')
         self.assertGreater(result['checked_at'], 0)
 
+    def test_unavailable_website_cannot_hide_router_drift(self):
+        values = list(self.fixture())
+        values[2] = None
+        values[3]['docs_commit'] = 'b' * 40
+        values[3]['provider_document_hashes']['alpha'] = 'old'
+        result = self.assess(*values, expected_docs_ref='a' * 40,
+                             failures=['website:unavailable:HTTPError'])
+        self.assertEqual(result['status'], 'not_assessed')
+        self.assertIn('tool-router:docs_revision_mismatch', result['mismatches'])
+        self.assertIn('alpha:tool-router:document_hash_mismatch', result['mismatches'])
+        self.assertNotIn('alpha:website:document_hash_mismatch', result['mismatches'])
+
+    def test_missing_website_does_not_skip_independent_empty_catalog_proof(self):
+        import json
+        import tempfile
+        from unittest.mock import patch
+        documents, runtime, website, router = self.fixture()
+        runtime['providers'].append({'id': 'disabled_only', 'facts_hash': 'disabled'})
+        router['provider_document_hashes']['disabled_only'] = 'emptydoc'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'openapi.yaml').write_text(yaml.safe_dump({'info': {'x-aisa-document': {'providers': documents}}}))
+            self.write_website_version(root)
+            (root / 'website.yaml').unlink()
+            for name, value in [('runtime', runtime), ('router', router)]:
+                (root / (name + '.json')).write_text(json.dumps(value))
+            report = root / 'report.json'
+            with patch.object(sys, 'argv', ['check_contract_revisions.py', '--root', str(root),
+                    '--evidence-dir', str(root), '--acceptance', '--expected-docs-ref', 'a' * 40,
+                    '--report', str(report)]), patch('builtins.print'), \
+                    patch('check_contract_revisions.verified_empty_catalogs',
+                          return_value={'disabled_only': {'document_hash': 'emptydoc'}}) as proof:
+                self.assertEqual(main(), 1)
+                proof.assert_called_once()
+            result = json.loads(report.read_text())
+            self.assertEqual(result['status'], 'not_assessed')
+            self.assertNotIn('disabled_only:docs:catalog_missing', result['mismatches'])
+
     def test_matching_provider_hashes_cannot_hide_wrong_website_source(self):
         for field, replacement, expected in [
                 ('docsRevision', 'b' * 40, 'website:docs_revision_mismatch'),
