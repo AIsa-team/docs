@@ -63,6 +63,15 @@ def validate_surfaces(root, published_ref=None):
     history = published_history(root, published_ref)
     validate_document_identities(all_documents, history)
     localized_documents = {}
+    from readable_contract_notes import BEGIN, END, readable_block
+    from runtime_localize_openapi_zh import translation
+    catalog_path = root / 'translations/openapi-zh.json'
+    catalog = json.loads(catalog_path.read_text()) if catalog_path.is_file() else {'entries': {}}
+    def translated_note(note):
+        try:
+            return translation(catalog, note)
+        except KeyError:
+            return note
 
     def localized_document(provider):
         # Scope the cache to this assessment. Repeated pages of a large
@@ -130,6 +139,16 @@ def validate_surfaces(root, published_ref=None):
             identity = operation.get('operationId')
             if not identity or header.get('x-aisa-operation-id') != identity:
                 raise ValueError('page operation identity mismatch: ' + str(path))
+            # A correct frontmatter binding cannot certify stale or edited
+            # machine declarations in the body that llms-full will expose.
+            canonical_source = documents[provider]
+            canonical_operation = canonical_source['paths'][route][method]
+            expected_block = readable_block(canonical_operation, language, translated_note,
+                document=canonical_source, method=method, path=route,
+                spec_path=f"openapi/{'zh/' if language == 'zh' else ''}{provider}.json")
+            actual_blocks = re.findall(re.escape(BEGIN) + r".*?" + re.escape(END), text, re.S)
+            if actual_blocks != [expected_block]:
+                raise ValueError('page readable contract differs from provider: ' + str(path))
             page = path.relative_to(root).with_suffix('').as_posix()
             canonical = operation.get('x-aisa-identity', {}).get('canonical_operation_id', identity)
             found[language].setdefault((provider, route, method, canonical), set()).add(page)

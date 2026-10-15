@@ -55,6 +55,19 @@ class PublicationSurfaceTests(unittest.TestCase):
         page.write_text(page.read_text() + 'Different prose\n')
         self.assertNotEqual(hashes[page.relative_to(self.root).as_posix()], publication_hashes(self.root)[page.relative_to(self.root).as_posix()])
 
+    def test_missing_or_tampered_readable_request_cannot_pass_formal_surface_check(self):
+        from readable_contract_notes import strip_generated_block
+        for prefix in ('', 'zh/'):
+            page = self.root / (prefix + 'api-reference/fixture/one.mdx')
+            original = page.read_text()
+            for changed in (original.replace('"method": "GET"', '"method": "POST"'),
+                            original.replace('"parameters": []', '"parameters": [{"name":"hidden","in":"query","required":true}]'),
+                            strip_generated_block(original)):
+                page.write_text(changed)
+                with self.subTest(prefix=prefix), self.assertRaisesRegex(ValueError, 'readable contract differs'):
+                    validate_surfaces(self.root)
+                page.write_text(original)
+
     def test_translated_prose_is_allowed_but_literal_schema_data_is_not(self):
         self.change_json('openapi/zh/fixture.json', lambda d: d['paths']['/one']['get']['responses']['200'].update(description='成功'))
         validate_surfaces(self.root)
