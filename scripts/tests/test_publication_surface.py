@@ -100,6 +100,24 @@ class PublicationSurfaceTests(unittest.TestCase):
                     validate_surfaces(self.root)
                 page.write_text(original)
 
+    def test_disabled_status_refresh_and_tampering_are_formally_checked(self):
+        document = json.loads((self.root / 'openapi/fixture.json').read_text())
+        document['paths']['/one']['get']['x-aisa-status'] = 'disabled'
+        changes = {}
+        generate_pages(self.root, 'fixture', document, changes)
+        changes[self.root / 'openapi/fixture.json'] = json.dumps(document)
+        for path, text in changes.items():
+            path.write_text(text)
+        validate_surfaces(self.root)
+        for prefix in ('', 'zh/'):
+            page = self.root / (prefix + 'api-reference/fixture/one.mdx')
+            original = page.read_text()
+            for replacement in ('"x-aisa-status": "enabled"', '"unpublished-status": "disabled"'):
+                page.write_text(original.replace('"x-aisa-status": "disabled"', replacement))
+                with self.assertRaisesRegex(ValueError, 'readable contract differs'):
+                    validate_surfaces(self.root)
+                page.write_text(original)
+
     def test_translated_prose_is_allowed_but_literal_schema_data_is_not(self):
         self.change_json('openapi/zh/fixture.json', lambda d: d['paths']['/one']['get']['responses']['200'].update(description='成功'))
         validate_surfaces(self.root)

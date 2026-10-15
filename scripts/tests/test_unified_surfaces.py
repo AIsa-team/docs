@@ -56,6 +56,27 @@ class UnifiedSurfacesTests(unittest.TestCase):
             self.assertIn('9007199254740993', block)
         self.assertEqual(document, before)
 
+    def test_availability_is_exact_bilingual_and_absence_is_not_enabled(self):
+        for status in (None, "enabled", "disabled", "unknown"):
+            operation = {"operationId": "historical", "x-aisa-pricing": {"unit_rate_usd": 0.02}}
+            if status is not None:
+                operation["x-aisa-status"] = status
+            document = {"paths": {"/one": {"get": operation}}}
+            before = copy.deepcopy(document)
+            for language in ("en", "zh"):
+                context = dict(document=document, method="get", path="/one", spec_path="openapi/p.json")
+                block = readable_block(operation, language, **context)
+                request = json.loads(re.search(r'```json\n(.*?)\n```', block, re.S)[1])
+                self.assertEqual(request.get("x-aisa-status"), status)
+                self.assertEqual("x-aisa-status" in request, status is not None)
+                self.assertEqual(request["x-aisa-pricing"], operation["x-aisa-pricing"])
+                warning = "This endpoint is disabled and cannot be called" if language == "en" else "此接口已停用，无法调用"
+                self.assertEqual(warning in block, status == "disabled")
+                rendered = update_readable_block("Manual historical prose.\n", operation, language, **context)
+                self.assertTrue(rendered.startswith("Manual historical prose.\n"))
+                self.assertEqual(update_readable_block(rendered, operation, language, **context), rendered)
+            self.assertEqual(document, before)
+
     def test_auth_reference_chain_is_complete_and_missing_scheme_fails(self):
         operation = {'operationId': 'secured'}
         document = {'paths': {'/one': {'get': operation}}, 'security': [{'Auth': []}],
