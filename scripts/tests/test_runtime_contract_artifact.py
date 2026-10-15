@@ -74,6 +74,17 @@ class CanonicalArtifactTests(unittest.TestCase):
             self.assertEqual(set(facts), {'index.json', 'example.json', 'category.json'})
             self.assertEqual(facts['example.json'], original['providers/example.json'])
             self.assertNotIn('bundle_approved', binding)
+            receipt_path = root / 'acquisition-receipt.json'
+            receipt = json.loads(receipt_path.read_bytes())
+            receipt.pop('canonical_validation')
+            receipt_path.write_bytes(encoded(receipt))
+            with self.assertRaisesRegex(ValueError, 'Canonical acquisition validation differs'):
+                load_runtime(root, artifact_revision=self.revision, compiler_revision=self.compiler,
+                             receipt_sha256=fetch.sha(receipt_path.read_bytes()))
+
+    def test_fact_only_receipt_has_no_canonical_claim(self):
+        revision, compiler, reader, *_ = public_tests.PublicReleaseTests().fixture()
+        self.assertNotIn('canonical_validation', fetch.acquire(revision, compiler, reader)[-1])
 
     def test_canonical_roles_cannot_relax_fact_graph(self):
         value = json.loads(self.contents['index.json'])
@@ -151,6 +162,77 @@ class CanonicalArtifactTests(unittest.TestCase):
         self.contents[contract.AGGREGATE] = encoded(value)
         self.seal()
         with self.assertRaisesRegex(ValueError, 'v2 mirrors'):
+            self.acquire()
+
+    def test_path_item_reference_chains_are_resolved_before_identity_comparison(self):
+        value = native()
+        value['components'] = {'pathItems': {'actual/part': value['paths']['/request'],
+                                            'alias': {'$ref': '#/components/pathItems/actual%7E1part'}}}
+        value['paths']['/request'] = {'$ref': '#/components/pathItems/alias'}
+        self.contents['contracts/native/example.json'] = encoded(value)
+        self.contents[contract.AGGREGATE] = encoded(value)
+        self.seal()
+        self.acquire()
+        self.assertEqual(contract.operation_ids(value), {'canonical'})
+        value['components']['pathItems']['actual/part']['get']['operationId'] = 'wrong'
+        self.contents[contract.AGGREGATE] = encoded(value)
+        self.seal()
+        with self.assertRaisesRegex(ValueError, 'identities differ'):
+            self.acquire()
+        value['components']['pathItems']['actual/part'] = {'$ref': '#/components/pathItems/alias'}
+        self.contents[contract.AGGREGATE] = encoded(value)
+        self.seal()
+        with self.assertRaisesRegex(ValueError, 'recursive public object'):
+            self.acquire()
+
+    def test_security_requirements_are_closed_or_exact_disabled_legacy_debt(self):
+        for status, state in [(None, None), ('enabled', 'retained_legacy'), ('disabled', None)]:
+            value = native()
+            operation = value['paths']['/request']['get']
+            operation['security'] = [{'MissingScheme': []}]
+            operation['x-aisa-documentation-limitations'] = ['unresolved_security_scheme:MissingScheme']
+            if status:
+                operation['x-aisa-status'] = status
+            if state:
+                operation['x-aisa-contract-state'] = state
+            self.contents['contracts/native/example.json'] = encoded(value)
+            self.contents[contract.AGGREGATE] = encoded(value)
+            self.seal()
+            with self.subTest(status=status, state=state), self.assertRaisesRegex(ValueError, 'security scheme'):
+                self.acquire()
+        operation['x-aisa-contract-state'] = 'retained_legacy'
+        self.contents['contracts/native/example.json'] = encoded(value)
+        self.contents[contract.AGGREGATE] = encoded(value)
+        self.seal()
+        receipt = self.acquire()[-1]
+        validation = receipt['canonical_validation']
+        self.assertEqual(validation['security_status'], 'historical_debt')
+        self.assertEqual(len(validation['historical_security_debt']), 2)
+        for row in validation['historical_security_debt']:
+            self.assertEqual({k: v for k, v in row.items() if k != 'document'},
+                {'provider': 'example', 'path': '/request', 'method': 'GET',
+                 'operation_id': 'canonical', 'scheme': 'MissingScheme'})
+        value['security'] = [{'MissingRoot': []}]
+        self.contents[contract.AGGREGATE] = encoded(value)
+        self.seal()
+        with self.assertRaisesRegex(ValueError, 'security scheme'):
+            self.acquire()
+
+    def test_auth_aliases_resolve_and_schema_security_properties_are_data(self):
+        value = native()
+        value['security'] = [{'Auth': []}]
+        value['components'] = {'securitySchemes': {'Auth': {'$ref': '#/components/securitySchemes/Concrete'},
+            'Concrete': {'type': 'http', 'scheme': 'bearer'}}, 'schemas': {'Business': {'type': 'object',
+                'properties': {'security': {'type': 'array', 'default': [{'NotAuth': []}]}},
+                'example': {'security': [{'NotAuth': []}]}}}}
+        self.contents['contracts/native/example.json'] = encoded(value)
+        self.contents[contract.AGGREGATE] = encoded(value)
+        self.seal()
+        self.assertEqual(self.acquire()[-1]['canonical_validation']['security_status'], 'passed')
+        value['components']['securitySchemes']['Concrete'] = {'$ref': '#/components/securitySchemes/Auth'}
+        self.contents[contract.AGGREGATE] = encoded(value)
+        self.seal()
+        with self.assertRaisesRegex(ValueError, 'recursive public object'):
             self.acquire()
 
     def test_refs_are_context_aware_and_business_examples_preserved(self):

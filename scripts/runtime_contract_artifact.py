@@ -51,13 +51,15 @@ def strict_json(raw):
     return json.loads(raw, object_pairs_hook=pairs, parse_float=checked_float, parse_constant=invalid)
 
 
-def operation_ids(document, *, aggregate=False):
-    # Reuse the production mirror rule; never create a separate endpoint list.
+def operation_ids(document, *, aggregate=False, security_debt=None):
+    # Reuse the production mirror rule and resolver, not a second endpoint list.
+    from compose_openapi import effective_object, effective_security
     from runtime_consolidate_openapi import remove_v2_path_mirrors, validate_reference_closure
     require(isinstance(document, dict) and document.get('openapi') in {'3.0.0', '3.0.1', '3.0.2', '3.0.3', '3.1.0', '3.1.1'}
             and isinstance(document.get('info'), dict) and isinstance(document.get('paths'), dict),
             'Invalid canonical OpenAPI document')
     validate_reference_closure(document)
+    effective_security({}, document)  # Root declarations cannot claim an operation-only legacy exception.
     selected = {'paths': document['paths']}
     removed = remove_v2_path_mirrors(selected)
     require(not aggregate or removed == 0, 'Aggregate still contains removed v2 mirrors')
@@ -65,18 +67,24 @@ def operation_ids(document, *, aggregate=False):
     for path, item in selected['paths'].items():
         require(isinstance(path, str) and path.startswith('/') and isinstance(item, dict),
                 'Invalid canonical path item')
+        item = effective_object(item, document)
         for method, operation in item.items():
             if method not in METHODS:
                 continue
             require(isinstance(operation, dict) and isinstance(operation.get('operationId'), str)
                     and operation['operationId'] and operation['operationId'] not in identities,
                     'Invalid or duplicate canonical operation identity')
+            _, missing_schemes = effective_security(operation, document)
+            if security_debt is not None:
+                security_debt.extend({'path': path, 'method': method.upper(),
+                    'operation_id': operation['operationId'], 'scheme': scheme}
+                    for scheme in sorted(set(missing_schemes)))
             identities.add(operation['operationId'])
     return identities
 
 
 def validate_canonical_files(contents, current):
-    """Validate optional closed canonical graph; return only its self-described binding.
+    """Validate optional canonical integrity and report explicit historical auth debt.
 
     This does not match bundle/build pins to deployment policy, approve source
     freshness, or prove native/aggregate field equivalence. The producer and
@@ -116,15 +124,25 @@ def validate_canonical_files(contents, current):
                 'Canonical member bytes or hash differ')
         seen.append(name)
     require(seen == sorted(seen) and set(seen) == names - {MANIFEST}, 'Canonical graph membership differs')
-    identities = set()
+    identities, owners, security_debt = set(), {}, []
     for name in sorted(native_names):
-        native_ids = operation_ids(strict_json(contents[name]))
+        missing = []
+        native_ids = operation_ids(strict_json(contents[name]), security_debt=missing)
+        provider = name.removeprefix('contracts/native/').removesuffix('.json')
+        owners.update({identity: provider for identity in native_ids})
+        security_debt.extend({**row, 'provider': provider, 'document': name} for row in missing)
         require(not identities.intersection(native_ids), 'Canonical native identities overlap')
         identities.update(native_ids)
-    require(identities == operation_ids(strict_json(contents[AGGREGATE]), aggregate=True),
+    missing = []
+    require(identities == operation_ids(strict_json(contents[AGGREGATE]), aggregate=True, security_debt=missing),
             'Canonical native and aggregate identities differ')
+    security_debt.extend({**row, 'provider': owners[row['operation_id']], 'document': AGGREGATE}
+                         for row in missing)
     readiness = strict_json(contents[READINESS])
     require(isinstance(readiness, dict) and readiness.get('status') == 'passed' and
             all(readiness.get(key) == [] for key in ('global_errors', 'missing_inputs', 'blocked_providers')),
             'Canonical compilation readiness did not pass')
-    return manifest
+    return {'protocol_version': PROTOCOL, 'operation_identity_count': len(identities),
+            'security_status': 'historical_debt' if security_debt else 'passed',
+            'historical_security_debt': security_debt,
+            'scope': 'integrity_and_operation_identity_only_not_field_equivalence_or_source_authorization'}

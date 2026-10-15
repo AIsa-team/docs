@@ -159,8 +159,10 @@ def facts_members(contents):
     return {name: raw for name, raw in contents.items() if not name.startswith('contracts/')}
 
 
-def validate_artifact_files(contents, current):
-    validate_canonical_files(contents, current)
+def validate_artifact_files(contents, current, *, canonical_result=None):
+    result = validate_canonical_files(contents, current)
+    if canonical_result is not None and result is not None:
+        canonical_result.update(result)
     return validate_release_files(facts_members(contents))
 
 
@@ -182,7 +184,8 @@ def acquire(revision, compiler, reader):
                 'Immutable file hash or ETag mismatch')
         decode(raw)
         contents[row['name']] = raw
-    index, providers, selected = validate_artifact_files(contents, before)
+    canonical_validation = {}
+    index, providers, selected = validate_artifact_files(contents, before, canonical_result=canonical_validation)
     coverage = index['coverage']
     category, _ = reader('/info/apis/category')
     catalog = category_content(category)
@@ -203,6 +206,8 @@ def acquire(revision, compiler, reader):
                'category_ignored_volatile_fields': ['cached_at'],
                'category_scope': 'live unversioned category content, stable twice except cache construction timestamp; outside immutable release manifest',
                'scope': 'actual public Runtime input acquisition only; no Docs readiness or baseline approval'}
+    if canonical_validation:
+        receipt['canonical_validation'] = canonical_validation
     return contents, category, before_raw, after_raw, receipt
 
 

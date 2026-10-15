@@ -64,6 +64,25 @@ The native comparison reuses the existing `remove_v2_path_mirrors` rule; the
 aggregate must already have removed those mirrors. Business example/default
 values are not mistaken for schema references.
 
+Path Item reference chains are resolved with the existing Composer resolver
+before enumerating IDs, including escaped JSON pointers; unresolved or cyclic
+public-object references fail closed. Root and effective public-operation
+security requirements resolve named schemes through the same authentication
+helper used by the existing MDX renderer. Enabled operations and ordinary
+disabled operations cannot reference a missing scheme.
+
+The renderer already preserves one precise historical exception: an operation
+with both `x-aisa-status: disabled` and
+`x-aisa-contract-state: retained_legacy` may retain a missing security-scheme
+name. This reader reuses that rule; it does not invent a Bearer definition or
+change the fixed historical bundle. Such findings are reported explicitly in
+`canonical_validation.historical_security_debt` in the acquisition receipt and
+public shadow binding, with provider, path, method, operation ID, scheme and
+document. `security_status` is `historical_debt`, not `passed`. The fixed corpus
+has three Agentmail historical operations with an unresolved `Bearer` name,
+appearing in both native and aggregate documents (six declaration findings).
+Receipt replay recomputes this result. Fact-only receipts gain no such field.
+
 This reader verifies graph integrity and operation identities. It does **not**
 recompile aggregate transformations or claim complete native/aggregate field
 equivalence. The producer must validate that they came from the same compile.
@@ -127,3 +146,11 @@ documents, 2,007 aggregate operations, and 40,486,518 member bytes. Acquisition
 and save preserved every byte; the shadow stage received only 57 facts/category
 files. Network and subprocess were forbidden. This is not a genuine production
 publication, current build approval, or source authorization.
+
+After the independent authentication/Path Item review fixes, the same 133-file
+fixture still preserved all original artifact bytes and the same outer revision;
+it explicitly reported the three disabled Agentmail operations above. Extracting
+the shared authentication helper left all 4,014 English/Chinese request blocks
+byte-for-byte unchanged. Missing auth on enabled/ordinary-disabled operations,
+forged freeform limitation text, and different IDs hidden in Path Item references
+are negative regressions, not silently accepted forms.

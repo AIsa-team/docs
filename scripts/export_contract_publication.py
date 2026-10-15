@@ -42,6 +42,8 @@ def acquired_input(facts):
             require((facts / Path(name).name).read_bytes() == content, 'Flat Runtime facts changed')
         return content, {'etag': '"' + sha(content) + '"'}
     rebuilt = acquire(revision, compiler, reader)[-1]
+    require(canonical(receipt.get('canonical_validation')) == canonical(rebuilt.get('canonical_validation')),
+            'Canonical acquisition validation differs')
     for key in (*RUNTIME_KEYS, 'manifest_files', 'inventory_endpoint_count', 'selected_endpoint_count',
                 'provider_count', 'category_sha256', 'category_content_sha256', 'category_ignored_volatile_fields'):
         require(receipt.get(key) == rebuilt[key], 'Saved acquisition receipt mismatch')

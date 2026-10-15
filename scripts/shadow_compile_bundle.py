@@ -47,7 +47,11 @@ def load_runtime(root, *, artifact_revision, compiler_revision, receipt_sha256):
         require(sha(raw) == row['sha256'], 'Runtime member differs from immutable manifest')
         strict_json(raw)
         contents[row['name']] = raw
-    validate_artifact_files(contents, before)
+    canonical_validation = {}
+    validate_artifact_files(contents, before, canonical_result=canonical_validation)
+    if canonical_validation:
+        require(canonical(receipt.get('canonical_validation')) == canonical(canonical_validation),
+                'Canonical acquisition validation differs')
     category = regular_read(root, 'category.json')
     require(len(category) <= MAX_FILE and total + len(category) <= MAX_TOTAL,
             'Runtime category byte limit exceeded')
@@ -56,9 +60,12 @@ def load_runtime(root, *, artifact_revision, compiler_revision, receipt_sha256):
             'Unversioned category differs from pinned original acquisition')
     facts = {Path(name).name: raw for name, raw in facts_members(contents).items()}
     facts['category.json'] = category
-    return facts, {'artifact_revision': artifact_revision, 'compiler_revision': compiler_revision,
+    binding = {'artifact_revision': artifact_revision, 'compiler_revision': compiler_revision,
                    'acquisition_receipt_sha256': receipt_sha256, 'generation': before['generation'],
                    'freshness': 'historical_acquisition_only_not_current_freshness'}
+    if canonical_validation:
+        binding['canonical_validation'] = canonical_validation
+    return facts, binding
 
 
 def compile_shadow(bundle_root, runtime_root, *, bundle_sha256, docs_ref,
