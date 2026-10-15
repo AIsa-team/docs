@@ -123,25 +123,25 @@ def validate_surfaces(root, published_ref=None):
                     raise ValueError('runtime page has no operation reference: ' + str(path))
                 continue
             match = re.fullmatch(r'openapi/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)', reference)
-            if not match or match[2] not in documents:
+            if not match or match[2] not in all_documents:
                 if header.get('x-aisa-operation-id') in identities:
                     raise ValueError('runtime page references an unknown document: ' + str(path))
                 continue
             if bool(match[1]) != (language == 'zh'):
                 raise ValueError('page references wrong language: ' + str(path))
             provider, method, route = match[2], match[3].lower(), match[4]
-            source_document = documents[provider]
+            source_document = all_documents[provider]
             if language == 'zh':
                 source_document = localized_document(provider)
             operation = source_document.get('paths', {}).get(route, {}).get(method)
             if method not in METHODS or not isinstance(operation, dict):
                 raise ValueError('page references missing operation: ' + str(path))
             identity = operation.get('operationId')
-            if not identity or header.get('x-aisa-operation-id') != identity:
+            if (provider in documents or 'x-aisa-operation-id' in header) and (not identity or header.get('x-aisa-operation-id') != identity):
                 raise ValueError('page operation identity mismatch: ' + str(path))
             # A correct frontmatter binding cannot certify stale or edited
             # machine declarations in the body that llms-full will expose.
-            canonical_source = documents[provider]
+            canonical_source = all_documents[provider]
             canonical_operation = canonical_source['paths'][route][method]
             expected_block = readable_block(canonical_operation, language, translated_note,
                 document=canonical_source, method=method, path=route,
