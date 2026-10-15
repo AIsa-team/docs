@@ -6,8 +6,10 @@ import copy
 import hashlib
 import json
 import re
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+from compose_openapi import effective_object, map_contract_children, referenced_components
 
 # Reviewed settlement denomination, not a token-price oracle. New assets/chains
 # require explicit review instead of assuming every ERC20 represents one USD.
@@ -29,28 +31,38 @@ def local_file(root, name):
     return path
 
 
-def build_catalog(root, allowlist, evidence, plan_raw, blocked=()):
-    plan = json.loads(plan_raw)
-    if evidence.get('version') != 2 or plan.get('version') != 1:
-        raise ValueError('Expected reviewed v2 payment evidence and v1 runtime plan')
-    if evidence.get('runtime_plan_sha256') != digest(plan_raw):
-        raise ValueError('Runtime quote plan changed')
+def build_catalog(root, allowlist, evidence, plan_raw=None, blocked=(), *, runtime_quotes=False):
+    if runtime_quotes:
+        if evidence.get('version') != 3 or evidence.get('quote_source') != 'runtime-unauthenticated-402':
+            raise ValueError('Expected explicitly attributed Runtime 402 evidence')
+        plan = {'entries': []}
+    else:
+        plan = json.loads(plan_raw)
+        if evidence.get('version') != 2 or plan.get('version') != 1:
+            raise ValueError('Expected reviewed v2 payment evidence and v1 runtime plan')
+        if evidence.get('runtime_plan_sha256') != digest(plan_raw):
+            raise ValueError('Runtime quote plan changed')
     if evidence.get('environment') != 'production' or evidence.get('server') != 'https://api.aisa.one':
         raise ValueError('Only production challenge evidence may be published')
     allowed = {key(op): op for op in allowlist}
     if len(allowed) != len(allowlist) or any(op['provider'] == 'tikhub' for op in allowlist):
         raise ValueError('Invalid reviewed allowlist')
     quotes = {key(row['operation']): row for row in plan['entries']}
+    if len(quotes) != len(plan['entries']):
+        raise ValueError('Duplicate runtime quote operation')
     doc = {'openapi': '3.1.0', 'info': {
         'title': 'AIsa MPP Data APIs', 'version': '2.0.0',
         'contact': {'url': 'https://aisa.one', 'email': 'developer@aisa.one'},
         'description': 'Reviewed synchronous read-only APIs. Prices reflect the verified public PAYG quote; inspect the current 402 challenge before payment.',
         'x-guidance': 'GET uses query/path parameters. Read-only POST uses the documented requestBody. Request without credentials to inspect the 402 WWW-Authenticate challenge, then retry the same request and X-Request-ID with Authorization: Payment <credential>. Failed payment records do not imply an on-chain refund.'},
         'servers': [{'url': evidence['server']}], 'paths': {}}
-    report = {'version': 2, 'runtime_plan_sha256': digest(plan_raw), 'allowlist_sha256': digest(json.dumps(allowlist, sort_keys=True).encode()),
+    report = {'version': 3 if runtime_quotes else 2, 'quote_source': 'runtime-unauthenticated-402' if runtime_quotes else 'verified-runtime-plan', 'allowlist_sha256': digest(json.dumps(allowlist, sort_keys=True).encode()),
               'providers': {}, 'included': [], 'excluded': [{'provider': r['provider'], 'method': r['method'], 'path': r['path'], 'reason': r['blocked_reason']} for r in blocked], 'known_warnings': ['MPPScan UI may warn about GET input schemas; query/path parameters remain authoritative and no synthetic JSON body is added.'], 'verification': 'Unauthenticated challenges only; paid execution remains a separate staging acceptance step.'}
+    if not runtime_quotes:
+        report['runtime_plan_sha256'] = digest(plan_raw)
     seen = set()
     operation_ids = set()
+    sources, verified_bindings = {}, set()
     for entry in evidence['operations']:
         identity = key(entry)
         if identity in seen:
@@ -62,13 +74,20 @@ def build_catalog(root, allowlist, evidence, plan_raw, blocked=()):
             report['excluded'].append({'provider': identity[0], 'method': identity[1], 'path': identity[2], 'reason': entry['error']})
             continue
         quote = quotes.get(identity)
-        if not quote or quote.get('blocked_reason'):
+        if not runtime_quotes and (not quote or quote.get('blocked_reason')):
             raise ValueError('No eligible deterministic runtime quote')
         spec = allowed[identity]
-        raw = local_file(root, spec['source']).read_bytes()
-        if digest(raw) != entry['source_sha256']:
-            raise ValueError('Source changed after challenge verification')
-        source = json.loads(raw)
+        if spec['source'] not in sources:
+            raw = local_file(root, spec['source']).read_bytes()
+            sources[spec['source']] = (raw, json.loads(raw))
+        raw, source = sources[spec['source']]
+        binding = evidence.get('source_contracts', {}).get(spec['source'])
+        if binding is None:
+            if digest(raw) != entry['source_sha256']:
+                raise ValueError('Source changed after challenge verification')
+        elif spec['source'] not in verified_bindings:
+            verify_contract_binding(source, [op for op in allowlist if op['source'] == spec['source']], binding)
+            verified_bindings.add(spec['source'])
         provider, method, path = identity
         method = method.lower()
         if method not in ('get', 'post'):
@@ -78,16 +97,28 @@ def build_catalog(root, allowlist, evidence, plan_raw, blocked=()):
         caps = original.get('x-aisa-capabilities', {})
         if original.get('x-aisa-status') != 'enabled' or caps.get('mpp') is not True:
             raise ValueError('Runtime has not enabled MPP for this operation')
-        if 'mpp_methods' in caps and method.upper() not in caps['mpp_methods']:
+        if not isinstance(caps.get('mpp_methods'), list) or method.upper() not in caps['mpp_methods']:
             raise ValueError('Runtime method is not enabled for MPP')
         document_target = original.get('x-aisa-upstream-path')
-        if (quote['operation'].get('target') != spec['target'] or
+        bound_target = entry.get('runtime_binding', {}).get('target') if runtime_quotes else quote['operation'].get('target')
+        if (bound_target != spec['target'] or
                 (document_target is not None and document_target != spec['target']) or
                 (document_target is None and original.get('x-aisa-validation') != 'runtime')):
             raise ValueError('Reviewed upstream route changed or lacks runtime authority')
         revisions = original.get('x-aisa-revision')
-        if not revisions or not all(quote.get(k) for k in ('profile_ref', 'customer_pricing_ref', 'plan_policy_version')) or revisions.get('profile_ref') != quote.get('profile_ref') or revisions.get('customer_pricing_ref') != quote.get('customer_pricing_ref') or revisions.get('plan_policy_version') != quote.get('plan_policy_version'):
+        quoted_revisions = entry.get('runtime_binding', {}).get('revision', {}) if runtime_quotes else quote
+        if not revisions or not all(quoted_revisions.get(k) for k in ('profile_ref', 'customer_pricing_ref', 'plan_policy_version')) or any(revisions.get(k) != quoted_revisions.get(k) for k in ('profile_ref', 'customer_pricing_ref', 'plan_policy_version')):
             raise ValueError('Missing runtime source revisions')
+        if runtime_quotes:
+            bound = entry['runtime_binding']
+            for name, field in (('pricing', 'x-aisa-pricing'), ('capabilities', 'x-aisa-capabilities'), ('status', 'x-aisa-status')):
+                declared = original.get(field)
+                if name == 'capabilities':
+                    # Composer also documents ordinary token-auth quote and
+                    # idempotency headers; Runtime owns these payment flags.
+                    declared = {k: declared.get(k) for k in ('mpp', 'mpp_methods', 'x402') if k in bound[name]}
+                if canonical_json(bound.get(name)) != canonical_json(declared):
+                    raise ValueError('Current source differs from acquired Runtime payment binding')
         if original.get('x-aisa-pricing', {}).get('cost_contract') != 'fixed_success':
             raise ValueError('Runtime no longer advertises fixed cost')
         offer = entry['offer']
@@ -98,14 +129,32 @@ def build_catalog(root, allowlist, evidence, plan_raw, blocked=()):
                 or not offer.get('description') or not re.fullmatch(r'[0-9]+', amount)
                 or decimals is None or entry.get('decimals') != decimals):
             raise ValueError('Invalid observed payment terms or unknown USD denomination')
-        price = quote.get('price_micros_usd')
-        base, multiplier = quote.get('base_micros_usd'), quote.get('payg_multiplier_ppm')
-        if (not isinstance(price, int) or price <= 0 or not isinstance(base, int) or base <= 0
-                or not isinstance(multiplier, int) or multiplier <= 0
-                or price != (base * multiplier + 999999) // 1000000):
-            raise ValueError('Invalid deterministic PAYG quote')
-        if Decimal(amount) / 10**decimals != Decimal(price) / 1_000_000:
-            raise ValueError('Live challenge amount differs from runtime PAYG quote')
+        # Expiry is the historical challenge lifetime, not a claim that the
+        # published static offer is still redeemable. Clients obtain a new 402.
+        try:
+            observed = datetime.fromisoformat(entry['observed_at'].replace('Z', '+00:00'))
+            expires = datetime.fromisoformat(entry['expires'].replace('Z', '+00:00'))
+            if observed.tzinfo is None or expires.tzinfo is None or expires <= observed:
+                raise ValueError('Invalid observed challenge lifetime')
+        except (TypeError, ValueError) as exc:
+            raise ValueError('Invalid observed challenge lifetime') from exc
+        if runtime_quotes:
+            price = int(amount)
+            if price <= 0 or decimals != 6:
+                raise ValueError('Invalid Runtime fixed USD amount')
+            quote_source = {'authority': 'runtime-unauthenticated-402', 'amount': amount,
+                            'currency': offer['currency'], 'chain_id': entry['chain_id'], 'decimals': decimals}
+        else:
+            price = quote.get('price_micros_usd')
+            base, multiplier = quote.get('base_micros_usd'), quote.get('payg_multiplier_ppm')
+            if (type(price) is not int or price <= 0 or type(base) is not int or base <= 0
+                    or type(multiplier) is not int or multiplier <= 0
+                    or price != (base * multiplier + 999999) // 1000000):
+                raise ValueError('Invalid deterministic PAYG quote')
+            if Decimal(amount) / 10**decimals != Decimal(price) / 1_000_000:
+                raise ValueError('Live challenge amount differs from runtime PAYG quote')
+            quote_source = {'profile_sha256': quote['profile_sha256'], 'pricing_sha256': quote['pricing_sha256'],
+                            'base_micros_usd': base, 'payg_multiplier_ppm': multiplier, 'price_micros_usd': price}
         op = {k: copy.deepcopy(v) for k, v in original.items()
               if not k.startswith('x-aisa-') and k not in ('security', 'servers')}
         if method == 'post' and not op.get('requestBody'):
@@ -126,7 +175,9 @@ def build_catalog(root, allowlist, evidence, plan_raw, blocked=()):
         params.update({parameter_key(p): p for p in op.get('parameters', [])})
         if params:
             op['parameters'] = list(params.values())
-        namespace = provider.replace('-', '_') + '__'
+        # Match the deployed runtime catalogue identity and avoid collisions
+        # between differently scoped component definitions of one provider.
+        namespace = provider.replace('-', '_') + '_' + digest((method.upper() + path).encode())[:12] + '__'
         reachable = {}
 
         def rewrite(value):
@@ -134,7 +185,9 @@ def build_catalog(root, allowlist, evidence, plan_raw, blocked=()):
                 return [rewrite(v) for v in value]
             if not isinstance(value, dict):
                 return value
-            value = {k: rewrite(v) for k, v in value.items()}
+            if '$dynamicRef' in value or '$recursiveRef' in value:
+                raise ValueError('Unsupported dynamic payment reference')
+            value = map_contract_children(value, rewrite)
             if '$ref' in value:
                 value['$ref'] = reference(value['$ref'])
             if isinstance(value.get('discriminator'), dict):
@@ -154,7 +207,9 @@ def build_catalog(root, allowlist, evidence, plan_raw, blocked=()):
             target = '#/components/' + section + '/' + target_name.replace('~', '~0').replace('/', '~1')
             if ref not in reachable:
                 reachable[ref] = True
-                component = rewrite(copy.deepcopy(source['components'][section][name]))
+                definition = copy.deepcopy(source['components'][section][name])
+                component = (rewrite({'links': {'target': definition}})['links']['target']
+                             if section == 'links' else rewrite(definition))
                 dest = doc.setdefault('components', {}).setdefault(section, {})
                 if target_name in dest and dest[target_name] != component:
                     raise ValueError('Component namespace collision')
@@ -189,8 +244,7 @@ def build_catalog(root, allowlist, evidence, plan_raw, blocked=()):
         doc['paths'].setdefault(path, {})[method] = op
         report['included'].append({'provider': provider, 'method': method.upper(), 'path': path,
                                    'source': spec['source'], 'source_sha256': digest(raw), 'source_revision': revisions,
-                                   'quote_source': {'profile_sha256': quote['profile_sha256'], 'pricing_sha256': quote['pricing_sha256'],
-                                                    'base_micros_usd': base, 'payg_multiplier_ppm': multiplier, 'price_micros_usd': price},
+                                   'quote_source': quote_source,
                                    'observed_at': entry['observed_at'], 'chain_id': entry['chain_id'], 'decimals': decimals})
     for identity, spec in allowed.items():
         if identity not in seen:
@@ -204,4 +258,80 @@ def build_catalog(root, allowlist, evidence, plan_raw, blocked=()):
         raise ValueError('No verified operations; refusing empty publication')
     raw = (json.dumps(doc, indent=2, ensure_ascii=True) + '\n').encode()
     report['output_sha256'] = digest(raw)
+    return doc, report
+
+
+def canonical_json(value):
+    return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True, allow_nan=False).encode()
+
+
+def contract_projection(source, operations):
+    """Bind selected contracts and their full closure, not source refresh metadata.
+
+    Instances and unknown extensions remain data; neither may introduce refs.
+    Display-only fields do not authorize pricing, auth or schema changes.
+    """
+    selected = {}
+    for spec in operations:
+        method, path = spec['method'].lower(), spec['path']
+        item = source['paths'][path]
+        original = item[method]
+        contract = {k: copy.deepcopy(v) for k, v in original.items() if k not in {
+            'description', 'summary', 'tags', 'externalDocs', 'x-codeSamples',
+            'x-aisa-source', 'x-aisa-response-source', 'x-aisa-docs-url', 'x-aisa-category'}}
+        contract['path_parameters'] = copy.deepcopy(item.get('parameters', []))
+        contract['servers'] = copy.deepcopy(original.get('servers', item.get('servers', source.get('servers', []))))
+        contract['security'] = copy.deepcopy(original.get('security', source.get('security', [])))
+        schemes = {}
+        for requirement in contract['security']:
+            for name in requirement:
+                try:
+                    schemes[name] = effective_object(source['components']['securitySchemes'][name], source)
+                except KeyError as exc:
+                    raise ValueError('Unresolved payment source security scheme') from exc
+        # x-aisa fields and security scheme definitions are not request schemas.
+        public = {k: v for k, v in contract.items() if not k.startswith('x-aisa-')}
+        contract['components'] = referenced_components(public, source)
+        contract['security_schemes'] = schemes
+        selected[method.upper() + ' ' + path] = contract
+    return selected
+
+
+def contract_binding(source, operations):
+    projection = contract_projection(source, operations)
+    return {'algorithm': 'sha256-selected-multi-payment-contracts-v1',
+            'sha256': digest(canonical_json(projection)), 'projection': projection}
+
+
+def verify_contract_binding(source, operations, binding):
+    if not isinstance(binding, dict) or set(binding) != {'algorithm', 'sha256', 'projection'}:
+        raise ValueError('Invalid payment contract binding')
+    actual = contract_binding(source, operations)
+    if canonical_json(binding) != canonical_json(actual):
+        raise ValueError('Reviewed payment contract changed; review and refresh evidence')
+
+
+def build_publication(root, bundle):
+    """Read the reviewed public subset without expanding production enablement."""
+    if bundle.get('version') != 3 or bundle.get('kind') != 'reviewed-mpp-publication':
+        raise ValueError('Unsupported payment publication bundle')
+    allowed = bundle['allowlist']
+    evidence = bundle['challenge_evidence']
+    if not allowed or any(op['source'] != 'openapi/' + op['provider'] + '.json' for op in allowed):
+        raise ValueError('Invalid payment provider source')
+    if set(evidence.get('source_contracts', {})) != {op['source'] for op in allowed}:
+        raise ValueError('Missing or unexpected reviewed payment source binding')
+    identities = {key(op) for op in allowed}
+    if identities != {key(row) for row in evidence['operations']} or any(row.get('error') for row in evidence['operations']):
+        raise ValueError('Every published operation requires successful production challenge evidence')
+    snapshot = evidence.get('runtime_snapshot', {})
+    if (not re.fullmatch('[0-9a-f]{64}', str(snapshot.get('artifact_revision', '')))
+            or not re.fullmatch('[0-9a-f]{40}', str(snapshot.get('compiler_revision', '')))
+            or not re.fullmatch('[0-9a-f]{64}', str(snapshot.get('source_digest', '')))
+            or type(snapshot.get('generation')) is not int or snapshot['generation'] < 0
+            or evidence.get('fresh_before_and_after') is not True):
+        raise ValueError('Missing stable fresh Runtime snapshot attribution')
+    doc, report = build_catalog(root, allowed, evidence, runtime_quotes=True)
+    if report['excluded'] or len(report['included']) != len(allowed):
+        raise ValueError('Refusing to silently withdraw a published payment operation')
     return doc, report
