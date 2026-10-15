@@ -110,3 +110,7 @@ source observations, 74 exact native files and the 2,007-operation aggregate. It
 future canonical Runtime acquisition and compiled-lock fields remain synthetic.
 In-memory formal preparation and consumer compatibility tests are not evidence
 of a successful production canonical publication or renewed source approval.
+The complete assessment followed by exporter replay passed in 117.915 seconds;
+194 focused and neighboring tests passed. Website's new shape validator and the
+existing MCP/Router graph and source checks also accepted that full report at its
+original historical assessment time, without extending its authorization.
