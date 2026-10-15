@@ -75,7 +75,11 @@ def validate_report_deferrals(root, report):
         from gap_evidence import gap_key
     policy = load_deferred_definitions(root)
     expected = policy.metadata if policy else None
-    for scope in (report, report.get('composed_candidate', {})):
+    from formal_assessment import CANONICAL
+    # Canonical metadata is independently reconstructed in the outer report;
+    # this mode must not fabricate a local Composer result to carry exemptions.
+    scopes = (report,) if report.get('evaluation') == CANONICAL else (report, report.get('composed_candidate', {}))
+    for scope in scopes:
         if scope.get('deferred_definitions') != expected:
             raise ValueError('Formal report deferral policy mismatch')
         seen = set()
