@@ -60,6 +60,9 @@ scope, document/provider counts, and manifest SHA-256. A rejected input exits
 nonzero. Runtime metrics are kept outside the deterministic artifact.
 
 The `compile_shadow(...)` Python API implements the same boundary as the CLI.
+Its composition implementation is shared with the explicitly separate
+[internal snapshot shadow adapter](internal-snapshot-shadow.md); this public
+entry point retains all original acquisition and independent-pin requirements.
 `load_bundle(...)` returns verified bytes and the verified `BundleHistory`;
 all composition inputs are materialized privately from these bytes. The shadow
 path explicitly supplies history, uses `offline=True` and `with_pages=False`,
