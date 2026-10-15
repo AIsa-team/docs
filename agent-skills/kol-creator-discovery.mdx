@@ -1,0 +1,126 @@
+---
+title: "KOL Creator Discovery"
+description: "Find creator emails and similar YouTube or TikTok creators from a single profile URL, returning an outreach-ready table."
+---
+
+[View on GitHub →](https://github.com/AIsa-team/agent-skills/tree/main/marketing/kol-creator-discovery)
+
+**Creator prospecting for agents.** Provide the skill with a TikTok, Instagram, or YouTube profile URL. It looks up that creator's contact email, finds similar YouTube or TikTok creators via AIsa's WaveInflu APIs, retrieves an email for each match, and returns an evidence-based Markdown table (plus optional JSON).
+
+## Install
+
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill kol-creator-discovery
+```
+
+```bash AIsa CLI
+npm install -g @aisa-one/cli
+aisa skills install kol-creator-discovery
+```
+</CodeGroup>
+
+Start a new agent session after installing so the skill loads.
+
+## What can agents do with it?
+
+<CardGroup cols={2}>
+  <Card title="Creator email lookup" icon="envelope">
+    "Find the contact email for this Instagram creator profile."
+  </Card>
+  <Card title="Similar-creator lists" icon="users">
+    "Find 15 YouTube creators similar to this channel and include their emails."
+  </Card>
+  <Card title="Campaign filters" icon="filter">
+    "Find US and UK TikTok creators in this content direction with 10K–500K followers."
+  </Card>
+  <Card title="Outreach-ready tables" icon="table">
+    A single table with profile URL, similarity score, followers, average views, region/language, email, and lookup status.
+  </Card>
+</CardGroup>
+
+## Requirements
+
+```bash
+export AISA_API_KEY="your-aisa-api-key"
+```
+
+- Python 3 and `curl`
+- Calls go only to `https://api.aisa.one/apis/v1/waveinflu/...`. No separate WaveInflu credentials are needed.
+
+Each email lookup and similar-creator search is a separate billed call. The skill enriches 10 creators by default and asks for confirmation before enriching more than 25.
+
+## Compatibility
+
+Works with any agentskills.io-compatible harness, including Claude Code, Claude, OpenAI Codex, Cursor, Gemini CLI, OpenCode, Goose, OpenClaw, Hermes, and other runtimes that support skill folders.
+
+## Quick start
+
+```bash
+python3 scripts/kol_creator_discovery.py research \
+  "https://www.youtube.com/@mkbhd" \
+  --limit 10 \
+  --out kol-report.md \
+  --json-out kol-report.json
+```
+
+With a content direction and audience filters:
+
+```bash
+python3 scripts/kol_creator_discovery.py research \
+  "https://www.tiktok.com/@creator" \
+  --platform tiktok \
+  --content-direction "consumer AI apps and productivity tools" \
+  --regions US,GB \
+  --languages en \
+  --min-followers 10000 \
+  --max-followers 500000 \
+  --limit 15 \
+  --out kol-report.md
+```
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `research PROFILE_URL` | Full workflow: seed email lookup, similar-creator discovery, email lookup per match, and Markdown/JSON report |
+| `lookup PROFILE_URL [...]` | Email lookup only, for one or more profile URLs |
+| `similar --platform youtube\|tiktok` | Similar-creator discovery only (`--seed-profile-url` and/or `--content-direction`) |
+
+Options for `similar` and `research`: `--platform`, `--content-direction`, `--limit` (1–100, default 10), `--regions`, `--languages`, `--min-followers`, `--max-followers`, `--min-average-views`, `--max-average-views`. `research` requires `--allow-large-enrichment` for more than 25 email lookups.
+
+## How it works
+
+1. **Validate the brief.** The seed must be a creator profile URL, not a post or video. The target platform is inferred from a YouTube or TikTok seed. Instagram seeds require an explicit `--platform` and `--content-direction`, because similarity matching does not accept Instagram profiles.
+2. **Look up the seed creator** with `POST /apis/v1/waveinflu/email-lookup`.
+3. **Find similar creators** with `POST /apis/v1/waveinflu/similar`, which returns creators sorted by `similarityScore`.
+4. **Enrich each match** with its own email lookup. A missing email is recorded as `Not found` and a failed lookup as `Lookup failed`. The skill never guesses or pattern-matches an address.
+5. **Deduplicate and report**, preserving WaveInflu's similarity order and exact metrics in the JSON output.
+
+## When to use
+
+- KOL or influencer research and prospecting
+- Creator email lookup from a profile URL
+- Building a similar-creator or outreach list for a campaign
+
+The skill does not send outreach, email anyone, or upload the list anywhere without your separate authorization. Treat returned contact data as sensitive.
+
+## Get started
+
+1. Sign up at [aisa.one](https://aisa.one) and create an API key in the console.
+2. Set it in your shell: `export AISA_API_KEY="your-key"`.
+3. Install the skill with one of the commands under [Install](#install), then start a new agent session.
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="WaveInflu Email Lookup" icon="envelope" href="/api-reference/waveinflu/post_waveinflu-email-lookup">
+    Creator emails and normalized profile details.
+  </Card>
+  <Card title="WaveInflu Similar Creators" icon="users" href="/api-reference/waveinflu/post_waveinflu-similar">
+    Similar YouTube or TikTok creators from a seed or content direction.
+  </Card>
+  <Card title="Creator Marketing" icon="handshake" href="/agent-skills/creator-marketing">
+    Turn a shortlist into a partnership pilot, brief, and measurement plan.
+  </Card>
+</CardGroup>

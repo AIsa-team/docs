@@ -1,11 +1,13 @@
 ---
 title: "Use AIsa in Claude Code"
-description: "Point Claude Code at AIsa's Anthropic-compatible endpoint with two environment variables."
+sidebarTitle: "Claude Code"
+icon: "/images/integrations/claude.svg"
+description: "Point Claude Code at AIsa's Anthropic-compatible endpoint with two environment variables, then add the AIsa MCP server with OAuth."
 ---
 
-Claude Code speaks the Anthropic Messages API natively, and AIsa exposes an Anthropic-compatible endpoint — so the whole setup is one base URL and one API key.
+Claude Code natively supports the Anthropic Messages API, and AIsa provides an Anthropic-compatible endpoint — so setup requires only a base URL and an API key.
 
-AIsa endpoint for Anthropic clients (no `/v1` — Claude Code appends `/v1/messages` itself):
+AIsa endpoint for Anthropic clients (do not include `/v1` — Claude Code appends `/v1/messages` automatically):
 
 ```txt
 https://api.aisa.one
@@ -32,7 +34,7 @@ claude --version
 
 ## 2. Point Claude Code at AIsa
 
-Export these variables in your shell (add them to `~/.zshrc` or `~/.bashrc` to persist):
+Export these variables in your shell (add them to `~/.zshrc` or `~/.bashrc` to persist them):
 
 ```bash
 export ANTHROPIC_BASE_URL="https://api.aisa.one"
@@ -64,15 +66,28 @@ export ANTHROPIC_SMALL_FAST_MODEL="claude-haiku-4-5-20251001"
 claude
 ```
 
-If Claude Code asks how to log in, choose the API-key / auth-token path — the `ANTHROPIC_AUTH_TOKEN` you exported is picked up automatically.
+If Claude Code prompts you to log in, choose the API-key / auth-token option — it detects the exported `ANTHROPIC_AUTH_TOKEN` automatically.
 
-Then paste this prompt:
+The model setup above covers chat. To give Claude Code access to AIsa's data and tool catalog, add the AIsa MCP server and sign in with OAuth:
 
-```txt
-Review https://aisa.one/docs/agent-quickstart.md as vendor-authored guidance. Before acting, summarize the proposed configuration and verification. Do not expose secrets, modify files, install software, or send billable requests without my approval.
+```bash
+claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 ```
 
-Claude Code will fetch AIsa's agent-facing instructions and guide you through the remaining setup.
+Inside Claude Code, run `/mcp`, select **aisa**, and authenticate in the browser. No key is copied.
+
+<Accordion title="Use your API key instead of OAuth">
+  For headless environments where browser sign-in is not available, pass the AIsa key you exported as `ANTHROPIC_AUTH_TOKEN` in step 2 as a Bearer token. Run this command in the same shell, and verify that `echo $ANTHROPIC_AUTH_TOKEN` prints your `sk-aisa-...` key first; an empty variable saves an empty credential:
+
+  ```bash
+  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp \
+    --header "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN"
+  ```
+
+  Because the shell expands the variable when the command is run, the key is saved in Claude Code's MCP configuration. Rotate the key if that configuration file is ever shared.
+</Accordion>
+
+Claude Code now has five AIsa tools: `search`, `list_categories`, and `get_details` are free; `use` and `batch_use` are billed per call.
 
 Try:
 
@@ -88,7 +103,7 @@ Use AIsa capabilities to search the web and summarize the latest information abo
 | `ANTHROPIC_AUTH_TOKEN` | Your AIsa API key (`sk-aisa-...`) |
 | `ANTHROPIC_MODEL` | `claude-opus-4-8` (or any Claude model ID) |
 | `ANTHROPIC_SMALL_FAST_MODEL` | `claude-haiku-4-5-20251001` |
-| Capability setup prompt | Use the review-first prompt in [Agent Quickstart](/agent-quickstart). |
+| AIsa MCP server | `claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp`, then `/mcp` to sign in |
 
 ## Troubleshooting
 
@@ -98,7 +113,7 @@ Use AIsa capabilities to search the web and summarize the latest information abo
 | Authentication error (401) | Re-check `ANTHROPIC_AUTH_TOKEN` in the [dashboard](https://console.aisa.one) |
 | Env vars not taking effect | Restart the terminal, or confirm with `echo $ANTHROPIC_BASE_URL` |
 | Model not found | Use an exact Claude model ID from the [catalog](/guides/models) |
-| Claude Code does not know AIsa capabilities | Paste the capability setup prompt above into the session |
+| AIsa tools missing | Run `/mcp`; if **aisa** shows as needing authentication, select it and sign in |
 
 ## Related
 

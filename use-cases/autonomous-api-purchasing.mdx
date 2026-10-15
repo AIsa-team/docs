@@ -1,122 +1,75 @@
 ---
 title: Design an Autonomous API Purchasing Workflow
-description: Plan how an AI agent selects, authorizes, purchases, verifies, and audits a supported paid API capability without open-ended spending or duplicate charges.
+sidebarTitle: Autonomous API Purchasing
+description: Let an agent select, quote, authorize, pay for, verify, and audit a paid API call at runtime without open-ended spending or duplicate charges.
+icon: cart-shopping
 ---
 
-An autonomous API purchasing workflow lets an agent request a supported paid capability at runtime under explicit budget and authorization rules. The agent may select a resource, but selection alone does not grant permission to spend.
+## The problem
 
-AIsa uses usage-based billing across model and API consumption. Some workflows may use a pre-funded AIsa balance, while a documented capability may support another programmatic payment flow. Do not assume every API supports the same payment protocol or settlement behavior.
+Agents increasingly need paid capabilities mid-task: an enrichment lookup, a deep-research report, or an unplanned dataset. Without controls, "select a tool" quietly becomes "spend money", and a timeout can turn into a duplicate charge. A good outcome is an agent that quotes before it buys, stays within an approved cap, executes once, verifies both the charge and the delivered result, and leaves an audit record without secrets.
 
-## Separate the decisions
+## Prompt
 
-Treat the workflow as distinct stages:
+Give this to your agent once AIsa is [connected via MCP](/agent-quickstart):
 
-1. **Select:** identify the capability that could complete the task.
-2. **Estimate:** determine the documented price unit and expected workflow cost.
-3. **Authorize:** compare the cost and capability type with policy.
-4. **Execute:** submit the approved request through the documented interface.
-5. **Verify payment:** confirm the usage or settlement record.
-6. **Verify delivery:** confirm the API response is complete and usable.
-7. **Audit:** record the decision, amount, resource, and outcome without secrets.
+```txt wrap
+Task: <what you need done>. Budget for the whole task: <your approved budget>. Ask me before any paid call; above <your threshold>, wait for my explicit yes.
+Process for every paid step: (1) find the operation with AIsa `search`; (2) call `get_details` with a quote; (3) show me the operation, arguments, quoted cost, and remaining budget; (4) after I approve, run it once with `use` and pass the approved amount as `max_price_usd`.
+If a quote is missing or failed, or the endpoint has no documented maximum, tell me and do not run it under the fixed budget. Re-quote if the arguments change.
+Never retry a paid call automatically after a timeout or unclear result: check usage first and report back.
+At the end, give me an audit table: step | operation | quoted | approved cap | settled cost (or "unknown") | result verified?
+```
 
-Successful payment does not prove that the requested resource was delivered successfully. Verify both independently.
+## APIs and Skills used
 
-## Define policy before execution
+Through MCP, your agent reaches every operation via five tools at `https://mcp.aisa.one/mcp`: `search`, `list_categories`, and `get_details` are free; `use` and `batch_use` (up to 20 calls) are billed per call.
 
-| Control | Example policy question |
-| --- | --- |
-| Allowed capabilities | Which model or API families may the agent purchase? |
-| Per-request limit | What is the maximum cost of one operation? |
-| Per-task limit | What is the maximum total cost across all workflow steps? |
-| Time-based limit | What daily or monthly ceiling applies? |
-| Confirmation threshold | Which amounts or capability types require human approval? |
-| Retry policy | Under which states can a request be retried safely? |
-| Fallback policy | May the agent choose a cheaper or alternate capability? |
-| Audit policy | Which request, decision, cost, and result fields are retained? |
+| Step | What the agent calls | Reference |
+| --- | --- | --- |
+| Select | `search` / `list_categories` for the smallest sufficient operation | [Connect via MCP](/agent-quickstart) |
+| Estimate | `get_details` with a quote: returns the estimate and a suggested `max_price_usd` | [Quote, review, then execute](/guides/pricing#quote-review-then-execute) |
+| Authorize | Your policy layer and, above a threshold, a person | [Security & Privacy](/guides/security) |
+| Execute | `use` or `batch_use` with the approved `max_price_usd` | [How It Works](/how-it-works) |
+| Same over HTTP | `X-AISA-Cost-Mode: quote`, then `X-AISA-Max-Price-USD` | [Billing & Credits](/guides/pricing) |
+| Verify payment | Balance, settled-cost metadata, Usage & Logs | [Credit Balance](/api-reference/credits-balance), [Usage and Logs](/guides/dashboard/overview#usage-and-logs) |
+| Handle rejections | `402` budget errors, `409` idempotency conflicts, retry rules | [Error Codes](/api-reference/errors) |
+| Pay per request without an account | MPP on selected read-only operations | [Machine Payments](/integrations/machine-payments) |
 
-Keep authorization policy outside the model prompt where possible. Enforce it in application code or another trusted control layer.
+`max_price_usd` acts as an admission check: the gateway rejects any call whose estimate exceeds this value before calling a provider, but it does not cap the final charge of a metered operation. The key's spending limit in the Console is the hard ceiling.
 
-## Recommended workflow
+**Machine payments (MPP).** On operations that accept MPP, a request without credentials returns HTTP `402` with a `WWW-Authenticate: Payment` challenge; the agent pays through Tempo and retries with `Authorization: Payment <credential>`. The live challenge is authoritative for the amount and terms. Not every endpoint accepts MPP, so check the operation first.
 
-### 1. Define the task and success condition
+## Example output
 
-Specify the output required, acceptable quality, deadline, and maximum spend. A vague success condition can lead to unnecessary calls or repeated purchases.
+<Note>Illustrative only. Operations and amounts are placeholders, not real prices or account records.</Note>
 
-### 2. Choose the smallest sufficient capability
+| Step | Operation | Quoted | Approved cap | Settled cost | Result verified |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `example_company_enrich` | `<quote A>` | `<cap A>` | `<settled A>` | Yes: record for Example Corp returned |
+| 2 | `example_deep_report` | `<quote B>` | not approved (over threshold) | none | Skipped, asked user |
+| 3 | `example_people_match` | `<quote C>` | `<cap C>` | unknown (timeout) | Not retried; flagged for reconciliation |
 
-Use [How It Works](/how-it-works) and the [API Reference](/api-reference) to identify whether the task needs a model, direct API, Skill, or another resource.
+## Guardrails
 
-Do not purchase a broader or more expensive capability when a documented smaller surface satisfies the requirement.
+- **Separate the stages:** select, estimate, authorize, execute, verify payment, verify delivery, and audit. Selecting a tool never grants permission to spend, and a successful payment does not prove delivery.
+- **Policy lives outside the prompt.** Enforce allowed capabilities, per-call, per-task, and time-based limits, confirmation thresholds, and fallback rules in code or another trusted layer.
+- **A quote is not approval, and a missing quote is not free.** Re-quote when the operation, arguments, or scope change. Stop if the quote or documented maximum exceeds the remaining budget.
+- **Execute once and keep identifiers.** Preserve request, usage, and transaction IDs. Use idempotency keys only where an endpoint documents them (for example, synchronous Similarweb routes); never change a key to get past a `409`.
+- **Reconcile ambiguous outcomes:**
+  - Rejected before acceptance: fix the request or pick another operation.
+  - No confirmed charge and no result: check status before any retry.
+  - Charge recorded, result missing: reconcile or contact support; do not repurchase.
+  - Result present, settlement unclear: keep the result and reconcile the charge separately.
+  - A network timeout does not prove the request failed before billing.
+- **Audit without secrets.** Record the task, decision, operation, approved and settled amounts, reference IDs, and outcome. Never store API keys, wallet secrets, payment credentials, or bearer tokens.
+- **When a simpler flow is better:** use normal account funding and application-controlled calls when usage is predictable, purchases do not need to happen at runtime, or you cannot reconcile ambiguous payment states.
 
-### 3. Read current billing and availability information
+## Related
 
-Before approval, verify:
-
-- Exact model, API, or capability identifier.
-- Current price unit and authentication requirements.
-- Availability, rate limits, and known constraints.
-- Whether the flow uses normal AIsa balance deduction or another documented payment mechanism.
-
-Use current documentation and live responses rather than a cached fixed price.
-
-### 4. Authorize the request
-
-Compare the estimate with policy. If confirmation is required, show:
-
-- The capability and intended task.
-- Expected price or maximum authorized amount.
-- Funding source or billing boundary.
-- What happens if the result fails or is incomplete.
-- Whether a retry can incur another charge.
-
-### 5. Execute once and preserve identifiers
-
-Submit the request through the exact documented API. Preserve any request, usage, transaction, or correlation identifiers returned by the system.
-
-Use idempotency controls only when the capability explicitly supports them. Do not invent an idempotency key contract for an endpoint that does not document one.
-
-### 6. Reconcile ambiguous outcomes
-
-| Observed state | Safe response |
-| --- | --- |
-| Request rejected before acceptance | Correct the request or select another capability |
-| No confirmed charge and no result | Check status before considering a retry |
-| Charge or usage record exists, result missing | Reconcile or seek support; do not blindly repurchase |
-| Result exists, settlement status uncertain | Preserve the result and reconcile the financial record separately |
-| Both payment and result verified | Mark the purchase complete and record the outcome |
-
-Network timeout does not prove that a request failed before billing.
-
-### 7. Audit without exposing secrets
-
-Record only the fields needed for review, such as:
-
-- Task and policy decision.
-- Capability identifier.
-- Authorized and actual amount when available.
-- Request or transaction reference.
-- Result status and verification outcome.
-- Retry or fallback decisions.
-
-Never store API keys, wallet secrets, signatures, or bearer tokens in the audit record.
-
-## When autonomous purchasing is useful
-
-Consider it when:
-
-- Resource needs vary by task.
-- A dedicated provider subscription is not justified for occasional use.
-- The workflow can state a clear maximum spend.
-- The application can verify both billing and delivery.
-- Budget, confirmation, retry, and audit controls are enforceable.
-
-## When a simpler billing flow is better
-
-Use normal account funding and application-controlled API calls when usage is predictable, purchasing decisions do not need to happen at runtime, or the application cannot safely reconcile ambiguous payment states.
-
-## Related guidance
-
-- [Machine Payments for AI Agents](/concepts/machine-payments-for-agents)
-- [Billing & Credits](/guides/pricing)
-- [Security & Privacy](/guides/security)
-- [Authentication](/guides/authentication)
+<CardGroup cols={2}>
+  <Card title="Machine Payments" icon="credit-card" href="/integrations/machine-payments">MPP for agents paying per request.</Card>
+  <Card title="Billing & Credits" icon="wallet" href="/guides/pricing">Quotes, caps, and settled cost.</Card>
+  <Card title="Error Codes" icon="triangle-exclamation" href="/api-reference/errors">Safe retry guidance.</Card>
+  <Card title="Security & Privacy" icon="shield" href="/guides/security">Agent safety controls.</Card>
+</CardGroup>

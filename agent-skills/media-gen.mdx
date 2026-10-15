@@ -1,0 +1,111 @@
+---
+title: "Media Gen"
+description: "Image and video generation for autonomous agents with Seedream, Wan, and GPT Image models through AIsa's image and video routes."
+---
+
+[View on GitHub →](https://github.com/AIsa-team/agent-skills/tree/main/creative/media-gen)
+
+**Generate images and videos with one AIsa API key.** The skill guides your agent on which model and route to use for an image or video request, and bundles `media_gen_client.py` for Seedream image generation.
+
+## Install
+
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill media-gen
+```
+
+```bash AIsa CLI
+npm install -g @aisa-one/cli
+aisa skills install media-gen
+```
+</CodeGroup>
+
+After installing, start a new agent session so the skill loads.
+
+## What can agents do with it?
+
+<CardGroup cols={2}>
+  <Card title="Marketing creatives" icon="palette">
+    "Generate an ultra-detailed product shot of a red panda, studio lighting, sharp focus."
+  </Card>
+  <Card title="Large-format images" icon="image">
+    "Generate a 2048×2048 magazine cover: neo-noir detective portrait, film grain."
+  </Card>
+  <Card title="Text-to-video" icon="film">
+    "Sweeping establishing shot of a neon cyberpunk skyline at dusk, 5 seconds."
+  </Card>
+  <Card title="Image-to-video" icon="clapperboard">
+    "Starting from this reference image, gentle camera push-in with parallax."
+  </Card>
+</CardGroup>
+
+## Requirements
+
+- Python 3 and a POSIX shell
+- `AISA_API_KEY` in the environment
+
+Generation calls are billed to your AIsa balance per request or per output, depending on the model. See [AI Model Pricing](/guides/pricing#models) for how each model type is billed.
+
+## Current models and routes
+
+The live gateway serves these media models. Check [`GET /v1/models`](/guides/models) for the current list; each model lists its preferred route.
+
+| Kind | Models | Route |
+| --- | --- | --- |
+| Image | `seedream-5-0-260128`, `wan2.7-image`, `wan2.7-image-pro`, `gpt-image-2`, `gpt-image-2.5-flare`, `gpt-image-2.5-sunburst` | `POST /v1/images/generations` |
+| Video | `wan2.7-t2v`, `wan2.7-i2v`, `wan2.7-r2v` | `POST /v1/video/generations`, then `GET /v1/video/generations/{task_id}` |
+
+<Warning>
+The skill's bundled client still targets older routes and model IDs. Its `image` command works with Seedream (`--model seedream-5-0-260128`), but it sends Wan image models to `/v1/chat/completions`, which no longer serves image models, and its `video-*` commands call a retired video route. Until the skill is updated, generate Wan images and videos through the routes above, not through the client.
+</Warning>
+
+- **Seedream** rejects images below 3,686,400 pixels (for example `1024×1024`). Use a size such as `1920x1920` or `2048x2048`. `wan2.7-image` accepts smaller sizes.
+- Video generation is asynchronous: create a task, then poll it by `task_id` until it finishes.
+- Each image in `n` is billed separately. Request a free quote first by adding `X-AISA-Cost-Mode: quote` to the same request; see [Billing & Credits](/guides/pricing).
+
+## Quick start
+
+With the skill's client (Seedream):
+
+```bash
+export AISA_API_KEY="your-key"
+
+python3 scripts/media_gen_client.py image \
+  --model seedream-5-0-260128 \
+  --prompt "Neo-noir detective portrait, film grain" \
+  --size 2048x2048 \
+  --out out.png
+```
+
+Any image model, directly over HTTP:
+
+```bash
+curl -sS -X POST "https://api.aisa.one/v1/images/generations" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "wan2.7-image-pro",
+    "prompt": "Ultra-detailed product shot of a red panda, studio lighting",
+    "n": 1,
+    "size": "2048x2048"
+  }'
+```
+
+Request and response fields are documented in [Image Generations](/api-reference/chat/post_images-generations).
+
+## Get started
+
+1. Sign up at [aisa.one](https://aisa.one) and create an API key in the console.
+2. Set it in your shell: `export AISA_API_KEY="your-key"`.
+3. Install the skill with one of the commands under [Install](#install), then start a new agent session.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Image generations" icon="image" href="/api-reference/chat/post_images-generations">
+    OpenAI-compatible image generation endpoint and current image models.
+  </Card>
+  <Card title="Model catalog" icon="list" href="/guides/models">
+    Current model IDs, modalities, and routes.
+  </Card>
+</CardGroup>

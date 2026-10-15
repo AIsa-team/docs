@@ -1,0 +1,77 @@
+---
+title: "Machine Payments (MPP) for AI Agents"
+sidebarTitle: "Machine Payments"
+icon: "coins"
+description: "Pay for selected AIsa data endpoints per request with the Machine Payments Protocol (MPP) instead of an API key, along with the budget, approval, and audit controls an autonomous agent needs first."
+---
+
+Most agents reach AIsa with an API key or the [MCP server](/agent-quickstart), where every call draws from a prepaid balance. Selected read-only data endpoints also accept the [Machine Payments Protocol (MPP)](https://mpp.dev): the agent pays for each request over HTTP 402, with no AIsa account or API key required.
+
+| | API key or MCP | MPP |
+| --- | --- | --- |
+| Coverage | Every model and API endpoint | Selected read-only data endpoints |
+| Account | AIsa account with a prepaid balance | None; the client pays each request |
+| Billing | Deducted from your balance per call | Settled per request through the MPP challenge |
+| Best for | Ongoing use, per-key budgets, and usage logs | Occasional calls by agents that hold an MPP wallet |
+
+## How a paid request works
+
+<Steps>
+  <Step title="Call the endpoint without a key">
+    Send the normal request, for example `GET https://api.aisa.one/apis/v1/polymarket/oi`, with no `Authorization` header.
+  </Step>
+  <Step title="Read the 402 challenge">
+    AIsa responds with `402 Payment Required`, returning an `application/problem+json` body and a `WWW-Authenticate: Payment ...` header. The challenge specifies the method (currently `tempo`), the intent (`charge`), an expiry, and the payment terms in its `request` parameter. The live challenge is the authoritative price for that request.
+  </Step>
+  <Step title="Pay and retry">
+    An MPP client pays the challenge and retries the same request with `Authorization: Payment <credential>`. On success, the response carries the data, and the client retains the payment receipt.
+  </Step>
+</Steps>
+
+Use an MPP client rather than building the flow by hand: the TypeScript SDK and CLI `mppx`, as well as other SDKs, are listed at [mpp.dev](https://mpp.dev). The same request with `Authorization: Bearer $AISA_API_KEY` skips the challenge and bills your AIsa balance instead.
+
+## Which endpoints accept MPP
+
+The live list is maintained in the payment discovery document at `https://api.aisa.one/openapi.json` (OpenAPI 3.1). Each operation in it carries `x-payment-info` with its MPP offer and documents the `402` response. Today it covers synchronous read-only data such as prediction markets, financial data, and web search; models, account endpoints such as [Credits Balance](/api-reference/credits-balance), and write actions require an API key.
+
+Check that document, not this page, before you design a flow: an endpoint that is not listed there does not accept MPP. Docs do not list MPP prices; read them from the discovery document as advisory hints and from the live challenge as the actual terms.
+
+## Controls to define first
+
+Paying is an action with financial side effects. Treat it like any other privileged action, and decide these controls before an agent pays on its own:
+
+| Control | Question |
+| --- | --- |
+| Per-request limit | What is the most one call may cost? |
+| Per-task and time limits | How much may a workflow, a day, or a month spend? |
+| Approval policy | Which amounts or endpoints require human approval? |
+| Retry policy | Can a failed request be retried without paying twice? |
+| Audit record | Which request, amount, endpoint, and result fields are kept? |
+| Failure behavior | What happens when payment settles but the result is unusable? |
+
+Keep tool selection separate from authorization: an agent can decide a paid endpoint is useful without being allowed to buy it. Estimate the cost, compare it with the policy, get approval when the policy requires it, execute once, then verify both the receipt and the data before recording the outcome.
+
+## Safety rules for agents
+
+- Holding a wallet, a key, or a connected MCP server does not grant permission to spend.
+- Never print wallet keys, credentials, signatures, or authorization headers.
+- Do not loop on billable retries; a new request is a new charge.
+- Read the challenge terms before paying, and stop if they exceed the approved amount.
+- Treat a settled payment as paid, not as a successful task: check the response too.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Billing & Credits" icon="credit-card" href="/guides/pricing">
+    How balance-based billing, cost quotes, and per-key limits work.
+  </Card>
+  <Card title="Autonomous API purchasing" icon="cart-shopping" href="/use-cases/autonomous-api-purchasing">
+    A full purchasing workflow with approval and reconciliation steps.
+  </Card>
+  <Card title="Agent Discovery" icon="radar" href="/guides/agent-discovery">
+    Agent Card, OpenAPI, and MCP entry points for autonomous agents.
+  </Card>
+  <Card title="Security & Privacy" icon="shield" href="/guides/security">
+    Key handling, actions, and payment safety.
+  </Card>
+</CardGroup>

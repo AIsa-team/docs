@@ -1,0 +1,121 @@
+---
+title: "Use Similarweb"
+description: "Similarweb website intelligence through AIsa: traffic, engagement, channels, audience, technologies, and search footprint, with every request built from the live contract and quoted before it runs."
+---
+
+[View on GitHub →](https://github.com/AIsa-team/agent-skills/tree/main/marketing/use-similarweb)
+
+**Website intelligence, spent deliberately.** The skill contains no endpoint parameters or prices. The agent reads parameters from the live Similarweb contract, gets a free quote before each call, sends the approved amount as an admission check, and reports the actual cost afterward.
+
+## Install
+
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill use-similarweb
+```
+
+```bash AIsa CLI
+npm install -g @aisa-one/cli
+aisa skills install use-similarweb
+```
+</CodeGroup>
+
+After installing, start a new agent session so the skill loads.
+
+## What can agents do with it?
+
+<CardGroup cols={2}>
+  <Card title="Domain traffic" icon="chart-line">
+    "How many visits did cnn.com get last month? Quote it first."
+  </Card>
+  <Card title="Competitors and search" icon="ranking-star">
+    "Who are nike.com's keyword competitors and which landing pages win?"
+  </Card>
+  <Card title="Audience and sources" icon="users">
+    "Show cnn.com's referral sources and its audience overlap with bbc.com. Ask me before spending."
+  </Card>
+  <Card title="Site footprint" icon="sitemap">
+    Technologies, popular pages, subdomains, top geographies, PPC spend, and ad networks.
+  </Card>
+</CardGroup>
+
+## Requirements
+
+```bash
+export AISA_API_KEY="your-aisa-api-key"
+```
+
+- Python 3
+- An AIsa account with balance; Similarweb calls are pay-as-you-go. The [Go-to-Market plan](https://aisa.one/solutions/go-to-market) is optional.
+- Requests go to `https://api.aisa.one/apis/v1/similarweb` with `Authorization: Bearer $AISA_API_KEY`.
+
+## Quick start
+
+```bash
+python3 scripts/similarweb_client.py discover                    # route index from the live contract
+python3 scripts/similarweb_client.py describe ROUTE              # parameters, enums, limits, date rules
+python3 scripts/similarweb_client.py window                      # latest complete data month
+python3 scripts/similarweb_client.py check ROUTE name=value …    # validate against the contract, no API call
+python3 scripts/similarweb_client.py quote ROUTE name=value …    # free price estimate
+python3 scripts/similarweb_client.py call  ROUTE name=value … --max-usd "$APPROVED_USD"
+python3 scripts/similarweb_client.py usage --days 1              # charged amounts for reconciliation
+```
+
+`ROUTE` is a path from `discover`, without the `/similarweb` prefix. Every `name=value` comes from `describe`. `call` without `--max-usd` only quotes.
+
+## The protocol
+
+**Discover** at session start, and again whenever a contract-built request is rejected:
+
+1. `discover` downloads the contract from `https://aisa.one/docs/openapi/similarweb.json` and caches it (revalidated with its ETag; `--refresh` forces a new copy).
+2. `describe ROUTE` shows required and optional parameters, enums, defaults, maximums, and date-window rules.
+3. `window` finds the latest complete data month.
+
+**Call**, for every request:
+
+1. Build the smallest request that answers the question and `check` it.
+2. `quote` it (free, via `X-AISA-Cost-Mode: quote`).
+3. To widen months, metrics, rows, or domains, quote the wider variant too and pick the cheapest one that answers the question.
+4. Show the quote and get approval against your budget.
+5. `call … --max-usd <approved>` sends `X-AISA-Max-Price-USD` and an `Idempotency-Key`. The header rejects a call whose pre-execution estimate is above the approved amount; it does not cap the final charge on usage-metered routes (see [Quote, review, then execute](/guides/pricing#quote-review-then-execute)). Before approving, check the route's billing rules on its [API reference](/api-reference/similarweb/get_similarweb-website-traffic-engagement) page to confirm the maximum possible charge, and set a [spending limit](/guides/authentication#key-settings) on the key as the hard ceiling.
+6. Report `cost_usd` (from the `x-aisa-customer-cost-micros-usd` header) and `data_month`, and reconcile with `usage`.
+
+`call` prints JSON with `status`, `quoted_usd`, `cost_usd`, `request_id`, `latency_s`, `data_month`, `note`, and `data`.
+
+## Reading responses
+
+| Response | Meaning | Billed |
+| --- | --- | --- |
+| `400` with `meta.error_message` | A date-window rule was broken; the message states the allowed range | No |
+| `400` with `error.supported` | Invalid value; `supported` lists valid values | No |
+| `402` | The estimate is above your cap | No |
+| `409` | The `Idempotency-Key` was already used | No |
+| `503` with `retryable: true` | A transient failure, but not proof the call did not run or was not billed | Possibly |
+
+Before retrying a `503`, check the original request in [Usage & Logs](/guides/dashboard/overview#usage-and-logs) or your balance. Retry only once you know it did not complete; keep the same `Idempotency-Key` and payload unless the endpoint's rules say otherwise, since a new key can create a second billed call. See [Retry guidance](/api-reference/errors#retry-guidance).
+
+Never retry a `200`. Make paid calls over REST, where the cost header is returned.
+
+## When to use
+
+Use this skill when the question is about a **website's** traffic, audience, sources, technology, or search footprint. For keyword volumes and difficulty, use [SEO Keyword Research](/agent-skills/seo-keyword-research) (DataForSEO) or the Semrush APIs; for backlinks, use the Ahrefs APIs.
+
+## Get started
+
+1. Sign up at [aisa.one](https://aisa.one), add balance (or optionally subscribe to the Go-to-Market plan), and create an API key in the console.
+2. Set it in your shell: `export AISA_API_KEY="your-key"`.
+3. Install the skill with one of the commands under [Install](#install), then start a new agent session.
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Similarweb API reference" icon="chart-area" href="/api-reference/similarweb/get_similarweb-website-traffic-engagement">
+    Every Similarweb route with its parameters.
+  </Card>
+  <Card title="Quotes and charges" icon="receipt" href="/guides/pricing">
+    Quote mode, price caps, and the cost header.
+  </Card>
+  <Card title="Product Selection" icon="box" href="/agent-skills/product-selection">
+    Uses Similarweb for channel fit in product research.
+  </Card>
+</CardGroup>

@@ -1,0 +1,103 @@
+---
+title: "Product Selection"
+description: "Pick products to sell, compare destination markets and channels, and calculate viable landed-cost prices from live AIsa evidence."
+---
+
+[View on GitHub →](https://github.com/AIsa-team/agent-skills/tree/main/marketing/product-selection)
+
+**Product–market–price decisions for sellers.** Research what to sell, where, and through which channel, then price it from verified costs. Live evidence comes from the AIsa MCP server; bundled TypeScript helpers handle ranking and unit economics offline.
+
+## Install
+
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill product-selection
+```
+
+```bash AIsa CLI
+npm install -g @aisa-one/cli
+aisa skills install product-selection
+```
+</CodeGroup>
+
+Start a new agent session after installing so the skill loads.
+
+## What can agents do with it?
+
+<CardGroup cols={2}>
+  <Card title="Explore from scratch" icon="compass">
+    No starting preference: build 3–5 market hypotheses and test 2–3 product families in each.
+  </Card>
+  <Card title="Fixed market or product" icon="location-dot">
+    Keep a chosen market or product fixed and compare products, markets, or channels around it.
+  </Card>
+  <Card title="Landed-cost pricing" icon="calculator">
+    Calculate price floors, contribution, and profit from explicit costs, fees, FX, and returns, with a downside case.
+  </Card>
+  <Card title="Comparable prices" icon="scale-balanced">
+    Normalize competitor prices for FX, tax, shipping, and pack size before comparing them.
+  </Card>
+</CardGroup>
+
+## Requirements
+
+- **Live research:** an AIsa MCP connection at `https://mcp.aisa.one/mcp`, authorized in your agent client. See [Connect via MCP](/agent-quickstart).
+- **Offline helpers:** Node.js 22 or later. Compiled JavaScript ships in `dist/`, so no `npm install` and no API key are needed.
+
+If the MCP connection is missing or unauthorized, the agent provides the endpoint and setup steps, pausing before attempting live research. It continues planning and calculating with your supplied evidence and discloses any data gaps, rather than silently falling back to ordinary web research.
+
+## How live research works
+
+The skill uses the MCP server's own tools (`search`, `get_details`, `use`, `batch_use`, and free `list_categories`):
+
+1. **Discover** an operation for a specific evidence need with `search`.
+2. **Inspect** its schema, availability, and price information with `get_details`.
+3. **Check cost** against your authorized spend before any paid call, asking for confirmation when it is not covered.
+4. **Use** the operation with `use` or `batch_use`, recording retrieval time, provider, and source URLs alongside each piece of evidence.
+
+Default sequence: Tavily search/extract for official market and entry rules, then DataForSEO keywords and trends for demand, then product/competitor tools or public listings for comparable prices. Similarweb is added for website or channel fit only when needed. Paid calls are billed to your AIsa balance.
+
+## Offline helpers
+
+```bash
+node dist/cli.js --help
+node dist/cli.js plan assets/explore-input.json
+node dist/cli.js price assets/pricing-example.json
+```
+
+| Command | Input / purpose |
+| --- | --- |
+| `plan` | `{markets?, products?, channels?}` → scenario route and MCP discovery intents |
+| `rank` | Evidence-backed opportunity dimensions and gates → heuristic score intervals and evidence coverage (example: `assets/ranking-example.json`) |
+| `price` | A complete economics input, or `{scenarios:[{name,input}]}` → price floors and offered-price economics |
+| `compare-prices` | Prefiltered observations → FX/tax/shipping/pack-normalized delivered price quartiles and exclusions |
+
+Pass `-` to read JSON from stdin. Results are written to stdout as JSON; exit code `2` indicates invalid input or a calculation error. The helpers make no network calls and never execute MCP requests.
+
+## When to use
+
+- Product selection and product–market fit research
+- Marketplace assortment research and competitor price comparisons
+- Landed-cost pricing for a chosen product and market
+
+The skill treats each option as **market × product specification × channel × fulfillment route**. Failed compliance, channel, or economics gates mean "do not enter under these assumptions", and missing costs are never assumed to be zero. A recommendation does not place inventory orders, create listings, run ads, or contact suppliers.
+
+## Get started
+
+1. Connect your agent to the AIsa MCP server and sign in: [Connect via MCP](/agent-quickstart).
+2. Install the skill with one of the commands under [Install](#install), then start a new agent session.
+3. Provide the agent with your starting point (nothing chosen, a market, a product, or both) and your sourcing, channel, and budget constraints.
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="Connect via MCP" icon="plug" href="/agent-quickstart">
+    Add the AIsa MCP server to your agent.
+  </Card>
+  <Card title="SEO Keyword Research" icon="magnifying-glass-chart" href="/agent-skills/seo-keyword-research">
+    Deeper keyword demand research with DataForSEO.
+  </Card>
+  <Card title="Similarweb" icon="chart-area" href="/agent-skills/use-similarweb">
+    Website traffic and channel intelligence.
+  </Card>
+</CardGroup>

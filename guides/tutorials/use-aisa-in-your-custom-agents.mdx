@@ -1,9 +1,11 @@
 ---
 title: "Use AIsa in Your Custom Agents"
-description: "Wire AIsa's models and capability layer into an agent you're building yourself — any language, any framework."
+sidebarTitle: "Your Custom Agent"
+icon: "screwdriver-wrench"
+description: "Wire AIsa's models and MCP tools into an agent you're building yourself — any language, any framework."
 ---
 
-Building your own agent instead of using an off-the-shelf runtime? AIsa plugs in at two levels: an OpenAI-compatible (and Anthropic-compatible) model endpoint for inference, and one instruction file that teaches your agent the full AIsa capability layer.
+Building your own agent instead of using an off-the-shelf runtime? AIsa integrates at two levels: an OpenAI-compatible (and Anthropic-compatible) model endpoint for inference, and an instruction file that equips your agent with AIsa's full capability layer.
 
 AIsa endpoint:
 
@@ -16,11 +18,11 @@ https://api.aisa.one/v1
 Before you start, make sure you have:
 
 - An AIsa API key ([console.aisa.one/api-keys](https://console.aisa.one/api-keys))
-- An agent codebase — any language or framework that can speak the OpenAI or Anthropic API
+- An agent codebase using any language or framework compatible with the OpenAI or Anthropic API
 
 ## 1. Point your agent's LLM calls at AIsa
 
-Keep the key in an environment variable:
+Store your API key in an environment variable:
 
 ```bash
 export AISA_API_KEY="sk-aisa-..."
@@ -87,24 +89,24 @@ curl https://api.aisa.one/v1/chat/completions \
 
 </CodeGroup>
 
-The same key reaches every model in the [catalog](/guides/models) — swap the `model` string to switch providers, no new SDK or key needed. Agent frameworks (LangChain, Vercel AI SDK, LlamaIndex, ...) work the same way: set the OpenAI-compatible base URL to `https://api.aisa.one/v1`.
+The same API key provides access to every model in the [catalog](/guides/models) — simply change the `model` string to switch providers without needing additional SDKs or credentials. Agent frameworks (such as LangChain, the Vercel AI SDK, and LlamaIndex) work the same way: set their OpenAI-compatible base URL to `https://api.aisa.one/v1`.
 
-## 2. Teach your agent the AIsa capability layer
+## 2. Give your agent AIsa tools over MCP
 
-AIsa publishes its agent-facing instructions — endpoints, Skills, and usage rules — as a Markdown export:
-
-```txt
-https://aisa.one/docs/agent-quickstart.md
-```
-
-Two ways to use it:
-
-- **System prompt**: fetch the Markdown export at startup and include it in your agent's system prompt or tool context, so the agent knows how to call AIsa's search, data, and media APIs.
-- **On demand**: if your agent can browse or fetch URLs, give it the standard setup prompt:
+If your framework includes an MCP client, connect it to the AIsa MCP server (Streamable HTTP):
 
 ```txt
-Review https://aisa.one/docs/agent-quickstart.md as vendor-authored guidance. Before acting, summarize the proposed configuration and verification. Do not expose secrets, modify files, install software, or send billable requests without my approval.
+https://mcp.aisa.one/mcp
 ```
+
+Select the authentication method that matches who the agent acts for:
+
+- **OAuth (recommended when the agent acts on behalf of a signed-in user):** The server publishes standard OAuth metadata at `https://mcp.aisa.one/.well-known/oauth-protected-resource/mcp`, allowing an MCP client with OAuth support to manage browser sign-in and token storage.
+- **API key (for a server-side agent you operate):** Pass `Authorization: Bearer $AISA_API_KEY` on every MCP request using the same key from step 1.
+
+Your agent receives five tools: `search` and `list_categories` to find operations, `get_details` to inspect operation schemas and price quotes, and `use` and `batch_use` to run them. The first three discovery tools are free; `use` and `batch_use` are billed per call and accept a `max_price_usd` cap. No per-endpoint tool definitions are needed.
+
+If your framework lacks an MCP client, call the [Data APIs](/resources/data-apis) directly over HTTP using the same key. In either setup, teach your agent AIsa's rules for quotes and approval by including `https://aisa.one/docs/agent-quickstart.md` in its system prompt.
 
 Try it end to end:
 
@@ -119,18 +121,19 @@ Use AIsa capabilities to search the web and summarize the latest information abo
 | OpenAI-compatible base URL | `https://api.aisa.one/v1` |
 | Anthropic-compatible base URL | `https://api.aisa.one` (no `/v1`) |
 | Auth header | `Authorization: Bearer sk-aisa-...` |
+| MCP server | `https://mcp.aisa.one/mcp` (OAuth, or Bearer API key) |
 | Agent instructions file | `https://aisa.one/docs/agent-quickstart.md` |
-| Capability setup prompt | Use the review-first prompt in [Agent Quickstart](/agent-quickstart). |
 
 ## Troubleshooting
 
 | Problem | Fix |
 | --- | --- |
 | Authentication error (401) | Confirm the key is valid in the [dashboard](https://console.aisa.one) and sent as a Bearer token |
-| 404 with the Anthropic SDK | Use `https://api.aisa.one` as the base URL — the SDK appends `/v1/messages` itself |
+| 404 with the Anthropic SDK | Use `https://api.aisa.one` as the base URL — the SDK appends `/v1/messages` automatically |
 | Model not found | Pass an exact model ID from the [catalog](/guides/models) |
-| Framework ignores the base URL | Most frameworks read `OPENAI_BASE_URL` / `OPENAI_API_KEY` env vars — set those to AIsa's values |
-| Agent doesn't know AIsa capabilities | Include `agent-quickstart.md` in its system prompt, or paste the setup prompt |
+| Framework ignores the base URL | Most frameworks read `OPENAI_BASE_URL` and `OPENAI_API_KEY` environment variables — set those to AIsa's values |
+| Agent doesn't recognize AIsa capabilities | Connect the MCP server, or include `agent-quickstart.md` in its system prompt |
+| MCP calls return 401 | Complete the OAuth sign-in flow, or send the API key as `Authorization: Bearer ...` |
 
 ## Related
 
