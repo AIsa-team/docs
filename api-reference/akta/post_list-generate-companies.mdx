@@ -4,7 +4,6 @@ title: "List Generation"
 description: "Build targeted company lists from structured filters or natural language, with optional enrichment."
 openapi: "openapi/akta.json POST /apis/v1/akta/list/generate/companies"
 ---
-
 import McpSetup from "/snippets/mcp-setup.mdx";
 
 {/* 正文与 openapi spec 的 operation description 同步维护：改一处请同步另一处 */}
@@ -13,16 +12,117 @@ Build a targeted company list from structured `filters` or a natural-language `q
 
 Prefer [`post_akta_filter_builder`](/api-reference/akta/post_list-filter-builder) to turn plain language into a reviewable `filters` object first; pass `query` directly only for one-shot searches (it carries a surcharge and is not reproducible).
 
-Pricing: base $0.05 per call (+$0.10 with `query`) + $0.02 per returned company + per-section enrichment costs × company count.
-
 <McpSetup />
 
 [Set this endpoint up in your agent →](https://aisa.one/mcp?from=/api-reference/akta/post_list-generate-companies)
 
+For current API pricing, see the published x-aisa-pricing metadata. Where supported, obtain a quote for your exact request.
 
 {/* aisa-contract-details:start */}
 
+## Request contract
+
+- **Method and path:** POST /apis/v1/akta/list/generate/companies
+- **Request URL template:** https://api.aisa.one/apis/v1/akta/list/generate/companies
+- **Runtime facts:** d6697de3e5c016d4bf4c7fb0c4b834f38524cf92fb24739a3f461f45df5d3ce2
+
+[Complete OpenAPI definition](https://aisa.one/docs/openapi/akta.json)
+
+Effective request and pricing declaration (including authentication and referenced schemas):
+
+```json
+{
+  "operationId": "post_akta_list_generate",
+  "method": "POST",
+  "path": "/apis/v1/akta/list/generate/companies",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "required": true,
+    "content": {
+      "application/json": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Natural language search query (e.g. 'SaaS companies in the US with Series A funding'). Cannot be used with filters."
+            },
+            "filters": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Structured filter conditions. Use the Filter Builder API to generate valid filters. Cannot be used with query. See filter options at /api-reference/listgen-api."
+            },
+            "sections": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Data enrichment sections to include. Values: firmographic, business_model, company_assessment, trust_signal, company_hierarchy, digital_presence, financial_estimate, location, management_profile, product_offering, strategic_signal, customer_profile, industry, technology, funding_detail (Subscription, Enterprise), mna_and_investment (Subscription, Enterprise)"
+            },
+            "sort_by": {
+              "type": "string",
+              "enum": [
+                "relevance",
+                "revenue_estimate",
+                "valuation_estimate",
+                "employee_range",
+                "total_funding",
+                "founded_year"
+              ],
+              "description": "Field to sort results by. Default: relevance"
+            },
+            "sort_order": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "description": "Sort direction. Default: desc"
+            },
+            "limit": {
+              "type": "integer",
+              "description": "Maximum companies to return. Default: 50, Max: 500"
+            },
+            "offset": {
+              "type": "integer",
+              "description": "Number of results to skip for pagination. Default: 0"
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-aisa-pricing": {
+    "cost_contract": "fixed_success",
+    "customer_pricing": "fixed_success",
+    "default_request_estimate_usd": 0.05,
+    "estimate_source": "profile_seed",
+    "evidence_source": "request_snapshot"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## Cost and request rules
+
+Published reference price: $0.05 USD per successful request. Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 

@@ -7,7 +7,144 @@ x-aisa-operation-id: "post_byteplus_web_search"
 
 {/* aisa-contract-details:start */}
 
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/byteplus/web-search
+- **请求 URL 模板:** https://api.aisa.one/apis/v1/byteplus/web-search
+- **Runtime 事实版本:** c6938a2b68dcd4140f77b783866eb27d207badfaf1ccb92415f8f016896bad6f
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/byteplus-search.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_byteplus_web_search",
+  "method": "POST",
+  "path": "/apis/v1/byteplus/web-search",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "required": true,
+    "content": {
+      "application/json": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "Query": {
+              "type": "string",
+              "description": "The search query. Required. Max 400 characters; the upstream engine also effectively caps around 50 words.",
+              "example": "OpenAI news",
+              "maxLength": 400
+            },
+            "Count": {
+              "type": "integer",
+              "description": "Number of results to return. Optional; default 10, maximum 20.",
+              "maximum": 20,
+              "example": 10,
+              "default": 10
+            },
+            "Filter": {
+              "type": "object",
+              "description": "Optional result filter. Both fields are pipe-separated strings of full domains (max 5 each).",
+              "properties": {
+                "Sites": {
+                  "type": "string",
+                  "description": "Restrict results to these full domains. Pipe-separated, max 5, e.g. \"bytedance.com|byteplus.com\". (Sending an array returns 10400 Invalid Parameter.)",
+                  "example": "bytedance.com|byteplus.com"
+                },
+                "BlockHosts": {
+                  "type": "string",
+                  "description": "Exclude results from these full domains. Pipe-separated, max 5, e.g. \"reddit.com|quora.com\".",
+                  "example": "reddit.com|quora.com"
+                }
+              }
+            },
+            "Language": {
+              "type": "string",
+              "description": "Optional language hint in the upstream format, e.g. EN, ZH-HANS, ZH-HANT.",
+              "example": "EN"
+            },
+            "TimeRange": {
+              "description": "Optional recency window. One of the named windows OneDay / OneWeek / OneMonth / OneYear, or a custom range \"YYYY-MM-DD..YYYY-MM-DD\". Omit for no time filter. NOTE: values like \"week\"/\"month\" are silently ignored upstream.",
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "OneDay",
+                    "OneWeek",
+                    "OneMonth",
+                    "OneYear"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}\\.\\.\\d{4}-\\d{2}-\\d{2}$",
+                  "description": "Custom range, e.g. 2026-08-01..2026-09-01."
+                }
+              ],
+              "example": "OneWeek"
+            }
+          },
+          "required": [
+            "Query"
+          ]
+        },
+        "examples": {
+          "basic": {
+            "summary": "Minimal query",
+            "value": {
+              "Query": "OpenAI news"
+            }
+          },
+          "filtered": {
+            "summary": "Query with count, domain filter, language and time window",
+            "value": {
+              "Query": "OpenAI product launch",
+              "Count": 10,
+              "Filter": {
+                "Sites": "openai.com|bytedance.com",
+                "BlockHosts": "reddit.com"
+              },
+              "Language": "EN",
+              "TimeRange": "OneWeek"
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-aisa-pricing": {
+    "cost_contract": "fixed_success",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.0048,
+    "estimate_source": "profile_seed",
+    "evidence_source": "request_snapshot"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## 费用与请求规则
+
+公开参考价格：每次成功请求 $0.0048 USD。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 
