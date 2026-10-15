@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
@@ -175,7 +176,7 @@ class BundleHistory:
         return strict_json(raw), sha(raw)
 
 
-def validate_bundle(root, *, expected_manifest_sha256, expected_docs_ref,
+def load_bundle(root, *, expected_manifest_sha256, expected_docs_ref,
                     expected_baseline_ref=REVIEWED_BASELINE):
     """Validate against caller pins; pins still require an external trust source."""
     root = Path(root)
@@ -313,13 +314,27 @@ def validate_bundle(root, *, expected_manifest_sha256, expected_docs_ref,
         load_deferred_definitions(verified_root)
         reproduced = source_report(verified_root, saved['receipts'], checked_at=checked_at, attempts=saved.get('attempts', {}))
     require(canonical(reproduced) == canonical(governance), 'Original source receipts do not reproduce fixed formal governance')
-    return {'status': 'passed', 'scope': 'offline_integrity_and_historical_replay_only',
+    result = {'status': 'passed', 'scope': 'offline_integrity_and_historical_replay_only',
             'current_source_freshness': 'not_assessed', 'git_ancestry_and_review_authenticity': 'external_trust_required',
             'manifest_sha256': sha(raw), 'docs_ref': expected_docs_ref, 'baseline_ref': expected_baseline_ref,
             'source_checked_at': governance['checked_at'], 'files': len(members), 'bytes': total,
             'providers': len(registry['providers']), 'canonical_operations': len(canonical_ids),
             'alias_proofs': sum(len(v) for v in history.aliases.values()),
             'upstream_sources': sum(r['role'] == 'upstream_schema' for r in members.values())}
+
+    return VerifiedBundle(result, members, verified_bytes, history)
+
+
+@dataclass(frozen=True)
+class VerifiedBundle:
+    validation: dict
+    members: dict
+    contents: dict
+    history: BundleHistory
+
+
+def validate_bundle(root, **pins):
+    return load_bundle(root, **pins).validation
 
 
 def main():

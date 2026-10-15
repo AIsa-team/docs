@@ -26,7 +26,10 @@ from source_json import loads as source_json_loads, load as source_json_load, Un
 from readable_contract_notes import update_readable_block
 from identity_compatibility import published_history, attach_history, localize_identities, validate_document_identities
 
+from contract_page_links import slug, select_pages, project_links
+
 ROOT = Path(__file__).resolve().parents[1]
+_AUTO_HISTORY = object()
 
 
 def read_json(path: Path, default=None):
@@ -107,10 +110,6 @@ def reject_stale_runtime_response(headers):
         raise URLError('runtime_contract_unavailable: stale runtime response')
 
 
-def slug(value):
-    return re.sub(r"[^a-zA-Z0-9_-]", "-", value)
-
-
 def existing_page_references(root: Path):
     """Read each referenced spec once, preserving the existing page selection."""
     from urllib.parse import urlsplit
@@ -162,15 +161,12 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
             identity = page_documents[spec].get('paths', {}).get(path, {}).get(method, {}).get('operationId')
         if identity:
             known_ids.setdefault(identity, set()).add(page)
-    current_prefix = urlsplit((document.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
+    selected_pages = select_pages(provider, document, known_ids, known)
     paths = []
     for path, method, operation in operations(document):
-        page_names = sorted(known_ids.get(operation['operationId'], set())) or [
-            known.get((current_prefix + path, method), f"api-reference/{provider}/{slug(operation['operationId'])}")]
+        page_names = selected_pages[operation['operationId']]
         for page in page_names:
             paths.append(page)
-            if decorate_links:
-                operation["x-aisa-docs-url"] = "https://aisa.one/docs/" + page
             for language, prefix in (("en", ""), ("zh", "zh/")):
                 destination = root / f"{prefix}{page}.mdx"
                 spec_path = f"openapi/{'zh/' if language == 'zh' else ''}{provider}.json"
@@ -258,8 +254,7 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
     if content != docs_path.read_text():
         changes[docs_path] = content
     if decorate_links:
-        meta = document["info"]["x-aisa-document"]
-        meta["document_hash"] = digest({"composer_hash": meta["document_hash"], "page_links": {op["operationId"]: op.get("x-aisa-docs-url") for _, _, op in operations(document)}})
+        project_links(document, selected_pages)
     # Use the existing deterministic translation catalog. Untranslated strings
     # retain English; no paid/model translation is invoked by scheduled pulls.
     localized = localization.localize_tree(document, catalog, allow_untranslated=True)
@@ -304,13 +299,17 @@ def refresh_legacy_page_blocks(root, documents, changes, catalog):
 
 
 def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = True,
-          readiness_context: dict | None = None) -> tuple[dict, dict]:
+          readiness_context: dict | None = None, *, identity_history=_AUTO_HISTORY,
+          page_link_index=None, reuse_unchanged_documents=True) -> tuple[dict, dict]:
     registry_path = root / "openapi/registry.yaml"
     registry = yaml.safe_load(registry_path.read_text())
     if not isinstance(registry.get("providers"), dict):
         raise ValueError("registry providers must be a mapping")
     changes = {}
-    identity_history = published_history(root, (readiness_context or {}).get('published_ref'))
+    if identity_history is _AUTO_HISTORY:
+        identity_history = published_history(root, (readiness_context or {}).get('published_ref'))
+    if with_pages and page_link_index is not None:
+        raise ValueError('Page generation and explicit native link projection are mutually exclusive')
     index = read_json(facts_dir / 'index.json', {}) if facts_dir else {}
     if registry.get("auto_register"):
         category = read_json(facts_dir / "category.json") if facts_dir else fetch_json(f"{base_url.rstrip('/')}/info/apis/category")
@@ -513,6 +512,8 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         attach_history(document, identity_history)
         if with_pages:
             generate_pages(root, provider, document, changes, previous, decorate_links=not entry.get("pin"), page_references=page_references)
+        elif page_link_index is not None:
+            project_links(document, select_pages(provider, document, *page_link_index))
         old_hash = previous.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         new_hash = document.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         if entry.get("pin"):
@@ -525,7 +526,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             if not new_hash:
                 raise ValueError(f"{provider}: generated document has no document_hash")
             changed = old_hash != new_hash
-            if changed:
+            if changed or not reuse_unchanged_documents:
                 changes[output_path] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
             else:
                 # generated_at is observational, and cannot create commit churn.
@@ -553,12 +554,14 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             attach_history(recomposed_documents[provider], identity_history)
         if with_pages:
             generate_pages(root, provider, document, changes, previous, page_references=page_references)
+        elif page_link_index is not None:
+            project_links(document, select_pages(provider, document, *page_link_index))
         old_hash = previous.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         new_hash = document.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         if not new_hash:
             raise ValueError(f"{provider}: generated document has no document_hash")
         changed = old_hash != new_hash
-        if changed:
+        if changed or not reuse_unchanged_documents:
             changes[root / f"openapi/{provider}.json"] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
         elif with_pages:
             generate_pages(root, provider, previous, changes, previous, decorate_links=False, page_references=page_references)
@@ -636,6 +639,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         for path, content in changes.items():
             if path.parent == root / 'openapi' and path.suffix == '.json' and path.name not in SKIP_FILES:
                 documents[path.stem] = json.loads(content)
+        readiness_context['documents'] = documents
         readiness_context['facts_by_provider'] = facts_by_provider
         readiness_context['coverage'] = coverage
         readiness_context['runtime_index'] = index
