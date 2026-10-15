@@ -40,13 +40,15 @@ Inputs:
 - Runtime compiler: `61f788ae67374a1a0d63281e9d1610f31494c0c6`.
 - Runtime acquisition completed: `2026-10-15T14:00:21Z`.
 
-The candidate was generated in a separate worktree with the existing full page
-and localization pipeline. No generated graph was committed as a shortcut for
-the formal publisher. No production mutation or paid provider request was made.
+The integrated candidate is committed with its generators and checks so PR CI
+can assess the actual file graph. Formal publication pointers and acquisition
+receipts are unchanged: the scheduled publisher must acquire and assess again
+before creating an official release. No production mutation or paid provider
+request was made.
 
 Results:
 
-- 628 unit tests pass; three existing checks requiring the official FRED HTML cache
+- 649 integrated unit tests pass; three existing checks requiring the official FRED HTML cache
   or the JavaScript YAML dependency are skipped in this local environment.
 - Stage readiness: passed, zero blocked providers. DataForSEO has no new pending
   request or response declarations.
@@ -144,3 +146,26 @@ The targeted change-scope, acquisition and receipt-preparation suites pass
 27 tests, including new assertions that current discovery rejects stale or
 unpublished Runtime generations and CI never writes/regenerates candidate
 artifacts before checking them.
+
+## Integrated document surfaces
+
+The same aggregate object generates JSON and YAML. All 2,007 operations now have
+English and Chinese readable request declarations, including the nine legacy
+model/account/Twitter operations. The managed JSON preserves method, effective
+parameters, authentication, reference closure and complete declared pricing.
+The formal gate checks each managed block against its source operation; the
+public monitor rejects contradictory duplicates, wrong identities and prices.
+
+The candidate contains a full aggregate at `openapi/openapi.json`, not the Plant
+Store example. Docs redirects rely on Website PR #216 being deployed and read
+back first. The root llms index is part of the formal file graph; Website #216,
+MCP #33 and Router #163 preserve old receipts while verifying the new binding.
+MCP has not been activated or deployed. MPP remains the reviewed payment subset
+explained above. Runtime producer migration remains a separate work package.
+
+The implementation and full verification/rollout requirements are recorded in
+[AIsaServices PR #622](https://github.com/AIsa-team/AIsaServices/pull/622).
+Local generation and CI success do not establish Mintlify publication, actual
+llms-full content or consumer convergence; those require the public checks after
+the ordered deployment. Mintlify CLI whole-site warnings are reported separately
+from managed-block MDX compilation and contract semantic checks.
