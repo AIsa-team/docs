@@ -1,14 +1,269 @@
 ---
 title: "Changelog"
-description: "A running log of new features, API additions, fixes, and improvements to the AIsa platform. Updated with every significant release."
+description: "What's new on the AIsa platform: data APIs, models, MCP and CLI tooling, billing behavior, and documentation changes, newest first."
 sidebarTitle: "Changelog"
 icon: "clock-rotate-left"
 ---
 
-Stay up to date with what's new across the AIsa platform — API endpoints, documentation, developer tools, and infrastructure changes. Entries are grouped by date, with the most recent changes at the top.
+Stay up to date with what's new across the AIsa platform — API endpoints, documentation, developer tools, and infrastructure changes. Entries are grouped by date (by month for busy periods), with the most recent changes at the top.
 
 ---
 
+## October 15, 2026
+
+### OAuth-first integration guides
+
+Every [Integrations](/guides/tutorials/use-aisa-in-claude-code) guide now connects to the single MCP server at `https://mcp.aisa.one/mcp`, authenticates with OAuth first, and keeps the API key as a Bearer fallback for headless environments. Guides for Claude Code, Codex, Cursor, Hermes Agent, OpenClaw, Pi, and Grok Build include the exact add and sign-in commands; Antigravity continues to use the API key header.
+
+### Machine payments are MPP
+
+The [Machine Payments](/integrations/machine-payments) page replaces the earlier concept page. It documents MPP, the payment protocol the API serves, and where to find endpoints that accept it. Earlier references to x402 have been corrected.
+
+### Agent Skills match the skills repository
+
+- Skills are grouped to match the [agent-skills repository](https://github.com/AIsa-team/agent-skills): Financial & Markets, Search & Research, Social Media, AI Models, Marketing, Creative. The [overview](/agent-skills) compares similar skills in each group.
+- Pages were renamed to match the repository names: `youtube-serp`, `youtube-search`, `multi-source-search`, `media-gen`. Old URLs redirect.
+- New Marketing skills: [KOL Creator Discovery](/agent-skills/kol-creator-discovery), [Creator Marketing](/agent-skills/creator-marketing), [Product Selection](/agent-skills/product-selection), [Similarweb](/agent-skills/use-similarweb), and [Article SEO/GEO Review](/agent-skills/article-seo-geo-review).
+- Chinese-language skills are documented in the Chinese docs only.
+
+### Examples
+
+The five [Examples](/use-cases/research-agent) now share a consistent layout: the problem, a prompt to paste into your agent, the APIs and Skills it calls, and example output.
+
+---
+
+## October 14, 2026
+
+### New documentation structure
+
+The docs are reorganized into six tabs:
+
+| Tab | What's there |
+| :--- | :--- |
+| **Docs** | [How It Works](/how-it-works), Get Started for AI agents ([Connect via MCP](/agent-quickstart), [Install the Agent Skill](/get-started/agent-skill), [Use the CLI](/get-started/cli)) and for developers ([API key and first call](/guides/getting-started-with-aisa), [OpenAI / Anthropic SDK](/get-started/sdk-compatibility)), plus authentication, billing, security, Console, and FAQ |
+| **Resources** | The [Model Catalog](/guides/models), rewritten around `GET /v1/models`, and a new [Data APIs](/resources/data-apis) overview |
+| **Agent Skills** | The [skills catalog](/agent-skills), grouped by domain |
+| **Integrations** | Setup guides for coding agents and agent platforms |
+| **Examples** | End-to-end use cases such as the [research agent](/use-cases/research-agent) |
+| **API Reference** | Endpoints grouped by category, then vendor: Models, Search & Research, Finance & Crypto, Social & Media, SEO & Web Intel, Sales & Email, Travel & Other |
+
+Merged or retired pages redirect to their replacements. "Copy page" is now the default page action.
+
+### MCP server
+
+The Get Started pages now use the remote MCP server at `https://mcp.aisa.one/mcp` (Streamable HTTP, browser OAuth) and its five tools: `search`, `list_categories`, `get_details`, `use`, and `batch_use`. Discovery and `get_details` are free; `use` and `batch_use` are billed per call.
+
+### Positioning cleanup
+
+The OpenRouter comparison page has been removed, and the FAQ now explains how AIsa differs from an LLM gateway in general terms.
+
+---
+
+## October 13, 2026
+
+### Integrations tab and new client guides
+
+Setup tutorials now live in their own **Integrations** tab. Page URLs are unchanged.
+
+- **Coding agents:** [Claude Code](/guides/tutorials/use-aisa-in-claude-code), [Codex](/guides/tutorials/use-aisa-in-codex), [Cursor](/guides/tutorials/use-aisa-in-cursor), [Antigravity](/guides/tutorials/use-aisa-in-agy), [Pi](/guides/tutorials/use-aisa-in-pi), [Grok Build](/guides/tutorials/use-aisa-in-grok)
+- **Agent platforms:** [OpenClaw](/guides/tutorials/use-aisa-in-openclaw), [Hermes](/guides/tutorials/use-aisa-in-hermes-agent), [Manus](/guides/tutorials/use-aisa-in-manus), [Muse](/guides/tutorials/use-aisa-in-muse), [Grok Bot](/guides/tutorials/use-aisa-in-grok-bot), [Cue](/guides/tutorials/use-aisa-in-cue)
+- **Build your own:** [custom agents](/guides/tutorials/use-aisa-in-your-custom-agents), [agent discovery](/guides/agent-discovery), and [machine payments](/integrations/machine-payments)
+
+Guides for Antigravity, Grok Build, Pi, and Muse are new, each connecting to `https://mcp.aisa.one/mcp`. Grok Bot and Cue are also new and include setup screenshots.
+
+---
+
+## October 12, 2026
+
+### Cost quotes, maximum price, and settled cost
+
+The [Billing & Credits](/guides/pricing) guide and the [API Reference overview](/api-reference) now describe the cost protocol used by the API:
+
+- **Free quote:** On endpoints that support it, send the exact request with `X-AISA-Cost-Mode: quote`. The upstream provider is not called, and your balance is not debited.
+- **Maximum price:** `X-AISA-Max-Price-USD` (or `max_price_usd` over MCP) rejects a call if its estimate exceeds your limit. It does not cap the final charge.
+- **Settled cost:** `X-AISA-Customer-Cost-Micros-USD` reports what a completed call cost. If the header is missing, the cost is unknown, not zero.
+
+Over MCP, calling `get_details` with `with_quote` returns a quote, and `use` / `batch_use` accept `max_price_usd`.
+
+Endpoint pages now show each endpoint's cost rules and request limits, generated from OpenAPI metadata. The [error reference](/api-reference/errors) documents the error formats returned by the API.
+
+---
+
+## October 10, 2026
+
+### Machine payments with MPP
+
+Selected data endpoints can now be paid per request using the Machine Payments Protocol (MPP) on Tempo, with no API key required. An unauthenticated request returns HTTP `402` with a `WWW-Authenticate: Payment` challenge. The client pays and retries with `Authorization: Payment <credential>`. An MPP discovery document lists supported endpoints, starting with Polymarket data. See [Machine Payments](/integrations/machine-payments).
+
+### API Reference generated from the live catalog
+
+API Reference pages are now generated from the live AIsa runtime catalog, ensuring request and response definitions match what the gateway serves. This adds reference pages for Brave Search, Brave Answer, Parallel, FRED economic data, BytePlus Market Insight, and Duffel Stays. Browse them by category in [Data APIs](/resources/data-apis).
+
+---
+
+## October 8, 2026
+
+### Model examples and image generation
+
+Code examples that used `gpt-4.1` or `gpt-5`, which the gateway no longer serves, now use available models. The "Image Generation via Chat" page has been retired because no image models serve the chat route. Use [Image Generation](/api-reference/chat/post_images-generations) (`/v1/images/generations`) instead; the old URL redirects there.
+
+### CLI credentials
+
+The browser-based `aisa login` flow (CLI 0.6+) stores an auto-refreshing OAuth session in `~/.aisa/tokens.json`. The docs no longer instruct agents to read `~/.aisa/key`, a legacy mirror that can hold an expired token.
+
+---
+
+## October 5, 2026
+
+### Private market data and flights
+
+- **Akta:** Private company data, including company enrichment and discovery, located under Financial Data starting at [Company Enrichment](/api-reference/akta/get_company-enrichment).
+- **Duffel Flights:** Flight search, orders, changes, and cancellations, starting at [Create Offer Request](/api-reference/duffel/post_duffel-flights-offer-requests-create).
+
+---
+
+## September 30, 2026
+
+### Billing semantics instead of price tables
+
+The docs no longer publish prices. Model, data API, and provider pages explain how each call is billed (per call, per result, per row, credit formulas, and what is or isn't billed). Live prices are at [aisa.one/models](https://aisa.one/models) and [aisa.one/api](https://aisa.one/api). The billing guide also covers pay-as-you-go and the Builder and Team subscription plans.
+
+### Model catalog sync
+
+The [Model Catalog](/guides/models) and [Chinese model](/guides/chinese-llms) pages now match the live model list. Retired model IDs have been removed and new providers added.
+
+### MCP-first Agent Quickstart
+
+The [Agent Quickstart](/agent-quickstart) now directs agents to the remote MCP server by default whenever the client supports an MCP connector. The CLI is for clients without MCP, for non-interactive automation with an existing key, or when preferred by the user.
+
+---
+
+## September 2026: AIsa CLI 0.5 – 0.6
+
+Several versions of the [AIsa CLI](/get-started/cli) (`@aisa-one/cli`) were released this month:
+
+| Version | Change |
+| :--- | :--- |
+| 0.5.0 (Sep 9) | Command surface narrowed to `search`, `schema`, `quote`, and `call`, plus the `api list` / `api show` catalog. Domain shortcuts such as `web-search` and `twitter` were removed. |
+| 0.6.0 (Sep 10) | Browser-based `aisa login` stores OAuth tokens that refresh automatically, instead of minting a permanent API key. `AISA_API_KEY` still takes precedence. |
+| 0.6.3 (Sep 30) | Metered endpoints show as `usage-based` in `api list` / `api show`, with a pointer to request a quote. |
+| 0.6.5 (Sep 30) | New `aisa usage` command: daily requests, failures, tokens, and charges from `GET /v1/usage`. |
+| 0.6.6 (Sep 30) | `aisa login`, `aisa connect`, and `aisa topup` open the browser correctly on Windows. |
+
+---
+
+## September 16, 2026
+
+### Run any endpoint from your agent
+
+Every API Reference page for an operation served by the MCP server now has an **MCP** tab next to the curl example. It provides a prompt you can paste into your agent to connect, authorize, and run the call.
+
+### TikHub
+
+The TikHub API reference covers 956 endpoints across Douyin, TikTok, Bilibili, Kuaishou, Weibo, Xiaohongshu, Zhihu, WeChat, and more, in English and Chinese.
+
+### Oxylabs
+
+ChatGPT, Gemini, and Perplexity queries have moved to the asynchronous [Oxylabs LLM](/api-reference/search/post_oxylabs-llm) endpoint. Google sources (`google_search`, `google_ai_mode`) remain on the synchronous `/apis/v1/oxylabs/ai-search` endpoint.
+
+---
+
+## September 11, 2026
+
+### New data APIs
+
+| API | What it adds |
+| :--- | :--- |
+| [BytePlus SearchInfinity](/api-reference/search/post_byteplus-web-search) | AI-oriented real-time web search and clean page fetch |
+| [Foreplay](/api-reference/foreplay/get_foreplay-brand-analytics) | Ad library search and brand analytics (4 endpoints) |
+| [CNPJá](/api-reference/cnpja/get_cnpja-office-lookup) | Brazilian company (CNPJ) office lookup |
+| [Open-Meteo](/api-reference/openmeteo/get_openmeteo-climate) | Weather forecasts, history, and climate data (12 endpoints) |
+
+### Paid-call approval for agents
+
+Agent-facing pages now require agents to show the endpoint, scope, and cost rule, and to wait for explicit user approval before making a paid or high-cost call. OpenAPI operations carry a machine-readable `x-aisa-pricing` extension that describes how each call is billed.
+
+### Twitter media upload
+
+[`POST /twitter/upload_media`](/api-reference/twitter/post_twitter-upload-media) is now documented. It accepts `multipart/form-data` and returns the `media_id` used when posting a tweet with media.
+
+---
+
+## August 2026
+
+### Search, SEO, and web-intelligence APIs
+
+- **Firecrawl** — scrape, crawl, map, search, and batch-scrape.
+- **Exa** — search, answer, contents, and agent runs.
+- **Oxylabs AI Search** — real-time AI search.
+- **Model-grounded web search** — [Anthropic](/api-reference/search/post_anthropic-websearch-search) and [OpenAI](/api-reference/search/post_openai-websearch-search) endpoints that run a live search inside a fixed model and return a cited answer with sources.
+- **Ahrefs and Semrush** — domain, keyword, and backlink data.
+- **SimilarWeb** — website traffic, engagement, ranking, audience, and keyword data, plus the Traffic Snapshot, Traffic Trend, and Top Geographies managed products.
+
+### Embeddings, rerank, and account endpoints
+
+- Jina [embeddings](/api-reference/embeddings/post_embeddings-create) and [rerank](/api-reference/rerank/post_rerank-create) are available through the AIsa API.
+- [`GET /v1/credits/balance`](/api-reference/credits-balance) returns your credit balance.
+- The model catalog was refreshed against the live model list.
+
+### Agent-ready descriptions
+
+Search, financial, CoinGecko, and Apollo operations now have stable `operationId`s (used by the MCP server as tool names) and descriptions written for agents. Instagram and Pinterest descriptions were rewritten against live responses.
+
+---
+
+## July 2026
+
+### Agent Quickstart
+
+A new [Agent Quickstart](/agent-quickstart) provides agents with a concise page to read when connecting to AIsa, instead of the full `llms.txt`. Setup prompts for Hermes and OpenClaw now point to it.
+
+### Integration tutorials
+
+New step-by-step guides for [Claude Code](/guides/tutorials/use-aisa-in-claude-code), [Codex](/guides/tutorials/use-aisa-in-codex), [Cursor](/guides/tutorials/use-aisa-in-cursor), [Manus](/guides/tutorials/use-aisa-in-manus), and [custom agents](/guides/tutorials/use-aisa-in-your-custom-agents).
+
+### Chinese documentation
+
+The documentation is now available in Chinese. Use the language switcher in the header to access guides, Agent Skills, the model catalog, and the localized API reference.
+
+### API reference accuracy
+
+Tavily, Twitter, social, CoinGecko, prediction-market, Gemini `generateContent`, Apollo, AgentMail, and DataForSEO pages were corrected against live API responses. API reference URL slugs were normalized.
+
+### New endpoints
+
+- **EDINET** — Japanese securities filings, located under Financial Data.
+- **WaveInflu** — Creator email lookup and similar-creator search. In September, WaveInflu moved to a new upstream contract with changed request and response fields, and added [AI Search](/api-reference/waveinflu/post_waveinflu-ai-search).
+
+---
+
+## June 2026
+
+### Social and email APIs
+
+- **AgentMail** — Inboxes, messages, threads, drafts, and lists for agents, organized by user journey.
+- **Reddit** — Subreddit, post-comment, and search endpoints.
+- **Twitter** — [user tweet timeline](/api-reference/twitter/get_twitter-user-tweet-timeline), [tweet replies v2](/api-reference/twitter/get_twitter-tweet-replies-v2), and [list tweet timeline](/api-reference/twitter/get_twitter-list-tweets-timeline).
+- **Instagram** (15 endpoints) and **Pinterest** (4 endpoints).
+
+### Agent Skills and OpenClaw
+
+Agent Skill pages now include a CLI install step, and the [OpenClaw guide](/guides/tutorials/use-aisa-in-openclaw) was rewritten.
+
+---
+
+## May 28, 2026
+
+### Apollo and DataForSEO
+
+- **Apollo** — Sales intelligence: people and organization search, contacts, accounts, email campaigns, and more, grouped by business object.
+- **DataForSEO** — SERP, keyword, backlink, on-page, content, business, and AI-optimization data.
+
+### Agent Skills documentation
+
+Detailed pages were added for skills across finance, search, social media, and AI models. Each page covers what the skill does, how to install it, and example prompts. See the [Agent Skills catalog](/agent-skills).
+
+---
 ## April 21, 2026
 
 ### Agent Discovery Infrastructure
