@@ -5,7 +5,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from pricing_prose import clean_text, clean_document, clean_page, NOTICE
+from pricing_prose import clean_text, clean_document, clean_page, pricing_summary, PRICE_BEGIN, NOTICE
 from compose_openapi import compose
 from test_runtime_contracts import facts, operation, mirror
 
@@ -13,6 +13,47 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class PricingProseTests(unittest.TestCase):
+    def test_visible_price_tracks_runtime_in_openapi_localization_pages_and_sales(self):
+        from readable_contract_notes import readable_block
+        from runtime_localize_openapi_zh import localize_tree
+        from sales_catalog_projection import project_sales_catalog
+        runtime = facts()
+        operation(runtime)['description'] = 'Domain Rating. Billed $0.02 per successful call.'
+        operation(runtime)['x-aisa-pricing'] = {'cost_contract': 'fixed_success', 'default_request_estimate_usd': .08}
+        document, _ = compose(runtime)
+        public = operation(document)
+        self.assertIn('Published reference price: $0.08 USD per successful request.', public['description'])
+        self.assertNotIn('$0.02', public['description'])
+        self.assertIn('$0.08 USD', readable_block(public))
+        localized = localize_tree(document, {'entries': {}}, allow_untranslated=True)
+        self.assertIn('每次成功请求 $0.08 USD', operation(localized)['description'])
+        self.assertIn('每次成功请求 $0.08 USD', readable_block(public, 'zh'))
+        sales = project_sales_catalog(document, 'a' * 64)['document']
+        self.assertEqual(operation(sales)['description'], public['description'])
+        self.assertEqual(clean_document(document), document)
+        operation(document)['x-aisa-pricing']['default_request_estimate_usd'] = .12
+        updated = clean_document(document)
+        description = operation(updated)['description']
+        self.assertIn('$0.12 USD', description)
+        self.assertNotIn('$0.08', description)
+        self.assertEqual(description.count(PRICE_BEGIN), 1)
+        operation(updated).pop('x-aisa-pricing')
+        self.assertNotIn('$0.12', operation(clean_document(updated))['description'])
+
+    def test_fixed_zero_usage_units_and_missing_prices_have_distinct_labels(self):
+        fixed = pricing_summary({'cost_contract': 'fixed_success', 'default_request_estimate_usd': .08, 'customer_multiplier': 2})
+        self.assertIn('$0.08 USD per successful request', fixed)
+        self.assertNotIn('$0.16', fixed)
+        free = pricing_summary({'cost_contract': 'explicit_zero', 'customer_pricing': 'fixed_success', 'default_request_estimate_usd': 0})
+        self.assertIn('$0 USD per successful request', free)
+        usage = pricing_summary({'cost_contract': 'response_count', 'default_request_estimate_usd': 1.275, 'unit_rate_usd': .075, 'unit': 'similarweb_credit'})
+        self.assertIn('estimate: $1.275 USD (not a fixed price)', usage)
+        self.assertIn('$0.075 USD per similarweb_credit', usage)
+        self.assertNotIn('per row', usage)
+        for value in (None, True, -1, float('inf'), float('nan'), '0.08'):
+            self.assertNotIn('$', pricing_summary({'default_request_estimate_usd': value}))
+        self.assertNotIn('$', pricing_summary({'default_request_estimate_usd': .08, 'reference_unavailable': True}))
+
     def test_page_rate_table_and_translation_cannot_restore_stale_prices(self):
         from readable_contract_notes import update_readable_block
         from runtime_localize_openapi_zh import translation, key_for

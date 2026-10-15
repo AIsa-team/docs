@@ -45,7 +45,11 @@ class ResponseMigrationTests(unittest.TestCase):
         self.assertEqual(pending,[]);self.assertNotIn('x-aisa-response-pending',operation(doc))
         self.assertEqual(operation(doc)['responses']['200']['content'],operation(json.loads(raw))['responses']['200']['content'])
         for key,value in before.items():
-            if key!='responses':self.assertEqual(operation(doc)[key],value)
+            if key == 'description':
+                from pricing_prose import strip_price_summary
+                self.assertEqual(strip_price_summary(operation(doc)[key]), value)
+            elif key != 'responses':
+                self.assertEqual(operation(doc)[key], value)
         self.assertEqual(compose(current,public_mirrors=index(source),previous=doc),(doc,[]))
 
     def test_transport_request_identity_or_source_drift_invalidates_review(self):

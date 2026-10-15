@@ -4,6 +4,13 @@ The Runtime contract is the source for published pricing. Handwritten and
 provider descriptions had become a second price list: Ahrefs domain-rating,
 for example, described a $0.02 charge while Runtime published $0.08.
 
+The correction also adds a visible, generated pricing paragraph: domain-rating
+shows `Published reference price: $0.08 USD per successful request.` The value
+comes from Runtime, not a replacement hard-coded string. Usage-priced endpoints
+show estimates and declared unit rates instead of a fabricated fixed price.
+The same summary appears in English/Chinese pages, operation descriptions and
+the derived sales catalog. Repeated generation replaces it when pricing changes.
+
 The audit covered all upstream OpenAPI prose, English/Chinese API pages and
 guides, and llms.txt. Numeric billing claims were also present in parameter and
 response descriptions, not only operation descriptions. The projection removes
@@ -46,7 +53,7 @@ the cleaned descriptions through the existing formal publication graph.
 
 Validation:
 
-- `python -m unittest discover -s scripts/tests -v`: 624 tests, OK, 3 skipped.
+- `python -m unittest discover -s scripts/tests -v`: 626 tests, OK, 3 skipped.
 - `python scripts/generate_payment_discovery.py --check`: passed.
 - Frozen W0 integrity verification and five W3 policy tests: passed.
 - Full frozen catalog generation and idempotent replay: passed; 1,930 composed

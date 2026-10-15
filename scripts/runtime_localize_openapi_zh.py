@@ -351,18 +351,24 @@ def translation(catalog: dict[str, Any], source: str) -> str:
 
 def localize_tree(node: Any, catalog: dict[str, Any], path: tuple[str, ...] = (), *, allow_untranslated: bool = False) -> Any:
     if isinstance(node, dict):
+        from pricing_prose import strip_price_summary, add_price_summary
+        is_operation = isinstance(node.get('operationId'), str) and 'x-aisa-pricing' in node
         result = {}
         for key, value in node.items():
             if key in TRANSLATABLE_KEYS and isinstance(value, str) and value.strip():
                 if is_translatable_spec_field(path, key):
+                    if is_operation and key == 'description':
+                        value = strip_price_summary(value)
                     try:
-                        result[key] = translation(catalog, value)
+                        result[key] = translation(catalog, value) if value else ''
                     except KeyError:
                         if not allow_untranslated:
                             raise
                         result[key] = value
                     continue
             result[key] = localize_tree(value, catalog, path + (str(key),), allow_untranslated=allow_untranslated)
+        if is_operation:
+            add_price_summary(result, 'zh')
         return result
     if isinstance(node, list):
         return [localize_tree(value, catalog, path + (str(index),), allow_untranslated=allow_untranslated) for index, value in enumerate(node)]

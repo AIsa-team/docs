@@ -52,7 +52,11 @@ class IndependentResponseTests(unittest.TestCase):
                 actual=operation(doc)
                 self.assertNotIn('x-aisa-response-pending',actual)
                 for key,value in original.items():
-                    if key!='responses':self.assertEqual(actual[key],value)
+                    if key == 'description':
+                        from pricing_prose import strip_price_summary
+                        self.assertEqual(strip_price_summary(actual[key]), value)
+                    elif key != 'responses':
+                        self.assertEqual(actual[key], value)
                 self.assertNotIn('x-aisa-source',actual)
                 self.assertEqual(actual['x-aisa-response-source']['source']['content_hash'],'sha256:response-fixture')
                 self.assertEqual(compose(runtime,public_mirrors=index(response_source(method)),previous=doc),(doc,[]))
