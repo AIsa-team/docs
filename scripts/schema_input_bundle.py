@@ -122,6 +122,15 @@ def role_for(name):
     raise ValueError('Unsupported bundle member or role')
 
 
+def formal_input_paths(hashes):
+    """The single selection rule for Git-bound Composer schema inputs."""
+    return {name for name in hashes if
+            name == 'openapi/registry.yaml' or name in (POLICY_PATH, REBINDING_PATH) or
+            re.fullmatch('openapi/upstream/' + SPEC_NAME, name) or
+            (re.fullmatch('openapi/' + SPEC_NAME, name) and
+             (Path(name).name not in SKIP_FILES or Path(name).name in {'coverage.json', 'pending.json'}))}
+
+
 def reject_unimplemented_inputs(registry, *, pointer_paths):
     require(isinstance(registry, dict) and isinstance(registry.get('providers'), dict), 'Invalid registry')
     for config in registry['providers'].values():
@@ -286,11 +295,7 @@ def load_bundle(root, *, expected_manifest_sha256, expected_docs_ref,
     require(sha(canonical(core).rstrip(b'\n')) == pointer.get('contract_release'), 'Historical formal identity differs')
     hashes = pointer['files_sha256']
     reject_unimplemented_inputs(registry, pointer_paths=hashes)
-    expected_inputs = {('input/' + name) for name in hashes if
-                       name == 'openapi/registry.yaml' or name in (POLICY_PATH, REBINDING_PATH) or
-                       re.fullmatch('openapi/upstream/' + SPEC_NAME, name) or
-                       (re.fullmatch('openapi/' + SPEC_NAME, name) and
-                        (Path(name).name not in SKIP_FILES or Path(name).name in {'coverage.json', 'pending.json'}))}
+    expected_inputs = {'input/' + name for name in formal_input_paths(hashes)}
     actual_inputs = {n for n, row in members.items() if row['role'] in {
         'registry', 'reviewed_deferral_policy', 'reviewed_deferral_rebinding', 'upstream_schema',
         'historical_compatibility_document', 'historical_gap_inventory'}}
