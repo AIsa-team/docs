@@ -23,9 +23,10 @@ class SurfaceChecks(unittest.TestCase):
         self.expected = request_blocks(self.text)
         self.payloads = {
             'website-json': json.dumps(self.spec).encode(), 'docs-json': json.dumps(self.spec).encode(),
+            'docs-root-json': json.dumps(self.spec).encode(),
             'mcp-version': json.dumps({'state': 'loaded', 'docsRefs': [self.ref], 'documentHashes': {'example': 'c' * 64}}).encode(),
-            'website-llms': f'Declared API contract: {self.digest}; immutable Docs revision: {self.ref}. /openapi/openapi.json'.encode(),
-            'docs-llms': b'OpenAPI /openapi/openapi.json',
+            'website-llms': f'Declared API contract: {self.digest}; immutable Docs revision: {self.ref}. https://raw.githubusercontent.com/AIsa-team/docs/{self.ref}/openapi.yaml https://aisa.one/openapi.json'.encode(),
+            'docs-llms': ('OpenAPI /openapi/openapi.json ' + self.digest).encode(),
             'docs-llms-full': self.text.encode(), 'mcp-llms': ('Loaded Docs revisions: ' + self.ref).encode()}
 
     def block(self, request, price='Published reference price: $0 USD per successful request.'):
