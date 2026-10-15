@@ -252,6 +252,14 @@ def main():
             if yaml.safe_load(raw) != expected:
                 report['status'] = 'failed'
                 report.setdefault('global_errors', []).append({'code': 'aggregate_recomposition_mismatch'})
+            index_path = args.root / 'llms.txt'
+            if index_path.is_file() and consolidate.discovery_index_block(raw) not in index_path.read_text():
+                report['status'] = 'failed'
+                report.setdefault('global_errors', []).append({'code': 'llms_index_provenance_mismatch'})
+            json_path = args.root / 'openapi/openapi.json'
+            if not json_path.is_file() or json.dumps(json.loads(json_path.read_text()), sort_keys=True, allow_nan=False) != json.dumps(expected, sort_keys=True, allow_nan=False):
+                report['status'] = 'failed'
+                report.setdefault('global_errors', []).append({'code': 'aggregate_json_recomposition_mismatch'})
             from sales_catalog_projection import verify_sales_catalog
             try:
                 verify_sales_catalog(args.root, expected, raw)

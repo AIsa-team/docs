@@ -216,7 +216,8 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                         return note
                 from pricing_prose import clean_page
                 text = clean_page(text, language)
-                text = update_readable_block(text, operation, language, translated_note)
+                text = update_readable_block(text, operation, language, translated_note,
+                    document=document, method=method, path=path, spec_path=spec_path)
                 if not destination.exists() or text != destination.read_text():
                     changes[destination] = text
     nav_config = api_nav_groups.load(root)
@@ -557,6 +558,21 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
     for path, content in changes.items():
         if path.parent == root / 'openapi' and path.suffix == '.json' and path.name not in SKIP_FILES:
             documents[path.stem] = json.loads(content)
+    if with_pages:
+        # Keep previously published locale URLs, but refresh their content from
+        # the current canonical document even after pages move to a new owner.
+        import runtime_localize_openapi_zh as localization
+        catalog = read_json(root / "translations/openapi-zh.json", {"entries": {}})
+        for name, document in documents.items():
+            target = root / f"openapi/zh/{name}.json"
+            if target.exists() and target not in changes:
+                source = copy.deepcopy(document)
+                attach_history(source, identity_history)
+                if source != document:
+                    changes[root / f"openapi/{name}.json"] = json.dumps(source, indent=2, ensure_ascii=False) + "\n"
+                    documents[name] = source
+                localized = localize_identities(localization.localize_tree(source, catalog, allow_untranslated=True))
+                changes[target] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
     from gap_evidence import response_gap_rows
     validate_document_identities(documents, identity_history)
     coverage['response_gaps'] = {provider: response_gap_rows(documents.get(provider, {}), facts_by_provider.get(provider, {}), rows)

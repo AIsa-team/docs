@@ -295,3 +295,34 @@ receipts after reviewed changes reach main.
 The tracked publication plan is ready; the existing operator activation variable
 still controls whether scheduled publication and revision monitoring run. No
 cadence, receipt lifetime, acceptance baseline or pending policy is relaxed.
+
+### Unified JSON and readable request projection
+
+The Runtime consolidator writes `openapi.yaml` and `openapi/openapi.json` from
+one aggregate object. The JSON is excluded from provider input scans to prevent
+recursive aggregation, included in the formal file manifest, and checked against
+the same offline recomposition. It replaces the old Plant Store placeholder.
+Neither this full contract nor its compatibility redirects changes the API
+host's `/openapi.json`, which remains the MPP payment subset.
+
+The existing managed MDX block now includes effective method/path, server URL
+templates, parameter requiredness, request body, authentication and the reachable
+request schema closure. It is ordinary Markdown/JSON so Mintlify's llms-full
+output can carry it without expanding OpenAPI frontmatter. Rendering reuses the
+compositor's instance-aware reference traversal, preserves native numbers and
+recursive schemas, and does not copy response schemas. Historical locale URLs
+remain present, with their content refreshed from the current English source.
+
+Deploy and verify the website's `/openapi.json` first, then publish the Docs
+root and nested JSON redirects. As with YAML, the oversized JSON is excluded
+from Mintlify ingestion; the immutable Git file remains manifest-bound. Root
+JSON redirects reuse the existing `redirects` / `permanent` configuration.
+
+Validate with `python -m unittest discover -s scripts/tests -v`, followed by
+actual Runtime candidate composition and the formal artifact check. Check live
+`llms-full.txt` for the generated request blocks after Mintlify publication;
+source Markdown alone does not prove platform rendering. Measure total and
+largest generated blocks on the actual candidate. A frozen historical fixture
+with duplicate legacy pages produced 7,282 request blocks (22.43 MB total,
+75.4 KB largest) before the final renderer review; it is a sizing diagnostic,
+not the size or acceptance result of the current live publication.
