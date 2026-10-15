@@ -9,7 +9,7 @@ import tempfile
 
 from contract_page_links import historical_link_index, require_historical_primary_links
 from fetch_runtime_release import (MAX_FILE, MAX_TOTAL, category_content,
-                                   validate_current, validate_release_files)
+                                   validate_current, validate_artifact_files, facts_members, file_limit)
 from pull_openapi import stage
 from runtime_registry import published_documents
 from presentation_page_bindings import (MEMBER as PRESENTATION_MEMBER,
@@ -43,18 +43,18 @@ def load_runtime(root, *, artifact_revision, compiler_revision, receipt_sha256):
     for row in before['files']:
         raw = regular_read(root, row['name'])
         total += len(raw)
-        require(len(raw) <= MAX_FILE and total <= MAX_TOTAL, 'Runtime byte limit exceeded')
+        require(len(raw) <= file_limit(row['name'], MAX_FILE) and total <= MAX_TOTAL, 'Runtime byte limit exceeded')
         require(sha(raw) == row['sha256'], 'Runtime member differs from immutable manifest')
         strict_json(raw)
         contents[row['name']] = raw
-    validate_release_files(contents)
+    validate_artifact_files(contents, before)
     category = regular_read(root, 'category.json')
     require(len(category) <= MAX_FILE and total + len(category) <= MAX_TOTAL,
             'Runtime category byte limit exceeded')
     require(sha(category) == receipt.get('category_sha256') and
             sha(category_content(category)) == receipt.get('category_content_sha256'),
             'Unversioned category differs from pinned original acquisition')
-    facts = {Path(name).name: raw for name, raw in contents.items()}
+    facts = {Path(name).name: raw for name, raw in facts_members(contents).items()}
     facts['category.json'] = category
     return facts, {'artifact_revision': artifact_revision, 'compiler_revision': compiler_revision,
                    'acquisition_receipt_sha256': receipt_sha256, 'generation': before['generation'],
