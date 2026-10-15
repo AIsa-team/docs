@@ -1,5 +1,5 @@
 import copy
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from http.client import BadStatusLine
 import io
 import json
@@ -94,6 +94,27 @@ class PublicReleaseTests(unittest.TestCase):
                 save(output, result)
         self.assertEqual(calls.count('/public/api-contract/current'), 2)
         self.assertEqual(calls.count('/info/apis/category'), 2)
+
+    def test_current_cli_discovers_public_revision_and_keeps_strict_acquisition(self):
+        revision, compiler, reader, current, payload, calls = self.fixture()
+        with tempfile.TemporaryDirectory() as temp, patch('fetch_runtime_release.PublicReader', return_value=reader):
+            output = Path(temp) / 'facts'
+            with redirect_stdout(io.StringIO()):
+                main(['--current', '--output', str(output)])
+            receipt = json.loads((output / 'acquisition-receipt.json').read_text())
+            self.assertEqual(receipt['artifact_revision'], revision)
+            self.assertEqual(receipt['compiler_revision'], compiler)
+            self.assertEqual((output / 'index.json').read_bytes(), payload['index.json'])
+        self.assertEqual(calls.count('/public/api-contract/current'), 3)
+        # Discovery does not relax freshness or permit an unpublished generation.
+        for mutation in (lambda c: c.update(fresh=False), lambda c: c.update(generation=4)):
+            _, _, bad_reader, *_ = self.fixture(mutate_current=mutation)
+            with tempfile.TemporaryDirectory() as temp, patch('fetch_runtime_release.PublicReader', return_value=bad_reader):
+                output = Path(temp) / 'facts'
+                with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as raised:
+                    main(['--current', '--output', str(output)])
+                self.assertEqual(raised.exception.code, 1)
+                self.assertFalse(output.exists())
 
     def test_wrong_pins_stale_generation_and_manifest_corruption_fail_before_files(self):
         for mutation in (lambda c: c.update(fresh=False), lambda c: c.update(generation=4),

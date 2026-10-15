@@ -110,6 +110,28 @@ the workflow manually from `main` with `dispatch_tool_router` enabled.
 
 This repository is available under the [MIT License](LICENSE).
 
+## Contract candidate CI and Runtime freshness
+
+Artifact-changing PRs acquire Runtime's public `current` release using
+`fetch_runtime_release.py --current`. The importer discovers its exact pins,
+verifies the immutable manifest and file hashes, and requires the same fresh
+current pointer before and after acquisition. The PR cannot select an older
+Runtime release by editing a Docs receipt. Main's last-good Docs acquisition is
+not the acquisition pin: Docs may lag Runtime while a source fix is under review,
+so requiring that old pin to still be current would block the repair itself.
+
+CI checks the actual committed PR graph against those inputs. It does not
+regenerate or rewrite the PR before assessing it. The independently reviewed
+coverage baseline, published identity baseline, source-maintenance evidence,
+payment binding and formal artifact checks remain required. If Runtime advances
+and the PR graph no longer matches, regenerate the complete candidate from a new
+verified acquisition, review the diff and rerun CI. Do not alter a formal
+publication receipt or accept new pending debt to make the check pass.
+
+The formal publisher separately acquires a fresh release and assesses the exact
+staged graph before exporting its publication pointer. Candidate CI success does
+not authorize a formal release or assert that consumers have converged.
+
 ## Acquire an actual Runtime release for contract review
 
 After the Runtime operator supplies the **actual published artifact revision**
