@@ -244,12 +244,15 @@ def main():
             finally:
                 consolidate.OPENAPI_DIR = previous_root
             raw = aggregate_path.read_bytes()
+            actual_yaml = yaml.safe_load(raw)
             try:
-                consolidate.validate_reference_closure(yaml.safe_load(raw))
+                consolidate.validate_reference_closure(actual_yaml)
             except (KeyError, TypeError, ValueError) as exc:
                 report['status'] = 'failed'
                 report.setdefault('global_errors', []).append({'code': 'aggregate_unresolved_reference', 'detail': str(exc)})
-            if yaml.safe_load(raw) != expected:
+            # Python equality treats True as 1; wire schema declarations must
+            # retain JSON scalar types as well as exact numeric values.
+            if json.dumps(actual_yaml, sort_keys=True, allow_nan=False) != json.dumps(expected, sort_keys=True, allow_nan=False):
                 report['status'] = 'failed'
                 report.setdefault('global_errors', []).append({'code': 'aggregate_recomposition_mismatch'})
             index_path = args.root / 'llms.txt'
