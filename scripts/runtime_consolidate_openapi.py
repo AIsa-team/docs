@@ -410,18 +410,20 @@ def load_spec(filepath):
         return source_json_load(f)
 
 
-def endpoint_page_links():
-    root = Path(OPENAPI_DIR).parent
+def endpoint_page_links(root=None):
+    from contract_page_links import page_reference
+    root = Path(root) if root is not None else Path(OPENAPI_DIR).parent
     links = {}
     for page in sorted((root / "api-reference").rglob("*.mdx")):
-        match = re.search(r"^openapi:\s*['\"]?(openapi/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", page.read_text(), re.M)
-        if match:
-            key = (Path(match[1]).name, match[2].lower(), match[3])
+        reference = page_reference(page.read_text())
+        if reference:
+            spec, method, path = reference
+            key = (Path(spec).name, method, path)
             links.setdefault(key, "https://aisa.one/docs/" + page.relative_to(root).with_suffix("").as_posix())
     return links
 
 
-def build_unified_spec():
+def build_unified_spec(*, root=None, page_links=None):
     """Merge all individual specs into one OpenAPI 3.1 document."""
     unified = {
         "openapi": "3.1.0",
@@ -493,17 +495,19 @@ def build_unified_spec():
     }
 
     tags_seen = set()
-    page_links = endpoint_page_links()
-    registry_path = Path(OPENAPI_DIR) / "registry.yaml"
+    openapi_dir = Path(root) / 'openapi' if root is not None else Path(OPENAPI_DIR)
+    if page_links is None:
+        page_links = endpoint_page_links(openapi_dir.parent)
+    registry_path = openapi_dir / "registry.yaml"
     registry = yaml.safe_load(registry_path.read_text()) if registry_path.exists() else {}
     registrations = (registry or {}).get("providers", {})
-    files = sorted(os.listdir(OPENAPI_DIR))
+    files = sorted(os.listdir(openapi_dir))
 
     for filename in files:
         if filename in SKIP_FILES or not filename.endswith(".json"):
             continue
 
-        filepath = os.path.join(OPENAPI_DIR, filename)
+        filepath = openapi_dir / filename
         tag = FILE_TAG_MAP.get(filename, "Other")
 
         try:

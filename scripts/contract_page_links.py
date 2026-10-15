@@ -5,6 +5,12 @@ from urllib.parse import urlsplit
 from compose_openapi import METHODS, digest
 
 DOCS_PREFIX = 'https://aisa.one/docs/'
+PAGE_REFERENCE = re.compile(r"^openapi:\s*['\"]?(openapi/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", re.M)
+
+
+def page_reference(text):
+    match = PAGE_REFERENCE.search(text)
+    return (match[1], match[2].lower(), match[3]) if match else None
 
 
 def slug(value):

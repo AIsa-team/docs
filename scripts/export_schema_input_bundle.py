@@ -15,6 +15,7 @@ import tempfile
 import yaml
 
 from identity_compatibility import PublishedHistory
+from presentation_page_bindings import MEMBER as PRESENTATION_MEMBER, export_bindings
 from schema_input_bundle import (AUTHORITY, HEX40, REVIEWED_BASELINE, SINGLETONS, MAX_FILE,
                                  regular_read,
                                  canonical, require, role_for, safe_name, sha, UniqueLoader,
@@ -56,7 +57,8 @@ class GitSource:
         return self.git('cat-file', 'blob', metadata[2].decode())
 
 
-def export_bundle(repo, docs_ref, baseline_ref, source_receipts, output):
+def export_bundle(repo, docs_ref, baseline_ref, source_receipts, output, *, bundle_version=1):
+    require(type(bundle_version) is int and bundle_version in (1, 2), 'Unsupported bundle version')
     require(baseline_ref == REVIEWED_BASELINE and docs_ref != baseline_ref,
             'An independent, code-pinned reviewed baseline is required')
     source = GitSource(repo, docs_ref)
@@ -99,7 +101,13 @@ def export_bundle(repo, docs_ref, baseline_ref, source_receipts, output):
         'docs_ref': docs_ref, 'ancestors': sorted(ancestors),
         'independently_pinned_baseline': {'ref': baseline_ref, 'path': 'openapi/coverage.json',
             'sha256': sha(files['baseline/openapi/coverage.json'])}})
-    manifest = {'schema_version': 1, 'kind': 'aisa-schema-input-bundle',
+    if bundle_version == 2:
+        documents = {Path(name).stem: strict_json(raw) for name, raw in files.items()
+                     if role_for(name) == 'historical_compatibility_document'}
+        files[PRESENTATION_MEMBER] = canonical(export_bindings(
+            docs_ref, pointer['files_sha256'], documents,
+            lambda name: source.read(docs_ref, name), sha))
+    manifest = {'schema_version': bundle_version, 'kind': 'aisa-schema-input-bundle',
                 'docs_ref': docs_ref, 'baseline_ref': baseline_ref, 'authority': AUTHORITY,
                 'files': [{'path': name, 'role': role_for(name), 'sha256': sha(raw), 'bytes': len(raw)}
                           for name, raw in sorted(files.items())]}
@@ -128,9 +136,11 @@ def main():
     parser.add_argument('--baseline-ref', required=True)
     parser.add_argument('--source-receipts', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--bundle-version', type=int, choices=(1, 2), default=1)
     args = parser.parse_args()
     try:
-        result = export_bundle(args.repo, args.docs_ref, args.baseline_ref, args.source_receipts, args.output)
+        result = export_bundle(args.repo, args.docs_ref, args.baseline_ref, args.source_receipts, args.output,
+                               bundle_version=args.bundle_version)
     except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as exc:
         parser.exit(1, 'Schema input export rejected: ' + str(exc) + '\n')
     print(json.dumps(result, sort_keys=True))
