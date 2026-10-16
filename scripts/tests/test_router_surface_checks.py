@@ -102,6 +102,40 @@ class RouterSurfaceTests(unittest.TestCase):
                 self.assertEqual(result['verified_operations'], 0)
                 self.assertTrue(any(':arguments_schema:' in error for error in result['mismatches']))
 
+    def test_whole_object_body_requires_full_native_schema_and_separate_http_parameters(self):
+        node=self.document['components']['schemas']['Node']
+        node['required']=['count']
+        node['additionalProperties']=False
+        operation=self.document['paths']['/item']['get']
+        operation['requestBody']['required']=True
+        actual={'type':'object','additionalProperties':False,
+            'properties':{'query':{'type':'string'},'body':copy.deepcopy(node)},
+            'required':['body'],'components':copy.deepcopy(self.document['components'])}
+        def check(value):
+            return check_arguments_schema(self.document,'/item','GET',value)
+        self.assertEqual(check(actual),[])
+        for name,mutate in [
+            ('missing body property',lambda a:a['properties']['body']['properties'].pop('count')),
+            ('open closed object',lambda a:a['properties']['body'].update(additionalProperties=True)),
+            ('missing body required',lambda a:a['properties']['body'].pop('required')),
+            ('missing envelope required',lambda a:a.pop('required')),
+            ('reference target drift',lambda a:a['components']['schemas']['Node']['properties']['count'].update(default=9007199254740992)),
+            ('query drift',lambda a:a['properties']['query'].update(type='integer')),
+            ('extra root field',lambda a:a['properties'].update(count={'type':'integer'})),
+            ('body rule at root',lambda a:a.update(minProperties=1)),
+            ('unclosed root',lambda a:a.update(additionalProperties=True)),
+        ]:
+            with self.subTest(name=name):
+                changed=copy.deepcopy(actual);mutate(changed)
+                self.assertTrue(check(changed))
+        # Optional bodies keep required fields inside the body without making
+        # the body itself required. A matching wrapper is not enough by itself.
+        operation['requestBody']['required']=False
+        actual.pop('required')
+        self.assertEqual(check(actual),[])
+        actual['properties']['body']['required']=[]
+        self.assertTrue(check(actual))
+
     def test_nested_body_composition_and_literal_business_names_are_preserved(self):
         self.document['paths']['/item'].pop('parameters')
         literal = {'$ref': 'a literal, not a schema reference', 'description': True}

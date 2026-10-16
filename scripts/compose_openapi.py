@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit, unquote
 
-VERSION = "21"
+VERSION = "22"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -481,6 +481,46 @@ def flatten_object(schema: dict) -> dict:
     return result
 
 
+def retain_source_annotations(declared: dict, source: dict) -> dict:
+    """Runtime owns constraints; missing descriptive annotations retain their source."""
+    result = copy.deepcopy(declared)
+    runtime_values = declared.get("schema", declared)
+    source_values = source.get("schema", source)
+    for key in ("description", "summary", "title"):
+        if key not in result and key in source:
+            annotation = copy.deepcopy(source[key])
+            if (isinstance(annotation, str) and isinstance(runtime_values, dict) and isinstance(source_values, dict)
+                    and "default" in runtime_values and "default" in source_values
+                    and runtime_values["default"] != source_values["default"]
+                    and isinstance(source_values["default"], (str, int, float, bool))
+                    and isinstance(runtime_values["default"], (str, int, float, bool))):
+                # The source's usage guidance is useful, but its explicitly
+                # labelled default must follow the public Runtime declaration.
+                before = str(source_values["default"])
+                value = runtime_values["default"]
+                after = value if isinstance(value, str) else json.dumps(value)
+                annotation = re.sub(r'(\bdefault(?: value)?(?: is| of|:)?\s+)' + re.escape(before) + r'(?![\w.])',
+                                    lambda match: match[1] + after, annotation, flags=re.I)
+            result[key] = annotation
+    # Different wire types can legitimately need different examples. A source
+    # suggestion never becomes a Runtime default or changes requiredness.
+    same_type = "type" in declared and source.get("type") == declared["type"]
+    integer_example = (declared.get("type") == "integer" and source.get("type") == "number"
+                       and isinstance(source.get("example"), int) and not isinstance(source["example"], bool))
+    ignored = SCHEMA_ANNOTATIONS | {"default"}
+    source_constraints = {key: value for key, value in source.items() if key not in ignored}
+    runtime_constraints = {key: value for key, value in declared.items() if key not in ignored}
+    if integer_example:
+        source_constraints["type"] = "integer"
+    # Same type alone cannot prove an example respects a narrower bound or enum.
+    # Keep uncertain examples out rather than adding a second schema validator.
+    if (same_type or integer_example) and source_constraints == runtime_constraints:
+        for key in ("example", "examples"):
+            if key not in result and key in source and (same_type or key == "example"):
+                result[key] = copy.deepcopy(source[key])
+    return result
+
+
 def merge_object(upstream: dict, declared: dict) -> dict:
     merged = flatten_object(upstream)
     names = set(declared.get("properties", {}))
@@ -494,10 +534,10 @@ def merge_object(upstream: dict, declared: dict) -> dict:
               and isinstance(original.get("items"), dict)):
             # Runtime owns this array and its bounds, but an explicit empty
             # items schema makes no declaration about the provider's children.
-            merged["properties"][name] = copy.deepcopy(value)
+            merged["properties"][name] = retain_source_annotations(value, original)
             merged["properties"][name]["items"] = copy.deepcopy(original["items"])
         else:
-            merged["properties"][name] = copy.deepcopy(value)
+            merged["properties"][name] = retain_source_annotations(value, original) if isinstance(original, dict) else copy.deepcopy(value)
     merged.pop("required", None)
     if required:
         merged["required"] = sorted(required)
@@ -806,7 +846,13 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             if p.get("name", "").lower() not in auth_names
                             and (p.get("in") != "query" or query_passthrough or (p["in"], p["name"]) in runtime_fields)
                         }
-                        parameters.update({(p["in"], p["name"]): copy.deepcopy(p) for p in runtime.get("parameters", [])})
+                        for parameter in runtime.get("parameters", []):
+                            key = (parameter["in"], parameter["name"])
+                            original = parameters.get(key, {})
+                            merged = retain_source_annotations(parameter, original)
+                            if isinstance(parameter.get("schema"), dict) and isinstance(original.get("schema"), dict):
+                                merged["schema"] = retain_source_annotations(parameter["schema"], original["schema"])
+                            parameters[key] = merged
                         if parameters:
                             operation["parameters"] = [parameter_wire_default(parameters[k]) for k in sorted(parameters)]
                         if mirror.get("requestBody") or runtime.get("requestBody"):

@@ -82,13 +82,16 @@ def schema_semantics(value, document, active=(), named=False):
 def check_arguments_schema(document,path,method,actual):
     """Return errors for missing/extra names, type/enum/default/required drift.
 
-    Object request bodies are exposed as named tool arguments. Non-object or
-    empty-schema bodies use the explicit `body` argument. Parameter and body
-    schemas resolve references against their own documents. Empty source
-    contracts remain empty and do not establish completeness.
+    Full native bodies may use an explicit `body` argument independently of
+    HTTP parameters. Retain strict legacy flattened comparisons during the
+    consumer migration. References resolve against their own documents; empty
+    source contracts do not establish completeness.
     """
     if not isinstance(actual, dict):
         return ['arguments_schema missing or not object']
+    actual_props=actual.get('properties',{})
+    if not isinstance(actual_props,dict):
+        return ['argument properties missing or not object']
     errors=[]
     item=effective_object(document['paths'][path],document)
     op=item[method.lower()]
@@ -114,9 +117,10 @@ def check_arguments_schema(document,path,method,actual):
         body_schema=content[media].get('schema',{})
         body_schema=effective_object(body_schema,document)
         body_props=body_schema.get('properties',{}) if isinstance(body_schema,dict) else {}
+        whole_json_body=(media=='application/json' or media.endswith('+json')) and 'body' in actual_props and 'body' not in props
         # Object-wide body constraints cannot apply to sibling query/path/header
         # arguments. The existing whole-body form preserves that scope.
-        if body_props and not (props and set(body_schema) & TOP_CONSTRAINTS):
+        if body_props and not whole_json_body and not (props and set(body_schema) & TOP_CONSTRAINTS):
             for name,subschema in body_props.items():
                 if name in props:
                     return ['ambiguous parameter/body name '+name]
@@ -135,6 +139,10 @@ def check_arguments_schema(document,path,method,actual):
             props['body']=body_schema
             if body.get('required'):
                 required.add('body')
+            if whole_json_body:
+                for key in TOP_CONSTRAINTS:
+                    if key in actual:
+                        errors.append('body constraint escaped its scope: '+key)
     if not isinstance(actual,dict):
         return ['arguments_schema missing or not object']
     actual_props=actual.get('properties',{})

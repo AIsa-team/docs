@@ -141,6 +141,56 @@ class PricingProseTests(unittest.TestCase):
             self.assertEqual(source, original, path.name)
         self.assertNotIn('flat', clean_text('Billed at a flat $0.012 per request.'))
 
+    def test_real_search_filter_examples_and_batch_rules_survive_rate_cleanup(self):
+        source = json.loads((ROOT / 'openapi/upstream/dataforseo-official.json').read_text())
+        text = source['components']['schemas']['MerchantGoogleProductsTaskPostRequestInfo']['properties']['search_param']['description']
+        self.assertEqual(clean_text(text), text)
+        source = json.loads((ROOT / 'openapi/upstream/tikhub.json').read_text())
+        schema = source['components']['schemas']['BatchGiftQuery']
+        for text in (schema['properties']['gift_ids']['description'],
+                     source['paths']['/tikhub/tiktok/web/fetch_gift_names_by_ids']['post']['requestBody']['content']['application/json']['schema']['description']):
+            result = clean_text(text)
+            self.assertNotIn('$0.025', result)
+            self.assertIn('50', result)
+            self.assertEqual(result.count('first 50'), text.count('first 50'))
+            self.assertEqual(clean_text(result), result)
+
+    def test_conditional_provider_usage_warning_survives_without_static_amount(self):
+        text = 'Note: you will be charged extra $0.002 for using this parameter; if absent charges are returned.'
+        result = clean_text(text)
+        self.assertIn('provider usage may increase for using this parameter', result)
+        self.assertIn('if absent charges are returned', result)
+        self.assertNotIn('$0.002', result)
+        self.assertEqual(clean_text(result), result)
+
+    def test_suffix_dollar_rates_preserve_mixed_batch_and_usage_instructions(self):
+        self.assertNotIn('0.02$', clean_text('- Price: 0.02$ / time'))
+        batch = '- Batch Get Video Information, up to 50 videos at a time, this interface charges a fixed price of 0.001$ * 50 = 0.05$ each time.'
+        result = clean_text(batch)
+        self.assertIn('up to 50 videos at a time', result)
+        self.assertNotIn('0.001$', result)
+        variable = '- Charged by the number of live rooms queried, 0.025$ per live room, please try to query 50 live rooms to avoid wasting API call counts.'
+        result = clean_text(variable)
+        self.assertIn('Provider usage depends on the number of live rooms queried', result)
+        self.assertIn('query 50 live rooms', result)
+        self.assertNotIn('0.025$', result)
+
+    def test_free_claim_reconciles_only_positive_fixed_customer_pricing(self):
+        text = 'Resolve an industry from free text. Free, suitable as health check.'
+        for pricing, replace in (
+                ({'customer_pricing': 'fixed_success', 'cost_contract': 'explicit_zero', 'default_request_estimate_usd': .001}, True),
+                ({'cost_contract': 'explicit_zero', 'default_request_estimate_usd': .001}, False),
+                ({'customer_pricing': 'usage', 'default_request_estimate_usd': .001}, False),
+                ({'customer_pricing': 'fixed_success', 'default_request_estimate_usd': 0}, False),
+                ({'customer_pricing': 'fixed_success', 'default_request_estimate_usd': .001, 'reference_unavailable': True}, False)):
+            with self.subTest(pricing=pricing):
+                result = clean_document({'paths': {'/test': {'get': {
+                    'operationId': 'test', 'description': text, 'x-aisa-pricing': pricing}}}})
+                description = result['paths']['/test']['get']['description']
+                self.assertIn('from free text', description)
+                self.assertEqual('Free, suitable' not in description, replace)
+                self.assertEqual(clean_document(result), result)
+
 
 if __name__ == '__main__':
     unittest.main()
