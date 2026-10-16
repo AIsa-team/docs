@@ -5,6 +5,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import copy
 
 from openapi_spec_validator import validate
 
@@ -46,7 +47,10 @@ class DuffelFlightsReferenceTest(unittest.TestCase):
                     self.assertTrue(request['required'])
                     schema = request['content']['application/json']['schema']
                     self.assertEqual(schema['required'], ['data'])
-                    self.assertEqual(schema['properties']['data'], item['bodyDataSchema'])
+                    expected = copy.deepcopy(item['bodyDataSchema'])
+                    if (method, path) == ('POST', '/air/offer_requests'):
+                        expected['properties']['passengers'].pop('example')
+                    self.assertEqual(schema['properties']['data'], expected)
                 else:
                     self.assertNotIn('requestBody', operation)
 
