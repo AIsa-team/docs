@@ -62,6 +62,26 @@ class MetadataTests(unittest.TestCase):
         self.assertEqual((self.facts, self.native, self.readiness), before)
         self.assertEqual(result['coverage']['providers']['one'][0]['status'], 'composed')
 
+    def test_response_identity_policy_mode_is_shared_by_canonical_projection(self):
+        from types import SimpleNamespace
+        from gap_evidence import gap_key
+        self.native['one']['paths']['/request']['get']['responses'] = {'200': {'description': 'unknown'}}
+        self.facts['one']['paths']['/request']['get']['responses'] = {'200': {'description': 'unknown'}}
+        # The production loader authenticates exact record bytes. This fixture
+        # exercises projection wiring, independently of Composer and the loader.
+        with patch('deferred_definitions.load_deferred_definitions',
+                   return_value=SimpleNamespace(response_v2_keys={'mode-marker'})):
+            first = self.project()
+            op = self.facts['one']['paths']['/request']['get']
+            op['parameters'] = [{'name': 'new', 'in': 'query', 'schema': {'type': 'string'}}]
+            second = self.project()
+        old = first['coverage']['response_gaps']['one'][0]
+        new = second['coverage']['response_gaps']['one'][0]
+        self.assertIn('response_runtime_binding_hash', old)
+        self.assertEqual(gap_key(old), gap_key(new))
+        self.assertNotEqual(old['source_binding_hash'], new['source_binding_hash'])
+        self.assertNotIn('response_runtime_binding_hash', self.project()['coverage']['response_gaps']['one'][0])
+
     def test_group_facts_share_existing_combiner(self):
         self.registry['providers'] = {'one': {'group': ['alpha', 'beta']}}
         self.write_registry()

@@ -326,6 +326,9 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
     registry = yaml.safe_load(registry_path.read_text())
     if not isinstance(registry.get("providers"), dict):
         raise ValueError("registry providers must be a mapping")
+    from deferred_definitions import load_deferred_definitions
+    deferred = load_deferred_definitions(root)
+    response_identity_v2 = bool(deferred and deferred.response_v2_keys)
     changes = {}
     if identity_history is _AUTO_HISTORY:
         identity_history = published_history(root, (readiness_context or {}).get('published_ref'))
@@ -488,7 +491,8 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                 document, unresolved = compose(facts, upstream, overlay, history, public_mirrors, source_bindings)
                 coverage["providers"][provider] = coverage_rows(facts, document, unresolved, catalogs)
                 from gap_evidence import enrich_coverage
-                enrich_coverage(coverage['providers'][provider], facts, upstream, public_mirrors, source_bindings)
+                enrich_coverage(coverage['providers'][provider], facts, upstream, public_mirrors, source_bindings,
+                                response_identity_v2=response_identity_v2)
                 active_history = copy.deepcopy(history)
                 runtime_paths = normalize_paths(facts)["paths"]
                 active_history["paths"] = {p: item for p, item in history["paths"].items() if p in runtime_paths}
@@ -620,7 +624,8 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         refresh_legacy_page_blocks(root, documents, changes, catalog)
     from gap_evidence import response_gap_rows
     validate_document_identities(documents, identity_history)
-    coverage['response_gaps'] = {provider: response_gap_rows(documents.get(provider, {}), facts_by_provider.get(provider, {}), rows)
+    coverage['response_gaps'] = {provider: response_gap_rows(documents.get(provider, {}), facts_by_provider.get(provider, {}), rows,
+                                                         response_identity_v2=response_identity_v2)
         for provider, rows in coverage['providers'].items()}
     if registry.get("auto_register"):
         changes[registry_path] = yaml.safe_dump(registry, sort_keys=False, allow_unicode=True)
@@ -628,7 +633,6 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
     changes[root / "openapi/pending.json"] = json.dumps(pending, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     if readiness_context is not None:
         from contract_readiness import check_readiness
-        from deferred_definitions import load_deferred_definitions
         documents = dict(original_documents)
         from runtime_consolidate_openapi import SKIP_FILES
         for path, content in changes.items():
@@ -642,7 +646,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         readiness_context['report'] = check_readiness(
             facts_by_provider, documents, coverage,
             baseline_coverage=readiness_context.get('baseline_coverage'),
-            runtime_index=index, deferred_definitions=load_deferred_definitions(root))
+            runtime_index=index, deferred_definitions=deferred)
         from check_contract_candidate import assess_fresh_contracts
         assess_fresh_contracts(readiness_context['report'], documents, recomposed_documents, coverage)
     return {p: content for p, content in changes.items() if not p.exists() or p.read_text() != content}, summary

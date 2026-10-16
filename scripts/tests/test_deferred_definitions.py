@@ -31,6 +31,7 @@ class DeferredDefinitionTests(unittest.TestCase):
         self.original_root = Path(self.original.name)
         value = json.loads((ROOT / REBINDING_PATH).read_bytes())
         value.pop('request_response_migration', None)
+        value.pop('response_identity_migration', None)
         original_raw = (json.dumps(value, indent=2, ensure_ascii=False) + '\n').encode()
         self.assertEqual(hashlib.sha256(original_raw).hexdigest(), REBINDING_SHA256)
         for name, raw in ((POLICY_PATH, (ROOT / POLICY_PATH).read_bytes()),

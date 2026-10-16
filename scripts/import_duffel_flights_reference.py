@@ -5,11 +5,11 @@ import hashlib
 import json
 from pathlib import Path
 
-from compose_openapi import digest
+from compose_openapi import digest, schema_30_to_31
 from import_duffel_reference import NextData, ORIGIN, REFERENCE, SDK_REVISION, envelope
 from source_json import loads
 
-CONVERTER = 'scripts/import_duffel_flights_reference.py@1'
+CONVERTER = 'scripts/import_duffel_flights_reference.py@2'
 SDK_HASHES = {
     "src__types__ClientType.ts": "3aa0ea34054d294f71deaad9005eba83e841cfb70588ca47b6ba55a9f59161b5",
     "src__Client.ts": "0de07d39cc8dd3faae13561cd2e291e7bcaaf58761433bd35db4d929bc8d6b7b",
@@ -46,6 +46,18 @@ OPERATIONS = {
     },
     'seat-maps': {'get-seat-maps': ('GET', '/air/seat_maps', True, False, True)},
 }
+
+
+def omit_invalid_passenger_example(data_schema):
+    """Omit an inconsistent illustration without changing its oneOf contract."""
+    from jsonschema import Draft202012Validator
+    from referencing import Registry
+    passengers = data_schema.get('properties', {}).get('passengers', {})
+    if ('example' in passengers and not Draft202012Validator(
+            schema_30_to_31(passengers), registry=Registry()).is_valid(passengers['example'])):
+        passengers.pop('example')
+        return True
+    return False
 
 
 def convert(directory, fetched_at):
@@ -88,8 +100,11 @@ def convert(directory, fetched_at):
                          'parameters': copy.deepcopy(item['requestParameters']),
                          'x-aisa-reference-url': REFERENCE + slug, 'responses': {'2XX': response}}
             if body:
+                data_schema = copy.deepcopy(item['bodyDataSchema'])
+                if (method, path) == ('POST', '/air/offer_requests'):
+                    omit_invalid_passenger_example(data_schema)
                 operation['requestBody'] = {'required': True, 'content': {'application/json': {
-                    'schema': {'type': 'object', 'required': ['data'], 'properties': {'data': copy.deepcopy(item['bodyDataSchema'])}}}}}
+                    'schema': {'type': 'object', 'required': ['data'], 'properties': {'data': data_schema}}}}}
             if method.lower() in paths.setdefault(path, {}):
                 raise ValueError('duplicate output operation')
             paths[path][method.lower()] = operation

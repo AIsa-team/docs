@@ -76,7 +76,10 @@ def project_metadata(input_view, catalog_facts, index, category, native, produce
     The caller verifies these original bytes first. This internal pure projection
     returns objects only and is not an independent trust/authorization boundary.
     """
+    from deferred_definitions import load_deferred_definitions
     root = Path(input_view)
+    deferred = load_deferred_definitions(root)
+    response_identity_v2 = bool(deferred and deferred.response_v2_keys)
     registry = yaml.load(regular_read(root, 'openapi/registry.yaml'), Loader=UniqueLoader)
     if registry.get('auto_register'):
         discover(registry, category)
@@ -108,9 +111,11 @@ def project_metadata(input_view, catalog_facts, index, category, native, produce
             producer_readiness['providers'][provider], upstream, bindings)
         pending['providers'][provider] = unresolved
         rows = coverage_rows(facts, native[provider], unresolved, catalogs)
-        enrich_coverage(rows, facts, upstream, mirrors, bindings)
+        enrich_coverage(rows, facts, upstream, mirrors, bindings,
+                        response_identity_v2=response_identity_v2)
         coverage['providers'][provider] = rows
-        coverage['response_gaps'][provider] = response_gap_rows(native[provider], facts, rows)
+        coverage['response_gaps'][provider] = response_gap_rows(native[provider], facts, rows,
+            response_identity_v2=response_identity_v2)
         for path, method, operation in operations(native[provider]):
             if operation.get('x-aisa-contract-state') != 'retained_legacy':
                 moved.add((path, method, operation['operationId'], provider))

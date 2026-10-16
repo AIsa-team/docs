@@ -189,6 +189,27 @@ remain subject to the strict readiness check. Source review receipts do not
 provide the independently approved baseline or prove a code-only Docs commit was
 published. See [reviewed source inputs](docs/current-source-review-20261009/README.md).
 
+The loader supports a separately reviewed response-debt identity migration in
+`docs/deferred-age-response-rebinding-20261012.json`. The existing c77 input
+retains legacy response identities; compiler support alone does not activate the
+new identity. Only the separately reviewed exact migration record selects it and
+preserves the original
+60-item approval bytes and clocks (now 7 request and 53 response gaps). Its 53
+enabled and 2 disabled-baseline response identities bind the public operation,
+route/method, effective public security and scheme definitions, published
+upstream selector/response provenance, selected source and response declarations.
+Request parameters/body, opaque Profile revision and pricing are excluded from
+that response-only identity. Response/source/route/auth changes still require an
+exact approved match; unknown payloads remain explicitly unknown. Old reviewed
+input records retain their original identity behavior. Composer and canonical
+metadata projection use the same authenticated record; the existing closed
+bundle exporter includes that same file, without another registry or Runtime
+protocol. This grants no execution or private-provider-auth guarantee.
+
+Focused validation: `python -m unittest discover -s scripts/tests -p "test_response*.py"`
+(also `test_deferred_definitions.py` and
+`test_canonical_import.py`).
+
 ### Formal publication current pointer (same commit)
 
 The existing publication workflow exports `docs/publication/current.json` only
