@@ -15,28 +15,28 @@ Give this to your agent once AIsa is [connected via MCP](/agent-quickstart):
 
 ```txt wrap
 Task: <what you need done>. Budget for the whole task: <your approved budget>. Ask me before any paid call; above <your threshold>, wait for my explicit yes.
-Process for every paid step: (1) find the operation with AIsa `search`; (2) call `get_details` with a quote; (3) show me the operation, arguments, quoted cost, and remaining budget; (4) after I approve, run it once with `use` and pass the approved amount as `max_price_usd`.
-If a quote is missing or failed, or the endpoint has no documented maximum, tell me and do not run it under the fixed budget. Re-quote if the arguments change.
+Process for every paid step: (1) find the operation with AIsa `search`; (2) quote the exact call with `batch_quote`; (3) show me the operation, arguments, quoted cost, and remaining budget; (4) after I approve, run that same call once with `batch_use`.
+If a quote is missing or failed, or the endpoint has no documented maximum, tell me and do not run it under the fixed budget. Re-quote if the operation or arguments change.
 Never retry a paid call automatically after a timeout or unclear result: check usage first and report back.
 At the end, give me an audit table: step | operation | quoted | approved cap | settled cost (or "unknown") | result verified?
 ```
 
 ## APIs and Skills used
 
-Through MCP, your agent reaches every operation via five tools at `https://mcp.aisa.one/mcp`: `search`, `list_categories`, and `get_details` are free; `use` and `batch_use` (up to 20 calls) are billed per call.
+Through MCP, your agent reaches every operation via a few meta tools at `https://mcp.aisa.one/mcp`: `search`, `list_categories`, `get_details`, and `batch_quote` are free; `batch_use` (up to 20 calls) is billed per call.
 
 | Step | What the agent calls | Reference |
 | --- | --- | --- |
 | Select | `search` / `list_categories` for the smallest sufficient operation | [Connect via MCP](/agent-quickstart) |
-| Estimate | `get_details` with a quote: returns the estimate and a suggested `max_price_usd` | [Quote, review, then execute](/guides/pricing#quote-review-then-execute) |
+| Estimate | `batch_quote` with the exact calls: returns the estimate without running anything | [Quote, review, then execute](/guides/pricing#quote-review-then-execute) |
 | Authorize | Your policy layer and, above a threshold, a person | [Security & Privacy](/guides/security) |
-| Execute | `use` or `batch_use` with the approved `max_price_usd` | [How It Works](/how-it-works) |
+| Execute | `batch_use` with the same calls, after approval | [How It Works](/how-it-works) |
 | Same over HTTP | `X-AISA-Cost-Mode: quote`, then `X-AISA-Max-Price-USD` | [Billing & Credits](/guides/pricing) |
 | Verify payment | Balance, settled-cost metadata, Usage & Logs | [Credit Balance](/api-reference/credits-balance), [Usage and Logs](/guides/dashboard/overview#usage-and-logs) |
 | Handle rejections | `402` budget errors, `409` idempotency conflicts, retry rules | [Error Codes](/api-reference/errors) |
 | Pay per request without an account | MPP on selected read-only operations | [Machine Payments](/integrations/machine-payments) |
 
-`max_price_usd` acts as an admission check: the gateway rejects any call whose estimate exceeds this value before calling a provider, but it does not cap the final charge of a metered operation. The key's spending limit in the Console is the hard ceiling.
+A quote, like `X-AISA-Max-Price-USD` over HTTP, checks the estimate before any provider is called; neither caps the final charge of a metered operation. The key's spending limit in the Console is the hard ceiling.
 
 **Machine payments (MPP).** On operations that accept MPP, a request without credentials returns HTTP `402` with a `WWW-Authenticate: Payment` challenge; the agent pays through Tempo and retries with `Authorization: Payment <credential>`. The live challenge is authoritative for the amount and terms. Not every endpoint accepts MPP, so check the operation first.
 
