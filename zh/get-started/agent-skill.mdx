@@ -1,0 +1,66 @@
+---
+title: "安装 AIsa 智能体技能"
+sidebarTitle: "安装智能体技能"
+icon: "wand-magic-sparkles"
+description: "安装官方 aisa skill，让 Claude Code、Codex、Cursor 及其他编程智能体学会查找和调用 AIsa 工具。"
+---
+
+智能体技能是一组指令，你的编程智能体在处理相关任务时会加载它们。官方 `aisa` skill 会教你的智能体如何搜索 AIsa 工具目录、查看报价，以及在预算内执行调用。
+
+Skill 通过一个活跃连接来执行操作：可以是 MCP（推荐）或 AIsa CLI。
+
+<Steps>
+  <Step title="安装 Skill">
+    ```bash
+    npx skills add AIsa-team/agent-skills --skill aisa --agent claude-code --global
+    ```
+
+    将 `--agent` 设置为你使用的工具（`claude-code`、`codex`、`cursor` 等）。省略 `--global` 则仅为当前工作区安装。需要 Node.js 22.20 或更高版本。
+
+    如果你已经安装了 AIsa CLI，也可以运行：
+    ```bash
+    aisa skills install aisa
+    ```
+  </Step>
+  <Step title="连接并登录">
+    添加 MCP 服务器并在浏览器中完成 OAuth 授权；参见[通过 MCP 连接](/zh/agent-quickstart)。在没有 MCP 的纯终端环境中，使用 CLI：`npm install -g @aisa-one/cli && aisa login`（[使用 CLI](/zh/get-started/cli)）。
+  </Step>
+  <Step title="在智能体中测试">
+    将以下内容粘贴到你的智能体中：
+
+    ```txt wrap
+    使用 aisa skill 查看我的 AIsa 余额，然后找到你选择的一家公司的三条最新公开动态并附上来源链接。在任何付费调用前先询问我。
+    ```
+  </Step>
+</Steps>
+
+安装 Skill 只是教会你的智能体工作流程，并非授权消费。你的智能体仍会在每次付费调用前给出报价，等待你批准后才执行。
+
+## 不使用 npx 的手动安装
+
+如果 `npx skills` 不可用，可以直接将 skill 文件下载到智能体的技能目录中。以下示例针对 Codex（`~/.agents/skills/aisa`）；如使用其他智能体，请修改 `aisa_skill_parent`。
+
+```sh
+set -e
+aisa_skill_target="$HOME/.agents/skills/aisa"
+aisa_skill_parent="$HOME/.agents/skills"
+aisa_skill_base="https://raw.githubusercontent.com/AIsa-team/agent-skills/68f63a3af4840e999f680e966f7a935d712b796d/platform/aisa"
+if [ -e "$aisa_skill_target" ] || [ -L "$aisa_skill_target" ]; then
+  echo "Target already exists, skipping: $aisa_skill_target"
+  echo "Not assumed official; inspect it before treating it as the AIsa skill."
+  exit 0
+fi
+aisa_skill_tmp="$(mktemp -d)"
+trap 'rm -rf "$aisa_skill_tmp"' EXIT
+mkdir -p "$aisa_skill_tmp/aisa/agents" "$aisa_skill_parent"
+curl -fSL "$aisa_skill_base/SKILL.md" -o "$aisa_skill_tmp/aisa/SKILL.md"
+curl -fSL "$aisa_skill_base/LICENSE" -o "$aisa_skill_tmp/aisa/LICENSE"
+curl -fSL "$aisa_skill_base/agents/openai.yaml" -o "$aisa_skill_tmp/aisa/agents/openai.yaml"
+mv "$aisa_skill_tmp/aisa" "$aisa_skill_target"
+```
+
+智能体注意：仅当[使用 CLI](/zh/get-started/cli) 中的 CLI 门控条件成立、`npx skills` 无法运行且仍需要将官方 skill 安装到磁盘时，才使用此路径。请保留已有的官方或自定义 skill，包括符号链接。
+
+## 浏览更多技能
+
+核心 `aisa` skill 覆盖通用目录。针对市场调研、SEO、社交情报和搜索的专用技能可在 [智能体技能目录](/zh/agent-skills)中找到。你可以随时通过 `npx skills add AIsa-team/agent-skills --skill <name>` 或 `aisa skills install <name>` 安装。源码：[AIsa-team/智能体-skills](https://github.com/AIsa-team/agent-skills)。

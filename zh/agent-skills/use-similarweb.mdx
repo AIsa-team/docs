@@ -1,0 +1,121 @@
+---
+title: "使用 Similarweb"
+description: "通过 AIsa 获取 Similarweb 网站情报：流量、互动、渠道、受众、技术和搜索足迹。每个请求都基于实时契约构建，并在执行前获取报价。"
+---
+
+[在 GitHub 上查看 →](https://github.com/AIsa-team/agent-skills/tree/main/marketing/use-similarweb)
+
+**网站情报，精打细算。** 该 Skill 不包含端点参数或价格。智能体从实时 Similarweb 契约中读取参数，在每次调用前获取免费报价，将批准金额作为准入检查发送，并在调用后报告实际费用。
+
+## 安装
+
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill use-similarweb
+```
+
+```bash AIsa CLI
+npm install -g @aisa-one/cli
+aisa skills install use-similarweb
+```
+</CodeGroup>
+
+安装后，启动一个新的智能体会话以加载该 Skill。
+
+## 智能体能用它做什么？
+
+<CardGroup cols={2}>
+  <Card title="域名流量" icon="chart-line">
+    “cnn.com 上个月有多少访问量？先报价。”
+  </Card>
+  <Card title="竞争对手和搜索" icon="ranking-star">
+    “nike.com 的关键词竞争对手有哪些？哪些落地页胜出？”
+  </Card>
+  <Card title="受众和来源" icon="users">
+    “展示 cnn.com 的引荐来源及其与 bbc.com 的受众重叠。花费前先问我。”
+  </Card>
+  <Card title="网站全貌" icon="sitemap">
+    技术栈、热门页面、子域名、主要地区、PPC 花费和广告网络。
+  </Card>
+</CardGroup>
+
+## 前提条件
+
+```bash
+export AISA_API_KEY="your-aisa-api-key"
+```
+
+- Python 3
+- 拥有余额的 AIsa 账户；Similarweb 调用按用量付费。[Go-to-Market 方案](https://aisa.one/solutions/go-to-market)为可选。
+- 请求发送到 `https://api.aisa.one/apis/v1/similarweb`，使用 `Authorization: Bearer $AISA_API_KEY`。
+
+## 快速开始
+
+```bash
+python3 scripts/similarweb_client.py discover                    # route index from the live contract
+python3 scripts/similarweb_client.py describe ROUTE              # parameters, enums, limits, date rules
+python3 scripts/similarweb_client.py window                      # latest complete data month
+python3 scripts/similarweb_client.py check ROUTE name=value …    # validate against the contract, no API call
+python3 scripts/similarweb_client.py quote ROUTE name=value …    # free price estimate
+python3 scripts/similarweb_client.py call  ROUTE name=value … --max-usd "$APPROVED_USD"
+python3 scripts/similarweb_client.py usage --days 1              # charged amounts for reconciliation
+```
+
+`ROUTE` 是 `discover` 返回的路径，不含 `/similarweb` 前缀。每个 `name=value` 来自 `describe`。不带 `--max-usd` 的 `call` 仅返回报价。
+
+## 协议流程
+
+**Discover**：在会话开始时执行，若基于契约构建的请求被拒绝则再次执行：
+
+1. `discover` 从 `https://aisa.one/docs/openapi/similarweb.json` 下载契约并缓存（通过 ETag 重新验证；`--refresh` 强制获取新副本）。
+2. `describe ROUTE` 显示必需和可选参数、枚举值、默认值、最大值及日期窗口规则。
+3. `window` 获取最新的完整数据月份。
+
+**Call**：每次请求时执行：
+
+1. 构建能回答问题的最小请求并 `check`。
+2. `quote` 获取报价（免费，通过 `X-AISA-Cost-Mode: quote`）。
+3. 若需扩大月份、指标、行数或域名范围，也为更大的变体报价，选择能回答问题的最便宜方案。
+4. 展示报价并根据预算获取批准。
+5. `call … --max-usd <approved>` 发送 `X-AISA-Max-Price-USD` 和 `Idempotency-Key`。该 Header 会拒绝预估超出批准金额的调用；但不会限制按用量计费路由的最终扣费（参见[报价、审核、然后执行](/zh/guides/pricing#先报价、再审核、后执行)）。批准前，请在对应的 [API 参考](/zh/api-reference/similarweb/get_similarweb-website-traffic-engagement)页面查看该路由的计费规则以确认最大可能扣费，并在 API key 上设置[消费限额](/zh/guides/authentication#密钥设置)作为硬性上限。
+6. 报告 `cost_usd`（来自 `x-aisa-customer-cost-micros-usd` Header）和 `data_month`，并通过 `usage` 进行核对。
+
+`call` 输出包含 `status`、`quoted_usd`、`cost_usd`、`request_id`、`latency_s`、`data_month`、`note` 和 `data` 的 JSON。
+
+## 解读响应
+
+| 响应 | 含义 | 是否计费 |
+| --- | --- | --- |
+| `400` 带 `meta.error_message` | 日期窗口规则被违反；消息中会说明允许的范围 | 否 |
+| `400` 带 `error.supported` | 无效值；`supported` 列出有效值 | 否 |
+| `402` | 预估超出你的上限 | 否 |
+| `409` | 该 `Idempotency-Key` 已被使用 | 否 |
+| `503` 带 `retryable: true` | 暂时性故障，但不能证明调用未执行或未计费 | 可能 |
+
+重试 `503` 前，先在[用量与日志](/zh/guides/dashboard/overview#usage-and-logs)或余额中检查原始请求。仅在确认调用未完成后再重试；除非端点规则另有说明，否则保持相同的 `Idempotency-Key` 和请求体，因为新 key 可能产生第二次计费调用。参见[重试指南](/zh/api-reference/errors#重试指南)。
+
+永远不要重试 `200`。通过 REST 发起付费调用，以获取费用 Header。
+
+## 使用场景
+
+当问题涉及**网站的**流量、受众、来源、技术或搜索足迹时，使用此 Skill。若需关键词搜索量和难度，使用 [SEO 关键词研究](/zh/agent-skills/seo-keyword-research)（DataForSEO）或 Semrush API；若需外链数据，使用 Ahrefs API。
+
+## 开始使用
+
+1. 在 [aisa.one](https://aisa.one) 注册，充值余额（或选择订阅 Go-to-Market 方案），并在控制台创建 API key。
+2. 在 shell 中设置：`export AISA_API_KEY="your-key"`。
+3. 使用[安装](#安装)部分的命令安装该 Skill，然后启动一个新的智能体会话。
+
+## 相关
+
+<CardGroup cols={3}>
+  <Card title="Similarweb API 参考" icon="chart-area" href="/zh/api-reference/similarweb/get_similarweb-website-traffic-engagement">
+    所有 Similarweb 路由及其参数。
+  </Card>
+  <Card title="报价与收费" icon="receipt" href="/zh/guides/pricing">
+    报价模式、价格上限和费用 Header。
+  </Card>
+  <Card title="产品选品" icon="box" href="/zh/agent-skills/product-selection">
+    在产品调研中利用 Similarweb 分析渠道契合度。
+  </Card>
+</CardGroup>

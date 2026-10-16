@@ -1,0 +1,107 @@
+---
+title: "使用 AIsa CLI"
+sidebarTitle: "使用 CLI"
+icon: "terminal"
+description: "安装 @aisa-one/cli，通过浏览器登录，在终端、脚本或 CI 任务中搜索、报价和调用 AIsa 工具。"
+---
+
+AIsa CLI 让终端、脚本和 CI 拥有与智能体通过 MCP 访问的相同工具目录，还支持模型对话、余额和用量查询。当 MCP 客户端不可用时使用它；否则请 [通过 MCP 连接](/zh/agent-quickstart)。
+
+<Steps>
+  <Step title="安装">
+    ```bash
+    npm install -g @aisa-one/cli
+    aisa --version
+    ```
+
+    需要 Node.js 18 或更高版本。
+  </Step>
+  <Step title="登录">
+    ```bash
+    aisa login
+    aisa balance
+    ```
+
+    `aisa login` 会打开浏览器并存储一个自动刷新的 OAuth 会话；无需复制密钥。`aisa balance` 可验证登录是否成功。对于 CI 和其他无界面任务，改为设置 `AISA_API_KEY`（或运行 `aisa login --key <key>`）；它的优先级高于已存储的会话。
+  </Step>
+  <Step title="让你的智能体来做">
+    将以下内容粘贴到在此终端运行的编码智能体中：
+
+    ```txt wrap
+    使用 aisa CLI 查找你选择的一家公司的三条最新公开动态，并附上来源链接。先运行 aisa search，在任何付费调用前先 quote 报价；执行前先征求我的同意。
+    ```
+  </Step>
+</Steps>
+
+## 命令
+
+| 命令 | 功能 | 是否计费 |
+| --- | --- | --- |
+| `aisa search "<task>"` | 用自然语言查找适合某项任务的工具 | 免费 |
+| `aisa schema <tool>` | 查看工具的完整输入 schema | 免费 |
+| `aisa quote --input '<calls>'` | 为调用报价但不执行 | 免费 |
+| `aisa call --input '<calls>'` | 执行一个或多个工具调用 | 按次计费 |
+| `aisa chat "<message>" --model <id>` | 与目录中的任意模型对话 | 按 token 计费 |
+| `aisa models` | 列出模型 ID | 免费 |
+| `aisa balance` / `aisa usage` | 查看余额和每日用量 | 免费 |
+| `aisa skills install <name>` | 从[目录](/zh/agent-skills)安装 Skill | 免费 |
+
+```bash
+aisa search "company facts" --json
+aisa quote --input '{"calls":[{"call_id":"c1","tool":"<name from search>","arguments":{}}]}' --json
+```
+
+`quote` 和 `call` 接受相同的输入，因此你可以先查看估价，再执行完全相同的请求。报价是免费的，不会执行任何操作，也不构成批准。运行 `aisa --help` 或 `aisa <command> --help` 查看所有参数。
+
+## CLI 的智能体规则
+
+**门槛**：仅在以下情况下使用 CLI：当前客户端没有 MCP 机制、任务是使用已有密钥的非交互式自动化、或用户明确选择了 CLI。
+
+Node.js **必须已经安装**——否则停止；如果当前客户端支持 MCP 则使用 MCP，否则告知用户缺少 Node.js。不要绕过缺失的前置条件或被拒绝的写入权限：不要安装 Node/npm，不要建私有或隔离运行时，不要重定向 `HOME`。
+
+**Node.js 缺失，或写入被拒绝（例如沙箱中的 `EPERM`）？** 绝不要自行绕过。将确切步骤告知用户，让他们在自己的终端中执行——如果缺少 Node.js，从 [nodejs.org](https://nodejs.org) 或其常用包管理器安装 **22.20+**（CI：将其添加到 runner 镜像）；然后 `npm install -g @aisa-one/cli` 和 `aisa login`——之后说 *重试*。他们安装的 CLI 和密钥可从此处复用。如果无法执行，则使用 MCP 或询问用户偏好哪种传输方式。
+
+首先安装官方 Skill（[安装智能体技能](/zh/get-started/agent-skill)）：`npx skills add AIsa-team/agent-skills --skill aisa --agent <this harness> --global`。除非用户要求仅限当前仓库，否则优先使用 `--global`。不要使用 `--all` 或 `*`。Skill 安装器需要 Node.js **22.20.0+**。
+
+如果已存在 `@aisa-one/cli` **0.5.0 或更高版本**则复用；否则安装；不要降级。读取磁盘上的 Skill。通过该 Skill 和 `aisa login --help` 登录。用 `aisa balance` 验证身份；`aisa whoami` 仅限本地，而 `search` 或 `schema` 可能匿名运行，因此它们都不能证明已认证。`AISA_API_KEY` 会覆盖已存储的会话；如果两者冲突，说明两个来源。绝不要打印凭据或引导用户去复制控制台密钥。浏览器 `aisa login` 是交互式使用的主要凭据路径；无界面自动化使用预先配置的 `AISA_API_KEY`。
+
+工作流：`aisa search` → 当 `has_full_schema` 为 false 时执行 `aisa schema` → `aisa quote` → 在授权范围和消费额度内执行 `aisa call`。从 search 或 schema 获取工具名称和参数。缺失、失败或不完整的报价不是免费的，也不是批量总计或上限。如果工具、参数或范围发生变化，重新报价。不要静默重试或扩展批量请求。
+
+## 直接 HTTP 回退
+
+**门槛**：CLI 和 MCP 均不可用，支持 HTTP 请求，且已有有效的 AIsa API key。在提出付费方案或费用批准之前，以及在发起任何付费请求之前，请阅读本节全部内容——端点文档、定价和批准 XML。此路径不会绕过无效凭据、额度耗尽或同一 API 的故障。不要用付费请求来探测可用性。不要提取或复用客户端拥有的 MCP OAuth token。
+
+使用对应的端点参考和已发布的定价：[API 参考](https://aisa.one/docs/zh/api-reference)、[认证](https://aisa.one/docs/zh/guides/authentication) 和[计费与额度](https://aisa.one/docs/zh/guides/pricing)。Data API：`https://api.aisa.one/apis/v1`。模型目录：`https://api.aisa.one/v1/models`。在提交付费请求供批准之前，阅读所选端点的完整参考或对应的 OpenAPI 操作，包括参数和计费规则。目录、索引或定价概览不等于端点契约。
+
+将密钥作为 Bearer token 发送。`/v1/models` 或其他发现端点的成功响应不能证明已认证的业务访问。如果没有文档记录的上限或提供商限制，或没有认证，则在该限制处停止。端点、范围或上限的变更需要新的详情和批准。
+
+**API key**。复用 `AISA_API_KEY`，或当前客户端授权密钥存储中已有的 AIsa API key。如果来源冲突，向用户解释；不要覆盖自定义密钥。浏览器 `aisa login` 在 `~/.aisa/tokens.json` 中存储的是 CLI 管理的自动刷新会话，不是 API key：不要手动读取、复制或刷新它。不要使用 `~/.aisa/key`；它是一个可能持有过期 token 的遗留镜像。如果以上都不存在且 `aisa login` 可用，则使用 CLI 而非直接 HTTP。否则，最后的选择是让用户在 [console.aisa.one/api-keys](https://console.aisa.one/api-keys) 创建密钥，并将其保存到当前客户端的密钥设置或本地 `AISA_API_KEY` 中。不要让用户将密钥粘贴到聊天中。在发起受保护的请求之前等待凭据就绪。获取密钥不等于付费调用的批准。
+
+### 先获得付费 API 批准
+
+本约定**仅**适用于对付费、动态定价或可能高成本的数据端点发起的直接 HTTP 调用。它不适用于文档记录的免费发现。它不会为普通 CLI 或 MCP 的 quote 和 call 增加额外的后续消息要求。
+
+```xml
+<IMPORTANT id="paid-api-approval-first">
+  <before-paid-data-call>
+    Read the matching endpoint documentation and published pricing declaration.
+    Docs, /v1/models, and capability or MCP discovery are allowed before approval.
+    STOP: a request to collect, research, or report data is not approval. State
+    the exact endpoint and scope, formula or rate, and documented maximum USD
+    exposure; then wait for a separate user message explicitly approving that
+    scope and cap.
+    If a provider-controlled dimension has no documented upper bound, do not
+    execute: an example or user-stated budget is not an enforceable cap.
+  </before-paid-data-call>
+  <prohibited>
+    Do not run a paid data call in the planning turn, use the initial request as
+    consent, or use a paid call to discover price, probe, test, or "just check".
+  </prohibited>
+  <after-approval>
+    Execute only the approved request. If its endpoint, scope, or maximum
+    changes, present the new details and obtain new approval.
+  </after-approval>
+</IMPORTANT>
+```
+
+原始任务，或在同一规划轮次中的“我批准”，不构成该后续批准。
