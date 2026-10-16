@@ -2,22 +2,22 @@
 title: "Use AIsa in Hermes Agent"
 sidebarTitle: "Hermes Agent"
 icon: "/images/integrations/hermes.svg"
-description: "Use AIsa as Hermes Agent's model provider, then add the AIsa MCP server with OAuth for data and tools."
+description: "Add AIsa as a remote MCP server in Hermes Agent with one command and a browser sign-in. Optionally use AIsa as the model provider."
 ---
 
-Configure AIsa in Hermes Agent using a single model endpoint and one API key.
+Hermes Agent has a built-in MCP client. Add AIsa as a remote MCP server, sign in once, and Hermes can discover and call AIsa capabilities across web research, finance, social, SEO, sales, and more.
 
-AIsa endpoint:
+AIsa MCP server:
 
 ```txt
-https://api.aisa.one/v1
+https://mcp.aisa.one/mcp
 ```
 
 ## Prerequisites
 
 Before you start, make sure you have:
 
-- An AIsa API key
+- An AIsa account ([console.aisa.one](https://console.aisa.one)). You sign in through the browser.
 - A terminal on macOS, Linux, or Windows WSL2
 
 ## 1. Install Hermes Agent
@@ -40,15 +40,57 @@ Verify the installation:
 hermes doctor
 ```
 
-## 2. Add AIsa as the model provider
+## 2. Add the AIsa MCP server
+
+Run this in a terminal, not inside a Hermes session:
+
+```bash
+hermes mcp add aisa --url https://mcp.aisa.one/mcp --auth oauth
+```
+
+Hermes opens your browser. Sign in to AIsa and approve access; no key is copied. To sign in again later, run `hermes mcp login aisa`.
+
+<Accordion title="Use your API key instead of OAuth">
+  For headless machines, add the server with header auth:
+
+  ```bash
+  hermes mcp add aisa --url https://mcp.aisa.one/mcp --auth header
+  ```
+
+  Answer `Y` when Hermes asks whether the server requires authentication, then paste your AIsa key at **API key / Bearer token**. Hermes stores it in its `.env` file as `MCP_AISA_API_KEY` and references it from `config.yaml`.
+</Accordion>
+
+## 3. Verify
+
+```bash
+hermes mcp test aisa
+```
+
+Hermes should report `Connected` and `Tools discovered: 7`. Start a new Hermes session to load the tools, or run `/reload-mcp` in a running session.
+
+## 4. Use AIsa capabilities
+
+```bash
+hermes
+```
+
+Hermes now has the AIsa tools. `search`, `list_categories`, `get_details`, `batch_get_schema`, and `batch_quote` (prices exact calls without running them) are free; `use` and `batch_use` run calls and are billed per call.
+
+Try:
+
+```txt
+Use AIsa capabilities to search the web and summarize the latest information about Hermes Agent.
+```
+
+## Optional: use AIsa as the model provider
+
+Hermes can also run on models from the AIsa catalog. This needs an AIsa API key ([console.aisa.one/api-keys](https://console.aisa.one/api-keys)).
 
 Run:
 
 ```bash
 hermes model
 ```
-
-Hermes prompts you to choose a model provider.
 
 Select:
 
@@ -57,10 +99,6 @@ Custom Model / OpenAI-compatible endpoint
 ```
 
 ![Select Custom Model / OpenAI-compatible endpoint](https://assets.aisaskills.com/custom-endpoint.png)
-
-This allows Hermes to connect to AIsa through its OpenAI-compatible API.
-
-### 2.1 Configure AIsa endpoint
 
 When Hermes asks for the API endpoint and API key, enter:
 
@@ -76,11 +114,9 @@ Verified endpoint via https://api.aisa.one/v1/models
 167 model(s) visible
 ```
 
-### 2.2 Choose API mode
-
 ![Hermes API compatibility mode prompt](https://assets.aisaskills.com/api-model.png)
 
-Pick mode `1. Auto-detect` or `2. Chat Completions` — both work, since the base URL ends in `/v1`. Mode 2 is recommended because it is explicit and easier to debug.
+Pick mode `1. Auto-detect` or `2. Chat Completions`; both work, since the base URL ends in `/v1`. Mode 2 is recommended because it is explicit and easier to debug.
 
 | Mode | Required base URL | Use for |
 | --- | --- | --- |
@@ -89,93 +125,39 @@ Pick mode `1. Auto-detect` or `2. Chat Completions` — both work, since the bas
 | 3. Responses / Codex | `https://api.aisa.one/v1` | Codex CLI and reasoning models needing server-side state |
 | 4. Anthropic Messages | `https://api.aisa.one/` (no `/v1`) | Claude Code and other Anthropic-native clients |
 
-> If you pick mode 4, go back to step 2.1 and remove `/v1` from the base URL — Anthropic clients append `/v1/messages` automatically.
+> If you pick mode 4, remove `/v1` from the base URL; Anthropic clients append `/v1/messages` automatically.
 
-### 2.3 Choose a model
-
-Hermes displays the available models.
-
-You can either enter the model number or type the model name directly:
-
-```txt
-Select model [1-167] or type name: gpt-5.5
-```
-
-Choose a text, reasoning, or coding model. Do not choose image, video, embedding, Whisper, or TTS models as the main Hermes model.
-
-### 2.4 Set context length
-
-When Hermes asks:
-
-```txt
-Context length in tokens [leave blank for auto-detect]:
-```
-
-Press Enter to leave it blank.
-
-## 3. Connect AIsa capabilities and start using
-
-After configuring the model provider, start Hermes:
-
-```bash
-hermes
-```
-
-The provider covers chat. To give Hermes access to AIsa's data and tool catalog, add the AIsa MCP server with OAuth:
-
-```bash
-hermes mcp add aisa --url https://mcp.aisa.one/mcp --auth oauth
-```
-
-Approve access in the browser when Hermes opens it; no key is copied. To sign in again later, run `hermes mcp login aisa`.
-
-<Accordion title="Use your API key instead of OAuth">
-  For headless machines, add the server with header auth and paste your AIsa key when Hermes asks for the **API key / Bearer token**:
-
-  ```bash
-  hermes mcp add aisa --url https://mcp.aisa.one/mcp --auth header
-  ```
-</Accordion>
-
-Check the connection with `hermes mcp test aisa`. Hermes now has the AIsa tools: `search`, `list_categories`, `get_details`, and `batch_quote` (prices exact calls without running them) are free; `batch_use` runs the calls and is billed per call.
-
-Try:
-
-```txt
-Use AIsa capabilities to search the web and summarize the latest information about Hermes Agent.
-```
+Then enter a model number or type a model name, for example `gpt-5.5`. Choose a text, reasoning, or coding model, not an image, video, embedding, Whisper, or TTS model. When Hermes asks for the context length, press Enter to auto-detect.
 
 ## Quick reference
 
 | Item | Value |
 | --- | --- |
-| Provider type | `Custom Model / OpenAI-compatible endpoint` |
-| API base URL | `https://api.aisa.one/v1` |
-| API mode | `2. Chat Completions` |
-| Context length | Leave blank for auto-detect |
-| AIsa MCP server | `hermes mcp add aisa --url https://mcp.aisa.one/mcp --auth oauth` |
+| Add AIsa | `hermes mcp add aisa --url https://mcp.aisa.one/mcp --auth oauth` |
+| Sign in again | `hermes mcp login aisa` |
+| Check connection | `hermes mcp test aisa` |
+| Reload in a session | `/reload-mcp` |
+| Optional model provider | `Custom Model / OpenAI-compatible endpoint`, `https://api.aisa.one/v1`, mode `2. Chat Completions` |
 
 ## Troubleshooting
 
 | Problem | Fix |
 | --- | --- |
 | `hermes: command not found` | Run `source ~/.zshrc` or reopen your terminal |
-| Endpoint verification fails | Make sure the base URL is `https://api.aisa.one/v1` |
-| Authentication error | Re-enter your AIsa API key |
-| AIsa tools missing or 401 | Run `hermes mcp login aisa`, then `hermes mcp test aisa` |
-| Unsure which provider to choose | Choose `Custom Model / OpenAI-compatible endpoint` |
-| Unsure which API mode to choose | Choose `2. Chat Completions` |
-| Unsure what to enter for context length | Leave it blank and press Enter |
+| OAuth fails in a script or CI | OAuth needs an interactive terminal. Use `--auth header` with an API key instead |
+| AIsa tools missing or 401 | Run `hermes mcp login aisa`, then `hermes mcp test aisa`, then `/reload-mcp` |
+| Added the server inside a running session and sign-in timed out | Run `hermes mcp login aisa` in a separate terminal |
+| Model endpoint verification fails | Make sure the base URL is `https://api.aisa.one/v1` |
 | Selected the wrong model | Re-run `hermes model` and choose a text or coding model |
 
 ## Related
 
 <CardGroup cols={3}>
   <Card title="Use AIsa in OpenClaw" icon="screwdriver-wrench" href="/guides/tutorials/use-aisa-in-openclaw">
-    Configure another agent runtime with the OpenClaw setup path.
+    Add AIsa to another agent runtime.
   </Card>
-  <Card title="Authentication" icon="key" href="/guides/authentication">
-    API key creation, rotation, and storage best practices.
+  <Card title="Connect via MCP" icon="plug" href="/agent-quickstart">
+    MCP setup for other clients.
   </Card>
   <Card title="Model Catalog" icon="list" href="/guides/models">
     Browse supported models before choosing a Hermes default.

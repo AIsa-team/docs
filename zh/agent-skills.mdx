@@ -1,211 +1,143 @@
 ---
-title: "智能体技能（Agent Skills）"
-description: "教 AI 编程智能体如何使用 AIsa API 的指令包。一次安装，即可用于你机器上的所有智能体。"
+title: "智能体技能"
+sidebarTitle: "概览"
+icon: "wand-magic-sparkles"
+description: "教 AI 编程智能体如何使用 AIsa API 的指令包。一次安装，机器上每个智能体都能用。"
 ---
 
-Agent Skills 是面向 AI 编程 Agent 的模块化能力包，支持 Claude Code、Cursor、GitHub Copilot、Windsurf 等。每个 Skill 都是一个包含 `SKILL.md` 的文件夹，用来告诉 Agent 该 API 能做什么、如何认证以及如何使用。通过 AIsa CLI 安装一次后，Skill 会写入你机器上每个 Agent 的目录。
+智能体技能是一个包含 `SKILL.md` 文件（以及辅助脚本）的文件夹，它告诉智能体任务需要什么、该调用哪些 AIsa API、以及如何调用。智能体在会话启动时只加载每个 Skill 的名称和描述，当任务匹配时才读取完整指令。Skill 可在任何兼容 [agentskills.io](https://agentskills.io) 的框架中使用，包括 Claude Code、Codex、Cursor、Gemini CLI、OpenClaw 等。
 
-<CardGroup cols={2}>
-  <Card title="快速入门" icon="rocket" href="/zh/agent-skills/quickstart">
-    安装 CLI、完成认证，并在两分钟内添加你的第一个 skill。
-  </Card>
-  <Card title="浏览技能仓库" icon="store" href="https://github.com/AIsa-team/agent-skills">
-    在 GitHub 上查看 agent-skills 技能仓库中所有可用于生产环境的技能。
-  </Card>
-</CardGroup>
+通用的 `aisa` Skill 教你的智能体查找和调用任意 AIsa 工具；请在[安装智能体技能](/zh/get-started/agent-skill) 中开始使用它。下方的专用 Skill 为特定任务封装了现成的工作流。所有 Skill 都在 [AIsa-team/智能体-skills](https://github.com/AIsa-team/agent-skills) 仓库中。
 
-## 安装 CLI
+## 安装 Skill
 
-安装任何 skill 之前，先安装 AIsa CLI：
-
-```bash
-npm install -g @aisa-one/cli
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill <name>
 ```
 
-## 工作原理
+```bash AIsa CLI
+npm install -g @aisa-one/cli
+aisa skills install <name>
+```
+</CodeGroup>
 
-<Steps>
-  <Step title="安装 skill">
-    运行 `aisa skills install <name>`。CLI 会自动检测你机器上所有支持的 agent，并把 skill 写入每个 agent 的目录。
-  </Step>
-  <Step title="Agent 发现 skill">
-    在你的 agent 中打开一个新 session。Skills 会在 session 启动时自动加载——一开始只读取 metadata（name + description），因此不会消耗 context window。
-  </Step>
-  <Step title="Agent 使用 API">
-    当你要求 agent 执行该 skill 能处理的任务时，它会读取完整 instructions，并使用你的 `AISA_API_KEY` 调用 AIsa APIs。
-  </Step>
-</Steps>
+两条命令都按名称查找 Skill，无论它在哪个分类目录下。使用 `npx skills` 时，可通过 `--agent <agent>` 和 `--global` 来选择安装位置（参见[安装智能体技能](/zh/get-started/agent-skill)）。安装后请启动一个新的智能体会话，以便加载该 Skill。
 
-## 技能目录
+大多数 Skill 会使用你的 `AISA_API_KEY` 调用 AIsa API；调用按请求从你的 AIsa 余额中计费。每个 Skill 页面列出了各自的前置要求。
 
-### 营销
+## 该选哪个 Skill？
 
-<CardGroup cols={2}>
-  <Card title="SEO Keyword Research" icon="magnifying-glass-chart" href="/zh/agent-skills/seo-keyword-research">
-    关键词策略、SERP 分析、竞品缺口和意图聚类。
-  </Card>
-</CardGroup>
+几个 Skill 存在刻意的重叠：宽泛的 Skill 会搭配更窄的、单一用途的入口点来处理同一工作的某个部分。选覆盖你任务的最窄 Skill；它能给智能体更短、更聚焦的指令。
 
-### AI 模型网关
+### 金融与市场
 
-<CardGroup cols={2}>
-  <Card title="AIsa Provider for OpenClaw" icon="robot" href="/zh/agent-skills/aisa-provider">
-    配置 OpenClaw 使用 AIsa 作为模型 Provider。
-  </Card>
-  <Card title="AIsa CN-LLM Route" icon="language" href="/zh/agent-skills/cn-llm">
-    将中文 Prompt 路由到中国 LLM。
-  </Card>
-  <Card title="AIsa LLM Router" icon="route" href="/zh/agent-skills/llm-router">
-    在 GPT、Claude、Gemini、Qwen、DeepSeek、Grok 等模型之间选择。
-  </Card>
-</CardGroup>
+| Skill | 适用场景 | 选择时机 |
+| --- | --- | --- |
+| [market](/zh/agent-skills/market) | 一个 Skill 覆盖股票和加密货币：价格、财报、指标、文件、分析师评级、内部交易、机构持仓、新闻和利率 | 你想用一个数据 Skill 同时覆盖股票和加密货币 |
+| [marketpulse](/zh/agent-skills/marketpulse) | 股票数据，包括筛选、分部收入、财报新闻稿和宏观利率 | 任务仅涉及股票，且需要筛选或更深入的基本面 |
+| [crypto-market-data](/zh/agent-skills/crypto-market-data) | CoinGecko 数据：价格、OHLC、图表、合约地址查询、交易所、分类、热门 token 和新闻 | 任务是加密货币相关的，例如 token 查询或交易所行情 |
+| [us-stock-analyst](/zh/agent-skills/us-stock-analyst) | 结合财务数据、新闻、社交情绪和多模型 AI 的完整美股研报 | 你想要一份书面研究报告，而非原始数据 |
+| [stock-analysis](/zh/agent-skills/stock-analysis) | 8 维评分，含买入/持有/卖出信号、入场/目标/止损价格和风险标记 | 你想要一个或多个股票代码的评分信号 |
+| [stock-hot](/zh/agent-skills/stock-hot) | 热门异动：涨幅榜、跌幅榜、最活跃、加密货币亮点和催化剂 | 问题是“现在什么在动？” |
+| [stock-rumors](/zh/agent-skills/stock-rumors) | 早期信号：并购传闻、内部人士活动、分析师变动和监管新闻 | 你在寻找尚未被市场定价的催化剂 |
+| [stock-dividend](/zh/agent-skills/stock-dividend) | 只读股息指标：收益率、派息率、增长、安全评分和 Aristocrat/King 状态 | 问题关于收入或股息安全性 |
+| [stock-portfolio](/zh/agent-skills/stock-portfolio) | 投资组合持仓及实时盈亏，跨会话本地存储 | 你想长期跟踪持仓 |
+| [stock-watchlist](/zh/agent-skills/stock-watchlist) | 自选清单，含目标价和止损提醒，本地存储 | 你想对尚未持有的股票设置提醒 |
+| [prediction-market-data](/zh/agent-skills/prediction-market-data) | Polymarket 和 Kalshi 的市场与事件发现；实时价格、订单簿和 K 线来自各平台自有 API | 你需要查找和比较预测市场 |
+| [prediction-market-arbitrage](/zh/agent-skills/prediction-market-arbitrage) | 筛选 Polymarket 和 Kalshi 上可能等价的市场；交易前需在各平台验证价格和深度 | 你在研究套利机会，而不仅是赔率 |
+| [trend-forecast](/zh/agent-skills/trend-forecast) | 综合预测市场赔率、X 情绪、新闻速度和市场数据的单一趋势评分 | 你想要一个综合多种信号类型的预测 |
 
-### 创意 AI
-
-<CardGroup cols={2}>
-  <Card title="Media Gen" icon="image" href="/zh/agent-skills/media-gen">
-    使用 Gemini 3 Pro 生成图片，并使用 Wan 2.6 生成视频。
-  </Card>
-</CardGroup>
-
-### 数据与金融
-
-<CardGroup cols={2}>
-  <Card title="Trend Forecast" icon="chart-line" href="/zh/agent-skills/trend-forecast">
-    基于预测市场、社交情绪、新闻和市场数据预测趋势。
-  </Card>
-  <Card title="MarketPulse" icon="chart-line" href="/zh/agent-skills/marketpulse">
-    实时和历史股票数据、财务数据、申报文件以及宏观背景。
-  </Card>
-  <Card title="AIsa Market" icon="chart-line" href="/zh/agent-skills/market">
-    广泛覆盖股票、加密货币、财务、分析师、内部人和宏观数据。
-  </Card>
-  <Card title="Crypto Market Data" icon="coins" href="/zh/agent-skills/crypto-market-data">
-    由 CoinGecko 支持的加密货币价格、图表、交易所和 Token 研究。
-  </Card>
-  <Card title="Stock & Crypto Analysis" icon="file-chart-line" href="/zh/agent-skills/stock-analysis">
-    带评分、风险标记、目标价和止损位的资产分析。
-  </Card>
-  <Card title="Dividend Analysis" icon="percent" href="/zh/agent-skills/stock-dividend">
-    分析股息率、派息安全性、增长和收益质量。
-  </Card>
-  <Card title="Hot Scanner" icon="fire" href="/zh/agent-skills/stock-hot">
-    扫描热门股票、加密货币异动和催化剂动量。
-  </Card>
-  <Card title="Portfolio Management" icon="wallet" href="/zh/agent-skills/stock-portfolio">
-    管理投资组合持仓、配置和实时盈亏。
-  </Card>
-  <Card title="Rumor Scanner" icon="radio" href="/zh/agent-skills/stock-rumors">
-    追踪并购传闻、内部人活动、分析师变动和监管新闻。
-  </Card>
-  <Card title="Watchlist Management" icon="list-check" href="/zh/agent-skills/stock-watchlist">
-    管理目标价、止损、观察列表和提醒检查。
-  </Card>
-  <Card title="US Stock Analyst" icon="file-invoice-dollar" href="/zh/agent-skills/us-stock-analyst">
-    结合财务数据、新闻、申报文件、情绪和 AI 综合分析生成美股报告。
-  </Card>
-  <Card title="Prediction Market Data" icon="chart-simple" href="/zh/agent-skills/prediction-market-data">
-    发现 Polymarket 和 Kalshi 市场，分析价格和交易历史。
-  </Card>
-  <Card title="Prediction Market Arbitrage" icon="scale-balanced" href="/zh/agent-skills/prediction-market-arbitrage">
-    筛选 Polymarket 与 Kalshi 的跨平台套利候选市场；价格与深度需在各平台核实。
-  </Card>
-</CardGroup>
+两者都有中文版 Skill（`prediction-market-data-zh`、`prediction-market-arbitrage-zh`），安装方式见 [Prediction Market Data](/zh/agent-skills/prediction-market-data) 和 [Prediction Market Arbitrage](/zh/agent-skills/prediction-market-arbitrage) 页面。
 
 ### 搜索与研究
 
-<CardGroup cols={2}>
-  <Card title="多源搜索" icon="magnifying-glass" href="/zh/agent-skills/multi-source-search">
-    在一个 Skill 中统一网页、学术、Perplexity Sonar 和 Tavily 搜索。
-  </Card>
-  <Card title="Perplexity Search" icon="sparkles" href="/zh/agent-skills/perplexity-search">
-    使用 Perplexity Sonar 生成带引用的答案。
-  </Card>
-  <Card title="YouTube SERP" icon="youtube" href="/zh/agent-skills/youtube-serp">
-    提供适合内容研究和竞品监控的 YouTube 排序结果。
-  </Card>
-  <Card title="Last 30 Days" icon="calendar-days" href="/zh/agent-skills/last30days">
-    汇总网页、社交媒体、市场和社区中的近期多源证据。
-  </Card>
-  <Card title="AIsa Tavily Search" icon="magnifying-glass-plus" href="/zh/agent-skills/aisa-tavily">
-    搜索网页并提取公开页面内容。
-  </Card>
-  <Card title="AIsa YouTube Search" icon="youtube" href="/zh/agent-skills/aisa-youtube-search">
-    搜索 YouTube 视频、频道和播放列表。
-  </Card>
-  <Card title="AIsa Multi-Source Search" icon="magnifying-glass-plus" href="/zh/agent-skills/multi-search">
-    跨网页、学术、智能搜索、Tavily 和研究型答案来源进行搜索。
-  </Card>
-  <Card title="AIsa Perplexity Deep Research" icon="microscope" href="/zh/agent-skills/perplexity-research">
-    使用 Perplexity Sonar 模型完成带引用的深度研究。
-  </Card>
-  <Card title="AIsa Scholar Search" icon="graduation-cap" href="/zh/agent-skills/scholar-search">
-    搜索学术论文和学术来源。
-  </Card>
-  <Card title="AIsa Smart Search" icon="wand-magic-sparkles" href="/zh/agent-skills/smart-search">
-    混合检索网页和学术来源。
-  </Card>
-  <Card title="AIsa Tavily Extract" icon="scissors" href="/zh/agent-skills/tavily-extract">
-    从公开 URL 提取干净、可读的内容。
-  </Card>
-  <Card title="Tavily Search" icon="magnifying-glass" href="/zh/agent-skills/tavily-search">
-    支持搜索深度、主题筛选、时间范围和域名控制。
-  </Card>
-  <Card title="AIsa Web Search" icon="globe" href="/zh/agent-skills/web-search">
-    获取当前网页搜索结果，包括标题、URL 和摘要。
-  </Card>
-  <Card title="YouTube Search" icon="youtube" href="/zh/agent-skills/youtube-search">
-    面向内容研究搜索视频、频道和播放列表。
-  </Card>
-</CardGroup>
+| Skill | 适用场景 | 选择时机 |
+| --- | --- | --- |
+| [multi-source-search](/zh/agent-skills/multi-source-search) | 一个 Skill 覆盖所有搜索模式：网页、学术、混合、Tavily search/extract/crawl/map、Perplexity Sonar 系列和并行检索 | 你想一次安装覆盖所有搜索需求 |
+| [multi-search](/zh/agent-skills/multi-search) | 并行网页、学术、智能和 Tavily 搜索，带置信度评分和可选 AI 综合 | 你需要对一个问题进行跨源验证 |
+| [web-search](/zh/agent-skills/web-search) | 结构化网页结果：标题、URL 和摘要 | 快速通用网页查询就够了 |
+| [scholar-search](/zh/agent-skills/scholar-search) | 带年份范围过滤的学术论文 | 你只需要学术来源 |
+| [smart-search](/zh/agent-skills/smart-search) | 一次混合调用返回网页和学术结果 | 你想同时获得两种来源，而不必运行两次搜索 |
+| [tavily-search](/zh/agent-skills/tavily-search) | Tavily 搜索，含深度、主题（general/news/finance）、时间范围、域名过滤和可选回答 | 你需要对网页搜索进行精细控制（Python 客户端） |
+| [tavily-extract](/zh/agent-skills/tavily-extract) | 从一个或多个 URL 提取干净可读的文本 | 你已有 URL，需要其内容 |
+| [aisa-tavily](/zh/agent-skills/aisa-tavily) | Tavily 搜索和 URL 提取合一，通过 Node.js 脚本 | 你的运行环境是 Node.js 而非 Python，或者你想把搜索和提取放在一个小 Skill 里 |
+| [perplexity-search](/zh/agent-skills/perplexity-search) | Perplexity Sonar、Sonar Pro、Sonar Reasoning Pro 和 Sonar Deep Research，各一条命令，支持可选系统提示 | 你特别想要 Perplexity 的回答并自行选择模型 |
+| [perplexity-research](/zh/agent-skills/perplexity-research) | Sonar 模型提供的带引用来源的研究回答，从快速到详尽 | 任务是研究问题，你想要综合的、带引用的回答 |
+| [last30days](/zh/agent-skills/last30days) | 过去 30 天跨 Reddit、X、YouTube、TikTok、Instagram、Hacker News、Polymarket、GitHub 和网页的排序聚合简报 | 你需要近期社交证据：上线反响、趋势扫描、竞品或人物画像 |
+
+也有中文版 Skill `last30days-zh`，安装方式见 [Last 30 Days](/zh/agent-skills/last30days) 页面。
 
 ### 社交媒体
 
-<CardGroup cols={2}>
-  <Card title="Twitter Autopilot" icon="twitter" href="/zh/agent-skills/twitter-autopilot">
-    执行 X/Twitter 搜索、账号分析、趋势追踪、私信和发帖。
-  </Card>
-  <Card title="AIsa Twitter API" icon="twitter" href="/zh/agent-skills/aisa-twitter-api">
-    访问账号、时间线、推文、社区、趋势、列表、Spaces 和 Grok 上下文。
-  </Card>
-  <Card title="AIsa Twitter Command Center" icon="terminal" href="/zh/agent-skills/aisa-twitter-command-center">
-    在一个 X/Twitter 工作流中完成搜索、监控、发布和互动。
-  </Card>
-  <Card title="AIsa Twitter Post & Engage" icon="pen" href="/zh/agent-skills/aisa-twitter-post-engage">
-    发布推文、点赞推文、关注用户并检查关系。
-  </Card>
-  <Card title="Twitter Command Center Search + Post" icon="terminal" href="/zh/agent-skills/twitter-command-center-search-post">
-    搜索 X/Twitter，并准备经授权的发帖工作流。
-  </Card>
-  <Card title="X Intelligence Automation" icon="radar" href="/zh/agent-skills/x-intelligence-automation">
-    跟踪竞品、意见领袖、趋势、提及和对话。
-  </Card>
-</CardGroup>
+所有六个 Twitter/X Skill 通过 AIsa 中继使用你的 `AISA_API_KEY` 读取，绝不索要密码或 cookie。发帖和互动操作需要在浏览器中完成一次性 OAuth 授权。它们的区别在于写入能力和指令长度：
 
-## 支持的 Agent
+| Skill | 适用场景 | 选择时机 |
+| --- | --- | --- |
+| [aisa-twitter-api](/zh/agent-skills/aisa-twitter-api) | 旗舰级读取 Skill，带自选清单式监控，加上 OAuth 发布文字、图片或视频 | 你主要研究和监控 X，偶尔发帖 |
+| [aisa-twitter-command-center](/zh/agent-skills/aisa-twitter-command-center) | 搜索个人资料、推文、趋势、列表、社区和 Spaces，加上 OAuth 发帖 | 你想要紧凑的读取 + 发帖 Skill，不需要点赞或关注 |
+| [twitter-command-center-search-post](/zh/agent-skills/twitter-command-center-search-post) | 相同的读取 + 发帖能力，Skill 中包含完整端点参考 | 你想要读取 + 发帖，且让智能体看到每个端点和参数 |
+| [aisa-twitter-post-engage](/zh/agent-skills/aisa-twitter-post-engage) | 读取 + 发帖 + 点赞/取消点赞和关注/取消关注 | 你还需要互动操作，不仅是发帖 |
+| [x-intelligence-automation](/zh/agent-skills/x-intelligence-automation) | 相同的读取 + 发帖 + 互动能力，指令最短 | 你想要互动功能，同时尽量减少上下文开销 |
+| [twitter-autopilot](/zh/agent-skills/twitter-autopilot) | 完整的读取 + 发帖 + 互动能力，附详细的命令和工作流参考 | 你想要一个完整的 X Skill，不介意指令较长 |
 
-Skills 会自动安装到以下目录：
+YouTube 方面，三个 Skill 调用的是同一个 AIsa YouTube 搜索端点：
 
-| Agent | 目录 |
-| --- | --- |
-| Claude Code | `~/.claude/skills/` |
-| Cursor | `~/.cursor/skills/` |
-| GitHub Copilot | `~/.github/skills/` |
-| Windsurf | `~/.codeium/windsurf/skills/` |
-| Codex | `~/.agents/skills/` |
-| Gemini CLI | `~/.gemini/skills/` |
-| OpenClaw | `~/.openclaw/skills/` |
+| Skill | 适用场景 | 选择时机 |
+| --- | --- | --- |
+| [youtube-serp](/zh/agent-skills/youtube-serp) | 通过 Python 客户端获取排序结果，支持 `search`、`top-videos` 和 `competitor` 命令 | 你在 YouTube 上做内容研究或竞品追踪 |
+| [youtube-search](/zh/agent-skills/youtube-search) | 完整 API 参考，含 curl、Python 和 JavaScript 示例、分页和错误处理 | 你想让智能体在自己的代码中直接调用端点 |
+| [aisa-youtube-search](/zh/agent-skills/aisa-youtube-search) | 最小化的纯 curl Skill，带护栏 | 你想要最轻量的安装，不需要 Python |
 
-## 了解更多
+### AI 模型
+
+| Skill | 适用场景 | 选择时机 |
+| --- | --- | --- |
+| [llm-router](/zh/agent-skills/llm-router) | 一个 OpenAI 兼容 API 即可调用 GPT、Claude、Gemini、Qwen、DeepSeek、Grok 等 | 你想用一个 key 在模型家族间路由 |
+| [cn-llm](/zh/agent-skills/cn-llm) | 通过一个 OpenAI 兼容接口调用中文模型（Qwen、DeepSeek、GLM 等） | 你的工作负载是中文的，或特别需要中文模型 |
+| [aisa-provider](/zh/agent-skills/aisa-provider) | 在 OpenClaw 中将 AIsa 配置为模型提供方 | 你使用 OpenClaw，想在其中接入 AIsa 模型 |
+
+### 营销
+
+| Skill | 适用场景 | 选择时机 |
+| --- | --- | --- |
+| [seo-keyword-research](/zh/agent-skills/seo-keyword-research) | 关键词发现、意图聚类、竞品差距和页面创意，数据来自 DataForSEO | 你在规划写什么内容或建什么页面 |
+| [article-seo-geo-review](/zh/agent-skills/article-seo-geo-review) | 对一篇草稿或 URL 的 SEO + GEO 评分审查，含竞品差距和 AI 引用检查 | 你已有文章，想优化它 |
+| [use-similarweb](/zh/agent-skills/use-similarweb) | 网站流量、渠道、受众、技术和搜索足迹，每次调用前报价 | 问题是关于某网站的流量或受众 |
+| [kol-creator-discovery](/zh/agent-skills/kol-creator-discovery) | 从一个档案获取创作者邮箱和相似的 YouTube/TikTok 创作者，输出为外联表格 | 你需要一份相似创作者的联系人列表 |
+| [creator-marketing](/zh/agent-skills/creator-marketing) | 端到端合作规划：候选名单、交易模型、试点预算、Brief、外联和效果衡量 | 你在设计创作者或 UGC 项目，不只是找人 |
+| [product-selection](/zh/agent-skills/product-selection) | 卖什么、在哪卖、定价多少，使用 MCP 实时证据和离线定价辅助工具 | 你作为卖家在选品、选市场或定价 |
+
+### 创意
+
+| Skill | 适用场景 | 选择时机 |
+| --- | --- | --- |
+| [media-gen](/zh/agent-skills/media-gen) | 图片和视频生成，一个客户端将每个模型路由到对应端点 | 你想让智能体生成图片、文本转视频或图片转视频 |
+
+## AIsa CLI 安装 Skill 的位置
+
+`aisa skills install` 会将 Skill 写入它在你机器上检测到的每个支持的智能体（如果未检测到则写入全部）。用 `--agent <name>` 指定某一个，或用 `--agent all`。
+
+| 智能体 | `--agent` | 目录 |
+| --- | --- | --- |
+| Claude Code | `claude` | `~/.claude/skills/` |
+| Cursor | `cursor` | `~/.cursor/skills/` |
+| GitHub Copilot | `copilot` | `~/.github/skills/` |
+| Windsurf | `windsurf` | `~/.codeium/windsurf/skills/` |
+| Codex | `codex` | `~/.agents/skills/` |
+| Gemini CLI | `gemini` | `~/.gemini/skills/` |
+| OpenClaw | `openclaw` | `~/.openclaw/skills/` |
+
+## 相关
 
 <CardGroup cols={3}>
-  <Card title="规范" icon="list-check" href="/zh/agent-skills/standards">
-    了解如何组织 `SKILL.md`，并把自己的 Skill 发布到 Registry。
+  <Card title="标准" icon="list-check" href="/zh/agent-skills/standards">
+    如何组织 `SKILL.md` 并将你的 Skill 发布到注册表。
   </Card>
-  <Card title="Agent Skills 与工具对比" icon="code-compare" href="/zh/guides/learn/agent-skills-vs-tools">
-    了解什么时候使用 技能仓库中的 Skill，什么时候构建自己的自定义工具。
+  <Card title="Skill 还是直接调 API？" icon="code-compare" href="/zh/guides/faq#智能体应该使用-skill-还是直接调用-api？">
+    何时用现成的 Skill，何时直接调用 API。
   </Card>
   <Card title="获取支持" icon="envelope" href="mailto:developer@aisa.one">
-    有问题？请通过 developer@aisa.one 联系团队。
+    有问题？联系团队：developer@aisa.one。
   </Card>
 </CardGroup>

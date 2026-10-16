@@ -2,17 +2,81 @@
 title: "Use AIsa in OpenClaw"
 sidebarTitle: "OpenClaw"
 icon: "/images/integrations/openclaw.svg"
-description: "Use AIsa as OpenClaw's LLM provider, then add the AIsa MCP server with OAuth for data and tools."
+description: "Add AIsa as a remote MCP server in OpenClaw with one command and a browser sign-in. Optionally use AIsa as the LLM provider."
 ---
+
+OpenClaw has a built-in MCP client. Add AIsa as a remote MCP server, sign in once, and your OpenClaw agents can discover and call AIsa capabilities across web research, finance, social, SEO, sales, and more.
+
+AIsa MCP server:
+
+```txt
+https://mcp.aisa.one/mcp
+```
 
 This guide has two parts:
 
-1. Configure AIsa as OpenClaw's LLM provider.
-2. Add the AIsa MCP server so OpenClaw can use AIsa's data and tools.
+1. Add the AIsa MCP server so OpenClaw can use AIsa's data and tools.
+2. Optionally, configure AIsa as OpenClaw's LLM provider.
 
-## 1. Use AIsa as the LLM provider
+## 1. Connect AIsa capabilities
 
-If you want full control over OpenClaw's model configuration — custom model lists, fallback chains, credentials in OpenClaw's auth store, or per-channel routing — edit `openclaw.json` directly.
+### Step 1: Add the server
+
+```bash
+openclaw mcp add aisa --url https://mcp.aisa.one/mcp --transport streamable-http --timeout 30 --auth oauth
+```
+
+<Note>
+  Keep `--transport streamable-http` and `--timeout 30`. Without `--transport`, OpenClaw connects over SSE and the server rejects it with `405`. Without `--timeout`, the connection test can time out.
+</Note>
+
+### Step 2: Sign in
+
+```bash
+openclaw mcp login aisa
+```
+
+OpenClaw prints an authorization URL. Open it, sign in to AIsa, and approve access. The browser is then redirected to a local callback URL (`http://127.0.0.1:8989/oauth/callback?code=...`); the page may not load. Copy the `code` value from the address bar and finish the sign-in:
+
+```bash
+openclaw mcp login aisa --code <code>
+```
+
+<Accordion title="Use your API key instead of OAuth">
+  For headless hosts, pass the API key as a Bearer header instead of `--auth oauth`. The single quotes keep `${AISA_API_KEY}` unexpanded, so OpenClaw stores the reference and reads the key from the environment at runtime instead of saving it in `openclaw.json`:
+
+  ```bash
+  export AISA_API_KEY="sk-aisa-..."
+  openclaw mcp add aisa --url https://mcp.aisa.one/mcp --transport streamable-http --timeout 30 \
+    --header 'Authorization=Bearer ${AISA_API_KEY}'
+  ```
+
+  `AISA_API_KEY` must be set in the environment that runs OpenClaw, or in the `env` block of `openclaw.json`.
+</Accordion>
+
+### Step 3: Verify and reload
+
+```bash
+openclaw mcp probe
+```
+
+The output should include `aisa: 7 tools`. Restart the gateway so running agents pick up the server:
+
+```bash
+openclaw gateway restart
+```
+
+OpenClaw now has the AIsa tools. `search`, `list_categories`, `get_details`, `batch_get_schema`, and `batch_quote` (prices exact calls without running them) are free; `use` and `batch_use` run calls and are billed per call.
+
+Try:
+
+```txt
+Use AIsa capabilities to search the web and summarize the latest information about OpenClaw.
+```
+
+## 2. Optional: use AIsa as the LLM provider
+
+OpenClaw can also route its agents' LLM requests through AIsa. Edit `openclaw.json` directly for full control over the model configuration: custom model lists, fallback chains, credentials in OpenClaw's auth store, or per-channel routing.
 
 ### Step 1: Get your AIsa API key
 
@@ -91,34 +155,6 @@ openclaw gateway restart
 ```
 
 Your agents will now route requests through AIsa.
-
-## 2. Connect AIsa resource capabilities
-
-The provider configuration covers chat. To give OpenClaw access to AIsa's data and tool catalog, add the AIsa MCP server and sign in with OAuth:
-
-```bash
-openclaw mcp add aisa --url https://mcp.aisa.one/mcp --auth oauth
-openclaw mcp login aisa
-```
-
-Approve access in the browser; no key needs to be copied.
-
-<Accordion title="Use your API key instead of OAuth">
-  For headless hosts, pass the API key as a Bearer header. The shell expands `$AISA_API_KEY` when you run the command, so it must be exported in this shell, even if Step 2 put the key only in the `env` block of `openclaw.json`. The `:?` check stops the command instead of saving an empty token, and the expanded key is saved directly into `openclaw.json`:
-
-  ```bash
-  export AISA_API_KEY="sk-aisa-..."
-  openclaw mcp add aisa --url https://mcp.aisa.one/mcp --header "Authorization=Bearer ${AISA_API_KEY:?Set AISA_API_KEY first}"
-  ```
-</Accordion>
-
-Verify the connection with `openclaw mcp probe`. OpenClaw now has access to the AIsa tools: `search`, `list_categories`, `get_details`, and `batch_quote` (prices exact calls without running them) are free; `batch_use` runs the calls and is billed per call.
-
-Try:
-
-```txt
-Use AIsa capabilities to search the web and summarize the latest information about OpenClaw.
-```
 
 ### Video walkthrough
 
@@ -222,9 +258,17 @@ Track your usage and per-request details in the [AIsa dashboard](https://console
 
 <Accordion title="AIsa tools missing">
 **Fix:**
-1. Run `openclaw mcp list` and confirm **aisa** is configured.
-2. Run `openclaw mcp login aisa` to sign in again.
-3. Run `openclaw mcp reload` so the next turn picks up the updated connection.
+1. Run `openclaw mcp list` and confirm **aisa** is configured with `streamable-http`.
+2. Run `openclaw mcp status --verbose` to check the sign-in; if needed, run `openclaw mcp login aisa` again.
+3. Run `openclaw gateway restart` so running agents reload the server.
+</Accordion>
+
+<Accordion title="'SSE error: Non-200 status code (405)' or 'Request timed out'">
+**Fix:** `openclaw mcp add` tests the connection before saving, so a failed add saves nothing. Run it again with `--transport streamable-http --timeout 30`. To replace an existing entry, run `openclaw mcp unset aisa` first.
+</Accordion>
+
+<Accordion title="'Blocked: resolves to private/internal/special-use IP address'">
+**Fix:** OpenClaw blocks hosts that resolve to private or special-use addresses. A proxy in fake-IP mode (for example Clash or Surge) can make `clerk.aisa.one` resolve this way. Exclude `aisa.one` from fake-IP, or use the API key option instead of OAuth.
 </Accordion>
 
 </AccordionGroup>

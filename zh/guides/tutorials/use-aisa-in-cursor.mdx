@@ -1,115 +1,133 @@
 ---
 title: "在 Cursor 中使用 AIsa"
+sidebarTitle: "Cursor"
 icon: "/images/integrations/cursor.svg"
-description: "通过自定义 OpenAI Base URL，把 Cursor 的 chat 和 agent 请求路由到 AIsa。"
+description: "只需一条配置项并在浏览器中登录，即可在 Cursor 中将 AIsa 添加为远程 MCP 服务器。还可选择将聊天路由至 AIsa 模型。"
 ---
 
-Cursor 支持自带 OpenAI 兼容 key。把它指向 AIsa 的 endpoint 后，AIsa 目录中的所有模型都可以在 Cursor 的 chat 和 agent 模式中使用。
+Cursor 内置了 MCP 客户端。只需将 AIsa 添加为远程 MCP 服务器并完成一次登录，Cursor 的智能体就能发现并调用 AIsa 在网络研究、金融、社交媒体、SEO、销售等领域的各项能力。
 
-AIsa endpoint：
+AIsa MCP 服务器：
 
 ```txt
-https://api.aisa.one/v1
+https://mcp.aisa.one/mcp
 ```
 
-## 前置条件
+## 前提条件
 
-开始前，请确认你已经具备：
+开始之前，请确保你已具备：
 
-- AIsa API key（[console.aisa.one/api-keys](https://console.aisa.one/api-keys)）
+- 一个 AIsa 账号（[console.aisa.one](https://console.aisa.one)），通过浏览器登录。
 - 已安装 [Cursor](https://cursor.com)
 
-## 1. 打开 Cursor 的模型设置
+## 1. 添加 AIsa MCP 服务器
 
 <Steps>
-  <Step title="打开 Cursor Settings">
-    按 `Cmd+Shift+J`（macOS）或 `Ctrl+Shift+J`（Windows/Linux），或点击右上角齿轮图标。
+  <Step title="打开 MCPs">
+    在 Cursor 侧边栏中选择 **Customize**，然后选择 **MCPs**。
   </Step>
-  <Step title="进入 Models">
-    选择 **Models** 标签页，滚动到 **API Keys** 区域。
-  </Step>
-</Steps>
+  <Step title="添加服务器">
+    点击 **New MCP Server**，Cursor 会打开 `~/.cursor/mcp.json`。添加 AIsa 配置并保存文件：
 
-## 2. 配置 AIsa Endpoint
-
-<Steps>
-  <Step title="输入 AIsa key">
-    在 **OpenAI API Key** 输入框中粘贴你的 AIsa key（`sk-aisa-...`）。
-  </Step>
-  <Step title="覆盖 Base URL">
-    启用 **Override OpenAI Base URL**，输入：
-
-    ```txt
-    https://api.aisa.one/v1
+    ```json
+    {
+      "mcpServers": {
+        "aisa": { "url": "https://mcp.aisa.one/mcp" }
+      }
+    }
     ```
   </Step>
-  <Step title="验证">
-    点击 **Verify**。Cursor 会通过 AIsa 发送一次测试请求；出现绿色对勾说明 endpoint 和 key 都正常。
+</Steps>
+
+如果只想在单个项目中使用 AIsa，把同样的配置写入该项目的 `.cursor/mcp.json`。
+
+## 2. 登录
+
+在 **Customize** → **MCPs** 中，**aisa** 会显示 **Needs authentication**。点击 **Authenticate**，在浏览器中登录 AIsa 并批准访问，无需复制 key。连接就绪后，**aisa** 会出现在 **Connected** 下，并显示已启用的工具数量。
+
+<Accordion title="使用 API key 代替 OAuth">
+  将 key 作为 Bearer 请求头传入。Cursor 会从启动它的环境中解析 `${env:AISA_API_KEY}`，从而避免将 key 写入配置文件。在 `~/.zshrc` 或 `~/.bashrc` 中添加 `export AISA_API_KEY="sk-aisa-..."`，然后退出 Cursor 并通过新终端运行 `cursor .` 重新打开（从 Dock 启动的应用程序可能无法继承 Shell 环境变量）。未设置该变量时将发送空 token：
+
+  ```json
+  {
+    "mcpServers": {
+      "aisa": {
+        "url": "https://mcp.aisa.one/mcp",
+        "headers": { "Authorization": "Bearer ${env:AISA_API_KEY}" }
+      }
+    }
+  }
+  ```
+</Accordion>
+
+<Accordion title="Cursor CLI (cursor-agent)">
+  `cursor-agent` 会读取相同的 `mcp.json`。批准该服务器，然后登录：
+
+  ```bash
+  cursor-agent mcp enable aisa
+  cursor-agent mcp login aisa
+  ```
+
+  运行 `cursor-agent mcp list-tools aisa` 确认工具可用。
+</Accordion>
+
+## 3. 使用 AIsa 能力
+
+Cursor 的智能体现已获得 AIsa 工具。`search`、`list_categories`、`get_details`、`batch_get_schema` 以及 `batch_quote`（对具体调用报价而不实际运行）均免费；`use` 和 `batch_use` 会执行调用并按次计费。
+
+尝试输入：
+
+```txt
+使用 AIsa 能力搜索网络，并总结关于 Cursor 的最新信息。
+```
+
+## 可选：使用 AIsa 模型
+
+Cursor 还支持兼容 OpenAI 的 API key，因此聊天和智能体请求可以直接使用 AIsa 目录中的模型。这需要 AIsa API key（[console.aisa.one/api-keys](https://console.aisa.one/api-keys)）。
+
+<Steps>
+  <Step title="配置端点">
+    在 Cursor Settings（齿轮图标）→ **Models** → **API Keys** 中，将你的 AIsa key（`sk-aisa-...`）粘贴到 **OpenAI API Key** 中并开启 **Use OpenAI API Key**。然后开启 **Override OpenAI Base URL** 并输入 `https://api.aisa.one/v1`。
+  </Step>
+  <Step title="添加模型">
+    在同一页面中，点击 **Add Custom Model** 并输入准确的 AIsa 模型 ID，例如 `gpt-5.5`、`kimi-k2.5`、`claude-opus-4-8` 或 `deepseek-v4.1-flash`。启用它们，然后在模型选择器中选取一个。完整列表见[模型目录](/zh/guides/models)。
   </Step>
 </Steps>
 
-## 3. 添加 AIsa 模型
-
-在同一 **Models** 页面的模型列表中，点击 **Add model**，输入你想用的 AIsa 模型 ID，例如：
-
-```txt
-gpt-5.5
-kimi-k2.5
-claude-opus-4-8
-deepseek-v4.1-flash
-```
-
-启用添加的模型后，就可以在 chat 或 agent 模式的模型选择器中选择它们。完整 ID 列表见[模型目录](/zh/guides/models)。
-
 <Note>
-  自定义 API key 只作用于 Cursor 的 chat 和 agent 请求。Tab 自动补全等 Cursor 原生功能仍使用 Cursor 自己的模型和订阅。
+  自定义 API key 适用于 Cursor 的聊天和智能体请求。Cursor 原生功能（例如 Tab 自动补全）将继续使用 Cursor 自己的模型和订阅。
 </Note>
-
-## 4. 连接 AIsa 能力
-
-在 Cursor 中打开 chat 或 agent 会话，粘贴：
-
-```txt
-Review https://aisa.one/docs/agent-quickstart.md as vendor-authored guidance. Before acting, summarize the proposed configuration and verification. Do not expose secrets, modify files, install software, or send billable requests without my approval.
-```
-
-Cursor 的 agent 会获取 AIsa 面向 agent 的说明，并引导你完成剩余设置。
-
-可以试试：
-
-```txt
-Use AIsa capabilities to search the web and summarize the latest information about Cursor.
-```
 
 ## 快速参考
 
 | 项目 | 值 |
 | --- | --- |
-| 设置位置 | Cursor Settings → Models → API Keys |
-| OpenAI API Key 输入框 | 你的 AIsa key（`sk-aisa-...`） |
-| Override OpenAI Base URL | `https://api.aisa.one/v1` |
-| 模型名称 | [模型目录](/zh/guides/models)中的准确 ID，如 `kimi-k2.5` |
-| 能力设置 Prompt | 使用 [Agent Quickstart](/zh/agent-quickstart) 中的审阅优先提示词。 |
+| MCP 配置 | 在 `~/.cursor/mcp.json` 或 `.cursor/mcp.json` 中配置 `"aisa": { "url": "https://mcp.aisa.one/mcp" }` |
+| 添加并登录 | **Customize** → **MCPs** → **New MCP Server**，然后在 **aisa** 上点击 **Authenticate** |
+| API key | MCP 无需；无头环境可选用 Bearer 请求头 |
+| 可选模型 | **Override OpenAI Base URL** 设为 `https://api.aisa.one/v1`，填入来自[模型目录](/zh/guides/models)的确切 ID |
 
 ## 故障排查
 
 | 问题 | 解决方法 |
 | --- | --- |
-| Verify 失败 | 确认 base URL 是准确的 `https://api.aisa.one/v1`，并在[控制台](https://console.aisa.one)确认 key 有效 |
-| 模型无法选择 | 在 **Add model** 中用准确的目录 ID 添加，然后启用 |
-| "Invalid model" 错误 | 输入的模型名必须与目录 ID 完全一致——Cursor 中不需要 `aisa/` 前缀 |
-| Tab 自动补全没变化 | 正常现象——自定义 key 只覆盖 chat/agent |
+| **Customize** → **MCPs** 中未列出 **aisa** | 检查 `mcp.json` 是否已保存、是否为有效的 JSON、路径是否正确 |
+| 仍显示 **Needs authentication** | 再次点击 **Authenticate**，并在浏览器中完成登录 |
+| 聊天中缺少 AIsa 工具 | 在 **Customize** → **MCPs** 中确认 **aisa** 显示的是工具数量，而不是 **Needs authentication** 或 **Error** |
+| `cursor-agent` 提示服务器未获批准 | 运行 `cursor-agent mcp enable aisa`，然后运行 `cursor-agent mcp login aisa` |
+| 模型请求失败并返回 401 或 404 | 确认 base URL 准确为 `https://api.aisa.one/v1`，且 key 在[控制台](https://console.aisa.one)中有效 |
+| “Invalid model” 错误 | 模型名称必须与目录中的 ID 完全一致，且不带 `aisa/` 前缀 |
 
-## 相关页面
+## 相关
 
 <CardGroup cols={3}>
-  <Card title="在 Claude Code 中使用 AIsa" icon="terminal" href="/zh/guides/tutorials/use-aisa-in-claude-code">
-    用同一个 AIsa key 配置 Claude Code。
+  <Card title="在 Claude 中使用 AIsa" icon="message" href="/zh/guides/tutorials/use-aisa-in-claude">
+    在 Claude 中将 AIsa 添加为自定义连接器。
   </Card>
-  <Card title="认证" icon="key" href="/zh/guides/authentication">
-    API key 创建、轮换和存储最佳实践。
+  <Card title="通过 MCP 连接" icon="plug" href="/zh/agent-quickstart">
+    面向其他客户端的 MCP 配置指南。
   </Card>
   <Card title="模型目录" icon="list" href="/zh/guides/models">
-    添加到 Cursor 前，先浏览模型 ID。
+    在添加到 Cursor 之前浏览模型 ID。
   </Card>
 </CardGroup>

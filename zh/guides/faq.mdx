@@ -1,38 +1,59 @@
 ---
-title: "常见问题 - AIsa 统一 API"
-description: >-
-  关于 AIsa 智能体能力层的常见问题，包括它与普通 LLM 网关的区别、OpenAI 兼容性和价格说明。
+title: "常见问题"
+sidebarTitle: "FAQ"
+icon: "circle-question"
+description: "关于 AIsa 的常见问题：如何连接智能体、OpenAI 和 Anthropic 兼容性、计费、模型、Skill 与直接调用 API 的区别，以及数据处理。"
 ---
 
-本页回答关于 AIsa 统一模型网关、兼容性、价格和基础设施的常见问题。
+## 什么是 AIsa？
 
-## AIsa 和 LLM 网关有什么区别？
+AIsa 是 AI 智能体的资源与支付层：一个账户、一笔余额，即可发现、调用并支付实时 LLM 和媒体模型以及 100 多个数据 API——搜索、金融、社交、SEO、销售等。详见[工作原理](/zh/how-it-works)。
 
-LLM 网关只是把多个模型聚合到一个 API 后面。AIsa 是智能体能力层：除了模型推理，还集成了 100+ 非 LLM 数据 API（例如 Twitter、金融、搜索）、可复用的 Agent Skills、MCP server，以及面向自主 Agent 的原生稳定币微支付能力。详见 [模型网关与 Agent 能力层](/zh/concepts/model-gateway-vs-capability-layer)。
+## AIsa 与 LLM 网关有什么区别？
 
-AIsa 是为智能体经济构建的基础设施层。在这个场景中，智能体不仅需要思考（LLM），还需要行动（数据 API）和交易（机器到机器支付）。
+LLM 网关将多个模型统一到一个 API 后面。AIsa 也做同样的事，但还加入了智能体操作所需的数据 API、MCP 服务器和 Skill 以便智能体发现并调用它们，以及按次计费与消费上限，让智能体为实际用量付费。如果你的场景只需要一个模型提供商，直接集成可能更简单；一旦智能体需要多个提供商，AIsa 就能派上用场。
 
-## 我需要修改现有 OpenAI 代码吗？
+## 我应该选择哪种连接方式？
 
-不需要。AIsa 与 OpenAI API 规范兼容。
+- **智能体（Claude Code、Codex、Cursor 等）**：[通过 MCP 连接](/zh/agent-quickstart)。在浏览器中完成 OAuth，无需粘贴密钥。
+- **希望智能体学习 AIsa 工作流：** 在此基础上添加 [智能体技能](/zh/get-started/agent-skill)。
+- **不支持 MCP 的终端、脚本或 CI 任务**：[使用 CLI](/zh/get-started/cli)。
+- **你自己的代码：** 通过 HTTP 使用 [API key](/zh/guides/getting-started-with-aisa)，或使用[现有 SDK](/zh/get-started/sdk-compatibility)。
 
-如果你正在使用官方 OpenAI Python 或 TypeScript SDK，通常只需要把 `base_url` 改成 `https://api.aisa.one/v1`，并使用 [AIsa API Key](/zh/guides/authentication) 进行认证。`temperature`、`top_p`、streaming responses 等标准参数都可以按预期使用。
+## 我需要修改 OpenAI 或 Anthropic 的代码吗？
 
-## AIsa 如何计费？
+不需要。只需更改 base URL 和密钥：OpenAI SDK 使用 `https://api.aisa.one/v1`，Anthropic SDK 使用 `https://api.aisa.one`。标准参数和流式传输照常工作。详见 [OpenAI / Anthropic SDK](/zh/get-started/sdk-compatibility)。
 
-AIsa 使用统一的按量计费系统。你可以按量付费（Pay as you go），也可以选择订阅套餐（Builder 或 Team），套餐详情见 [aisa.one/pricing](https://aisa.one/pricing)。
+## MCP 服务器暴露了哪些工具？
 
-* **LLM 推理** 按 token 计费。
-* **数据 API** 按请求计费：部分按每次调用固定费率（例如 Open-Meteo、CoinGecko），其余按上游成本计量，价格会随调用返回的内容变化（例如 Twitter、Tavily、搜索、金融）。
+一组精简的元工具：`search` 和 `list_categories` 用于查找操作，`get_details`（也可通过 `batch_get_schema` 调用）用于获取完整契约，`batch_quote` 用于在不实际执行的情况下为调用报价，`batch_use` 用于一次执行最多 20 个调用。除 `batch_use` 外均免费；`batch_use` 按调用计费。`use` 作为已弃用的单次调用形式仍然保留。你的智能体通过这些工具访问整个数据目录，无需加载数百个工具。
 
-所有用量都会从同一个集中账户余额中扣除。计费方式请查看 [价格总览](/zh/guides/pricing)；模型的当前价格见 [aisa.one/models](https://aisa.one/models)。
+## 智能体应该使用 Skill 还是直接调用 API？
 
-## AIsa 支持哪些模型？
+如果已有 Skill 能覆盖你想要的结果，就用 Skill——它编码了要调用哪些工具、按什么顺序、以及如何呈现结果。当你的应用需要自定义编排、重试或数据处理时，直接调用 API（通过 HTTP 或 MCP `batch_use`）。两者可以结合：常规路径用 Skill，其余用直接调用。
 
-AIsa 为实时模型目录提供统一网关，截至 2026 年 9 月 30 日共 124 个模型。目前模型家族包括 OpenAI GPT、Anthropic Claude、Google Gemini、xAI Grok、DeepSeek、Alibaba Qwen 和 Wan、Moonshot Kimi、MiniMax、Zhipu GLM、ByteDance Seed、Seedream 和 Dreamina、腾讯混元、StepFun、小米 MiMo，以及 Jina embedding。
+## 用量如何计费？
 
-如需查看完整且最新的模型 ID、上下文窗口、endpoint、能力和计费说明，请访问 [支持的模型目录](/zh/guides/models) 和 [AI 模型价格](/zh/guides/pricing/ai-model-pricing-llm-inference) 文档。
+模型按 token 计费；数据 API 按请求计费，要么按固定费率收费，要么根据请求返回的内容计量。所有费用从同一笔预付余额中扣除，而发现功能——文档、`/v1/models`、MCP `search`、`get_details` 和 `batch_quote`——是免费的。文档说明了计费规则但不列出价格；请查看 [aisa.one/models](https://aisa.one/models) 和 [aisa.one/api](https://aisa.one/api)，以及[计费与额度](/zh/guides/pricing)了解报价和消费上限。
+
+## 我能限制智能体的花费吗？
+
+可以。在控制台中为每个智能体创建独立的 API key 并设置消费限额。该限额是该 key 能花费的硬性上限。
+
+对于单次调用，声明支持 maximum-price 的端点接受 HTTP 头 `X-AISA-Max-Price-USD`：如果成本估算超出你的上限，网关会在调用提供商之前以 `402` 拒绝请求。通过 MCP 时，先用 `batch_quote` 为调用报价，仅在报价符合预算时再用 `batch_use` 执行。两者都检查估算值，但都不会限制最终实际费用。模型路由（如 `/v1/chat/completions`）不适用此 header，因此请通过 `max_tokens` 和 key 的消费限额来约束其成本。详见[计费与额度](/zh/guides/pricing#先报价、再审核、后执行)。
+
+## 每个端点都支持机器支付（MPP 或 x402）吗？
+
+不是。AIsa 支持 Machine Payments Protocol（MPP），而非 x402，且仅限于部分只读数据端点。可用列表见 `https://api.aisa.one/openapi.json` 的发现文档；其他端点均需 API key。详见[机器支付](/zh/integrations/machine-payments)。
+
+## 有哪些可用模型？
+
+GPT、Claude、Gemini、Grok、DeepSeek、Qwen 与 Wan、Kimi、MiniMax、GLM、ByteDance Seed 与 Seedream、Hunyuan、MiMo 等，还有 embedding、图像和视频模型。目录经常更新：`GET https://api.aisa.one/v1/models` 和 [aisa.one/models](https://aisa.one/models) 始终是最新的，[模型目录](/zh/guides/models)列出了 ID 和路由。
+
+## AIsa 会存储我的提示词或输出吗？
+
+不会。请求内容仅做瞬时处理后即丢弃；AIsa 只保留运维元数据，如时间戳、key 标识符、token 数量、费用和状态。详见[安全与隐私](/zh/guides/security)。
 
 ## 如何开始使用？
 
-请查看 [快速开始指南](/zh/guides/getting-started-with-aisa)，创建账号、生成 API key，并使用免费测试额度完成第一次统一 API 调用。
+编写代码请参阅 [API Key 与首次调用](/zh/guides/getting-started-with-aisa)；连接智能体请参阅[通过 MCP 连接](/zh/agent-quickstart)。

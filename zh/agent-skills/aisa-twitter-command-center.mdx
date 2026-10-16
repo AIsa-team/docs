@@ -1,90 +1,132 @@
 ---
 title: "AIsa Twitter Command Center"
-description: "通过一个经批准的工作流搜索并发布 X/Twitter 内容。"
+description: "通过一个经批准的工作流在 X/Twitter 上搜索和发布内容。"
 ---
 
 [在 GitHub 上查看 →](https://github.com/AIsa-team/agent-skills/tree/main/social-media/aisa-twitter-command-center)
 
-Twitter Command Center 把搜索、草稿、审批和发布组织成一个明确流程，适合需要“先研究、再由用户批准发布”的 Agent。
+**X/Twitter 工作的指挥中心。** 搜索用户资料、推文、趋势、列表、社区和 Spaces，然后在获得批准后通过 OAuth 发布内容。
 
 ## 安装
 
-```bash
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill aisa-twitter-command-center
+```
+
+```bash AIsa CLI
 npm install -g @aisa-one/cli
 aisa skills install aisa-twitter-command-center
 ```
+</CodeGroup>
 
-## Agent 可以做什么？
+安装完成后请启动一个新的智能体会话，以加载该 Skill。
+
+## 智能体能用它做什么？
 
 <CardGroup cols={2}>
-  <Card title="搜索与发现" icon="magnifying-glass">
-    搜索 X/Twitter 用户、推文、趋势和社区内容。
+  <Card title="搜索与监控" icon="magnifying-glass">
+    搜索用户、推文、趋势、列表和社区。
   </Card>
-  <Card title="发布准备" icon="pen-to-square">
-    根据研究结果生成候选推文、回复或互动建议。
+  <Card title="发布帖子" icon="pen">
+    在账户授权后起草并发布 X 帖子。
   </Card>
-  <Card title="人工审批" icon="check-double">
-    在发布前让用户明确确认内容和目标账号。
+  <Card title="互动操作" icon="thumbs-up">
+    点赞、关注、回复，以及管理社交工作流。
   </Card>
-  <Card title="授权执行" icon="lock">
-    只有在 OAuth/relay 授权完成后才执行写操作。
+  <Card title="私信上下文" icon="message-circle">
+    在工作流中查看和使用私信上下文。
   </Card>
 </CardGroup>
 
-## 何时使用
+## 适用场景
 
-- 用户要监控话题并准备发布。
-- 用户要基于搜索结果写推文、回复或互动计划。
-- 团队需要一个可审计的发布前审批流程。
+- 用户需要 Twitter/X 调研、监控或内容发现。
+- 用户需要查看用户资料、时间线、提及、趋势、回复、引用、列表、社区或 Spaces。
+- 用户希望在明确的 OAuth 批准后起草或发布帖子，无需共享密码。
 
-## 何时不要使用
+## 不适用场景
 
-- 用户没有授权写操作。
-- 内容未经过用户确认。
-- 目标是刷量、骚扰、规避平台规则或批量垃圾内容。
+- 用户需要基于密码的登录、cookie 提取或浏览器凭据抓取。
+- 工作流必须避免通过中继调用 `api.aisa.one`。
+- 请求涉及此包未涵盖的不受支持的互动操作。
 
 ## 快速参考
 
+- 必需的环境变量：`AISA_API_KEY`
+- 读取客户端：`scripts/twitter_client.py`
+- OAuth 和发布客户端：`scripts/twitter_oauth_client.py`
+- 发布指南：`references/post_twitter.md`
+
+## 配置
+
 ```bash
-export AISA_API_KEY="YOUR_AISA_API_KEY"
+export AISA_API_KEY="your-key"
 ```
 
-## 常见命令
+所有网络请求均发送至 `https://api.aisa.one/apis/v1/...`。
 
-```txt
-搜索今天关于某产品的热门讨论，并草拟 3 条回复
-根据这些链接写一条 X thread 草稿，不要发布
-检查某个账号最近的话题，给出互动建议
+## 功能
+
+- 读取用户数据、时间线、提及、粉丝、关注列表及相关用户资料信息。
+- 搜索推文和用户，查看回复、引用、转发者、帖子上下文、趋势、列表、社区和 Spaces。
+- 在明确的 OAuth 批准后发布文本、图片和视频帖子。
+- 当发布权限尚未获得批准时，返回授权链接。
+
+## 常用命令
+
+```bash
+python3 scripts/twitter_client.py user-info --username elonmusk
+python3 scripts/twitter_client.py search --query "AI agents" --type Latest
+python3 scripts/twitter_client.py trends --woeid 1
+python3 scripts/twitter_oauth_client.py status
+python3 scripts/twitter_oauth_client.py authorize
+python3 scripts/twitter_oauth_client.py post --text "Hello from AIsa"
 ```
 
 ## 发布工作流
 
-1. 搜索并收集上下文。
-2. 生成候选内容。
-3. 标注目标账号、推文或 thread。
-4. 向用户展示最终文本。
-5. 只有用户明确批准后才调用写操作。
-6. 返回发布结果或失败原因。
+当用户要求在 X/Twitter 上发送、发布、回复或引用时：
 
-## 防护规则
+1. 检查 `AISA_API_KEY` 是否已配置。
+2. 如果用户意图是发布，尝试执行发布工作流。
+3. 如果授权尚未完成，先返回 OAuth 授权链接。
+4. 仅在用户提供了本地工作区文件时才使用 `--media-file`。
+5. 在发布命令实际执行成功之前，不要声称帖子已发布成功。
 
-- 默认只读。
-- 不自动发布。
-- 不隐藏赞助、广告或机器人属性。
-- 不伪造来源、截图或互动结果。
-- 不泄露 OAuth token、API key 或 relay 配置。
+## 安全护栏
+
+- 不要要求 Twitter 密码或浏览器 cookie。
+- 不要捏造说明文字、推文 URL 或附件文件。
+- 除非用户明确要求启动本地浏览器，否则不要默认打开浏览器。
+- 在 API 确认成功之前，不要声称外部发布已成功。
+
+## 安全说明
+
+- 该工作流基于中继模式，将 API 请求、OAuth 请求和经批准的媒体上传发送至 `api.aisa.one`。
+- 必需密钥：`AISA_API_KEY`。
+- 该工作流不需要密码、浏览器 cookie 提取或直接共享账户凭据。
+
+## 参考资料
+
+- 详细的发布示例和 OAuth 指南请参见 `references/post_twitter.md`。
+
+## 开始使用
+
+1. 在 [aisa.one](https://aisa.one) 注册并在控制台中创建一个 API key。
+2. 在终端中设置：`export AISA_API_KEY="your-key"`。
+3. 使用[安装](#安装)部分的命令安装该 Skill，然后启动一个新的智能体会话。
 
 ## 相关
 
 <CardGroup cols={3}>
-  <Card title="AIsa Twitter API" icon="code" href="/zh/agent-skills/aisa-twitter-api">
-    读取 X/Twitter 数据。
+  <Card title="AIsa Twitter API" icon="twitter" href="/zh/agent-skills/aisa-twitter-api">
+    X/Twitter 数据访问与社交情报。
   </Card>
-  <Card title="发布与互动" icon="paper-plane" href="/zh/agent-skills/aisa-twitter-post-engage">
-    授权后的写操作。
+  <Card title="AIsa Twitter Post & Engage" icon="pen" href="/zh/agent-skills/aisa-twitter-post-engage">
+    专注于发布、点赞、关注和回复操作。
   </Card>
-  <Card title="Twitter Command Center Search + Post" icon="magnifying-glass" href="/zh/agent-skills/twitter-command-center-search-post">
-    搜索加发布的完整工作流。
+  <Card title="关联 X 账户" icon="key" href="/zh/api-reference/twitter/post_twitter-auth-twitter">
+    为写入操作配置 OAuth。
   </Card>
 </CardGroup>
-

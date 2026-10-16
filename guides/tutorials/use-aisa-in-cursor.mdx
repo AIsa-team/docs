@@ -2,86 +2,51 @@
 title: "Use AIsa in Cursor"
 sidebarTitle: "Cursor"
 icon: "/images/integrations/cursor.svg"
-description: "Route Cursor's chat and agent requests through AIsa with a custom OpenAI base URL, then add the AIsa MCP server with OAuth."
+description: "Add AIsa as a remote MCP server in Cursor with one config entry and a browser sign-in. Optionally route chat through AIsa models."
 ---
 
-Cursor lets you bring your own OpenAI-compatible API key. Point it at AIsa's endpoint, and every model in the AIsa catalog becomes available in Cursor's chat and agent modes.
+Cursor has a built-in MCP client. Add AIsa as a remote MCP server, sign in once, and Cursor's agent can discover and call AIsa capabilities across web research, finance, social, SEO, sales, and more.
 
-AIsa endpoint:
+AIsa MCP server:
 
 ```txt
-https://api.aisa.one/v1
+https://mcp.aisa.one/mcp
 ```
 
 ## Prerequisites
 
 Before you start, make sure you have:
 
-- An AIsa API key ([console.aisa.one/api-keys](https://console.aisa.one/api-keys))
+- An AIsa account ([console.aisa.one](https://console.aisa.one)). You sign in through the browser.
 - [Cursor](https://cursor.com) installed
 
-## 1. Open Cursor's model settings
+## 1. Add the AIsa MCP server
 
 <Steps>
-  <Step title="Open Cursor Settings">
-    Press `Cmd+Shift+J` (macOS) or `Ctrl+Shift+J` (Windows/Linux), or click the gear icon in the top-right corner.
+  <Step title="Open MCPs">
+    In the Cursor sidebar, select **Customize**, then **MCPs**.
   </Step>
-  <Step title="Go to Models">
-    Select the **Models** tab, then scroll to the **API Keys** section.
-  </Step>
-</Steps>
+  <Step title="Add the server">
+    Click **New MCP Server**. Cursor opens `~/.cursor/mcp.json`. Add the AIsa entry and save the file:
 
-## 2. Configure the AIsa endpoint
-
-<Steps>
-  <Step title="Enter your AIsa key">
-    In the **OpenAI API Key** field, paste your AIsa key (`sk-aisa-...`).
-  </Step>
-  <Step title="Override the base URL">
-    Enable **Override OpenAI Base URL** and enter:
-
-    ```txt
-    https://api.aisa.one/v1
+    ```json
+    {
+      "mcpServers": {
+        "aisa": { "url": "https://mcp.aisa.one/mcp" }
+      }
+    }
     ```
   </Step>
-  <Step title="Verify">
-    Click **Verify**. Cursor sends a test request through AIsa; a green checkmark confirms the endpoint and key are working.
-  </Step>
 </Steps>
 
-## 3. Add AIsa models
+To add AIsa to one project only, put the same entry in `.cursor/mcp.json` in that project.
 
-In the model list on the same **Models** page, click **Add model** and enter the exact AIsa model ID you want to use, for example:
+## 2. Sign in
 
-```txt
-gpt-5.5
-kimi-k2.5
-claude-opus-4-8
-deepseek-v4.1-flash
-```
-
-Enable the models you added, then select one from the model picker in chat or agent mode. The full list of IDs is in the [model catalog](/guides/models).
-
-<Note>
-  Custom API keys apply to Cursor's chat and agent requests. Cursor-native features such as Tab autocomplete continue to use Cursor's own models and subscription.
-</Note>
-
-## 4. Connect AIsa capabilities
-
-The model settings cover chat. To give Cursor's agent access to AIsa's data and tool catalog, add the AIsa MCP server to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project):
-
-```json
-{
-  "mcpServers": {
-    "aisa": { "url": "https://mcp.aisa.one/mcp" }
-  }
-}
-```
-
-Open **Cursor Settings → MCP**, click **Needs login** next to **aisa**, and approve access in the browser. No key is copied.
+Under **Customize** → **MCPs**, **aisa** shows **Needs authentication**. Click **Authenticate**, sign in to AIsa in the browser, and approve access. No key is copied. When the connection is ready, **aisa** is listed under **Connected** with its enabled tool count.
 
 <Accordion title="Use your API key instead of OAuth">
-  Pass the key as a Bearer header. Cursor resolves `${env:AISA_API_KEY}` from the environment where it was launched, keeping the key out of the configuration file. Because the model settings above store the key only inside Cursor, first add `export AISA_API_KEY="sk-aisa-..."` to `~/.zshrc` or `~/.bashrc`, then quit Cursor and reopen it from a new terminal with `cursor .` (apps launched from the Dock may not inherit shell variables). An unset variable sends an empty token:
+  Pass the key as a Bearer header. Cursor resolves `${env:AISA_API_KEY}` from the environment where it was launched, keeping the key out of the configuration file. Add `export AISA_API_KEY="sk-aisa-..."` to `~/.zshrc` or `~/.bashrc`, then quit Cursor and reopen it from a new terminal with `cursor .` (apps launched from the Dock may not inherit shell variables). An unset variable sends an empty token:
 
   ```json
   {
@@ -95,7 +60,20 @@ Open **Cursor Settings → MCP**, click **Needs login** next to **aisa**, and ap
   ```
 </Accordion>
 
-Cursor's agent now has the AIsa tools: `search`, `list_categories`, `get_details`, and `batch_quote` (prices exact calls without running them) are free; `batch_use` runs the calls and is billed per call.
+<Accordion title="Cursor CLI (cursor-agent)">
+  `cursor-agent` reads the same `mcp.json`. Approve the server, then sign in:
+
+  ```bash
+  cursor-agent mcp enable aisa
+  cursor-agent mcp login aisa
+  ```
+
+  Run `cursor-agent mcp list-tools aisa` to confirm the tools are available.
+</Accordion>
+
+## 3. Use AIsa capabilities
+
+Cursor's agent now has the AIsa tools. `search`, `list_categories`, `get_details`, `batch_get_schema`, and `batch_quote` (prices exact calls without running them) are free; `use` and `batch_use` run calls and are billed per call.
 
 Try:
 
@@ -103,34 +81,51 @@ Try:
 Use AIsa capabilities to search the web and summarize the latest information about Cursor.
 ```
 
+## Optional: use AIsa models
+
+Cursor also accepts an OpenAI-compatible API key, so chat and agent requests can run on models from the AIsa catalog. This needs an AIsa API key ([console.aisa.one/api-keys](https://console.aisa.one/api-keys)).
+
+<Steps>
+  <Step title="Configure the endpoint">
+    In Cursor Settings (gear icon) → **Models** → **API Keys**, paste your AIsa key (`sk-aisa-...`) into **OpenAI API Key** and turn on **Use OpenAI API Key**. Then turn on **Override OpenAI Base URL** and enter `https://api.aisa.one/v1`.
+  </Step>
+  <Step title="Add models">
+    On the same page, click **Add Custom Model** and enter exact AIsa model IDs, for example `gpt-5.5`, `kimi-k2.5`, `claude-opus-4-8`, or `deepseek-v4.1-flash`. Enable them, then pick one in the model picker. The full list is in the [model catalog](/guides/models).
+  </Step>
+</Steps>
+
+<Note>
+  Custom API keys apply to Cursor's chat and agent requests. Cursor-native features such as Tab autocomplete continue to use Cursor's own models and subscription.
+</Note>
+
 ## Quick reference
 
 | Item | Value |
 | --- | --- |
-| Settings location | Cursor Settings → Models → API Keys |
-| OpenAI API Key field | Your AIsa key (`sk-aisa-...`) |
-| Override OpenAI Base URL | `https://api.aisa.one/v1` |
-| Model names | Exact IDs from the [catalog](/guides/models), e.g. `kimi-k2.5` |
-| AIsa MCP server | `"aisa": { "url": "https://mcp.aisa.one/mcp" }` in `~/.cursor/mcp.json`, then **Needs login** |
+| MCP config | `"aisa": { "url": "https://mcp.aisa.one/mcp" }` in `~/.cursor/mcp.json` or `.cursor/mcp.json` |
+| Add and sign in | **Customize** → **MCPs** → **New MCP Server**, then **Authenticate** on **aisa** |
+| API key | Not needed for MCP; optional Bearer header for headless use |
+| Optional models | **Override OpenAI Base URL** `https://api.aisa.one/v1`, exact IDs from the [catalog](/guides/models) |
 
 ## Troubleshooting
 
 | Problem | Fix |
 | --- | --- |
-| Verify fails | Confirm the base URL is exactly `https://api.aisa.one/v1` and the key is valid in the [dashboard](https://console.aisa.one) |
-| Model not selectable | Add it under **Add model** with the exact catalog ID, then toggle it on |
-| "Invalid model" errors | The typed model name must match a catalog ID exactly — no `aisa/` prefix in Cursor |
-| Tab autocomplete unchanged | Expected — custom keys cover chat/agent only |
-| AIsa tools missing | Check **Cursor Settings → MCP**: the JSON must be valid and **aisa** signed in; toggle the server off and on to reload |
+| **aisa** not listed under **Customize** → **MCPs** | Check that `mcp.json` is saved, is valid JSON, and is in the right location |
+| Still shows **Needs authentication** | Click **Authenticate** again and finish the sign-in in the browser |
+| AIsa tools missing in chat | Under **Customize** → **MCPs**, check that **aisa** shows a tool count, not **Needs authentication** or **Error** |
+| `cursor-agent` says the server has not been approved | Run `cursor-agent mcp enable aisa`, then `cursor-agent mcp login aisa` |
+| Model requests fail with 401 or 404 | Confirm the base URL is exactly `https://api.aisa.one/v1` and the key is valid in the [console](https://console.aisa.one) |
+| "Invalid model" errors | The model name must match a catalog ID exactly, with no `aisa/` prefix |
 
 ## Related
 
 <CardGroup cols={3}>
-  <Card title="Use AIsa in Claude Code" icon="terminal" href="/guides/tutorials/use-aisa-in-claude-code">
-    Configure Claude Code with the same AIsa key.
+  <Card title="Use AIsa in Claude" icon="message" href="/guides/tutorials/use-aisa-in-claude">
+    Add AIsa as a custom connector in Claude.
   </Card>
-  <Card title="Authentication" icon="key" href="/guides/authentication">
-    API key creation, rotation, and storage best practices.
+  <Card title="Connect via MCP" icon="plug" href="/agent-quickstart">
+    MCP setup for other clients.
   </Card>
   <Card title="Model Catalog" icon="list" href="/guides/models">
     Browse model IDs before adding them to Cursor.

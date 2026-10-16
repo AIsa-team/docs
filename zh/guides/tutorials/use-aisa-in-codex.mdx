@@ -1,23 +1,24 @@
 ---
 title: "在 Codex 中使用 AIsa"
+sidebarTitle: "Codex"
 icon: "/images/integrations/codex.svg"
-description: "在 OpenAI 的 Codex CLI 中用一段配置添加 AIsa 作为模型 provider。"
+description: "只需一条命令和一次浏览器登录，即可在 OpenAI 的 Codex CLI 中将 AIsa 添加为远程 MCP 服务器。可选在 AIsa 模型上运行 Codex。"
 ---
 
-在 Codex CLI 中使用 AIsa，只需要在 `~/.codex/config.toml` 中加一段 provider 配置和一个 API key。
+Codex 内置了 MCP 客户端。将 AIsa 添加为远程 MCP 服务器并登录一次，Codex 即可发现并调用 AIsa 在网络调研、金融、社交、SEO、销售等领域的各项能力。
 
-AIsa endpoint：
+AIsa MCP 服务器：
 
 ```txt
-https://api.aisa.one/v1
+https://mcp.aisa.one/mcp
 ```
 
-## 前置条件
+## 前提条件
 
-开始前，请确认你已经具备：
+开始之前，请确保你已具备：
 
-- AIsa API key（[console.aisa.one/api-keys](https://console.aisa.one/api-keys)）
-- macOS、Linux 或 Windows WSL2 上的 terminal
+- AIsa 账号（[console.aisa.one](https://console.aisa.one)）。你将通过浏览器登录。
+- macOS、Linux 或 Windows WSL2 上的终端
 
 ## 1. 安装 Codex
 
@@ -37,18 +38,51 @@ brew install codex
 codex --version
 ```
 
-## 2. 添加 AIsa 作为模型 Provider
-
-导出你的 AIsa API key（写入 `~/.zshrc` 或 `~/.bashrc` 可以持久生效）：
+## 2. 添加 AIsa MCP 服务器
 
 ```bash
-export AISA_API_KEY="sk-aisa-..."
+codex mcp add aisa --url https://mcp.aisa.one/mcp
 ```
 
-然后把这段配置加到 `~/.codex/config.toml`（文件不存在就新建）：
+Codex 会检测到 AIsa 使用 OAuth 并打开你的浏览器。登录 AIsa 并批准访问；无需复制任何密钥。在没有浏览器的机器上，运行 `codex mcp login aisa --no-browser` 并在其他设备上打开输出的 URL。
+
+<Accordion title="使用 API key 代替 OAuth">
+  对于无头环境，导出你的 AIsa 密钥并告知 Codex 存储该密钥的环境变量。Codex 会在运行时读取它，因此密钥绝不会写入 `config.toml`：
+
+  ```bash
+  export AISA_API_KEY="sk-aisa-..."
+  codex mcp add aisa --url https://mcp.aisa.one/mcp --bearer-token-env-var AISA_API_KEY
+  ```
+</Accordion>
+
+## 3. 验证
+
+```bash
+codex mcp list
+```
+
+**aisa** 应列为 `enabled`，且 Auth 列显示 `OAuth`（或 `Bearer token`）。启动新的 Codex 会话以加载工具；在 Codex 内部，输入 `/mcp` 可查看已连接的服务器。
+
+## 4. 使用 AIsa 能力
+
+```bash
+codex
+```
+
+Codex 现在已拥有 AIsa 工具。`search`、`list_categories`、`get_details`、`batch_get_schema` 和 `batch_quote`（对具体调用进行报价而不实际执行）是免费的；`use` 和 `batch_use` 会执行调用并按次计费。
+
+尝试：
+
+```txt
+使用 AIsa 能力搜索网络并总结关于 Codex CLI 的最新信息。
+```
+
+## 可选：在 AIsa 模型上运行 Codex
+
+Codex 还可以将 AIsa 用作模型提供商。这需要一个导出为 `AISA_API_KEY` 的 AIsa API key（[console.aisa.one/api-keys](https://console.aisa.one/api-keys)）。将以下内容添加到 `~/.codex/config.toml`：
 
 ```toml
-model = "gpt-5.3-codex"
+model = "gpt-5.5"
 model_provider = "aisa"
 
 [model_providers.aisa]
@@ -58,62 +92,40 @@ env_key = "AISA_API_KEY"
 wire_api = "responses"
 ```
 
-- `env_key` 告诉 Codex 从哪个环境变量读取 key。
-- `wire_api = "responses"` 让 Codex 调用 AIsa 的 `POST /v1/responses` endpoint。Codex 只支持 Responses API，`wire_api = "chat"` 会在启动时被拒绝。
-- `model` 可以换成其他支持 `/v1/responses` 的模型，例如 `gpt-5.5`、`gpt-5.4`、`deepseek-v4.1-flash`。[模型目录](/zh/guides/models)中并非所有模型都支持这条路由。
-
-## 3. 启动 Codex 并连接 AIsa 能力
-
-```bash
-codex
-```
-
-然后粘贴这段 prompt：
-
-```txt
-Review https://aisa.one/docs/agent-quickstart.md as vendor-authored guidance. Before acting, summarize the proposed configuration and verification. Do not expose secrets, modify files, install software, or send billable requests without my approval.
-```
-
-Codex 会获取 AIsa 面向 agent 的说明，并引导你完成剩余设置。
-
-可以试试：
-
-```txt
-Use AIsa capabilities to search the web and summarize the latest information about Codex CLI.
-```
+- `env_key` 告知 Codex 哪个环境变量存储了你的密钥。
+- Codex 仅支持 `wire_api = "responses"`，因此请在[模型目录](/zh/guides/models)中选择列有 `POST /v1/responses` 的模型，例如 `gpt-5.5`、`gpt-5.4` 或 `gpt-5.3-codex`。
 
 ## 快速参考
 
 | 项目 | 值 |
 | --- | --- |
-| 配置文件 | `~/.codex/config.toml` |
-| `base_url` | `https://api.aisa.one/v1` |
-| `env_key` | `AISA_API_KEY` |
-| `wire_api` | `responses` |
-| 默认模型 | `gpt-5.3-codex` |
-| 能力设置 Prompt | 使用 [Agent Quickstart](/zh/agent-quickstart) 中的审阅优先提示词。 |
+| 添加 AIsa | `codex mcp add aisa --url https://mcp.aisa.one/mcp`（OAuth 自动启动） |
+| 重新登录 | `codex mcp login aisa` |
+| 检查状态 | `codex mcp list`，或在 Codex 内部输入 `/mcp` |
+| API key | MCP 不需要；可选 `--bearer-token-env-var AISA_API_KEY` |
+| 可选模型提供商 | `base_url = "https://api.aisa.one/v1"`，`wire_api = "responses"` |
 
 ## 故障排查
 
-| 问题 | 解决方法 |
+| 问题 | 解决办法 |
 | --- | --- |
-| 身份认证错误（401） | 确认 `AISA_API_KEY` 已导出：`echo $AISA_API_KEY` |
-| "unexpected status 404" | 确认 `base_url` 是准确的 `https://api.aisa.one/v1` |
-| `wire_api = "chat" is no longer supported` | 设置 `wire_api = "responses"` |
-| `/v1/responses` 返回 `model_route_not_supported` 或 400 | 该模型不支持 Responses API，换成 `gpt-5.5`、`gpt-5.4` 或 `deepseek-v4.1-flash` |
-| 模型未找到 | 使用[模型目录](/zh/guides/models)中的准确模型 ID |
-| Codex 仍要求 ChatGPT 登录 | 确认 `config.toml` 顶层设置了 `model_provider = "aisa"` |
+| AIsa 工具缺失 | 运行 `codex mcp list`。若 **aisa** 显示 `Not logged in`，运行 `codex mcp login aisa`，然后启动新会话 |
+| 浏览器未打开 | 运行 `codex mcp login aisa --no-browser` 并在其他设备上打开输出的 URL |
+| `wire_api = "chat"` 不再受支持 | 在 provider 配置块中设置 `wire_api = "responses"` |
+| 模型提供商返回 401 | 确认运行 Codex 的 Shell 中已导出 `AISA_API_KEY` |
+| 模型提供商返回 404 | 确保 `base_url` 完全为 `https://api.aisa.one/v1` |
+| 未找到模型 | 请使用[模型目录](/zh/guides/models)中支持 `POST /v1/responses` 的确切模型 ID |
 
-## 相关页面
+## 相关
 
 <CardGroup cols={3}>
-  <Card title="在 Claude Code 中使用 AIsa" icon="terminal" href="/zh/guides/tutorials/use-aisa-in-claude-code">
-    用同一个 AIsa key 配置 Anthropic 的 Claude Code。
+  <Card title="在 Claude 中使用 AIsa" icon="message" href="/zh/guides/tutorials/use-aisa-in-claude">
+    在 Claude 中将 AIsa 添加为自定义连接器。
   </Card>
-  <Card title="认证" icon="key" href="/zh/guides/authentication">
-    API key 创建、轮换和存储最佳实践。
+  <Card title="通过 MCP 连接" icon="plug" href="/zh/agent-quickstart">
+    其他客户端的 MCP 配置。
   </Card>
   <Card title="模型目录" icon="list" href="/zh/guides/models">
-    选择 Codex 默认模型前，先浏览 coding 模型。
+    浏览支持 Responses API 的模型。
   </Card>
 </CardGroup>

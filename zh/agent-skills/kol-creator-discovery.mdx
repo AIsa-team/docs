@@ -1,0 +1,126 @@
+---
+title: "KOL 创作者发现"
+description: "通过单个创作者主页 URL，查找创作者邮箱并发现相似的 YouTube 或 TikTok 创作者，返回可直接用于外联的表格。"
+---
+
+[在 GitHub 上查看 →](https://github.com/AIsa-team/agent-skills/tree/main/marketing/kol-creator-discovery)
+
+**面向智能体的创作者挖掘工具。** 提供一个 TikTok、Instagram 或 YouTube 的主页 URL，Skill 会查找该创作者的联系邮箱，通过 AIsa 的 WaveInflu API 发现相似的 YouTube 或 TikTok 创作者，为每个匹配结果获取邮箱，最终返回一张基于数据的 Markdown 表格（可选 JSON）。
+
+## 安装
+
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill kol-creator-discovery
+```
+
+```bash AIsa CLI
+npm install -g @aisa-one/cli
+aisa skills install kol-creator-discovery
+```
+</CodeGroup>
+
+安装完成后，请启动一个新的智能体会话以加载该 Skill。
+
+## 智能体可以用它做什么？
+
+<CardGroup cols={2}>
+  <Card title="创作者邮箱查找" icon="envelope">
+    “查找这个 Instagram 创作者主页的联系邮箱。”
+  </Card>
+  <Card title="相似创作者列表" icon="users">
+    “找 15 个与这个频道相似的 YouTube 创作者，并附上他们的邮箱。”
+  </Card>
+  <Card title="投放筛选" icon="filter">
+    “查找美国和英国的 TikTok 创作者，内容方向匹配，粉丝数在 10K–500K 之间。”
+  </Card>
+  <Card title="可直接外联的表格" icon="table">
+    一张包含主页 URL、相似度分数、粉丝数、平均播放量、地区/语言、邮箱和查找状态的完整表格。
+  </Card>
+</CardGroup>
+
+## 前置条件
+
+```bash
+export AISA_API_KEY="your-aisa-api-key"
+```
+
+- Python 3 和 `curl`
+- 所有请求仅发送至 `https://api.aisa.one/apis/v1/waveinflu/...`，无需额外的 WaveInflu 凭据。
+
+每次邮箱查找和相似创作者搜索都是独立的计费调用。Skill 默认丰富 10 个创作者的信息，超过 25 个时会先请求确认。
+
+## 兼容性
+
+适用于任何兼容 agentskills.io 的运行环境，包括 Claude Code、Claude、OpenAI Codex、Cursor、Gemini CLI、OpenCode、Goose、OpenClaw、Hermes 以及其他支持 Skill 文件夹的运行时。
+
+## 快速开始
+
+```bash
+python3 scripts/kol_creator_discovery.py research \
+  "https://www.youtube.com/@mkbhd" \
+  --limit 10 \
+  --out kol-report.md \
+  --json-out kol-report.json
+```
+
+附带内容方向和受众筛选条件：
+
+```bash
+python3 scripts/kol_creator_discovery.py research \
+  "https://www.tiktok.com/@creator" \
+  --platform tiktok \
+  --content-direction "consumer AI apps and productivity tools" \
+  --regions US,GB \
+  --languages en \
+  --min-followers 10000 \
+  --max-followers 500000 \
+  --limit 15 \
+  --out kol-report.md
+```
+
+## 命令
+
+| 命令 | 功能 |
+| --- | --- |
+| `research PROFILE_URL` | 完整流程：种子创作者邮箱查找、相似创作者发现、逐一邮箱查找，并生成 Markdown/JSON 报告 |
+| `lookup PROFILE_URL [...]` | 仅邮箱查找，支持一个或多个主页 URL |
+| `similar --platform youtube\|tiktok` | 仅相似创作者发现（`--seed-profile-url` 和/或 `--content-direction`） |
+
+`similar` 和 `research` 的可选参数：`--platform`、`--content-direction`、`--limit`（1–100，默认 10）、`--regions`、`--languages`、`--min-followers`、`--max-followers`、`--min-average-views`、`--max-average-views`。`research` 在邮箱查找超过 25 个时需要加 `--allow-large-enrichment`。
+
+## 工作原理
+
+1. **校验输入。** 种子必须是创作者主页 URL，而非帖子或视频链接。YouTube 或 TikTok 种子会自动推断目标平台。Instagram 种子需要显式指定 `--platform` 和 `--content-direction`，因为相似度匹配不接受 Instagram 主页。
+2. **查找种子创作者**，调用 `POST /apis/v1/waveinflu/email-lookup`。
+3. **发现相似创作者**，调用 `POST /apis/v1/waveinflu/similar`，返回结果按 `similarityScore` 排序。
+4. **逐一丰富匹配结果**，为每个创作者执行邮箱查找。未找到邮箱记录为 `Not found`，查找失败记录为 `Lookup failed`。Skill 绝不会猜测或模式匹配邮箱地址。
+5. **去重并生成报告**，保留 WaveInflu 的相似度排序和 JSON 输出中的精确指标。
+
+## 适用场景
+
+- KOL 或网红调研与挖掘
+- 通过主页 URL 查找创作者邮箱
+- 为营销活动构建相似创作者或外联列表
+
+该 Skill 不会发送外联消息、给任何人发邮件，也不会在未经你另行授权的情况下将列表上传到任何地方。请将返回的联系方式视为敏感数据。
+
+## 开始使用
+
+1. 在 [aisa.one](https://aisa.one) 注册并在控制台中创建 API key。
+2. 在终端中设置：`export AISA_API_KEY="your-key"`。
+3. 使用[安装](#安装)部分的任一命令安装 Skill，然后启动一个新的智能体会话。
+
+## 相关
+
+<CardGroup cols={3}>
+  <Card title="WaveInflu 邮箱查找" icon="envelope" href="/zh/api-reference/waveinflu/post_waveinflu-email-lookup">
+    创作者邮箱及标准化的主页详情。
+  </Card>
+  <Card title="WaveInflu 相似创作者" icon="users" href="/zh/api-reference/waveinflu/post_waveinflu-similar">
+    基于种子或内容方向发现相似的 YouTube 或 TikTok 创作者。
+  </Card>
+  <Card title="创作者营销" icon="handshake" href="/zh/agent-skills/creator-marketing">
+    将候选名单转化为合作试点、简报和效果衡量方案。
+  </Card>
+</CardGroup>

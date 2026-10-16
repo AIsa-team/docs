@@ -1,0 +1,132 @@
+---
+title: "通过 OpenAI、Anthropic 和 Gemini SDK 使用 AIsa"
+sidebarTitle: "OpenAI / Anthropic SDK"
+icon: "arrows-rotate"
+description: "保留你现有的 SDK，只需将 base URL 和 API key 指向 AIsa。支持 OpenAI Chat Completions 与 Responses、Anthropic Messages 以及 Gemini generateContent。"
+---
+
+AIsa 兼容标准的 OpenAI、Anthropic 和 Gemini SDK 格式。你只需修改两项设置——**base URL** 和 **API key**，即可继续使用现有代码和库。
+
+| SDK | Base URL | 支持的路由 | 认证 Header |
+| --- | --- | --- | --- |
+| OpenAI | `https://api.aisa.one/v1` | `/chat/completions`、`/responses`、`/embeddings`、`/images/generations` | `Authorization: Bearer $AISA_API_KEY` |
+| Anthropic | `https://api.aisa.one` | `/v1/messages` | `x-api-key: $AISA_API_KEY` |
+| Google Gen AI (Gemini) | `https://api.aisa.one` | `/v1beta/models/{model}:generateContent` | 在 headers 中传入 `x-api-key: $AISA_API_KEY` |
+
+并非每个模型都支持所有路由。[模型目录](/zh/guides/models)列出了每个模型支持的路由；调用不支持的路由会返回 `400 model_route_not_supported`。
+
+## OpenAI SDK
+
+<CodeGroup>
+
+```python Python
+from openai import OpenAI
+import os
+
+client = OpenAI(api_key=os.environ["AISA_API_KEY"], base_url="https://api.aisa.one/v1")
+
+chat = client.chat.completions.create(
+    model="gpt-5.4-mini",
+    messages=[{"role": "user", "content": "Say hello in five words."}],
+)
+print(chat.choices[0].message.content)
+
+# The Responses API works on the same client.
+resp = client.responses.create(model="gpt-5.4-mini", input="Say hello in five words.")
+print(resp.output_text)
+```
+
+```typescript TypeScript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.AISA_API_KEY,
+  baseURL: "https://api.aisa.one/v1",
+});
+
+const chat = await client.chat.completions.create({
+  model: "gpt-5.4-mini",
+  messages: [{ role: "user", content: "Say hello in five words." }],
+});
+console.log(chat.choices[0].message.content);
+```
+
+</CodeGroup>
+
+其他家族的模型——Claude、Gemini、DeepSeek、Qwen 等——同样可以通过 Chat Completions 接口使用其 AIsa 模型 ID 来调用。
+
+## Anthropic SDK
+
+Anthropic SDK 会自动拼接 `/v1/messages`，因此 base URL 不带 `/v1`。
+
+<CodeGroup>
+
+```python Python
+import anthropic
+import os
+
+client = anthropic.Anthropic(api_key=os.environ["AISA_API_KEY"], base_url="https://api.aisa.one")
+
+message = client.messages.create(
+    model="claude-haiku-4-5-20251001",
+    max_tokens=256,
+    messages=[{"role": "user", "content": "Say hello in five words."}],
+)
+print("".join(block.text for block in message.content if block.type == "text"))
+```
+
+```typescript TypeScript
+import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic({
+  apiKey: process.env.AISA_API_KEY,
+  baseURL: "https://api.aisa.one",
+});
+
+const message = await client.messages.create({
+  model: "claude-haiku-4-5-20251001",
+  max_tokens: 256,
+  messages: [{ role: "user", content: "Say hello in five words." }],
+});
+for (const block of message.content) {
+  if (block.type === "text") console.log(block.text);
+}
+```
+
+</CodeGroup>
+
+基于 Anthropic SDK 构建的工具同样适用此设置，例如 Claude Code：参见[在 Claude Code 中使用 AIsa 模型](/zh/guides/tutorials/use-aisa-in-claude#claude-code)。
+
+## Google Gen AI SDK (Gemini)
+
+AIsa 从 `Authorization: Bearer` 或 `x-api-key` 读取密钥，而非 Google 的 `x-goog-api-key` header，因此需要将密钥作为额外 header 传入。
+
+```python Python
+from google import genai
+from google.genai import types
+import os
+
+key = os.environ["AISA_API_KEY"]
+client = genai.Client(
+    api_key=key,
+    http_options=types.HttpOptions(base_url="https://api.aisa.one", headers={"x-api-key": key}),
+)
+
+response = client.models.generate_content(model="gemini-3.5-flash", contents="Say hello in five words.")
+print(response.text)
+```
+
+## 其他框架
+
+任何支持设置 OpenAI 兼容 base URL 的框架——LangChain、LlamaIndex、Vercel AI SDK、LiteLLM——都可以用同样的方式接入：base URL 设为 `https://api.aisa.one/v1`，密钥使用 `AISA_API_KEY`。
+
+## 下一步
+
+<CardGroup cols={2}>
+  <Card title="模型目录" icon="microchip" href="/zh/guides/models">
+    模型 ID、路由和上下文窗口。
+  </Card>
+  <Card title="Chat Completions 参考" icon="code" href="/zh/api-reference/chat/post_chat-completions">
+    所有参数说明，附带交互式 playground。
+  </Card>
+</CardGroup>

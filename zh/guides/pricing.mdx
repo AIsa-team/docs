@@ -1,68 +1,67 @@
 ---
-title: "AIsa 价格 - LLM 与数据 API 的按量计费"
+title: "计费与额度"
+sidebarTitle: "计费与额度"
+icon: "credit-card"
 description: >-
-  AIsa 价格总览：100+ AI 模型按 token 计费，数据 API 可能是固定按次计费或按量计价。可按量付费，也可选择订阅套餐。
+  AIsa 的计费方式：统一预付余额、按 token 的模型定价、固定或按量的数据 API 定价、免费报价、消费上限，以及每次调用的费用报告。当前价格见 aisa.one/models 和 aisa.one/api。
 ---
+AIsa 按用量计费。你充值一个统一余额，每次模型调用、数据 API 调用、MCP `batch_use` 和 CLI `call` 都从中扣费。你可以按需付费，也可以选择订阅计划；详见 [aisa.one/pricing](https://aisa.one/pricing)。
 
-AIsa 使用按量计费系统。费用会根据你使用的 API 类型计算。你可以按量付费（Pay as you go），也可以选择订阅套餐（Builder 或 Team），套餐详情见 [aisa.one/pricing](https://aisa.one/pricing)。
+本文档说明**如何**计费，不列出具体价格——价格更新频率高于文档。当前价格：
 
-主要有两类计费方式：
+- **模型**：[aisa.one/models](https://aisa.one/models) — 各模型的输入和输出单价，并排对比。
+- **数据 API**：[aisa.one/api](https://aisa.one/api) — 每个提供商页面标注了端点是固定还是按量计费、参考价格及费用规则。
 
-1. **AI Model（LLM）价格：** 按 token 计费。
-2. **数据 API 价格：** 按请求计费 —— 要么每次调用固定费率，要么按该请求的上游成本计量。
+## 额度与充值
 
-本页提供两种计费模型的高层概览，并链接到对应的详细价格页面。
+- 新账户自带免费额度用于测试。
+- 在 [控制台 → Billing](https://console.aisa.one/billing)（或通过 CLI 执行 `aisa topup`）充值。支付在 Stripe 托管页面完成。
+- 余额由你所有的 API key 和会话共享。设置了[消费限额](/zh/guides/authentication#密钥设置)的 API key 最多可消费其剩余限额与余额中较低的那个。
+- 余额或 API key 限额耗尽时，请求会在调用任何提供商之前以 `402`（`insufficient_wallet_balance` 或 `insufficient_api_key_balance`）失败。少数高级端点还要求订阅；其 `402` 响应会说明这一点。
 
-## 1. AI Model（LLM）价格
+## 模型
 
-AI 模型 API 根据 token 用量计费。
+模型调用按该请求报告的用量计费：
 
-[模型目录页](https://aisa.one/models)会并排列出每个可用模型当前的输入和输出单价，方便你在选型前直接比较。文档不公布价格。
+| 模型类型 | 计费依据 |
+| --- | --- |
+| 文本、代码和视觉模型 | 按每 1M token：输入和输出，加上路由报告的缓存读取和缓存写入（如有） |
+| Embedding、rerank 和 classify 模型 | 按每 1M 输入 token |
+| 图像模型 | 按请求或按生成的图片数量；部分图像模型按 token 加每张图片的分级计费 |
+| 视频模型 | 按输出秒数或按每 1M token，不同分辨率有不同费率 |
 
-每个请求会分别计算：
+对于 token 模型：`cost = input_tokens / 1,000,000 × input_price + output_tokens / 1,000,000 × output_price`，加上缓存桶（如有）。流式输出不影响价格。响应中的 `usage` 对象报告被计费的 token 数。
 
-* **输入 Token**（Prompt Token）。
-* **输出 Token**（生成 Token）。
+## 数据 API
 
-价格按 **每 100 万 tokens（1M tokens）** 定义，input 和 output token 会分别计费。
+数据 API 按请求计费，采用以下两种模式之一：
 
-该计费模型适用于：
+- **按次固定** — 对该端点的每次成功请求费用相同，不受响应大小影响。示例：Open-Meteo、CoinGecko、Polymarket、Kalshi、Apollo、AgentMail、EDINET、FRED。
+- **按量** — 价格取决于请求消耗的内容（结果数、行数、页数或提供商额度），乘以你的计划倍率，因此随返回内容增长。示例：Twitter、Tavily、web search、Financial、YouTube、Scholar、Exa、Perplexity、Firecrawl、Semrush、Ahrefs、SimilarWeb、TikHub、DataForSEO。
 
-* 聊天补全。
-* 文本生成。
-* 支持视觉的模型。
-* 支持工具调用的模型。
-* 流式响应。
+部分端点（包括 SimilarWeb）采用额度公式。在付费请求前请阅读端点的参考页面了解公式；如果没有记录最大值，请勿在需要事先批准的策略下执行。
 
-各类模型的计费方式请查看 [AI 模型价格](/zh/guides/pricing/ai-model-pricing-llm-inference)。
+哪些情况计费：
 
-## 2. 数据 API 价格
+- 已处理并返回结果的请求会被计费。每次成功的重试会再次计费，因此请谨慎重试。
+- 在处理前被拒绝的请求——凭据错误、速率限制、余额不足、价格超出上限——不计费。
+- 每次调用费率可能因计划或分组不同而异；实际扣费金额显示在 Usage & Logs 中。
 
-数据 API 按请求计费，分两种模型：
+通过 MCP，`search`、`list_categories`、`get_details` 和 `batch_quote` 免费；`batch_use` 按相同费率逐次计费。部分数据端点还支持通过 Machine Payments Protocol (MPP) 按请求付费，无需 API key；详见[机器支付](/zh/integrations/machine-payments)。
 
-* **固定按次** —— 对某个 endpoint 的每次成功请求费用相同，与响应大小无关。例如：Open-Meteo、CoinGecko、Polymarket、Kalshi、Apollo、AgentMail、EDINET 和 FRED。
-* **按量计价** —— 价格跟随该请求的上游 provider 成本，再乘以你的套餐倍率，因此会随请求返回的内容（结果数、行数、页数或 credits）增长。例如：Twitter、Tavily、网页搜索、Financial、YouTube、Scholar、Exa、Perplexity、Firecrawl、Semrush、Ahrefs、SimilarWeb、TikHub 和 DataForSEO。
+## 费用估算、报价与扣费
 
-[aisa.one/api](https://aisa.one/api) 的 provider 页面展示 endpoint 的公开参考估价、费率及已有的计费规则。默认请求估价不是最低价，也不是你的账户报价；请求参数和账户倍率可能改变费用。
+- **目录估算**：目录中的 `default_request_estimate_usd` 描述的是参考请求。它不是保证的起始价格、最大值或账单。
+- **免费报价**：在支持 `X-AISA-Cost-Mode: quote` 的端点上，使用将要执行请求的 API key 发送完全相同的请求。报价反映你当前账户的定价。它不会调用上游提供商，也不会扣减余额。
+- **账户倍率**：`billing_multiplier_ppm` 是你的倍率，单位为百万分之一；除以 1,000,000 即可。例如 1,000,000 表示 1×。发布的参考倍率不能替代你在认证报价中获取的倍率。
+- **微美元单位**：费用字段使用整数微美元（1 USD = 1,000,000 微美元）。
+- **结算费用**：执行后，REST 响应头 `X-AISA-Customer-Cost-Micros-USD`，或成功的原生 Tool 结果中的 `customer_cost_micros_usd`，在存在时报告客户费用。缺失费用元数据意味着未知，而非免费。Tool 的 `cost_estimate` 仍然是估算值，提供商费用不是你的扣款。通过 [Usage & Logs](/zh/guides/dashboard/overview#usage-and-logs) 和余额核对费用；解析细节参见 [API 参考](/zh/api-reference#已结算调用费用)。
 
-固定按次计费的具体规则请查看[按次调用 API 价格](/zh/guides/pricing/per-call-api-pricing)。
+## 先报价、再审核、后执行
 
-部分付费数据 API（包括 SimilarWeb）使用 credit 公式，而不是固定的按次价格。发起付费请求前，请阅读匹配 endpoint 文档中的公式，并在 [aisa.one/api](https://aisa.one/api) 查看当前费率；如果没有已记录的最大上限，不得按先批准后执行合同调用。
+使用当前端点参考中的完整 URL 和参数。以下 GET 示例适用于声明了报价和最高价格支持的端点。对于 POST 或其他方法，在两个步骤中保持相同的方法和请求体以及 URL。在环境中设置 `AISA_API_KEY` 和 `AISA_REQUEST_URL`；两个步骤使用相同的账户和请求参数。
 
-## 参考估价、报价与结算
-
-目录中的 `default_request_estimate_usd` 对应一个参考请求，不是保证的起步价、最高价或账单。对于支持 `X-AISA-Cost-Mode: quote` 的接口，执行前使用完整请求和将实际调用的 API key 获取免费报价。报价反映该请求在当前账户价格下的费用信息，不会执行上游调用。
-
-`billing_multiplier_ppm` 使用百万分率表示账户倍率：除以 1,000,000 才得到倍率。例如 1,000,000 表示 1 倍，并非价格的一百万倍。公开参考倍率不能替代认证报价中的账户倍率。
-
-执行后，REST 响应头 `X-AISA-Customer-Cost-Micros-USD` 和成功原生 Tool 结果中的 `customer_cost_micros_usd` 在提供时表示客户费用，单位均为整数 micro-USD（1 USD = 1,000,000 micro-USD）。费用元数据缺失表示未知，不等于免费。Tool 的 `cost_estimate` 仍是估价，上游成本也不等于客户扣费。请通过 [Usage Logs](/zh/guides/dashboard/usage-logs) 和余额核对实际扣费。不同响应路径提供的字段可能不同；解析和浏览器响应头说明见 [API 参考](/zh/api-reference)。
-
-
-## 先报价、核对，再执行
-
-从当前 endpoint 参考页取得完整 URL 和参数。以下 GET 示例适用于明确声明支持报价和最高价格参数的接口。对于 POST 等其他方法，两个步骤还必须使用相同的方法和请求体。先在环境中设置 `AISA_API_KEY` 与 `AISA_REQUEST_URL`，两个步骤使用相同账户和请求参数。
-
-首先获取免费报价：
+首先，请求免费报价：
 
 ```bash
 curl --fail-with-body --silent --show-error "${AISA_REQUEST_URL:?Set AISA_REQUEST_URL}" \
@@ -71,9 +70,9 @@ curl --fail-with-body --silent --show-error "${AISA_REQUEST_URL:?Set AISA_REQUES
   --output quote.json
 ```
 
-确认响应包含 `object: cost_estimate`。将 `estimated_cost_micros_usd` 除以 1,000,000 换算为 USD，不要向下舍入。核对报价后，把 `AISA_MAX_PRICE_USD` 设置为你批准的十进制 USD 金额。这是准入检查：执行时的估价超过限额，会在调用上游前返回 402；估价不会因此变成最终账单。
+检查响应是否包含 `object: cost_estimate`。将 `estimated_cost_micros_usd` 除以 1,000,000 转换为 USD，不要向下取整。将 `AISA_MAX_PRICE_USD` 设置为你批准的金额。这是一个准入检查：如果执行估算超过你的限额，网关会在调用上游提供商之前以 `402` 拒绝请求。它不会限制最终费用。
 
-核对后，对相同请求执行以下命令，**不携带报价头**：
+审核通过后，执行相同的请求，**不带**报价头：
 
 ```bash
 curl --fail-with-body --silent --show-error "${AISA_REQUEST_URL:?Set AISA_REQUEST_URL}" \
@@ -81,46 +80,33 @@ curl --fail-with-body --silent --show-error "${AISA_REQUEST_URL:?Set AISA_REQUES
   --header "X-AISA-Max-Price-USD: ${AISA_MAX_PRICE_USD:?Set AISA_MAX_PRICE_USD}"
 ```
 
-### Similarweb 同步调用的幂等行为
+MCP 提供相同的配对操作：`batch_quote` 返回完全相同调用的报价而不执行，`batch_use` 在审核后执行相同的调用。如果工具或参数发生变化，请重新报价。
 
-对于声明支持 `Idempotency-Key` 的 Similarweb 同步路由，每个逻辑执行生成一个唯一 key，并与请求记录一起保存。在上面的执行命令中添加以下请求头：
+### 同步 Similarweb 调用的幂等性
+
+对于声明了 `Idempotency-Key` 的同步 Similarweb 路由，为每个逻辑执行生成一个唯一的 key 并与请求记录一起保存。在上述执行命令中添加此头：
 
 ```bash
 --header "Idempotency-Key: ${AISA_IDEMPOTENCY_KEY:?Set AISA_IDEMPOTENCY_KEY}"
 ```
 
-对已接纳的请求重复使用相同 key 会返回 409，例如 `{"error":"idempotent request already admitted"}`。这是防重复准入，**不会回放原始响应**。如果第一次响应丢失，应检查 Usage Logs，以及已记录的请求 ID（若有）。不要换 key 绕过冲突，也不要盲目重试状态不明的付费请求；明确发起新的操作时才使用新 key。异步 Job 和其他 API 类型遵循各自契约。
+对已准入的请求重用 key 会返回 409，例如 `{"error":"idempotent request already admitted"}`。这可以防止重复准入；但**不会重放原始响应**。如果第一次响应丢失，请检查 Usage & Logs 和已记录的请求 ID（如有）。不要为了绕过冲突而更换 key，也不要盲目重试不确定的付费操作。全新的操作需要新的 key。异步任务和其他 API 系列有各自的约定。
 
-日期输入以具体操作的约束为准。经典 Similarweb Traffic & Engagement 也接受 `2026-09-01` 至 `2026-09-30` 这样的完整日期；这不改变托管 trend 和 snapshot 仅接受 `YYYY-MM` 的要求。部分校验错误会在 `supported` 对象中给出允许值或边界；出现时可用于排错，但不要假设所有错误都带此字段。
+对于日期输入，请遵循各个操作的约束。经典 Similarweb Traffic & Engagement 也接受完整日期，如 `2026-09-01` 到 `2026-09-30`；这不会扩展托管趋势和快照请求的 `YYYY-MM` 仅月份格式。部分校验错误包含一个 `supported` 对象，列出允许的值或范围。如有该信息请使用，但不要假设每个错误都包含此字段。
 
-## 如何选择正确的计费模型
+## 为智能体工作流制定预算
 
-如果你的 API 请求：
+多步骤智能体通常产生多笔费用：检索调用、模型 token、重试或回退、对入围记录的补全，以及媒体生成。单个端点最便宜不代表整个任务最便宜——如果需要更多重试或后续调用的话。
 
-* 使用语言模型生成文本 → **适用按 token 计费**。
-* 检索结构化数据或执行搜索 → **先阅读对应 API 的计费模型**；它可能是固定按次计费，也可能是按量计价。
+在大规模使用前，请确定：
 
-[模型目录页](https://aisa.one/models)会显示每个模型的按 token 价格。[aisa.one/api](https://aisa.one/api) 的 provider 页面展示公开参考价格和已有计费规则。规则未声明不代表固定价格或费用有上限。
+- 每次调用和每个任务的最大费用。在声明了最高价格支持的端点上，通过 `X-AISA-Max-Price-USD` 发送每次调用的最高价格；它会拒绝估算更高的调用，但不会限制最终费用。对于模型调用，用 `max_tokens` 限制输出。
+- 智能体使用的 API key 的消费限额。
+- 哪些金额需要人工确认，以及智能体是否可以回退到更贵的路由。
+- 余额耗尽时的处理方式。
 
-## 用量追踪和透明度
+然后运行一个小规模的代表性任务，在 Usage & Logs 中检查记录，衡量整个工作流而非单次调用。
 
-所有 API 活动，无论是按 token 还是按次调用，都会记录在：
+## 查看消费记录
 
-* **[Usage Logs](/zh/guides/dashboard/usage-logs)**。
-* 账户账单汇总。
-
-你可以查看：
-
-* 消耗的 tokens（AI 模型）。
-* 请求次数（按次调用 API）。
-* 每次请求的最终费用。
-* 已应用的价格规则或 group ratio。
-
-费用会根据适用的计费模型从账户余额中扣除。
-
-## 其他说明
-
-* 价格按用量计算，没有固定月度平台费。
-* 价格可能因模型、provider、group 或 endpoint 而异。
-* 当前费率：模型见 [aisa.one/models](https://aisa.one/models)，数据 API 见 [aisa.one/api](https://aisa.one/api)。
-* Usage Logs 中会提供详细的计费明细。
+[控制台 → Usage & Logs](/zh/guides/dashboard/overview#usage-and-logs) 列出每个请求的端点、API key、模型、token 数和扣费金额。`GET /v1/usage` 通过代码返回某个 API key 的每日汇总，`aisa usage` 通过 CLI 实现同样功能。

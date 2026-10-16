@@ -1,84 +1,219 @@
 ---
 title: "Twitter Autopilot"
-description: "完整 X/Twitter 情报与授权写操作能力。"
+description: "为自主智能体提供完整的 X/Twitter 情报能力——个人资料、时间线、提及、粉丝、推文搜索、趋势、列表、社区和 Spaces。此外还有 OAuth 授权的写操作，支持发帖、点赞和关注。"
 ---
 
 [在 GitHub 上查看 →](https://github.com/AIsa-team/agent-skills/tree/main/social-media/twitter-autopilot)
 
-Twitter Autopilot 覆盖 X/Twitter profiles、timelines、mentions、followers、tweet search、trends、lists、communities、Spaces，以及 OAuth-gated 写操作。
+**为自主智能体提供完整的 Twitter 情报能力。** 一个 `AISA_API_KEY` 即可解锁所有读取端点；OAuth 解锁写操作（发帖、点赞、关注）。
 
 ## 安装
 
-```bash
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill twitter-autopilot
+```
+
+```bash AIsa CLI
 npm install -g @aisa-one/cli
 aisa skills install twitter-autopilot
 ```
+</CodeGroup>
 
-## Agent 可以做什么？
+安装后请启动一个新的智能体会话，以便加载该 Skill。
+
+## 智能体可以用它做什么？
 
 <CardGroup cols={2}>
-  <Card title="数据收集" icon="database">
-    调用相关 AIsa API 获取结构化数据。
+  <Card title="监控意见领袖" icon="user-magnifying-glass">
+    “获取 Elon Musk 的最新推文，并在出现 AI 相关帖子时通知我。”
   </Card>
-  <Card title="研究分析" icon="brain">
-    把结果整理成摘要、表格、报告或行动建议。
+  <Card title="追踪趋势" icon="arrow-trend-up">
+    “现在 Twitter 全球趋势是什么？”
   </Card>
-  <Card title="自动化工作流" icon="gears">
-    适合定时监控、批量查询和 Agent 任务链。
+  <Card title="社交媒体监听" icon="ear-listen">
+    “搜索提及我们产品的推文并分析情绪。”
   </Card>
-  <Card title="安全边界" icon="shield-halved">
-    对写操作、投资建议和敏感结论使用明确防护规则。
+  <Card title="竞争对手情报" icon="eye">
+    “监控 @anthropic 和 @GoogleAI——有新公告时提醒我。”
+  </Card>
+  <Card title="话题上下文" icon="comments">
+    “获取某条热门推文的完整对话线程。”
+  </Card>
+  <Card title="互动工作流" icon="thumbs-up">
+    “通过 OAuth 进行点赞、取消点赞、关注或取消关注（需要用户授权）。”
   </Card>
 </CardGroup>
+
+## 核心能力
+
+- **用户** — 个人资料信息、“about” 元数据、按 ID 批量查询、最新推文、提及、粉丝、关注列表、认证粉丝、关注关系检查、关键词搜索
+- **推文** — 高级搜索（Latest/Top）、按 ID 查询、回复、引用、转推者、完整线程上下文、文章提取
+- **趋势** — 按 WOEID 获取全球及区域热门话题
+- **列表** — 成员和关注者
+- **社区** — 信息、成员、版主、推文、跨社区搜索
+- **Spaces** — Space 详情查询
+- **互动（OAuth）** — 通过本地中继进行点赞 / 取消点赞 / 关注 / 取消关注 / 发帖 / 回复 / 引用
 
 ## 快速开始
 
 ```bash
-export AISA_API_KEY="YOUR_AISA_API_KEY"
+export AISA_API_KEY="your-key"
 ```
 
-根据任务选择对应 endpoint 或脚本运行。Agent 应先确认目标、范围和输出格式，再调用 API。
+### 用户端点
 
-## 常见用法
+```bash
+# Profile
+curl "https://api.aisa.one/apis/v1/twitter/user/info?userName=elonmusk" \
+  -H "Authorization: Bearer $AISA_API_KEY"
 
-```txt
-生成一份结构化研究摘要，并列出来源。
-把结果按表格输出，包含关键指标和风险。
-只读取公开数据；不要执行写操作，除非我明确批准。
+# Latest tweets
+curl "https://api.aisa.one/apis/v1/twitter/user/last_tweets?userName=elonmusk" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Mentions
+curl "https://api.aisa.one/apis/v1/twitter/user/mentions?userName=elonmusk" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Followers / followings
+curl "https://api.aisa.one/apis/v1/twitter/user/followers?userName=elonmusk" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Verified followers (note: requires numeric user_id, not userName)
+curl "https://api.aisa.one/apis/v1/twitter/user/verifiedFollowers?user_id=44196397" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Follow-relationship check
+curl "https://api.aisa.one/apis/v1/twitter/user/check_follow_relationship?source_user_name=elonmusk&target_user_name=BillGates" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# User search
+curl "https://api.aisa.one/apis/v1/twitter/user/search?query=AI+researcher" \
+  -H "Authorization: Bearer $AISA_API_KEY"
 ```
 
-## 工作流
+### 推文端点
 
-1. 明确用户目标、对象、时间范围和输出格式。
-2. 选择最小必要的数据源。
-3. 调用 API 并保留关键来源字段。
-4. 清洗、去重、排序和聚合结果。
-5. 输出结论、证据、限制和下一步。
+```bash
+# Advanced search (queryType is required: Latest or Top)
+curl "https://api.aisa.one/apis/v1/twitter/tweet/advanced_search?query=AI+agents&queryType=Latest" \
+  -H "Authorization: Bearer $AISA_API_KEY"
 
-## API 参考
+# Tweets by IDs
+curl "https://api.aisa.one/apis/v1/twitter/tweets?tweet_ids=1895096451033985024" \
+  -H "Authorization: Bearer $AISA_API_KEY"
 
-具体 endpoint 见相关 API reference 页面。对于金融、社交或搜索类数据，优先链接到对应 endpoint，而不是把参数表复制到 Skill 文档中。
+# Replies, quotes, retweeters, thread context
+curl "https://api.aisa.one/apis/v1/twitter/tweet/replies?tweetId=1895096451033985024" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+curl "https://api.aisa.one/apis/v1/twitter/tweet/thread_context?tweetId=1895096451033985024" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
 
-## 风险与限制
+### 趋势、列表、社区、Spaces
 
-- 不要编造 API 返回值。
-- 不要泄露 API key、OAuth token 或用户隐私数据。
-- 投资、法律、医疗等高风险结论需要明确提示限制。
-- 写操作必须先获得用户明确授权。
+```bash
+# Worldwide trends
+curl "https://api.aisa.one/apis/v1/twitter/trends?woeid=1" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# List members
+curl "https://api.aisa.one/apis/v1/twitter/list/members?list_id=1585430245762441216" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Community tweets
+curl "https://api.aisa.one/apis/v1/twitter/community/tweets?community_id=1708485837274263614" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Space detail
+curl "https://api.aisa.one/apis/v1/twitter/spaces/detail?space_id=1dRJZlbLkjexB" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+## Python 客户端
+
+```bash
+# User
+python3 scripts/twitter_client.py user-info --username elonmusk
+python3 scripts/twitter_client.py user-about --username elonmusk
+python3 scripts/twitter_client.py tweets --username elonmusk
+python3 scripts/twitter_client.py mentions --username elonmusk
+python3 scripts/twitter_client.py followers --username elonmusk
+python3 scripts/twitter_client.py followings --username elonmusk
+python3 scripts/twitter_client.py verified-followers --user-id 44196397
+python3 scripts/twitter_client.py check-follow --source elonmusk --target BillGates
+python3 scripts/twitter_client.py user-search --query "AI researcher"
+
+# Search & trends
+python3 scripts/twitter_client.py search --query "AI agents"
+python3 scripts/twitter_client.py search --query "AI agents" --type Top
+python3 scripts/twitter_client.py trends --woeid 1
+
+# Tweets
+python3 scripts/twitter_client.py detail --tweet-ids 1895096451033985024
+python3 scripts/twitter_client.py replies --tweet-id 1895096451033985024
+python3 scripts/twitter_client.py quotes --tweet-id 1895096451033985024
+python3 scripts/twitter_client.py retweeters --tweet-id 1895096451033985024
+python3 scripts/twitter_client.py thread --tweet-id 1895096451033985024
+
+# Lists & communities
+python3 scripts/twitter_client.py list-members --list-id 1585430245762441216
+python3 scripts/twitter_client.py community-info --community-id 1708485837274263614
+python3 scripts/twitter_client.py community-tweets --community-id 1708485837274263614
+
+# Engagement (OAuth-gated; use the local relay)
+python3 scripts/twitter_engagement_client.py like-latest --user "@elonmusk"
+python3 scripts/twitter_engagement_client.py follow-user --user "@elonmusk"
+```
+
+## 端点参考
+
+| 端点                                                | 方法   | 用途                                                                    |
+| --------------------------------------------------- | ------ | ----------------------------------------------------------------------- |
+| `/twitter/user/info`                                | GET    | [用户资料](/zh/api-reference/twitter/get_twitter-user-info)             |
+| `/twitter/user_about`                               | GET    | [用户简介](/zh/api-reference/twitter/get_twitter-user-about)            |
+| `/twitter/user/batch_info_by_ids`                   | GET    | [批量用户信息](/zh/api-reference/twitter/get_twitter-user-batch-info-by-ids) |
+| `/twitter/user/last_tweets`                         | GET    | [用户最新推文](/zh/api-reference/twitter/get_twitter-user-last-tweets)  |
+| `/twitter/user/mentions`                            | GET    | [用户提及](/zh/api-reference/twitter/get_twitter-user-mentions)         |
+| `/twitter/user/followers`                           | GET    | [用户粉丝](/zh/api-reference/twitter/get_twitter-user-followers)        |
+| `/twitter/user/followings`                          | GET    | [用户关注](/zh/api-reference/twitter/get_twitter-user-followings)       |
+| `/twitter/user/verifiedFollowers`                   | GET    | [认证粉丝](/zh/api-reference/twitter/get_twitter-user-verifiedfollowers) |
+| `/twitter/user/check_follow_relationship`           | GET    | [关注关系](/zh/api-reference/twitter/get_twitter-user-check-follow-relationship) |
+| `/twitter/user/search`                              | GET    | [用户搜索](/zh/api-reference/twitter/get_twitter-user-search)           |
+| `/twitter/tweet/advanced_search`                    | GET    | [推文高级搜索](/zh/api-reference/twitter/get_twitter-tweet-advanced-search) |
+| `/twitter/tweets`                                   | GET    | [按 ID 查推文](/zh/api-reference/twitter/get_twitter-tweets)            |
+| `/twitter/tweet/replies`                            | GET    | [推文回复](/zh/api-reference/twitter/get_twitter-tweet-replies)         |
+| `/twitter/tweet/quotes`                             | GET    | [推文引用](/zh/api-reference/twitter/get_twitter-tweet-quotes)          |
+| `/twitter/tweet/retweeters`                         | GET    | [推文转推者](/zh/api-reference/twitter/get_twitter-tweet-retweeters)    |
+| `/twitter/tweet/thread_context`                     | GET    | [线程上下文](/zh/api-reference/twitter/get_twitter-tweet-thread-context) |
+| `/twitter/article`                                  | GET    | [按推文获取文章](/zh/api-reference/twitter/get_twitter-article)         |
+| `/twitter/trends`                                   | GET    | [趋势](/zh/api-reference/twitter/get_twitter-trends)                    |
+| `/twitter/list/members`                             | GET    | [列表成员](/zh/api-reference/twitter/get_twitter-list-members)          |
+| `/twitter/list/followers`                           | GET    | [列表关注者](/zh/api-reference/twitter/get_twitter-list-followers)      |
+| `/twitter/community/info`                           | GET    | [社区信息](/zh/api-reference/twitter/get_twitter-community-info)        |
+| `/twitter/community/members`                        | GET    | [社区成员](/zh/api-reference/twitter/get_twitter-community-members)     |
+| `/twitter/community/moderators`                     | GET    | [社区版主](/zh/api-reference/twitter/get_twitter-community-moderators)  |
+| `/twitter/community/tweets`                         | GET    | [社区推文](/zh/api-reference/twitter/get_twitter-community-tweets)      |
+| `/twitter/community/get_tweets_from_all_community`  | GET    | [跨社区搜索](/zh/api-reference/twitter/get_twitter-community-get-tweets-from-all-community) |
+| `/twitter/spaces/detail`                            | GET    | [Space 详情](/zh/api-reference/twitter/get_twitter-spaces-detail)       |
 
 ## 开始使用
 
-```bash
-export AISA_API_KEY="YOUR_AISA_API_KEY"
-npm install -g @aisa-one/cli
-aisa skills install twitter-autopilot
-```
+1. 在 [aisa.one](https://aisa.one) 注册并在控制台中创建 API key。
+2. 在终端中设置：`export AISA_API_KEY="your-key"`。
+3. 使用[安装](#安装)部分中的任一命令安装 Skill，然后启动一个新的智能体会话。
 
 ## 相关
 
 <CardGroup cols={3}>
-  <Card title="Agent Skills" icon="wand-magic-sparkles" href="/zh/agent-skills">返回 Agent Skills 总览。</Card>
-  <Card title="API 参考" icon="code" href="/zh/api-reference">查看 API endpoint。</Card>
-  <Card title="Agent Quickstart" icon="rocket" href="/zh/agent-quickstart">Agent 接入快速开始。</Card>
+  <Card title="Twitter API 参考" icon="twitter" href="/zh/api-reference/twitter/get_twitter-user-info">
+    所有读取端点及交互式调试工具。
+  </Card>
+  <Card title="身份验证" icon="key" href="/zh/guides/authentication">
+    Bearer token 认证及写操作的 OAuth 授权。
+  </Card>
+  <Card title="速率限制" icon="gauge-high" href="/zh/api-reference/rate-limits">
+    每个 key 的 Twitter RPM 上限。
+  </Card>
 </CardGroup>
-

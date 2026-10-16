@@ -1,84 +1,463 @@
 ---
-title: "YouTube Search"
+title: "YouTube 搜索"
 description: "使用一个 AIsa key 搜索 YouTube 视频、频道和播放列表。"
 ---
 
 [在 GitHub 上查看 →](https://github.com/AIsa-team/agent-skills/tree/main/social-media/youtube-search)
 
-YouTube Search 帮助 Agent 查询视频、频道和播放列表，并把视频搜索结果与网页搜索或 LLM 摘要结合。
+**无需单独配置 Google 的 YouTube 搜索**。通过 AIsa 使用一个 API key 即可搜索视频、频道和播放列表。
 
 ## 安装
 
-```bash
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill youtube-search
+```
+
+```bash AIsa CLI
 npm install -g @aisa-one/cli
 aisa skills install youtube-search
 ```
+</CodeGroup>
 
-## Agent 可以做什么？
+安装后启动新的智能体会话以加载该 Skill。
+
+## 智能体可以用它做什么？
 
 <CardGroup cols={2}>
-  <Card title="数据收集" icon="database">
-    调用相关 AIsa API 获取结构化数据。
+  <Card title="内容调研" icon="youtube">
+    围绕特定主题查找视频和频道。
   </Card>
-  <Card title="研究分析" icon="brain">
-    把结果整理成摘要、表格、报告或行动建议。
+  <Card title="趋势发现" icon="arrow-trend-up">
+    发掘 YouTube 上正在受到关注的内容。
   </Card>
-  <Card title="自动化工作流" icon="gears">
-    适合定时监控、批量查询和 Agent 任务链。
+  <Card title="竞品追踪" icon="eye">
+    监控细分领域的频道和内容形式。
   </Card>
-  <Card title="安全边界" icon="shield-halved">
-    对写操作、投资建议和敏感结论使用明确防护规则。
+  <Card title="主题探索" icon="compass">
+    为研究工作流收集以视频为主的佐证资料。
   </Card>
 </CardGroup>
 
 ## 快速开始
 
 ```bash
-export AISA_API_KEY="YOUR_AISA_API_KEY"
+# Search for videos (using requests — recommended)
+python <<'EOF'
+import os, json, requests
+results = requests.get(
+    'https://api.aisa.one/apis/v1/youtube/search',
+    headers={'Authorization': f'Bearer {os.environ["AISA_API_KEY"]}'},
+    params={'engine': 'youtube', 'q': 'coding tutorial'}
+).json()
+print(json.dumps(results, indent=2))
+EOF
 ```
 
-根据任务选择对应 endpoint 或脚本运行。Agent 应先确认目标、范围和输出格式，再调用 API。
+## Base URL
 
-## 常见用法
-
-```txt
-生成一份结构化研究摘要，并列出来源。
-把结果按表格输出，包含关键指标和风险。
-只读取公开数据；不要执行写操作，除非我明确批准。
+```
+https://api.aisa.one/apis/v1/youtube/search
 ```
 
-## 工作流
+所有 YouTube 搜索请求均通过该单一端点。AIsa 处理与底层 YouTube 数据源的身份验证 —— 你只需提供自己的 AIsa API key。
 
-1. 明确用户目标、对象、时间范围和输出格式。
-2. 选择最小必要的数据源。
-3. 调用 API 并保留关键来源字段。
-4. 清洗、去重、排序和聚合结果。
-5. 输出结论、证据、限制和下一步。
+## 身份验证
 
-## API 参考
+所有请求都需要在 Authorization header 中包含 AIsa API key：
 
-具体 endpoint 见相关 API reference 页面。对于金融、社交或搜索类数据，优先链接到对应 endpoint，而不是把参数表复制到 Skill 文档中。
+```
+Authorization: Bearer $AISA_API_KEY
+```
 
-## 风险与限制
-
-- 不要编造 API 返回值。
-- 不要泄露 API key、OAuth token 或用户隐私数据。
-- 投资、法律、医疗等高风险结论需要明确提示限制。
-- 写操作必须先获得用户明确授权。
-
-## 开始使用
+**环境变量**：将你的 API key 设置为 `AISA_API_KEY`：
 
 ```bash
 export AISA_API_KEY="YOUR_AISA_API_KEY"
-npm install -g @aisa-one/cli
-aisa skills install youtube-search
 ```
+
+### 获取你的 API Key
+
+1. 在 [AIsa 控制台](https://console.aisa.one)登录或创建账号
+2. 进入控制台
+3. 复制你的 API key
+
+## API 参考
+
+### YouTube 搜索
+
+```bash
+GET /apis/v1/youtube/search
+```
+
+#### Query 参数
+
+| 参数 | 类型 | 必填 | 描述 |
+|-----------|------|----------|-------------|
+| `engine` | string | 是 | 必须为 `youtube` |
+| `q` | string | 是 | 搜索查询词（语法与 YouTube 搜索框相同） |
+| `sp` | string | 否 | 用于分页或高级筛选的 YouTube 过滤 token |
+| `gl` | string | 否 | 用于本地化结果的国家/地区代码（例如 `us`、`jp`、`gb`）。并非所有国家代码都支持 —— 详见下方说明 |
+| `hl` | string | 否 | 界面语言（例如 `en`、`zh`、`ja`） |
+
+#### 示例：基础搜索
+
+```bash
+curl -s -X GET "https://api.aisa.one/apis/v1/youtube/search?engine=youtube&q=machine+learning+tutorial" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+#### 示例：带国家和语言参数的搜索
+
+```bash
+curl -s -X GET "https://api.aisa.one/apis/v1/youtube/search?engine=youtube&q=AI+news&gl=us&hl=en" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+#### 示例：使用 `sp` Token 分页
+
+```bash
+# Use the sp token from a previous response to get the next page
+curl -s -X GET "https://api.aisa.one/apis/v1/youtube/search?engine=youtube&q=python+tutorial&sp=EgIQAQ%3D%3D" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+#### 响应
+
+该 API 返回结构化的 YouTube 搜索结果，包括视频元数据、频道信息、缩略图和分页 token。
+
+**注意**：响应结构可能会因查询语言而异。英文查询通常在 `videos` 数组中返回结果。某些非英文查询可能会将结果分组在 `sections` 数组中返回。请务必同时检查这两个字段。
+
+```json
+{
+  "search_metadata": {
+    "status": "Success",
+    "total_time_taken": 1.2
+  },
+  "search_parameters": {
+    "engine": "youtube",
+    "q": "machine learning tutorial"
+  },
+  "next_page_token": "CBQQABoCEgA%3D",
+  "videos": [
+    {
+      "position_on_page": 1,
+      "title": "Machine Learning Full Course for Beginners",
+      "link": "https://www.youtube.com/watch?v=abc123xyz",
+      "channel": {
+        "name": "Tech Academy",
+        "link": "https://www.youtube.com/channel/UCxyz123",
+        "thumbnail": "https://yt3.ggpht.com/..."
+      },
+      "published_date": "2 months ago",
+      "views": 1500000,
+      "length": "3:45:20",
+      "description": "Complete machine learning tutorial...",
+      "thumbnail": {
+        "static": "https://i.ytimg.com/vi/abc123xyz/hq720.jpg",
+        "rich": "https://i.ytimg.com/an_webp/abc123xyz/mqdefault_6s.webp"
+      }
+    }
+  ]
+}
+```
+
+**备选响应结构（非英文 / 部分查询）**：
+
+部分查询返回的结果会按 `sections` 分组，而不是扁平的 `videos` 数组：
+
+```json
+{
+  "sections": [
+    {
+      "title": "搜索结果",
+      "videos": [
+        {
+          "title": "编程教程...",
+          "link": "https://www.youtube.com/watch?v=...",
+          ...
+        }
+      ]
+    }
+  ]
+}
+```
+
+**同时解析两种格式**：
+
+```python
+# Handle both response structures
+videos = results.get('videos', [])
+if not videos and 'sections' in results:
+    for section in results['sections']:
+        videos.extend(section.get('videos', []))
+```
+
+### 高级搜索技巧
+
+YouTube 的 `q` 参数支持与 YouTube 搜索框相同的搜索语法：
+
+| 搜索语法 | 描述 | 示例 |
+|---------------|-------------|---------|
+| 基础关键词 | 标准搜索 | `q=python tutorial` |
+| 精确短语 | 使用双引号精确匹配 | `q="machine learning basics"` |
+| 频道过滤 | 在指定频道内搜索 | `q=channel:GoogleDevelopers python` |
+| 时长提示 | 与关键词组合使用 | `q=python tutorial long` |
+
+### 使用 `sp` 过滤 Token
+
+`sp` 参数接收 YouTube 的编码过滤 token。常见取值：
+
+| 筛选条件 | `sp` 值 | 描述 |
+|--------|-----------|-------------|
+| 仅视频 | `EgIQAQ%3D%3D` | 仅筛选视频结果 |
+| 仅频道 | `EgIQAg%3D%3D` | 仅筛选频道结果 |
+| 仅播放列表 | `EgIQAw%3D%3D` | 仅筛选播放列表结果 |
+| 正在直播 | `EgJAAQ%3D%3D` | 当前正在直播的流 |
+| 本周 | `EgIIAw%3D%3D` | 本周上传 |
+| 本月 | `EgIIBA%3D%3D` | 本月上传 |
+| 短视频 (&lt;4 min) | `EgIYAQ%3D%3D` | 短时长视频 |
+| 长视频 (>20 min) | `EgIYAg%3D%3D` | 长时长视频 |
+
+你也可以从先前 API 响应中的 `next_page_token` 字段获取 `sp` token 来实现分页。
+
+#### 分页
+
+使用响应中的 `next_page_token` 获取下一页结果：
+
+```python
+# First page
+results = requests.get(
+    'https://api.aisa.one/apis/v1/youtube/search',
+    headers=headers,
+    params={'engine': 'youtube', 'q': 'python tutorial'}
+).json()
+
+# Get next page token
+next_token = results.get('next_page_token')
+if next_token:
+    page2 = requests.get(
+        'https://api.aisa.one/apis/v1/youtube/search',
+        headers=headers,
+        params={'engine': 'youtube', 'q': 'python tutorial', 'sp': next_token}
+    ).json()
+```
+
+## 代码示例
+
+### JavaScript
+
+```javascript
+const headers = {
+  'Authorization': `Bearer ${process.env.AISA_API_KEY}`
+};
+
+// Basic YouTube search
+const results = await fetch(
+  'https://api.aisa.one/apis/v1/youtube/search?engine=youtube&q=AI+agents+tutorial',
+  { headers }
+).then(r => r.json());
+
+console.log(results.videos);
+
+// Search with filters
+const filtered = await fetch(
+  'https://api.aisa.one/apis/v1/youtube/search?engine=youtube&q=deep+learning&gl=us&hl=en&sp=EgIQAQ%3D%3D',
+  { headers }
+).then(r => r.json());
+```
+
+### Python
+
+```python
+import os
+import requests
+
+headers = {'Authorization': f'Bearer {os.environ["AISA_API_KEY"]}'}
+
+# Basic YouTube search
+results = requests.get(
+    'https://api.aisa.one/apis/v1/youtube/search',
+    headers=headers,
+    params={'engine': 'youtube', 'q': 'AI agents tutorial'}
+).json()
+
+for video in results.get('videos', []):
+    print(f"{video['title']} - {video.get('views', 'N/A')} views")
+
+# Search with country and language
+results_jp = requests.get(
+    'https://api.aisa.one/apis/v1/youtube/search',
+    headers=headers,
+    params={'engine': 'youtube', 'q': 'プログラミング', 'gl': 'jp', 'hl': 'ja'}
+).json()
+```
+
+### Python（urllib，无依赖项）
+
+> **注意**：`urllib` 可能会因为其默认的 User-Agent 遇到 403 错误。建议使用 `requests`（见上文）。如果你必须使用 `urllib`，请务必设置自定义 User-Agent header。
+
+```python
+import urllib.request, urllib.parse, os, json
+
+def youtube_search(query, gl=None, hl=None, sp=None):
+    """Search YouTube via AIsa API."""
+    params = {'engine': 'youtube', 'q': query}
+    if gl: params['gl'] = gl
+    if hl: params['hl'] = hl
+    if sp: params['sp'] = sp
+    
+    url = f'https://api.aisa.one/apis/v1/youtube/search?{urllib.parse.urlencode(params)}'
+    req = urllib.request.Request(url)
+    req.add_header('Authorization', f'Bearer {os.environ["AISA_API_KEY"]}')
+    req.add_header('User-Agent', 'AIsa-Skill/1.0')
+    return json.load(urllib.request.urlopen(req))
+
+# Search
+results = youtube_search('OpenClaw tutorial', gl='us', hl='en')
+
+# Handle both response formats
+videos = results.get('videos', [])
+if not videos and 'sections' in results:
+    for section in results['sections']:
+        videos.extend(section.get('videos', []))
+
+print(json.dumps(videos[:3], indent=2))
+```
+
+## 与其他 AIsa API 结合使用
+
+AIsa 的核心优势之一是**统一的 API key**。使用同一个 `AISA_API_KEY`，即可将 YouTube 搜索与 AIsa 的其他能力结合：
+
+### YouTube 搜索 + LLM 总结
+
+```python
+import os, requests, json
+
+headers = {'Authorization': f'Bearer {os.environ["AISA_API_KEY"]}'}
+
+# 1. Search YouTube
+yt_results = requests.get(
+    'https://api.aisa.one/apis/v1/youtube/search',
+    headers=headers,
+    params={'engine': 'youtube', 'q': 'latest AI developments 2026'}
+).json()
+
+# 2. Summarize with LLM (same API key!)
+video_titles = [v['title'] for v in yt_results.get('videos', [])[:5]]
+summary = requests.post(
+    'https://api.aisa.one/v1/chat/completions',
+    headers={**headers, 'Content-Type': 'application/json'},
+    json={
+        'model': 'qwen-flash',
+        'messages': [
+            {'role': 'user', 'content': f'Summarize the trending AI topics based on these YouTube videos: {json.dumps(video_titles)}'}
+        ]
+    }
+).json()
+
+print(summary['choices'][0]['message']['content'])
+```
+
+### YouTube 搜索 + Web 搜索
+
+```python
+# Search both YouTube and the web for comprehensive research
+yt_results = requests.get(
+    'https://api.aisa.one/apis/v1/youtube/search',
+    headers=headers,
+    params={'engine': 'youtube', 'q': 'AI agent frameworks 2026'}
+).json()
+
+web_results = requests.get(
+    'https://api.aisa.one/apis/v1/search/smart',
+    headers=headers,
+    params={'q': 'AI agent frameworks 2026'}
+).json()
+```
+
+## 注意事项
+
+- 所有请求均通过你的 AIsa 余额**按量计费** —— 无需单独管理 YouTube API 配额
+- `engine` 参数必须始终设置为 `youtube`
+- 视频 URL 遵循 `https://www.youtube.com/watch?v={videoId}` 格式
+- 频道 URL 遵循 `https://www.youtube.com/channel/{channelId}` 格式
+- 使用先前响应中的 `next_page_token` 作为分页的 `sp` 值
+- `gl`（国家/地区）参数**不**支持所有 ISO 国家代码。已知不支持的值包括 `cn`（中国）。如果你遇到 `Unsupported value` 错误，请尝试省略 `gl` 或使用其他国家代码
+- 非英文查询可能会在 `sections` 数组中返回结果，而不是扁平的 `videos` 数组 —— 请务必同时处理这两种格式
+- 重要提示：Python `urllib` 可能会因为其默认的 User-Agent 返回 403 错误。请改用 `requests` 库，或者添加自定义 `User-Agent` header
+- 重要提示：使用 curl 命令时，请确保 `$AISA_API_KEY` 等环境变量已正确展开
+- 重要提示：将 curl 输出通过管道传递给 `jq` 时，请使用 `-s` 参数并确保已设置 API key
+
+## 错误处理
+
+| 状态码 | 含义 |
+|--------|---------|
+| 200 | 搜索请求成功 |
+| 400 | 请求参数无效（缺少 `engine` 或 `q`） |
+| 401 | 未授权 —— AIsa API key 无效或缺失 |
+| 429 | 请求触发速率限制 |
+| 500 | 服务器内部错误 |
+
+### 排错：API Key 问题
+
+1. 检查是否已设置 `AISA_API_KEY` 环境变量：
+
+```bash
+echo $AISA_API_KEY
+```
+
+2. 通过简单的测试验证 API key 是否正常工作：
+
+```bash
+python <<'EOF'
+import os, json, requests
+try:
+    result = requests.get(
+        'https://api.aisa.one/apis/v1/youtube/search',
+        headers={'Authorization': f'Bearer {os.environ["AISA_API_KEY"]}'},
+        params={'engine': 'youtube', 'q': 'test'}
+    ).json()
+    videos = result.get('videos', [])
+    print(f"✅ API key is valid. Results: {len(videos)} videos found")
+except Exception as e:
+    print(f"❌ Error: {e}")
+EOF
+```
+
+### 排错：无搜索结果
+
+1. 确认你的查询词不为空
+2. 尝试使用更宽泛的搜索词
+3. 如果使用了 `gl`，请确认该国家代码受支持 —— 并非所有 ISO 代码均可用（例如不支持 `cn`）。可尝试省略 `gl` 来测试
+4. 确保每个请求中都包含 `engine=youtube`
+5. 检查结果是否位于 `sections` 而非 `videos` 中（在非英文查询中很常见）
+
+## 资源
+
+- [AIsa API 文档](https://aisa.one/docs/zh)
+- [AIsa 控制台](https://console.aisa.one)
+- [YouTube 搜索 API 参考](https://aisa.one/docs/zh/api-reference/search/get_youtube-search)
+- [AIsa 智能搜索 API](https://aisa.one/docs/zh/api-reference/scholar/post_scholar-search-mixed)
+- [AIsa Chat Completions API](https://aisa.one/docs/zh/api-reference/chat/post_chat-completions)
+- [ClawHub Skills](https://clawhub.ai)
+
+## 开始使用
+
+1. 在 [aisa.one](https://aisa.one) 注册并在控制台中创建 API key。
+2. 在你的终端中设置环境变量：`export AISA_API_KEY="your-key"`。
+3. 使用 [安装](#安装) 下的命令之一安装该 Skill，然后启动新的智能体会话。
 
 ## 相关
 
 <CardGroup cols={3}>
-  <Card title="Agent Skills" icon="wand-magic-sparkles" href="/zh/agent-skills">返回 Agent Skills 总览。</Card>
-  <Card title="API 参考" icon="code" href="/zh/api-reference">查看 API endpoint。</Card>
-  <Card title="Agent Quickstart" icon="rocket" href="/zh/agent-quickstart">Agent 接入快速开始。</Card>
+  <Card title="YouTube SERP" icon="youtube" href="/zh/agent-skills/youtube-serp">
+    现有的面向 SERP 的 YouTube Skill。
+  </Card>
+  <Card title="AIsa YouTube 搜索" icon="youtube" href="/zh/agent-skills/aisa-youtube-search">
+    AIsa 原生的 YouTube 搜索工作流。
+  </Card>
+  <Card title="YouTube 搜索端点" icon="code" href="/zh/api-reference/search/get_youtube-search">
+    YouTube 搜索的端点参考。
+  </Card>
 </CardGroup>
-
