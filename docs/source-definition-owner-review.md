@@ -57,3 +57,19 @@ producer's exact publication commit, aggregate hash and closed file graph.
 Only a subsequent separate publication/consumer activation acceptance can prove
 the normal and lost-dispatch timing budgets. Code CI and draft acquisition do
 not advance that state.
+
+FRED's official converter retains incomplete parameter fragments separately from
+provider operations. The Composer may fill only the fragment's missing type or
+requiredness from the same Runtime snapshot's structured, backend-managed
+`Description.methods.requestParams`. Explicit official declarations must agree;
+malformed, conflicting or absent managed metadata leaves the request pending.
+The derived in-memory source is `runtime_metadata`, not a provider review receipt.
+It preserves provider validation, Runtime ANY forwarding, prices and identity.
+No parameter registry or request enforcement is added. Managed declaration
+changes are re-projected and fingerprinted for every compilation; a price-only
+change uses the current price without renewing a source review clock.
+
+Validate this boundary with `PYTHONPATH=scripts:scripts/tests python -m unittest
+ test_full_registry test_fred_reference test_gap_evidence`. Set
+`AISA_FRED_REFERENCE_CACHE` to an acquired official HTML directory to replay its
+original bytes too. These checks do not prove publication or production delivery.

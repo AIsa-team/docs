@@ -6,7 +6,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from import_fred_reference import INDEX, import_reference, parse_reference, official_url, reference_identity, response_evidence, Tree, OfficialRedirectHandler
+from import_fred_reference import INDEX, import_reference, parse_reference, official_url, reference_identity, response_evidence, Tree, OfficialRedirectHandler, incomplete_request_reference
 from compose_openapi import compose, digest
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -46,6 +46,15 @@ class FredReferenceTest(unittest.TestCase):
         for declaration in ('opaque, required', 'string', 'integer greater than 4, required'):
             with self.subTest(declaration=declaration), self.assertRaises(ValueError):
                 parse_reference(reference('<h3>future</h3><ul><li>'+declaration+'</li></ul>'), INDEX+'example.html')
+
+    def test_partial_reference_keeps_constraints_without_inventing_requiredness(self):
+        fragment = incomplete_request_reference(reference('<h3>frequency</h3><ul><li>One of the following strings: \'a\', \'m\'.</li></ul>'), INDEX+'example.html')
+        parameter = fragment['parameters'][-1]
+        self.assertEqual(parameter['schema'], {'type': 'string', 'enum': ['a', 'm']})
+        self.assertNotIn('required', parameter)
+        self.assertEqual(fragment['missing_fields'], {'frequency': ['required']})
+        self.assertEqual(fragment['parameters'][1]['schema']['maximum'], 1000)
+        self.assertEqual(fragment['path'], '/fred/example')
 
     def test_enum_and_explicit_default_without_required_word(self):
         _, op = parse_reference(reference('''<h3>order</h3><ul><li>On of the following strings: 'asc', 'desc'.</li><li>optional, default: asc</li></ul><h3>category</h3><ul><li>integer, default: 0 (root category)</li></ul>'''), INDEX+'example.html')
@@ -155,8 +164,9 @@ class FredReferenceTest(unittest.TestCase):
         self.assertTrue(all(row['required'] is False and row['media_type']=='text/xml' for row in declarations))
         facts=json.loads((ROOT/'facts/fred.json').read_text())
         public,pending=compose(facts,fresh)
-        self.assertEqual(len(pending),3)
-        self.assertEqual(len(public['info']['x-aisa-document']['response_pending']),32)
+        self.assertEqual(pending,[])
+        self.assertEqual(len(public['paths']),35)
+        self.assertEqual(len(public['info']['x-aisa-document']['response_pending']),35)
         self.assertTrue(any('examples' in media for item in public['paths'].values()
                             for op in item.values() for response in op.get('responses',{}).values()
                             for media in response.get('content',{}).values()))

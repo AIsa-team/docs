@@ -1,13 +1,113 @@
 """Discovery and public legacy-input indexing for the runtime contract puller."""
 import copy
+import hashlib
 import json
-from source_json import loads as source_json_loads
+from source_json import loads as source_json_loads, checked_float
 import re
 from pathlib import Path
 from urllib.parse import urlsplit
 from compose_openapi import METHODS, digest, referenced_components, response_object
 
 KEY = re.compile(r'[a-z0-9][a-z0-9_.-]*')
+
+
+def runtime_metadata_mirrors(facts, upstream, mirrors):
+    """Fill official reference omissions from the same Runtime's managed declarations.
+
+    The in-memory source is Runtime metadata, never a provider approval receipt
+    or an assertion that the relay enforces these parameters.
+    """
+    # Derive afresh: an entry computed for an earlier snapshot is never reused.
+    result = {key: value for key, value in (mirrors or {}).items()
+              if value.get('source', {}).get('kind') != 'runtime_metadata'}
+    sources = upstream if isinstance(upstream, list) else ([upstream] if upstream else [])
+    prefix = urlsplit((facts.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
+    def unique(pairs):
+        value = {}
+        for key, child in pairs:
+            if key in value:
+                raise ValueError('duplicate managed metadata field')
+            value[key] = child
+        return value
+    for route, item in facts.get('paths', {}).items():
+        for runtime_method, runtime in item.items():
+            if runtime_method not in METHODS and runtime_method != 'x-aisa-any':
+                continue
+            if runtime.get('x-aisa-validation') != 'provider':
+                continue
+            candidates = [(doc, doc['x-aisa-incomplete-request-definitions'][runtime.get('x-aisa-upstream-path')])
+                          for doc in sources if isinstance(doc.get('x-aisa-incomplete-request-definitions'), dict)
+                          and runtime.get('x-aisa-upstream-path') in doc['x-aisa-incomplete-request-definitions']]
+            if len(candidates) != 1:
+                continue
+            official, fragment = candidates[0]
+            try:
+                if fragment['path'] != runtime.get('x-aisa-upstream-path') or not fragment['missing_fields']:
+                    continue
+                original_source = official['info']['x-aisa-source']
+                if original_source.get('kind') != 'provider_openapi' or not any(
+                        row.get('url') == fragment['official_reference_url'] and row.get('sha256') == fragment['official_reference_sha256']
+                        and row.get('path') == fragment['path'] and row.get('method') == fragment['method']
+                        and row.get('request_status') == 'pending'
+                        for row in original_source.get('operation_identity_evidence', [])):
+                    continue
+                raw = runtime.get('description', '')
+                if not isinstance(raw, str) or len(raw.encode()) > 256 * 1024:
+                    continue
+                metadata = json.loads(raw, object_pairs_hook=unique, parse_float=checked_float, parse_constant=lambda _: (_ for _ in ()).throw(ValueError('non-JSON metadata')))
+                if not isinstance(metadata, dict) or set(metadata) != {'methods'} or not isinstance(metadata['methods'], list):
+                    continue
+                declared, seen = {}, set()
+                for method in metadata['methods']:
+                    if not isinstance(method, dict) or not {'methodType', 'requestParams'} <= set(method) <= {'methodType', 'methodDesc', 'requestParams', 'responseParams'}:
+                        raise ValueError('unsupported managed method declaration')
+                    name = method['methodType']
+                    if not isinstance(name, str) or name.lower() not in METHODS or name != name.upper() or name in seen or not isinstance(method['requestParams'], list):
+                        raise ValueError('invalid or duplicate managed method')
+                    seen.add(name); parameters = {}
+                    for parameter in method['requestParams']:
+                        if not isinstance(parameter, dict) or not {'name', 'type', 'required'} <= set(parameter) <= {'name', 'type', 'required', 'description'}:
+                            raise ValueError('incomplete managed parameter')
+                        key, kind, required = parameter['name'], parameter['type'], parameter['required']
+                        if not isinstance(key, str) or not re.fullmatch('[a-zA-Z_][a-zA-Z0-9_]*', key) or key in parameters or kind not in {'string', 'integer', 'number', 'boolean'} or type(required) is not bool:
+                            raise ValueError('unsupported managed parameter type or requiredness')
+                        parameters[key] = {'name': key, 'in': 'query', 'required': required, 'schema': {'type': kind}}
+                    declared[name] = parameters
+                method = fragment['method']
+                if method not in declared or runtime_method != 'x-aisa-any' and runtime_method.upper() != method:
+                    continue
+                supplied = declared[method]
+                parameters = copy.deepcopy(fragment['parameters'])
+                missing = fragment['missing_fields']
+                for parameter in parameters:
+                    name = parameter['name']
+                    for field in missing.get(name, []):
+                        if field not in {'type', 'required'} or name not in supplied:
+                            raise ValueError('managed metadata cannot complete official fragment')
+                        target = parameter['schema'] if field == 'type' else parameter
+                        if field in target:
+                            raise ValueError('official declaration is not missing this field')
+                        target[field] = supplied[name]['schema']['type'] if field == 'type' else supplied[name]['required']
+                    if name in supplied and (parameter.get('required') != supplied[name]['required'] or parameter['schema'].get('type') != supplied[name]['schema']['type']):
+                        raise ValueError('managed metadata contradicts explicit official declaration')
+                if any(type(parameter.get('required')) is not bool or parameter.get('schema', {}).get('type') not in {'string', 'integer', 'number', 'boolean'} for parameter in parameters):
+                    raise ValueError('incomplete parameter fragment')
+                key = (prefix + route, method.lower())
+                if key in result:
+                    raise ValueError('ambiguous managed request authority')
+                source = {'kind': 'runtime_metadata', 'url': 'https://api.aisa.one/public/api-contract/current',
+                    'authority': 'backend-managed endpoint.Description.methods.requestParams', 'validation_owner': 'provider',
+                    'runtime_operation_id': runtime['operationId'], 'runtime_method': 'ANY' if runtime_method == 'x-aisa-any' else runtime_method.upper(),
+                    'runtime_description_sha256': hashlib.sha256(raw.encode()).hexdigest(),
+                    'upstream_path_sha256': hashlib.sha256(runtime['x-aisa-upstream-path'].encode()).hexdigest(),
+                    'official_parameter_source': {name: original_source[name] for name in ('kind', 'url', 'content_hash', 'converter')},
+                    'official_missing_fields': copy.deepcopy(missing),
+                    'content_hash': digest({'parameters': parameters, 'runtime_description': raw, 'official_fragment': fragment})}
+                result[key] = {'operation': {'operationId': runtime['operationId'], 'parameters': parameters},
+                               'source': source, 'components': {}, 'response_operation': {}, 'response_components': {}, 'openapi': '3.1.0'}
+            except (ValueError, KeyError, TypeError, AttributeError, RecursionError):
+                continue  # No schema is safer than guessing from malformed/ambiguous metadata.
+    return result
 
 
 def catalog_ids(category):
