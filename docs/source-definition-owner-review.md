@@ -73,3 +73,12 @@ Validate this boundary with `PYTHONPATH=scripts:scripts/tests python -m unittest
  test_full_registry test_fred_reference test_gap_evidence`. Set
 `AISA_FRED_REFERENCE_CACHE` to an acquired official HTML directory to replay its
 original bytes too. These checks do not prove publication or production delivery.
+
+The existing rebinding loader also recognizes one exact, hash-bound candidate
+record that replaces the original three FRED request deferral identities with
+unknown-response identities for those same immutable Runtime operations. It
+retains the original 60-item policy and authorization, including its original
+evidence and clocks; it grants no new endpoint or response-schema claim. The
+old record remains supported until the reviewed input snapshot promotes the new
+record. `test_deferred_definitions` checks both versions and rejects changed
+identities or bytes.
