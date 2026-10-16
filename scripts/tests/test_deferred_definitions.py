@@ -7,7 +7,7 @@ import tempfile
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from deferred_definitions import (DeferredDefinitions, load_deferred_definitions, POLICY_PATH,
-                                  POLICY_SHA256, REBINDING_PATH, REBINDING_SHA256, validate_report_deferrals)
+                                  POLICY_SHA256, REBINDING_PATH, REBINDING_SHA256, FRED_MIGRATION_SHA256, validate_report_deferrals)
 from contract_readiness import check_readiness, _pending_key, binding_hash
 from gap_evidence import gap_key, response_gap_rows
 from publication_surface import publication_hashes
@@ -77,6 +77,35 @@ class DeferredDefinitionTests(unittest.TestCase):
             for changed in (raw + b' ', b'{}', json.dumps(expanded).encode(),
                             raw.replace(b'"enabled"', b'"disabled"', 1)):
                 binding.write_bytes(changed)
+                with self.assertRaises(ValueError):
+                    load_deferred_definitions(root)
+
+    def test_exact_fred_request_to_unknown_response_replacement_keeps_sixty_keys(self):
+        raw = (ROOT / 'scripts/tests/fixtures/fred-three-request-response-rebinding.json').read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(), FRED_MIGRATION_SHA256)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for name in (POLICY_PATH, REBINDING_PATH):
+                path = root / name; path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes((ROOT / name).read_bytes())
+            (root / REBINDING_PATH).write_bytes(raw)
+            policy = load_deferred_definitions(root)
+            self.assertEqual(len(policy.keys), 60)
+            self.assertEqual(policy.metadata['scope'], {'request': 10, 'response': 50})
+            self.assertEqual(policy.metadata['effective_scope'], {'request': 7, 'response': 53})
+            migration = json.loads(raw)['request_response_migration']
+            for row in migration['replacements']:
+                self.assertFalse(policy.matches('fred', 'request', row['old_gate_identity']))
+                self.assertTrue(policy.matches('fred', 'response', row['new_gate_identity']))
+                for index in range(len(row['new_gate_identity'])):
+                    changed = copy.deepcopy(row['new_gate_identity'])
+                    changed[index] = ['201'] if isinstance(changed[index], list) else 'changed'
+                    self.assertFalse(policy.matches('fred', 'response', changed))
+                self.assertFalse(policy.matches('other', 'response', row['new_gate_identity']))
+            # Unknown/tampered bytes cannot activate even an apparently similar mapping.
+            for changed in (raw + b' ', raw.replace(b'"old_kind": "request"', b'"old_kind": "response"', 1),
+                            raw.replace(b'"GET"', b'"POST"', 1), raw.replace(b'"enabled"', b'"disabled"', 1)):
+                (root / REBINDING_PATH).write_bytes(changed)
                 with self.assertRaises(ValueError):
                     load_deferred_definitions(root)
 

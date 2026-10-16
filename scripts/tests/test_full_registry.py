@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -144,6 +145,67 @@ class FullRegistryTests(unittest.TestCase):
                                        readiness_context={'offline': True})
                 self.assertIn('blocked', summary['alpha'])
                 self.assertGreater(summary['alpha']['pending'], 0)
+
+    def metadata_source(self):
+        fragment = {'path': '/provider/test', 'method': 'GET',
+                    'parameters': [{'name': 'q', 'in': 'query', 'schema': {'enum': ['first', 'second']}}],
+                    'missing_fields': {'q': ['required', 'type']},
+                    'official_reference_url': 'https://provider.example/reference',
+                    'official_reference_sha256': 'a' * 64}
+        return {'openapi': '3.1.0', 'paths': {}, 'info': {'x-aisa-source': {
+            'kind': 'provider_openapi', 'url': 'https://provider.example/', 'fetched_at': '2026-10-16',
+            'content_hash': 'sha256:fixture', 'converter': 'fixture',
+            'operation_identity_evidence': [{'path': fragment['path'], 'method': 'GET',
+                'url': fragment['official_reference_url'], 'sha256': fragment['official_reference_sha256'],
+                'request_status': 'pending'}]}}, 'x-aisa-incomplete-request-definitions': {'/provider/test': fragment}}
+
+    def managed_runtime(self, required=True):
+        runtime = contract('alpha', 'x-aisa-any', 'provider')
+        operation(runtime)['x-aisa-query-policy'] = {'request_wins': True}
+        operation(runtime)['description'] = json.dumps({'methods': [{'methodType': 'GET', 'requestParams': [
+            {'name': 'q', 'type': 'string', 'required': required}]}]})
+        return runtime
+
+    def test_managed_metadata_projection_uses_current_facts_not_a_second_registry(self):
+        from runtime_registry import runtime_metadata_mirrors
+        from gap_evidence import source_binding_evidence
+        runtime, source = self.managed_runtime(), self.metadata_source()
+        initial = runtime_metadata_mirrors(runtime, source, {})
+        result, pending = compose(runtime, source)
+        self.assertEqual(pending, [])
+        actual = result['paths']['/apis/v1/alpha/test']['get']
+        self.assertEqual(actual['x-aisa-source']['kind'], 'runtime_metadata')
+        self.assertEqual(actual['x-aisa-validation'], 'provider')
+        self.assertEqual(actual['x-aisa-runtime-operation']['method'], 'ANY')
+        q = next(p for p in actual['parameters'] if p['name'] == 'q')
+        self.assertEqual(q['schema'], {'type': 'string', 'enum': ['first', 'second']})
+        self.assertTrue(q['required'])
+        before = source_binding_evidence(operation(runtime), runtime, source, {}, '/apis/v1/alpha/test', 'ANY')
+        changed = self.managed_runtime(required=False)
+        operation(changed)['x-aisa-pricing']['default_request_estimate_usd'] = 0.12345
+        result, pending = compose(changed, source, public_mirrors=initial)
+        actual = result['paths']['/apis/v1/alpha/test']['get']
+        self.assertEqual(pending, [])
+        self.assertFalse(next(p for p in actual['parameters'] if p['name'] == 'q')['required'])
+        self.assertEqual(actual['x-aisa-pricing'], operation(changed)['x-aisa-pricing'])
+        self.assertNotEqual(actual['x-aisa-source']['content_hash'], initial[('/apis/v1/alpha/test', 'get')]['source']['content_hash'])
+        self.assertNotEqual(before, source_binding_evidence(operation(changed), changed, source, {}, '/apis/v1/alpha/test', 'ANY'))
+
+    def test_managed_metadata_never_guesses_missing_or_conflicting_declarations(self):
+        for change in ('missing', 'duplicate', 'bool_integer', 'array', 'path', 'identity', 'ambiguous', 'official_conflict'):
+            runtime, source = self.managed_runtime(), self.metadata_source()
+            if change == 'missing': operation(runtime)['description'] = 'Runtime prose only'
+            elif change == 'duplicate': operation(runtime)['description'] = '{"methods":[],"methods":[]}'
+            elif change == 'bool_integer': operation(runtime)['description'] = operation(runtime)['description'].replace('true', '1')
+            elif change == 'array': operation(runtime)['description'] = operation(runtime)['description'].replace('string', 'array')
+            elif change == 'path': operation(runtime)['x-aisa-upstream-path'] += '/new'
+            elif change == 'identity': source['info']['x-aisa-source']['operation_identity_evidence'] = []
+            elif change == 'ambiguous': source = [source, copy.deepcopy(source)]
+            else: source['x-aisa-incomplete-request-definitions']['/provider/test']['parameters'][0]['required'] = False
+            with self.subTest(change=change):
+                result, pending = compose(runtime, source)
+                self.assertEqual(len(pending), 1)
+                self.assertEqual(result['paths'], {})
 
     def test_generation_time_does_not_churn_localized_pages_or_provider_spec(self):
         source = contract('alpha')

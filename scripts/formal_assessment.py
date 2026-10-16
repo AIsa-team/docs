@@ -64,17 +64,35 @@ its historical acceptance. Canonical mode always requires the payment subgate.
     require(imported.get('scope') == IMPORT_SCOPE, 'Canonical import scope differs')
     inputs = imported.get('inputs')
     passed(inputs)
-    require(type(inputs.get('schema_version')) is int and inputs['schema_version'] == 1 and
+    require(type(inputs.get('schema_version')) is int and inputs['schema_version'] in {1, 2} and
             inputs.get('scope') == INPUT_SCOPE, 'Canonical input assessment scope differs')
     pins = inputs.get('compiler_inputs')
     require(isinstance(pins, dict) and set(pins) == INPUT_KEYS and
             pins.get('protocol_version') == 'aisa-runtime-canonical-v1' and
             all((revision if key in {'docs_ref', 'composer_revision'} else digest)(pins[key])
                 for key in INPUT_KEYS - {'protocol_version'}), 'Canonical build pins invalid')
-    require(inputs.get('source_formal_provenance', {}).get('expected_docs_ref') == pins['docs_ref'],
-            'Canonical schema provenance ref differs')
+    if inputs['schema_version'] == 1:
+        require('source_input_provenance' not in inputs and 'input_context_sha256' not in inputs and
+                inputs.get('source_formal_provenance', {}).get('expected_docs_ref') == pins['docs_ref'],
+                'Canonical formal schema provenance differs')
+        context_hash = 'source_pointer_sha256'
+    else:
+        provenance = inputs.get('source_input_provenance')
+        require('source_formal_provenance' not in inputs and 'source_pointer_sha256' not in inputs and
+                isinstance(provenance, dict) and set(provenance) == {
+                    'kind', 'expected_docs_ref', 'bundle_manifest_sha256', 'historical_formal_ref',
+                    'input_context_sha256', 'input_source_receipts_sha256'} and
+                provenance['kind'] == 'reviewed_git_input' and
+                provenance['expected_docs_ref'] == pins['docs_ref'] and
+                provenance['bundle_manifest_sha256'] == pins['bundle_manifest_sha256'] and
+                revision(provenance['historical_formal_ref']) and
+                digest(provenance['input_context_sha256']) and
+                provenance['input_context_sha256'] == inputs.get('input_context_sha256') and
+                digest(provenance['input_source_receipts_sha256']),
+                'Canonical reviewed schema provenance differs')
+        context_hash = 'input_context_sha256'
     for key in ('runtime_acquisition_sha256', 'canonical_manifest_sha256', 'current_before_sha256',
-                'current_after_sha256', 'source_pointer_sha256', 'source_receipts_sha256'):
+                'current_after_sha256', context_hash, 'source_receipts_sha256'):
         require(digest(inputs.get(key)), 'Canonical input hash missing: ' + key)
     runtime = report.get('runtime')
     require(isinstance(runtime, dict) and set(runtime) == {'artifact_revision', 'source_digest', 'compiler_revision', 'generation'}
@@ -93,6 +111,12 @@ its historical acceptance. Canonical mode always requires the payment subgate.
                 for name, value in frozen.items()) and
             all(name in frozen and value == frozen[name] for name, value in current.items()),
             'Canonical fixed schema input hashes invalid')
+    if inputs['schema_version'] == 2:
+        for path, key in (
+                ('docs/schema-inputs/context.json', 'input_context_sha256'),
+                ('docs/schema-inputs/source-receipts.json', 'input_source_receipts_sha256')):
+            require(frozen.get(path) == provenance[key] and current.get(path) == provenance[key],
+                    'Canonical reviewed input evidence hashes differ')
     artifact = report.get('publication_artifact', {})
     assessed, previous = imported.get('assessed_base'), imported.get('previous_formal_ref')
     require(revision(assessed) and revision(previous) and artifact.get('published_ref') == assessed,

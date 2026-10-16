@@ -34,6 +34,10 @@ SPEC_NAME = r'[A-Za-z0-9_.-]+\.json'
 MAX_FILE = 32 << 20
 MAX_TOTAL = 192 << 20
 MAX_FILES = 512
+INPUT_CONTEXT_PATH = 'docs/schema-inputs/context.json'
+INPUT_RECEIPTS_PATH = 'docs/schema-inputs/source-receipts.json'
+INPUT_CONTEXT_MEMBER = 'evidence/reviewed-input-context.json'
+INPUT_ROLES = {'registry', 'reviewed_deferral_policy', 'reviewed_deferral_rebinding', 'upstream_schema'}
 AUTHORITY = {
     'purpose': 'offline_schema_and_compatibility_inputs_only',
     'runtime_facts_included': False,
@@ -109,6 +113,8 @@ def safe_name(name):
 
 def role_for(name):
     safe_name(name)
+    if name == INPUT_CONTEXT_MEMBER:
+        return 'reviewed_input_context'
     if name == PRESENTATION_MEMBER:
         return 'historical_presentation_bindings'
     if name in SINGLETONS:
@@ -120,6 +126,20 @@ def role_for(name):
     if re.fullmatch(r'proofs/[0-9a-f]{40}/openapi/(?:zh/)?' + SPEC_NAME, name):
         return 'historical_alias_git_bytes'
     raise ValueError('Unsupported bundle member or role')
+
+
+def reviewed_context(raw):
+    """A reconstruction recipe, never a formal or current authorization receipt."""
+    value = strict_json(raw)
+    require(isinstance(value, dict) and set(value) == {'schema_version', 'kind',
+            'historical_formal_ref', 'source_receipts_path', 'source_receipts_sha256', 'source_checked_at'}
+            and type(value['schema_version']) is int and value['schema_version'] == 1
+            and value['kind'] == 'aisa-reviewed-schema-input-context'
+            and isinstance(value['historical_formal_ref'], str) and HEX40.fullmatch(value['historical_formal_ref'])
+            and value['source_receipts_path'] == INPUT_RECEIPTS_PATH
+            and isinstance(value['source_receipts_sha256'], str) and HEX64.fullmatch(value['source_receipts_sha256'])
+            and timestamp(value['source_checked_at']) is not None, 'Invalid reviewed input context')
+    return value
 
 
 def formal_input_paths(hashes):
@@ -200,9 +220,11 @@ def load_bundle(root, *, expected_manifest_sha256, expected_docs_ref,
     raw = regular_read(root, 'manifest.json')
     require(sha(raw) == expected_manifest_sha256, 'Manifest differs from caller trust pin')
     manifest = strict_json(raw)
-    require(set(manifest) == {'schema_version', 'kind', 'docs_ref', 'baseline_ref', 'authority', 'files'},
+    version = manifest.get('schema_version')
+    require(set(manifest) == {'schema_version', 'kind', 'docs_ref', 'baseline_ref', 'authority', 'files'} |
+            ({'context'} if version == 3 else set()),
             'Unsupported manifest fields')
-    require(type(manifest['schema_version']) is int and manifest['schema_version'] in (1, 2) and
+    require(type(version) is int and version in (1, 2, 3) and
             manifest['kind'] == 'aisa-schema-input-bundle' and canonical(manifest['authority']) == canonical(AUTHORITY),
             'Unsupported schema bundle authority')
     require(manifest['docs_ref'] == expected_docs_ref and
@@ -228,8 +250,16 @@ def load_bundle(root, *, expected_manifest_sha256, expected_docs_ref,
         verified_bytes[name] = content
     require(list(members) == sorted(members), 'Manifest members are not sorted')
     require(set(SINGLETONS) <= set(members), 'Required bundle inputs are missing')
-    require((PRESENTATION_MEMBER in members) == (manifest['schema_version'] == 2),
+    require((PRESENTATION_MEMBER in members) == (version in (2, 3)),
             'Presentation bindings require bundle v2 and are mandatory in v2')
+    require((INPUT_CONTEXT_MEMBER in members) == (version == 3),
+            'Reviewed input context requires bundle v3')
+    context = reviewed_context(verified_bytes[INPUT_CONTEXT_MEMBER]) if version == 3 else None
+    if context is not None:
+        require(manifest['context'] == {'historical_formal_ref': context['historical_formal_ref']},
+                'Reviewed history context differs')
+        require(sha(verified_bytes['evidence/source-receipts.json']) == context['source_receipts_sha256'],
+                'Reviewed input receipt bytes differ')
     present = set()
     for path in root.rglob('*'):
         require(not path.is_symlink(), 'Bundle symlink is forbidden')
@@ -244,7 +274,7 @@ def load_bundle(root, *, expected_manifest_sha256, expected_docs_ref,
     reject_unimplemented_inputs(registry, pointer_paths=members)
     discover(copy.deepcopy(registry), {'apis': []})
     for provider, config in registry['providers'].items():
-        require('input/openapi/' + provider + '.json' in members, 'Registry output missing')
+        require(version == 3 or 'input/openapi/' + provider + '.json' in members, 'Registry output missing')
         upstream = (config or {}).get('upstream')
         for item in upstream if isinstance(upstream, list) else [upstream]:
             if not item:
@@ -277,11 +307,16 @@ def load_bundle(root, *, expected_manifest_sha256, expected_docs_ref,
             'Orphan alias proof file')
     attest = load('evidence/git-validation.json')
     refs = sorted({n.split('/')[1] for n in history.used})
-    require(attest == {'kind': 'exporter_checked_git_ancestry_not_offline_authentication',
+    expected_attest = {'kind': 'exporter_checked_git_ancestry_not_offline_authentication',
                       'docs_ref': expected_docs_ref, 'ancestors': refs,
                       'independently_pinned_baseline': {'ref': expected_baseline_ref,
                           'path': 'openapi/coverage.json',
-                          'sha256': members['baseline/openapi/coverage.json']['sha256']}},
+                          'sha256': members['baseline/openapi/coverage.json']['sha256']}}
+    if context is not None:
+        expected_attest.update(historical_formal_ref=context['historical_formal_ref'],
+            input_files_sha256={name.removeprefix('input/'): row['sha256'] for name, row in members.items()
+                                if row['role'] in INPUT_ROLES})
+    require(attest == expected_attest,
             'Invalid build ancestry/baseline attestation')
     pointer = load('input/docs/publication/current.json')
     report_raw = verified_bytes['input/docs/publication/formal-contract-readiness.json']
@@ -299,11 +334,18 @@ def load_bundle(root, *, expected_manifest_sha256, expected_docs_ref,
     actual_inputs = {n for n, row in members.items() if row['role'] in {
         'registry', 'reviewed_deferral_policy', 'reviewed_deferral_rebinding', 'upstream_schema',
         'historical_compatibility_document', 'historical_gap_inventory'}}
-    require(actual_inputs == expected_inputs, 'Formal input membership differs')
-    require(all(members[name]['sha256'] == hashes[name.removeprefix('input/')] for name in actual_inputs),
+    # v3 approves new schema inputs independently of the old formal graph. Only
+    # historical native/gap bytes still come from that exact old pointer.
+    historical_inputs = {name for name in actual_inputs if members[name]['role'] not in INPUT_ROLES}
+    compared = actual_inputs if version != 3 else historical_inputs
+    expected_compared = expected_inputs if version != 3 else {
+        name for name in expected_inputs if role_for(name) not in INPUT_ROLES}
+    require(compared == expected_compared, 'Formal input membership differs')
+    require(all(members[name]['sha256'] == hashes[name.removeprefix('input/')] for name in compared),
             'Input differs from historical formal file binding')
-    if manifest['schema_version'] == 2:
-        validate_bindings(load(PRESENTATION_MEMBER), expected_docs_ref, hashes, docs)
+    if version in (2, 3):
+        validate_bindings(load(PRESENTATION_MEMBER),
+            context['historical_formal_ref'] if context else expected_docs_ref, hashes, docs)
     require(members['baseline/openapi/coverage.json']['sha256'] == REVIEWED_BASELINE_SHA256,
             'Independent reviewed baseline bytes differ')
     baseline = load('baseline/openapi/coverage.json')
@@ -312,7 +354,7 @@ def load_bundle(root, *, expected_manifest_sha256, expected_docs_ref,
     require(type(saved.get('schema_version')) is int and saved.get('schema_version') == 1 and isinstance(saved.get('receipts'), dict) and
             isinstance(saved.get('attempts', {}), dict), 'Invalid original receipt packet')
     governance = report.get('source_governance', {})
-    checked_at = timestamp(governance.get('checked_at'))
+    checked_at = timestamp(context['source_checked_at'] if context else governance.get('checked_at'))
     require(checked_at is not None, 'Historical assessment clock missing')
     # Existing governance helpers take paths. Materialize a private copy from
     # verified bytes so they cannot reopen caller-mutated bundle members.
@@ -325,7 +367,12 @@ def load_bundle(root, *, expected_manifest_sha256, expected_docs_ref,
                 target.write_bytes(content)
         load_deferred_definitions(verified_root)
         reproduced = source_report(verified_root, saved['receipts'], checked_at=checked_at, attempts=saved.get('attempts', {}))
-    require(canonical(reproduced) == canonical(governance), 'Original source receipts do not reproduce fixed formal governance')
+    if context is None:
+        require(canonical(reproduced) == canonical(governance), 'Original source receipts do not reproduce fixed formal governance')
+    else:
+        require(not reproduced['policy_errors'] and reproduced['status'] == 'passed',
+                'Reviewed input source policy or original review evidence is invalid')
+        governance = reproduced
     result = {'status': 'passed', 'scope': 'offline_integrity_and_historical_replay_only',
             'current_source_freshness': 'not_assessed', 'git_ancestry_and_review_authenticity': 'external_trust_required',
             'manifest_sha256': sha(raw), 'docs_ref': expected_docs_ref, 'baseline_ref': expected_baseline_ref,
@@ -334,6 +381,11 @@ def load_bundle(root, *, expected_manifest_sha256, expected_docs_ref,
             'alias_proofs': sum(len(v) for v in history.aliases.values()),
             'upstream_sources': sum(r['role'] == 'upstream_schema' for r in members.values())}
 
+    if context is not None:
+        result['input_provenance'] = {'kind': 'reviewed_git_input',
+            'historical_formal_ref': context['historical_formal_ref'],
+            'input_context_sha256': sha(verified_bytes[INPUT_CONTEXT_MEMBER]),
+            'input_source_receipts_sha256': sha(verified_bytes['evidence/source-receipts.json'])}
     return VerifiedBundle(result, members, verified_bytes, history)
 
 

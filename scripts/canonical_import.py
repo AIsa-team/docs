@@ -276,7 +276,7 @@ def assess_projected_candidate(input_view, projected_view, native_raw, aggregate
     return report
 
 
-def schema_input_view_files(repository, current_view, docs_ref, previous_ref):
+def schema_input_view_files(repository, current_view, docs_ref, previous_ref, *, compiler_inputs=None):
     """Restore fixed schema inputs only after checking current config and prior output.
 
     Returned bytes are for a private input view; no checkout is rewritten. The
@@ -294,7 +294,28 @@ def schema_input_view_files(repository, current_view, docs_ref, previous_ref):
     previous = inspect_publication(Path(repository), previous_ref, historical=True)
     require(previous.get('expected_docs_ref') == previous_ref, 'Prior formal source differs')
     git = GitSource(repository, docs_ref)
-    frozen_pointer = strict_json(git.read(docs_ref, 'docs/publication/current.json'))
+    from schema_input_bundle import INPUT_CONTEXT_PATH, INPUT_RECEIPTS_PATH
+    git.read(docs_ref, 'openapi/registry.yaml')
+    reviewed = INPUT_CONTEXT_PATH in git.trees[docs_ref]
+    if reviewed:
+        from canonical_input_assessment import load_reviewed_inputs
+        require(isinstance(compiler_inputs, dict) and compiler_inputs.get('docs_ref') == docs_ref,
+                'Reviewed input requires the canonical compiler binding')
+        bundle = load_reviewed_inputs(repository, docs_ref,
+            compiler_inputs['bundle_manifest_sha256'])
+        frozen_files = {name.removeprefix('input/'): raw for name, raw in bundle.contents.items()
+                        if name.startswith('input/') and role_for(name) in {
+                            'registry', 'upstream_schema', 'reviewed_deferral_policy',
+                            'reviewed_deferral_rebinding', 'historical_compatibility_document',
+                            'historical_gap_inventory'}}
+        frozen_files.update({INPUT_CONTEXT_PATH: git.read(docs_ref, INPUT_CONTEXT_PATH),
+                             INPUT_RECEIPTS_PATH: git.read(docs_ref, INPUT_RECEIPTS_PATH)})
+    else:
+        frozen_pointer = strict_json(git.read(docs_ref, 'docs/publication/current.json'))
+        frozen_files = {name: git.read(docs_ref, name)
+                        for name in formal_input_paths(frozen_pointer['files_sha256'])}
+        require(all(sha(raw) == frozen_pointer['files_sha256'][name] for name, raw in frozen_files.items()),
+                'Fixed schema input differs')
     previous_pointer = strict_json(git.read(previous_ref, 'docs/publication/current.json'))
     require(previous_pointer.get('contract_release') == previous.get('contract_release'),
             'Prior formal pointer differs')
@@ -307,23 +328,28 @@ def schema_input_view_files(repository, current_view, docs_ref, previous_ref):
             previous_native[Path(name).stem] = strict_json(raw)
     require(set(published_documents(current)) == set(previous_native), 'Current native graph differs from prior formal graph')
     previous_registry = git.read(previous_ref, 'openapi/registry.yaml')
+    current_registry = regular_read(current, 'openapi/registry.yaml')
     require(sha(previous_registry) == previous_pointer['files_sha256'].get('openapi/registry.yaml') and
-            regular_read(current, 'openapi/registry.yaml') == previous_registry,
+            (current_registry == previous_registry or
+             reviewed and current_registry == frozen_files['openapi/registry.yaml']),
             'Current registry is not the prior assessed projection')
     files = {}
-    for name in formal_input_paths(frozen_pointer['files_sha256']):
-        raw = git.read(docs_ref, name)
-        require(sha(raw) == frozen_pointer['files_sha256'][name], 'Fixed schema input differs')
+    for name, raw in frozen_files.items():
         files[name] = raw
-        if role_for('input/' + name) in {'upstream_schema', 'reviewed_deferral_policy', 'reviewed_deferral_rebinding'}:
+        if name.startswith('docs/schema-inputs/') or role_for('input/' + name) in {
+                'upstream_schema', 'reviewed_deferral_policy', 'reviewed_deferral_rebinding'}:
             require(regular_read(current, name) == raw, 'Current schema authority configuration changed')
-    expected_sources = {name for name in files if role_for('input/' + name) == 'upstream_schema'}
+    expected_sources = {name for name in files if name.startswith('openapi/upstream/')}
     actual_sources = {path.relative_to(current).as_posix() for path in (current / 'openapi/upstream').glob('*.json')}
     require(expected_sources == actual_sources, 'Current source membership changed')
     frozen_native = {Path(name).stem: strict_json(raw) for name, raw in files.items()
-                     if role_for('input/' + name) == 'historical_compatibility_document'}
-    validate_derived_registry(yaml.load(files['openapi/registry.yaml'], Loader=UniqueLoader),
-        yaml.load(previous_registry, Loader=UniqueLoader), frozen_native, previous_native)
+                     if name.startswith('openapi/') and
+                     role_for('input/' + name) == 'historical_compatibility_document'}
+    # A new reviewed R may intentionally change upstream/group configuration.
+    # Otherwise only exact, proven prior Runtime presentation metadata is legal.
+    if not reviewed or current_registry != files['openapi/registry.yaml']:
+        validate_derived_registry(yaml.load(files['openapi/registry.yaml'], Loader=UniqueLoader),
+            yaml.load(current_registry, Loader=UniqueLoader), frozen_native, previous_native)
     return files, {'previous_formal_provenance': previous,
                    'previous_registry_sha256': sha(previous_registry),
                    'fixed_registry_sha256': sha(files['openapi/registry.yaml'])}
@@ -361,7 +387,8 @@ def assess_canonical_candidate(repository, current_view, projected_view, acquire
     from schema_input_bundle import REVIEWED_BASELINE
     repository, current, acquired = Path(repository), Path(current_view), Path(acquired)
     manifest = strict_json(regular_read(acquired, MANIFEST))
-    files, lineage = schema_input_view_files(repository, current, manifest['docs_ref'], previous_ref)
+    files, lineage = schema_input_view_files(repository, current, manifest['docs_ref'], previous_ref,
+                                             compiler_inputs=manifest)
     receipt_path = Path(source_receipts) if source_receipts else current / '.cache/source-reviews.json'
     receipt_raw = regular_read(receipt_path.parent, receipt_path.name)
     saved = strict_json(receipt_raw)

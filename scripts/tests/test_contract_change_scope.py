@@ -6,11 +6,32 @@ import unittest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from contract_change_scope import git_requires_artifact_check, verify_required_jobs, requires_artifact_check
+from contract_change_scope import (git_requires_artifact_check, verify_required_jobs,
+                                   requires_artifact_check, is_reviewed_input_change)
 from identity_compatibility import PublishedHistory
 
 
 class ChangeScopeTests(unittest.TestCase):
+    def test_input_only_intent_is_closed_and_requires_changed_context(self):
+        context, receipt = 'docs/schema-inputs/context.json', 'docs/schema-inputs/source-receipts.json'
+        self.assertTrue(is_reviewed_input_change([context, receipt, 'openapi/upstream/one.json']))
+        self.assertTrue(is_reviewed_input_change([context, 'openapi/registry.yaml']))
+        for paths in ([context, receipt], [receipt, 'openapi/upstream/one.json'],
+                      [context, 'openapi/upstream/../one.json']):
+            self.assertFalse(is_reviewed_input_change(paths))
+        for extra in ('scripts/changed.py', 'openapi/one.json', 'api-reference/one.mdx',
+                      'docs/publication/current.json', 'docs/publication/release-origin.json',
+                      'openapi/overlays/one.json', 'docs/schema-inputs/extra.json'):
+            self.assertFalse(is_reviewed_input_change([context, receipt, 'openapi/upstream/one.json', extra]))
+        workflow = yaml.safe_load((Path(__file__).resolve().parents[2] /
+                                   '.github/workflows/test-runtime-contracts.yml').read_text())
+        steps = workflow['jobs']['artifact-contracts']['steps']
+        original = next(row for row in steps if row.get('name') == 'Check actual candidate readiness')
+        candidate = next(row for row in steps if 'check_reviewed_schema_inputs.py' in row.get('run', ''))
+        self.assertEqual(original['if'], "needs.changes.outputs.input_candidate != 'true'")
+        self.assertEqual(candidate['if'], "needs.changes.outputs.input_candidate == 'true'")
+        self.assertIn('--base "$INPUT_BASE"', candidate['run'])
+
     def test_guide_only_edits_run_protocol_checks_without_republishing_contracts(self):
         root = Path(__file__).resolve().parents[2]
         workflow = yaml.safe_load((root / '.github/workflows/test-runtime-contracts.yml').read_text())
