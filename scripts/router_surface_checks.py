@@ -1,6 +1,6 @@
 """Read-only Router schema declarations versus one immutable formal Docs tree.
 
-This checks published documentation, not executable binder/body equivalence or
+This checks published documentation, actual named argument constraints; not executable binder serialization or
 provider execution. No second endpoint inventory: scope comes from bound specs.
 It checks presence and fields of expected operations, not extra online operation
 IDs: Router exposes bounded search and batch lookup, but no full public ID list.
@@ -27,6 +27,7 @@ from compose_openapi import (METHODS, effective_object, effective_parameters,
                             map_contract_children, pointer_target)
 from fetch_runtime_release import NoRedirect
 from source_json import loads
+from public_surface_checks import same_json
 
 ROUTER = 'https://tools.aisa.one'
 METADATA = ROUTER + '/.well-known/catalog.json'
@@ -41,6 +42,106 @@ def canonical(value):
 
 def digest(value):
     return hashlib.sha256(canonical(value)).hexdigest()
+
+
+ANNOTATIONS = {'description','title','example','examples','$comment','deprecated','externalDocs','readOnly','writeOnly'}
+NAMED = {'properties','patternProperties','$defs','definitions','dependentSchemas'}
+LITERALS = {'default','const','enum','examples','example'}
+TOP_CONSTRAINTS = {'allOf','anyOf','oneOf','not','if','then','else','dependentRequired','dependentSchemas','minProperties','maxProperties','propertyNames','patternProperties'}
+
+
+def schema_semantics(value, document, active=(), named=False):
+    if isinstance(value,list):
+        return [schema_semantics(v,document,active) for v in value]
+    if not isinstance(value,dict):
+        return value
+    if not named and '$ref' in value:
+        ref=value['$ref']
+        if not isinstance(ref,str) or not ref.startswith('#/'):
+            raise ValueError('Non-local schema reference cannot be compared')
+        if ref in active:
+            return {'$recursive_target': ref}
+        target=pointer_target(document,ref)
+        if not isinstance(target,dict):
+            raise ValueError('Schema reference must resolve to object')
+        merged={**target,**{k:v for k,v in value.items() if k!='$ref'}}
+        return schema_semantics(merged,document,(*active,ref))
+    result={}
+    for key,child in value.items():
+        if not named and key in ANNOTATIONS:
+            continue
+        if not named and (key in LITERALS or key.startswith('x-')):
+            result[key]=child
+        elif not named and key=='required' and isinstance(child,list):
+            result[key]=sorted(child)
+        else:
+            result[key]=schema_semantics(child,document,active,not named and key in NAMED)
+    return result
+
+
+def check_arguments_schema(document,path,method,actual):
+    """Return errors for missing/extra names, type/enum/default/required drift.
+
+    Object request bodies are exposed as named tool arguments. Non-object or
+    empty-schema bodies use the explicit `body` argument. Parameter and body
+    schemas resolve references against their own documents. Empty source
+    contracts remain empty and do not establish completeness.
+    """
+    if not isinstance(actual, dict):
+        return ['arguments_schema missing or not object']
+    errors=[]
+    item=effective_object(document['paths'][path],document)
+    op=item[method.lower()]
+    props={}; required=set()
+    for p in effective_parameters(item,op,document):
+        if p.get('in') not in ('query','path','header') or p.get('name','').lower()=='authorization':
+            continue
+        name=p['name']
+        if name in props:
+            return ['ambiguous named parameter '+name]
+        props[name]=p.get('schema',{})
+        if p.get('required'):
+            required.add(name)
+    body=effective_object(op['requestBody'],document) if op.get('requestBody') else None
+    body_schema=None
+    if body:
+        content=body.get('content',{})
+        # Catalog stores media sorted lexically; JSON/+json is preferred.
+        names=sorted(content)
+        media=next((m for m in names if m=='application/json' or m.endswith('+json')),next(iter(names),None))
+        if media is None:
+            return ['requestBody has no declared media']
+        body_schema=content[media].get('schema',{})
+        body_schema=effective_object(body_schema,document)
+        body_props=body_schema.get('properties',{}) if isinstance(body_schema,dict) else {}
+        if body_props:
+            for name,subschema in body_props.items():
+                if name in props:
+                    return ['ambiguous parameter/body name '+name]
+                props[name]=subschema
+            required.update(body_schema.get('required',[]))
+            for key in TOP_CONSTRAINTS:
+                if key in body_schema and not same_json(schema_semantics(body_schema[key],document), schema_semantics(actual.get(key),actual)):
+                    errors.append('flattened body lost '+key)
+        else:
+            if 'body' in props:
+                return ['ambiguous parameter/body name body']
+            props['body']=body_schema
+            if body.get('required'):
+                required.add('body')
+    if not isinstance(actual,dict):
+        return ['arguments_schema missing or not object']
+    actual_props=actual.get('properties',{})
+    if set(props)!=set(actual_props):
+        errors.append('argument names differ: missing='+','.join(sorted(set(props)-set(actual_props)))+' extra='+','.join(sorted(set(actual_props)-set(props))))
+    for name in sorted(set(props)&set(actual_props)):
+        if not same_json(schema_semantics(props[name],document), schema_semantics(actual_props[name],actual)):
+            errors.append('argument constraints differ: '+name)
+    if required!=set(actual.get('required',[])):
+        errors.append('required names differ')
+    if actual.get('type')!='object' or actual.get('additionalProperties') is not False:
+        errors.append('tool argument envelope differs')
+    return errors
 
 
 def reference_targets(value, document):
@@ -158,7 +259,8 @@ def fixed_router_contracts(root, ref):
                     values = contract_fields(document, path, method)
                     expected[operation_id] = {'fingerprints': {key: digest(value) for key, value in values.items()},
                         'source_file': member.name, 'source_hash': 'sha256:' + hashes[member.name],
-                        'document_hash': metadata.get('document_hash'), 'method': method.upper(), 'path': path}
+                        'document_hash': metadata.get('document_hash'), 'method': method.upper(), 'path': path,
+                        'argument_source': document}
     if not expected:
         raise ValueError('Empty Router scope')
     return {'docs_ref': ref, 'operations': expected, 'excluded': excluded, 'provider_document_hashes': provider_hashes}
@@ -233,7 +335,7 @@ def check_router_surface(root, ref, *, read_json=None, expected=None, accepted_r
 
     def batch(selected):
         data = read('POST', SCHEMAS, {'tools': selected, 'include_documentation': True,
-                    'include_arguments_schema': False, 'include_response_schema': False})
+                    'include_arguments_schema': True, 'include_response_schema': False})
         rows = data.get('tools')
         if not isinstance(rows, dict) or set(rows) != set(selected):
             raise ValueError('Router batch membership differs')
@@ -267,6 +369,9 @@ def check_router_surface(root, ref, *, read_json=None, expected=None, accepted_r
                 for field, expected_hash in expected_row['fingerprints'].items():
                     if digest(actual.get(field)) != expected_hash:
                         mismatches.append(label + ':' + field + '_mismatch')
+                for error in check_arguments_schema(expected_row['argument_source'],
+                        expected_row['path'], expected_row['method'], row.get('arguments_schema')):
+                    mismatches.append(label + ':arguments_schema:' + error)
                 if len(mismatches) == previous_mismatches:
                     verified += 1
             except Exception as exc:

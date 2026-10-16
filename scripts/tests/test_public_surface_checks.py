@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from public_surface_checks import check_surfaces, compare_llms, request_blocks, same_json
+from public_surface_checks import check_surfaces, compare_llms, compare_mcp_sources, request_blocks, same_json
 
 
 class SurfaceChecks(unittest.TestCase):
@@ -28,7 +28,9 @@ class SurfaceChecks(unittest.TestCase):
             'mpp-json': self.payment,
             'website-json': json.dumps(self.spec).encode(), 'docs-json': json.dumps(self.spec).encode(),
             'docs-root-json': json.dumps(self.spec).encode(),
-            'mcp-version': json.dumps({'state': 'loaded', 'docsRefs': [self.ref], 'documentHashes': {'example': 'c' * 64}}).encode(),
+            'mcp-version': json.dumps({'state': 'loaded', 'docsRefs': [self.ref],
+                'documentHashes': {'example': 'c' * 64},
+                'sourceHashes': {'example': {'example.json': 'sha256:' + 'f' * 64}}}).encode(),
             'website-llms': f'Declared API contract: {self.digest}; immutable Docs revision: {self.ref}. https://raw.githubusercontent.com/AIsa-team/docs/{self.ref}/openapi.yaml https://aisa.one/openapi.json'.encode(),
             'docs-llms': ('OpenAPI /openapi/openapi.json ' + self.digest).encode(),
             'docs-llms-full': self.text.encode(), 'mcp-llms': ('Loaded Docs revisions: ' + self.ref).encode()}
@@ -39,7 +41,28 @@ class SurfaceChecks(unittest.TestCase):
     def check(self):
         return check_surfaces(self.spec, self.digest, {self.ref},
             read_bytes=lambda name, url: self.payloads[name], expected_requests=self.expected,
-            expected_payment=self.payment)
+            expected_payment=self.payment,
+            expected_mcp_sources={'required': ['example.json'], 'allowed': {'example.json': 'sha256:' + 'f' * 64}})
+
+    def test_mcp_requires_complete_raw_source_union_not_provider_named_modules(self):
+        expected = {'required': ['one.json', 'two.json'],
+                    'allowed': {'one.json': 'sha256:a', 'two.json': 'sha256:b', 'legacy.json': 'sha256:c'}}
+        actual = {'sourceHashes': {'composite': {'one.json': 'sha256:a', 'two.json': 'sha256:b'},
+                                  'alias': {'one.json': 'sha256:a'}, 'legacy': {'legacy.json': 'sha256:c'}}}
+        self.assertEqual(compare_mcp_sources(expected, actual), [])
+        for name, mutate, error in [
+            ('missing', lambda a: a['sourceHashes']['composite'].pop('two.json'), 'two.json:source_file_missing'),
+            ('stale', lambda a: a['sourceHashes']['composite'].update({'two.json': 'sha256:old'}), 'two.json:source_hash_mismatch'),
+            ('unknown', lambda a: a['sourceHashes']['alias'].update({'unknown.json': 'sha256:a'}), 'unknown.json:unexpected_source_file'),
+            ('conflict', lambda a: a['sourceHashes']['alias'].update({'one.json': 'sha256:wrong'}), 'one.json:conflicting_source_hash'),
+            ('malformed', lambda a: a['sourceHashes'].update({'bad': []}), 'source_hashes_invalid'),
+            ('unbound', lambda a: a.update(missingProvenance=['unknown']), 'loaded_provenance_unverified'),
+        ]:
+            with self.subTest(name=name):
+                changed = copy.deepcopy(actual); mutate(changed)
+                self.assertIn('mcp:' + error, compare_mcp_sources(expected, changed))
+        for actual in ({}, {'sourceHashes': {}}):
+            self.assertEqual(compare_mcp_sources(expected, actual), ['mcp:source_hashes_unverified'])
 
     def test_payment_subset_drift_is_detected_independently_of_other_surfaces(self):
         for field in ('price', 'parameters', 'method', 'path'):

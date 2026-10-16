@@ -9,7 +9,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from router_surface_checks import (METADATA, SCHEMAS, PublicSchemaReader, canonical,
-    check_router_surface, contract_fields, digest, fixed_router_contracts, in_scope, reference_targets)
+    check_arguments_schema, check_router_surface, contract_fields, digest, fixed_router_contracts,
+    in_scope, reference_targets, schema_semantics)
 
 
 class RouterSurfaceTests(unittest.TestCase):
@@ -32,9 +33,13 @@ class RouterSurfaceTests(unittest.TestCase):
                     'responses': {'200': {'description': 'OK'}}}}}}
         self.expected = {'docs_ref': self.ref, 'excluded': [], 'provider_document_hashes': {'fixture': 'doc-hash'},
             'operations': {'get_item': {'source_file': 'openapi/fixture.json', 'source_hash': 'sha256:file-hash',
-                'document_hash': 'doc-hash', 'method': 'GET', 'path': '/item',
+                'document_hash': 'doc-hash', 'method': 'GET', 'path': '/item', 'argument_source': self.document,
                 'fingerprints': {k: digest(v) for k, v in contract_fields(self.document, '/item', 'get').items()}}}}
-        self.row = {'successful': True, 'documentation': {'openapi': copy.deepcopy(self.document),
+        self.row = {'successful': True, 'arguments_schema': {'type': 'object', 'additionalProperties': False,
+            'properties': {'query': {'type': 'string'},
+                'next': {'$ref': '#/components/schemas/Node'},
+                'count': {'type': 'integer', 'default': 9007199254740993}},
+            'components': copy.deepcopy(self.document['components'])}, 'documentation': {'openapi': copy.deepcopy(self.document),
             'provenance': {'docs_sha': self.ref, 'source_file': 'openapi/fixture.json',
                            'source_hash': 'sha256:file-hash', 'document_hash': 'doc-hash'}}}
         self.metadata = {'docs_commit': self.ref, 'build_id': 'build-1', 'provider_document_hashes': {'fixture': 'doc-hash'}}
@@ -47,7 +52,7 @@ class RouterSurfaceTests(unittest.TestCase):
             return copy.deepcopy(self.after if self.after is not None and len(self.calls) > 1 else self.metadata)
         self.assertEqual((method, url), ('POST', SCHEMAS))
         self.assertEqual(payload, {'tools': ['get_item'], 'include_documentation': True,
-                                  'include_arguments_schema': False, 'include_response_schema': False})
+                                  'include_arguments_schema': True, 'include_response_schema': False})
         return {'tools': {'get_item': copy.deepcopy(self.row)}}
 
     def audit(self):
@@ -81,6 +86,68 @@ class RouterSurfaceTests(unittest.TestCase):
                 else:
                     operation[field] = None
                 self.assertIn('router-schema:get_item:' + field + '_mismatch', self.audit()['mismatches'])
+
+    def test_matching_native_document_cannot_hide_actual_argument_drift(self):
+        original = copy.deepcopy(self.row['arguments_schema'])
+        for field in ('missing', 'type', 'required', 'large_integer', 'absent'):
+            with self.subTest(field=field):
+                schema = copy.deepcopy(original)
+                if field == 'missing': schema['properties'].pop('query')
+                elif field == 'type': schema['properties']['query']['type'] = 'integer'
+                elif field == 'required': schema['required'] = ['query']
+                elif field == 'large_integer': schema['properties']['count']['default'] = 9007199254740992
+                else: schema = None
+                self.row['arguments_schema'] = schema
+                result = self.audit()
+                self.assertEqual(result['verified_operations'], 0)
+                self.assertTrue(any(':arguments_schema:' in error for error in result['mismatches']))
+
+    def test_nested_body_composition_and_literal_business_names_are_preserved(self):
+        literal = {'$ref': 'a literal, not a schema reference', 'description': True}
+        body = {'type': 'object', 'properties': {
+            'description': {'type': 'string', 'enum': ['first', 'second']},
+            '$ref': {'type': 'object', 'default': literal},
+            'example': {'oneOf': [{'type': 'integer', 'minimum': 9223372036854775807},
+                                 {'type': 'string', 'minLength': 2}]}},
+            'required': ['description'], 'allOf': [{'anyOf': [{'required': ['$ref']},
+                                                            {'required': ['example']}]}]}
+        self.document['paths']['/item']['get'] = {'requestBody': {'required': True,
+            'content': {'application/json': {'schema': body}}}}
+        actual = {**copy.deepcopy(body), 'additionalProperties': False}
+        actual['properties']['query'] = {'type': 'string'}
+        actual['properties']['description']['description'] = 'Rendered annotation'
+        def check(value):
+            return check_arguments_schema(self.document, '/item', 'GET', value)
+        self.assertEqual(check(actual), [])
+        for name, mutate in [
+            ('composition', lambda a: a.pop('allOf')),
+            ('enum', lambda a: a['properties']['description']['enum'].append('third')),
+            ('literal boolean', lambda a: a['properties']['$ref']['default'].update(description=1)),
+            ('large integer', lambda a: a['properties']['example']['oneOf'][0].update(minimum=9223372036854776000)),
+            ('nested type', lambda a: a['properties']['example']['oneOf'][1].update(type='integer')),
+            ('required', lambda a: a.update(required=[])),
+        ]:
+            with self.subTest(name=name):
+                changed = copy.deepcopy(actual); mutate(changed)
+                self.assertTrue(check(changed))
+        # Keywords in instances and names are data, not recursively filtered.
+        normalized = schema_semantics(body, self.document)
+        self.assertEqual(normalized['properties']['$ref']['default'], literal)
+        self.assertIn('description', normalized['properties'])
+
+    def test_whole_body_and_local_refs_keep_independent_constraints(self):
+        operation = self.document['paths']['/item']['get']
+        operation.pop('requestBody')
+        operation['requestBody'] = {'required': True, 'content': {'application/json': {
+            'schema': {'type': 'array', 'items': {'$ref': '#/components/schemas/Node'}}}}}
+        actual = {'type': 'object', 'additionalProperties': False, 'required': ['body'],
+            'properties': {'query': {'type': 'string'},
+                           'body': {'type': 'array', 'items': {'$ref': '#/components/schemas/Node'}}},
+            'components': copy.deepcopy(self.document['components'])}
+        self.assertEqual(check_arguments_schema(self.document, '/item', 'get', actual), [])
+        actual['components']['schemas']['Node']['properties']['count']['default'] = 1
+        self.assertIn('argument constraints differ: body',
+                      check_arguments_schema(self.document, '/item', 'get', actual))
 
     def test_unavailable_legacy_is_never_implicitly_excluded(self):
         self.row = {'successful': False, 'error': {'code': 'not_found'}}
