@@ -7,7 +7,7 @@ import tempfile
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from deferred_definitions import (DeferredDefinitions, load_deferred_definitions, POLICY_PATH,
-                                  POLICY_SHA256, REBINDING_PATH, REBINDING_SHA256, FRED_MIGRATION_SHA256, validate_report_deferrals)
+                                  POLICY_SHA256, REBINDING_PATH, REBINDING_SHA256, FRED_MIGRATION_SHA256, validate_report_deferrals, canonical_key)
 from contract_readiness import check_readiness, _pending_key, binding_hash
 from gap_evidence import gap_key, response_gap_rows
 from publication_surface import publication_hashes
@@ -23,14 +23,32 @@ def policy_for(provider, kind, row):
 
 
 class DeferredDefinitionTests(unittest.TestCase):
+    def setUp(self):
+        # ROOT may be a source-only candidate activating the other approved
+        # record. Reconstruct the original fixture and verify its independent
+        # fixed hash before exercising the original sixty-key controls.
+        self.original = tempfile.TemporaryDirectory()
+        self.original_root = Path(self.original.name)
+        value = json.loads((ROOT / REBINDING_PATH).read_bytes())
+        value.pop('request_response_migration', None)
+        original_raw = (json.dumps(value, indent=2, ensure_ascii=False) + '\n').encode()
+        self.assertEqual(hashlib.sha256(original_raw).hexdigest(), REBINDING_SHA256)
+        for name, raw in ((POLICY_PATH, (ROOT / POLICY_PATH).read_bytes()),
+                          (REBINDING_PATH, original_raw)):
+            path = self.original_root / name; path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(raw)
+
+    def tearDown(self):
+        self.original.cleanup()
+
     def test_exact_approved_bytes_and_all_identity_dimensions(self):
-        policy = load_deferred_definitions(ROOT)
+        policy = load_deferred_definitions(self.original_root)
         raw = (ROOT / POLICY_PATH).read_bytes()
         self.assertEqual(hashlib.sha256(raw).hexdigest(), POLICY_SHA256)
         items = json.loads(raw)['items']
         self.assertEqual(len(items), 60)
         self.assertEqual(sum(row['kind'] == 'request' for row in items), 10)
-        rebinding = json.loads((ROOT / REBINDING_PATH).read_text())['rebindings'][0]
+        rebinding = json.loads((self.original_root / REBINDING_PATH).read_text())['rebindings'][0]
         for item in items:
             if item['gate_identity'] == rebinding['old_gate_identity']:
                 self.assertFalse(policy.matches(item['provider'], item['kind'], item['gate_identity']))
@@ -59,11 +77,11 @@ class DeferredDefinitionTests(unittest.TestCase):
                     load_deferred_definitions(root)
 
     def test_exact_rebinding_is_hashed_and_cannot_expand_or_survive_tampering(self):
-        policy = load_deferred_definitions(ROOT)
+        policy = load_deferred_definitions(self.original_root)
         self.assertEqual(len(policy.keys), 60)
-        self.assertEqual(publication_hashes(ROOT)[REBINDING_PATH], REBINDING_SHA256)
+        self.assertEqual(publication_hashes(self.original_root)[REBINDING_PATH], REBINDING_SHA256)
         self.assertEqual(policy.metadata['rebinding'], {'path': REBINDING_PATH, 'sha256': REBINDING_SHA256})
-        raw = (ROOT / REBINDING_PATH).read_bytes()
+        raw = (self.original_root / REBINDING_PATH).read_bytes()
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             p = root / POLICY_PATH; p.parent.mkdir(parents=True)
@@ -94,6 +112,11 @@ class DeferredDefinitionTests(unittest.TestCase):
             self.assertEqual(policy.metadata['scope'], {'request': 10, 'response': 50})
             self.assertEqual(policy.metadata['effective_scope'], {'request': 7, 'response': 53})
             migration = json.loads(raw)['request_response_migration']
+            expected = load_deferred_definitions(self.original_root).keys
+            for row in migration['replacements']:
+                expected = ((expected - {canonical_key('fred', 'request', row['old_gate_identity'])})
+                            | {canonical_key('fred', 'response', row['new_gate_identity'])})
+            self.assertEqual(policy.keys, expected)
             for row in migration['replacements']:
                 self.assertFalse(policy.matches('fred', 'request', row['old_gate_identity']))
                 self.assertTrue(policy.matches('fred', 'response', row['new_gate_identity']))
