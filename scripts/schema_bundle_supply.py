@@ -15,13 +15,26 @@ from export_schema_input_bundle import GitSource, export_bundle
 from publication_origin import ORIGIN, REPOSITORY, WORKFLOW
 from schema_input_bundle import (HEX40, HEX64, MAX_FILE, MAX_FILES, MAX_TOTAL,
                                  REVIEWED_BASELINE, canonical, load_bundle,
-                                 regular_read, require, role_for, sha, strict_json)
+                                 regular_read, require, role_for, sha, strict_json, INPUT_CONTEXT_PATH)
 
 SCOPE = 'verified_build_input_not_publication_or_current_source_authorization'
 KIND = 'aisa-schema-bundle-supply-candidate'
 ARCHIVE = 'bundle.tar.gz'
 MAX_ARCHIVE = MAX_TOTAL + (1 << 20)
 POSITIVE_IDENTIFIER = re.compile(r'[1-9][0-9]{0,23}')
+
+
+def legacy_supply_required(repo, docs_ref):
+    """Only an assessed Git-input formal graph may omit obsolete v2 transport."""
+    source = GitSource(repo, docs_ref)
+    report = strict_json(source.read(docs_ref, 'docs/publication/formal-contract-readiness.json'))
+    if INPUT_CONTEXT_PATH not in source.trees[docs_ref]:
+        return True
+    from formal_assessment import validate_formal_assessment, CANONICAL
+    require(validate_formal_assessment(report) == CANONICAL and
+            report['canonical_runtime_import']['inputs']['schema_version'] == 2,
+            'Reviewed input formal requires its explicit version 2 assessment')
+    return False
 
 
 def pack_bundle(root, destination):
@@ -178,6 +191,9 @@ def build_supply(repo, docs_ref, source_receipts, output, *, run_id, run_attempt
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
+    mode = commands.add_parser('mode')
+    mode.add_argument('--repo', type=Path, required=True)
+    mode.add_argument('--docs-ref', required=True)
     build = commands.add_parser('build')
     build.add_argument('--repo', type=Path, required=True)
     build.add_argument('--source-receipts', type=Path, required=True)
@@ -193,7 +209,10 @@ def main(argv=None):
         command.add_argument('--run-attempt', type=int, required=True)
     args = parser.parse_args(argv)
     try:
-        if args.command == 'build':
+        if args.command == 'mode':
+            print(str(legacy_supply_required(args.repo, args.docs_ref)).lower())
+            return
+        elif args.command == 'build':
             result = build_supply(args.repo, args.docs_ref, args.source_receipts, args.output,
                                   run_id=args.run_id, run_attempt=args.run_attempt)
         else:

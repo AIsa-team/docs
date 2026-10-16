@@ -116,6 +116,41 @@ class CanonicalShapeTests(unittest.TestCase):
             with self.subTest(mutate=mutate), self.assertRaises(ValueError):
                 shape.validate_formal_assessment(self.report, bad)
 
+    def test_reviewed_input_provenance_is_explicit_and_backwards_compatible(self):
+        report = copy.deepcopy(self.report)
+        inputs = report['canonical_runtime_import']['inputs']
+        inputs['schema_version'] = 2
+        inputs.pop('source_formal_provenance')
+        inputs['input_context_sha256'] = inputs.pop('source_pointer_sha256')
+        inputs['source_input_provenance'] = provenance = {
+            'kind': 'reviewed_git_input', 'expected_docs_ref': inputs['compiler_inputs']['docs_ref'],
+            'bundle_manifest_sha256': inputs['compiler_inputs']['bundle_manifest_sha256'],
+            'historical_formal_ref': '6' * 40, 'input_context_sha256': inputs['input_context_sha256'],
+            'input_source_receipts_sha256': '7' * 64}
+        for path, key in (('docs/schema-inputs/context.json', 'input_context_sha256'),
+                          ('docs/schema-inputs/source-receipts.json', 'input_source_receipts_sha256')):
+            for field in ('frozen_input_files_sha256', 'current_input_files_sha256'):
+                inputs[field][path] = provenance[key]
+        self.assertEqual(shape.validate_formal_assessment(report, self.receipt), shape.CANONICAL)
+        mutations = [lambda i: i.update(schema_version=1),
+            lambda i: i.update(source_formal_provenance={'expected_docs_ref': 'd' * 40}),
+            lambda i: i.update(source_pointer_sha256='1' * 64),
+            lambda i: i['source_input_provenance'].update(kind='formal'),
+            lambda i: i['source_input_provenance'].update(extra=True),
+            lambda i: i['source_input_provenance'].update(expected_docs_ref='9' * 40),
+            lambda i: i['source_input_provenance'].update(bundle_manifest_sha256='9' * 64),
+            lambda i: i['source_input_provenance'].update(historical_formal_ref='main'),
+            lambda i: i['source_input_provenance'].update(input_context_sha256='9' * 64),
+            lambda i: i['current_input_files_sha256'].pop('docs/schema-inputs/context.json'),
+            lambda i: i['frozen_input_files_sha256'].pop('docs/schema-inputs/source-receipts.json')]
+        for mutate in mutations:
+            bad = copy.deepcopy(report); mutate(bad['canonical_runtime_import']['inputs'])
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError):
+                shape.validate_formal_assessment(bad, self.receipt)
+        legacy = copy.deepcopy(self.report)
+        legacy['canonical_runtime_import']['inputs']['source_input_provenance'] = provenance
+        with self.assertRaises(ValueError): shape.validate_formal_assessment(legacy)
+
     def test_export_replays_before_touching_a_saved_pointer(self):
         previous = self.fixture.root / 'docs/publication/current.json'
         previous.parent.mkdir(parents=True, exist_ok=True)
@@ -206,6 +241,12 @@ class FormalBaseTests(unittest.TestCase):
         (root / 'openapi/registry.yaml').write_text('providers: {}\n')
         (root / REBINDING_PATH).parent.mkdir(parents=True, exist_ok=True)
         (root / REBINDING_PATH).write_text('{}')
+        from schema_input_bundle import INPUT_CONTEXT_PATH, INPUT_RECEIPTS_PATH
+        evidence = {INPUT_CONTEXT_PATH: b'{"recipe":"original fixture bytes"}',
+                    INPUT_RECEIPTS_PATH: b'{"receipt":"original fixture clock"}'}
+        for name, raw in evidence.items():
+            (root / name).parent.mkdir(parents=True, exist_ok=True)
+            (root / name).write_bytes(raw)
         def git(*args):
             return subprocess.check_output(['git', *args], cwd=root, text=True).strip()
         git('init', '-q'); git('config', 'user.name', 'Test'); git('config', 'user.email', 'test@example.invalid')
@@ -218,6 +259,8 @@ class FormalBaseTests(unittest.TestCase):
             self.assertEqual((view / 'openapi/registry.yaml').read_text(), 'providers: {}\n')
             self.assertEqual(projected, root)
             self.assertEqual(kwargs['previous_ref'], head)
+            for name, raw in evidence.items():
+                self.assertEqual((view / name).read_bytes(), raw)
             return copy.deepcopy(report)
         with patch.object(formal, 'assess_canonical_candidate', side_effect=assess), \
              patch.object(formal, 'validate_formal_assessment'):

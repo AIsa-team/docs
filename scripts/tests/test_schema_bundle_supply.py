@@ -209,6 +209,32 @@ class SupplyEnvelopeTests(unittest.TestCase):
 
 
 class WorkflowSupplyTests(unittest.TestCase):
+    def test_context_cannot_silently_omit_legacy_supply_without_typed_assessment(self):
+        from test_canonical_formal import CanonicalShapeTests
+        fixture = CanonicalShapeTests(); fixture.setUp(); self.addCleanup(fixture.doCleanups)
+        report = copy.deepcopy(fixture.report)
+        ref = 'a' * 40
+        source = SimpleNamespace(trees={ref: {supply.INPUT_CONTEXT_PATH: []}},
+                                 read=lambda *_: canonical(report))
+        with patch.object(supply, 'GitSource', return_value=source):
+            with self.assertRaisesRegex(ValueError, 'version 2 assessment'):
+                supply.legacy_supply_required('.', ref)
+            inputs = report['canonical_runtime_import']['inputs']
+            inputs.update(schema_version=2, input_context_sha256=inputs.pop('source_pointer_sha256'))
+            inputs.pop('source_formal_provenance')
+            inputs['source_input_provenance'] = provenance = {
+                'kind': 'reviewed_git_input', 'expected_docs_ref': inputs['compiler_inputs']['docs_ref'],
+                'bundle_manifest_sha256': inputs['compiler_inputs']['bundle_manifest_sha256'],
+                'historical_formal_ref': 'b' * 40, 'input_context_sha256': inputs['input_context_sha256'],
+                'input_source_receipts_sha256': 'c' * 64}
+            for path, key in (('docs/schema-inputs/context.json', 'input_context_sha256'),
+                              ('docs/schema-inputs/source-receipts.json', 'input_source_receipts_sha256')):
+                for field in ('frozen_input_files_sha256', 'current_input_files_sha256'):
+                    inputs[field][path] = provenance[key]
+            self.assertFalse(supply.legacy_supply_required('.', ref))
+            provenance['kind'] = 'formal'
+            with self.assertRaises(ValueError): supply.legacy_supply_required('.', ref)
+
     def test_upload_is_required_before_push_and_notifications_bind_only_pushed_commit(self):
         root = Path(__file__).resolve().parents[2]
         flow = yaml.safe_load((root / '.github/workflows/pull-openapi.yml').read_text())
@@ -224,9 +250,13 @@ class WorkflowSupplyTests(unittest.TestCase):
         self.assertNotIn('git push', steps[prepare]['run'])
         self.assertNotIn('docs_commit=', steps[prepare]['run'])
         for step in steps[prepare + 1:push + 1]:
-            self.assertEqual(step['if'], "steps.prepare.outputs.candidate_commit != ''")
+            expected = "steps.prepare.outputs.candidate_commit != ''"
+            if step.get('id') == 'schema_bundle':
+                expected += " && steps.supply_mode.outputs.legacy == 'true'"
+            self.assertEqual(step['if'], expected)
             self.assertNotIn('continue-on-error', step)
         self.assertIn('schema_bundle_supply.py build', steps[prepare + 1]['run'])
+        self.assertIn('schema_bundle_supply.py mode', steps[prepare + 1]['run'])
         self.assertIn('--source-receipts .cache/source-reviews.json', steps[prepare + 1]['run'])
         self.assertEqual(steps[upload]['uses'], 'actions/upload-artifact@v4')
         self.assertEqual(steps[upload]['with']['if-no-files-found'], 'error')

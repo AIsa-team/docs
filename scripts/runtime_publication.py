@@ -48,7 +48,8 @@ def stage_canonical(root, facts, *, baseline, source_receipts=None, checked_at=N
     require(verified_mode(facts) == 'canonical', 'Canonical stage requires a canonical Runtime artifact')
     assessed, previous = publication_refs(root, baseline)
     manifest = strict_json(regular_read(facts, MANIFEST))
-    files, lineage = schema_input_view_files(root, root, manifest['docs_ref'], previous)
+    files, lineage = schema_input_view_files(root, root, manifest['docs_ref'], previous,
+                                              compiler_inputs=manifest)
     receipt_path = Path(source_receipts) if source_receipts else root / '.cache/source-reviews.json'
     receipts = regular_read(receipt_path.parent, receipt_path.name)
     now = checked_at or datetime.now(timezone.utc)

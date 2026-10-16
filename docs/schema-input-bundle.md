@@ -145,3 +145,11 @@ cost/compatibility evaluation. This format does not choose an implementation
 language or introduce a second producer. Output-size roles, compiler identity,
 mixed-worker rollout fencing, current-time source governance, and consumer
 cutover remain separate reviewed work.
+
+## Reviewed input promotion
+
+[Bundle v3](reviewed-schema-inputs.md) separates a reviewed fixed Git schema
+input from its historical formal compatibility context. It preserves the
+existing v1/v2 path; a context-bearing ref must use explicit v3 rather than
+being exported as a formal v2 input. No production input or worker lock is
+activated by this support code.
