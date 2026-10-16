@@ -54,14 +54,51 @@ def available_targets(fragment, document):
     return targets
 
 
-def source_binding_evidence(fact, facts, sources, mirrors, public_path, method, source_bindings=None, response=False):
+def response_runtime_binding(fact, facts, public_path, method):
+    """Existing public response context; never private transport or requests.
+
+    The exact existing unknown-response policy chooses this identity version.
+    A new identity never automatically inherits an old exemption. No private
+    provider configuration, new Runtime fact or extra database read is needed.
+    """
+    prefix = urlsplit((facts.get('servers') or [{'url': ''}])[0].get('url', '')).path.rstrip('/')
+    path_item = facts.get('paths', {}).get(public_path.removeprefix(prefix), {})
+    security = fact.get('security', facts.get('security', []))
+    schemes = facts.get('components', {}).get('securitySchemes', {})
+    selected_schemes = {}
+    for requirement in security:
+        for name in requirement:
+            if name not in schemes:
+                raise ValueError('Unresolved response binding security scheme')
+            selected_schemes[name] = schemes[name]
+    security_targets = available_targets({'securitySchemes': selected_schemes}, facts)
+    if any(value in ({'missing_target': True}, {'external_target': True}) for value in security_targets.values()):
+        raise ValueError('Unresolved response binding security reference')
+    fields = ('operationId', 'x-aisa-status', 'x-aisa-upstream-path', 'x-aisa-upstream-selector',
+              'x-aisa-identity-source', 'x-aisa-lifecycle',
+              'x-aisa-response-passthrough', 'x-aisa-response-upstream-path-sha256',
+              'x-aisa-response-upstream-origin-sha256')
+    value = {'version': 2, 'path': public_path, 'method': method.upper(),
+             'provider': facts.get('info', {}).get('x-aisa-provider'),
+             'runtime': {key: fact[key] for key in fields if key in fact},
+             'security': security,
+             'security_schemes': _schema_contract({'securitySchemes': selected_schemes})['securitySchemes'],
+             'security_components': security_targets,
+             'servers': fact.get('servers', path_item.get('servers', facts.get('servers', [])))}
+    # Transport selectors and scheme names are instance data. Names such as
+    # "description" must not disappear through generic schema-prose stripping.
+    return digest(value)
+
+
+def source_binding_evidence(fact, facts, sources, mirrors, public_path, method, source_bindings=None, response=False, response_identity_v2=False):
     from runtime_registry import runtime_metadata_mirrors
     mirrors = runtime_metadata_mirrors(facts, sources, mirrors)
     sources = sources if isinstance(sources, list) else ([sources] if sources else [])
     selected_url = (source_bindings or {}).get(public_path)
     selected_sources = [s for s in sources if s.get('info', {}).get('x-aisa-source', {}).get('response_only') is not True
                         and (not selected_url or s.get('info', {}).get('x-aisa-source', {}).get('url') == selected_url)]
-    value = {'runtime_binding': binding_hash(fact, facts), 'selected_url': selected_url,
+    independent_binding = response_runtime_binding(fact, facts, public_path, method) if response and response_identity_v2 else None
+    value = {'runtime_binding': independent_binding or binding_hash(fact, facts), 'selected_url': selected_url,
              'upstream_path': fact.get('x-aisa-upstream-path'), 'selector': fact.get('x-aisa-upstream-selector')}
     ambiguous_candidates = []
     try:
@@ -156,7 +193,7 @@ def source_binding_evidence(fact, facts, sources, mirrors, public_path, method, 
     return digest(value)
 
 
-def enrich_coverage(rows, facts, upstream, mirrors, source_bindings=None):
+def enrich_coverage(rows, facts, upstream, mirrors, source_bindings=None, *, response_identity_v2=False):
     prefix = urlsplit((facts.get('servers') or [{'url': ''}])[0].get('url', '')).path.rstrip('/')
     for row in rows:
         item = facts['paths'].get(row['path'].removeprefix(prefix), {})
@@ -165,11 +202,11 @@ def enrich_coverage(rows, facts, upstream, mirrors, source_bindings=None):
         row['source_binding_hash'] = source_binding_evidence(effective, facts, upstream, mirrors,
             row['path'], row['method'], source_bindings)
         row['response_source_binding_hash'] = source_binding_evidence(effective, facts, upstream, mirrors,
-            row['path'], row['method'], source_bindings, response=True)
+            row['path'], row['method'], source_bindings, response=True, response_identity_v2=response_identity_v2)
     return rows
 
 
-def response_gap_rows(document, facts, coverage_rows):
+def response_gap_rows(document, facts, coverage_rows, *, response_identity_v2=False):
     by_route = {(row['path'], row['method'].lower()): row for row in coverage_rows}
     prefix = urlsplit((document.get('servers') or [{'url': ''}])[0].get('url', '')).path.rstrip('/')
     fact_prefix = urlsplit((facts.get('servers') or [{'url': ''}])[0].get('url', '')).path.rstrip('/')
@@ -198,18 +235,29 @@ def response_gap_rows(document, facts, coverage_rows):
             coverage = by_route.get((public, method), by_route.get((public, 'any'), {}))
             fact_item = facts.get('paths', {}).get(public.removeprefix(fact_prefix), {})
             fact = fact_item.get(method, fact_item.get('x-aisa-any', {}))
-            gaps.append({'operation_id': operation.get('operationId'), 'path': public, 'method': method.upper(),
+            row = {'operation_id': operation.get('operationId'), 'path': public, 'method': method.upper(),
                 'statuses': sorted(missing or declared.get('statuses', [])),
                 'reason_code': 'unresolved_response_reference' if unresolved else ('response_conversion_gap' if declared.get('reason') and not missing else 'missing_success_payload'),
                 'binding_hash': coverage.get('binding_hash') or binding_hash(fact, facts),
                 'source_binding_hash': coverage.get('source_binding_hash'),
                 'response_source_binding_hash': coverage.get('response_source_binding_hash'),
                 'response_binding_hash': digest(declaration_evidence(operation, document, ('responses',))),
-                'runtime_status': operation.get('x-aisa-status')})
+                'runtime_status': operation.get('x-aisa-status')}
+            if response_identity_v2:
+                row['response_runtime_binding_hash'] = response_runtime_binding(fact, facts, public, coverage.get('method', method))
+            gaps.append(row)
     return gaps
 
 
 def gap_key(row):
+    if 'response_runtime_binding_hash' in row:
+        required = ('operation_id', 'path', 'method', 'reason_code',
+                    'response_runtime_binding_hash', 'response_source_binding_hash', 'response_binding_hash')
+        if any(not row.get(key) for key in required):
+            return None
+        return (row['operation_id'], row['path'], str(row['method']).upper(), row['reason_code'],
+                'response-v2', row['response_runtime_binding_hash'], row['response_source_binding_hash'],
+                row['response_binding_hash'], tuple(sorted(row.get('statuses', []))), row.get('runtime_status'))
     required = ('operation_id', 'path', 'method', 'reason_code', 'binding_hash', 'source_binding_hash', 'response_source_binding_hash', 'response_binding_hash')
     if any(not row.get(key) for key in required):
         return None
@@ -221,14 +269,19 @@ def assess_response_gaps(report, facts, documents, coverage, baseline, deferred_
     if coverage.get('schema_version') != 2:
         return  # Legacy unit inputs; staged publication always uses version 2.
     for provider, result in report['providers'].items():
-        current = response_gap_rows(documents.get(provider, {}), facts.get(provider, {}), coverage['providers'].get(provider, []))
+        current = response_gap_rows(documents.get(provider, {}), facts.get(provider, {}), coverage['providers'].get(provider, []),
+            response_identity_v2=bool(deferred_definitions and deferred_definitions.response_v2_keys))
         declared = coverage.get('response_gaps', {}).get(provider)
         result.update(new_response_pending=[], existing_response_pending=[], deferred_response_pending=[])
         if declared != current:
             result['errors'].append({'code': 'response_gap_accounting_mismatch', 'provider': provider})
         approved = {gap_key(row) for row in (baseline or {}).get('response_gaps', {}).get(provider, [])} - {None}
         for row in current:
-            target = 'existing_response_pending' if gap_key(row) in approved else 'new_response_pending'
+            key = gap_key(row)
+            baseline_match = (key in approved or
+                (deferred_definitions is not None and
+                 deferred_definitions.response_baseline_matches(provider, key, approved)))
+            target = 'existing_response_pending' if baseline_match else 'new_response_pending'
             if target == 'new_response_pending' and deferred_definitions is not None and deferred_definitions.matches(provider, 'response', gap_key(row)):
                 target = 'deferred_response_pending'
             result[target].append(row)
