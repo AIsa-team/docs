@@ -1,5 +1,11 @@
 # Request-contract and consumer repair batch
 
+This code prerequisite adds compiler/converter support only. It does not change
+reviewed authority, upstream source bytes, receipts, source-review clocks, input
+context, the existing c77 debt record, or any formal publication. The separate
+reviewed-input PR must pass its normal exact input gate after this code is on
+main; no production acceptance is claimed by these code tests.
+
 ## Outcome and boundaries
 
 The Runtime request contract must describe what the gateway accepts and sends.
@@ -26,8 +32,9 @@ example scan; its failures must remain visible in the batch report.
   Reconcile an unqualified Free claim only against a positive, available
   fixed-success customer reference. Provider cost alone does not imply a customer
   price, and a usage estimate does not establish a fixed charge.
-- Restore the missing FRED current-maintenance receipt by copying the existing
-  reviewed receipt exactly. Do not renew its original acquisition/review clock.
+- The separate reviewed-input activation restores the missing FRED
+  current-maintenance receipt by copying the existing reviewed receipt exactly.
+  This code prerequisite includes no receipt change and renews no source clock.
 - Increment Composer's version so its existing input/version hash invalidates
   cached documents when the projection behavior changes.
 

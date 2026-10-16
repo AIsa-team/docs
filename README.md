@@ -189,8 +189,11 @@ remain subject to the strict readiness check. Source review receipts do not
 provide the independently approved baseline or prove a code-only Docs commit was
 published. See [reviewed source inputs](docs/current-source-review-20261009/README.md).
 
-The exact reviewed response-debt migration in
-`docs/deferred-age-response-rebinding-20261012.json` preserves the original
+The loader supports a separately reviewed response-debt identity migration in
+`docs/deferred-age-response-rebinding-20261012.json`. The existing c77 input
+retains legacy response identities; compiler support alone does not activate the
+new identity. Only the separately reviewed exact migration record selects it and
+preserves the original
 60-item approval bytes and clocks (now 7 request and 53 response gaps). Its 53
 enabled and 2 disabled-baseline response identities bind the public operation,
 route/method, effective public security and scheme definitions, published
