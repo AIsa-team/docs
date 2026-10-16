@@ -45,9 +45,9 @@ def digest(value):
 
 
 ANNOTATIONS = {'description','title','example','examples','$comment','deprecated','externalDocs','readOnly','writeOnly'}
-NAMED = {'properties','patternProperties','$defs','definitions','dependentSchemas'}
+NAMED = {'properties','patternProperties','$defs','definitions','dependentSchemas','dependentRequired'}
 LITERALS = {'default','const','enum','examples','example'}
-TOP_CONSTRAINTS = {'allOf','anyOf','oneOf','not','if','then','else','dependentRequired','dependentSchemas','minProperties','maxProperties','propertyNames','patternProperties'}
+TOP_CONSTRAINTS = {'allOf','anyOf','oneOf','not','if','then','else','dependentRequired','dependentSchemas','minProperties','maxProperties','propertyNames','patternProperties','const','enum'}
 
 
 def schema_semantics(value, document, active=(), named=False):
@@ -123,7 +123,11 @@ def check_arguments_schema(document,path,method,actual):
                 props[name]=subschema
             required.update(body_schema.get('required',[]))
             for key in TOP_CONSTRAINTS:
-                if key in body_schema and not same_json(schema_semantics(body_schema[key],document), schema_semantics(actual.get(key),actual)):
+                if key not in body_schema:
+                    continue
+                expected_constraint = schema_semantics({key: body_schema[key]}, document)
+                actual_constraint = schema_semantics({key: actual.get(key)}, actual)
+                if not same_json(expected_constraint, actual_constraint):
                     errors.append('flattened body lost '+key)
         else:
             if 'body' in props:

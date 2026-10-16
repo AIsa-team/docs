@@ -162,6 +162,20 @@ class RouterSurfaceTests(unittest.TestCase):
             'properties': {'query': {'type': 'string'}, 'name': {'type': 'string'}}}
         self.assertTrue(check_arguments_schema(self.document, '/item', 'get', flattened))
 
+    def test_top_level_literal_and_named_constraint_keys_are_data(self):
+        self.document['paths']['/item'].pop('parameters')
+        body = {'type': 'object', 'properties': {'description': {'type': 'string'}, '$ref': {'type': 'string'}},
+            'const': {'description': 'literal', '$ref': 'literal reference'},
+            'dependentRequired': {'description': ['$ref']},
+            'dependentSchemas': {'description': {'required': ['$ref']}}}
+        self.document['paths']['/item']['get']['requestBody'] = {
+            'content': {'application/json': {'schema': body}}}
+        actual = {**copy.deepcopy(body), 'additionalProperties': False}
+        self.assertEqual(check_arguments_schema(self.document, '/item', 'get', actual), [])
+        for field in ('const', 'dependentRequired', 'dependentSchemas'):
+            changed = copy.deepcopy(actual); changed[field].pop('description')
+            self.assertTrue(check_arguments_schema(self.document, '/item', 'get', changed))
+
     def test_unavailable_legacy_is_never_implicitly_excluded(self):
         self.row = {'successful': False, 'error': {'code': 'not_found'}}
         result = self.audit()
