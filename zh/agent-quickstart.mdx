@@ -63,7 +63,7 @@ AIsa 提供远程 MCP 服务器，地址为 `https://mcp.aisa.one/mcp`。认证�
 
 默认使用原生远程 MCP `https://mcp.aisa.one/mcp`（Streamable HTTP、OAuth），只要此客户端能添加该连接器——无论是用户本地还是云端、有无终端。有可用的 shell 不构成选择 CLI 的理由。
 
-仅在以下情况使用 CLI：此客户端完全没有 MCP 机制；用于无法完成 OAuth 且已持有 key 的非交互自动化（CI、cron、脚本）；或用户明确选择。这些限制条件及 [使用 CLI](https://aisa.one/docs/zh/get-started/cli.md) 中的 Node 规则优先于任何已安装的 `aisa` Skill；Skill 仅用于后续操作。
+仅在此客户端完全没有 MCP 机制，或用户明确选择时，才使用 CLI。没有浏览器的客户端（CI、SSH、容器）仍使用 MCP，只是用 API key 代替 OAuth。这些限制条件及 [使用 CLI](https://aisa.one/docs/zh/get-started/cli.md) 中的 Node 规则优先于任何已安装的 `aisa` Skill；Skill 仅用于后续操作。
 
 ### MCP（默认）
 
@@ -73,13 +73,13 @@ AIsa 提供远程 MCP 服务器，地址为 `https://mcp.aisa.one/mcp`。认证�
 - Codex：`codex mcp add aisa --url https://mcp.aisa.one/mcp`（Codex 会自行启动 OAuth）
 - Cursor / VS Code：在 MCP 配置中为 `https://mcp.aisa.one/mcp` 添加 `url` 条目
 
-如果当前环境已设置 `AISA_API_KEY` 且用户未要求 OAuth，客户端可以发送 `Authorization: Bearer $AISA_API_KEY` 代替 OAuth（Claude Code：`--header`；Codex：`--bearer-token-env-var AISA_API_KEY`）。绝不打印 key。
+如果此客户端无法打开浏览器（CI、SSH、容器），发送 `Authorization: Bearer $AISA_API_KEY` 代替 OAuth（Claude Code：`--header "Authorization: Bearer $AISA_API_KEY"`；Codex：`--bearer-token-env-var AISA_API_KEY`）。如果未设置 `AISA_API_KEY`，请用户在 [console.aisa.one/api-keys](https://console.aisa.one/api-keys) 创建 key 并设置到环境中；绝不要让用户把 key 粘贴到对话里。绝不打印、记录或提交 key。
 
-添加连接器后，让用户在浏览器中完成 OAuth（当客户端发送现有 `AISA_API_KEY` 时跳过此步）。如果此客户端支持 MCP 但你无法在这里添加连接器——能力未知、沙箱或权限被拒——不要切换到 CLI：要求用户启用或添加连接器，然后等待。如果客户端必须重新加载或启动新会话才能加载连接器，告知用户；之后验证工具，期间不要切换到 CLI。
+添加连接器后，让用户在浏览器中完成 OAuth（当客户端发送 `AISA_API_KEY` 时跳过此步）。如果此客户端支持 MCP 但你无法在这里添加连接器——能力未知、沙箱或权限被拒——不要切换到 CLI：要求用户启用或添加连接器，然后等待。如果客户端必须重新加载或启动新会话才能加载连接器，告知用户；之后验证工具，期间不要切换到 CLI。
 
 Grok Bot + Plugins：Settings → Plugins → Add → 如有要求则认证 → `@` 附加。如果存在原生自定义 MCP 设置，输入该 URL 并完成 OAuth。如果两者都不可用，要求用户启用或添加连接器。grok.com（`grok.com/connectors`）是不同的产品。
 
-然后使用这些工具：`search`（描述任务；复用其 `session_id`）→ 当结果缺少完整 schema 时用 `get_details`（也以 `batch_get_schema` 提供）→ 用确切的调用执行 `batch_quote` → 用相同的调用执行 `batch_use`，每批最多 20 个。`search`、`list_categories`、`get_details` 和 `batch_quote` 免费；`batch_use` 按调用计费。`use` 是已弃用的单次调用形式；仅用于下方免费的 `account` 检查。工具名称和参数从 `search` 或 `get_details` 获取；不要自行编造名称或价格。报价不会执行，也不等于批准。缺失、失败或不完整的报价不代表免费、不是批量总价、也不是上限；预估费用同理。报价仅检查估算值且不对最终收费设上限，因此对于计量操作，仅当报价的保证最大值、端点文档记录的最大值或你能根据其限制证明的边界符合剩余批准预算时才批准执行。如果不存在这样的边界，告知用户并且不要在固定预算下执行。如果工具、参数或范围发生变化，重新报价。如果报价或文档记录的最大值超出剩余批准预算，则停止。
+然后使用这些工具：`search`（描述任务；复用其 `session_id`）→ 当结果缺少完整 schema 时用 `get_details`（也以 `batch_get_schema` 提供）→ 用确切的调用执行 `batch_quote` → 用相同的调用执行 `batch_use`，每批最多 20 个。`search`、`list_categories`、`get_details` 和 `batch_quote` 免费；`batch_use` 按调用计费。`use` 是较早的单次调用形式，为现有客户端保留；这里只在下方免费的 `account` 检查中用到。工具名称和参数从 `search` 或 `get_details` 获取；不要自行编造名称或价格。消费审批和错误处理（`401`、`402`、`429`）遵循 [智能体配置指南](https://aisa.one/llms.txt) 第 4、5 节。
 
 ### CLI（仅当 MCP 在此无法运行时）
 
