@@ -132,6 +132,16 @@ The formal publisher separately acquires a fresh release and assesses the exact
 staged graph before exporting its publication pointer. Candidate CI success does
 not authorize a formal release or assert that consumers have converged.
 
+For mixed request bodies, an explicit Runtime array `items: {}` leaves its
+children provider-owned. Composer preserves the reviewed source item schema at
+that same array position while keeping Runtime's array type and bounds.
+Constrained Runtime items and mismatched source types keep the existing Runtime
+override. This changes documentation only, without changing request validation:
+
+```sh
+python -m unittest discover -s scripts/tests -p 'test_open_array_items.py'
+```
+
 ## Acquire an actual Runtime release for contract review
 
 After the Runtime operator supplies the **actual published artifact revision**
