@@ -1,77 +1,289 @@
 ---
 title: "Trend Forecast"
-description: "从预测市场、社交信号、新闻和市场数据预测趋势。"
+description: "基于预测市场、社交信号、新闻和市场数据进行趋势预测。"
 ---
 
 [在 GitHub 上查看 →](https://github.com/AIsa-team/agent-skills/tree/main/financial/trend-forecast)
 
-Trend Forecast 帮助 Agent 将多源信号转化为结构化预测：预测市场价格、社交讨论、新闻变化、股票/加密市场数据和关键不确定性。
+**多信号源趋势预测。** 结合预测市场、社交数据、新闻和市场走势，生成带置信度评分的分析报告。
 
 ## 安装
 
-```bash
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill trend-forecast
+```
+
+```bash AIsa CLI
 npm install -g @aisa-one/cli
 aisa skills install trend-forecast
 ```
+</CodeGroup>
 
-## Agent 可以做什么？
+安装完成后请启动新的智能体会话，以加载该 Skill。
+
+## 智能体能用它做什么？
 
 <CardGroup cols={2}>
-  <Card title="预测市场信号" icon="chart-line">
-    读取 Polymarket、Kalshi 等市场价格和事件结构。
+  <Card title="趋势简报" icon="chart-line">
+    将混合信号转化为简明的趋势预测。
   </Card>
-  <Card title="社交情绪" icon="comments">
-    分析 X/Twitter 讨论、影响者观点和传播速度。
+  <Card title="预测市场信号" icon="scale-balanced">
+    利用 Polymarket 和 Kalshi 的赔率作为概率依据。
   </Card>
-  <Card title="新闻与市场" icon="newspaper">
-    结合新闻、价格、基本面和宏观变量。
+  <Card title="社交情绪" icon="twitter">
+    读取 X/Twitter 上围绕话题、实体和叙事的动态。
   </Card>
-  <Card title="结构化预测" icon="bullseye">
-    输出概率、置信度、关键驱动因素和反证。
+  <Card title="市场背景" icon="landmark">
+    在相关时补充股票、加密货币和宏观经济背景。
   </Card>
 </CardGroup>
 
-## 工作流
+## 上下文
 
-1. 拆解用户问题，明确预测对象、时间范围和判断标准。
-2. 收集预测市场信号：市场价格、成交量、事件描述和到期时间。
-3. 收集 X/Twitter 社交情绪：热门讨论、关键账号、正反观点。
-4. 收集新闻信号：官方公告、媒体报道、行业变化。
-5. 如适用，收集股票、加密或宏观市场数据。
-6. 综合信号，给出概率区间、关键假设和风险。
-7. 用清晰格式输出，并附上来源链接。
+你是一个趋势预测智能体。当用户询问某个话题的走向、前景或概率时，你通过 AIsa 的统一 API 从五个独立数据源收集信号，然后综合生成带置信度评分的预测。
+
+这个 Skill 不是网络搜索工具。它是一个**多信号聚合引擎**，从预测市场、社交媒体、新闻和金融市场拉取结构化数据，再使用 LLM 综合生成趋势报告。
+
+所有端点共用同一个认证 Header：`Authorization: Bearer $AISA_API_KEY`。REST 接口位于 `https://api.aisa.one/apis/v1`；OpenAI 兼容的 LLM 网关位于 `https://api.aisa.one/v1`（注意：没有 `/apis`）。
 
 ## 示例提示词
 
-```txt
-预测某家公司下季度是否会发布新 AI 产品，并列出主要证据。
+- “未来 6 个月 AI 芯片市场的前景如何？”
+- “美联储会在 9 月之前降息吗？”
+- “根据当前情绪预测特斯拉股票的趋势”
+- “预测市场对 2026 年中期选举怎么看？”
+- “远程办公普及的趋势分析——结合社交、新闻和市场数据”
 
-基于预测市场、新闻和社交讨论，评估某政策在年底前通过的概率。
+## 环境变量
+
+```bash
+export AISA_API_KEY="your-aisa-api-key"
+```
+
+## 架构
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    USER QUERY                           │
+│          "What's the outlook on X?"                     │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│              QUERY DECOMPOSITION (LLM)                  │
+│  Break topic into search terms per data source          │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+          ┌────────────┼────────────┬────────────┐
+          ▼            ▼            ▼            ▼
+    ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
+    │Prediction│ │ Twitter  │ │  News    │ │  Stock   │
+    │ Markets  │ │Sentiment │ │ Velocity │ │  Data    │
+    │ (odds)   │ │ (volume) │ │ (tavily) │ │(financial)│
+    └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘
+         │            │            │             │
+         └────────────┴─────┬──────┴─────────────┘
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│              SIGNAL SYNTHESIS (LLM)                     │
+│  Weigh signals, detect agreement/conflict,              │
+│  produce confidence score (0-100) + forecast            │
+└─────────────────────────────────────────────────────────┘
+```
+
+## 工作流程
+
+按以下步骤依次执行。每一步都调用特定的 AIsa API 端点。
+
+### 第 1 步：分解查询
+
+使用 AIsa LLM 网关将用户查询拆解为各数据源的搜索词。
+
+```bash
+curl -X POST "https://api.aisa.one/v1/chat/completions" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4.1-mini",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You decompose a user query into search terms for 4 data sources. Respond ONLY with JSON: {\"prediction_market_query\": \"...\", \"twitter_query\": \"...\", \"news_query\": \"...\", \"stock_symbols\": [\"...\"], \"topic_summary\": \"...\"}. stock_symbols must be real tickers (AAPL, NVDA, TLT) — never institution abbreviations like FED/SEC/FDA."
+      },
+      {"role": "user", "content": "<USER_QUERY>"}
+    ],
+    "temperature": 0.2
+  }'
+```
+
+### 第 2 步：收集预测市场信号
+
+使用已挂载的预测市场发现端点收集市场上下文。AIsa 目前提供 Polymarket 的市场/事件发现和 Kalshi 的市场/交易接口；当预测需要可执行赔率时，请使用各平台原生 API 或交易系统获取当前价格和订单簿。
+
+```bash
+# Polymarket markets
+curl "https://api.aisa.one/apis/v1/polymarket/markets?limit=5" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Polymarket events
+curl "https://api.aisa.one/apis/v1/polymarket/events?limit=5" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+Kalshi 端点：
+
+```bash
+curl "https://api.aisa.one/apis/v1/kalshi/markets?limit=5&status=open" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+curl "https://api.aisa.one/apis/v1/kalshi/trades?limit=5&is_block_trade=false" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+提取：市场标题、状态、成交量/流动性字段、截止时间和近期交易上下文。
+
+### 第 3 步：收集 Twitter/X 社交情绪
+
+搜索 Twitter 上的近期讨论量和情绪信号。推文搜索端点为 `/twitter/tweet/advanced_search`，参数包括 `query` 和 `queryType`（`Latest` 或 `Top`）。
+
+```bash
+curl "https://api.aisa.one/apis/v1/twitter/tweet/advanced_search?query=<TWITTER_QUERY>&queryType=Latest" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+提取：推文数量、互动指标（点赞、转发、回复）、讨论该话题的知名账号，以及整体情绪基调。
+
+### 第 4 步：收集新闻信号
+
+使用 AIsa 的 Tavily 中继搜索该话题的近期新闻。
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/tavily/search" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "<NEWS_QUERY>",
+    "search_depth": "advanced",
+    "max_results": 10,
+    "topic": "news",
+    "days": 7
+  }'
+```
+
+提取：文章数量、来源多样性、标题情绪、发布速度（文章数量在加速还是减速？）。
+
+### 第 5 步：收集股票/市场信号（如适用）
+
+如果话题涉及上市公司、行业板块或金融工具，请查询 AIsa 的 MarketPulse `/financial/` 端点。每个 ticker 拉取三类信号：
+
+```bash
+# Historical prices (interval is required: day, week, month, etc.)
+curl "https://api.aisa.one/apis/v1/financial/prices?ticker=<STOCK_SYMBOL>&interval=day" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Real-time financial metrics snapshot
+curl "https://api.aisa.one/apis/v1/financial/financial-metrics/snapshot?ticker=<STOCK_SYMBOL>" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Company news
+curl "https://api.aisa.one/apis/v1/financial/news?ticker=<STOCK_SYMBOL>" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+提取：近期价格走势（1 天、5 天、30 天）、估值/盈利指标和标题情绪。若需更深入的信号，可补充 `/financial/analyst-estimates`、`/financial/insider-trades`，或宏观端点 `/financial/macro/interest-rates/snapshot`。
+
+只使用真实的 ticker 符号（AAPL、NVDA、TLT）——绝不要将机构缩写（FED、SEC、FDA）传入 `/financial/` 端点，否则会失败。如果没有相关的股票符号，跳过此步骤并注明 “N/A — non-financial topic”。
+
+### 第 6 步：综合预测
+
+将所有收集到的信号传入 AIsa LLM 网关进行综合分析。
+
+```bash
+curl -X POST "https://api.aisa.one/v1/chat/completions" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4.1-mini",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a trend analyst. Given structured signals from prediction markets, Twitter, news, and stock data, produce a forecast. Output JSON: {\"trend_direction\": \"bullish|bearish|neutral|mixed\", \"confidence_score\": 0-100, \"time_horizon\": \"...\", \"headline\": \"...\", \"analysis\": \"...\", \"signal_agreement\": \"high|medium|low\", \"key_signals\": [...], \"risks\": [...], \"data_gaps\": [...]}"
+      },
+      {
+        "role": "user",
+        "content": "TOPIC: <TOPIC_SUMMARY>\n\nPREDICTION MARKETS:\n<PM_DATA>\n\nTWITTER SENTIMENT:\n<TWITTER_DATA>\n\nNEWS VELOCITY:\n<NEWS_DATA>\n\nMARKET DATA:\n<STOCK_DATA>"
+      }
+    ],
+    "temperature": 0.3
+  }'
+```
+
+### 第 7 步：格式化并交付
+
+以如下格式向用户展示预测结果：
+
+```
+📈 TREND FORECAST: <headline>
+
+Direction: <trend_direction>
+Confidence: <confidence_score>/100
+Signal Agreement: <signal_agreement>
+Time Horizon: <time_horizon>
+
+ANALYSIS:
+<analysis paragraph>
+
+KEY SIGNALS:
+- <signal 1>
+- <signal 2>
+- <signal 3>
+
+RISKS & CAVEATS:
+- <risk 1>
+- <risk 2>
+
+DATA GAPS:
+- <any sources that returned no data>
 ```
 
 ## 规则
 
-- 搜索结果只是线索，抓取页面和 API 数据才是证据。
-- 不要把市场价格机械等同为真实概率。
-- 明确区分事实、市场预期和模型判断。
-- 对投资相关结论加入风险提示。
+- 在综合之前**必须**调用至少 3 个数据源（共 4 个）。如果预测基于不足 3 个数据源，必须包含醒目的 “LOW CONFIDENCE — limited data sources” 警告。
+- **绝不要**将预测市场赔率当作确定事实。始终表述为“预测市场目前将 X 定价为 Y%”，而非“X 会发生”。
+- **绝不要**提供理财建议。所有输出都应定位为信息性分析，而非投资建议。涉及股票数据时须附加免责声明。
+- 股票信号只使用真实 ticker 符号。绝不要将机构缩写（FED、SEC、FDA）传入 `/financial/` 端点——它们会失败。
+- 如果 AISA_API_KEY 未设置，请提示用户设置，并提供 https://aisa.one 的链接以创建账号。
+- 如果任何 API 调用失败，记录错误，继续使用剩余数据源，并在最终输出中注明缺口。
 
 ## 自动化
 
-该 Skill 适合定时生成简报：每日趋势榜、事件概率变化、竞品动态和风险告警。
-## 开始使用
+如需定期预测，可使用 Python 脚本：
 
 ```bash
-export AISA_API_KEY="YOUR_AISA_API_KEY"
-npm install -g @aisa-one/cli
-aisa skills install trend-forecast
+python3 scripts/trend_forecast.py "Will the Fed cut rates in 2026?" --output json
+python3 scripts/trend_forecast.py "Tesla outlook" --output markdown --save report.md
+python3 scripts/trend_forecast.py "Bitcoin outlook" --model gpt-5.4
 ```
+
+完整实现参见 `scripts/trend_forecast.py`，完整的 AIsa 端点文档参见 `references/api_endpoints.md`。
+
+## 开始使用
+
+1. 在 [aisa.one](https://aisa.one) 注册并在控制台中创建 API key。
+2. 在 shell 中设置：`export AISA_API_KEY="your-key"`。
+3. 使用[安装](#安装)部分的命令安装 Skill，然后启动新的智能体会话。
 
 ## 相关
 
 <CardGroup cols={3}>
-  <Card title="Prediction Market Data" icon="chart-line" href="/zh/agent-skills/prediction-market-data">预测市场数据。</Card>
-  <Card title="Twitter Autopilot" icon="x-twitter" href="/zh/agent-skills/twitter-autopilot">社交信号。</Card>
-  <Card title="MarketPulse" icon="chart-candlestick" href="/zh/agent-skills/marketpulse">市场数据。</Card>
+  <Card title="Prediction Market Data" icon="chart-simple" href="/zh/agent-skills/prediction-market-data">
+    市场赔率、价格和交易历史。
+  </Card>
+  <Card title="Twitter Autopilot" icon="twitter" href="/zh/agent-skills/twitter-autopilot">
+    X/Twitter 搜索与社交情报。
+  </Card>
+  <Card title="MarketPulse" icon="chart-line" href="/zh/agent-skills/marketpulse">
+    股票、财报和宏观市场背景。
+  </Card>
 </CardGroup>
-

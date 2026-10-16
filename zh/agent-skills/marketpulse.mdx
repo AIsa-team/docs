@@ -1,83 +1,230 @@
 ---
 title: "MarketPulse"
-description: "面向 Agent 的实时与历史股票市场数据。"
+description: "面向自主智能体的实时及历史股票市场数据——价格、新闻、财务报表、指标、分析师预测、内部人交易、SEC 文件、股票筛选及宏观利率。"
 ---
 
 [在 GitHub 上查看 →](https://github.com/AIsa-team/agent-skills/tree/main/financial/marketpulse)
 
-MarketPulse 为 Agent 提供股票价格、新闻、财务报表、指标、分析师预期、内部人交易、SEC filings、筛选器和宏观利率数据。
+**为自主智能体提供完整的股票市场数据。** 一个 `AISA_API_KEY` 即可解锁股票、财务数据、SEC 文件和宏观数据——智能体研究、筛选和分析上市公司所需的一切。
 
 ## 安装
 
-```bash
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill marketpulse
+```
+
+```bash AIsa CLI
 npm install -g @aisa-one/cli
 aisa skills install marketpulse
 ```
+</CodeGroup>
 
-## Agent 可以做什么？
+安装后请启动一个新的智能体会话，以便加载该 Skill。
+
+## 智能体能用它做什么？
 
 <CardGroup cols={2}>
-  <Card title="价格数据" icon="chart-line">
-    获取历史日线、周线和分钟级日内行情柱。
+  <Card title="投资研究" icon="magnifying-glass-chart">
+    “完整分析：NVDA 价格趋势、内部人交易、分析师预测、SEC 文件。”
   </Card>
-  <Card title="基本面" icon="building-columns">
-    查询财务报表、指标、估值和分析师预期。
+  <Card title="财报分析" icon="file-invoice-dollar">
+    “获取 Tesla 财报快照、分析师预测和价格反应。”
   </Card>
-  <Card title="事件与披露" icon="file-lines">
-    读取新闻、SEC 申报文件、内部人交易和申报文件条目。
+  <Card title="市场筛选" icon="filter">
+    “查找 P/E < 15 且营收增长 > 20% 的股票。”
   </Card>
-  <Card title="筛选与宏观" icon="filter">
-    使用股票筛选器、报表项目搜索 和利率数据。
+  <Card title="大户追踪" icon="fish">
+    “追踪 Apple 的内部人交易并与价格走势关联。”
+  </Card>
+  <Card title="财务报表分析" icon="chart-pie">
+    “比较 Apple 的利润表、资产负债表、现金流量表和财务指标。”
+  </Card>
+  <Card title="宏观背景" icon="landmark">
+    “拉取联邦基金利率历史数据，与银行财报对照。”
   </Card>
 </CardGroup>
 
 ## 核心能力
 
-- 股票历史价格和实时快照
-- 利润表、资产负债表和现金流量表
-- 财务指标和快照
-- 分析师预期
-- 内部人交易
-- SEC 申报文件与已解析条目
-- 股票筛选与财务项目搜索
-- 宏观利率
+- **价格**——历史 OHLCV 数据，支持秒、分钟、日、周、月、年粒度
+- **新闻**——按股票代码过滤的公司新闻
+- **财务报表**——利润表、资产负债表、现金流量表；年度、季度或 TTM
+- **财务指标**——实时快照或历史序列
+- **分析师预测**——EPS 和增长预测
+- **内部人交易**——按股票代码查询 Form 4 文件
+- **SEC 文件**——文件索引和解析后的文件条目（10-K、10-Q、8-K 等）
+- **公司信息**——按股票代码或 CIK 查询参考数据
+- **股票筛选器**——通过 POST 请求体筛选全市场（P/E、增长率等）
+- **科目搜索**——一次调用即可拉取多个股票代码的特定指标
+- **宏观**——当前及历史央行利率
 
 ## 快速开始
 
 ```bash
-# 历史日线
-curl "https://api.aisa.one/apis/v1/financials/prices?ticker=AAPL&start_date=2025-01-01&end_date=2025-01-31&interval=day" \
+export AISA_API_KEY="your-key"
+```
+
+### 股票价格
+
+```bash
+# Historical daily data
+curl "https://api.aisa.one/apis/v1/financial/prices?ticker=AAPL&interval=day&interval_multiplier=1&start_date=2025-01-01&end_date=2025-12-31" \
   -H "Authorization: Bearer $AISA_API_KEY"
 
-# 实时财务指标快照
-curl "https://api.aisa.one/apis/v1/financials/metrics/snapshot?ticker=AAPL" \
+# Intraday 5-minute bars
+curl "https://api.aisa.one/apis/v1/financial/prices?ticker=AAPL&interval=minute&interval_multiplier=5&start_date=2025-01-15&end_date=2025-01-15" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+**必需参数：** `ticker`、`interval`（`second` · `minute` · `day` · `week` · `month` · `year`）、`interval_multiplier`、`start_date`、`end_date`。
+
+### 财务报表
+
+```bash
+# All three statements in one call
+curl "https://api.aisa.one/apis/v1/financial/financials?ticker=AAPL&period=annual" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Or fetch them individually
+-H "Authorization: Bearer $AISA_API_KEY"
+-H "Authorization: Bearer $AISA_API_KEY"
+-H "Authorization: Bearer $AISA_API_KEY"
+```
+
+**`period`** 接受 `annual`、`quarterly` 或 `ttm`。
+
+### 财务指标
+
+```bash
+# Real-time snapshot
+curl "https://api.aisa.one/apis/v1/financial/financial-metrics/snapshot?ticker=AAPL" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Historical
+curl "https://api.aisa.one/apis/v1/financial/financial-metrics?ticker=AAPL&period=annual" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+### 内部人交易
+
+```bash
+curl "https://api.aisa.one/apis/v1/financial/insider-trades?ticker=AAPL" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+### SEC 文件
+
+```bash
+# Filings index
+curl "https://api.aisa.one/apis/v1/financial/filings?ticker=AAPL" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Parsed filing items (requires filing_type and year)
+curl "https://api.aisa.one/apis/v1/financial/filings/items?ticker=AAPL&filing_type=10-K&year=2024" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+### 股票筛选器（POST）
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/financial/financials/search/screener" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"filters":{"pe_ratio":{"max":15},"revenue_growth":{"min":0.2}}}'
+```
+
+### 科目搜索
+
+```bash
+curl -X POST "https://api.aisa.one/apis/v1/financial/financials/search/line-items" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"tickers":["AAPL","MSFT"],"line_items":["revenue","net_income"],"period":"annual"}'
+```
+
+### 宏观利率
+
+```bash
+# Current rates
+curl "https://api.aisa.one/apis/v1/financial/macro/interest-rates/snapshot" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+# Historical (per central bank)
+curl "https://api.aisa.one/apis/v1/financial/macro/interest-rates?bank=fed" \
   -H "Authorization: Bearer $AISA_API_KEY"
 ```
 
 ## Python 客户端
 
-用 Python client 时，先把 ticker、日期范围和 interval 明确传入。价格接口通常需要 `start_date`、`end_date` 和 `interval`。
-
-## Endpoint 参考
-
-主要 endpoint 位于 [Financial API](/api-reference/financial/get_prices) 和相关 financial reference 页面。
-
-## 使用建议
-
-把 MarketPulse 作为事实数据层；投资结论应结合财报、新闻、价格行为、估值和风险，不要只用单个指标。
-## 开始使用
+自带的 `market_client.py` 封装了所有端点，一行即可调用：
 
 ```bash
-export AISA_API_KEY="YOUR_AISA_API_KEY"
-npm install -g @aisa-one/cli
-aisa skills install marketpulse
+# Prices (start/end are required)
+python3 scripts/market_client.py stock prices --ticker AAPL --start 2025-01-01 --end 2025-01-31
+python3 scripts/market_client.py stock prices --ticker AAPL --start 2025-01-01 --end 2025-01-31 --interval week
+
+# Statements
+python3 scripts/market_client.py stock statements --ticker AAPL --type all --period annual
+python3 scripts/market_client.py stock statements --ticker AAPL --type income --period quarterly
+
+# Analysis
+python3 scripts/market_client.py stock metrics --ticker AAPL --historical --period annual
+python3 scripts/market_client.py stock analyst --ticker AAPL
+python3 scripts/market_client.py stock earnings --ticker AAPL
+
+# Insider trades
+python3 scripts/market_client.py stock insider --ticker AAPL
+
+# SEC filings
+python3 scripts/market_client.py stock filings --ticker AAPL --items --filing-type 10-K --year 2024
+
+# Screener / line items
+python3 scripts/market_client.py stock screen --pe-max 15 --growth-min 0.2
+python3 scripts/market_client.py stock line-items --tickers AAPL,MSFT --items revenue,net_income --period annual
+
+# Interest rates
+python3 scripts/market_client.py stock rates --historical --bank fed
 ```
+
+## 端点参考
+
+| 端点                                           | 方法   | 用途                                                                                               |
+| ---------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------- |
+| `/financial/prices`                            | GET    | [历史价格](/zh/api-reference/financial/get_prices)                                                  |
+| `/financial/news`                              | GET    | [公司新闻](/zh/api-reference/financial/get_news)                                                    |
+| `/financial/financials`                        | GET    | [全部报表](/zh/api-reference/financial/get_financials)                                              |
+| `/financial/financials/income-statements`      | GET    | [利润表](/zh/api-reference/financial/get_financials-income-statements)                              |
+| `/financial/financials/balance-sheets`         | GET    | [资产负债表](/zh/api-reference/financial/get_financials-balance-sheets)                             |
+| `/financial/financials/cash-flow-statements`   | GET    | [现金流量表](/zh/api-reference/financial/get_financials-cash-flow-statements)                       |
+| `/financial/financial-metrics/snapshot`        | GET    | [指标快照](/zh/api-reference/financial/get_financial-metrics-snapshot)                              |
+| `/financial/financial-metrics`                 | GET    | [历史指标](/zh/api-reference/financial/get_financial-metrics)                                       |
+| `/financial/analyst-estimates`                 | GET    | [分析师预测](/zh/api-reference/financial/get_analyst-estimates)                                     |
+| `/financial/insider-trades`                    | GET    | [内部人交易](/zh/api-reference/financial/get_insider-trades)                                        |
+| `/financial/filings`                           | GET    | [SEC 文件](/zh/api-reference/financial/get_filings)                                                 |
+| `/financial/filings/items`                     | GET    | [文件条目](/zh/api-reference/financial/get_filings-items)                                           |
+| `/financial/company/facts`                     | GET    | [公司信息](/zh/api-reference/financial/get_company-facts)                                           |
+| `/financial/financials/search/screener`        | POST   | 股票筛选器                                                                                         |
+| `/financial/financials/search/line-items`      | POST   | [科目搜索](/zh/api-reference/financial/post_financials-search-line-items)                           |
+| `/financial/macro/interest-rates/snapshot`     | GET    | [利率快照](/zh/api-reference/financial/get_macro-interest-rates-snapshot)                           |
+| `/financial/macro/interest-rates`              | GET    | [历史利率](/zh/api-reference/financial/get_macro-interest-rates)                                    |
+
+## 开始使用
+
+1. 在 [aisa.one](https://aisa.one) 注册并在控制台创建 API key。
+2. 在终端中设置：`export AISA_API_KEY="your-key"`。
+3. 使用[安装](#安装)部分的命令安装该 Skill，然后启动一个新的智能体会话。
 
 ## 相关
 
 <CardGroup cols={3}>
-  <Card title="AIsa Market" icon="chart-line" href="/zh/agent-skills/market">跨资产市场数据。</Card>
-  <Card title="US Stock Analyst" icon="magnifying-glass-chart" href="/zh/agent-skills/us-stock-analyst">美股研究报告。</Card>
-  <Card title="Stock Analysis" icon="chart-simple" href="/zh/agent-skills/stock-analysis">股票分析工作流。</Card>
+  <Card title="Financial API 参考" icon="chart-line" href="/zh/api-reference/financial/get_prices">
+    MarketPulse Skill 封装的所有端点，附带交互式调试工具。
+  </Card>
+  <Card title="错误码" icon="triangle-exclamation" href="/zh/api-reference/errors">
+    处理 Financial 端点返回的 400/401/429 响应。
+  </Card>
+  <Card title="速率限制" icon="gauge-high" href="/zh/api-reference/rate-limits">
+    各端点和层级的吞吐量上限。
+  </Card>
 </CardGroup>
-
