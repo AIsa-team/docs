@@ -17,6 +17,7 @@ from wrapper_twitter_reference import REFERENCE_URL as TWITTER_REFERENCE_URL, im
 from wrapper_cloudsway_reference import REFERENCE_URL as CLOUDSWAY_REFERENCE_URL, import_reference as import_cloudsway_reference
 from wrapper_cloudsway_full_reference import REFERENCE_URL as CLOUDSWAY_FULL_URL, import_reference as import_cloudsway_full_reference
 from source_governance import initial_policy
+from import_dataforseo_filters import SOURCE_URL as DATAFORSEO_URL, VERSION as DATAFORSEO_VERSION, normalize_filters, remove_duplicate_batch_examples
 from source_json import loads as source_json_loads, checked_float, UnsupportedNumericPrecision
 
 
@@ -117,6 +118,16 @@ OfficialSourceLoader.add_constructor('tag:yaml.org,2002:bool', _yaml_boolean)
 OfficialSourceLoader.add_constructor('tag:yaml.org,2002:timestamp', _yaml_timestamp)
 
 
+def normalize_relayer_address_example(document):
+    """Remove the known non-address placeholder, retaining the caller contract."""
+    for parameter in document.get('paths', {}).get('/relayer/api/keys', {}).get('get', {}).get('parameters', []):
+        if (parameter.get('in') == 'header' and parameter.get('name') == 'RELAYER_API_KEY_ADDRESS'
+                and parameter.get('example') == '0xabc...'
+                and parameter.get('schema') == {'$ref': '#/components/schemas/Address'}
+                and document.get('components', {}).get('schemas', {}).get('Address', {}).get('pattern') == '^0x[a-fA-F0-9]{40}$'):
+            parameter.pop('example')
+
+
 def import_source(provider, url):
     if not KEY.fullmatch(provider) or not url.startswith('https://'):
         raise ValueError('provider id and HTTPS source URL are required')
@@ -158,6 +169,20 @@ def import_source(provider, url):
     else:
         raw = fetch(url)
         document = source_json_loads(raw) if raw.lstrip().startswith((b'{', b'[')) else yaml.load(raw, Loader=OfficialSourceLoader)
+        if url == DATAFORSEO_URL:
+            original_hash = digest(document)
+            document, changed = normalize_filters(document)
+            examples = remove_duplicate_batch_examples(document)
+            metadata = {'converter': DATAFORSEO_VERSION, 'upstream_content_hash': original_hash,
+                        'filter_json_fields_normalized': len(changed),
+                        'duplicate_batch_examples_removed': len(examples)}
+        elif url == 'https://docs.polymarket.com/api-spec/relayer-openapi.yaml':
+            # An ellipsis is not a usable EVM-address example. Keep the header,
+            # pattern and all other declarations; never manufacture an address.
+            original_hash = digest(document)
+            normalize_relayer_address_example(document)
+            metadata = {'converter': 'scripts/import_upstream.py@4-relayer-address-example',
+                        'upstream_content_hash': original_hash}
     if not isinstance(document, dict) or not str(document.get('openapi', '')).startswith('3.') or not isinstance(document.get('paths'), dict):
         raise ValueError('source is not an OpenAPI 3 document')
     source_hash = digest(document)

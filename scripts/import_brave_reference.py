@@ -9,7 +9,73 @@ from source_json import loads as source_json_loads
 
 INDEX_URL = "https://api-dashboard.search.brave.com/llms.txt"
 ORIGIN = "https://api-dashboard.search.brave.com"
-VERSION = "scripts/import_brave_reference.py@3"
+VERSION = "scripts/import_brave_reference.py@4"
+
+
+def normalize_parameter_examples(param, schemas):
+    """Normalize documented logical examples and explicit CSV serialization."""
+    from jsonschema import Draft202012Validator
+    from referencing import Registry
+    root = {'allOf': [param.get('schema', {})], 'components': {'schemas': schemas}}
+    validator = Draft202012Validator(root, registry=Registry())
+    omitted = object()
+    csv_filter = (param.get('name') == 'result_filter'
+                  and (param.get('schema', {}).get('type') == 'array'
+                       or any(branch.get('type') == 'array' for branch in
+                              param.get('schema', {}).get('anyOf', [])))
+                  and 'comma' in param.get('schema', {}).get('description', '').lower())
+    if csv_filter and param.get('in') == 'query':
+        param.setdefault('style', 'form')
+        param.setdefault('explode', False)
+
+    def logical(value):
+        if validator.is_valid(value):
+            return value  # Valid empty strings, string unions and False survive.
+        if value == '':
+            return omitted  # UI placeholders are not logical request examples.
+        if isinstance(value, str) and value in ('true', 'false'):
+            candidate = value == 'true'
+            if validator.is_valid(candidate):
+                return candidate
+        if csv_filter and param.get('in') in ('query', 'body') and isinstance(value, str):
+            candidate = value.split(',')
+            if validator.is_valid(candidate):
+                return candidate
+        return value  # Unknown errors are retained for review, never discarded.
+
+    for owner in (param, param.get('schema', {})):
+        if isinstance(owner.get('examples'), list):
+            owner['examples'] = [v for example in owner['examples'] if (v := logical(example)) is not omitted]
+        elif isinstance(owner.get('examples'), dict):
+            examples = {}
+            for key, example in owner['examples'].items():
+                if not isinstance(example, dict) or 'value' not in example:
+                    examples[key] = example
+                elif (value := logical(example['value'])) is not omitted:
+                    examples[key] = {**example, 'value': value}
+            owner['examples'] = examples
+
+
+def normalize_body_examples(schema, schemas, seen=None):
+    """Request schema annotations only; example instances are never traversed."""
+    if not isinstance(schema, dict):
+        return
+    seen = set() if seen is None else seen
+    if id(schema) in seen:
+        return
+    seen.add(id(schema))
+    ref = schema.get('$ref', '')
+    if ref.startswith('#/components/schemas/'):
+        name = ref.removeprefix('#/components/schemas/').replace('~1', '/').replace('~0', '~')
+        normalize_body_examples(schemas.get(name), schemas, seen)
+    for name, value in schema.get('properties', {}).items():
+        normalize_parameter_examples({'in': 'body', 'name': name, 'schema': value}, schemas)
+        normalize_body_examples(value, schemas, seen)
+    for key in ('items', 'additionalProperties', 'not'):
+        normalize_body_examples(schema.get(key), schemas, seen)
+    for key in ('anyOf', 'oneOf', 'allOf', 'prefixItems'):
+        for value in schema.get(key, []):
+            normalize_body_examples(value, schemas, seen)
 
 
 def canonical(value):
@@ -103,6 +169,7 @@ def convert_specs(rows):
                     param["examples"] = examples
                 else:
                     raise ValueError("unsupported official parameter examples")
+            normalize_parameter_examples(param, spec['schemas'])
             operation["parameters"].append(param)
         auth = {}
         for param in spec["authParams"]:
@@ -121,7 +188,8 @@ def convert_specs(rows):
             if not any("application/json" in sample.get("source", "") for sample in spec["codeSamples"]):
                 raise ValueError("official request body has no JSON media evidence")
             operation["requestBody"] = {key: body[key] for key in ("required", "description") if key in body}
-            operation["requestBody"]["content"] = {"application/json": {"schema": body["schema"]}}
+            schema = copy.deepcopy(body["schema"])
+            operation["requestBody"]["content"] = {"application/json": {"schema": schema}}
         for response in spec["responses"]:
             operation["responses"][str(response["statusCode"])] = {
                 "description": response["description"],
@@ -150,9 +218,13 @@ def convert_specs(rows):
         if canonical(existing) != canonical(operation):
             raise ValueError("conflicting official operation documents")
         for name, schema in spec["schemas"].items():
-            existing = document["components"]["schemas"].setdefault(name, schema)
+            existing = document["components"]["schemas"].setdefault(name, copy.deepcopy(schema))
             if canonical(existing) != canonical(schema):
                 raise ValueError("conflicting official component definitions")
+    for item in document['paths'].values():
+        for operation in item.values():
+            for media in operation.get('requestBody', {}).get('content', {}).values():
+                normalize_body_examples(media['schema'], document['components']['schemas'])
     return document
 
 
