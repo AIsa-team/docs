@@ -761,6 +761,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         else:
                             raise ValueError("upstream operation missing")
                     operation = copy.deepcopy(runtime)
+                    query_restriction = None
                     capabilities = operation.get("x-aisa-capabilities", {})
                     if "mpp_methods" in capabilities:
                         capabilities["mpp"] = capabilities.get("mpp") is True and actual_method.upper() in capabilities["mpp_methods"]
@@ -785,6 +786,18 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     if validation != "runtime":
                         runtime_fields = {(p["in"], p["name"]) for p in runtime.get("parameters", [])}
                         query_passthrough = runtime.get("x-aisa-query-policy", {}).get("request_wins", False)
+                        query_policy = runtime.get("x-aisa-query-policy", {})
+                        if query_policy.get("request_wins") is False and query_policy.get("ignore_undeclared") is False:
+                            excluded = sorted({p["name"] for p in mirror.get("parameters", [])
+                                if p.get("in") == "query" and p.get("name", "").lower() not in auth_names
+                                and ("query", p["name"]) not in runtime_fields})
+                            if excluded:
+                                accepted = sorted(name for location, name in runtime_fields if location == "query")
+                                query_restriction = (
+                                    "AIsa query restriction: only declared query parameters are accepted"
+                                    + (": " + ", ".join(accepted) if accepted else " (none)")
+                                    + ". Upstream-only query parameters " + ", ".join(excluded)
+                                    + " are not accepted by this AIsa endpoint.")
                         if bound_source and not runtime.get("x-aisa-upstream-selector"):
                             for parameter in mirror.get("parameters", []):
                                 if parameter.get("in") == "query" and parameter.get("required") and isinstance(parameter.get("schema"), dict) and "default" in parameter["schema"]:
@@ -809,7 +822,12 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     description = editorial.get("description") or runtime.get("description") or mirror.get("description")
                     if description:
                         operation["description"] = description
-                    notes = editorial.get("x-aisa-notes", [])
+                    if query_restriction:
+                        operation["description"] = (operation.get("description", "").rstrip()
+                            + "\n\n" + query_restriction).lstrip()
+                    notes = [*editorial.get("x-aisa-notes", [])]
+                    if query_restriction:
+                        notes.append(query_restriction)
                     if notes:
                         operation["x-aisa-notes"] = copy.deepcopy(notes)
                         constraints = operation.setdefault("x-aisa-constraints", {})
