@@ -32,6 +32,27 @@ class ChangeScopeTests(unittest.TestCase):
         self.assertEqual(candidate['if'], "needs.changes.outputs.input_candidate == 'true'")
         self.assertIn('--base "$INPUT_BASE"', candidate['run'])
 
+    def test_input_review_and_regression_attachments_do_not_admit_execution_or_outputs(self):
+        source = ['docs/schema-inputs/context.json', 'docs/schema-inputs/source-receipts.json',
+                  'openapi/upstream/apollo.json']
+        attachments = ['scripts/tests/test_apollo_people_request_location.py',
+                       'docs/current-source-review-20261009/merged-source-reviews.json',
+                       'docs/current-source-review-20261016/apollo-people-request-location-review.json']
+        self.assertTrue(is_reviewed_input_change(source + attachments))
+        self.assertFalse(is_reviewed_input_change(attachments))
+        self.assertFalse(is_reviewed_input_change(source[1:] + attachments))
+        for extra in ('scripts/compose_openapi.py', 'scripts/check_reviewed_schema_inputs.py',
+                      'scripts/contract_change_scope.py', 'scripts/tests/__init__.py',
+                      'scripts/tests/helper.py', 'scripts/tests/fixtures/test_hidden.py',
+                      'scripts/tests/test_../escape.py', '.github/workflows/test-runtime-contracts.yml',
+                      'openapi/apollo.json', 'openapi.yaml', 'openapi/overlays/apollo.json',
+                      'docs/publication/current.json', 'api-reference/apollo.mdx',
+                      'docs/current-source-review-20261016/review.py',
+                      'docs/current-source-review-20261016/unknown.json',
+                      'docs/current-source-review-20261016/../apollo-review.json'):
+            with self.subTest(extra=extra):
+                self.assertFalse(is_reviewed_input_change(source + attachments + [extra]))
+
     def test_guide_only_edits_run_protocol_checks_without_republishing_contracts(self):
         root = Path(__file__).resolve().parents[2]
         workflow = yaml.safe_load((root / '.github/workflows/test-runtime-contracts.yml').read_text())
