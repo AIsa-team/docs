@@ -77,7 +77,23 @@ NOTICE_ZH = '当前 API 价格请查看公开的 x-aisa-pricing 信息；接口�
 # Examples and code are data, even when they happen to contain billing words.
 FENCES = re.compile(r'(```[^\n]*\n.*?```|~~~[^\n]*\n.*?~~~|<pre\b[^>]*>.*?</pre>)', re.S | re.I)
 PARTS = re.compile(r'(\n+|[;；](?![^()]*\))|(?<=[.!?。！？])\s+(?!\d)|<br\s*/?>|</?p\b[^>]*>|(?=\bNote:?)|(?<=false)(?=Note))', re.I)
-NON_RATE = re.compile(r'products that cost|price per contract|price_centicents|YES at|NO at|shares redeem', re.I)
+NON_RATE = re.compile(r'products that cost|sort by|(?:minimum|maximum) price of|price per contract|price_centicents|YES at|NO at|shares redeem', re.I)
+PRICE_PARENTHETICAL = re.compile(
+    r'\(\s*(?:US)?\$\s*\d+(?:\.\d+)?(?:\s*/\s*(?:request|call)(?:[^()\n]*))?\s*\)', re.I)
+CONDITIONAL_SURCHARGE = re.compile(
+    r'\byou will be (?:charged|billed) (?:extra\s+)?(?:' + MONEY.pattern + r')(?:\s+extra)?', re.I)
+
+
+def reconcile_free_claim(text, pricing):
+    """A positive customer success price contradicts an unqualified Free claim."""
+    if not isinstance(pricing, dict) or pricing.get('customer_pricing') != 'fixed_success':
+        return text
+    amount = usd(pricing.get('default_request_estimate_usd'))
+    if amount is None or amount == '$0' or pricing.get('reference_unavailable'):
+        return text
+    # A standalone billing sentence/clause, never descriptions such as free text.
+    return re.sub(r'(?:(?<=\.)|^)\s*Free(?=[.,;]|$)',
+                  ' See the published pricing', text)
 
 
 def clean_text(text: str, language: str = 'en') -> str:
@@ -89,16 +105,24 @@ def clean_text(text: str, language: str = 'en') -> str:
     changed = False
     for index in range(0, len(chunks), 2):
         chunk = chunks[index]
-        # Inline model lists must keep the supported model names.
-        chunk, count = re.subn(r'\(\$\d+(?:\.\d+)?\s*/\s*request[^()\n]*\)', '', chunk, flags=re.I)
-        changed |= bool(count)
         # Keep the model choice while removing its obsolete rate assertion.
         chunk, count = re.subn(r'(`[^`]+`) is billed at \$\d+(?:\.\d+)? per request\.', r'\1 is supported.', chunk)
+        changed |= bool(count)
+        # Preserve the condition that changes provider usage while removing its
+        # stale monetary amount. This does not assert a customer surcharge.
+        chunk, count = CONDITIONAL_SURCHARGE.subn('provider usage may increase', chunk)
         changed |= bool(count)
         parts = PARTS.split(chunk)
         for j in range(0, len(parts), 2):
             part = parts[j]
             if MONEY.search(part) and RATE.search(part) and not NON_RATE.search(part):
+                # An API-rate parenthetical must not take its surrounding batch
+                # limits or other caller instructions with it.
+                without_rate, count = PRICE_PARENTHETICAL.subn('', part)
+                if count and not MONEY.search(without_rate):
+                    parts[j] = without_rate.rstrip()
+                    changed = True
+                    continue
                 # A price-only bullet under a Price heading has its unit in the
                 # same clause. Keep surrounding non-price bullets untouched.
                 # Row limits are request rules, not monetary rates.
@@ -133,6 +157,7 @@ def clean_document(document: dict) -> dict:
         is_operation = isinstance(result.get('operationId'), str)
         if is_operation and isinstance(result.get('description'), str):
             result['description'] = strip_price_summary(result['description'])
+            result['description'] = reconcile_free_claim(result['description'], result.get('x-aisa-pricing'))
         for field in ('description', 'summary', 'title'):
             if isinstance(result.get(field), str):
                 result[field] = clean_text(result[field])
