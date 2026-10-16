@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit, unquote
 
-VERSION = "20"
+VERSION = "21"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -489,6 +489,13 @@ def merge_object(upstream: dict, declared: dict) -> dict:
         original = merged.setdefault("properties", {}).get(name, {})
         if value.get("properties") and isinstance(original, dict) and original.get("type", "object") == "object":
             merged["properties"][name] = merge_object(original, value)
+        elif (value.get("type") == "array" and value.get("items") == {}
+              and isinstance(original, dict) and original.get("type") == "array"
+              and isinstance(original.get("items"), dict)):
+            # Runtime owns this array and its bounds, but an explicit empty
+            # items schema makes no declaration about the provider's children.
+            merged["properties"][name] = copy.deepcopy(value)
+            merged["properties"][name]["items"] = copy.deepcopy(original["items"])
         else:
             merged["properties"][name] = copy.deepcopy(value)
     merged.pop("required", None)
