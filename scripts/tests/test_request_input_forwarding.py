@@ -1,11 +1,42 @@
 import copy
 import unittest
 
-from audit_request_input_forwarding import audit_provider, missing_header_inputs, missing_query_inputs
+from audit_request_input_forwarding import audit_provider, missing_header_inputs, missing_query_inputs, missing_body_inputs
 from test_runtime_contracts import facts, mirror, operation
 
 
 class RequestInputForwardingTests(unittest.TestCase):
+    def test_closed_body_optional_fields_are_rejected_at_any_depth(self):
+        def body(schema):
+            return {'requestBody': {'content': {'application/json': {'schema': schema}}}}
+        source = body({'type': 'object', 'properties': {'optional': {'type': 'string'},
+                      'options': {'type': 'object', 'properties': {'nested': {'type': 'string'}}}}})
+        runtime = body({'type': 'object', 'additionalProperties': False, 'properties': {
+                       'options': {'type': 'object', 'properties': {}, 'additionalProperties': False}}})
+        missing, status = missing_body_inputs(runtime, source, {}, {})
+        self.assertEqual(missing, ['application/json#/optional', 'application/json#/options/nested'])
+        self.assertEqual(status, 'checked_declared_properties')
+
+    def test_body_open_leaf_and_opaque_cases_are_distinct(self):
+        source = {'requestBody': {'content': {'application/json': {'schema': {'type': 'object', 'properties': {'value': {'type': 'object', 'properties': {'child': {}}}}}}}}}
+        runtime = copy.deepcopy(source)
+        runtime['requestBody']['content']['application/json']['schema'] = {'properties': {'value': {}}, 'additionalProperties': False}
+        self.assertEqual(missing_body_inputs(runtime, source, {}, {}), ([], 'checked_declared_properties'))
+        self.assertEqual(missing_body_inputs({}, source, {}, {}), ([], 'opaque_or_absent_runtime_body_unverified'))
+        opaque = {'x-aisa-validation': 'mixed', 'x-aisa-passthrough': True}
+        self.assertEqual(missing_body_inputs(opaque, source, {}, {}), ([], 'opaque_by_runtime_validation_boundary'))
+        opaque['x-aisa-validation'] = 'runtime'
+        self.assertEqual(missing_body_inputs(opaque, source, {}, {}), ([], 'opaque_or_absent_runtime_body_unverified'))
+
+    def test_body_refs_arrays_and_schema_branches_are_visible(self):
+        reference = {'components': {'schemas': {'Data': {'type': 'object', 'properties': {'cursor': {}}}}}}
+        source = {'requestBody': {'content': {'application/json': {'schema': {'type': 'array', 'items': {'$ref': '#/components/schemas/Data'}}}}}}
+        runtime = copy.deepcopy(source)
+        runtime['requestBody']['content']['application/json']['schema']['items'] = {'type': 'object', 'additionalProperties': False}
+        self.assertEqual(missing_body_inputs(runtime, source, reference, {})[0], ['application/json#/*/cursor'])
+        runtime['requestBody']['content']['application/json']['schema'] = {'oneOf': [{}, {}]}
+        self.assertEqual(missing_body_inputs(runtime, source, reference, {})[1], 'partial_schema_review')
+
     def test_optional_and_required_inputs_cannot_silently_disappear(self):
         for required in (False, True):
             with self.subTest(required=required):
