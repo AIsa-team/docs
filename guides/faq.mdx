@@ -26,21 +26,21 @@ No. Change the base URL and the key: `https://api.aisa.one/v1` for the OpenAI SD
 
 ## What tools does the MCP server expose?
 
-Five: `search` and `list_categories` to find an operation, `get_details` for its contract and a quote, and `use` or `batch_use` to run it. The first three are free; `use` and `batch_use` are billed per call. Your agent reaches the whole data catalog through these five instead of loading hundreds of tools.
+A small set of meta tools: `search` and `list_categories` to find an operation, `get_details` (also served as `batch_get_schema`) for its full contract, `batch_quote` to price the exact calls without running them, and `batch_use` to run up to 20 calls at once. All but `batch_use` are free; `batch_use` is billed per call. `use` remains as a deprecated single-call form. Your agent reaches the whole data catalog through these tools instead of loading hundreds.
 
 ## Should my agent use a Skill or call APIs directly?
 
-Use a Skill when an existing one already covers the outcome - it encodes which tools to call, in what order, and how to present the result. Call APIs directly (over HTTP or MCP `use`) when your application needs its own sequencing, retries, or data processing. You can combine both: a Skill for the common path, direct calls for the rest.
+Use a Skill when an existing one already covers the outcome - it encodes which tools to call, in what order, and how to present the result. Call APIs directly (over HTTP or MCP `batch_use`) when your application needs its own sequencing, retries, or data processing. You can combine both: a Skill for the common path, direct calls for the rest.
 
 ## How is usage billed?
 
-Models are billed per token; data APIs per request, either a fixed rate per call or metered from what the request returns. Everything draws on one prepaid balance, and discovery - docs, `/v1/models`, MCP `search` and `get_details` - is free. The docs explain billing rules but do not list prices; see [aisa.one/models](https://aisa.one/models) and [aisa.one/api](https://aisa.one/api), and [Billing & Credits](/guides/pricing) for quotes and spend caps.
+Models are billed per token; data APIs per request, either a fixed rate per call or metered from what the request returns. Everything draws on one prepaid balance, and discovery - docs, `/v1/models`, MCP `search`, `get_details`, and `batch_quote` - is free. The docs explain billing rules but do not list prices; see [aisa.one/models](https://aisa.one/models) and [aisa.one/api](https://aisa.one/api), and [Billing & Credits](/guides/pricing) for quotes and spend caps.
 
 ## Can I cap what an agent spends?
 
 Yes. Give each agent its own API key with a spending limit in the Console. That limit is the hard ceiling on what the key can spend.
 
-For a single call, endpoints that declare maximum-price support accept `X-AISA-Max-Price-USD` over HTTP, and MCP `use` and `batch_use` accept `max_price_usd`. If the cost estimate exceeds your maximum, the gateway rejects the request with `402` before calling the provider. This checks the estimate; it does not cap the final charge. Model routes such as `/v1/chat/completions` do not apply this header, so bound their cost with `max_tokens` and the key's spending limit. See [Billing & Credits](/guides/pricing#quote-review-then-execute).
+For a single call, endpoints that declare maximum-price support accept `X-AISA-Max-Price-USD` over HTTP: if the cost estimate exceeds your maximum, the gateway rejects the request with `402` before calling the provider. Over MCP, price the exact calls with `batch_quote` first and run them with `batch_use` only when the quote fits your budget. Both check the estimate; neither caps the final charge. Model routes such as `/v1/chat/completions` do not apply this header, so bound their cost with `max_tokens` and the key's spending limit. See [Billing & Credits](/guides/pricing#quote-review-then-execute).
 
 ## Does every endpoint support machine payments (MPP or x402)?
 
