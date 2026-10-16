@@ -871,6 +871,16 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                                     parameter.setdefault("example", value)
                         if bound_source and not query_passthrough and any(p.get("in") == "query" and p.get("required") and (p["in"], p["name"]) not in runtime_fields for p in mirror.get("parameters", [])):
                             raise ValueError("bound source requires query parameters that runtime does not forward")
+                        unforwarded_query = sorted({
+                            p["name"] for p in mirror.get("parameters", [])
+                            if p.get("in") == "query"
+                            and p.get("name", "").lower() not in auth_names
+                            and not query_passthrough
+                            and (p["in"], p["name"]) not in runtime_fields
+                        })
+                        if unforwarded_query:
+                            raise ValueError("source query parameters are not forwarded by runtime: "
+                                             + ", ".join(unforwarded_query))
                         parameters = {
                             (p["in"], p["name"]): p for p in mirror.get("parameters", [])
                             if p.get("name", "").lower() not in auth_names

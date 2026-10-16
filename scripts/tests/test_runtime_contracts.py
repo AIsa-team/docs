@@ -129,11 +129,35 @@ class CompositionTests(unittest.TestCase):
             runtime = facts("mixed")
             operation(runtime)["x-aisa-query-policy"] = {"request_wins": False, "ignore_undeclared": ignore}
             document, pending = compose(runtime, upstream)
-            self.assertFalse(pending)
-            self.assertEqual([p["name"] for p in operation(document)["parameters"]], ["switch"])
+            self.assertEqual(document["paths"], {})
+            self.assertEqual(pending[0]["reason"],
+                             "source query parameters are not forwarded by runtime: upstream_only")
         operation(runtime)["x-aisa-query-policy"]["request_wins"] = True
         document, _ = compose(runtime, upstream)
         self.assertEqual([p["name"] for p in operation(document)["parameters"]], ["switch", "upstream_only"])
+
+    def test_optional_query_loss_is_pending_for_provider_and_mixed_contracts(self):
+        for validation in ("provider", "mixed"):
+            runtime, upstream = facts(validation), mirror()
+            operation(runtime)["x-aisa-query-policy"] = {"request_wins": False}
+            upstream["paths"]["/provider/test"]["post"]["parameters"].extend([
+                {"in": "query", "name": "cursor", "required": False,
+                 "schema": {"type": "string"}},
+                {"in": "query", "name": "after", "schema": {"type": "string"}}])
+            document, pending = compose(runtime, upstream)
+            self.assertEqual(document["paths"], {})
+            self.assertEqual(pending, [{"operation_id": "published_identity",
+                "path": "/apis/v1/similarweb/test", "method": "POST",
+                "reason": "source query parameters are not forwarded by runtime: after, cursor"}])
+            # Declaring precisely these inputs restores composition; provider
+            # credentials remain hidden and do not create a false omission.
+            operation(runtime)["parameters"].extend([
+                {"in": "query", "name": "cursor", "schema": {"type": "string"}},
+                {"in": "query", "name": "after", "schema": {"type": "string"}}])
+            document, pending = compose(runtime, upstream)
+            self.assertFalse(pending)
+            self.assertEqual([p["name"] for p in operation(document)["parameters"]],
+                             ["after", "cursor", "switch"])
 
     def test_nested_mixed_body_preserves_undeclared_provider_fields(self):
         runtime, upstream = facts("mixed"), mirror()

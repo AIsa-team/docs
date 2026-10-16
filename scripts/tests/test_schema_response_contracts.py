@@ -215,6 +215,8 @@ class SchemaResponseContractsTests(unittest.TestCase):
         public['info']['x-aisa-source'].update(kind='manual', path_space='public')
         public['components']['schemas']['Body']['properties']['email']['nullable'] = True
         source_op = operation(public)
+        # A public mirror declares caller inputs, not provider credentials.
+        source_op['parameters'] = [p for p in source_op['parameters'] if p['name'] != 'provider_token']
         public['components']['schemas']['Result'] = {'type': 'string', 'nullable': True}
         source_op['responses'] = {'200': {
             'headers': {'Ignored-Header': {'$ref': 'https://example.test/ignored-header'}},
