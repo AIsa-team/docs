@@ -144,3 +144,13 @@ archive SHA was
 claim that the historical GitHub run uploaded this newly introduced artifact.
 The new supply workflow must run on a subsequent genuine formal publication to
 establish the first actual CI artifact.
+
+## Git input supply
+
+For explicitly assessed [reviewed Git inputs](reviewed-schema-inputs.md), the
+worker rebuilds its v3 bundle from independently pinned Git bytes. The formal
+publisher therefore skips only the obsolete v2 supply artifact for a validated
+version 2 input assessment. It still performs all formal/replay/origin/CAS and
+notification steps. Old v1 input assessments without a context keep the existing
+required v2 export/upload path. This does not solve retention of old formal
+producer provenance; those original run/artifact checks remain explicit.

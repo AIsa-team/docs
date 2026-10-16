@@ -190,20 +190,27 @@ jobs:
           echo "candidate_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "assessed_base=$assessed_base" >> "$GITHUB_OUTPUT"
       - name: Export and verify original schema inputs for the local formal commit
+        id: supply_mode
         if: steps.prepare.outputs.candidate_commit != ''
         env:
           CANDIDATE_COMMIT: ${{ steps.prepare.outputs.candidate_commit }}
           PUBLISH_RUN_ID: ${{ github.run_id }}
           PUBLISH_RUN_ATTEMPT: ${{ github.run_attempt }}
-        run: >-
-          python scripts/schema_bundle_supply.py build
-          --repo . --docs-ref "$CANDIDATE_COMMIT"
-          --source-receipts .cache/source-reviews.json
-          --run-id "$PUBLISH_RUN_ID" --run-attempt "$PUBLISH_RUN_ATTEMPT"
-          --output "$RUNNER_TEMP/schema-bundle-supply"
+        run: |
+          legacy=$(python scripts/schema_bundle_supply.py mode --repo . --docs-ref "$CANDIDATE_COMMIT")
+          echo "legacy=$legacy" >> "$GITHUB_OUTPUT"
+          if [ "$legacy" = true ]; then
+            python scripts/schema_bundle_supply.py build \
+              --repo . --docs-ref "$CANDIDATE_COMMIT" \
+              --source-receipts .cache/source-reviews.json \
+              --run-id "$PUBLISH_RUN_ID" --run-attempt "$PUBLISH_RUN_ATTEMPT" \
+              --output "$RUNNER_TEMP/schema-bundle-supply"
+          elif [ "$legacy" != false ]; then
+            exit 1
+          fi
       - name: Retain immutable schema input candidate before publication
         id: schema_bundle
-        if: steps.prepare.outputs.candidate_commit != ''
+        if: steps.prepare.outputs.candidate_commit != '' && steps.supply_mode.outputs.legacy == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: schema-input-bundle-v2-${{ github.run_id }}-${{ github.run_attempt }}

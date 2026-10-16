@@ -8,6 +8,7 @@ on:
       - 'discovery/**'
       - 'openapi/**'
       - 'docs/publication/**'
+      - 'docs/schema-inputs/**'
       - 'docs/current-source-review-20261009/**'
       - 'docs/response-source-review-receipts.json'
       - 'openapi.yaml'
@@ -27,6 +28,7 @@ on:
       - 'discovery/**'
       - 'openapi/**'
       - 'docs/publication/**'
+      - 'docs/schema-inputs/**'
       - 'docs/current-source-review-20261009/**'
       - 'docs/response-source-review-receipts.json'
       - 'openapi.yaml'
@@ -53,6 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       artifacts: ${{ steps.scope.outputs.artifacts }}
+      input_candidate: ${{ steps.scope.outputs.input_candidate }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -108,6 +111,9 @@ jobs:
     if: needs.changes.outputs.artifacts == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -138,6 +144,7 @@ jobs:
           --reviewed docs/current-source-review-20261009/merged-source-reviews.json
           --cache .cache/source-reviews.json
       - name: Check actual candidate readiness
+        if: needs.changes.outputs.input_candidate != 'true'
         env:
           REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
           PUBLISHED_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.published_ref || github.event.pull_request.base.sha || github.event.before }}
@@ -147,6 +154,15 @@ jobs:
             --baseline-ref "$REVIEWED_BASELINE" \
             --published-ref "$PUBLISHED_REF" \
             --report /tmp/contract-readiness.json
+      - name: Check explicit reviewed source-only input without claiming formal output
+        if: needs.changes.outputs.input_candidate == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          python scripts/check_reviewed_schema_inputs.py \
+            --facts-dir /tmp/runtime-contract-evidence \
+            --base "$INPUT_BASE" --output /tmp/reviewed-input-candidate
       - name: Retain candidate assessment
         if: always()
         uses: actions/upload-artifact@v4
@@ -155,6 +171,7 @@ jobs:
           path: |
             /tmp/contract-readiness.json
             /tmp/runtime-contract-evidence/acquisition-receipt.json
+            /tmp/reviewed-input-candidate/receipt.json
           if-no-files-found: ignore
   contracts:
     # Preserve the existing required check and reject skipped formal checks

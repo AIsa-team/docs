@@ -9,7 +9,7 @@ from canonical_import import assess_canonical_candidate
 from export_schema_input_bundle import GitSource
 from formal_assessment import FORMAL_SCOPE, ARTIFACT_SCOPE, validate_formal_assessment
 from schema_input_bundle import (REBINDING_PATH, UniqueLoader, canonical, regular_read,
-    reject_unimplemented_inputs, require, strict_json)
+    reject_unimplemented_inputs, require, strict_json, INPUT_CONTEXT_PATH, INPUT_RECEIPTS_PATH)
 
 
 def assess_formal_canonical(root, facts, *, previous_formal_ref, assessed_base,
@@ -30,7 +30,8 @@ def assess_formal_canonical(root, facts, *, previous_formal_ref, assessed_base,
                                 pointer_paths=source.trees[assessed_base])
     selected = [name for name in source.trees[assessed_base] if
                 (name.startswith('openapi/') and not name.startswith('openapi/zh/')
-                 and name != 'openapi/openapi.json') or name == REBINDING_PATH]
+                 and name != 'openapi/openapi.json') or name in {
+                     REBINDING_PATH, INPUT_CONTEXT_PATH, INPUT_RECEIPTS_PATH}]
     with tempfile.TemporaryDirectory(prefix='canonical-assessed-base-') as folder:
         view = Path(folder)
         for name in selected:
