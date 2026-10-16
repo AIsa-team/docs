@@ -1,6 +1,8 @@
 import copy
 from datetime import datetime, timedelta, timezone
 import hashlib
+import html
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -19,6 +21,133 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 
 
 class ActivationTests(unittest.TestCase):
+    def test_two_semantic_rounds_and_lost_dispatch_use_actual_all_surface_gates(self):
+        """Isolated monitor integration, not attributed publication or deployment.
+
+        Every registry provider participates; expected Git and observed HTTP
+        bytes are separate. Only the formal authorization boundary is mocked.
+        No checker is replaced with a pre-assessed pass.
+        """
+        from public_surface_checks import JSON_SURFACES, TEXT_SURFACES
+        from router_surface_checks import METADATA, canonical, digest
+        providers = sorted(yaml.safe_load((SCRIPTS.parent / 'openapi/registry.yaml').read_text())['providers'])
+        began = datetime.now(timezone.utc) - timedelta(minutes=15)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            def git(*args):
+                return subprocess.check_output(['git', *args], cwd=root, text=True).strip()
+            git('init', '-q'); git('config', 'user.name', 'Ken'); git('config', 'user.email', 'ken@aisa.one')
+            registry = {'providers': {p: {} for p in providers}}
+            current = {}
+            def make_round(number):
+                documents, metadata, pages, rows, hashes = {}, {}, {}, {}, {}
+                for provider in providers:
+                    oid = 'get_' + provider
+                    path = '/apis/v1/' + provider
+                    method = 'post' if number == 2 else 'get'
+                    parameter = {'name': 'q', 'in': 'query', 'required': number > 0,
+                                 'schema': {'type': 'string', 'minLength': number}}
+                    operation = {'operationId': oid, 'parameters': [parameter],
+                        'requestBody': {'content': {'application/json': {'schema': {
+                            'type': 'object', 'properties': {'value': {'type': 'integer', 'minimum': number}}}}}},
+                        'responses': {'200': {'description': 'OK'}},
+                        'x-aisa-pricing': {'amount': number + .0123, 'billing_mode': 'usage' if number == 2 else 'fixed'},
+                        'security': [] if number < 2 else [{'Bearer': []}]}
+                    meta = {'document_hash': digest(operation), 'facts_hash': 'facts-' + str(number)}
+                    metadata[provider] = meta
+                    document = {'openapi': '3.1.0', 'info': {'x-aisa-document': meta},
+                        'servers': [{'url': 'https://api.aisa.one'}],
+                        'components': {'securitySchemes': {'Bearer': {'type': 'http', 'scheme': 'bearer'}}},
+                        'paths': {path: {method: operation}}}
+                    documents[provider] = document
+                    raw = canonical(document); hashes['openapi/' + provider + '.json'] = hashlib.sha256(raw).hexdigest()
+                    request = {**operation, 'method': method.upper(), 'path': path}
+                    price = 'Published price round ' + str(number)
+                    page = '## Request contract\n\n```json\n' + json.dumps(request) + '\n```\n\n## Cost and request rules\n\n' + price + '\n'
+                    for prefix in ('', 'zh/'):
+                        pages[prefix + 'api-reference/' + provider + '.mdx'] = page
+                    rows[oid] = {'successful': True, 'documentation': {'openapi': copy.deepcopy(document),
+                        'provenance': {'source_file': 'openapi/' + provider + '.json',
+                                       'source_hash': 'sha256:' + hashes['openapi/' + provider + '.json'],
+                                       'document_hash': meta['document_hash']}},
+                        'arguments_schema': {'type': 'object', 'additionalProperties': False,
+                            'properties': {'q': parameter['schema'], 'value': {'type': 'integer', 'minimum': number}},
+                            **({'required': ['q']} if number else {})}}
+                aggregate = {'openapi': '3.1.0', 'info': {'x-aisa-document': {'providers': metadata}},
+                    'paths': {path: item for document in documents.values() for path, item in document['paths'].items()}}
+                files = {'openapi.yaml': yaml.safe_dump(aggregate).encode(),
+                    'openapi/registry.yaml': yaml.safe_dump(registry).encode(),
+                    'discovery/openapi.json': canonical(aggregate),
+                    **{'openapi/' + p + '.json': canonical(d) for p, d in documents.items()},
+                    **{p: text.encode() for p, text in pages.items()}}
+                for path, raw in files.items():
+                    target = root / path; target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(raw)
+                pointer = root / 'docs/publication/current.json'; pointer.parent.mkdir(parents=True, exist_ok=True)
+                pointer.write_bytes(canonical({'status': 'passed', 'files_sha256': {
+                    p: hashlib.sha256(raw).hexdigest() for p, raw in files.items()}}))
+                git('add', 'openapi.yaml', 'openapi', 'discovery', 'api-reference', 'zh', 'docs'); git('commit', '-qm', 'isolated semantic round ' + str(number))
+                ref = git('rev-parse', 'HEAD'); sha = hashlib.sha256(files['openapi.yaml']).hexdigest()
+                for row in rows.values(): row['documentation']['provenance']['docs_sha'] = ref
+                mcp = {'state': 'loaded', 'docsRefs': [ref], 'documentHashes': {p: m['document_hash'] for p, m in metadata.items()},
+                    'sourceHashes': {p: {p + '.json': 'sha256:' + hashes['openapi/' + p + '.json']} for p in providers}}
+                payloads = {url: canonical(aggregate) for url in JSON_SURFACES.values()}
+                payloads.update({'https://api.aisa.one/openapi.json': files['discovery/openapi.json'],
+                    'https://aisa.one/openapi.yaml': files['openapi.yaml'],
+                    'https://mcp.aisa.one/contract-version': canonical(mcp),
+                    TEXT_SURFACES['website-llms']: (sha + ' ' + ref + ' https://aisa.one/openapi.json https://raw.githubusercontent.com/AIsa-team/docs/' + ref + '/openapi.yaml').encode(),
+                    TEXT_SURFACES['docs-llms']: (sha + ' openapi.json').encode(),
+                    TEXT_SURFACES['mcp-llms']: ref.encode(),
+                    TEXT_SURFACES['docs-llms-full']: ''.join(pages[p] for p in pages if not p.startswith('zh/')).encode()})
+                for path, page in pages.items():
+                    request = json.loads(page.split('```json\n')[1].split('\n```')[0])
+                    payloads['https://aisa.one/docs/' + path.removesuffix('.mdx')] = (
+                        '<h2>Request contract</h2><pre><code>' + html.escape(json.dumps(request)) +
+                        '</code></pre><h2>Cost and request rules</h2><p>Published price round ' + str(number) + '</p>').encode()
+                return {'ref': ref, 'sha': sha, 'payloads': payloads, 'rows': rows,
+                    'runtime': {'providers': [{'id': p, 'facts_hash': m['facts_hash']} for p, m in metadata.items()]},
+                    'router': {'docs_commit': ref, 'build_id': 'round-' + str(number),
+                               'provider_document_hashes': {p: m['document_hash'] for p, m in metadata.items()}}}
+            def run(selected):
+                selection = root / 'selection.json'
+                selection.write_text(json.dumps({'selection': select_revision('schedule', selected['ref'], selected['sha'])}))
+                argv = ['monitor', '--root', str(root), '--all-surfaces', '--all-doc-pages', '--require-budget',
+                    '--expected-docs-ref', selected['ref'], '--selection-file', str(selection),
+                    '--budget-start', began.isoformat(), '--state', str(root/'state.json'), '--report', str(root/'report.json')]
+                def read(url):
+                    if url.endswith('/info/openapi.json'): return current['runtime']
+                    if url == METADATA: return current['router']
+                    return {'mode': 'formal', 'docsRevision': current['ref'], 'contentHash': current['sha']}
+                def schema_read(_, method, url, payload=None):
+                    return current['router'] if url == METADATA else {'tools': {oid: current['rows'][oid] for oid in payload['tools']}}
+                with patch.object(sys, 'argv', argv), patch('builtins.print'), \
+                    patch('check_contract_revisions.read_public', side_effect=read), \
+                    patch('check_contract_revisions.read_public_bytes', side_effect=lambda url: current['payloads'][url]), \
+                    patch('check_contract_revisions.urlopen', side_effect=lambda request, **kw: io.BytesIO(current['payloads'][request.full_url])), \
+                    patch('router_surface_checks.PublicSchemaReader.__call__', new=schema_read), \
+                    patch('publication_origin.verify_consumer_refs', return_value={'status': 'passed',
+                        'expected_docs_ref': selected['ref'], 'contract_release': selected['sha'],
+                        'clock_docs_ref': selected['ref'], 'publications': {selected['ref']: {}}}):
+                    code = main()
+                return code, json.loads((root/'report.json').read_text())
+            current.update(make_round(0))
+            self.assertEqual(run(current)[1]['status'], 'passed')
+            for number in (1, 2):
+                selected = make_round(number)
+                # Omitted dispatch leaves all actual consumer bytes at last-good.
+                _, stale = run(selected)
+                self.assertNotEqual(stale['status'], 'passed')
+                self.assertTrue(stale['mismatches'])
+                self.assertEqual(current['router']['build_id'], 'round-' + str(number - 1))
+                current.update(selected)  # Existing scheduled consumer recovery.
+                code, recovered = run(selected)
+                self.assertEqual((code, recovered['status']), (0, 'passed'))
+                self.assertEqual(recovered['router_schemas']['verified_operations'], len(providers))
+                self.assertEqual(recovered['timing']['budget_start'], began.isoformat())
+                history = json.loads((root/'state.json').read_text())['publication_history']
+                self.assertTrue(any((row['identity'].get('contract_release') == selected['sha'] or
+                    row['identity'].get('docs_ref') == selected['ref']) and
+                    row['assessment']['status'] != 'passed' for row in history))
+
     def test_ready_plan_and_workflow_double_gate_have_frozen_cadence(self):
         config = json.loads((SCRIPTS / 'contract_activation.json').read_text())
         self.assertTrue(validate_config(config)['activation_enabled'])

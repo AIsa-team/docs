@@ -12,6 +12,7 @@ import subprocess
 import tarfile
 
 from source_json import loads
+import yaml
 
 JSON_SURFACES = {
     'website-json': 'https://aisa.one/openapi.json',
@@ -91,6 +92,66 @@ def fixed_payment_bytes(root, ref):
     return raw
 
 
+def fixed_mcp_sources(root, ref, spec):
+    """Required managed sources and permitted residual inputs from formal Git.
+
+    Module names are not provider names: a composed module can load several
+    native files. Bind the complete union of raw files, rather than accepting a
+    consumer's self-selected subset of document hashes.
+    """
+    pointer = loads(subprocess.check_output(['git', 'show', ref + ':docs/publication/current.json'], cwd=root))
+    if pointer.get('status') != 'passed':
+        raise ValueError('Expected publication is not formal')
+    hashes = pointer.get('files_sha256', {})
+    def bound(path):
+        raw = subprocess.check_output(['git', 'show', ref + ':' + path], cwd=root)
+        if hashlib.sha256(raw).hexdigest() != hashes.get(path):
+            raise ValueError('MCP source is not formally bound: ' + path)
+        return raw
+    providers = spec.get('info', {}).get('x-aisa-document', {}).get('providers', {})
+    required = {provider + '.json' for provider, metadata in providers.items()
+                if metadata.get('document_hash')}
+    if not required:
+        raise ValueError('No managed MCP sources')
+    registry = yaml.safe_load(bound('openapi/registry.yaml'))
+    residual = {name.removesuffix('.json') + '.json'
+                for entry in registry['providers'].values()
+                for name in (entry or {}).get('legacy_sources', [])}
+    allowed = {}
+    for filename in sorted(required | residual):
+        if not re.fullmatch(r'[A-Za-z0-9_.-]+\.json', filename):
+            raise ValueError('Invalid MCP source filename')
+        path = 'openapi/' + filename
+        if path not in hashes and filename not in required:
+            continue  # A declared legacy source may have been superseded.
+        allowed[filename] = 'sha256:' + hashlib.sha256(bound(path)).hexdigest()
+    return {'required': sorted(required), 'allowed': allowed}
+
+
+def compare_mcp_sources(expected, actual):
+    errors, union = [], {}
+    sources = actual.get('sourceHashes')
+    if not expected or not isinstance(sources, dict) or not sources:
+        return ['mcp:source_hashes_unverified']
+    for module, rows in sources.items():
+        if not isinstance(module, str) or not isinstance(rows, dict) or not rows:
+            errors.append('mcp:source_hashes_invalid')
+            continue
+        for filename, digest in rows.items():
+            if filename not in expected['allowed']:
+                errors.append('mcp:' + str(filename) + ':unexpected_source_file')
+            elif expected['allowed'][filename] != digest:
+                errors.append('mcp:' + filename + ':source_hash_mismatch')
+            if filename in union and union[filename] != digest:
+                errors.append('mcp:' + str(filename) + ':conflicting_source_hash')
+            union[filename] = digest
+    errors.extend('mcp:' + filename + ':source_file_missing'
+                  for filename in set(expected['required']) - set(union))
+    if actual.get('missingProvenance') or actual.get('conflictingDocuments'):
+        errors.append('mcp:loaded_provenance_unverified')
+    return sorted(set(errors))
+
+
 def compare_llms(expected, actual):
     """Require coverage and reject contradictory records for known operations.
 
@@ -122,7 +183,7 @@ def compare_llms(expected, actual):
 
 
 def check_surfaces(spec, expected_hash, accepted_refs, *, read_bytes, expected_requests,
-                   expected_payment=None):
+                   expected_payment=None, expected_mcp_sources=None):
     """Return every independent failure; an unavailable surface cannot pass."""
     mismatches, missing, observations = [], [], {}
     for name, url in JSON_SURFACES.items():
@@ -166,6 +227,7 @@ def check_surfaces(spec, expected_hash, accepted_refs, *, read_bytes, expected_r
             for provider, digest in hashes.items():
                 if providers.get(provider, {}).get('document_hash') != digest:
                     mismatches.append('mcp:' + provider + ':document_hash_mismatch')
+        mismatches.extend(compare_mcp_sources(expected_mcp_sources, mcp))
     except Exception as exc:
         missing.append('mcp-version:unavailable:' + type(exc).__name__)
     for name, url in TEXT_SURFACES.items():

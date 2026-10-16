@@ -145,7 +145,8 @@ def retain_assessment_history(state, previous, assessment, identity):
     old = previous.get('latest_publication_assessment')
     if previous and not old and 'publication_history' not in previous:
         history.append({'legacy_monitor_state': previous, 'status': 'historical_not_reclassified'})
-    if old and old.get('identity') != identity:
+    if old and (old.get('identity') != identity or
+                (old.get('assessment', {}).get('status') != 'passed' and assessment.get('status') == 'passed')):
         history.append(old)
     state['publication_history'] = history
     state['latest_publication_assessment'] = {'identity': identity, 'assessment': assessment}
@@ -370,7 +371,7 @@ def main():
                         expected_openapi_sha256=source_hash if args.expected_docs_ref else None,
                         failures=failures)
     if args.all_surfaces:
-        from public_surface_checks import check_surfaces, fixed_request_blocks, fixed_payment_bytes
+        from public_surface_checks import check_surfaces, fixed_request_blocks, fixed_payment_bytes, fixed_mcp_sources
         accepted_refs = {args.expected_docs_ref} if args.expected_docs_ref else set()
         if provenance:
             accepted_refs.update(provenance.get('publications', {}))
@@ -388,6 +389,11 @@ def main():
             expected_payment = fixed_payment_bytes(args.root, args.expected_docs_ref)
         except Exception as exc:
             assessment['missing_inputs'].append('fixed_payment_discovery:unavailable:' + type(exc).__name__)
+        expected_mcp_sources = None
+        try:
+            expected_mcp_sources = fixed_mcp_sources(args.root, args.expected_docs_ref, spec)
+        except Exception as exc:
+            assessment['missing_inputs'].append('fixed_mcp_sources:unavailable:' + type(exc).__name__)
         def surface_reader(name, url):
             if name in surface_cache:
                 return surface_cache[name]
@@ -396,7 +402,8 @@ def main():
                 return (args.evidence_dir / (name + extension)).read_bytes()
             return read_public_bytes(url)
         extra = check_surfaces(spec, source_hash, accepted_refs, read_bytes=surface_reader,
-                               expected_requests=expected_requests, expected_payment=expected_payment)
+                               expected_requests=expected_requests, expected_payment=expected_payment,
+                               expected_mcp_sources=expected_mcp_sources)
         assessment['public_surfaces'] = extra
         assessment['missing_inputs'] = sorted(set(assessment['missing_inputs'] + extra['missing_inputs']))
         assessment['mismatches'] = sorted(set(assessment['mismatches'] + extra['mismatches']))
