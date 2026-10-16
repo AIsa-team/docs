@@ -1,7 +1,7 @@
 import copy
 import unittest
 
-from compose_openapi import compose, merge_object, retain_source_annotations
+from compose_openapi import compose, merge_object, retain_source_annotations, retain_provider_parameter_guidance
 from test_runtime_contracts import facts, mirror, operation
 
 
@@ -52,6 +52,35 @@ class SourceAnnotationPreservationTests(unittest.TestCase):
                 ({'type': 'integer', 'maximum': 5}, {'type': 'integer', 'maximum': 10, 'example': 10}),
                 ({'type': 'string', 'enum': ['a']}, {'type': 'string', 'enum': ['a', 'b'], 'example': 'b'})):
             self.assertNotIn('example', retain_source_annotations(runtime, source))
+
+
+    def test_supplier_numeric_query_guidance_keeps_runtime_wire_schema_exact(self):
+        from contract_readiness import _runtime_parameter_errors
+        runtime, upstream = facts('mixed'), mirror()
+        operation(runtime)['parameters'][0]['schema'] = {'type': 'string'}
+        source = operation(upstream)['parameters'][0]
+        source.update(description='Number of results.', schema={
+            'type': 'integer', 'minimum': 1, 'default': 10, 'format': 'int32'})
+        before = copy.deepcopy((runtime, upstream))
+        document, pending = compose(runtime, upstream)
+        self.assertFalse(pending)
+        parameter = operation(document)['parameters'][0]
+        self.assertEqual(parameter['schema'], {'type': 'string'})
+        self.assertIn('Number of results.', parameter['description'])
+        self.assertIn('"minimum":1', parameter['description'])
+        self.assertIn('"default":10', parameter['description'])
+        self.assertIn('"format":"int32"', parameter['description'])
+        self.assertIn('"type":"integer"', parameter['description'])
+        self.assertEqual(_runtime_parameter_errors(operation(runtime), runtime,
+            operation(document), document), [])
+        self.assertEqual(retain_provider_parameter_guidance(parameter, source), parameter)
+        self.assertEqual((runtime, upstream), before)
+
+    def test_explicit_runtime_defaults_and_enums_are_not_replaced_by_supplier_hints(self):
+        parameter = {'name': 'mode', 'in': 'query', 'description': 'Runtime guidance.',
+            'schema': {'type': 'string', 'default': 'current', 'enum': ['current']}}
+        source = {'schema': {'type': 'string', 'default': 'old', 'enum': ['old', 'current']}}
+        self.assertEqual(retain_provider_parameter_guidance(parameter, source), parameter)
 
 
 if __name__ == '__main__':

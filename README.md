@@ -142,6 +142,12 @@ override. This changes documentation only, without changing request validation:
 python -m unittest discover -s scripts/tests -p 'test_open_array_items.py'
 ```
 
+For Runtime-owned query parameters, missing supplier constraints and formats
+remain visible as `Provider reference (supplier schema)` guidance in the field
+description. The machine-readable schema retains the exact Runtime contract,
+including its wire type and defaults. Supplier hints do not add gateway
+validation or imply that a supplier default is installed by the gateway.
+
 ## Acquire an actual Runtime release for contract review
 
 After the Runtime operator supplies the **actual published artifact revision**

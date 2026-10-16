@@ -24,6 +24,7 @@ If --output is omitted, writes to stdout.
 """
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -586,8 +587,20 @@ def build_unified_spec(*, root=None, page_links=None):
                         operation["x-aisa-docs-url"] = page_links[(filename, method, path)]
                     if not generated:
                         operation["tags"] = [tag]
-                    # Drop any per-op servers from the input file
-                    operation.pop("servers", None)
+                    effective_servers = copy.deepcopy(operation.get('servers',
+                        methods.get('servers', spec.get('servers', []))))
+                    if not generated and effective_servers:
+                        # The aggregate's four discovery servers do not mean
+                        # that every historic endpoint exists on every surface.
+                        # Compensate only the prefix added to this path key.
+                        for server in effective_servers:
+                            if path_prefix:
+                                if not server.get('url', '').endswith(path_prefix):
+                                    raise ValueError('cannot preserve operation server while rebasing ' + path)
+                                server['url'] = server['url'][:-len(path_prefix)]
+                        operation['servers'] = effective_servers
+                    if not generated and 'security' not in operation and 'security' in spec:
+                        operation['security'] = copy.deepcopy(spec['security'])
                     # Add LLM-server override on operations from LLM
                     # files so OpenAPI consumers route them to /v1 or /v1beta
                     # instead of the default /apis/v1.
@@ -602,7 +615,7 @@ def build_unified_spec(*, root=None, page_links=None):
                         operation["servers"] = spec.get("servers", [])
                         if "security" not in operation and "security" in spec:
                             operation["security"] = spec["security"]
-                    elif is_llm:
+                    elif is_llm and not effective_servers:
                         operation["servers"] = [
                             {"url": file_server_url}
                         ]

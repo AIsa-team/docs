@@ -337,6 +337,14 @@ def previous_for_facts(facts, documents, provider):
         document['paths'] = {prefix + p: item for p, item in document.get('paths', {}).items() if name == provider or prefix + p in routes}
         if not document['paths']:
             continue
+        # Retained operations move under a different document root. Bind their
+        # inherited authentication before merging sources and scheme namespaces;
+        # otherwise retain_unregistered_history can no longer recover it.
+        for path, item in document['paths'].items():
+            if path not in routes and 'security' in document:
+                for method, operation in item.items():
+                    if method in METHODS:
+                        operation.setdefault('security', copy.deepcopy(document['security']))
         if document.get('openapi', '').startswith('3.0.'):
             # The merged publication has no single source dialect. Normalize
             # only reachable success payloads before losing this source's 3.0

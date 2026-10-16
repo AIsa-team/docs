@@ -151,3 +151,20 @@ class UnifiedSurfacesTests(unittest.TestCase):
             self.assertEqual(index.count('aisa-contract-source:start'), 1)
             subprocess.run(command, check=True, capture_output=True)
             self.assertEqual((root / 'openapi/openapi.json').read_bytes(), first)
+
+    def test_aggregate_preserves_disabled_legacy_server_and_auth_scope(self):
+        from runtime_consolidate_openapi import build_unified_spec
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); (root / 'openapi').mkdir()
+            source = {'openapi': '3.1.0', 'info': {'title': 'Historical', 'version': '1'},
+                'servers': [{'url': 'https://api.aisa.one/apis/v1'}],
+                'security': [{'HistoricalAuth': []}],
+                'components': {'securitySchemes': {'HistoricalAuth': {'type': 'http', 'scheme': 'bearer'}}},
+                'paths': {'/twitter/spaces/detail': {'get': {'operationId': 'disabled_space',
+                    'x-aisa-status': 'disabled', 'responses': {'200': {'description': 'ok'}}}}}}
+            (root / 'openapi/twitter-trend.json').write_text(json.dumps(source))
+            result = build_unified_spec(root=root)
+            operation = result['paths']['/twitter/spaces/detail']['get']
+            self.assertEqual(operation['servers'], source['servers'])
+            self.assertEqual(operation['security'], source['security'])
+            self.assertEqual(operation['x-aisa-status'], 'disabled')
