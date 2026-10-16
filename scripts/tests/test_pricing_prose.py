@@ -163,6 +163,18 @@ class PricingProseTests(unittest.TestCase):
         self.assertNotIn('$0.002', result)
         self.assertEqual(clean_text(result), result)
 
+    def test_suffix_dollar_rates_preserve_mixed_batch_and_usage_instructions(self):
+        self.assertNotIn('0.02$', clean_text('- Price: 0.02$ / time'))
+        batch = '- Batch Get Video Information, up to 50 videos at a time, this interface charges a fixed price of 0.001$ * 50 = 0.05$ each time.'
+        result = clean_text(batch)
+        self.assertIn('up to 50 videos at a time', result)
+        self.assertNotIn('0.001$', result)
+        variable = '- Charged by the number of live rooms queried, 0.025$ per live room, please try to query 50 live rooms to avoid wasting API call counts.'
+        result = clean_text(variable)
+        self.assertIn('Provider usage depends on the number of live rooms queried', result)
+        self.assertIn('query 50 live rooms', result)
+        self.assertNotIn('0.025$', result)
+
     def test_free_claim_reconciles_only_positive_fixed_customer_pricing(self):
         text = 'Resolve an industry from free text. Free, suitable as health check.'
         for pricing, replace in (

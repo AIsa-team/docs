@@ -66,7 +66,7 @@ def add_price_summary(operation, language='en'):
         operation['description'] = description
     return operation
 
-MONEY = re.compile(r'(?:US)?\$\s*\d[\d,]*(?:\.\d+)?(?:\s*USD)?|\b\d+(?:\.\d+)?\s*(?:USD|美元|cents?)\b', re.I)
+MONEY = re.compile(r'(?:US)?\$\s*\d[\d,]*(?:\.\d+)?(?:\s*USD)?|\b\d[\d,]*(?:\.\d+)?\s*\$|\b\d+(?:\.\d+)?\s*(?:USD|美元|cents?)\b', re.I)
 RATE = re.compile(
     r'\bbill(?:ed|ing|s)?\b|\bcharg(?:e|ed|es|ing)\b|\bpric(?:e|ing)\b|'
     r'\b(?:flat|rate|surcharge|upstream|per\s+(?:call|request|item|row|job|1M\s+tokens))\b|'
@@ -116,6 +116,18 @@ def clean_text(text: str, language: str = 'en') -> str:
         for j in range(0, len(parts), 2):
             part = parts[j]
             if MONEY.search(part) and RATE.search(part) and not NON_RATE.search(part):
+                # A usage sentence can end with a separate API-billing clause.
+                # Keep its batch limit rather than deleting the complete line.
+                usage = re.split(r',\s*this (?:interface|endpoint) charges\b', part, maxsplit=1, flags=re.I)
+                if len(usage) == 2 and not MONEY.search(usage[0]):
+                    parts[j] = usage[0].rstrip(' ,') + '.'
+                    changed = True
+                    continue
+                variable = re.search(r'\bCharged by (.*?),\s*(?:' + MONEY.pattern + r')\s+per [^,;.]+,\s*(.+)', part, flags=re.I)
+                if variable:
+                    parts[j] = 'Provider usage depends on ' + variable[1] + '; ' + variable[2]
+                    changed = True
+                    continue
                 # An API-rate parenthetical must not take its surrounding batch
                 # limits or other caller instructions with it.
                 without_rate, count = PRICE_PARENTHETICAL.subn('', part)
