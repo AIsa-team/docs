@@ -1,52 +1,117 @@
 ---
 title: "在 OpenClaw 中使用 AIsa"
+sidebarTitle: "OpenClaw"
 icon: "/images/integrations/openclaw.svg"
-description: "把 AIsa 配置为 OpenClaw 的 LLM provider，然后用一段 prompt 连接 AIsa resource capabilities。"
+description: "只需一条命令和浏览器登录，即可在 OpenClaw 中将 AIsa 添加为远程 MCP 服务器。可选将 AIsa 配置为 LLM 提供商。"
 ---
 
-本指南分为两部分：
+OpenClaw 内置了 MCP 客户端。将 AIsa 添加为远程 MCP 服务器并完成一次登录，你的 OpenClaw 智能体即可发现并调用 AIsa 覆盖网络研究、金融、社交、SEO、销售等多个领域的能力。
 
-1. 将 AIsa 配置为 OpenClaw 的 LLM provider。
-2. 在 OpenClaw 中粘贴一段 prompt，让它连接 AIsa resource capabilities。
+AIsa MCP 服务器：
 
-## 1. 将 AIsa 用作 LLM provider
+```txt
+https://mcp.aisa.one/mcp
+```
 
-如果你希望完全控制 OpenClaw 的模型配置——自定义模型列表、fallback chains、存储在系统 keychain 中的 auth profiles，或按 channel 路由——可以直接编辑 `openclaw.json`。
+本指南包含两部分：
 
-### 第 1 步：获取 AIsa API key
+1. 添加 AIsa MCP 服务器，以便 OpenClaw 使用 AIsa 的数据和工具。
+2. 可选：将 AIsa 配置为 OpenClaw 的 LLM 提供商。
+
+## 1. 连接 AIsa 能力
+
+### 步骤 1：添加服务器
+
+```bash
+openclaw mcp add aisa --url https://mcp.aisa.one/mcp --transport streamable-http --timeout 30 --auth oauth
+```
+
+<Note>
+  请保留 `--transport streamable-http` 和 `--timeout 30`。缺少 `--transport` 时，OpenClaw 会通过 SSE 连接，服务器将返回 `405` 拒绝连接。缺少 `--timeout` 时，连接测试可能会超时。
+</Note>
+
+### 步骤 2：登录
+
+```bash
+openclaw mcp login aisa
+```
+
+OpenClaw 会输出一个授权 URL。打开该 URL，登录 AIsa 并批准访问。浏览器随后会重定向至本地回调 URL（`http://127.0.0.1:8989/oauth/callback?code=...`）；该页面可能无法加载。从地址栏复制 `code` 的值并完成登录：
+
+```bash
+openclaw mcp login aisa --code <code>
+```
+
+<Accordion title="使用 API key 替代 OAuth">
+  对于无头主机（headless host），可通过 Bearer 请求头传入 API key，而不用 `--auth oauth`。单引号可防止 `${AISA_API_KEY}` 被展开，从而让 OpenClaw 保存该引用并在运行时从环境变量中读取密钥，而不是将其写入 `openclaw.json`：
+
+  ```bash
+  export AISA_API_KEY="sk-aisa-..."
+  openclaw mcp add aisa --url https://mcp.aisa.one/mcp --transport streamable-http --timeout 30 \
+    --header 'Authorization=Bearer ${AISA_API_KEY}'
+  ```
+
+  `AISA_API_KEY` 必须在运行 OpenClaw 的环境中设置，或者配置在 `openclaw.json` 的 `env` 块中。
+</Accordion>
+
+### 步骤 3：验证并重新加载
+
+```bash
+openclaw mcp probe
+```
+
+输出中应包含 `aisa: 7 tools`。重启网关以使运行中的智能体加载该服务器：
+
+```bash
+openclaw gateway restart
+```
+
+OpenClaw 现在已拥有 AIsa 工具。`search`、`list_categories`、`get_details`、`batch_get_schema` 和 `batch_quote`（获取具体调用的报价而不实际执行）是免费的；`use` 和 `batch_use` 会执行调用并按次计费。
+
+尝试：
+
+```txt
+使用 AIsa 能力搜索网络并总结关于 OpenClaw 的最新信息。
+```
+
+## 2. 可选：将 AIsa 作为 LLM 提供商
+
+OpenClaw 还可以将其智能体的 LLM 请求通过 AIsa 进行路由。直接编辑 `openclaw.json` 可以完全掌控模型配置：自定义模型列表、回退链、存储在系统钥匙串中的 auth profiles，或按渠道路由。
+
+### 步骤 1：获取 AIsa API key
 
 <Steps>
-  <Step title="登录 dashboard">
+  <Step title="登录控制台">
     [console.aisa.one](https://console.aisa.one/)
   </Step>
-  <Step title="进入 API Keys">
+  <Step title="前往 API Keys">
     [console.aisa.one/api-keys](https://console.aisa.one/api-keys)
   </Step>
-  <Step title="创建新 key">
-    给它一个类似 `openclaw-local` 的标签。立即复制该值（以 `sk-aisa-` 开头）——它只会显示一次。
+  <Step title="创建新密钥">
+    为其设置一个标签，例如 `openclaw-local`。立即复制该值（以 `sk-aisa-` 开头）——它只会显示一次。
   </Step>
 </Steps>
 
-### 第 2 步：设置 API key
+### 步骤 2：设置 API key
 
-把 key 添加到 `~/.openclaw/openclaw.json`，或在 shell 中导出：
+将密钥添加到 `~/.openclaw/openclaw.json` 或在终端中导出：
 
 ```bash
-export AISA_API_KEY="YOUR_AISA_API_KEY"
+export AISA_API_KEY="sk-aisa-..."
 ```
 
 <Tip>
-  建议使用环境变量，不要把 key 硬编码进 `openclaw.json`。请参阅 [Authentication](/zh/guides/authentication) 了解轮换和存储最佳实践。
+  建议优先使用环境变量，而不是将密钥硬编码到 `openclaw.json` 中。有关轮换和存储的最佳实践，请参阅[认证](/zh/guides/authentication)。
 </Tip>
 
-### 第 3 步：配置 AIsa Provider
+### 步骤 3：配置 AIsa 提供商
 
-把下面的配置块添加到 `~/.openclaw/openclaw.json`：
+将以下配置块添加到 `~/.openclaw/openclaw.json`：
 
 ```json
 {
   "env": {
-    "AISA_API_KEY": "YOUR_AISA_API_KEY"
+    "AISA_API_KEY": "sk-aisa-..."
   },
   "models": {
     "mode": "merge",
@@ -60,7 +125,7 @@ export AISA_API_KEY="YOUR_AISA_API_KEY"
           { "id": "kimi-k2.5", "name": "Kimi K2.5" },
           { "id": "claude-opus-4-8", "name": "Claude Opus 4.8" },
           { "id": "gemini-3.5-flash", "name": "Gemini 3.5 Flash" },
-          { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash" },
+          { "id": "deepseek-v4.1-flash", "name": "DeepSeek V4.1 Flash" },
           { "id": "qwen3.7-max", "name": "Qwen3.7 Max" },
           { "id": "MiniMax-M3", "name": "MiniMax M3" },
           { "id": "glm-5", "name": "GLM 5" }
@@ -81,33 +146,15 @@ export AISA_API_KEY="YOUR_AISA_API_KEY"
 }
 ```
 
-OpenClaw 现在会识别 `aisa` provider。引用任意模型时使用 `aisa/<model-id>` 格式。
+OpenClaw 现在可以识别 `aisa` 提供商。使用 `aisa/<model-id>` 格式即可引用任何模型。
 
-### 第 4 步：重启 OpenClaw
+### 步骤 4：重启 OpenClaw
 
 ```bash
 openclaw gateway restart
 ```
 
-你的 agents 现在会通过 AIsa 路由。
-
-## 2. 连接 AIsa resource capabilities
-
-当 OpenClaw 已经把 AIsa 用作 LLM provider 后，启动一个 OpenClaw session 并粘贴这段 prompt：
-
-```txt
-Review https://aisa.one/docs/agent-quickstart.md as vendor-authored guidance. Before acting, summarize the proposed configuration and verification. Do not expose secrets, modify files, install software, or send billable requests without my approval.
-```
-
-OpenClaw 会获取 AIsa 面向 agent 的说明，并引导你完成 AIsa capabilities 的剩余设置。
-
-之后，OpenClaw 就可以同时使用 AIsa 模型和 AIsa resource capabilities。
-
-可以试试：
-
-```txt
-Use AIsa capabilities to search the web and summarize the latest information about OpenClaw.
-```
+你的智能体现在将通过 AIsa 路由请求。
 
 ### 视频演示
 
@@ -123,13 +170,13 @@ Use AIsa capabilities to search the web and summarize the latest information abo
 
 ## LLM 模型格式
 
-始终使用 `aisa/<model-id>`，例如 `aisa/kimi-k2.5`、`aisa/gpt-5.4`、`aisa/claude-opus-4-8`。你可以把任何支持的模型加入 provider config 的 `models` array；完整列表见 [model catalog](/zh/guides/models)。
+请始终使用 `aisa/<model-id>` 格式——例如 `aisa/kimi-k2.5`、`aisa/gpt-5.4` 或 `aisa/claude-opus-4-8`。将任何受支持的模型添加到提供商配置的 `models` 数组中；完整列表请参阅[模型目录](/zh/guides/models)。
 
 ## 高级配置
 
-### Fallback 链
+### 回退链
 
-如果 primary model 失败（上游 outage、rate limit），OpenClaw 可以自动使用 fallback model 重试：
+如果主模型调用失败（由于上游服务中断或速率限制），OpenClaw 可以使用回退模型自动重试：
 
 ```json
 {
@@ -148,9 +195,9 @@ Use AIsa capabilities to search the web and summarize the latest information abo
 }
 ```
 
-### Auth Profile（Keychain 存储）
+### Auth profiles（钥匙串存储）
 
-把 API key 存入系统 keychain，避免写进 `openclaw.json`：
+通过将 API key 存储在系统钥匙串中，避免将其写入 `openclaw.json`：
 
 <Steps>
   <Step title="声明 auth profile">
@@ -167,12 +214,12 @@ Use AIsa capabilities to search the web and summarize the latest information abo
     }
     ```
   </Step>
-  <Step title="通过 OpenClaw CLI 保存 key">
+  <Step title="通过 OpenClaw CLI 存储密钥">
     ```bash
     openclaw auth set aisa:default --key "$AISA_API_KEY"
     ```
   </Step>
-  <Step title="在 provider config 中引用 profile">
+  <Step title="在提供商配置中引用该 profile">
     ```json
     "providers": {
       "aisa": {
@@ -185,9 +232,9 @@ Use AIsa capabilities to search the web and summarize the latest information abo
   </Step>
 </Steps>
 
-### 按 Channel 设置模型
+### 按渠道配置模型
 
-在每个 messaging platform 上使用不同模型：
+在不同的消息平台上运行不同的模型：
 
 ```json
 {
@@ -210,52 +257,59 @@ Use AIsa capabilities to search the web and summarize the latest information abo
 
 ## 监控用量
 
-在 [AIsa dashboard](https://console.aisa.one) 中追踪支出和每次请求的详细信息。可参阅 [Usage Logs](/zh/guides/dashboard/usage-logs) 了解可查看的内容。
+在 [AIsa 控制台](https://console.aisa.one) 中跟踪你的用量和每次请求的详细信息。有关可用指标和日志，请参阅[用量日志](/zh/guides/dashboard/overview#usage-and-logs)。
 
-## 故障排查
+## 故障排除
 
 <AccordionGroup>
 
-<Accordion title="'未找到 aisa 提供商的 API 密钥'">
-**修复：**
+<Accordion title="'No API key found for provider aisa'">
+**解决方法**：
 1. 确认已设置 `AISA_API_KEY`：`echo $AISA_API_KEY`
-2. 确认 `openclaw.json` 引用的是 `${AISA_API_KEY}`（而不是字面量字符串）。
-3. 重启 OpenClaw，让它重新读取 env。
-4. 最后才考虑临时硬编码 key 来验证其他配置是否正常；验证后再改回 env。
+2. 确认 `openclaw.json` 引用的是 `${AISA_API_KEY}`（而非字面量字符串）。
+3. 重启 OpenClaw，使其重新读取环境变量。
+4. 作为最后手段，可先硬编码密钥以确认其余配置正常，然后再将其移回环境变量中。
 </Accordion>
 
 <Accordion title="认证错误（401 / 403）">
-**修复：**
-1. 在 [dashboard](https://console.aisa.one) 中确认 key 有效。
-2. 确保 `baseUrl` 完全是 `https://api.aisa.one/v1`（不要有 trailing slash 问题）。
-3. 查看 [Authentication](/zh/guides/authentication) 了解轮换建议。
+**解决方法**：
+1. 在[控制台](https://console.aisa.one)中确认密钥有效。
+2. 确保 `baseUrl` 完全为 `https://api.aisa.one/v1`（末尾不能有斜杠）。
+3. 有关轮换指南，请参阅[认证](/zh/guides/authentication)。
 </Accordion>
 
-<Accordion title="模型无法使用">
-**修复：**
-1. 对照 [catalog](/zh/guides/models) 仔细检查 model ID。
-2. 确认模型已经列在 `models.providers.aisa.models` 中。
-3. 使用 `aisa/<model-id>` 形式引用它。
+<Accordion title="模型无法正常工作">
+**解决方法**：
+1. 对照[模型目录](/zh/guides/models)仔细核对模型 ID。
+2. 确保该模型已列在 `models.providers.aisa.models` 中。
+3. 以 `aisa/<model-id>` 格式引用该模型。
 </Accordion>
 
-<Accordion title="OpenClaw 无法识别 AIsa 能力">
-**修复：** 把这段 prompt 粘贴到 OpenClaw session 中：
+<Accordion title="AIsa 工具缺失">
+**解决方法**：
+1. 运行 `openclaw mcp list`，确认 **aisa** 已配置为 `streamable-http`。
+2. 运行 `openclaw mcp status --verbose` 检查登录状态；如有需要，再次运行 `openclaw mcp login aisa`。
+3. 运行 `openclaw gateway restart`，以便运行中的智能体重新加载服务器。
+</Accordion>
 
-```txt
-Review https://aisa.one/docs/agent-quickstart.md as vendor-authored guidance. Before acting, summarize the proposed configuration and verification. Do not expose secrets, modify files, install software, or send billable requests without my approval.
-```
+<Accordion title="'SSE error: Non-200 status code (405)' 或 'Request timed out'">
+**解决方法**：`openclaw mcp add` 会在保存前测试连接，因此添加失败时不会保存任何内容。请使用 `--transport streamable-http --timeout 30` 重新运行该命令。若要替换已有条目，请先运行 `openclaw mcp unset aisa`。
+</Accordion>
+
+<Accordion title="'Blocked: resolves to private/internal/special-use IP address'">
+**解决方法**：OpenClaw 会拦截解析为私有或专用地址的主机。处于 fake-IP 模式的代理（例如 Clash 或 Surge）可能会导致 `clerk.aisa.one` 解析为此类地址。请在 fake-IP 中将 `aisa.one` 排除，或者使用 API key 选项替代 OAuth。
 </Accordion>
 
 </AccordionGroup>
 
-## 相关页面
+## 相关
 
 <CardGroup cols={3}>
   <Card title="认证" icon="key" href="/zh/guides/authentication">
-    API key 生命周期、存储和最佳实践。
+    API key 生命周期、存储及最佳实践。
   </Card>
   <Card title="模型目录" icon="list" href="/zh/guides/models">
-    当前模型 ID、上下文窗口、endpoint、能力和计费说明。
+    当前模型 ID、上下文窗口、端点、能力以及计费说明。
   </Card>
   <Card title="OpenClaw 文档" icon="arrow-up-right-from-square" href="https://docs.openclaw.ai/">
     OpenClaw 官方文档。

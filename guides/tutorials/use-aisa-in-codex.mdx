@@ -2,22 +2,22 @@
 title: "Use AIsa in Codex"
 sidebarTitle: "Codex"
 icon: "/images/integrations/codex.svg"
-description: "Add AIsa as a model provider in OpenAI's Codex CLI with one config block, then add the AIsa MCP server with OAuth."
+description: "Add AIsa as a remote MCP server in OpenAI's Codex CLI with one command and a browser sign-in. Optionally run Codex on AIsa models."
 ---
 
-Configure AIsa in OpenAI's Codex CLI using a single provider block in `~/.codex/config.toml` and your API key.
+Codex has a built-in MCP client. Add AIsa as a remote MCP server, sign in once, and Codex can discover and call AIsa capabilities across web research, finance, social, SEO, sales, and more.
 
-AIsa endpoint:
+AIsa MCP server:
 
 ```txt
-https://api.aisa.one/v1
+https://mcp.aisa.one/mcp
 ```
 
 ## Prerequisites
 
 Before you start, make sure you have:
 
-- An AIsa API key ([console.aisa.one/api-keys](https://console.aisa.one/api-keys))
+- An AIsa account ([console.aisa.one](https://console.aisa.one)). You sign in through the browser.
 - A terminal on macOS, Linux, or Windows WSL2
 
 ## 1. Install Codex
@@ -38,54 +38,38 @@ Verify the installation:
 codex --version
 ```
 
-## 2. Add AIsa as the model provider
-
-Export your AIsa API key (add it to `~/.zshrc` or `~/.bashrc` to persist it):
-
-```bash
-export AISA_API_KEY="sk-aisa-..."
-```
-
-Then add this to `~/.codex/config.toml` (create the file if it doesn't exist):
-
-```toml
-model = "gpt-5.3-codex"
-model_provider = "aisa"
-
-[model_providers.aisa]
-name = "AIsa"
-base_url = "https://api.aisa.one/v1"
-env_key = "AISA_API_KEY"
-wire_api = "chat"
-```
-
-- `env_key` tells Codex which environment variable holds your key.
-- `wire_api = "chat"` uses AIsa's standard OpenAI-compatible Chat Completions endpoint. Models that expose `POST /v1/responses` in the [catalog](/guides/models) (e.g. `gpt-5.4`, `gpt-5.5`) also work with `wire_api = "responses"`.
-- Swap `model` for any coding-capable model — `gpt-5.4`, `claude-opus-4-8`, `kimi-k2.5`, `qwen3-coder-plus`, etc.
-
-## 3. Start Codex and connect AIsa capabilities
-
-```bash
-codex
-```
-
-The provider block covers chat. To give Codex access to AIsa's data and tool catalog, add the AIsa MCP server:
+## 2. Add the AIsa MCP server
 
 ```bash
 codex mcp add aisa --url https://mcp.aisa.one/mcp
 ```
 
-Codex automatically opens your browser for OAuth authentication; approve access and no key is copied.
+Codex detects that AIsa uses OAuth and opens your browser. Sign in to AIsa and approve access; no key is copied. On a machine without a browser, run `codex mcp login aisa --no-browser` and open the printed URL elsewhere.
 
 <Accordion title="Use your API key instead of OAuth">
-  For headless environments, reuse the `AISA_API_KEY` exported for the provider. Codex reads it at runtime, so the key never lands in `config.toml`:
+  For headless environments, export your AIsa key and tell Codex which variable holds it. Codex reads it at runtime, so the key never lands in `config.toml`:
 
   ```bash
+  export AISA_API_KEY="sk-aisa-..."
   codex mcp add aisa --url https://mcp.aisa.one/mcp --bearer-token-env-var AISA_API_KEY
   ```
 </Accordion>
 
-Codex now has the AIsa tools: `search`, `list_categories`, `get_details`, and `batch_quote` (prices exact calls without running them) are free; `batch_use` runs the calls and is billed per call.
+## 3. Verify
+
+```bash
+codex mcp list
+```
+
+**aisa** should be listed as `enabled`, with `OAuth` (or `Bearer token`) in the Auth column. Start a new Codex session to load the tools; inside Codex, `/mcp` shows the connected servers.
+
+## 4. Use AIsa capabilities
+
+```bash
+codex
+```
+
+Codex now has the AIsa tools. `search`, `list_categories`, `get_details`, `batch_get_schema`, and `batch_quote` (prices exact calls without running them) are free; `use` and `batch_use` run calls and are billed per call.
 
 Try:
 
@@ -93,38 +77,55 @@ Try:
 Use AIsa capabilities to search the web and summarize the latest information about Codex CLI.
 ```
 
+## Optional: run Codex on AIsa models
+
+Codex can also use AIsa as its model provider. This needs an AIsa API key ([console.aisa.one/api-keys](https://console.aisa.one/api-keys)) exported as `AISA_API_KEY`. Add this to `~/.codex/config.toml`:
+
+```toml
+model = "gpt-5.5"
+model_provider = "aisa"
+
+[model_providers.aisa]
+name = "AIsa"
+base_url = "https://api.aisa.one/v1"
+env_key = "AISA_API_KEY"
+wire_api = "responses"
+```
+
+- `env_key` tells Codex which environment variable holds your key.
+- Codex only supports `wire_api = "responses"`, so pick a model that lists `POST /v1/responses` in the [catalog](/guides/models), such as `gpt-5.5`, `gpt-5.4`, or `gpt-5.3-codex`.
+
 ## Quick reference
 
 | Item | Value |
 | --- | --- |
-| Config file | `~/.codex/config.toml` |
-| `base_url` | `https://api.aisa.one/v1` |
-| `env_key` | `AISA_API_KEY` |
-| `wire_api` | `chat` (or `responses` for models that support it) |
-| Default model | `gpt-5.3-codex` |
-| AIsa MCP server | `codex mcp add aisa --url https://mcp.aisa.one/mcp` (OAuth) |
+| Add AIsa | `codex mcp add aisa --url https://mcp.aisa.one/mcp` (OAuth starts automatically) |
+| Sign in again | `codex mcp login aisa` |
+| Check status | `codex mcp list`, or `/mcp` inside Codex |
+| API key | Not needed for MCP; optional `--bearer-token-env-var AISA_API_KEY` |
+| Optional model provider | `base_url = "https://api.aisa.one/v1"`, `wire_api = "responses"` |
 
 ## Troubleshooting
 
 | Problem | Fix |
 | --- | --- |
-| Authentication error (401) | Confirm `AISA_API_KEY` is exported: `echo $AISA_API_KEY` |
-| "unexpected status 404" | Make sure `base_url` is exactly `https://api.aisa.one/v1` |
-| Errors with `wire_api = "responses"` | Switch to `wire_api = "chat"`, or pick a model that exposes `POST /v1/responses` |
-| Model not found | Use an exact model ID from the [catalog](/guides/models) |
-| Codex still asks for ChatGPT login | Confirm `model_provider = "aisa"` is set at the top level of `config.toml` |
-| AIsa tools missing | Run `codex mcp list`; if **aisa** is not authorized, run `codex mcp login aisa` and restart Codex |
+| AIsa tools missing | Run `codex mcp list`. If **aisa** shows `Not logged in`, run `codex mcp login aisa`, then start a new session |
+| Browser didn't open | Run `codex mcp login aisa --no-browser` and open the printed URL |
+| `wire_api = "chat"` is no longer supported | Set `wire_api = "responses"` in the provider block |
+| Model provider returns 401 | Confirm `AISA_API_KEY` is exported in the shell that runs Codex |
+| Model provider returns 404 | Make sure `base_url` is exactly `https://api.aisa.one/v1` |
+| Model not found | Use an exact model ID that supports `POST /v1/responses` in the [catalog](/guides/models) |
 
 ## Related
 
 <CardGroup cols={3}>
-  <Card title="Use AIsa in Claude Code" icon="terminal" href="/guides/tutorials/use-aisa-in-claude-code">
-    Configure Anthropic's Claude Code with the same AIsa key.
+  <Card title="Use AIsa in Claude" icon="message" href="/guides/tutorials/use-aisa-in-claude">
+    Add AIsa as a custom connector in Claude.
   </Card>
-  <Card title="Authentication" icon="key" href="/guides/authentication">
-    API key creation, rotation, and storage best practices.
+  <Card title="Connect via MCP" icon="plug" href="/agent-quickstart">
+    MCP setup for other clients.
   </Card>
   <Card title="Model Catalog" icon="list" href="/guides/models">
-    Browse coding models before choosing a Codex default.
+    Browse models that support the Responses API.
   </Card>
 </CardGroup>

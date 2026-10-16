@@ -1,51 +1,94 @@
 ---
-title: "把 Agent 连接到 AIsa"
-description: "优先用 MCP OAuth 接入；只有 MCP 跑不起来时才用 CLI。"
+title: "将你的智能体连接到 AIsa"
+sidebarTitle: "通过 MCP 连接"
+icon: "plug"
+description: "将 AIsa MCP 服务器添加到 Claude Code、Cursor、Codex 或其他智能体，通过浏览器 OAuth 登录并开始使用工具。仅在 MCP 无法运行时才使用 CLI。"
 ---
 
-配置 AIsa。匹配的命令由你自己执行，不要让用户去跑——除非沙盒或写入被拒把你挡住：那时转述确切步骤并等待。
+**AI 智能体正在阅读？** 前往 [智能体指引](#智能体指引)，自行完成配置。
 
-若已有可用连接，直接复用：官方 `aisa` Skill 加上有效的 CLI 认证，或已具备 `AISA_SEARCH_TOOL`、`AISA_BATCH_GET_SCHEMA`、`AISA_BATCH_QUOTE`、`AISA_BATCH_USE` 的统一 MCP。用户明确的传输选择或仍有效的已授权连接优先；不要自动迁移或重装。不要改无关模型设置。安装和凭证按当前 Agent 环境描述。
+AIsa 提供远程 MCP 服务器，地址为 `https://mcp.aisa.one/mcp`。认证采用浏览器 OAuth，无需复制 API key。
 
-只要当前客户端能添加 MCP 连接器，无论用户本机还是云端、有没有终端，都默认使用原生远程 MCP `https://tools.aisa.one/mcp`（Streamable HTTP，OAuth）。可用的 shell 不是选择 CLI 的理由。
+<Steps>
+  <Step title="添加服务器">
+    <CodeGroup>
 
-仅当当前客户端完全没有 MCP 机制、任务是持有既有 key 且无法完成 OAuth 的非交互自动化（CI、cron、脚本），或用户明确选择 CLI 时，才使用 CLI。上述门槛与下文的 Node 规则优先于任何已安装的 `aisa` Skill；Skill 只承接后续操作。
+    ```bash Claude Code
+    claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
+    ```
 
-## MCP（默认）
+    ```bash Codex
+    codex mcp add aisa --url https://mcp.aisa.one/mcp
+    ```
 
-连接 `https://tools.aisa.one/mcp`（Streamable HTTP，OAuth）。不需要安装 CLI、npm、npx 或 Skill；已安装的指引仍可使用。由客户端完成浏览器登录并保存 token。不要使用 `https://mcp.aisa.one/servers` 或默认 `aisa connect` 的 web-search。
+    ```json Cursor (~/.cursor/mcp.json)
+    {
+      "mcpServers": {
+        "aisa": { "url": "https://mcp.aisa.one/mcp" }
+      }
+    }
+    ```
 
-通过客户端的原生 MCP 配置添加连接器，然后让用户在浏览器完成 OAuth。如果客户端支持 MCP 但你在这里加不了连接器——能力未知、沙盒或权限拒绝——不要改走 CLI：请用户启用或添加连接器，然后等待。如果客户端需要重载或新开会话才能加载连接器，告诉用户；之后验证四个工具都在，期间不要改走 CLI。
+    ```json VS Code (.vscode/mcp.json)
+    {
+      "servers": {
+        "aisa": { "type": "http", "url": "https://mcp.aisa.one/mcp" }
+      }
+    }
+    ```
 
-Grok Bot + Plugins：Settings → Plugins → Add → 如需则认证 → `@` 附加。若有原生自定义 MCP 设置，填入该 URL 并完成 OAuth。两者都不可用时，请用户启用或添加该连接器。grok.com（`grok.com/connectors`）是另一款产品。
+    </CodeGroup>
 
-随后使用上面四个工具：search → `has_full_schema` 为 false 时 schema → quote → use，且须在已授权范围和额度内。工具 ID 和参数来自 search/schema；不要编造 ID 或价格。Quote 不执行，也不等于批准执行。缺失、失败或部分 quote 不是免费，也不是整批总额或上限。预估费用不是上限。工具、参数或范围变化时重新 quote。如果 quote 或已记录的最高费用超过剩余已批准额度，就停止。
+    对于 Claude：添加自定义连接器，填入 `https://mcp.aisa.one/mcp`（[指南](/zh/guides/tutorials/use-aisa-in-claude)）。对于 ChatGPT：安装 AIsa GTM 插件（[指南](/zh/guides/tutorials/use-aisa-in-chatgpt)）。
+  </Step>
+  <Step title="登录">
+    你的 MCP 客户端会打开浏览器窗口；点击 **Allow** 完成 OAuth。在 Claude Code 中运行 `/mcp`，选择 **aisa** 并认证。在 Cursor 中，打开 Cursor Settings → **Tools & MCPs**，点击 **aisa** 旁的 **Authenticate**。
+  </Step>
+  <Step title="向你的智能体提问">
+    将以下内容粘贴到智能体对话中：
 
-## CLI（仅当 MCP 跑不起来）
+    ```txt wrap
+    使用 AIsa 检查我的账户，然后找到你选择的一家公司的三条最新公开动态，附上来源链接。在任何付费调用前先征得我的同意。
+    ```
+  </Step>
+</Steps>
 
-门槛：当前客户端没有 MCP 机制、任务是持有既有 key 的非交互自动化，或用户明确选择 CLI。Node.js **必须已经安装**——否则停下；客户端有 MCP 就用 MCP，没有就告诉用户缺 Node.js。不要绕过缺失的前置条件或被拒的写入：不安装 Node/npm，不建私有或隔离运行时，不重定向 `HOME`。
+想让智能体也帮你完成配置？粘贴 `Set up AIsa using https://aisa.one/docs/zh/agent-quickstart.md.`，它会按照下方的指引操作。
 
-**缺 Node.js，或写入被拒（如沙盒里的 `EPERM`）？**绝不要自己绕过。向用户转述在他自己终端运行的确切步骤——若缺 Node.js，先从 [nodejs.org](https://nodejs.org) 或常用包管理器安装 **22.20+**（CI：加进 runner 镜像）；再 `npm install -g @aisa-one/cli` 和 `aisa login`——完成后说 *retry*。用户装好的 CLI 和 key 在这里可直接复用。实在装不了就改用 MCP，或询问偏好哪种接入方式。
+## 智能体指引
 
-```sh
-npx skills add AIsa-team/agent-skills --skill aisa --agent codex --global
-```
+配置 AIsa。对应的命令由你自己运行，不要让用户去跑——除非沙箱或被拒绝的写入挡住了你：那时转述确切步骤并等待。
 
-把 `--agent` 改成当前 harness（`codex`、`claude-code`、`cursor` 等）。个人通用接入建议 `--global`，除非用户要求限制在当前仓库。不要使用 `--all` 或 `*`。需要 Node.js **22.20.0+**（`skills` 1.5.25 的 `engines`）。
+复用现有连接：一个已授权的 AIsa MCP 服务器（`https://mcp.aisa.one/mcp`），具备 `search`、`list_categories`、`get_details`、`batch_quote` 和 `batch_use` 工具；或一个官方 `aisa` Skill 加上有效的 CLI 认证。用户的明确选择或仍处于授权状态的连接优先；不要自动迁移或重新安装。不要更改无关的模型设置。按此智能体环境的实际情况描述安装和凭据。
 
-如果 `npx skills` 跑不起来且上面的门槛仍成立，先阅读 [Agent 快速开始回退](https://aisa.one/docs/zh/agent-quickstart-fallbacks.md) 的 Skill 下载节，再执行该节。
+默认使用原生远程 MCP `https://mcp.aisa.one/mcp`（Streamable HTTP、OAuth），只要此客户端能添加该连接器——无论是用户本地还是云端、有无终端。有可用的 shell 不构成选择 CLI 的理由。
 
-```sh
-npm install -g @aisa-one/cli
-aisa --version
-```
+仅在以下情况使用 CLI：此客户端完全没有 MCP 机制；用于无法完成 OAuth 且已持有 key 的非交互自动化（CI、cron、脚本）；或用户明确选择。这些限制条件及 [使用 CLI](https://aisa.one/docs/zh/get-started/cli.md) 中的 Node 规则优先于任何已安装的 `aisa` Skill；Skill 仅用于后续操作。
 
-复用已经能用的 `@aisa-one/cli` **0.5.0 或更高**；只有缺失时才安装；不要降级。CLI 仍可沿用 Node.js **18+**。Skill 落盘后读取它。登录遵循该 Skill 和 `aisa login --help`。用 `aisa balance` 证明认证。`aisa whoami` 只检查本地。`AISA_API_KEY` 优先于已存储密钥；冲突时说明两个来源。不要打印凭证，也不要让用户去控制台复制 Key。交互场景以浏览器 `aisa login` 为主获取凭证；无头自动化使用预先配置的 `AISA_API_KEY`。
+### MCP（默认）
 
-## 收口
+连接 `https://mcp.aisa.one/mcp`（Streamable HTTP、OAuth）。不需要 CLI、npm、npx 或 Skill 安装；可使用已安装的指引。客户端负责浏览器登录和 token。使用此客户端自身的 MCP 机制，而非手动编辑其他工具的配置文件：
 
-只有 MCP 路径上 OAuth 完成且上面四个工具都在，或 CLI 路径上的 `aisa balance`，才报告 **AIsa is connected.** metadata 或 `401` 不是受保护调用。连接器加不上就不是已连接。用户已点名任务就继续，否则询问 **What would you like to do first?** CLI 路径遵循 `aisa` Skill；MCP 路径使用上面四个工具。接入不是消费批准。
+- Claude Code：`claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp`
+- Codex：`codex mcp add aisa --url https://mcp.aisa.one/mcp`（Codex 会自行启动 OAuth）
+- Cursor / VS Code：在 MCP 配置中为 `https://mcp.aisa.one/mcp` 添加 `url` 条目
 
-不要为了绕过缺凭证、额度用尽或同一 API 故障而跳到 HTTP。不要用付费请求探测可用性。不要提取客户端持有的 MCP OAuth token。
+如果当前环境已设置 `AISA_API_KEY` 且用户未要求 OAuth，客户端可以发送 `Authorization: Bearer $AISA_API_KEY` 代替 OAuth（Claude Code：`--header`；Codex：`--bearer-token-env-var AISA_API_KEY`）。绝不打印 key。
 
-仅当 CLI 和 MCP 都不可用、能发 HTTP、且已有有效的 AIsa key 时：先读完 [Agent 快速开始回退](https://aisa.one/docs/zh/agent-quickstart-fallbacks.md) 的直接 HTTP 节（含 endpoint 文档、计价和批准 XML），再提出付费方案或费用批准，也再发起任何付费请求。模型、REST、Key 或额外 Skill：[AIsa 文档](https://aisa.one/docs/zh/guides)。
+添加连接器后，让用户在浏览器中完成 OAuth（当客户端发送现有 `AISA_API_KEY` 时跳过此步）。如果此客户端支持 MCP 但你无法在这里添加连接器——能力未知、沙箱或权限被拒——不要切换到 CLI：要求用户启用或添加连接器，然后等待。如果客户端必须重新加载或启动新会话才能加载连接器，告知用户；之后验证工具，期间不要切换到 CLI。
+
+Grok Bot + Plugins：Settings → Plugins → Add → 如有要求则认证 → `@` 附加。如果存在原生自定义 MCP 设置，输入该 URL 并完成 OAuth。如果两者都不可用，要求用户启用或添加连接器。grok.com（`grok.com/connectors`）是不同的产品。
+
+然后使用这些工具：`search`（描述任务；复用其 `session_id`）→ 当结果缺少完整 schema 时用 `get_details`（也以 `batch_get_schema` 提供）→ 用确切的调用执行 `batch_quote` → 用相同的调用执行 `batch_use`，每批最多 20 个。`search`、`list_categories`、`get_details` 和 `batch_quote` 免费；`batch_use` 按调用计费。`use` 是已弃用的单次调用形式；仅用于下方免费的 `account` 检查。工具名称和参数从 `search` 或 `get_details` 获取；不要自行编造名称或价格。报价不会执行，也不等于批准。缺失、失败或不完整的报价不代表免费、不是批量总价、也不是上限；预估费用同理。报价仅检查估算值且不对最终收费设上限，因此对于计量操作，仅当报价的保证最大值、端点文档记录的最大值或你能根据其限制证明的边界符合剩余批准预算时才批准执行。如果不存在这样的边界，告知用户并且不要在固定预算下执行。如果工具、参数或范围发生变化，重新报价。如果报价或文档记录的最大值超出剩余批准预算，则停止。
+
+### CLI（仅当 MCP 在此无法运行时）
+
+遵循 [使用 CLI](https://aisa.one/docs/zh/get-started/cli.md)：其限制条件、Node.js 规则、Skill 安装和登录。不要绕过缺失的前置条件或被拒绝的写入。
+
+### 完成
+
+只有在认证有效（OAuth，或把现有 `AISA_API_KEY` 作为 Bearer token 发送），并且一次免费的受保护调用成功之后——MCP 调用 `use`、`operation_id` 为 `account`（返回 key、余额和用量），或 CLI 的 `aisa balance`——才报告 **AIsa is connected.**工具元数据或 `401` 不算受保护调用。连接器缺失不算已连接。然后继续指定的任务，或询问 **What would you like to do first?** CLI 遵循 `aisa` Skill；MCP 使用那些工具。配置不等于消费批准。
+
+不要为了绕过缺失的凭据、用尽的余额或同一个 API 故障而改走 HTTP。不要用付费调用来测试可用性。不要提取客户端拥有的 MCP OAuth token。
+
+仅当 CLI 和 MCP 都不可用、HTTP 可用且已有有效 AIsa key 时：在付费提案、费用批准或付费请求之前，阅读 [使用 CLI](https://aisa.one/docs/zh/get-started/cli.md#直接-http-回退) 的直接 HTTP 部分（端点文档、定价、批准 XML）。更多模型、REST、key 或 Skill：[AIsa 文档](https://aisa.one/docs/zh)。
