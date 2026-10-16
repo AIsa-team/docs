@@ -114,7 +114,9 @@ def check_arguments_schema(document,path,method,actual):
         body_schema=content[media].get('schema',{})
         body_schema=effective_object(body_schema,document)
         body_props=body_schema.get('properties',{}) if isinstance(body_schema,dict) else {}
-        if body_props:
+        # Object-wide body constraints cannot apply to sibling query/path/header
+        # arguments. The existing whole-body form preserves that scope.
+        if body_props and not (props and set(body_schema) & TOP_CONSTRAINTS):
             for name,subschema in body_props.items():
                 if name in props:
                     return ['ambiguous parameter/body name '+name]

@@ -103,6 +103,7 @@ class RouterSurfaceTests(unittest.TestCase):
                 self.assertTrue(any(':arguments_schema:' in error for error in result['mismatches']))
 
     def test_nested_body_composition_and_literal_business_names_are_preserved(self):
+        self.document['paths']['/item'].pop('parameters')
         literal = {'$ref': 'a literal, not a schema reference', 'description': True}
         body = {'type': 'object', 'properties': {
             'description': {'type': 'string', 'enum': ['first', 'second']},
@@ -114,7 +115,6 @@ class RouterSurfaceTests(unittest.TestCase):
         self.document['paths']['/item']['get'] = {'requestBody': {'required': True,
             'content': {'application/json': {'schema': body}}}}
         actual = {**copy.deepcopy(body), 'additionalProperties': False}
-        actual['properties']['query'] = {'type': 'string'}
         actual['properties']['description']['description'] = 'Rendered annotation'
         def check(value):
             return check_arguments_schema(self.document, '/item', 'GET', value)
@@ -148,6 +148,19 @@ class RouterSurfaceTests(unittest.TestCase):
         actual['components']['schemas']['Node']['properties']['count']['default'] = 1
         self.assertIn('argument constraints differ: body',
                       check_arguments_schema(self.document, '/item', 'get', actual))
+
+    def test_global_body_constraints_with_query_keep_body_scope(self):
+        body = {'type': 'object', 'properties': {'name': {'type': 'string'}},
+                'minProperties': 1, 'patternProperties': {'^name$': {'type': 'string'}}}
+        self.document['paths']['/item']['get']['requestBody'] = {'required': True,
+            'content': {'application/json': {'schema': body}}}
+        actual = {'type': 'object', 'additionalProperties': False, 'required': ['body'],
+            'properties': {'query': {'type': 'string'}, 'body': body}}
+        self.assertEqual(check_arguments_schema(self.document, '/item', 'get', actual), [])
+        flattened = {'type': 'object', 'additionalProperties': False,
+            'minProperties': 1, 'patternProperties': body['patternProperties'],
+            'properties': {'query': {'type': 'string'}, 'name': {'type': 'string'}}}
+        self.assertTrue(check_arguments_schema(self.document, '/item', 'get', flattened))
 
     def test_unavailable_legacy_is_never_implicitly_excluded(self):
         self.row = {'successful': False, 'error': {'code': 'not_found'}}
