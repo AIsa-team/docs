@@ -11,6 +11,7 @@ POLICY_PATH = 'openapi/policies/deferred-enabled-20261010.json'
 POLICY_SHA256 = '004d82c4dd026ed5ebf326ba9ce10bbea77e836e00f89f63931be28bcc8c32ee'
 REBINDING_PATH = 'docs/deferred-age-response-rebinding-20261012.json'
 REBINDING_SHA256 = '92137542ef16cea002f25b2f5033406dc88d6d28d39efd23d6f94401d2dc4c50'
+FRED_MIGRATION_SHA256 = 'c77c56e6530dc146956fb9c51f58bbc6791b80b3ba0d63f909f59f0de3d92d50'
 
 
 def canonical_key(provider, kind, key):
@@ -45,7 +46,8 @@ def load_deferred_definitions(root):
     if not binding_path.is_file():
         raise ValueError('Missing exact response deferral rebinding')
     binding_raw = binding_path.read_bytes()
-    if hashlib.sha256(binding_raw).hexdigest() != REBINDING_SHA256:
+    binding_sha = hashlib.sha256(binding_raw).hexdigest()
+    if binding_sha not in {REBINDING_SHA256, FRED_MIGRATION_SHA256}:
         raise ValueError('Response deferral rebinding differs from reviewed exact bytes')
     record = json.loads(binding_raw)
     if record.get('schema_version') != 1 or len(record.get('rebindings', [])) != 1:
@@ -61,7 +63,34 @@ def load_deferred_definitions(root):
     if old_key not in policy.keys or new_key in policy.keys:
         raise ValueError('Response deferral rebinding must replace exactly one existing key')
     policy.keys = (policy.keys - {old_key}) | {new_key}
-    policy.metadata['rebinding'] = {'path': REBINDING_PATH, 'sha256': REBINDING_SHA256}
+    policy.metadata['rebinding'] = {'path': REBINDING_PATH, 'sha256': binding_sha}
+    if binding_sha == FRED_MIGRATION_SHA256:
+        migration = record.get('request_response_migration', {})
+        replacements = migration.get('replacements', [])
+        if (migration.get('authorization') != value['authorization'] or
+                migration.get('original_policy_sha256') != POLICY_SHA256 or
+                migration.get('original_scope') != value['scope'] or len(replacements) != 3):
+            raise ValueError('Invalid exact FRED debt migration scope')
+        expected_paths = {'/apis/v1/fred/series/search', '/apis/v1/geofred/regional/data',
+                          '/apis/v1/geofred/shapes/file'}
+        if {row['old_gate_identity'][2] for row in replacements} != expected_paths:
+            raise ValueError('FRED debt migration changed operation scope')
+        for row in replacements:
+            old, new = row['old_gate_identity'], row['new_gate_identity']
+            if (row['provider'] != 'fred' or row['old_kind'] != 'request' or row['new_kind'] != 'response'
+                    or len(old) != 8 or len(new) != 10 or old[0] != 'fred'
+                    or old[1:3] != new[:2] or old[3] != 'ANY' or new[2] != 'GET'
+                    or old[4] != new[4] or new[3] != 'missing_success_payload'
+                    or old[-1] != 'enabled' or new[-1] != 'enabled'):
+                raise ValueError('FRED debt migration changed protected Runtime identity')
+            old_key = canonical_key('fred', 'request', old)
+            new_key = canonical_key('fred', 'response', new)
+            if old_key not in policy.keys or new_key in policy.keys:
+                raise ValueError('FRED debt migration must replace exactly three original keys')
+            policy.keys = (policy.keys - {old_key}) | {new_key}
+        if len(policy.keys) != 60:
+            raise ValueError('FRED debt migration expanded the original approval')
+        policy.metadata['effective_scope'] = {'request': 7, 'response': 53}
     return policy
 
 

@@ -55,6 +55,8 @@ def available_targets(fragment, document):
 
 
 def source_binding_evidence(fact, facts, sources, mirrors, public_path, method, source_bindings=None, response=False):
+    from runtime_registry import runtime_metadata_mirrors
+    mirrors = runtime_metadata_mirrors(facts, sources, mirrors)
     sources = sources if isinstance(sources, list) else ([sources] if sources else [])
     selected_url = (source_bindings or {}).get(public_path)
     selected_sources = [s for s in sources if s.get('info', {}).get('x-aisa-source', {}).get('response_only') is not True

@@ -13,7 +13,7 @@ from compose_openapi import digest
 from source_json import checked_float
 
 INDEX = 'https://fred.stlouisfed.org/docs/api/fred/'
-CONVERTER = 'scripts/import_fred_reference.py@4'
+CONVERTER = 'scripts/import_fred_reference.py@5'
 GEO_REFERENCE = {
     '/geofred/shapes/file': 'shapes.html',
     '/geofred/series/group': 'series_group.html',
@@ -308,6 +308,58 @@ def parse_reference(raw, url):
                   'x-aisa-response-evidence': evidence}
 
 
+def incomplete_request_reference(raw, url):
+    """Retain explicit parameter fragments; missing requiredness stays missing.
+
+    This is not an emitted provider operation. Runtime's separately attributed
+    managed metadata may fill those fields without claiming provider validation.
+    """
+    content, _, path = reference_identity(raw, url)
+    nodes = list(content.all())
+    start = [i for i, n in enumerate(nodes) if n.tag == 'h2' and n.text() == 'Parameters'][-1]
+    sections, name = {}, None
+    for node in nodes[start + 1:]:
+        if node.tag == 'h3':
+            name = node.text()
+            if not re.fullmatch('[a-z_]+', name) or name in sections:
+                raise ValueError('invalid or duplicate incomplete parameter section')
+            sections[name] = []
+        elif name:
+            sections[name].append(node)
+    defaults = dict(re.findall(r'default value of ([a-z_]+) is ([a-z0-9_]+)\.', content.text()))
+    parameters, missing = [], {}
+    for name, section in sections.items():
+        try:
+            value = parameter(name, section, defaults)
+        except ValueError as error:
+            if 'required/optional is not stated' not in str(error):
+                raise
+            bullets = [n.text(skip={'p', 'ul', 'ol'}) for n in section if n.tag == 'li']
+            # Reuse the constraint decoder, then remove every placeholder field.
+            # The placeholder itself is never source evidence or a public schema.
+            explicit_type = next((kind for kind in ('integer', 'string', 'boolean')
+                                  if any(re.search(r'\b' + kind + r's?\b', b, re.I) for b in bullets)), None)
+            placeholder = Node('li'); placeholder.children = [(explicit_type or 'string') + ', optional']
+            value = parameter(name, [*section, placeholder], defaults)
+            value.pop('required')
+            missing[name] = ['required']
+            if explicit_type is None:
+                value['schema'].pop('type')
+                missing[name].append('type')
+            # Shape names are explicitly enumerated by the official reference;
+            # text in parentheses labels a name, rather than part of its value.
+            if any(b.startswith('Available Shape Types:') for b in bullets):
+                values = [b.split(' (', 1)[0] for b in bullets if not b.startswith('Available Shape Types:')]
+                if not values or any(not re.fullmatch('[a-z]+', b) for b in values):
+                    raise ValueError('unsupported official shape enum')
+                value['schema']['enum'] = values
+            value['description'] = '\n'.join(dict.fromkeys(n.text() for n in section if n.tag in ('p', 'li')))
+        value.pop('x-aisa-reference-declarations', None)
+        parameters.append(value)
+    return {'method': 'GET', 'path': path, 'parameters': parameters, 'missing_fields': missing,
+            'official_reference_url': url, 'official_reference_sha256': hashlib.sha256(raw).hexdigest()}
+
+
 def import_reference(provider, url=INDEX, fetcher=None):
     if provider != 'fred' or url != INDEX:
         raise ValueError('FRED converter requires provider fred and its canonical official index')
@@ -324,7 +376,7 @@ def import_reference(provider, url=INDEX, fetcher=None):
             links[text] = destination
     if not links:
         raise ValueError('official index has no FRED endpoint references')
-    paths, sources, pending, identities = {}, [], [], []
+    paths, sources, pending, identities, fragments = {}, [], [], [], {}
     for title, destination in sorted(links.items()):
         raw = fetcher(destination)
         source = {'url': destination, 'sha256': hashlib.sha256(raw).hexdigest()}
@@ -343,6 +395,11 @@ def import_reference(provider, url=INDEX, fetcher=None):
         except ValueError as error:
             pending.append(dict(source, path=identity_path, method='GET', reason=str(error)))
             identity.update(request_status='pending', request_reason=str(error))
+            if 'required/optional is not stated' in str(error):
+                try:
+                    fragments[identity_path] = incomplete_request_reference(raw, destination)
+                except ValueError:
+                    pass  # Unsupported fragments remain pending, never guessed.
             continue
         if title.startswith('fred/') and path != '/' + title or path in paths:
             raise ValueError('index and reference path disagree')
@@ -361,6 +418,8 @@ def import_reference(provider, url=INDEX, fetcher=None):
     document = {'openapi': '3.1.0', 'info': {'title': 'Official FRED reference', 'version': 'reference-html-1', 'x-aisa-source': source},
                 'servers': [{'url': 'https://api.stlouisfed.org'}], 'paths': paths,
                 'components': {'securitySchemes': {'fred_api_key': {'type': 'apiKey', 'in': 'query', 'name': 'api_key'}}}}
+    if fragments:
+        document['x-aisa-incomplete-request-definitions'] = fragments
     source['content_hash'] = digest({**document, 'info': {key: value for key, value in document['info'].items() if key != 'x-aisa-source'}})
     return document
 

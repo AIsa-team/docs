@@ -680,7 +680,8 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
     retained_responses = {}
     response_gaps = []
     facts_prefix = urlsplit((facts.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
-    public_mirrors = public_mirrors or {}
+    from runtime_registry import runtime_metadata_mirrors
+    public_mirrors = runtime_metadata_mirrors(facts, upstream, public_mirrors)
     source_bindings = source_bindings or {}
     used_mirrors = {}
     published_ids = {}
