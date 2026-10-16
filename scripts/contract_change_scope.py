@@ -10,6 +10,13 @@ INPUT_CONTEXT = 'docs/schema-inputs/context.json'
 INPUT_RECEIPTS = 'docs/schema-inputs/source-receipts.json'
 
 
+def is_reviewed_input_attachment(name):
+    """Review data and top-level regression tests, never compiler/gate code."""
+    return (name == 'docs/current-source-review-20261009/merged-source-reviews.json' or
+            bool(re.fullmatch(r'docs/current-source-review-[0-9]{8}/[A-Za-z0-9_-]+-review\.json', name)) or
+            bool(re.fullmatch(r'scripts/tests/test_[A-Za-z0-9_]+\.py', name)))
+
+
 def is_reviewed_input_change(paths):
     """Closed source-only intent; the separate input gate must validate bytes."""
     paths = set(paths)
@@ -18,7 +25,7 @@ def is_reviewed_input_change(paths):
     source = lambda name: name in exact - {INPUT_CONTEXT, INPUT_RECEIPTS} or bool(
         re.fullmatch(r'openapi/upstream/[A-Za-z0-9_.-]+\.json', name))
     return (INPUT_CONTEXT in paths and any(source(name) for name in paths) and
-            all(name in exact or source(name) for name in paths))
+            all(name in exact or source(name) or is_reviewed_input_attachment(name) for name in paths))
 
 
 def git_changed_paths(root, base, head='HEAD'):
