@@ -71,6 +71,26 @@ candidates are assessed separately.
 
 ## Validation
 
+Consumer agreement must also be checked against source-to-Runtime input
+forwarding. Before accepting a unified candidate, run:
+
+```sh
+python scripts/audit_request_input_forwarding.py \
+  --root REVIEWED_INPUT_ROOT \
+  --runtime-dir VERIFIED_RUNTIME_CAPTURE \
+  --output request-input-forwarding.json
+```
+
+The root contains the reviewed registry and upstream sources; the capture
+contains each catalog's Runtime facts JSON. The check scans every configured
+provider, including expanded ANY methods, and exits nonzero for unforwarded
+query fields or unverifiable source operations. Optional fields count too.
+All consumers can agree while still omitting a required business input such as
+an identity or pagination cursor. This check changes no Profile or publication
+debt. It establishes query forwarding only; body semantics, provider acceptance
+and live adoption require their own evidence. Cached captures do not establish
+current production state.
+
 ```sh
 python -m unittest discover -s scripts/tests -v
 python -m unittest discover -s scripts/tests/w3_verification -v
