@@ -1,7 +1,7 @@
 import copy
 import unittest
 
-from audit_request_input_forwarding import audit_provider, missing_query_inputs
+from audit_request_input_forwarding import audit_provider, missing_header_inputs, missing_query_inputs
 from test_runtime_contracts import facts, mirror, operation
 
 
@@ -51,6 +51,24 @@ class RequestInputForwardingTests(unittest.TestCase):
         rows = audit_provider('example', runtime, source, mirrors,
                               {path: source['info']['x-aisa-source']['url']})
         self.assertEqual(rows[0]['status'], 'source_unverified')
+
+    def test_typed_header_without_forwarding_declaration_is_blocked(self):
+        runtime, source = facts('mixed'), mirror()
+        header = {'in': 'header', 'name': 'Parallel-Beta', 'schema': {'type': 'string'}}
+        operation(source)['parameters'].append(header)
+        operation(runtime)['parameters'].append(copy.deepcopy(header))
+        rows = audit_provider('example', runtime, source, {}, {}, include_headers=True)
+        self.assertEqual(rows[0]['missing_header_inputs'], ['Parallel-Beta'])
+        self.assertEqual(rows[0]['status'], 'blocked')
+        operation(runtime)['x-aisa-caller-headers'] = ['parallel-beta']
+        self.assertEqual(audit_provider('example', runtime, source, {}, {}, include_headers=True)[0]['status'], 'passed')
+
+    def test_header_auth_ownership_and_accept_remain_distinct(self):
+        source = {'parameters': [{'in': 'header', 'name': n} for n in
+                  ('Accept', 'X-API-Key', 'provider-secret', 'POLY_BUILDER_SIGNATURE')]}
+        self.assertEqual(missing_header_inputs({}, source, {}, ['provider-secret']), ['POLY_BUILDER_SIGNATURE'])
+        with self.assertRaisesRegex(ValueError, 'invalid Runtime caller-header'):
+            missing_header_inputs({'x-aisa-caller-headers': 'Parallel-Beta'}, source, {})
 
 
 if __name__ == '__main__':

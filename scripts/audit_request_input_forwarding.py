@@ -34,7 +34,24 @@ def missing_query_inputs(runtime, source, document, auth_names=()):
                    and p['name'] not in declared})
 
 
-def audit_provider(provider, facts, upstream, mirrors, bindings):
+def missing_header_inputs(runtime, source, document, auth_names=()):
+    """Generic relay headers need an explicit caller-value forwarding contract.
+
+    Typed request fields describe validation, not transport. Only the Runtime
+    caller-header allowlist proves generic forwarding; Accept is the existing
+    generic executor exception. Runtime-owned handlers are assessed separately.
+    """
+    declared = runtime.get('x-aisa-caller-headers', [])
+    if not isinstance(declared, list) or not all(isinstance(name, str) for name in declared):
+        raise ValueError('invalid Runtime caller-header forwarding declaration')
+    forwarded = {'accept', *(name.lower() for name in declared)}
+    consumed_auth = {'authorization', 'x-api-key', 'api-key', *(name.lower() for name in auth_names)}
+    return sorted({p['name'] for raw in source.get('parameters', [])
+                   for p in [resolve(raw, document, preserve_recursive=True)]
+                   if p.get('in') == 'header' and p['name'].lower() not in forwarded | consumed_auth})
+
+
+def audit_provider(provider, facts, upstream, mirrors, bindings, include_headers=False):
     sources = upstream if isinstance(upstream, list) else ([upstream] if upstream else [])
     mirrors = runtime_metadata_mirrors(facts, upstream, mirrors)
     prefix = urlsplit((facts.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
@@ -80,15 +97,17 @@ def audit_provider(provider, facts, upstream, mirrors, bindings):
                         document = {'openapi': value.get('openapi', '3.1.0'), 'components': value.get('components', {})}
                         source = value['operation']
                     missing = missing_query_inputs(runtime, source, document, auth)
-                    rows.append(dict(base, method=actual.upper(), status='blocked' if missing else 'passed',
-                                     missing_query_inputs=missing))
+                    headers = missing_header_inputs(runtime, source, document, auth) if include_headers else []
+                    rows.append(dict(base, method=actual.upper(), status='blocked' if missing or headers else 'passed',
+                                     missing_query_inputs=missing,
+                                     **({'missing_header_inputs': headers} if include_headers else {})))
             except (ValueError, KeyError, TypeError) as exc:
                 rows.append(dict(base, method='ANY' if method == 'x-aisa-any' else method.upper(),
                                  status='source_unverified', reason=str(exc)))
     return rows
 
 
-def audit(root, runtime_dir):
+def audit(root, runtime_dir, include_headers=False):
     registry = yaml.safe_load((root / 'openapi/registry.yaml').read_text())
     mirrors = public_mirror_index(root)
     rows, bindings = [], {}
@@ -101,17 +120,18 @@ def audit(root, runtime_dir):
             bindings[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
             documents[name] = json.loads(path.read_bytes())
         upstream, source_bindings = configured_inputs(root, provider, config)
-        rows.extend(audit_provider(provider, combine_facts(documents, provider), upstream, mirrors, source_bindings))
+        rows.extend(audit_provider(provider, combine_facts(documents, provider), upstream, mirrors, source_bindings, include_headers))
     blocked = [r for r in rows if r['status'] == 'blocked']
     unverified = [r for r in rows if r['status'] == 'source_unverified']
     return {'status': 'blocked' if blocked or unverified else 'passed',
-            'scope': 'Offline source-to-Runtime query forwarding; no provider execution or live freshness assertion',
+            'scope': 'Offline source-to-Runtime query forwarding' + (' and generic caller-header forwarding' if include_headers else '') + '; no provider execution or live freshness assertion',
             'checker_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             'source_files_sha256': {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
                                     for path in [root / 'openapi/registry.yaml', *sorted((root / 'openapi/upstream').glob('*.json'))]},
             'runtime_files_sha256': bindings, 'operations': len(rows),
             'blocked_operations': len(blocked),
             'missing_query_occurrences': sum(len(r['missing_query_inputs']) for r in blocked),
+            **({'missing_header_occurrences': sum(len(r.get('missing_header_inputs', [])) for r in blocked)} if include_headers else {}),
             'source_unverified_operations': len(unverified), 'rows': rows}
 
 
@@ -120,8 +140,9 @@ def main():
     parser.add_argument('--root', type=Path, required=True)
     parser.add_argument('--runtime-dir', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--include-headers', action='store_true', help='Also require declared generic caller-header forwarding; Runtime-owned handlers remain separate')
     args = parser.parse_args()
-    result = audit(args.root, args.runtime_dir)
+    result = audit(args.root, args.runtime_dir, args.include_headers)
     args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + '\n')
     print(json.dumps({k: v for k, v in result.items() if k not in {'rows', 'runtime_files_sha256', 'source_files_sha256'}}))
     return 0 if result['status'] == 'passed' else 1
