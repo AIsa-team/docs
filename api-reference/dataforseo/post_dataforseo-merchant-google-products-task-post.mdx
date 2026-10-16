@@ -26,12 +26,16 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/merchant/google/products/t
 // It carries everything needed to connect, authorize and run this example —
 // no key to paste, one click of Allow in the browser.
 {
-  "operation_id": "post_dataforseo_merchant_google_products_submit",
-  "arguments": {},
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_dataforseo_merchant_google_products_submit",
+      "arguments": {}
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -42,13 +46,14 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/merchant/google/products/t
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/api-reference/dataforseo/post_dataforseo-merchant-google-products-task-post.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -59,7 +64,206 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/merchant/google/products/t
 
 {/* aisa-contract-details:start */}
 
+## Request contract
+
+- **Method and path:** POST /apis/v1/dataforseo/merchant/google/products/task&#95;post
+- **Availability:** enabled
+- **Request URL template:** https://api.aisa.one/apis/v1/dataforseo/merchant/google/products/task&#95;post
+- **Runtime facts:** 6ab8fec17df1d5dcdff2e036dd1eb40587752b774ec040ab4eb0cc6946c3dd3c
+
+[Complete OpenAPI definition](https://aisa.one/docs/openapi/dataforseo.json)
+
+Effective request and pricing declaration (including authentication and referenced schemas):
+
+```json
+{
+  "operationId": "post_dataforseo_merchant_google_products_submit",
+  "method": "POST",
+  "path": "/apis/v1/dataforseo/merchant/google/products/task_post",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "example": [
+            {
+              "keyword": "iphone",
+              "language_code": "en",
+              "location_code": 2840,
+              "price_min": 5
+            }
+          ],
+          "items": {
+            "oneOf": [
+              {
+                "example": [
+                  {
+                    "keyword": "iphone",
+                    "language_code": "en",
+                    "location_code": 2840,
+                    "price_min": 5
+                  }
+                ],
+                "properties": {
+                  "depth": {
+                    "description": "<em>parsing depth</em><br>optional field<br>number of results to be retrieved from Google Shopping SERP<br>default value: <code>40</code><br>max value: <code>120</code><br><strong>Your account will be billed per each SERP containing up to 40 results;</strong> <br>Setting depth above 40 may result in additional charges <a href=\"https://dataforseo.com/help-center/how-many-results-scraped\" rel=\"noopener noreferrer\" target=\"_blank\">if the search engine returns more than 40 results</a>;<br>The cost can be calculated on the <a title=\"Pricing\" href=\"https://dataforseo.com/pricing/merchant/google-shopping-api\" target=\"_blank\" rel=\"noopener noreferrer\">Pricing</a> page.",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "keyword": {
+                    "description": "<em>keyword</em><br><strong>required field</strong><br>you can specify <strong>up to 700 characters</strong> in the <code>keyword</code> filed<br><strong>all %## will be decoded (plus character ‘+’ will be decoded to a space character)</strong><br>if you need to use the “%” character for your <code>keyword</code>, please specify it as “%25”;<p>learn more about rules and limitations of <code>keyword</code> and <code>keywords</code> fields in DataForSEO APIs in this <a href=\"https://dataforseo.com/help-center/rules-and-limitations-of-keyword-and-keywords-fields-in-dataforseo-apis\" rel=\"noopener noreferrer\" target=\"_blank\">Help Center article</a>",
+                    "type": "string"
+                  },
+                  "language_code": {
+                    "description": "<em>language code</em><br><strong>required field if you don't specify</strong> <code>language_name</code><br><strong>if you use this field, you don't need to specify <code>language_name</code></strong><br>you can receive the list of available Google Shopping languages with their <code>language_code</code>_by making a separate request to the <code>https://api.dataforseo.com/v3/merchant/google/languages</code><em><br></em>example:<em><br></em><code class=\"long-string\">en</code>",
+                    "type": "string"
+                  },
+                  "language_name": {
+                    "description": "<em>full name of the language</em><br><strong>required field if you don't specify</strong> <code>language_code</code><br><strong>if you use this field, you don't need to specify <code>language_code</code></strong><br>you can receive the list of available Google Shopping languages with their <code>language_name</code> by making a separate request to the <code>https://api.dataforseo.com/v3/merchant/google/languages</code><br>example:<br><code class=\"long-string\">English</code>",
+                    "type": "string"
+                  },
+                  "location_code": {
+                    "description": "<em>location code</em><br><strong>required field if you don't specify</strong> <code>location_name</code>_or <code>location_coordinate</code><br><strong>if you use this field, you don't need to specify <code>location_name</code> or <code>location_coordinate</code></strong><br>you can receive the list of available Google Shopping locations with their <code>location_code</code> by making a separate request to the <code>https://api.dataforseo.com/v3/merchant/google/locations</code><br>example:<br><code class=\"long-string\">2840</code>",
+                    "type": "integer"
+                  },
+                  "location_coordinate": {
+                    "description": "<em>GPS coordinates of a location</em><br><strong>required field if you don't specify</strong> <code>location_name</code>_or <code>location_code</code><br><strong>if you use this field, you don't need to specify <code>location_name</code> or <code>location_code</code></strong><br><code>location_coordinate</code> parameter should be specified in the <em>\"latitude,longitude,radius\"</em> format<br>the maximum number of decimal digits for <em>\"latitude\"</em> and <em>\"longitude\"</em>: 7<br>the minimum value for <em>\"radius\"</em>: 199.9<br>example:<br><code class=\"long-string\">53.476225,-2.243572,200</code>",
+                    "type": "string"
+                  },
+                  "location_name": {
+                    "description": "<em>full name of the location</em><br><strong>required field if you don't specify</strong> <code>location_code</code> or <code>location_coordinate</code><br><strong>if you use this field, you don't need to specify <code>location_code</code> or <code>location_coordinate</code></strong><br>you can receive the list of available Google Shopping locations with their <code>location_name</code> by making a separate request to the <code>https://api.dataforseo.com/v3/merchant/google/locations</code><br>example:<br><code class=\"long-string\">London,England,United Kingdom</code>",
+                    "type": "string"
+                  },
+                  "max_crawl_pages": {
+                    "description": "<em>page crawl limit</em><br>optional field<br>number of search results pages to crawl<br>max value: <code>7</code><br><strong>Note:</strong> the <code>max_crawl_pages</code> and <code>depth</code> parameters complement each other;<br>learn more at <a href=\"https://dataforseo.com/help-center/what-is-max-crawl-pages-and-how-does-it-work\" rel=\"noopener noreferrer\" target=\"_blank\">our help center</a>",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "pingback_url": {
+                    "description": "<em>notification URL of a completed task</em><br>optional field<br>when a task is completed we will notify you by GET request sent to the URL you have specified<br>you can use the ‘$id’ string as a <code>$id</code> variable and ‘$tag’ as urlencoded <code>$tag</code> variable. We will set the necessary values before sending the request.<br>example:<br><code>http://your-server.com/pingscript?id=$id</code><br><code>http://your-server.com/pingscript?id=$id&amp;tag=$tag</code><br><strong>Note:</strong> special characters in <code>pingback_url</code> will be urlencoded; <br>i.a., the <code>#</code> character will be encoded into <code>%23</code><p>learn more on our <a href=\"https://dataforseo.com/help-center/pingbacks-postbacks-with-dataforseo-api\" target=\"_blank\" rel=\"noopener noreferrer\">Help Center</a>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "postback_data": {
+                    "description": "<em>postback_url datatype</em><br><strong>required field if you specify <code>postback_url</code></strong><br>corresponds to the datatype that will be sent to your server<br>possible values:<br><code>advanced</code>, <code>html</code>",
+                    "type": "string"
+                  },
+                  "postback_url": {
+                    "description": "<em>URL for sending task results</em><br>optional field<br>once the task is completed, we will send a POST request with its results compressed in the <code>gzip</code> format to the <code>postback_url</code> you specified<br>you can use the ‘$id’ string as a <code>$id</code> variable and ‘$tag’ as urlencoded <code>$tag</code> variable. We will set the necessary values before sending the request.<br>example:<br><code>http://your-server.com/postbackscript?id=$id</code><br><code>http://your-server.com/postbackscript?id=$id&amp;tag=$tag</code><br><strong>Note:</strong> special characters in <code>postback_url</code> will be urlencoded; <br>i.a., the <code>#</code> character will be encoded into <code>%23</code><p>learn more on our <a href=\"https://dataforseo.com/help-center/pingbacks-postbacks-with-dataforseo-api\" target=\"_blank\" rel=\"noopener noreferrer\">Help Center</a>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "price_max": {
+                    "description": "<em>maximum product price</em><br>optional field<br>maximum price of the returned products listed on Google Shopping for the specified query<br>example:<br><code>100</code><br><strong>Note:</strong> if you specify <code>price_max</code>, the <code>search_param</code> parameter will be ignored",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "price_min": {
+                    "description": "<em>minimum product price</em><br>optional field<br>minimum price of the returned products listed on Google Shopping for the specified query<br>example:<br><code>5</code><br><strong>Note:</strong> if you specify <code>price_min</code>, the <code>search_param</code> parameter will be ignored",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "priority": {
+                    "description": "<em>task priority</em><br>optional field<br>can take the following values:<br>1 – normal execution priority (set by default)<br>2 – high execution priorityYou will be additionally charged for the tasks with high execution priority.<br>The cost can be calculated on the <a title=\"Pricing\" href=\"https://dataforseo.com/pricing/merchant/google-shopping-api\" target=\"_blank\" rel=\"noopener noreferrer\">Pricing</a> page.",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "se_domain": {
+                    "description": "<em>search engine domain</em><br>optional field<br>we choose the relevant search engine domain automatically according to the location and language you specify<br>however, you can set a custom search engine domain in this field<br>example:<br><code><em>google.co.uk</em></code>, <code><em>google.com.au</em></code>, <code><em>google.de</em></code>, etc.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "search_param": {
+                    "description": "<em>additional parameters of the search query</em><br>optional field<br>you can use the following search URL parameters for customizing the search;<br>example:<br><code>&amp;tbs=ppr_min:45</code> – search for products that cost <em>more than 45 USD</em>;<br><code>&amp;tbs=ppr_max:50</code> – search for products that cost <em>less than 50 USD</em>;<br><code>&amp;tbs=p_ord:p</code> – sort by <em>ascending price</em>;<br><code>&amp;tbs=p_ord:pd</code> – sort by <em>descending price</em>;<br><code>&amp;tbs=p_ord:rv</code> – sort by <em>review score</em>;<br><code>&amp;<br><code>&udm=28</code> – use new Google Shopping markup with 40 SERP results returned by default (the cost for one SERP is deducted accordingly); the maximum <code>depth</code> is 200; this parameter must be specified without <code>tbm=shop</code> in the <code>url</code>;<br><code>&shoprs=$value</code> – specify advanced filtering and sorting in the new Shopping markup; replace <code>$value</code> with a string in protobuf Base64 format; <a href=\"https://dataforseo.com/help-center/using-the-shoprs-parameter-in-google-shopping-merchant-api\" target=\"_blank\">learn more on our help center.</a><br>  <br><strong>Note</strong> that <code>search_param</code> values will be ignored if any of the following parameters are used: <code>price_min</code>, <code>price_max</code>, <code>sort_by</code>\n\nFor current API pricing, see the published x-aisa-pricing metadata. Where supported, obtain a quote for your exact request.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "sort_by": {
+                    "description": "<em>results sorting rules</em><br>optional field<br>the following sorting rules are supported:<br><code>review_score</code>, <code>price_low_to_high</code>, <code>price_high_to_low</code><br>example:<br><code>sort_by:\"review_score\"</code><br><strong>Note:</strong> if you specify <code>sort_by</code>, the <code>search_param</code> parameter will be ignored",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "tag": {
+                    "description": "<em>user-defined task identifier</em><br>optional field<br><em>the character limit is 255</em><br>you can use this parameter to identify the task and match it with the result<br>you will find the specified <code>tag</code> value in the <code>data</code> object of the response",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "url": {
+                    "description": "<em>direct URL of the search query</em><br>optional field<br>you can specify a direct URL and we will sort it out to the necessary fields. Note that this method is the most difficult for our API to process and also requires you to specify the exact language and location in the URL. In most cases, we wouldn’t recommend using this method.<br>example:<br><code class=\"long-string\">https://www.google.com/search?q=fish&hl=en&gl=US&gws_rd=cr&uule=w+CAIQIFISCQs2MuSEtepUEUK33kOSuTsc</code>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "type": "array"
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_usd",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.012,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## Cost and request rules
+
+Usage-based billing; Default request estimate: $0.012 USD (not a fixed price). Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 

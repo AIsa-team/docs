@@ -26,12 +26,16 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/backlinks/timeseries_summa
 // 连接、授权、跑通这个例子需要的东西都在里面 ——
 // 不用粘贴任何 key，浏览器里点一次 Allow 就好。
 {
-  "operation_id": "post_dataforseo_backlinks_timeseries_summary_live",
-  "arguments": {},
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_dataforseo_backlinks_timeseries_summary_live",
+      "arguments": {}
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -42,13 +46,14 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/backlinks/timeseries_summa
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/zh/api-reference/dataforseo/post_dataforseo-backlinks-timeseries-summary-live.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -59,7 +64,140 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/backlinks/timeseries_summa
 
 {/* aisa-contract-details:start */}
 
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/dataforseo/backlinks/timeseries&#95;summary/live
+- **可用状态:** enabled
+- **请求 URL 模板:** https://api.aisa.one/apis/v1/dataforseo/backlinks/timeseries&#95;summary/live
+- **Runtime 事实版本:** 6ab8fec17df1d5dcdff2e036dd1eb40587752b774ec040ab4eb0cc6946c3dd3c
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/dataforseo.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_dataforseo_backlinks_timeseries_summary_live",
+  "method": "POST",
+  "path": "/apis/v1/dataforseo/backlinks/timeseries_summary/live",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "example": [
+            {
+              "date_from": "2021-12-01",
+              "date_to": "2022-02-01",
+              "group_range": "month",
+              "target": "dataforseo.com"
+            }
+          ],
+          "items": {
+            "oneOf": [
+              {
+                "example": [
+                  {
+                    "date_from": "2021-12-01",
+                    "date_to": "2022-02-01",
+                    "group_range": "month",
+                    "target": "dataforseo.com"
+                  }
+                ],
+                "properties": {
+                  "date_from": {
+                    "description": "<em>starting date of the time range</em><br>optional field<br>this field indicates the date which will be used as a threshold for summary data;<p>minimum value: <code>2019-01-30</code><br>maximum value shouldn't exceed the date specified in the <code>date_to</code><br>date format: <code>\"yyyy-mm-dd\"</code><br>example:<br><code>\"2021-01-01\"</code>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "date_to": {
+                    "description": "<em>ending date of the time range</em><br>optional field<br>if you don't specify this field, the today's date will be used by default<br>minimum value shouldn't preceed the date specified in the <code>date_from</code><br>maximum value: today's date<br>date format: <code>\"yyyy-mm-dd\"</code><br>example:<br><code>\"2021-01-15\"</code>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "group_range": {
+                    "description": "<em>time range which will be used to group the results</em><br>optional field<br>default value: <code>month</code><br>possible values: <code>day</code>, <code>week</code>, <code>month</code>, <code>year</code><p><strong>note:</strong> for <code>day</code>, we will return items corresponding to all dates between and including <code>date_from</code> and <code>date_to</code>;<br>for <code>week</code>/<code>month</code>/<code>year</code>, we will return items corresponding to full weeks/months/years, where each item will indicate the last day of the week/month/year<p>for example, if you specify: <br><code>\"group_range\": \"month\",<br>\"date_from\": \"2022-03-23\",<br>\"date_to\": \"2022-05-13\"</code><br>we will return items falling between 2022-03-01 and 2022-05-31, namely, three items corresponding to the following dates: <code>2022-03-31</code>, <code>2022-04-30</code>, <code>2022-05-31</code><p>if there is no data for a certain  <code>day</code>/<code>week</code>/<code>month</code>/<code>year</code>, we will return <code>0</code>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "include_subdomains": {
+                    "description": "<em>indicates if the subdomains of the <code>target</code> will be included in the search</em><br>optional field<br>if set to <code>false</code>, the subdomains will be ignored<br>default value: <code>true</code>",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "rank_scale": {
+                    "description": "<em>defines the scale used for calculating and displaying the <code>rank</code>, <code>domain_from_rank</code>, and <code>page_from_rank</code> values</em><br>optional field<p>you can use this parameter to choose whether rank values are presented on a 0–100 or 0–1000 scale<p>possible values:<br><code>one_hundred</code> — rank values are displayed on a 0–100 scale<br><code>one_thousand</code> — rank values are displayed on a 0–1000 scale<p>default value: <code>one_thousand</code><p>learn more about how this parameter works and how ranking metrics are calculated in <a href=\"https://dataforseo.com/help-center/what_is_rank_in_backlinks_api#rank_scale\">this Help Center article</a>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "tag": {
+                    "description": "<em>user-defined task identifier</em><br>optional field<br><em>the character limit is 255</em><br>you can use this parameter to identify the task and match it with the result<br>you will find the specified <code>tag</code> value in the <code>data</code> object of the response",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "target": {
+                    "description": "<em>domain to get data for</em><br><strong>required field</strong><br>a domain should be specified without <code>https://</code> and <code>www.</code><br>example:<br><code>\"forbes.com\"</code>",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "type": "array"
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_usd",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.0273,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## 费用与请求规则
+
+按用量计费；默认请求预估费用：$0.0273 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 

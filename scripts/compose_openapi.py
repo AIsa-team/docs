@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit, unquote
 
-VERSION = "18"
+VERSION = "20"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -129,6 +129,32 @@ def effective_object(value: dict, document: dict) -> dict:
             {k: v for k, v in result.items() if k in {'summary', 'description'}})
         result = {**copy.deepcopy(target), **siblings}
     return result
+
+
+
+def effective_security(operation: dict, document: dict) -> tuple[dict, list[str]]:
+    """Resolve effective auth; retain only the established disabled legacy debt."""
+    requirements = operation.get("security", document.get("security", []))
+    if not isinstance(requirements, list):
+        raise ValueError("invalid public security requirements")
+    schemes = document.get("components", {}).get("securitySchemes", {})
+    if not isinstance(schemes, dict):
+        raise ValueError("invalid public security schemes")
+    selected, missing = {}, []
+    for requirement in requirements:
+        if not isinstance(requirement, dict):
+            raise ValueError("invalid public security requirement")
+        for name, scopes in requirement.items():
+            if not isinstance(scopes, list) or any(not isinstance(scope, str) for scope in scopes):
+                raise ValueError("invalid public security scopes")
+            scheme = schemes.get(name)
+            if scheme is None:
+                if operation.get("x-aisa-status") == "disabled" and operation.get("x-aisa-contract-state") == "retained_legacy":
+                    missing.append(name)
+                    continue
+                raise ValueError("unresolved request security scheme: " + name)
+            selected[name] = effective_object(scheme, document)
+    return selected, missing
 
 
 def effective_parameters(path_item: dict, operation: dict, document: dict) -> list:
@@ -895,4 +921,6 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                 elif method in {"post", "put", "patch"}:
                     add_body_code_sample(operation, method, path, operation.get("servers", item.get("servers", output.get("servers", []))))
     from source_provenance import compact_document
+    from pricing_prose import clean_document
+    output = clean_document(output)
     return compact_document(output), pending

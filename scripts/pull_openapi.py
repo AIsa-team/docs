@@ -21,12 +21,15 @@ import yaml
 import api_nav_groups
 from compose_openapi import METHODS, compose, digest, resolve_fragment
 from import_upstream import import_source
-from runtime_registry import discover, combine_facts, public_mirror_index, published_documents, previous_for_facts, coverage_rows
+from runtime_registry import discover, combine_facts, public_mirror_index, published_documents, previous_for_facts, coverage_rows, disabled_legacy_paths, source_configurations, legacy_coverage_row
 from source_json import loads as source_json_loads, load as source_json_load, UnsupportedNumericPrecision
 from readable_contract_notes import update_readable_block
 from identity_compatibility import published_history, attach_history, localize_identities, validate_document_identities
 
+from contract_page_links import slug, select_pages, project_links
+
 ROOT = Path(__file__).resolve().parents[1]
+_AUTO_HISTORY = object()
 
 
 def read_json(path: Path, default=None):
@@ -107,10 +110,6 @@ def reject_stale_runtime_response(headers):
         raise URLError('runtime_contract_unavailable: stale runtime response')
 
 
-def slug(value):
-    return re.sub(r"[^a-zA-Z0-9_-]", "-", value)
-
-
 def existing_page_references(root: Path):
     """Read each referenced spec once, preserving the existing page selection."""
     from urllib.parse import urlsplit
@@ -127,7 +126,7 @@ def existing_page_references(root: Path):
     return references
 
 
-def generate_pages(root: Path, provider: str, document: dict, changes: dict, previous: dict | None = None, decorate_links: bool = True, page_references=None) -> None:
+def generate_pages(root: Path, provider: str, document: dict, changes: dict, previous: dict | None = None, decorate_links: bool = True, page_references=None, require_existing_links: bool = False) -> None:
     """Append pages/navigation, reusing existing method/path references and prose."""
     docs_path = root / "docs.json"
     if not docs_path.exists():
@@ -162,15 +161,17 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
             identity = page_documents[spec].get('paths', {}).get(path, {}).get(method, {}).get('operationId')
         if identity:
             known_ids.setdefault(identity, set()).add(page)
-    current_prefix = urlsplit((document.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
+    selected_pages = select_pages(provider, document, known_ids, known)
+    if require_existing_links:
+        from contract_page_links import DOCS_PREFIX
+        for _, _, operation in operations(document):
+            if operation.get('x-aisa-docs-url') != DOCS_PREFIX + selected_pages[operation['operationId']][-1]:
+                raise ValueError('Canonical page binding differs from existing presentation selection')
     paths = []
     for path, method, operation in operations(document):
-        page_names = sorted(known_ids.get(operation['operationId'], set())) or [
-            known.get((current_prefix + path, method), f"api-reference/{provider}/{slug(operation['operationId'])}")]
+        page_names = selected_pages[operation['operationId']]
         for page in page_names:
             paths.append(page)
-            if decorate_links:
-                operation["x-aisa-docs-url"] = "https://aisa.one/docs/" + page
             for language, prefix in (("en", ""), ("zh", "zh/")):
                 destination = root / f"{prefix}{page}.mdx"
                 spec_path = f"openapi/{'zh/' if language == 'zh' else ''}{provider}.json"
@@ -214,7 +215,10 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                         return localization.translation(catalog, note)
                     except KeyError:
                         return note
-                text = update_readable_block(text, operation, language, translated_note)
+                from pricing_prose import clean_page
+                text = clean_page(text, language)
+                text = update_readable_block(text, operation, language, translated_note,
+                    document=document, method=method, path=path, spec_path=spec_path)
                 if not destination.exists() or text != destination.read_text():
                     changes[destination] = text
     nav_config = api_nav_groups.load(root)
@@ -255,8 +259,7 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
     if content != docs_path.read_text():
         changes[docs_path] = content
     if decorate_links:
-        meta = document["info"]["x-aisa-document"]
-        meta["document_hash"] = digest({"composer_hash": meta["document_hash"], "page_links": {op["operationId"]: op.get("x-aisa-docs-url") for _, _, op in operations(document)}})
+        project_links(document, selected_pages)
     # Use the existing deterministic translation catalog. Untranslated strings
     # retain English; no paid/model translation is invoked by scheduled pulls.
     localized = localization.localize_tree(document, catalog, allow_untranslated=True)
@@ -264,14 +267,70 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
     changes[root / f"openapi/zh/{provider}.json"] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
 
 
+def refresh_legacy_page_blocks(root, documents, changes, catalog):
+    """Update only already bound pages; never create pages or navigation."""
+    import runtime_localize_openapi_zh as localization
+    def translated_note(note):
+        try:
+            return localization.translation(catalog, note)
+        except KeyError:
+            return note
+    for language, directory in (("en", "api-reference"), ("zh", "zh/api-reference")):
+        for page in (root / directory).rglob("*.mdx"):
+            text = changes.get(page, page.read_text())
+            if not text.startswith("---\n"):
+                continue
+            header, _ = localization.split_frontmatter(text)
+            reference = (yaml.safe_load(header) or {}).get("openapi", "")
+            match = re.fullmatch(r"openapi/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)", reference)
+            if not match or match[2] not in documents:
+                continue
+            document = documents[match[2]]
+            if document.get("info", {}).get("x-aisa-document", {}).get("document_hash"):
+                continue  # Runtime page generation owns these pages.
+            method, path = match[3].lower(), match[4]
+            operation = document.get("paths", {}).get(path, {}).get(method)
+            if method not in METHODS or not isinstance(operation, dict):
+                raise ValueError("legacy page references missing operation: " + str(page))
+            if bool(match[1]) != (language == "zh"):
+                raise ValueError("legacy page references wrong language: " + str(page))
+            if language == "zh":
+                localized_path = root / reference.split()[0]
+                if not localized_path.exists() and localized_path not in changes:
+                    localized = localize_identities(localization.localize_tree(document, catalog, allow_untranslated=True))
+                    changes[localized_path] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
+            changes[page] = update_readable_block(text, operation, language, translated_note,
+                document=document, method=method, path=path, spec_path=reference.split()[0])
+
+
+def refresh_localized_documents(root, documents, changes, catalog, identity_history=None):
+    """Project existing locale aliases, preserving complete canonical declarations."""
+    import runtime_localize_openapi_zh as localization
+    for name, document in documents.items():
+        target = root / f"openapi/zh/{name}.json"
+        if target.exists() and target not in changes:
+            source = copy.deepcopy(document)
+            if identity_history is not None:
+                attach_history(source, identity_history)
+            if source != document:
+                changes[root / f"openapi/{name}.json"] = json.dumps(source, indent=2, ensure_ascii=False) + "\n"
+                documents[name] = source
+            localized = localize_identities(localization.localize_tree(source, catalog, allow_untranslated=True))
+            changes[target] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
+
+
 def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = True,
-          readiness_context: dict | None = None) -> tuple[dict, dict]:
+          readiness_context: dict | None = None, *, identity_history=_AUTO_HISTORY,
+          page_link_index=None, reuse_unchanged_documents=True) -> tuple[dict, dict]:
     registry_path = root / "openapi/registry.yaml"
     registry = yaml.safe_load(registry_path.read_text())
     if not isinstance(registry.get("providers"), dict):
         raise ValueError("registry providers must be a mapping")
     changes = {}
-    identity_history = published_history(root, (readiness_context or {}).get('published_ref'))
+    if identity_history is _AUTO_HISTORY:
+        identity_history = published_history(root, (readiness_context or {}).get('published_ref'))
+    if with_pages and page_link_index is not None:
+        raise ValueError('Page generation and explicit native link projection are mutually exclusive')
     index = read_json(facts_dir / 'index.json', {}) if facts_dir else {}
     if registry.get("auto_register"):
         category = read_json(facts_dir / "category.json") if facts_dir else fetch_json(f"{base_url.rstrip('/')}/info/apis/category")
@@ -388,23 +447,9 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             unresolved = []
             try:
                 configured = entry.get("upstream")
-                configurations = configured if isinstance(configured, list) else [configured]
+                configurations, source_bindings = source_configurations(provider, entry)
                 upstream_documents = []
-                source_bindings = {}
-                for configuration in configurations:
-                    source_url = configuration.get("url") if isinstance(configuration, dict) else configuration
-                    if configuration and (not isinstance(source_url, str) or not source_url.startswith("https://")):
-                        raise ValueError("upstream requires an HTTPS source URL")
-                    public_paths = configuration.get("public_paths", []) if isinstance(configuration, dict) else []
-                    if not isinstance(public_paths, list) or any(not isinstance(path, str) or not path.startswith("/") or any(char in path for char in "?# ") for path in public_paths):
-                        raise ValueError("upstream public_paths must be exact public path templates")
-                    for public_path in public_paths:
-                        if public_path in source_bindings:
-                            raise ValueError("duplicate public operation source binding")
-                        source_bindings[public_path] = source_url
-                    upstream_file = configuration.get("file", provider + ".json") if isinstance(configuration, dict) else provider + ".json"
-                    if not isinstance(upstream_file, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_.-]*\.json", upstream_file):
-                        raise ValueError("upstream file must name a JSON mirror within openapi/upstream")
+                for source_url, upstream_file in configurations:
                     upstream_path = root / "openapi/upstream" / upstream_file
                     document = read_json(upstream_path)
                     imported_source = False
@@ -474,6 +519,8 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         attach_history(document, identity_history)
         if with_pages:
             generate_pages(root, provider, document, changes, previous, decorate_links=not entry.get("pin"), page_references=page_references)
+        elif page_link_index is not None:
+            project_links(document, select_pages(provider, document, *page_link_index))
         old_hash = previous.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         new_hash = document.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         if entry.get("pin"):
@@ -486,7 +533,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             if not new_hash:
                 raise ValueError(f"{provider}: generated document has no document_hash")
             changed = old_hash != new_hash
-            if changed:
+            if changed or not reuse_unchanged_documents:
                 changes[output_path] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
             else:
                 # generated_at is observational, and cannot create commit churn.
@@ -514,12 +561,14 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             attach_history(recomposed_documents[provider], identity_history)
         if with_pages:
             generate_pages(root, provider, document, changes, previous, page_references=page_references)
+        elif page_link_index is not None:
+            project_links(document, select_pages(provider, document, *page_link_index))
         old_hash = previous.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         new_hash = document.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         if not new_hash:
             raise ValueError(f"{provider}: generated document has no document_hash")
         changed = old_hash != new_hash
-        if changed:
+        if changed or not reuse_unchanged_documents:
             changes[root / f"openapi/{provider}.json"] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
         elif with_pages:
             generate_pages(root, provider, previous, changes, previous, decorate_links=False, page_references=page_references)
@@ -528,6 +577,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
     # Retire only operations successfully moved to another output. Keeping
     # unmatched legacy operations avoids deleting docs outside runtime scope.
     from urllib.parse import urlsplit
+    disabled_paths = disabled_legacy_paths(registry, index, facts_by_provider)
     for name, original in original_documents.items():
         output_path = root / f"openapi/{name}.json"
         staged = json.loads(changes[output_path]) if output_path in changes else original
@@ -547,7 +597,15 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                     if not (set(retained["paths"][retained_path]) & METHODS):
                         del retained["paths"][retained_path]
             elif not targets:
-                coverage["legacy_operations"].append({"source": f"openapi/{name}.json", "path": prefix + path, "method": method.upper(), "operation_id": op.get("operationId"), "status": "retained_legacy", "reason": "not_in_composed_runtime_contract"})
+                reason = "not_in_composed_runtime_contract"
+                if prefix + path in disabled_paths.get(name, set()):
+                    retained_prefix = urlsplit((retained.get("servers") or [{"url": ""}])[0]["url"]).path.rstrip("/")
+                    retained_path = (prefix + path).removeprefix(retained_prefix)
+                    operation = retained.get("paths", {}).get(retained_path, {}).get(method)
+                    if operation is not None:
+                        operation["x-aisa-status"] = "disabled"
+                        reason = "runtime_explicitly_disabled"
+                coverage["legacy_operations"].append(legacy_coverage_row(name, prefix + path, method, op.get("operationId"), reason == "runtime_explicitly_disabled"))
         if retained != staged:
             changes[output_path] = json.dumps(retained, indent=2, ensure_ascii=False) + "\n"
     documents = dict(original_documents)
@@ -555,6 +613,11 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
     for path, content in changes.items():
         if path.parent == root / 'openapi' and path.suffix == '.json' and path.name not in SKIP_FILES:
             documents[path.stem] = json.loads(content)
+    if with_pages:
+        catalog = read_json(root / "translations/openapi-zh.json", {"entries": {}})
+        refresh_localized_documents(root, documents, changes, catalog, identity_history)
+    if with_pages:
+        refresh_legacy_page_blocks(root, documents, changes, catalog)
     from gap_evidence import response_gap_rows
     validate_document_identities(documents, identity_history)
     coverage['response_gaps'] = {provider: response_gap_rows(documents.get(provider, {}), facts_by_provider.get(provider, {}), rows)
@@ -571,6 +634,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         for path, content in changes.items():
             if path.parent == root / 'openapi' and path.suffix == '.json' and path.name not in SKIP_FILES:
                 documents[path.stem] = json.loads(content)
+        readiness_context['documents'] = documents
         readiness_context['facts_by_provider'] = facts_by_provider
         readiness_context['coverage'] = coverage
         readiness_context['runtime_index'] = index

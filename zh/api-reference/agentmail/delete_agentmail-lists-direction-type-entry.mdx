@@ -24,12 +24,16 @@ curl -X DELETE "https://api.aisa.one/apis/v1/agentmail/lists/{direction}/{type}/
 // 连接、授权、跑通这个例子需要的东西都在里面 ——
 // 不用粘贴任何 key，浏览器里点一次 Allow 就好。
 {
-  "operation_id": "delete_agentmail_list_entry",
-  "arguments": {},
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "delete_agentmail_list_entry",
+      "arguments": {}
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -40,13 +44,14 @@ curl -X DELETE "https://api.aisa.one/apis/v1/agentmail/lists/{direction}/{type}/
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/zh/api-reference/agentmail/delete_agentmail-lists-direction-type-entry.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -57,7 +62,97 @@ curl -X DELETE "https://api.aisa.one/apis/v1/agentmail/lists/{direction}/{type}/
 
 {/* aisa-contract-details:start */}
 
+## 请求规范
+
+- **方法与路径:** DELETE /apis/v1/agentmail/lists/&#123;direction&#125;/&#123;type&#125;/&#123;entry&#125;
+- **可用状态:** enabled
+- **请求 URL 模板:** https://api.aisa.one/apis/v1/agentmail/lists/&#123;direction&#125;/&#123;type&#125;/&#123;entry&#125;
+- **direction:** path; 必填
+- **entry:** path; 必填
+- **type:** path; 必填
+- **Runtime 事实版本:** 18a04e28941fae19674c11246b677373368b6bd927b7c146220cec1f168f4639
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/agentmail.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "delete_agentmail_list_entry",
+  "method": "DELETE",
+  "path": "/apis/v1/agentmail/lists/{direction}/{type}/{entry}",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "in": "path",
+      "name": "direction",
+      "required": true,
+      "schema": {
+        "description": "Direction of list entry.",
+        "enum": [
+          "send",
+          "receive",
+          "reply"
+        ],
+        "title": "Direction",
+        "type": "string"
+      }
+    },
+    {
+      "description": "Email address or domain.",
+      "in": "path",
+      "name": "entry",
+      "required": true,
+      "schema": {
+        "type": "string"
+      }
+    },
+    {
+      "in": "path",
+      "name": "type",
+      "required": true,
+      "schema": {
+        "description": "Type of list entry.",
+        "enum": [
+          "allow",
+          "block"
+        ],
+        "title": "ListType",
+        "type": "string"
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "explicit_zero",
+    "customer_pricing": "fixed_success",
+    "default_request_estimate_usd": 0.012,
+    "estimate_source": "profile_seed",
+    "evidence_source": "request_snapshot"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## 费用与请求规则
+
+公开参考价格：每次成功请求 $0.012 USD。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 

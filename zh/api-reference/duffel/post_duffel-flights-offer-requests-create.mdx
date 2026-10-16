@@ -7,7 +7,479 @@ x-aisa-operation-id: "post_duffel_offer_requests_create"
 
 {/* aisa-contract-details:start */}
 
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/duffel/flights/offer-requests/create
+- **可用状态:** enabled
+- **请求 URL 模板:** https://api.aisa.one/apis/v1/duffel/flights/offer-requests/create
+- **return&#95;offers:** query; 可选
+- **supplier&#95;timeout:** query; 可选
+- **view:** query; 可选
+- **Runtime 事实版本:** bf9fb3bbf6e2e7e14ca4ce53396557cdb3e72fc41144802c21ba89f761322925
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/duffel-flights.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_duffel_offer_requests_create",
+  "method": "POST",
+  "path": "/apis/v1/duffel/flights/offer-requests/create",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "description": "When set to `true`, the offer request resource returned will include _all_ the `offer`s returned by the airlines.\nIf set to `false`, the offer request resource won't include any `offer`s. To retrieve the associated offers later, use the [List Offers](/docs/api/offers/get-offers) endpoint, specifying the `offer_request_id`. You should use this option if you want to take advantage of the pagination, sorting and filtering that the [List Offers](/docs/api/offers/get-offers) endpoint provides.\n",
+      "in": "query",
+      "name": "return_offers",
+      "required": false,
+      "schema": {
+        "default": true,
+        "example": false,
+        "type": "boolean"
+      }
+    },
+    {
+      "description": "The maximum amount of time in milliseconds to wait for each airline search to complete. This timeout applies to the [response time](/docs/api/overview/response-times) of the call to the airline and includes some additional overhead added by Duffel.\nValue should be between 2 seconds and 60 seconds. Any values outside the range will be ignored and the default `supplier_timeout` will be used.\nIf a value is set, the response will only include offers from airline searches that completed within the given time.\nIf a value is not set, the response will only include offers from airline searches that completed within the default `supplier_timeout` value of 20 seconds.\nWe recommend setting `supplier_timeout` lower than the timeout on the HTTP request you send to Duffel API as that will allow us to respond with the offers we received before your request times out with an empty response.\n",
+      "in": "query",
+      "name": "supplier_timeout",
+      "required": false,
+      "schema": {
+        "default": 20000,
+        "example": 10000,
+        "type": "integer"
+      }
+    },
+    {
+      "description": "The format of the response. When set to `offers` (the default), the response includes a flat list of offers.\nWhen set to `itineraries`, offers are grouped into a hierarchical structure of slices, itineraries, and brands,\nwith shared data (airlines, places, aircraft) in top-level reference maps.\n",
+      "in": "query",
+      "name": "view",
+      "required": false,
+      "schema": {
+        "default": "offers",
+        "enum": [
+          "offers",
+          "itineraries"
+        ],
+        "type": "string"
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "properties": {
+            "data": {
+              "properties": {
+                "airline_credit_ids": {
+                  "description": "The list of airline credit IDs that Duffel received as input.",
+                  "example": [
+                    "acd_00009hthhsUZ8W4LxQgkjo",
+                    "acd_0000thhsUZ8W4LxQgkjo00"
+                  ],
+                  "items": {
+                    "example": "acd_0000thhsUZ8W4LxQgkjo00",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "cabin_class": {
+                  "description": "The cabin that the passengers want to travel in",
+                  "enum": [
+                    "first",
+                    "business",
+                    "premium_economy",
+                    "economy"
+                  ],
+                  "example": "economy",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "include_split_ticket": {
+                  "description": "When set to `true` and the search has more than one slice, additional one-way searches will be fired per slice to find split-ticket candidates. These results are only included in the response when `view` is set to `itineraries`. Please get in touch with the Duffel support team at <help@duffel.com> to access this feature.",
+                  "example": true,
+                  "type": "boolean"
+                },
+                "max_connections": {
+                  "default": 1,
+                  "description": "The maximum number of connections within any slice of the offer. For example 0 means a direct flight which will have a single segment within each slice and 1 means a maximum of two segments within each slice of the offer.",
+                  "example": 0,
+                  "maximum": 2,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "passengers": {
+                  "description": "The passengers who want to travel. If you specify an `age` for a passenger, the `type` may differ for the same passenger in different offers due to airline's different rules. e.g. one airline may treat a 14 year old as an adult, and another as a young adult. You may only specify an `age` or a `type` – not both.",
+                  "example": [
+                    {
+                      "family_name": "Earhart",
+                      "given_name": "Amelia",
+                      "loyalty_programme_accounts": [
+                        {
+                          "account_number": "12901014",
+                          "airline_iata_code": "BA"
+                        }
+                      ],
+                      "type": "adult"
+                    },
+                    {
+                      "age": 14
+                    },
+                    {
+                      "fare_type": "student"
+                    },
+                    {
+                      "age": 5,
+                      "fare_type": "contract_bulk_child"
+                    }
+                  ],
+                  "items": {
+                    "oneOf": [
+                      {
+                        "description": "A passenger specified by their type",
+                        "properties": {
+                          "family_name": {
+                            "description": "The passenger's family name. Only `space`, `-`, `'`, and letters from the [`ASCII`](https://www.unicode.org/charts/PDF/U0000.pdf), [`Latin-1 Supplement`](https://www.unicode.org/charts/PDF/U0080.pdf) and [`Latin Extended-A`](https://www.unicode.org/charts/PDF/U0100.pdf) (with the exceptions of `Æ`, `æ`, `Ĳ`, `ĳ`, `Œ`, `œ`, `Þ`, and `ð`) Unicode charts are accepted. All other characters will result in a validation error. The minimum length is 1 character, and the maximum is 20 characters.\n\nThis is only required if you're also including loyalty programme accounts.\n",
+                            "example": "Earhart",
+                            "type": "string"
+                          },
+                          "given_name": {
+                            "description": "The passenger's given name. Only `space`, `-`, `'`, and letters from the [`ASCII`](https://www.unicode.org/charts/PDF/U0000.pdf), [`Latin-1 Supplement`](https://www.unicode.org/charts/PDF/U0080.pdf) and [`Latin Extended-A`](https://www.unicode.org/charts/PDF/U0100.pdf) (with the exceptions of `Æ`, `æ`, `Ĳ`, `ĳ`, `Œ`, `œ`, `Þ`, and `ð`) Unicode charts are accepted. All other characters will result in a validation error. The minimum length is 1 character, and the maximum is 20 characters.\n\nThis is only required if you're also including loyalty programme accounts.\n",
+                            "example": "Amelia",
+                            "type": "string"
+                          },
+                          "loyalty_programme_accounts": {
+                            "description": "The loyalty programme accounts for this passenger",
+                            "items": {
+                              "properties": {
+                                "account_number": {
+                                  "description": "The passenger's account number for this loyalty programme account",
+                                  "example": "12901014",
+                                  "type": "string"
+                                },
+                                "airline_iata_code": {
+                                  "description": "The IATA code for the airline that this loyalty programme account belongs to",
+                                  "example": "BA",
+                                  "type": "string"
+                                }
+                              },
+                              "title": "Loyalty Programme Account",
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "type": {
+                            "description": "The type of the passenger. If the passenger is aged 18 or over, you should specify a `type` of `adult`. If a passenger is aged under 18, you should specify their `age` instead of a `type`. A passenger can have only a type or an age, but not both.",
+                            "enum": [
+                              "adult",
+                              "child",
+                              "infant_without_seat"
+                            ],
+                            "example": "adult",
+                            "type": "string"
+                          },
+                          "user_id": {
+                            "description": "The ID of the customer user that associates with this passenger.\n",
+                            "example": "icu_0000A3t2sL46m5eDF45kWW",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "title": "Offer Request Body Passenger With Type",
+                        "type": "object"
+                      },
+                      {
+                        "description": "A passenger specified by their age",
+                        "properties": {
+                          "age": {
+                            "description": "The age of the passenger on the `departure_date` of the final slice. e.g. if you are searching for a round trip and the passenger is 15 years old at the time of the outbound flight, but they then have their birthday and are 16 years old for the inbound flight, you must set the age to 16. You should specify an `age` for passengers who are under 18 years old. A passenger can have only a type or an age, but not both. You can optionally pass age with fare_type though.",
+                            "example": 14,
+                            "maximum": 130,
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "family_name": {
+                            "description": "The passenger's family name. Only `space`, `-`, `'`, and letters from the [`ASCII`](https://www.unicode.org/charts/PDF/U0000.pdf), [`Latin-1 Supplement`](https://www.unicode.org/charts/PDF/U0080.pdf) and [`Latin Extended-A`](https://www.unicode.org/charts/PDF/U0100.pdf) (with the exceptions of `Æ`, `æ`, `Ĳ`, `ĳ`, `Œ`, `œ`, `Þ`, and `ð`) Unicode charts are accepted. All other characters will result in a validation error. The minimum length is 1 character, and the maximum is 20 characters.\n\nThis is only required if you're also including loyalty programme accounts.\n",
+                            "example": "Earhart",
+                            "type": "string"
+                          },
+                          "given_name": {
+                            "description": "The passenger's given name. Only `space`, `-`, `'`, and letters from the [`ASCII`](https://www.unicode.org/charts/PDF/U0000.pdf), [`Latin-1 Supplement`](https://www.unicode.org/charts/PDF/U0080.pdf) and [`Latin Extended-A`](https://www.unicode.org/charts/PDF/U0100.pdf) (with the exceptions of `Æ`, `æ`, `Ĳ`, `ĳ`, `Œ`, `œ`, `Þ`, and `ð`) Unicode charts are accepted. All other characters will result in a validation error. The minimum length is 1 character, and the maximum is 20 characters.\n\nThis is only required if you're also including loyalty programme accounts.\n",
+                            "example": "Amelia",
+                            "type": "string"
+                          },
+                          "loyalty_programme_accounts": {
+                            "description": "The loyalty programme accounts for this passenger",
+                            "items": {
+                              "properties": {
+                                "account_number": {
+                                  "description": "The passenger's account number for this loyalty programme account",
+                                  "example": "12901014",
+                                  "type": "string"
+                                },
+                                "airline_iata_code": {
+                                  "description": "The IATA code for the airline that this loyalty programme account belongs to",
+                                  "example": "BA",
+                                  "type": "string"
+                                }
+                              },
+                              "title": "Loyalty Programme Account",
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "user_id": {
+                            "description": "The ID of the customer user that associates with this passenger.\n",
+                            "example": "icu_0000A3t2sL46m5eDF45kWW",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "age"
+                        ],
+                        "title": "Offer Request Body Passenger With Age",
+                        "type": "object"
+                      },
+                      {
+                        "description": "A passenger specified by their fare type. This is used for leisure private fares.",
+                        "properties": {
+                          "age": {
+                            "description": "The age of the passenger on the `departure_date` of the final slice. e.g. if you are searching for a round trip and the passenger is 15 years old at the time of the outbound flight, but they then have their birthday and are 16 years old for the inbound flight, you must set the age to 16. You should specify an `age` for passengers who are under 18 years old. A passenger can have only a type or an age, but not both. You can optionally pass age with fare_type though.",
+                            "example": 14,
+                            "maximum": 130,
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "family_name": {
+                            "description": "The passenger's family name. Only `space`, `-`, `'`, and letters from the [`ASCII`](https://www.unicode.org/charts/PDF/U0000.pdf), [`Latin-1 Supplement`](https://www.unicode.org/charts/PDF/U0080.pdf) and [`Latin Extended-A`](https://www.unicode.org/charts/PDF/U0100.pdf) (with the exceptions of `Æ`, `æ`, `Ĳ`, `ĳ`, `Œ`, `œ`, `Þ`, and `ð`) Unicode charts are accepted. All other characters will result in a validation error. The minimum length is 1 character, and the maximum is 20 characters.\n\nThis is only required if you're also including loyalty programme accounts.\n",
+                            "example": "Earhart",
+                            "type": "string"
+                          },
+                          "fare_type": {
+                            "description": "The fare type of the passenger. If the passenger is aged less than 18, you should pass in age as well.",
+                            "enum": [
+                              "accompanying_adult",
+                              "contract_bulk",
+                              "contract_bulk_child",
+                              "contract_bulk_infant_with_seat",
+                              "contract_bulk_infant_without_seat",
+                              "frequent_flyer",
+                              "group_inclusive_tour",
+                              "group_inclusive_tour_child",
+                              "humanitarian",
+                              "individual_inclusive_tour_child",
+                              "marine",
+                              "seat_only",
+                              "student",
+                              "teacher",
+                              "tour_operator_inclusive",
+                              "tour_operator_inclusive_infant",
+                              "unaccompanied_child",
+                              "visiting_friends_and_family"
+                            ],
+                            "example": "student",
+                            "type": "string"
+                          },
+                          "given_name": {
+                            "description": "The passenger's given name. Only `space`, `-`, `'`, and letters from the [`ASCII`](https://www.unicode.org/charts/PDF/U0000.pdf), [`Latin-1 Supplement`](https://www.unicode.org/charts/PDF/U0080.pdf) and [`Latin Extended-A`](https://www.unicode.org/charts/PDF/U0100.pdf) (with the exceptions of `Æ`, `æ`, `Ĳ`, `ĳ`, `Œ`, `œ`, `Þ`, and `ð`) Unicode charts are accepted. All other characters will result in a validation error. The minimum length is 1 character, and the maximum is 20 characters.\n\nThis is only required if you're also including loyalty programme accounts.\n",
+                            "example": "Amelia",
+                            "type": "string"
+                          },
+                          "loyalty_programme_accounts": {
+                            "description": "The loyalty programme accounts for this passenger",
+                            "items": {
+                              "properties": {
+                                "account_number": {
+                                  "description": "The passenger's account number for this loyalty programme account",
+                                  "example": "12901014",
+                                  "type": "string"
+                                },
+                                "airline_iata_code": {
+                                  "description": "The IATA code for the airline that this loyalty programme account belongs to",
+                                  "example": "BA",
+                                  "type": "string"
+                                }
+                              },
+                              "title": "Loyalty Programme Account",
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "user_id": {
+                            "description": "The ID of the customer user that associates with this passenger.\n",
+                            "example": "icu_0000A3t2sL46m5eDF45kWW",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "fare_type"
+                        ],
+                        "title": "Offer Request Body Passenger With Fare Type",
+                        "type": "object"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                "private_fares": {
+                  "additionalProperties": true,
+                  "description": "The private fare codes for this offer request. You can pass in multiple airlines with their specific private fare codes. The key is the airline's IATA code that provided the private fare code. The `corporate_code` and `tour_code` are provided to you by the airline and the `tracking_reference` is to identify your business by the airlines.",
+                  "example": {
+                    "QF": [
+                      {
+                        "corporate_code": "FLX53",
+                        "tracking_reference": "ABN:2345678"
+                      }
+                    ],
+                    "UA": [
+                      {
+                        "corporate_code": "1234",
+                        "tour_code": "578DFL"
+                      }
+                    ]
+                  }
+                },
+                "slices": {
+                  "description": "The [slices](/docs/api/overview/key-concepts) that make up this offer request. One-way journeys can be expressed using one slice, whereas return trips will need two.",
+                  "items": {
+                    "properties": {
+                      "arrival_time": {
+                        "description": "The inclusive time range for the arrival of the slice",
+                        "properties": {
+                          "from": {
+                            "description": "The local time in the format `hh:mm` of the destination airport at or after which the slice should arrive. Defaults to `00:00` when only `to` is provided",
+                            "example": "09:45",
+                            "format": "hh:mm",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "to": {
+                            "description": "The local time in the format `hh:mm` of the destination airport at or before which the slice should arrive. Defaults to `23:59` when only `from` is provided",
+                            "example": "17:00",
+                            "format": "hh:mm",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "title": "ArrivalTime",
+                        "type": [
+                          "object",
+                          "null"
+                        ]
+                      },
+                      "departure_date": {
+                        "description": "The [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) date on which the passengers want to depart",
+                        "example": "2020-04-24",
+                        "format": "date",
+                        "type": "string"
+                      },
+                      "departure_time": {
+                        "description": "The inclusive time range for the departure of the slice",
+                        "properties": {
+                          "from": {
+                            "description": "The local time in the format `hh:mm` of the origin airport at or after which the slice should depart. Defaults to current time at airport when only `to` is provided or `from` value is in the past",
+                            "example": "09:45",
+                            "format": "hh:mm",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "to": {
+                            "description": "The local time in the format `hh:mm` of the origin airport at or before which the slice should depart. Defaults to `23:59` when only `from` is provided",
+                            "example": "17:00",
+                            "format": "hh:mm",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "title": "DepartureTime",
+                        "type": [
+                          "object",
+                          "null"
+                        ]
+                      },
+                      "destination": {
+                        "description": "The 3-letter IATA code for the city or airport where this slice ends",
+                        "example": "JFK",
+                        "type": "string"
+                      },
+                      "origin": {
+                        "description": "The 3-letter IATA code for the city or airport where this slice starts",
+                        "example": "LHR",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "departure_date",
+                      "destination",
+                      "origin"
+                    ],
+                    "title": "Offer Request Body Slice",
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "slices",
+                "passengers"
+              ],
+              "title": "Body parameters",
+              "type": "object"
+            }
+          },
+          "required": [
+            "data"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "fixed_success",
+    "customer_pricing": "fixed_success",
+    "default_request_estimate_usd": 0.02,
+    "estimate_source": "profile_seed",
+    "evidence_source": "request_snapshot"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## 费用与请求规则
+
+公开参考价格：每次成功请求 $0.02 USD。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 

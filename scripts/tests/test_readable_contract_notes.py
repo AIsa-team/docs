@@ -35,6 +35,36 @@ class ReadableNotesTests(unittest.TestCase):
         self.assertIn('0.15', updated)
         self.assertEqual(update_readable_block(updated, changed), updated)
 
+    def test_paired_currency_is_literal_mdx_without_changing_contract_prices(self):
+        from pricing_prose import pricing_summary
+        from public_surface_checks import request_blocks, compare_llms
+        operation = {"operationId": "price", "x-aisa-pricing": {
+            "default_request_estimate_usd": 0.3, "unit_rate_usd": 0.075,
+            "unit": "similarweb_credit"}}
+        document = {"paths": {"/price": {"get": operation}}}
+        before = copy.deepcopy(document)
+        for language in ("en", "zh"):
+            context = dict(document=document, method="get", path="/price", spec_path="openapi/p.json")
+            block = readable_block(operation, language, **context)
+            self.assertIn(r"\$0.3 USD", block)
+            self.assertIn(r"\$0.075 USD", block)
+            canonical = pricing_summary(operation["x-aisa-pricing"], language)
+            self.assertNotIn(r"\$", canonical)
+            parsed = request_blocks(block)
+            record = next(iter(parsed.values()))[0]
+            self.assertEqual(record["price_summary"], canonical)
+            self.assertEqual(record["request"]["x-aisa-pricing"], before["paths"]["/price"]["get"]["x-aisa-pricing"])
+            # Mintlify exports either literal or escaped dollars to Markdown.
+            self.assertEqual(compare_llms(parsed, request_blocks(block.replace(r"\$", "$"))), [])
+            self.assertEqual(update_readable_block(block, operation, language, **context), block)
+        self.assertEqual(document, before)
+        for pricing in ({"default_request_estimate_usd": 0.3}, {"reference_unavailable": True}):
+            for language in ("en", "zh"):
+                canonical = pricing_summary(pricing, language)
+                block = readable_block({"x-aisa-pricing": pricing}, language)
+                self.assertIn(canonical, block)
+                self.assertNotIn(r"\$", block)
+
     def test_exact_large_numbers_and_unknown_formula(self):
         self.assertIn('9007199254740993', readable_block({'x-aisa-pricing': {'maximum_units': 9007199254740993}}))
         self.assertIsNone(formula_text({'input': 'q', 'unknown_operator': 2}))

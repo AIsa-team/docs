@@ -26,12 +26,16 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/dataforseo_labs/apple/bulk
 // 连接、授权、跑通这个例子需要的东西都在里面 ——
 // 不用粘贴任何 key，浏览器里点一次 Allow 就好。
 {
-  "operation_id": "post_dataforseo_labs_apple_bulk_app_metrics_live",
-  "arguments": {},
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_dataforseo_labs_apple_bulk_app_metrics_live",
+      "arguments": {}
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -42,13 +46,14 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/dataforseo_labs/apple/bulk
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/zh/api-reference/dataforseo/post_dataforseo-dataforseo-labs-apple-bulk-app-metrics-live.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -59,7 +64,131 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/dataforseo_labs/apple/bulk
 
 {/* aisa-contract-details:start */}
 
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/dataforseo/dataforseo&#95;labs/apple/bulk&#95;app&#95;metrics/live
+- **可用状态:** enabled
+- **请求 URL 模板:** https://api.aisa.one/apis/v1/dataforseo/dataforseo&#95;labs/apple/bulk&#95;app&#95;metrics/live
+- **Runtime 事实版本:** 6ab8fec17df1d5dcdff2e036dd1eb40587752b774ec040ab4eb0cc6946c3dd3c
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/dataforseo.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_dataforseo_labs_apple_bulk_app_metrics_live",
+  "method": "POST",
+  "path": "/apis/v1/dataforseo/dataforseo_labs/apple/bulk_app_metrics/live",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "example": [
+            {
+              "app_ids": [
+                "686449807",
+                "382617920"
+              ],
+              "language_name": "English",
+              "location_code": 2840
+            }
+          ],
+          "items": {
+            "oneOf": [
+              {
+                "example": [
+                  {
+                    "app_ids": [
+                      "686449807",
+                      "382617920"
+                    ],
+                    "language_name": "English",
+                    "location_code": 2840
+                  }
+                ],
+                "properties": {
+                  "app_ids": {
+                    "description": "<em>ids of the apps</em><br><strong>required field</strong><br>IDs of mobile applications on App Store;<br>you can find the ID in the URL of every app listed on App Store;<br>example:<br>in the URL <code>https://apps.apple.com/us/app/id835599320</code><br>the id is <code>835599320</code>;<br>the maximum number of IDs you can specify in this field is <code>1000</code>",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "language_code": {
+                    "description": "<em>language code</em><br><strong>required field if you don't specify</strong> <code>language_name</code><br><strong>Note:</strong> it is required to specify either <code>language_name</code> or <code>language_code</code><br>you can receive the list of available languages with their <code>language_code</code> by making a separate request to the <br><code>https://api.dataforseo.com/v3/dataforseo_labs/locations_and_languages</code>;<br><strong>Note:</strong> this endpoint currently supports the English language only<br>example:<br><code class=\"long-string\">en</code>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "language_name": {
+                    "description": "<em>full name of the language</em><br><strong>required field if you don't specify</strong> <code>language_code</code><br><strong>Note:</strong> it is required to specify either <code>language_name</code> or <code>language_code</code><br>you can receive the list of available languages with their <code>language_name</code> by making a separate request to the <br><code>https://api.dataforseo.com/v3/dataforseo_labs/locations_and_languages</code>;<br><strong>Note:</strong> this endpoint currently supports the English language only;<br>example:<br><code class=\"long-string\">English</code>",
+                    "type": "string"
+                  },
+                  "location_code": {
+                    "description": "<em>location code</em><br><strong>required field if you don't specify</strong> <code>location_name</code><br><strong>Note:</strong> it is required to specify either <code>location_name</code> or <code>location_code</code><br>you can receive the list of available locations with their <code>location_code</code> by making a separate request to <br><code>https://api.dataforseo.com/v3/dataforseo_labs/locations_and_languages</code>;<br><strong>Note:</strong> this endpoint currently supports the US location only;<br>example:<br><code class=\"long-string\">2840</code>",
+                    "type": "integer"
+                  },
+                  "location_name": {
+                    "description": "<em>full name of the location</em><br><strong>required field if you don't specify</strong> <code>location_code</code><br><strong>Note:</strong> it is required to specify either <code>location_name</code> or <code>location_code</code><br>you can receive the list of available locations with their <code>location_name</code> by making a separate request to <br><code>https://api.dataforseo.com/v3/dataforseo_labs/locations_and_languages</code>;<br><strong>Note:</strong> this endpoint currently supports the US location only;<br>example:<br><code class=\"long-string\">United States</code>",
+                    "type": "string"
+                  },
+                  "tag": {
+                    "description": "<em>user-defined task identifier</em><br>optional field<br><em>the character limit is 255</em><br>you can use this parameter to identify the task and match it with the result<br>you will find the specified <code>tag</code> value in the <code>data</code> object of the response",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "type": "array"
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_usd",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.1356,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## 费用与请求规则
+
+按用量计费；默认请求预估费用：$0.1356 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 

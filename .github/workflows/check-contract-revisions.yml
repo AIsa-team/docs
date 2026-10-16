@@ -35,7 +35,9 @@ jobs:
     needs: activation-plan
     if: github.event_name == 'workflow_dispatch' || (needs.activation-plan.outputs.enabled == 'true' && vars.RUNTIME_CONTRACT_ACTIVATION_ENABLED == 'true')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Existing surface/provenance checks plus a bounded five-minute read-only
+    # Router schema audit, with time left to upload failure evidence.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -74,7 +76,7 @@ jobs:
           if [ "$ACCEPTANCE" = 'true' ]; then
             args+=(--acceptance --require-budget)
           fi
-          python scripts/check_contract_revisions.py "${args[@]}"
+          python scripts/check_contract_revisions.py --all-surfaces "${args[@]}"
       - name: Retain dated convergence assessment
         if: always()
         uses: actions/upload-artifact@v4

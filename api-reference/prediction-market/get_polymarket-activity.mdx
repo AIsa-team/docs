@@ -22,7 +22,222 @@ For market-wide prices rather than one wallet's history, use [`get_polymarket_ma
 
 {/* aisa-contract-details:start */}
 
+## Request contract
+
+- **Method and path:** GET /apis/v1/polymarket/activity
+- **Availability:** enabled
+- **Request URL template:** https://api.aisa.one/apis/v1/polymarket/activity
+- **end:** query; optional
+- **eventId:** query; optional
+- **excludeDepositsWithdrawals:** query; optional
+- **limit:** query; optional
+- **market:** query; optional
+- **offset:** query; optional
+- **side:** query; optional
+- **sortBy:** query; optional
+- **sortDirection:** query; optional
+- **start:** query; optional
+- **type:** query; optional
+- **user:** query; required
+- **Runtime facts:** e5ff56471e62e340c326a9cf8efdb405dd827483c23e3fee435eec7999b7a85a
+
+[Complete OpenAPI definition](https://aisa.one/docs/openapi/polymarket-data.json)
+
+Effective request and pricing declaration (including authentication and referenced schemas):
+
+```json
+{
+  "operationId": "get_polymarket_activity",
+  "method": "GET",
+  "path": "/apis/v1/polymarket/activity",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "description": "Upper-bound timestamp (epoch seconds) for the activity window. Omit for the default (current time); rows newer than `end` are excluded.",
+      "in": "query",
+      "name": "end",
+      "schema": {
+        "minimum": 0,
+        "type": "integer"
+      }
+    },
+    {
+      "description": "Comma-separated list of event IDs. Mutually exclusive with market.",
+      "explode": false,
+      "in": "query",
+      "name": "eventId",
+      "schema": {
+        "items": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "type": "array"
+      },
+      "style": "form"
+    },
+    {
+      "description": "Excludes deposit and withdrawal records. The default `true` applies even when `type` requests those records, so to get deposits and withdrawals you must pass `false`.",
+      "in": "query",
+      "name": "excludeDepositsWithdrawals",
+      "schema": {
+        "default": true,
+        "type": "boolean"
+      }
+    },
+    {
+      "description": "Page size. Values above the maximum are clamped to 500.",
+      "in": "query",
+      "name": "limit",
+      "schema": {
+        "default": 100,
+        "maximum": 500,
+        "minimum": 0,
+        "type": "integer"
+      }
+    },
+    {
+      "description": "Comma-separated list of condition IDs. Mutually exclusive with eventId.",
+      "explode": false,
+      "in": "query",
+      "name": "market",
+      "schema": {
+        "items": {
+          "description": "0x-prefixed 64-hex string",
+          "example": "0xdd22472e552920b8438158ea7238bfadfa4f736aa4cee91a6b86c39ead110917",
+          "pattern": "^0x[a-fA-F0-9]{64}$",
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "style": "form"
+    },
+    {
+      "description": "Starting index for pagination. Requests past the cap are rejected with a 400 (never silently clamped). To read history deeper than offset 5000, page inside `start`/`end` windows — each window has its own offset budget.",
+      "in": "query",
+      "name": "offset",
+      "schema": {
+        "default": 0,
+        "maximum": 5000,
+        "minimum": 0,
+        "type": "integer"
+      }
+    },
+    {
+      "in": "query",
+      "name": "side",
+      "schema": {
+        "enum": [
+          "BUY",
+          "SELL"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "in": "query",
+      "name": "sortBy",
+      "schema": {
+        "default": "TIMESTAMP",
+        "enum": [
+          "TIMESTAMP",
+          "TOKENS",
+          "CASH"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "description": "`DESC` (default) returns the newest rows first; `ASC` the oldest first. Both orders are stable — the same query returns the same rows at any `limit`/`offset`, so pages compose without gaps or repeats.",
+      "in": "query",
+      "name": "sortDirection",
+      "schema": {
+        "default": "DESC",
+        "enum": [
+          "ASC",
+          "DESC"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "description": "Lower-bound timestamp (epoch seconds) for the activity window. Omit or pass `0` for the default window (most recent ~3 years); pass a positive epoch (e.g. `1`) to retrieve full history. With `sortDirection=ASC`, omitting `start` already reads from the beginning of the account's history (no default window).",
+      "in": "query",
+      "name": "start",
+      "schema": {
+        "minimum": 0,
+        "type": "integer"
+      }
+    },
+    {
+      "description": "Comma-separated list of activity types to include. DEPOSIT and WITHDRAWAL records also require `excludeDepositsWithdrawals=false`.",
+      "explode": false,
+      "in": "query",
+      "name": "type",
+      "schema": {
+        "items": {
+          "enum": [
+            "TRADE",
+            "SPLIT",
+            "MERGE",
+            "REDEEM",
+            "REWARD",
+            "CONVERSION",
+            "DEPOSIT",
+            "WITHDRAWAL",
+            "YIELD",
+            "MAKER_REBATE",
+            "TAKER_REBATE",
+            "REFERRAL_REWARD"
+          ],
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "style": "form"
+    },
+    {
+      "in": "query",
+      "name": "user",
+      "required": true,
+      "schema": {
+        "description": "User Profile Address (0x-prefixed, 40 hex chars)",
+        "example": "0x56687bf447db6ffa42ffe2204a05edaa20f55839",
+        "pattern": "^0x[a-fA-F0-9]{40}$",
+        "type": "string"
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "fixed_success",
+    "customer_pricing": "fixed_success",
+    "default_request_estimate_usd": 0.012,
+    "estimate_source": "profile_seed",
+    "evidence_source": "request_snapshot"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## Cost and request rules
+
+Published reference price: $0.012 USD per successful request. Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 

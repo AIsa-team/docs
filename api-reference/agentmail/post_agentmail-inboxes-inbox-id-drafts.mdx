@@ -25,12 +25,16 @@ curl -X POST "https://api.aisa.one/apis/v1/agentmail/inboxes/{inbox_id}/drafts" 
 // It carries everything needed to connect, authorize and run this example —
 // no key to paste, one click of Allow in the browser.
 {
-  "operation_id": "post_agentmail_inbox_draft",
-  "arguments": {},
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_agentmail_inbox_draft",
+      "arguments": {}
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -41,13 +45,14 @@ curl -X POST "https://api.aisa.one/apis/v1/agentmail/inboxes/{inbox_id}/drafts" 
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/api-reference/agentmail/post_agentmail-inboxes-inbox-id-drafts.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -58,7 +63,204 @@ curl -X POST "https://api.aisa.one/apis/v1/agentmail/inboxes/{inbox_id}/drafts" 
 
 {/* aisa-contract-details:start */}
 
+## Request contract
+
+- **Method and path:** POST /apis/v1/agentmail/inboxes/&#123;inbox&#95;id&#125;/drafts
+- **Availability:** enabled
+- **Request URL template:** https://api.aisa.one/apis/v1/agentmail/inboxes/&#123;inbox&#95;id&#125;/drafts
+- **inbox&#95;id:** path; required
+- **Runtime facts:** 18a04e28941fae19674c11246b677373368b6bd927b7c146220cec1f168f4639
+
+[Complete OpenAPI definition](https://aisa.one/docs/openapi/agentmail.json)
+
+Effective request and pricing declaration (including authentication and referenced schemas):
+
+```json
+{
+  "operationId": "post_agentmail_inbox_draft",
+  "method": "POST",
+  "path": "/apis/v1/agentmail/inboxes/{inbox_id}/drafts",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "in": "path",
+      "name": "inbox_id",
+      "required": true,
+      "schema": {
+        "description": "The ID of the inbox.",
+        "title": "InboxId",
+        "type": "string"
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "description": "Body for creating a draft. Supports plain, reply, reply-all, and forward\ndrafts:\n\n- **Plain draft:** supply `to`, `subject`, `text`, etc.\n- **Reply:** set `in_reply_to` to a message ID. Recipients, subject, and\n  threading are derived from that message. Set `reply_all` to address the\n  whole thread (you then cannot also pass `to`, `cc`, or `bcc`).\n- **Forward:** set `forward_of` to a message ID. The subject and threading\n  are derived from the source message, whose body and attachments are\n  merged in at send time.\n\n`in_reply_to` and `forward_of` are mutually exclusive, and reading the\nreferenced message requires `message_read` permission.",
+          "properties": {
+            "attachments": {
+              "description": "Attachments to include in draft.",
+              "items": {
+                "description": "Provide either `content` or `url` for each attachment.",
+                "properties": {
+                  "content": {
+                    "description": "Base64 encoded content of the attachment. The entire request, including the message body and all attachments, is limited to 6 MB.",
+                    "type": "string"
+                  },
+                  "content_disposition": {
+                    "description": "Content disposition of attachment.",
+                    "enum": [
+                      "inline",
+                      "attachment"
+                    ],
+                    "title": "AttachmentContentDisposition",
+                    "type": "string"
+                  },
+                  "content_id": {
+                    "description": "Content ID of attachment.",
+                    "title": "AttachmentContentId",
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "description": "Content type of attachment.",
+                    "title": "AttachmentContentType",
+                    "type": "string"
+                  },
+                  "filename": {
+                    "description": "Filename of attachment.",
+                    "title": "AttachmentFilename",
+                    "type": "string"
+                  },
+                  "url": {
+                    "description": "URL that AgentMail can download without custom authentication headers or cookies.\nRedirects and pre-signed URLs are supported, and the final response must be a\nsuccessful 2xx response. Keep URL-backed attachments around 30 MB total per message.",
+                    "type": "string"
+                  }
+                },
+                "title": "SendAttachment",
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "bcc": {
+              "description": "Addresses of BCC recipients. In format `username@domain.com` or `Display Name <username@domain.com>`.",
+              "items": {
+                "type": "string"
+              },
+              "title": "DraftBcc",
+              "type": "array"
+            },
+            "cc": {
+              "description": "Addresses of CC recipients. In format `username@domain.com` or `Display Name <username@domain.com>`.",
+              "items": {
+                "type": "string"
+              },
+              "title": "DraftCc",
+              "type": "array"
+            },
+            "client_id": {
+              "description": "Client ID of draft.",
+              "title": "DraftClientId",
+              "type": "string"
+            },
+            "forward_of": {
+              "description": "ID of message being forwarded.",
+              "title": "DraftForwardOf",
+              "type": "string"
+            },
+            "html": {
+              "description": "HTML body of draft.",
+              "title": "DraftHtml",
+              "type": "string"
+            },
+            "in_reply_to": {
+              "description": "ID of message being replied to.",
+              "title": "DraftInReplyTo",
+              "type": "string"
+            },
+            "labels": {
+              "description": "Labels of draft.",
+              "items": {
+                "type": "string"
+              },
+              "title": "DraftLabels",
+              "type": "array"
+            },
+            "reply_all": {
+              "description": "Reply to all recipients of the original message.",
+              "title": "DraftReplyAll",
+              "type": "boolean"
+            },
+            "reply_to": {
+              "description": "Reply-to addresses. In format `username@domain.com` or `Display Name <username@domain.com>`.",
+              "items": {
+                "type": "string"
+              },
+              "title": "DraftReplyTo",
+              "type": "array"
+            },
+            "send_at": {
+              "description": "Time at which to schedule send draft.",
+              "format": "date-time",
+              "title": "DraftSendAt",
+              "type": "string"
+            },
+            "subject": {
+              "description": "Subject of draft.",
+              "title": "DraftSubject",
+              "type": "string"
+            },
+            "text": {
+              "description": "Plain text body of draft.",
+              "title": "DraftText",
+              "type": "string"
+            },
+            "to": {
+              "description": "Addresses of recipients. In format `username@domain.com` or `Display Name <username@domain.com>`.",
+              "items": {
+                "type": "string"
+              },
+              "title": "DraftTo",
+              "type": "array"
+            }
+          },
+          "title": "CreateDraftRequest",
+          "type": "object"
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "explicit_zero",
+    "customer_pricing": "fixed_success",
+    "default_request_estimate_usd": 0.012,
+    "estimate_source": "profile_seed",
+    "evidence_source": "request_snapshot"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## Cost and request rules
+
+Published reference price: $0.012 USD per successful request. Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 

@@ -26,12 +26,16 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/dataforseo_labs/google/key
 // 连接、授权、跑通这个例子需要的东西都在里面 ——
 // 不用粘贴任何 key，浏览器里点一次 Allow 就好。
 {
-  "operation_id": "post_dataforseo_labs_google_keyword_suggestions_live",
-  "arguments": {},
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_dataforseo_labs_google_keyword_suggestions_live",
+      "arguments": {}
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -42,13 +46,14 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/dataforseo_labs/google/key
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/zh/api-reference/dataforseo/post_dataforseo-dataforseo-labs-google-keyword-suggestions-live.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -59,7 +64,216 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/dataforseo_labs/google/key
 
 {/* aisa-contract-details:start */}
 
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/dataforseo/dataforseo&#95;labs/google/keyword&#95;suggestions/live
+- **可用状态:** enabled
+- **请求 URL 模板:** https://api.aisa.one/apis/v1/dataforseo/dataforseo&#95;labs/google/keyword&#95;suggestions/live
+- **Runtime 事实版本:** 6ab8fec17df1d5dcdff2e036dd1eb40587752b774ec040ab4eb0cc6946c3dd3c
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/dataforseo.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_dataforseo_labs_google_keyword_suggestions_live",
+  "method": "POST",
+  "path": "/apis/v1/dataforseo/dataforseo_labs/google/keyword_suggestions/live",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "example": [
+            {
+              "include_seed_keyword": true,
+              "include_serp_info": true,
+              "keyword": "phone",
+              "language_code": "en",
+              "limit": 1,
+              "location_code": 2840
+            }
+          ],
+          "items": {
+            "oneOf": [
+              {
+                "example": [
+                  {
+                    "include_seed_keyword": true,
+                    "include_serp_info": true,
+                    "keyword": "phone",
+                    "language_code": "en",
+                    "limit": 1,
+                    "location_code": 2840
+                  }
+                ],
+                "properties": {
+                  "exact_match": {
+                    "description": "<em>search for the exact phrase</em><br>optional field<br>if set to <code>true</code>, the returned keywords will include the exact keyword phrase you specified, with potentially other words before or after that phrase<br>default value: <code>false</code>",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "filters": {
+                    "description": "<em>array of results filtering parameters</em><br>optional field<br><strong>you can add several filters at once (8 filters maximum)</strong><br>you should set a logical operator <code>and</code>, <code>or</code> between the conditions<br>the following operators are supported:<br><code>regex</code>, <code>not_regex</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>, <code>=</code>, <code>&lt;&gt;</code>, <code>in</code>, <code>not_in</code>, <code>match</code>, <code>not_match</code>, <code>ilike</code>, <code>not_ilike</code>, <code>like</code>, <code>not_like</code><br>you can use the <code>%</code> operator with <code>like</code> and <code>not_like</code>, as well as <code>ilike</code> and <code>not_ilike</code> to match any string of zero or more characters<br>example:<br><code>[\"keyword_info.search_volume\",\"&gt;\",0]</code><br><code>[[\"keyword_info.search_volume\",\"in\",[0,1000]],<br>\"and\",<br>[\"keyword_info.competition_level\",\"=\",\"LOW\"]]</code><code>[[\"keyword_info.search_volume\",\"&gt;\",100],<br>\"and\",<br>[[\"keyword_info.cpc\",\"&lt;\",0.5],<br>\"or\",<br>[\"keyword_info.high_top_of_page_bid\",\"&lt;=\",0.5]]]</code><br>for more information about filters, please refer to <a href=\"/v3/dataforseo_labs/filters\" target=\"_blank\" rel=\"noopener noreferrer\">Dataforseo Labs - Filters</a> or this <a href=\"https://dataforseo.com/help-center/how-to-use-filters-in-dataforseo-labs-api\" target=\"_blank\" rel=\"noopener noreferrer\">help center guide</a>",
+                    "items": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  },
+                  "ignore_synonyms": {
+                    "description": "<em>ignore highly similar keywords</em><br>optional field<br>if set to <code class=\"prettyprint\">true</code> only core keywords will be returned, all highly similar keywords will be excluded;<br>default value: <code>false</code>",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "include_clickstream_data": {
+                    "description": "<em>include or exclude data from clickstream-based metrics in the result</em><br>optional field<br>if the parameter is set to <code>true</code>, you will receive <code>clickstream_keyword_info</code>, <code>keyword_info_normalized_with_clickstream</code>, and <code>keyword_info_normalized_with_bing</code> fields in the response<br>default value: <code>false</code><br>with this parameter enabled, you will be charged double the price for the request<p>learn more about how clickstream-based metrics are calculated in this <a href=\"https://dataforseo.com/help-center/what-are-clickstream-based-metrics-and-how-do-we-calculate-them\" rel=\"noopener noreferrer\" target=\"_blank\">help center article</a>",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "include_seed_keyword": {
+                    "description": "<em>include data for the seed keyword</em><br>optional field<br>if set to <code>true</code>, data for the seed keyword specified in the <code>keyword</code> field will be provided in the <code>seed_keyword_data</code> array of the response<br>default value: <code>false</code>",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "include_serp_info": {
+                    "description": "<em>include data from SERP for each keyword</em><br>optional field<br>if set to <code>true</code>, we will return a <code>serp_info</code> array containing SERP data (number of search results, relevant URL, and SERP features) for every keyword in the response<br>default value: <code>false</code>",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "keyword": {
+                    "description": "<em>keyword</em><br><strong>required field</strong><br>UTF-8 encoding<br>the keywords will be converted to lowercase format;<p>learn more about rules and limitations of <code>keyword</code> and <code>keywords</code> fields in DataForSEO APIs in this <a href=\"https://dataforseo.com/help-center/rules-and-limitations-of-keyword-and-keywords-fields-in-dataforseo-apis\" rel=\"noopener noreferrer\" target=\"_blank\">Help Center article</a>",
+                    "type": "string"
+                  },
+                  "language_code": {
+                    "description": "<em>language code</em><br>optional field<br>if you use this field, you don't need to specify <code>language_name</code><br>you can receive the list of available languages with their <code>language_code</code> by making a separate request to the<br><code>https://api.dataforseo.com/v3/dataforseo_labs/locations_and_languages</code><br>example:<br><code class=\"long-string\">en</code><br><strong>Note:</strong> if omitted, results default to the language with the most keyword records in the specified location;<br>refer to the <code>available_languages.keywords</code> field of the <a href=\"https://docs.dataforseo.com/v3/dataforseo_labs/locations_and_languages\" target=\"_blank\">Locations and Languages endpoint</a> to determine the default language",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "language_name": {
+                    "description": "<em>full name of the language</em><br>optional field<br>if you use this field, you don't need to specify <code>language_code</code><br>you can receive the list of available languages with their <code>language_name</code> by making a separate request to the<br><code>https://api.dataforseo.com/v3/dataforseo_labs/locations_and_languages</code><br>example:<br><code class=\"long-string\">English</code><br><strong>Note:</strong> if omitted, results default to the language with the most keyword records in the specified location;<br>refer to the <code>available_languages.keywords</code> field of the <a href=\"https://docs.dataforseo.com/v3/dataforseo_labs/locations_and_languages\" target=\"_blank\">Locations and Languages endpoint</a> to determine the default language",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "limit": {
+                    "description": "<em>the maximum number of returned keywords</em><br>optional field<br>default value: <code>100</code><br>maximum value: <code>1000</code>",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "location_code": {
+                    "description": "<em>location code</em><br>optional field<br>if you use this field, you don't need to specify <code>location_name</code><br>you can receive the list of available locations with their <code>location_code</code> by making a separate request to the<br><code>https://api.dataforseo.com/v3/dataforseo_labs/locations_and_languages</code><br>ignore this field to get the results for all available locations<br>example:<br><code class=\"long-string\">2840</code>",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "location_name": {
+                    "description": "<em>full name of the location</em><br>optional field<br>if you use this field, you don't need to specify <code>location_code</code><br>you can receive the list of available locations with their <code>location_name</code> by making a separate request to the<br><code>https://api.dataforseo.com/v3/dataforseo_labs/locations_and_languages</code><br>ignore this field to get the results for all available locations<br>example:<br><code class=\"long-string\">United Kingdom</code>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "offset": {
+                    "description": "<em>offset in the results array of returned keywords</em><br>optional field<br>default value: <code>0</code><br>if you specify the <code>10</code> value, the first ten keywords in the results array will be omitted and the data will be provided for the successive keywords<br><strong>Note:</strong> we recommend using this parameter only when retrieving up to 10,000 results<br>for retrieving over 10,000 results, use the <code>offset_token</code> instead.",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "offset_token": {
+                    "description": "<em>offset token for subsequent requests</em><br>optional field<br>provided in the identical filed of the response to each request;<br>use this parameter to avoid timeouts while trying to obtain over 10,000 results in a single request;<br>by specifying the unique <code>offset_token</code> value from the response array, you will get the subsequent results of the initial task;<br><code>offset_token</code> values are unique for each subsequent task<br><strong>Note:</strong> if the <code>offset_token</code> is specified in the request, all other parameters except <code>limit</code> will not be taken into account when processing a task.<br>learn more about this parameter on our <a href=\"https://dataforseo.com/help-center/what-is-the-difference-between-the-offset-and-offset_token-parameters#offset_token\" target=\"_blank\">Help Center</a>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "order_by": {
+                    "description": "<em>results sorting rules</em><br>optional field<br>you can use the same values as in the <code>filters</code> array to sort the results<br>possible sorting types:<br><code>asc</code> - results will be sorted in the ascending order<br><code>desc</code> - results will be sorted in the descending order<br>a comma is used as a separator<br>example:<br><code>[\"keyword_info.competition,desc\"]</code><br>default rule:<br><code>[\"keyword_info.search_volume,desc\"]</code><br><strong>note that you can set no more than three sorting rules in a single request</strong><br>you should use a comma to separate several sorting rules<br>example:<br><code>[\"keyword_info.search_volume,desc\",\"keyword_info.cpc,desc\"]</code>",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  },
+                  "tag": {
+                    "description": "<em>user-defined task identifier</em><br>optional field<br><em>the character limit is 255</em><br>you can use this parameter to identify the task and match it with the result<br>you will find the specified <code>tag</code> value in the <code>data</code> object of the response",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "type": "array"
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_usd",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.132,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## 费用与请求规则
+
+按用量计费；默认请求预估费用：$0.132 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 

@@ -7,7 +7,7 @@ description: >-
   metered data-API pricing, free quotes, spend caps, and per-call cost
   reporting. Current prices live on aisa.one/models and aisa.one/api.
 ---
-AIsa is usage-based. You fund one balance and every model call, data-API call, MCP `use`, and CLI `call` draws on it. You can pay as you go or choose a subscription plan; see [aisa.one/pricing](https://aisa.one/pricing) for plans.
+AIsa is usage-based. You fund one balance and every model call, data-API call, MCP `batch_use`, and CLI `call` draws on it. You can pay as you go or choose a subscription plan; see [aisa.one/pricing](https://aisa.one/pricing) for plans.
 
 The docs explain **how** you are billed. They do not list prices, which change more often than the docs. Current prices:
 
@@ -49,7 +49,7 @@ What counts as billable:
 - A request rejected before processing - bad credentials, rate limiting, insufficient balance, a price above your cap - is not billed.
 - Per-call rates can differ by plan or group; the amount actually applied is shown in Usage & Logs.
 
-Through MCP, `search`, `list_categories`, and `get_details` are free; `use` and `batch_use` are billed per call at the same rates. Selected endpoints also accept the x402 machine-payment protocol; see [Machine payments for agents](/concepts/machine-payments-for-agents).
+Through MCP, `search`, `list_categories`, `get_details`, and `batch_quote` are free; `batch_use` is billed per call at the same rates. Selected data endpoints also accept per-request payment through the Machine Payments Protocol (MPP) without an API key; see [Machine Payments](/integrations/machine-payments).
 
 ## Cost estimates, quotes, and charges
 
@@ -82,7 +82,7 @@ curl --fail-with-body --silent --show-error "${AISA_REQUEST_URL:?Set AISA_REQUES
   --header "X-AISA-Max-Price-USD: ${AISA_MAX_PRICE_USD:?Set AISA_MAX_PRICE_USD}"
 ```
 
-MCP offers the same pair: `get_details` with `with_quote` returns a quote and a `suggested_max_price_usd`, and `use` or `batch_use` accept `max_price_usd`.
+MCP offers the same pair: `batch_quote` returns a quote for the exact calls without running them, and `batch_use` runs the same calls after review. Re-quote if the tools or arguments change.
 
 ### Idempotency for synchronous Similarweb calls
 
@@ -102,7 +102,7 @@ A multi-step agent usually incurs more than one charge: retrieval calls, model t
 
 Before scaling, define:
 
-- A maximum cost per call and per task. On endpoints that declare maximum-price support, send the per-call maximum as `X-AISA-Max-Price-USD` (or `max_price_usd` over MCP); it rejects calls whose estimate is higher but does not cap the final charge. For model calls, bound output with `max_tokens`.
+- A maximum cost per call and per task. On endpoints that declare maximum-price support, send the per-call maximum as `X-AISA-Max-Price-USD`; it rejects calls whose estimate is higher but does not cap the final charge. For model calls, bound output with `max_tokens`.
 - A spending limit on the key the agent uses.
 - Which amounts need a person's confirmation, and whether the agent may fall back to a more expensive route.
 - What happens when the balance runs out.

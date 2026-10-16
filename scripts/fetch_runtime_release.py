@@ -13,6 +13,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
+from runtime_contract_artifact import member_name, file_limit, validate_canonical_files
+
 MAX_FILE = 8 << 20
 MAX_TOTAL = 64 << 20
 HEX64 = re.compile(r'[0-9a-f]{64}')
@@ -65,11 +67,13 @@ class PublicReader:
     def __call__(self, path):
         remaining = self.deadline - time.monotonic()
         require(remaining > 0, 'Acquisition deadline exceeded')
+        match = re.fullmatch(r'/public/api-contract/releases/[0-9a-f]{64}/(contracts/(?:openapi|manifest|readiness)\.json)', path)
+        limit = file_limit(match[1], MAX_FILE) if match else MAX_FILE
         request = Request(self.origin + path, headers={'Accept': 'application/json'})
         try:
             with self.opener.open(request, timeout=min(10, remaining)) as response:
                 require(response.status == 200, 'Expected HTTP 200')
-                raw = response.read(MAX_FILE + 1)
+                raw = response.read(limit + 1)
                 headers = dict((k.lower(), v) for k, v in response.headers.items())
         except HTTPError as exc:
             exc.close()
@@ -77,7 +81,7 @@ class PublicReader:
         except (URLError, TimeoutError, OSError) as exc:
             raise AcquisitionRejected('Public metadata request failed: ' + type(exc).__name__) from None
         require(time.monotonic() <= self.deadline, 'Acquisition deadline exceeded')
-        require(len(raw) <= MAX_FILE, 'Public file exceeds byte limit')
+        require(len(raw) <= limit, 'Public file exceeds byte limit')
         require('110' not in headers.get('warning', ''), 'Stale public metadata rejected')
         return raw, headers
 
@@ -97,9 +101,7 @@ def validate_current(current, revision, compiler):
     for row in files:
         require(isinstance(row, dict) and set(row) == {'name', 'media_type', 'sha256'}, 'Unsupported manifest entry')
         name = row['name']
-        require(isinstance(name, str) and (name == 'index.json' or
-                re.fullmatch(r'providers/[a-z0-9][a-z0-9_.-]*\.json', name)) and
-                len(name) <= 255 and row['media_type'] == 'application/json' and
+        require(member_name(name) and row['media_type'] == 'application/json' and
                 HEX64.fullmatch(str(row['sha256'])), 'Invalid manifest member')
         names.append(name)
     require(names == sorted(set(names)) and 'index.json' in names, 'Manifest is not ordered and unique')
@@ -125,31 +127,16 @@ def category_content(raw):
     return json.dumps(content, sort_keys=True, separators=(',', ':')).encode()
 
 
-def acquire(revision, compiler, reader):
-    require(HEX64.fullmatch(revision) and HEX40.fullmatch(compiler), 'Full artifact and compiler revisions required')
-    started = datetime.now(timezone.utc).isoformat()
-    before_raw, _ = reader('/public/api-contract/current')
-    before = decode(before_raw)
-    validate_current(before, revision, compiler)
-    contents, total = {}, 0
-    for row in before['files']:
-        raw, headers = reader('/public/api-contract/releases/' + revision + '/' + row['name'])
-        total += len(raw)
-        require(len(raw) <= MAX_FILE and total <= MAX_TOTAL, 'Release byte limit exceeded')
-        tag = '"' + row['sha256'] + '"'
-        # Public intermediaries may weaken the validator without changing bytes.
-        # Accept only this exact manifest SHA; body hashing remains mandatory.
-        require(sha(raw) == row['sha256'] and headers.get('etag') in (tag, 'W/' + tag),
-                'Immutable file hash or ETag mismatch')
-        decode(raw)
-        contents[row['name']] = raw
+def validate_release_files(contents):
+    """Validate the closed immutable facts graph without performing acquisition."""
     index = decode(contents['index.json'])
     require(index.get('pending_endpoints') == [] and index.get('pending_providers') == [],
             'Runtime release still has pending projections')
     coverage = index.get('coverage', {})
     selected, projected = coverage.get('selected_endpoint_count'), coverage.get('projected_endpoint_count')
     require(type(selected) is int and selected >= 0 and type(projected) is int and selected == projected and
-            coverage.get('pending_endpoint_count') == 0, 'Incomplete Runtime selected coverage')
+            type(coverage.get('pending_endpoint_count')) is int and
+            coverage['pending_endpoint_count'] == 0, 'Incomplete Runtime selected coverage')
     providers = index.get('providers')
     require(isinstance(providers, list), 'Missing Runtime provider index')
     expected = {'index.json'}
@@ -165,6 +152,41 @@ def acquire(revision, compiler, reader):
         require(HEX64.fullmatch(str(provider.get('facts_hash', ''))) and
                 meta.get('facts_hash') == provider['facts_hash'], 'Index/provider facts hash mismatch')
     require(expected == set(contents), 'Manifest contains an unindexed provider')
+    return index, providers, selected
+
+
+def facts_members(contents):
+    return {name: raw for name, raw in contents.items() if not name.startswith('contracts/')}
+
+
+def validate_artifact_files(contents, current, *, canonical_result=None):
+    result = validate_canonical_files(contents, current)
+    if canonical_result is not None and result is not None:
+        canonical_result.update(result)
+    return validate_release_files(facts_members(contents))
+
+
+def acquire(revision, compiler, reader):
+    require(HEX64.fullmatch(revision) and HEX40.fullmatch(compiler), 'Full artifact and compiler revisions required')
+    started = datetime.now(timezone.utc).isoformat()
+    before_raw, _ = reader('/public/api-contract/current')
+    before = decode(before_raw)
+    validate_current(before, revision, compiler)
+    contents, total = {}, 0
+    for row in before['files']:
+        raw, headers = reader('/public/api-contract/releases/' + revision + '/' + row['name'])
+        total += len(raw)
+        require(len(raw) <= file_limit(row['name'], MAX_FILE) and total <= MAX_TOTAL, 'Release byte limit exceeded')
+        tag = '"' + row['sha256'] + '"'
+        # Public intermediaries may weaken the validator without changing bytes.
+        # Accept only this exact manifest SHA; body hashing remains mandatory.
+        require(sha(raw) == row['sha256'] and headers.get('etag') in (tag, 'W/' + tag),
+                'Immutable file hash or ETag mismatch')
+        decode(raw)
+        contents[row['name']] = raw
+    canonical_validation = {}
+    index, providers, selected = validate_artifact_files(contents, before, canonical_result=canonical_validation)
+    coverage = index['coverage']
     category, _ = reader('/info/apis/category')
     catalog = category_content(category)
     category_after, _ = reader('/info/apis/category')
@@ -184,6 +206,8 @@ def acquire(revision, compiler, reader):
                'category_ignored_volatile_fields': ['cached_at'],
                'category_scope': 'live unversioned category content, stable twice except cache construction timestamp; outside immutable release manifest',
                'scope': 'actual public Runtime input acquisition only; no Docs readiness or baseline approval'}
+    if canonical_validation:
+        receipt['canonical_validation'] = canonical_validation
     return contents, category, before_raw, after_raw, receipt
 
 

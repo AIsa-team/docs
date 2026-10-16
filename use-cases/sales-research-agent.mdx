@@ -1,75 +1,68 @@
 ---
 title: Build a Sales Research Agent with AIsa
-description: Plan a read-first company, people, contact, creator, and outreach-research workflow with clear consent and action boundaries.
+sidebarTitle: Sales Research Agent
+description: Plan a read-first company, people, and trigger-event research workflow with data minimization and explicit approval before any CRM write or outreach.
+icon: handshake
 ---
 
-A sales research agent should begin with read-only discovery and enrichment. Sending messages, adding contacts to sequences, or changing a CRM are separate authenticated actions with external side effects.
+## The problem
 
-## Choose the capability
+Sales and partnerships teams spend hours building target lists, identifying the right contacts, and finding timely reasons to reach out. An agent can handle the research, but enrichment incurs costs, returns personal data, and CRM or outreach actions carry real-world side effects. A good outcome is a concise, scored list of accounts and contacts with source links and trigger events, plus draft messaging, with nothing written or sent until you approve.
 
-| Need | Start with |
-| --- | --- |
-| Company, people, and contact APIs | [API Reference](/api-reference) |
-| SEO and competitor opportunity research | [SEO Keyword Research](/agent-skills/seo-keyword-research) |
-| Creator and contact discovery | Relevant WaveInflu API pages in the [API Reference](/api-reference) |
-| Broader company or market evidence | [Research agent use case](/use-cases/research-agent) |
-| Task-oriented reusable workflow | [Agent Skills](/agent-skills) |
+## Prompt
 
-Use direct APIs when the application must control filters, scoring, deduplication, or CRM mapping. Use a Skill when the process is reusable and the agent should follow a consistent research method.
+Give this to your agent once AIsa is [connected via MCP](/agent-quickstart):
 
-## Recommended workflow
+```txt wrap
+Use AIsa to find <N> target accounts matching: <industry>, <headcount range>, <region>, <technology or signal>.
+Find the right AIsa tools with `search` and quote paid calls with `batch_quote`. Ask me before any paid call, and especially before enrichment.
+Step 1: search companies and people by criteria (no enrichment yet). Step 2: pull recent news for each account to find a trigger event. Step 3: score each account against my criteria and show the scoring.
+Only after I approve a shortlist, enrich those people, requesting only name, title, and work email.
+Return a table: account | why it fits | trigger event (with link and date) | contact role | missing or uncertain fields. Then a 3-sentence draft opener per account.
+Do not create contacts, add anyone to a sequence, or send email.
+```
 
-### 1. Define the target profile
+## APIs and Skills used
 
-Specify the organization, role, geography, industry, company size, or creator profile that qualifies. Avoid collecting unrelated personal data.
+Through MCP, your agent reaches these via a few meta tools at `https://mcp.aisa.one/mcp`: `search`, `list_categories`, `get_details`, and `batch_quote` are free; `batch_use` (up to 20 calls) is billed per call.
 
-### 2. Discover organizations or people
+| Step | What the agent calls | Reference |
+| --- | --- | --- |
+| Build a target list | Company search by headcount, industry, location, technology | [Organization Search](/api-reference/apollo/post_apollo-mixed-companies-search) |
+| Find people | People search (contact details withheld) | [People API Search](/api-reference/apollo/post_apollo-mixed-people-api-search) |
+| Trigger events | Company news by category and date | [News Articles Search](/api-reference/apollo/post_apollo-news-articles-search) |
+| Company context | Website traffic snapshot | [Website Traffic Snapshot](/api-reference/similarweb/get_similarweb-website-traffic-snapshot), [Use Similarweb](/agent-skills/use-similarweb) |
+| Enrich the shortlist | One company by domain; one person by identifiers | [Organization Enrichment](/api-reference/apollo/get_apollo-organizations-enrich), [People Enrichment](/api-reference/apollo/post_apollo-people-match) |
+| Creator targets | Creator discovery for influencer programs | [KOL Creator Discovery](/agent-skills/kol-creator-discovery) |
+| Write actions (gated) | Create a contact; add to a sequence | [Create a Contact](/api-reference/apollo/post_apollo-contacts), [Add Contacts to a Sequence](/api-reference/apollo/post_apollo-emailer-campaigns-sequence-id-add-contact-ids) |
 
-Start with broad search criteria, then narrow the result set. Keep source identifiers and URLs so records can be traced and deduplicated.
+People search indicates whether a match exists and flags if an email or phone number is available; enrichment reveals the details and is where the enrichment charge applies. Revealing personal emails or phone numbers is opt-in and billed extra.
 
-### 3. Enrich only shortlisted records
+## Example output
 
-Enrichment may be billable and may return personal or professional contact information. Apply data-minimization rules:
+<Note>Illustrative only. Companies, roles, and links are placeholders, not real records.</Note>
 
-- Request only fields needed for the workflow.
-- Avoid enriching every discovery result by default.
-- Record the source and retrieval time.
-- Respect applicable privacy, consent, and outreach requirements.
+| Account | Why it fits | Trigger event | Contact role | Missing / uncertain |
+| --- | --- | --- | --- | --- |
+| Example Corp | 200–500 staff, EU, uses ExampleDB | Opened a new office, 2026-01-08 ([link](https://example.com/news)) | Head of Data | Work email not yet enriched |
+| Sample Labs Inc. | 50–200 staff, EU, hiring data roles | Funding announcement, 2025-12-20 ([link](https://example.org/press)) | VP Engineering | Headcount source is a range |
 
-### 4. Score with explicit criteria
+**Score:** fit criteria matched (4/5, 3/5), shown per account. **Draft opener (Example Corp):** "Congrats on the new office…"
 
-Keep qualification logic inspectable. Separate:
+## Guardrails
 
-- Source data.
-- Derived scores.
-- Model-generated interpretation.
-- Missing or uncertain fields.
+- **Read first, enrich later.** Discover broadly, then enrich only the approved shortlist. Do not enrich every result by default.
+- **Data minimization.** Request only the fields the workflow requires; record the source and retrieval time; and comply with relevant privacy, consent, and outreach rules.
+- **Inspectable scoring.** Keep source data, derived scores, model interpretation, and missing fields separate. The model must not invent revenue, headcount, titles, contact details, or buying intent.
+- **Drafting is not sending.** Before creating a contact, adding someone to a sequence, sending a message, or updating a CRM: verify the connected account and permissions, show the exact action and target, obtain explicit approval, execute once, and verify the result. Read access does not imply write permission.
+- **Quote, then ask.** Get a free quote with `batch_quote` and run the same calls with `batch_use` only after approval. A quote checks the estimate, not the final charge. See [Billing & Credits](/guides/pricing).
+- **When AIsa may not be necessary:** A direct CRM or data-provider integration is simpler if you use a single provider and already have stable enrichment, consent, and outreach processes.
 
-Do not let a model invent revenue, headcount, job title, contact details, or buying intent.
+## Related
 
-### 5. Prepare an outreach brief
-
-A research result may include company context, relevant triggers, suggested messaging, and source links. Drafting is not the same as sending.
-
-### 6. Gate external actions
-
-Before creating a contact, adding a person to a sequence, sending a message, or changing an external system:
-
-1. Verify the connected account and required permission.
-2. Show the intended action and target.
-3. Obtain confirmation where policy requires it.
-4. Execute the narrowest operation once.
-5. Verify the external result.
-
-Read access does not imply write permission.
-
-## Minimal documentation set
-
-- [How It Works](/how-it-works)
-- The exact company, people, enrichment, or creator API pages
-- [Authentication](/guides/authentication)
-- [Security](/guides/security)
-
-## When AIsa may not be necessary
-
-A direct CRM or data-provider integration may be simpler when the team uses one provider and already has stable enrichment, consent, and outreach processes.
+<CardGroup cols={2}>
+  <Card title="Social Intelligence Agent" icon="hashtag" href="/use-cases/social-intelligence-agent">Creator and social signals.</Card>
+  <Card title="SEO Keyword Research" icon="magnifying-glass-chart" href="/agent-skills/seo-keyword-research">Competitor and keyword gaps.</Card>
+  <Card title="Authentication" icon="key" href="/guides/authentication">Keys and OAuth.</Card>
+  <Card title="Security & Privacy" icon="shield" href="/guides/security">Agent safety controls.</Card>
+</CardGroup>

@@ -22,6 +22,8 @@ class OriginTests(unittest.TestCase):
         for name in ('api-reference', 'zh/api-reference'):
             directory=self.root/name; directory.mkdir(parents=True); (directory/'.keep').write_text('')
         (self.root/'docs.json').write_text('{}')
+        from runtime_consolidate_openapi import discovery_index_block
+        (self.root/'llms.txt').write_text(discovery_index_block((self.root/'openapi.yaml').read_bytes()) + '\n')
         self.fixture.report['publication_artifact']['files_sha256'] = origin.publication_hashes(self.root)
         self.now = self.fixture.now.replace(microsecond=0) + timedelta(seconds=2)
         self.git('init', '-q')
@@ -218,7 +220,7 @@ class OriginTests(unittest.TestCase):
         extra = self.root/'openapi/coverage/observation.json'; extra.parent.mkdir()
         extra.write_text('{"observed":"new"}')
         workflow = yaml.safe_load((Path(__file__).resolve().parents[2]/'.github/workflows/pull-openapi.yml').read_text())
-        script = next(s['run'] for s in workflow['jobs']['compose']['steps'] if s.get('id')=='publish')
+        script = next(s['run'] for s in workflow['jobs']['compose']['steps'] if s.get('id')=='prepare')
         script = script.replace('python scripts/', shlex.quote(sys.executable)+' scripts/')
         before=(self.root/origin.ORIGIN).read_bytes()
         result=subprocess.run(['bash','-e','-c',script],cwd=self.root, capture_output=True,text=True,
@@ -259,6 +261,21 @@ class OriginTests(unittest.TestCase):
         jobs = copy.deepcopy(self.jobs); jobs[0]['steps'][0]['started_at'] = self.end.isoformat()
         with self.assertRaises(ValueError):
             origin.verify_producer(self.receipt, self.run, jobs, self.base, self.end)
+
+    def test_uploaded_supply_cannot_turn_failed_push_into_formal_proof(self):
+        jobs = copy.deepcopy(self.jobs)
+        jobs[0]['conclusion'] = 'failure'
+        jobs[0]['steps'].extend([
+            {'name': 'Retain immutable schema input candidate before publication', 'conclusion': 'success'},
+            {'name': 'Push the assessed commit after schema supply succeeds', 'conclusion': 'failure'}])
+        with self.assertRaisesRegex(ValueError, 'compose did not succeed'):
+            origin.verify_producer(self.receipt, self.run, jobs, self.base, self.end)
+
+    def test_unpushed_local_candidate_is_not_formal_main_ancestry(self):
+        self.git('checkout', '-q', self.base)
+        with patch.object(origin, 'gh_json', side_effect=AssertionError('Do not authenticate an unpushed candidate')):
+            with self.assertRaisesRegex(ValueError, 'not an ancestor'):
+                origin.inspect_publication(self.root, self.ref, historical=True)
 
     def test_graph_artifact_or_current_drift_and_source_expiry_rejected(self):
         with self.assertRaises(ValueError):

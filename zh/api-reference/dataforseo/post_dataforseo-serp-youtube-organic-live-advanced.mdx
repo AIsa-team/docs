@@ -26,12 +26,16 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/serp/youtube/organic/live/
 // 连接、授权、跑通这个例子需要的东西都在里面 ——
 // 不用粘贴任何 key，浏览器里点一次 Allow 就好。
 {
-  "operation_id": "post_dataforseo_serp_youtube_organic_live",
-  "arguments": {},
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_dataforseo_serp_youtube_organic_live",
+      "arguments": {}
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -42,13 +46,14 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/serp/youtube/organic/live/
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/zh/api-reference/dataforseo/post_dataforseo-serp-youtube-organic-live-advanced.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -59,7 +64,159 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/serp/youtube/organic/live/
 
 {/* aisa-contract-details:start */}
 
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/dataforseo/serp/youtube/organic/live/advanced
+- **可用状态:** enabled
+- **请求 URL 模板:** https://api.aisa.one/apis/v1/dataforseo/serp/youtube/organic/live/advanced
+- **Runtime 事实版本:** 6ab8fec17df1d5dcdff2e036dd1eb40587752b774ec040ab4eb0cc6946c3dd3c
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/dataforseo.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_dataforseo_serp_youtube_organic_live",
+  "method": "POST",
+  "path": "/apis/v1/dataforseo/serp/youtube/organic/live/advanced",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "example": [
+            {
+              "keyword": "audi",
+              "language_code": "en",
+              "location_code": 2840
+            }
+          ],
+          "items": {
+            "oneOf": [
+              {
+                "example": [
+                  {
+                    "keyword": "audi",
+                    "language_code": "en",
+                    "location_code": 2840
+                  }
+                ],
+                "properties": {
+                  "block_depth": {
+                    "description": "parsing depth\noptional field\nnumber of blocks of results in SERP\ndefault value: 20\nmax value: 200\nNote: your account will be billed per each SERP containing up to 20 results;\nthus, setting a block depth above 20 may result in additional charges if the search engine returns more than 20 results;\nif the specified block depth is higher than the number of results in the response, the difference will be refunded automatically to your account balance",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "device": {
+                    "description": "device type\noptional field\nreturn results for a specific device type\navailable values: desktop, mobile",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "keyword": {
+                    "description": "keyword\nrequired field\nyou can specify up to 700 characters in the keyword field\nall %## will be decoded (plus character ‘+’ will be decoded to a space character)\nif you need to use the “%” character for your keyword, please specify it as “%25”;\nif you need to use the “+” character for your keyword, please specify it as “%2B”;\nlearn more about rules and limitations of keyword and keywords fields in DataForSEO APIs in this Help Center article",
+                    "type": "string"
+                  },
+                  "language_code": {
+                    "description": "search engine language code\nrequired field if you don't specify language_name\nif you use this field, you don't need to specify language_name\nyou can receive the list of available languages of the search engine with their language_code by making a separate request to the https://api.dataforseo.com/v3/serp/youtube/languages\nexample:\nen",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "language_name": {
+                    "description": "full name of search engine language\nrequired field if you don't specify language_code\nif you use this field, you don't need to specify language_code\nyou can receive the list of available languages of the search engine with their language_name by making a separate request to the https://api.dataforseo.com/v3/serp/youtube/languages\nexample:\nEnglish",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "location_code": {
+                    "description": "search engine location code\nrequired field if you don't specify location_name \nif you use this field, you don't need to specify location_name\nyou can receive the list of available locations of the search engines with their location_code by making a separate request to the https://api.dataforseo.com/v3/serp/youtube/locations\nexample:\n2840",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "location_name": {
+                    "description": "full name of search engine location\nrequired field if you don't specify location_code\nif you use this field, you don't need to specify location_code\nyou can receive the list of available locations of the search engine with their location_name by making a separate request to the https://api.dataforseo.com/v3/serp/youtube/locations\nexample:\nUnited States",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "os": {
+                    "description": "device operating system\noptional field\nif you specify desktop in the device field, choose from the following values: windows, macos\ndefault value: windows\nif you specify mobile in the device field, choose from the following values: android, ios\ndefault value: android",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "search_param": {
+                    "description": "additional parameters of the search query\noptional field\nexample:\nsp=EgIQAg%253D%253D",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "tag": {
+                    "description": "user-defined task identifier\noptional field\nthe character limit is 255\nyou can use this parameter to identify the task and match it with the result\nyou will find the specified tag value in the data object of the response",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "type": "array"
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_usd",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.002,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## 费用与请求规则
+
+按用量计费；默认请求预估费用：$0.002 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 

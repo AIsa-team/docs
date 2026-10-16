@@ -129,6 +129,8 @@ class PublicationRaceTests(unittest.TestCase):
         self.git(seed, 'config', 'user.email', 'fixture@example.invalid')
         for relative in ('openapi/example.json', 'api-reference/page.mdx', 'zh/api-reference/page.mdx', 'docs.json', 'openapi.yaml', 'discovery/payment-evidence.json', 'discovery/openapi.json'):
             path = seed / relative; path.parent.mkdir(parents=True, exist_ok=True); path.write_text('original\n')
+        from runtime_consolidate_openapi import discovery_index_block
+        (seed / 'llms.txt').write_text(discovery_index_block((seed / 'openapi.yaml').read_bytes()) + '\n')
         self.git(seed, 'add', '.')
         self.git(seed, 'commit', '-qm', 'initial')
         self.git(seed, 'remote', 'add', 'origin', str(remote))
@@ -146,11 +148,22 @@ class PublicationRaceTests(unittest.TestCase):
 
     def publish(self, candidate, root):
         workflow = yaml.safe_load((REPO / '.github/workflows/pull-openapi.yml').read_text())
-        script = next(step['run'] for step in workflow['jobs']['compose']['steps'] if step.get('id') == 'publish')
-        script = script.replace('python scripts/', __import__('shlex').quote(sys.executable)+' scripts/')
+        steps = workflow['jobs']['compose']['steps']
+        prepare = next(step['run'] for step in steps if step.get('id') == 'prepare')
+        prepare = prepare.replace('python scripts/', __import__('shlex').quote(sys.executable)+' scripts/')
+        result = subprocess.run(['bash', '-e', '-c', prepare], cwd=candidate,
+                                env={**os.environ, 'GITHUB_OUTPUT': str(root / 'prepared'),
+                                     'PUBLISH_RUN_ID':'123', 'PUBLISH_RUN_ATTEMPT':'1'}, capture_output=True, text=True)
+        if result.returncode:
+            return result
+        outputs = dict(line.split('=', 1) for line in (root / 'prepared').read_text().splitlines())
+        script = next(step['run'] for step in steps if step.get('id') == 'publish')
+        # Supply generation/upload is separately tested; this fixture exercises
+        # the actual two Git steps against a real concurrent remote main.
         return subprocess.run(['bash', '-e', '-c', script], cwd=candidate,
                               env={**os.environ, 'GITHUB_OUTPUT': str(root / 'output'),
-                                   'PUBLISH_RUN_ID':'123', 'PUBLISH_RUN_ATTEMPT':'1'}, capture_output=True, text=True)
+                                   'CANDIDATE_COMMIT':outputs['candidate_commit'],
+                                   'ASSESSED_BASE':outputs['assessed_base']}, capture_output=True, text=True)
 
     def test_concurrent_main_change_cannot_enter_unassessed_publication(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -173,6 +186,8 @@ class PublicationRaceTests(unittest.TestCase):
             published = self.git(root, '--git-dir=remote.git', 'rev-parse', 'main')
             self.assertEqual(published, self.git(candidate, 'rev-parse', 'HEAD'))
             self.assertEqual(self.git(root, '--git-dir=remote.git', 'show', 'main:openapi/example.json'), 'assessed candidate')
+            self.assertEqual(self.git(root, '--git-dir=remote.git', 'show', 'main:llms.txt'),
+                             (candidate / 'llms.txt').read_text().strip())
             self.assertIn('docs_commit=' + published, (root / 'output').read_text())
             self.assertEqual(self.git(root, '--git-dir=remote.git', 'show', 'main:docs/publication/current.json'),
                              json.dumps({'contract_release': 'a'*64}))

@@ -25,12 +25,16 @@ curl -X POST "https://api.aisa.one/apis/v1/agentmail/inboxes/{inbox_id}/messages
 // 连接、授权、跑通这个例子需要的东西都在里面 ——
 // 不用粘贴任何 key，浏览器里点一次 Allow 就好。
 {
-  "operation_id": "post_agentmail_inbox_message_forward",
-  "arguments": {},
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_agentmail_inbox_message_forward",
+      "arguments": {}
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -41,13 +45,14 @@ curl -X POST "https://api.aisa.one/apis/v1/agentmail/inboxes/{inbox_id}/messages
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/zh/api-reference/agentmail/post_agentmail-inboxes-inbox-id-messages-message-id-forward.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -58,7 +63,230 @@ curl -X POST "https://api.aisa.one/apis/v1/agentmail/inboxes/{inbox_id}/messages
 
 {/* aisa-contract-details:start */}
 
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/agentmail/inboxes/&#123;inbox&#95;id&#125;/messages/&#123;message&#95;id&#125;/forward
+- **可用状态:** enabled
+- **请求 URL 模板:** https://api.aisa.one/apis/v1/agentmail/inboxes/&#123;inbox&#95;id&#125;/messages/&#123;message&#95;id&#125;/forward
+- **inbox&#95;id:** path; 必填
+- **message&#95;id:** path; 必填
+- **Runtime 事实版本:** 18a04e28941fae19674c11246b677373368b6bd927b7c146220cec1f168f4639
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/agentmail.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_agentmail_inbox_message_forward",
+  "method": "POST",
+  "path": "/apis/v1/agentmail/inboxes/{inbox_id}/messages/{message_id}/forward",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "in": "path",
+      "name": "inbox_id",
+      "required": true,
+      "schema": {
+        "description": "The ID of the inbox.",
+        "title": "InboxId",
+        "type": "string"
+      }
+    },
+    {
+      "in": "path",
+      "name": "message_id",
+      "required": true,
+      "schema": {
+        "description": "ID of message.",
+        "title": "MessageId",
+        "type": "string"
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "properties": {
+            "attachments": {
+              "description": "Attachments to include in message.",
+              "items": {
+                "description": "Provide either `content` or `url` for each attachment.",
+                "properties": {
+                  "content": {
+                    "description": "Base64 encoded content of the attachment. The entire request, including the message body and all attachments, is limited to 6 MB.",
+                    "type": "string"
+                  },
+                  "content_disposition": {
+                    "description": "Content disposition of attachment.",
+                    "enum": [
+                      "inline",
+                      "attachment"
+                    ],
+                    "title": "AttachmentContentDisposition",
+                    "type": "string"
+                  },
+                  "content_id": {
+                    "description": "Content ID of attachment.",
+                    "title": "AttachmentContentId",
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "description": "Content type of attachment.",
+                    "title": "AttachmentContentType",
+                    "type": "string"
+                  },
+                  "filename": {
+                    "description": "Filename of attachment.",
+                    "title": "AttachmentFilename",
+                    "type": "string"
+                  },
+                  "url": {
+                    "description": "URL that AgentMail can download without custom authentication headers or cookies.\nRedirects and pre-signed URLs are supported, and the final response must be a\nsuccessful 2xx response. Keep URL-backed attachments around 30 MB total per message.",
+                    "type": "string"
+                  }
+                },
+                "title": "SendAttachment",
+                "type": "object"
+              },
+              "title": "SendMessageAttachments",
+              "type": "array"
+            },
+            "bcc": {
+              "description": "BCC recipient address or addresses.",
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ],
+              "title": "SendMessageBcc"
+            },
+            "cc": {
+              "description": "CC recipient address or addresses.",
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ],
+              "title": "SendMessageCc"
+            },
+            "headers": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Headers to include in message.",
+              "title": "SendMessageHeaders",
+              "type": "object"
+            },
+            "html": {
+              "description": "HTML body of message.",
+              "title": "MessageHtml",
+              "type": "string"
+            },
+            "labels": {
+              "description": "Labels of message.",
+              "items": {
+                "type": "string"
+              },
+              "title": "MessageLabels",
+              "type": "array"
+            },
+            "reply_to": {
+              "description": "Reply-to address or addresses.",
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ],
+              "title": "SendMessageReplyTo"
+            },
+            "subject": {
+              "description": "Subject of message.",
+              "title": "MessageSubject",
+              "type": "string"
+            },
+            "text": {
+              "description": "Plain text body of message.",
+              "title": "MessageText",
+              "type": "string"
+            },
+            "to": {
+              "description": "Recipient address or addresses.",
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ],
+              "title": "SendMessageTo"
+            },
+            "track_opens": {
+              "description": "Track when this message is first opened. Requires a custom domain with tracking enabled and\nan HTML body. Opens surface as the `opened` label on the message and as a `message.opened`\nevent. One pixel is injected per message, not per recipient, so a message with several\nrecipients fires once when any of them opens it, and the event does not identify which one.",
+              "title": "TrackOpens",
+              "type": "boolean"
+            }
+          },
+          "title": "SendMessageRequest",
+          "type": "object"
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "explicit_zero",
+    "customer_pricing": "fixed_success",
+    "default_request_estimate_usd": 0.012,
+    "estimate_source": "profile_seed",
+    "evidence_source": "request_snapshot"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## 费用与请求规则
+
+公开参考价格：每次成功请求 $0.012 USD。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 

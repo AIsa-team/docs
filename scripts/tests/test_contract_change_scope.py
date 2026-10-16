@@ -6,11 +6,32 @@ import unittest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from contract_change_scope import git_requires_artifact_check, verify_required_jobs, requires_artifact_check
+from contract_change_scope import (git_requires_artifact_check, verify_required_jobs,
+                                   requires_artifact_check, is_reviewed_input_change)
 from identity_compatibility import PublishedHistory
 
 
 class ChangeScopeTests(unittest.TestCase):
+    def test_input_only_intent_is_closed_and_requires_changed_context(self):
+        context, receipt = 'docs/schema-inputs/context.json', 'docs/schema-inputs/source-receipts.json'
+        self.assertTrue(is_reviewed_input_change([context, receipt, 'openapi/upstream/one.json']))
+        self.assertTrue(is_reviewed_input_change([context, 'openapi/registry.yaml']))
+        for paths in ([context, receipt], [receipt, 'openapi/upstream/one.json'],
+                      [context, 'openapi/upstream/../one.json']):
+            self.assertFalse(is_reviewed_input_change(paths))
+        for extra in ('scripts/changed.py', 'openapi/one.json', 'api-reference/one.mdx',
+                      'docs/publication/current.json', 'docs/publication/release-origin.json',
+                      'openapi/overlays/one.json', 'docs/schema-inputs/extra.json'):
+            self.assertFalse(is_reviewed_input_change([context, receipt, 'openapi/upstream/one.json', extra]))
+        workflow = yaml.safe_load((Path(__file__).resolve().parents[2] /
+                                   '.github/workflows/test-runtime-contracts.yml').read_text())
+        steps = workflow['jobs']['artifact-contracts']['steps']
+        original = next(row for row in steps if row.get('name') == 'Check actual candidate readiness')
+        candidate = next(row for row in steps if 'check_reviewed_schema_inputs.py' in row.get('run', ''))
+        self.assertEqual(original['if'], "needs.changes.outputs.input_candidate != 'true'")
+        self.assertEqual(candidate['if'], "needs.changes.outputs.input_candidate == 'true'")
+        self.assertIn('--base "$INPUT_BASE"', candidate['run'])
+
     def test_guide_only_edits_run_protocol_checks_without_republishing_contracts(self):
         root = Path(__file__).resolve().parents[2]
         workflow = yaml.safe_load((root / '.github/workflows/test-runtime-contracts.yml').read_text())
@@ -32,6 +53,28 @@ class ChangeScopeTests(unittest.TestCase):
         self.assertFalse(requires_artifact_check(['discovery/payment-evidence.json']))
         self.assertIn('python scripts/generate_payment_discovery.py --check',
                       [step.get('run') for step in workflow['jobs']['code-contracts']['steps']])
+
+    def test_artifact_check_acquires_current_without_overwriting_candidate_or_baselines(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = yaml.safe_load((root / '.github/workflows/test-runtime-contracts.yml').read_text())
+        steps = workflow['jobs']['artifact-contracts']['steps']
+        commands = [step.get('run', '') for step in steps]
+        acquire = next(command for command in commands if 'fetch_runtime_release.py' in command)
+        self.assertIn('--current', acquire)
+        self.assertNotIn('--artifact-revision', acquire)
+        self.assertNotIn('--compiler-revision', acquire)
+        self.assertNotIn('origin/main:docs/publication/runtime-acquisition.json', '\n'.join(commands))
+        check = next(step for step in steps if step.get('name') == 'Check actual candidate readiness')
+        self.assertEqual(check['env']['REVIEWED_BASELINE'], '${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}')
+        self.assertIn('--facts-dir /tmp/runtime-contract-evidence', check['run'])
+        self.assertIn('--baseline-ref "$REVIEWED_BASELINE"', check['run'])
+        self.assertIn('--published-ref "$PUBLISHED_REF"', check['run'])
+        # CI must inspect committed PR bytes. Regenerating first could hide a
+        # stale or tampered request/schema/price in the actual proposed graph.
+        for command in commands:
+            for writer in ('pull_openapi.py', 'runtime_consolidate_openapi.py', 'export_contract_publication.py'):
+                self.assertNotIn(writer, command)
+        self.assertNotIn('continue-on-error', check)
 
     def test_manual_assessment_requires_explicit_published_identity_baseline(self):
         root = Path(__file__).resolve().parents[2]

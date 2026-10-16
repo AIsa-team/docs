@@ -26,12 +26,16 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/business_data/google/hotel
 // 连接、授权、跑通这个例子需要的东西都在里面 ——
 // 不用粘贴任何 key，浏览器里点一次 Allow 就好。
 {
-  "operation_id": "post_dataforseo_business_google_hotel_info_live_html",
-  "arguments": {},
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_dataforseo_business_google_hotel_info_live_html",
+      "arguments": {}
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -42,13 +46,14 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/business_data/google/hotel
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/zh/api-reference/dataforseo/post_dataforseo-business-data-google-hotel-info-live-html.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -59,7 +64,168 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/business_data/google/hotel
 
 {/* aisa-contract-details:start */}
 
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/dataforseo/business&#95;data/google/hotel&#95;info/live/html
+- **可用状态:** enabled
+- **请求 URL 模板:** https://api.aisa.one/apis/v1/dataforseo/business&#95;data/google/hotel&#95;info/live/html
+- **Runtime 事实版本:** 6ab8fec17df1d5dcdff2e036dd1eb40587752b774ec040ab4eb0cc6946c3dd3c
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/dataforseo.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_dataforseo_business_google_hotel_info_live_html",
+  "method": "POST",
+  "path": "/apis/v1/dataforseo/business_data/google/hotel_info/live/html",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "example": [
+            {
+              "hotel_identifier": "ChYIq6SB--i6p6cpGgovbS8wN2s5ODZfEAE",
+              "language_code": "en",
+              "location_name": "New York,New York,United States"
+            }
+          ],
+          "items": {
+            "oneOf": [
+              {
+                "example": [
+                  {
+                    "hotel_identifier": "ChYIq6SB--i6p6cpGgovbS8wN2s5ODZfEAE",
+                    "language_code": "en",
+                    "location_name": "New York,New York,United States"
+                  }
+                ],
+                "properties": {
+                  "adults": {
+                    "description": "<em>number of adults</em><br>optional field<br>if you don't specify this field, two adults will be used by default<br>example:<br><code>1</code>",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "check_in": {
+                    "description": "<em>check-in date</em><br>optional field<br>if you don't specify this field, tomorrow's date will be used by default;<br>date format: <code>\"yyyy-mm-dd\"</code><br>example:<br><code>\"2019-01-15\"</code>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "check_out": {
+                    "description": "<em>check-out date</em><br>optional field<br>if you don't specify this field, our system will apply the date of two days from now by default;<br>date format: <code>\"yyyy-mm-dd\"</code><br>example:<br><code>\"2019-01-15\"</code>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "children": {
+                    "description": "<em>number and age of children</em><br>optional field<br>if you don't specify this field, no children will be included in the search;<p>set the following value if you want to include one 14-years-old child:<br><code>[14]</code><br>set the following value if you want to include one 13-years-old child and one 8-years-old child:<br><code>[13,8]</code>",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  },
+                  "currency": {
+                    "description": "<em>currency</em><br>optional field<br>example:<br><code>\"USD\"</code>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "hotel_identifier": {
+                    "description": "<em>unique hotel identifier</em><br><strong>required field</strong><br>unique identifier of a hotel entity in Google search;<br>you can obtain the value by making a request to Advanced <a href=\"/v3/serp/google/organic/overview/\" rel=\"noopener noreferrer\" target=\"_blank\">Google SERP API</a> (enclosed in the <code>hotels</code> element of the response), or the <a href=\"/v3/business_data/google/hotel_searches/task_post/\" rel=\"noopener noreferrer\" target=\"_blank\">Hotel Searches endpoint</a> of Business Data API<br>example:<br><code>ChYIq6SB--i6p6cpGgovbS8wN2s5ODZfEAE</code>",
+                    "type": "string"
+                  },
+                  "language_code": {
+                    "description": "<em>search engine language code</em><br><strong>required field if you don't specify <code>language_name</code></strong><br><strong>if you use this field, you don't need to specify <code>language_name</code></strong><br>you can receive the list of available languages with their <code>language_code</code>_by making a separate request to <code>https://api.dataforseo.com/v3/business_data/google/languages</code><em><br></em>example:<em><br></em><code class=\"long-string\">en</code>n",
+                    "type": "string"
+                  },
+                  "language_name": {
+                    "description": "<em>full name of search engine language</em><br><strong>required field if you don't specify <code>language_code</code></strong><br><strong>if you use this field, you don't need to specify <code>language_code</code></strong><br>you can receive the list of available languages with <code>language_name</code> by making a separate request to <code>https://api.dataforseo.com/v3/business_data/google/languages</code><br>example:<br><code class=\"long-string\">English</code>",
+                    "type": "string"
+                  },
+                  "location_code": {
+                    "description": "<em>search engine location code</em><br><strong>required field if you don't specify <code>location_name</code>_or <code>location_coordinate</code></strong><br><strong>if you use this field, you don't need to specify <code>location_name</code> or <code>location_coordinate</code></strong><br>you can receive the list of available locations with <code>location_code</code> by making a separate request to the <code>https://api.dataforseo.com/v3/business_data/google/locations</code><br>example:<br><code class=\"long-string\">2840</code>n",
+                    "type": "integer"
+                  },
+                  "location_coordinate": {
+                    "description": "<em>GPS coordinates of a location</em><br><strong>required field if you don't specify <code>location_name</code>_or <code>location_code</code></strong><br><strong>if you use this field, you don't need to specify <code>location_name</code> or <code>location_code</code></strong><br><code>location_coordinate</code> parameter should be specified in the <em>\"latitude,longitude\"</em> format<br>the maximum number of decimal digits for <em>\"latitude\"</em> and <em>\"longitude\"</em>: 7<br><strong>Note</strong>: if the coordinates are used to set a location, the search will occur in the nearest settlement;<br>example:<br><code class=\"long-string\">53.476225,-2.243572</code>n",
+                    "type": "string"
+                  },
+                  "location_name": {
+                    "description": "<em>full name of search engine location</em><br><strong>required field if you don't specify <code>location_code</code> or <code>location_coordinate</code></strong><br><strong>if you use this field, you don't need to specify <code>location_code</code> or <code>location_coordinate</code></strong><br>you can receive the list of available locations with <code>location_name</code> by making a separate request to <code>https://api.dataforseo.com/v3/business_data/google/locations</code><br>example:<br><code class=\"long-string\">London,England,United Kingdom</code>",
+                    "type": "string"
+                  },
+                  "priority": {
+                    "description": "<em>task priority</em><br>optional field<br>can take the following values:<br>1 – normal execution priority (set by default)<br>2 – high execution priorityYou will be additionally charged for the tasks with high execution priority.<br>The cost can be calculated on the <a title=\"Pricing\" href=\"https://dataforseo.com/pricing/business-data/google-hotels-api\" target=\"_blank\" rel=\"noopener noreferrer\">Pricing</a> page.",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "tag": {
+                    "description": "<em>user-defined task identifier</em><br>optional field<br><em>the character limit is 255</em><br>you can use this parameter to identify the task and match it with the result<br>you will find the specified <code>tag</code> value in the <code>data</code> array of the response",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "type": "array"
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_usd",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.2428,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## 费用与请求规则
+
+按用量计费；默认请求预估费用：$0.2428 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 

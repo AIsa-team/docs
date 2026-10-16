@@ -12,6 +12,7 @@ from export_contract_publication import canonical, source_expiry
 from fetch_runtime_release import require, sha
 from publication_surface import publication_hashes
 from source_governance import policy_errors, policy_revision, source_scope
+from formal_assessment import validate_formal_assessment
 
 REPOSITORY = 'AIsa-team/docs'
 WORKFLOW = '.github/workflows/pull-openapi.yml'
@@ -78,13 +79,8 @@ def verify_graph(root, origin, artifact, now=None):
     require(current.get('schema_version') == 1 and current.get('status') == 'passed' and current.get('files_sha256') == hashes
             and current.get('contract_release') == origin.get('contract_release') == sha(canonical(core)),
             'Publication graph or C differs')
-    require(report.get('status') == 'passed'
-            and report.get('evaluation') == 'actual_publication_graph_and_offline_composed_candidate'
-            and report.get('runtime') == current.get('runtime'), 'Formal producer assessment is invalid')
-    for scope in (report, report.get('composed_candidate', {})):
-        require(scope.get('status') == 'passed' and not scope.get('global_errors')
-                and not scope.get('missing_inputs') and not scope.get('blocked_providers'), 'Formal blockers present')
-    require(report.get('publication_surfaces', {}).get('status') == 'passed', 'Publication surfaces not passed')
+    require(report.get('runtime') == current.get('runtime'), 'Formal producer assessment is invalid')
+    validate_formal_assessment(report)
     binding = report['publication_artifact']
     require(binding.get('files_sha256') == hashes and binding.get('openapi_sha256') == hashes['openapi.yaml']
             and binding.get('published_ref') == origin['assessed_base'], 'Formal graph binding differs')
@@ -92,6 +88,7 @@ def verify_graph(root, origin, artifact, now=None):
                       ('runtime_acquisition', 'docs/publication/runtime-acquisition.json')]:
         require(current[key] == {'path': path, 'sha256': sha((root / path).read_bytes())}, 'Publication receipt binding differs')
     acquisition = json.loads((root / 'docs/publication/runtime-acquisition.json').read_bytes())
+    validate_formal_assessment(report, acquisition)
     require(report.get('runtime_acquisition_sha256') == current['runtime_acquisition']['sha256']
             and all(acquisition.get(k) == v for k, v in current['runtime'].items()), 'Acquisition identity differs')
     require(source_expiry(report, now) == (current.get('source_authorization_expires_at'),

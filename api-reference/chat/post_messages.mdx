@@ -9,3 +9,246 @@ Creates a Claude model response using the Anthropic-compatible Messages API. Thi
 Use this endpoint when you want to call Claude models (`claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, etc.) with Anthropic's native request format — including extended thinking, tool use, and prompt caching. If you prefer OpenAI-style chat completions, the same Claude models are also available via the [OpenAI Chat](/api-reference/chat/post_chat-completions) endpoint.
 
 Authentication uses your AIsa API key as a Bearer token. See the [model catalog](/guides/models) for the full list of supported Claude variants and context windows, and [pricing](/guides/pricing#models) for per-token rates.
+
+
+{/* aisa-contract-details:start */}
+
+## Request contract
+
+- **Method and path:** POST /messages
+- **Request URL template:** https://api.aisa.one/v1/messages
+
+[Complete OpenAPI definition](https://aisa.one/docs/openapi/claude-messages.json)
+
+Effective request and pricing declaration (including authentication and referenced schemas):
+
+```json
+{
+  "operationId": "createMessage",
+  "method": "POST",
+  "path": "/messages",
+  "servers": [
+    {
+      "url": "https://api.aisa.one/v1"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "properties": {
+            "max_tokens": {
+              "description": "Maximum number of tokens to generate before stopping.",
+              "example": 1024,
+              "type": "integer"
+            },
+            "messages": {
+              "description": "Conversation turns.",
+              "example": [
+                {
+                  "content": "Hello, Claude",
+                  "role": "user"
+                }
+              ],
+              "items": {
+                "properties": {
+                  "content": {
+                    "description": "String or array of content blocks.",
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "items": {
+                          "type": "object"
+                        },
+                        "type": "array"
+                      }
+                    ]
+                  },
+                  "role": {
+                    "enum": [
+                      "user",
+                      "assistant"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "role",
+                  "content"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "metadata": {
+              "properties": {
+                "user_id": {
+                  "description": "External user ID (no PII).",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "model": {
+              "description": "Claude model identifier. Examples: claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5-20251001.",
+              "example": "claude-sonnet-4-6",
+              "type": "string"
+            },
+            "service_tier": {
+              "default": "auto",
+              "enum": [
+                "auto",
+                "standard_only"
+              ],
+              "type": "string"
+            },
+            "stop_sequences": {
+              "description": "Custom sequences that stop generation.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "stream": {
+              "default": false,
+              "description": "Enable SSE streaming.",
+              "type": "boolean"
+            },
+            "system": {
+              "description": "System prompt. String or array of text blocks.",
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              ]
+            },
+            "temperature": {
+              "default": 1.0,
+              "description": "Randomness. 0 = deterministic, 1 = creative.",
+              "format": "float",
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "thinking": {
+              "description": "Enable extended thinking for complex reasoning.",
+              "properties": {
+                "budget_tokens": {
+                  "example": 10000,
+                  "type": "integer"
+                },
+                "display": {
+                  "enum": [
+                    "summarized",
+                    "omitted"
+                  ],
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "enabled"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "tool_choice": {
+              "description": "How the model uses tools.",
+              "properties": {
+                "disable_parallel_tool_use": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "name": {
+                  "description": "Required when type is tool.",
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "auto",
+                    "any",
+                    "tool",
+                    "none"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "tools": {
+              "description": "Tools the model may use.",
+              "items": {
+                "properties": {
+                  "description": {
+                    "type": "string"
+                  },
+                  "input_schema": {
+                    "type": "object"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "example": "custom",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "input_schema"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "top_k": {
+              "description": "Only sample from the top K options for each token.",
+              "type": "integer"
+            },
+            "top_p": {
+              "description": "Nucleus sampling. Use instead of temperature.",
+              "format": "float",
+              "type": "number"
+            }
+          },
+          "required": [
+            "model",
+            "max_tokens",
+            "messages"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    "required": true
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "bearerFormat": "AISA API Key",
+        "description": "Your AIsa API key as a Bearer token.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
+
+{/* aisa-contract-details:end */}

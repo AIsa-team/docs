@@ -1,106 +1,82 @@
 ---
 title: Build a Social Intelligence Agent with AIsa
-description: Design a read-first social and media research workflow that separates source evidence, model interpretation, and approved external actions.
+sidebarTitle: Social Intelligence Agent
+description: Design a read-first social and media research workflow across X, Reddit, and YouTube that keeps source evidence, model interpretation, and approved actions separate.
+icon: hashtag
 ---
 
-A social intelligence agent collects public social or media signals for research, monitoring, creator discovery, or content analysis. It should treat source records as evidence, model output as interpretation, and publishing or engagement as a separate authenticated action.
+## The problem
 
-This workflow is for source-bounded analysis, not unrestricted surveillance or automatic posting.
+Marketing, product, and community teams want to know how a launch, topic, or competitor is being discussed, and which creators are worth working with. Raw feeds are noisy, and a model left alone will happily invent sentiment, demographics, or trends. A good outcome is an evidence-linked brief: scope and time window, recurring themes with representative links, interpretation labeled as such, and the sampling limits stated. Posting or engaging remains a separate, approved step.
 
-## Choose the capability
+## Prompt
 
-| Need | Start with |
-| --- | --- |
-| X/Twitter profile, post, trend, list, community, or conversation data | [Twitter API Reference](/api-reference/twitter/get_twitter-user-info) |
-| YouTube video discovery | [YouTube Search API](/api-reference/search/get_youtube-search) |
-| Recent signals across several sources | [Last 30 Days](/agent-skills/last30days) |
-| Reusable X/Twitter research workflow | [Twitter Autopilot](/agent-skills/twitter-autopilot) |
-| Similar creator discovery | [WaveInflu Similar Creators](/api-reference/waveinflu/post_waveinflu-similar) |
-| Application-controlled endpoint composition | [API Reference](/api-reference) |
+Give this to your agent once AIsa is [connected via MCP](/agent-quickstart):
 
-Use an Agent Skill when the monitoring or analysis method is reusable. Use direct APIs when the application must control queries, pagination, deduplication, scoring, storage, or source-specific logic.
+```txt wrap
+Use AIsa to analyze public discussion of <topic or product> on X, Reddit, and YouTube over the last <14> days, in <languages>.
+Find the right AIsa tools with `search` and quote paid calls with `batch_quote`. Ask me before any paid call, and tell me how many pages of results you plan to fetch.
+For every record keep: platform, canonical URL, author or channel handle, publication time, and the raw metrics returned.
+Return: (1) scope and queries used; (2) 3–5 recurring themes, each with 2–3 representative links; (3) recurring questions or complaints; (4) your interpretation, labeled separately; (5) gaps and sampling limits.
+Do not infer demographics, sensitive traits, or intent the sources do not state. Do not post, like, follow, or reply.
+```
 
-## Recommended workflow
+Variant for creator discovery: `Find 10 creators on YouTube or TikTok who cover <topic>, similar to @example_handle. Show handle, platform, profile URL, and why they fit. Leave out contact emails and AI-inferred demographic fields until I approve the shortlist.`
 
-### 1. Define the research question
+## APIs and Skills used
 
-Specify the topic, entities, time window, platforms, languages, and output needed. Avoid collecting broad social data without a clear purpose.
+Through MCP, your agent reaches these via a few meta tools at `https://mcp.aisa.one/mcp`: `search`, `list_categories`, `get_details`, and `batch_quote` are free; `batch_use` (up to 20 calls) is billed per call.
 
-Examples include:
+| Step | What the agent calls | Reference |
+| --- | --- | --- |
+| X posts | Keyword search with advanced operators, Latest or Top | [Advanced Search](/api-reference/twitter/get_twitter-tweet-advanced-search) |
+| X profiles | Public profile by handle | [Get User Info](/api-reference/twitter/get_twitter-user-info) |
+| Reddit | Search across public subreddits | [Reddit Search](/api-reference/reddit/get_reddit-search) |
+| YouTube | Videos, channels, playlists | [YouTube Search](/api-reference/search/get_youtube-search), [YouTube SERP](/agent-skills/youtube-serp) |
+| Cross-platform brief | 30-day ranked, clustered brief with citations | [Last 30 Days](/agent-skills/last30days) |
+| Creator discovery | Creators from a brief or a seed account | [Creator AI Search](/api-reference/waveinflu/post_waveinflu-ai-search), [Similar Creators](/api-reference/waveinflu/post_waveinflu-similar), [KOL Creator Discovery](/agent-skills/kol-creator-discovery) |
+| Reusable X workflow | Read endpoints plus OAuth-gated engagement | [Twitter Autopilot](/agent-skills/twitter-autopilot) |
+| Write action (gated) | Publish a post for the authenticated user | [Post Twitter](/api-reference/twitter/post_twitter-post-twitter) |
 
-- Track how a product launch is discussed across selected public sources.
-- Identify recurring questions in a defined community.
-- Compare creator coverage of a topic during a stated time window.
-- Find source material for a content brief.
+Use a Skill when the monitoring method is reusable. Call APIs directly when your application must control queries, pagination, deduplication, scoring, or storage.
 
-### 2. Collect source-bounded records
+## Example output
 
-Use the smallest relevant APIs and preserve:
+<Note>Illustrative only. Handles, links, and counts are placeholders, not real posts or accounts.</Note>
 
-- Source platform and canonical URL.
-- Author or channel identifier when needed for the task.
-- Publication and retrieval times.
-- Query and filter parameters.
-- Raw metrics returned by the source.
+```md
+## "Example App 2.0" launch: public discussion, last 14 days (EN)
+Scope: X (Latest, 3 pages), Reddit (2 subreddits), YouTube (top 20 videos). Retrieved 2026-01-15.
 
-Do not treat missing results as proof that no discussion exists.
+Themes
+1. Setup confusion around the new login flow: x.com/example_handle/status/000, reddit.com/r/example/comments/000
+2. Praise for offline mode: youtube.com/watch?v=EXAMPLE000
 
-### 3. Normalize without erasing provenance
+Recurring questions
+- "Does 2.0 still support exports?" (seen in <n> threads)
 
-The application may normalize timestamps, identifiers, engagement fields, and text for analysis. Keep the original source reference so each normalized record remains auditable.
+Interpretation (model, not source data)
+- Early reaction skews toward usability rather than pricing.
 
-Separate:
+Limits
+- X results capped at 3 pages; no non-English sources; absence of discussion is not proof none exists.
+```
 
-- Source-provided fields.
-- Application-derived metrics.
-- Model-generated labels or summaries.
-- Missing, inaccessible, or uncertain data.
+## Guardrails
 
-### 4. Analyze patterns cautiously
+- **Purpose-bound collection.** Define the topic, entities, time window, platforms, and languages first. This is source-bounded analysis, not open-ended surveillance.
+- **Preserve provenance.** Normalize timestamps and metrics if needed, but keep the original URL for every record. Separate source fields, derived metrics, model labels, and missing data.
+- **Analyze cautiously.** Compare multiple records (and source types when possible) before drawing a conclusion. Missing results do not prove there is no discussion.
+- **Privacy.** Collect only what the purpose requires, respect platform terms, avoid inferring sensitive traits, and never expose credentials or unrelated personal data. Creator search can return AI-inferred gender, age range, ethnicity, and contact emails; use those fields only when lawful and necessary.
+- **Reading is not engaging.** Posting, liking, following, replying, or messaging requires OAuth and explicit approval: show the exact content and target, execute once, and verify the result. Treat automated engagement as a write action with reputational risk.
+- **Quote, then ask.** Get a free quote with `batch_quote` and run the same calls with `batch_use` only after approval. A quote checks the estimate, not the final charge. See [Billing & Credits](/guides/pricing).
+- **When AIsa may not be necessary:** a direct platform integration is simpler if you use only one source, already have stable authentication and compliance controls, and do not need models or Skills.
 
-A model can cluster themes, compare narratives, summarize recurring questions, or identify candidate signals. It should not invent audience demographics, intent, sentiment, identity, or causal relationships that the sources do not establish.
+## Related
 
-For important conclusions, compare multiple records and, when possible, more than one source type.
-
-### 5. Produce an evidence-linked brief
-
-A useful result should include:
-
-- Scope and time window.
-- Sources and collection method.
-- Observed themes or changes.
-- Representative links or records.
-- Model interpretation labeled separately.
-- Gaps, sampling limits, and uncertainty.
-
-### 6. Gate external actions
-
-Reading public social data does not authorize posting, liking, following, replying, messaging, or changing an account.
-
-Before an external action:
-
-1. Verify the connected account and required permission.
-2. Show the exact content, target, and intended effect.
-3. Obtain confirmation where policy requires it.
-4. Execute the narrowest action once.
-5. Verify the resulting external state.
-
-## Privacy and safety boundaries
-
-- Collect only data needed for the defined purpose.
-- Respect platform terms, applicable privacy requirements, and audience expectations.
-- Avoid inferring sensitive traits from social activity.
-- Do not expose credentials, private account data, or unrelated personal information.
-- Treat automated engagement as a write operation with reputational and compliance risk.
-
-## Minimal documentation set
-
-- [How It Works](/how-it-works)
-- The exact social, creator, or media endpoint pages
-- [Authentication](/guides/authentication)
-- [Security](/guides/security)
-- [Skills or direct APIs?](/guides/faq#should-my-agent-use-a-skill-or-call-apis-directly)
-
-## When AIsa may not be necessary
-
-A direct platform integration may be simpler when the application uses one source, already has stable authentication and compliance controls, and does not need models, reusable Skills, or other AIsa resources.
+<CardGroup cols={2}>
+  <Card title="Skills or direct APIs?" icon="circle-question" href="/guides/faq#should-my-agent-use-a-skill-or-call-apis-directly">Choosing the right surface.</Card>
+  <Card title="Sales Research Agent" icon="handshake" href="/use-cases/sales-research-agent">Accounts, contacts, and outreach.</Card>
+  <Card title="Authentication" icon="key" href="/guides/authentication">Keys and OAuth.</Card>
+  <Card title="Security & Privacy" icon="shield" href="/guides/security">Agent safety controls.</Card>
+</CardGroup>

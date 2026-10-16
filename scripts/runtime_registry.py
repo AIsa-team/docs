@@ -43,6 +43,79 @@ def discover(registry, category):
     return registry
 
 
+def source_configurations(provider, entry):
+    """Validate source selection once for composition and metadata projection."""
+    configured = entry.get('upstream')
+    configurations = configured if isinstance(configured, list) else [configured]
+    rows, bindings = [], {}
+    for configuration in configurations:
+        url = configuration.get('url') if isinstance(configuration, dict) else configuration
+        if configuration and (not isinstance(url, str) or not url.startswith('https://')):
+            raise ValueError('upstream requires an HTTPS source URL')
+        paths = configuration.get('public_paths', []) if isinstance(configuration, dict) else []
+        if not isinstance(paths, list) or any(not isinstance(path, str) or not path.startswith('/')
+                or any(char in path for char in '?# ') for path in paths):
+            raise ValueError('upstream public_paths must be exact public path templates')
+        for path in paths:
+            if path in bindings:
+                raise ValueError('duplicate public operation source binding')
+            bindings[path] = url
+        name = configuration.get('file', provider + '.json') if isinstance(configuration, dict) else provider + '.json'
+        if not isinstance(name, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_.-]*\.json', name):
+            raise ValueError('upstream file must name a JSON mirror within openapi/upstream')
+        rows.append((url, name))
+    return rows, bindings
+
+
+def legacy_coverage_row(source, path, method, operation_id, disabled=False):
+    """Presentation metadata only; never changes Runtime availability."""
+    return {'source': f'openapi/{source}.json', 'path': path, 'method': method.upper(),
+            'operation_id': operation_id, 'status': 'retained_legacy',
+            'reason': 'runtime_explicitly_disabled' if disabled else 'not_in_composed_runtime_contract'}
+
+
+def disabled_legacy_paths(registry, index, facts_by_provider):
+    """Explicit Runtime tombstones for known legacy owners, never path guesses.
+
+    An excluded row is path-wide authority only when status is disabled. Any
+    current/pending/conflicting Runtime row at the path prevents projection.
+    """
+    def valid_path(path):
+        return (isinstance(path, str) and
+                re.fullmatch(r"/apis/v1/(?:[A-Za-z0-9_.:-]+|\{[A-Za-z0-9_]+\})(?:/(?:[A-Za-z0-9_.:-]+|\{[A-Za-z0-9_]+\}))*", path)
+                and not any(part in {'.', '..'} for part in path.split('/')))
+
+    owners = {}
+    for provider, entry in registry['providers'].items():
+        entry = entry or {}
+        for source in {provider, *entry.get('legacy_sources', [])}:
+            owners.setdefault(source, []).append(provider)
+    coverage = index.get('coverage', {})
+    excluded = coverage.get('excluded_endpoints', [])
+    conflicts = {row.get('path') for row in coverage.get('projected_endpoints', [])
+                 + index.get('pending_endpoints', []) if isinstance(row, dict) and valid_path(row.get('path'))}
+    conflicts.update(row['path'] for row in excluded if isinstance(row, dict)
+                     and valid_path(row.get('path')) and row.get('status') != 'disabled')
+    for document in facts_by_provider.values():
+        prefix = urlsplit((document.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
+        for path, item in document.get('paths', {}).items():
+            if any(method in METHODS | {'x-aisa-any'} and op.get('x-aisa-status') != 'disabled'
+                   for method, op in item.items() if isinstance(op, dict)):
+                conflicts.add(prefix + path)
+    disabled = {}
+    for source, candidates in owners.items():
+        if len(candidates) != 1:
+            continue
+        owner = candidates[0]
+        catalogs = (registry['providers'][owner] or {}).get('group', [owner])
+        paths = {row['path'] for row in excluded if isinstance(row, dict)
+                 and row.get('provider') in catalogs and row.get('status') == 'disabled'
+                 and valid_path(row.get('path')) and row['path'] not in conflicts}
+        if paths:
+            disabled[source] = paths
+    return disabled
+
+
 def combine_facts(documents, provider):
     first = copy.deepcopy(next(iter(documents.values())))
     first['paths'] = {}

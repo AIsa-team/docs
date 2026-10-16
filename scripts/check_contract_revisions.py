@@ -14,9 +14,9 @@ import yaml
 
 def compare(documents, runtime, website, router):
     errors = []
-    index = {provider['id']: provider.get('facts_hash') for provider in runtime.get('providers', [])}
-    web = website.get('x-aisa-document', {}).get('providers', {})
-    router_hashes = router.get('provider_document_hashes', {})
+    index = {provider['id']: provider.get('facts_hash') for provider in (runtime or {}).get('providers', [])}
+    web = (website or {}).get('x-aisa-document', {}).get('providers', {})
+    router_hashes = (router or {}).get('provider_document_hashes', {})
     if not isinstance(router_hashes, dict):
         # Unpublished/legacy Router metadata can encode this map as null.
         # Keep the failure in the assessment and continue per-provider checks.
@@ -26,12 +26,16 @@ def compare(documents, runtime, website, router):
         expected = metadata.get('document_hash')
         if not expected:
             continue  # Legacy is explicitly not a verified runtime projection.
-        for surface, actual in [('website', web.get(provider, {}).get('document_hash')),
-                                ('tool-router', router_hashes.get(provider))]:
+        for surface, available, actual in [('website', website, web.get(provider, {}).get('document_hash')),
+                                ('tool-router', router, router_hashes.get(provider))]:
+            if available is None:
+                continue
             if actual != expected:
                 errors.append(f'{provider}:{surface}:document_hash_mismatch')
         catalogs = metadata.get('catalogs') or {provider: {'x-aisa-document': {'facts_hash': metadata.get('facts_hash')}}}
         for catalog, info in catalogs.items():
+            if runtime is None:
+                continue
             facts = info.get('x-aisa-document', {}).get('facts_hash')
             if not facts or index.get(catalog) != facts:
                 errors.append(f'{provider}:{catalog}:facts_hash_mismatch')
@@ -141,7 +145,8 @@ def retain_assessment_history(state, previous, assessment, identity):
     old = previous.get('latest_publication_assessment')
     if previous and not old and 'publication_history' not in previous:
         history.append({'legacy_monitor_state': previous, 'status': 'historical_not_reclassified'})
-    if old and old.get('identity') != identity:
+    if old and (old.get('identity') != identity or
+                (old.get('assessment', {}).get('status') != 'passed' and assessment.get('status') == 'passed')):
         history.append(old)
     state['publication_history'] = history
     state['latest_publication_assessment'] = {'identity': identity, 'assessment': assessment}
@@ -218,23 +223,28 @@ def assess(documents, runtime=None, website=None, router=None,
             missing.append('website:source_version_unavailable')
         if not expected_openapi_sha256:
             missing.append('docs:aggregate_content_hash_unavailable')
-    if not missing:
-        errors = compare(documents, **surfaces)
+    # Missing evidence on one surface must not conceal independently observable
+    # drift on another. Unavailable surfaces still keep the assessment unpassed.
+    errors = compare(documents, **{key: value if isinstance(value, dict) else None
+                                  for key, value in surfaces.items()})
+    if isinstance(runtime, dict):
         represented = set()
         for provider, metadata in verified.items():
             represented.update(metadata.get('catalogs') or {provider: {}})
         for provider in runtime.get('providers', []):
             if provider['id'] not in represented and provider['id'] not in (empty_catalogs or {}):
                 errors.append(f"{provider['id']}:docs:catalog_missing")
+        for provider in runtime.get('pending_providers', []):
+            missing.append(f"runtime:{provider['id']}:projection_pending")
+    if isinstance(router, dict):
         router_hashes = router.get('provider_document_hashes')
         for name, proof in (empty_catalogs or {}).items():
             if not isinstance(router_hashes, dict) or router_hashes.get(name) != proof.get('document_hash'):
                 errors.append(f'{name}:tool-router:document_hash_mismatch')
-        for provider in runtime.get('pending_providers', []):
-            missing.append(f"runtime:{provider['id']}:projection_pending")
         if expected_docs_ref:
             if router.get('docs_commit') not in accepted_refs:
                 errors.append('tool-router:docs_revision_mismatch')
+    if isinstance(website_version, dict):
         if expected_docs_ref or expected_openapi_sha256:
             if website_version.get('mode') != 'formal':
                 errors.append('website:source_mode_not_formal')
@@ -256,6 +266,8 @@ def assess(documents, runtime=None, website=None, router=None,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--all-surfaces', action='store_true', help='Also require complete JSON, llms content, visible bilingual page samples, MCP loaded source and all Router schemas')
+    parser.add_argument('--all-doc-pages', action='store_true', help='With --all-surfaces, read every formal bilingual HTML page instead of sampling')
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--state', type=Path, default=Path('.cache/contract-revisions/state.json'))
     parser.add_argument('--acceptance', action='store_true', help='Fail immediately on missing evidence or any mismatch; does not update monitor state')
@@ -267,6 +279,8 @@ def main():
     parser.add_argument('--require-budget', action='store_true', help='Activated monitoring cannot run without the independently recorded start and expected SHA')
     parser.add_argument('--selection-file', type=Path, help='Actual fixed source selected by the scheduled/manual recovery workflow')
     args = parser.parse_args()
+    if args.all_doc_pages and not args.all_surfaces:
+        parser.error('--all-doc-pages requires --all-surfaces')
     if args.require_budget and (not args.budget_start or not args.expected_docs_ref):
         assessment = {'status': 'not_assessed', 'missing_inputs': ['recorded budget start and independently selected Docs SHA'],
                       'scope': 'activated monitor; no network or deadline inference'}
@@ -329,15 +343,23 @@ def main():
         except Exception as exc:
             failures.append(f'{key}:unavailable:{type(exc).__name__}')
     provenance = None
+    surface_cache = {}
     if args.expected_docs_ref and args.budget_start and not args.evidence_dir and not failures:
         from publication_origin import verify_consumer_refs
         try:
+            consumer_refs = [results["router"].get("docs_commit"), results["website_version"].get("docsRevision")]
+            if args.all_surfaces:
+                surface_cache['mcp-version'] = read_public_bytes('https://mcp.aisa.one/contract-version')
+                mcp_refs = json.loads(surface_cache['mcp-version']).get('docsRefs')
+                if not isinstance(mcp_refs, list) or len(mcp_refs) != 1:
+                    raise ValueError('MCP does not identify one loaded source')
+                consumer_refs.extend(mcp_refs)
             provenance = verify_consumer_refs(args.root, args.expected_docs_ref,
-                [results["router"].get("docs_commit"), results["website_version"].get("docsRevision")], args.budget_start)
+                consumer_refs, args.budget_start)
         except Exception as exc:
             failures.append(f"formal_provenance:unavailable:{type(exc).__name__}")
     empty_catalogs = {}
-    if not failures and args.expected_docs_ref:
+    if isinstance(results.get('runtime'), dict) and args.expected_docs_ref:
         try:
             empty_catalogs = verified_empty_catalogs(args.root, args.expected_docs_ref, source_hash,
                                                     results['runtime'], documents,
@@ -348,6 +370,88 @@ def main():
     assessment = assess(documents, **results, formal_provenance=provenance, empty_catalogs=empty_catalogs, expected_docs_ref=args.expected_docs_ref,
                         expected_openapi_sha256=source_hash if args.expected_docs_ref else None,
                         failures=failures)
+    if args.all_surfaces:
+        from public_surface_checks import check_surfaces, fixed_request_blocks, fixed_payment_bytes, fixed_mcp_sources
+        accepted_refs = {args.expected_docs_ref} if args.expected_docs_ref else set()
+        if provenance:
+            accepted_refs.update(provenance.get('publications', {}))
+        expected_requests = {}
+        try:
+            if not args.expected_docs_ref:
+                raise ValueError('All-surface verification requires a fixed formal publication')
+            expected_requests = fixed_request_blocks(args.root, args.expected_docs_ref)
+        except Exception as exc:
+            assessment['missing_inputs'].append('fixed_llms_requests:unavailable:' + type(exc).__name__)
+        expected_payment = None
+        try:
+            if not args.expected_docs_ref:
+                raise ValueError('Payment verification requires a fixed formal publication')
+            expected_payment = fixed_payment_bytes(args.root, args.expected_docs_ref)
+        except Exception as exc:
+            assessment['missing_inputs'].append('fixed_payment_discovery:unavailable:' + type(exc).__name__)
+        expected_mcp_sources = None
+        try:
+            expected_mcp_sources = fixed_mcp_sources(args.root, args.expected_docs_ref, spec)
+        except Exception as exc:
+            assessment['missing_inputs'].append('fixed_mcp_sources:unavailable:' + type(exc).__name__)
+        def surface_reader(name, url):
+            if name in surface_cache:
+                return surface_cache[name]
+            if args.evidence_dir:
+                extension = '.json' if name.endswith(('json', 'version')) else '.txt'
+                return (args.evidence_dir / (name + extension)).read_bytes()
+            return read_public_bytes(url)
+        extra = check_surfaces(spec, source_hash, accepted_refs, read_bytes=surface_reader,
+                               expected_requests=expected_requests, expected_payment=expected_payment,
+                               expected_mcp_sources=expected_mcp_sources)
+        assessment['public_surfaces'] = extra
+        assessment['missing_inputs'] = sorted(set(assessment['missing_inputs'] + extra['missing_inputs']))
+        assessment['mismatches'] = sorted(set(assessment['mismatches'] + extra['mismatches']))
+        from rendered_page_checks import fixed_pages, check_rendered_pages
+        try:
+            pages = fixed_pages(args.root, args.expected_docs_ref)
+            def page_reader(name, url):
+                if args.evidence_dir:
+                    return (args.evidence_dir / (name + '.html')).read_bytes()
+                with urlopen(Request(url, headers={'Accept': 'text/html'}), timeout=20) as response:
+                    started, size, chunks = time.monotonic(), 0, []
+                    while True:
+                        if time.monotonic() - started > 30:
+                            raise TimeoutError('Rendered page read exceeded time budget')
+                        chunk = response.read(65536)
+                        if not chunk:
+                            return b''.join(chunks)
+                        size += len(chunk)
+                        if size > 16 * 1024 * 1024:
+                            raise ValueError('Rendered page exceeds byte limit')
+                        chunks.append(chunk)
+            rendered = check_rendered_pages(pages, read_bytes=page_reader, full=args.all_doc_pages)
+        except Exception as exc:
+            rendered = {'status': 'not_assessed', 'missing_inputs': [
+                'fixed_rendered_pages:unavailable:' + type(exc).__name__], 'mismatches': []}
+        assessment['rendered_docs_pages'] = rendered
+        assessment['missing_inputs'] = sorted(set(assessment['missing_inputs'] + rendered['missing_inputs']))
+        assessment['mismatches'] = sorted(set(assessment['mismatches'] + rendered['mismatches']))
+        from router_surface_checks import check_router_surface, METADATA, digest
+        router_reads = 0
+        def router_reader(method, url, payload=None):
+            # Offline evidence is raw lookup output, never a pre-assessed pass.
+            # Catalog snapshots bracket deterministically named schema batches.
+            nonlocal router_reads
+            if url == METADATA:
+                router_reads += 1
+                filename = 'router-schema-' + ('before' if router_reads == 1 else 'after') + '.json'
+            else:
+                filename = 'router-schema-batch-' + digest(payload['tools']) + '.json'
+            from source_json import loads
+            return loads((args.evidence_dir / filename).read_bytes())
+        router_schema = check_router_surface(args.root, args.expected_docs_ref,
+            read_json=router_reader if args.evidence_dir else None, accepted_refs=accepted_refs)
+        assessment['router_schemas'] = router_schema
+        assessment['missing_inputs'] = sorted(set(assessment['missing_inputs'] + router_schema['missing_inputs']))
+        assessment['mismatches'] = sorted(set(assessment['mismatches'] + router_schema['mismatches']))
+        assessment['status'] = ('not_assessed' if assessment['missing_inputs'] else
+                                'failed' if assessment['mismatches'] else 'passed')
     # Strict acceptance neither reads nor writes prior monitor observations.
     previous = json.loads(args.state.read_text()) if not args.acceptance and args.state.exists() else {}
     observation = None

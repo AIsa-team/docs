@@ -18,7 +18,185 @@ Scrape many URLs as one background job. `urls` and an `Idempotency-Key` are requ
 
 {/* aisa-contract-details:start */}
 
+## Request contract
+
+- **Method and path:** POST /apis/v1/firecrawl/batch-scrape
+- **Availability:** enabled
+- **Request URL template:** https://api.aisa.one/apis/v1/firecrawl/batch-scrape
+- **Idempotency-Key:** header; required
+- **X-AISA-Max-Price-USD:** header; optional
+- **X-AISA-Cost-Mode:** header; optional
+- **Runtime facts:** 82ca6e32a3422a9fdc47fb987d84d177f6e0ef05d5eae36691e5f7b3911d092f
+
+[Complete OpenAPI definition](https://aisa.one/docs/openapi/firecrawl.json)
+
+Effective request and pricing declaration (including authentication and referenced schemas):
+
+```json
+{
+  "operationId": "post_firecrawl_batch_scrape",
+  "method": "POST",
+  "path": "/apis/v1/firecrawl/batch-scrape",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "description": "Trimmed UTF-8 length must be 1 through 191 bytes.",
+      "in": "header",
+      "name": "Idempotency-Key",
+      "required": true,
+      "schema": {
+        "pattern": "\\S",
+        "type": "string"
+      }
+    },
+    {
+      "description": "Optional maximum customer authorization in USD, validated by the runtime price parser.",
+      "in": "header",
+      "name": "X-AISA-Max-Price-USD",
+      "schema": {
+        "type": "string"
+      }
+    },
+    {
+      "description": "Return a read-only cost quote instead of submitting a job.",
+      "in": "header",
+      "name": "X-AISA-Cost-Mode",
+      "schema": {
+        "enum": [
+          "quote"
+        ],
+        "type": "string"
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "example": {
+          "urls": [
+            "https://example.com"
+          ]
+        },
+        "schema": {
+          "additionalProperties": false,
+          "properties": {
+            "excludeTags": {
+              "items": {
+                "description": "Non-empty after trimming; no CR/LF; UTF-8 byte length is bounded.",
+                "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$(?![\\s\\S])",
+                "type": "string",
+                "x-aisa-max-utf8-bytes": 128
+              },
+              "maxItems": 50,
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "includeTags": {
+              "items": {
+                "description": "Non-empty after trimming; no CR/LF; UTF-8 byte length is bounded.",
+                "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$(?![\\s\\S])",
+                "type": "string",
+                "x-aisa-max-utf8-bytes": 128
+              },
+              "maxItems": 50,
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "maxAge": {
+              "maximum": 31536000000,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "maxConcurrency": {
+              "maximum": 20,
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "minAge": {
+              "maximum": 31536000000,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "onlyMainContent": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "timeout": {
+              "maximum": 300000,
+              "minimum": 1000,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "urls": {
+              "description": "URLs must also be unique after trimming whitespace and trailing slashes.",
+              "items": {
+                "description": "HTTPS URL with a hostname, without credentials or fragment. Trimmed input ending in .pdf (case insensitive) is not supported.",
+                "pattern": "^\\s*[hH][tT][tT][pP][sS]://",
+                "type": "string"
+              },
+              "maxItems": 1000,
+              "minItems": 1,
+              "type": "array",
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "urls"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "customer_unit_price_usd": 0.005,
+    "description": "Customer normal-tier reference, with the public PAYG multiplier. Authenticated plan and user tier may differ; a quote uses the actual caller and payload.",
+    "estimate_source": "unavailable",
+    "estimate_unavailable_reason": "request_dependent_units",
+    "kind": "metered_result"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## Cost and request rules
+
+A request reference price is not currently available; use a request quote where supported. Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 

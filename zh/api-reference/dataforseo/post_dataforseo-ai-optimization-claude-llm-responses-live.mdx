@@ -26,12 +26,16 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/ai_optimization/claude/llm
 // 连接、授权、跑通这个例子需要的东西都在里面 ——
 // 不用粘贴任何 key，浏览器里点一次 Allow 就好。
 {
-  "operation_id": "post_dataforseo_ai_claude_llm_responses_live",
-  "arguments": {},
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_dataforseo_ai_claude_llm_responses_live",
+      "arguments": {}
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -42,13 +46,14 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/ai_optimization/claude/llm
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/zh/api-reference/dataforseo/post_dataforseo-ai-optimization-claude-llm-responses-live.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -59,7 +64,232 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/ai_optimization/claude/llm
 
 {/* aisa-contract-details:start */}
 
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/dataforseo/ai&#95;optimization/claude/llm&#95;responses/live
+- **可用状态:** enabled
+- **请求 URL 模板:** https://api.aisa.one/apis/v1/dataforseo/ai&#95;optimization/claude/llm&#95;responses/live
+- **Runtime 事实版本:** 6ab8fec17df1d5dcdff2e036dd1eb40587752b774ec040ab4eb0cc6946c3dd3c
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/dataforseo.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_dataforseo_ai_claude_llm_responses_live",
+  "method": "POST",
+  "path": "/apis/v1/dataforseo/ai_optimization/claude/llm_responses/live",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "example": [
+            {
+              "max_output_tokens": 200,
+              "message_chain": [
+                {
+                  "message": "Hello, what’s up?",
+                  "role": "user"
+                },
+                {
+                  "message": "Hello! I’m doing well, thank you. How can I assist you today? Are there any specific topics or projects you’d like to discuss in our meeting?",
+                  "role": "ai"
+                }
+              ],
+              "model_name": "claude-opus-5",
+              "system_message": "communicate as if we are in a business meeting",
+              "temperature": 0.3,
+              "user_prompt": "provide information on how relevant the amusement park business is in France now",
+              "web_search": true,
+              "web_search_country_iso_code": "FR"
+            }
+          ],
+          "items": {
+            "oneOf": [
+              {
+                "example": [
+                  {
+                    "max_output_tokens": 200,
+                    "message_chain": [
+                      {
+                        "message": "Hello, what’s up?",
+                        "role": "user"
+                      },
+                      {
+                        "message": "Hello! I’m doing well, thank you. How can I assist you today? Are there any specific topics or projects you’d like to discuss in our meeting?",
+                        "role": "ai"
+                      }
+                    ],
+                    "model_name": "claude-opus-5",
+                    "system_message": "communicate as if we are in a business meeting",
+                    "temperature": 0.3,
+                    "user_prompt": "provide information on how relevant the amusement park business is in France now",
+                    "web_search": true,
+                    "web_search_country_iso_code": "FR"
+                  }
+                ],
+                "properties": {
+                  "force_web_search": {
+                    "description": "<em>force AI agent to use web search</em><br>optional field<br>to enable this parameter, <code>web_search</code> must also be enabled;<br>when enabled, the AI model is forced to access and cite current web information;<br>default value: <code>false</code>;<br><strong>Note:</strong> even if the parameter is set to <code>true</code>, there is no guarantee web sources will be cited in the response",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "max_output_tokens": {
+                    "description": "<em>maximum number of tokens in the AI response</em><br>optional field<br>minimum value: <code>1</code>;<br>maximum value: <code>4096</code>;<br>default value: <code>2048</code>;<br><strong>Note:</strong> if <code>web_search</code> is set to <code>true</code> or the reasoning model is specified in the request, the output token count may exceed the specified <code>max_output_tokens</code> limit<br><strong>Note #2:</strong> if <code>use_reasoning</code> is set to <code>true</code>, the minimum value for <code>max_output_tokens</code> is <code>1025</code>",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "message_chain": {
+                    "description": "conversation history\noptional field\narray of message objects representing previous conversation turns;\neach object must contain:\nrole string with either user or ai role;\nmessage string with message content (max 500 characters);\nyou can specify maximum of 10 message objects in the array;\nNote: for Perplexity models, messages must strictly alternate between user and AI roles (user → ai);\nexample:\n\"message_chain\": [{\"role\":\"user\",\"message\":\"Hello, what’s up?\"},{\"role\":\"ai\",\"message\":\"Hello! I’m doing well, thank you. How can I assist you today?\"}]",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "properties": {
+                            "message": {
+                              "description": "message text",
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "role": {
+                              "description": "role of the user from whom the message originates",
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "type": "object"
+                        }
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  },
+                  "model_name": {
+                    "description": "<em>name of the AI model</em><br><strong>required field</strong><br><code>model_name</code >consists of the actual model name and version name;<br>if the basic model name is specified, its latest version will be set by default;<br>for example, if <code>claude-opus-4-0</code> is specified, the <code>claude-opus-4-20250514</code> will be set as <code>model_name</code> automatically;<br>you can receive the list of available LLM models by making a separate request to the <code>https://api.dataforseo.com/v3/ai_optimization/claude/llm_responses/models</code>",
+                    "type": "string"
+                  },
+                  "system_message": {
+                    "description": "<em>instructions for the AI behaviour</em><br>optional field<br>defines the AI's role, tone, or specific behavior;<br>you can specify <strong>up to 500 characters</strong> in the <code>system_message</code> field",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "tag": {
+                    "description": "<em>user-defined task identifier</em><br>optional field<br><em>the character limit is 255</em><br>you can use this parameter to identify the task and match it with the result<br>you will find the specified <code>tag</code> value in the <code>data</code> object of the response",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "temperature": {
+                    "description": "<em>randomness of the AI response</em><br>optional field<br>higher values make output more diverse; <br>lower values make output more focused;<br>minimum value: <code>0</code><br>maximum value: <code>1</code><br>default value: <code>0.7</code><p><strong>Note:</strong> <code>temperature</code> cannot be used together with <code>top_p</code> in the same request",
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "top_p": {
+                    "description": "<em>diversity of the AI response</em><br>optional field <br>controls diversity of the response by limiting token selection;<br>minimum value: <code>0</code><br>maximum value: <code>1</code> <br>default value: <code>null</code><p><strong>Note:</strong> <code>top_p</code> cannot be used together with <code>temperature</code> in the same request",
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "use_reasoning": {
+                    "description": "<em>enable reasoning for the AI model</em><br>optional field<br>when enabled, the model will perform reasoning before generating a response<br>refer to the <a href=\"https://docs.dataforseo.com/v3/ai_optimization/claude/llm_responses/models/\" target=\"_blank\">Models endpoint</a> for a list of models that support <code>reasoning</code><br>default value: <code>false</code><br><strong>Note:</strong> if set to <code>true</code>, the minimum value for <code>max_output_tokens</code> is <code>1025</code><br><strong>Note #2:</strong> if set to <code>true</code>, <code>force_web_search</code> must be set to <code>false</code><br><strong>Note #3:</strong> if set to <code>true</code>, the <code>temperature</code> and <code>top_p</code> cannot be used",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "user_prompt": {
+                    "description": "<em>prompt for the AI model</em><br><strong>required field</strong><br>the question or task you want to send to the AI model;<br>you can specify <strong>up to 500 characters</strong> in the <code>user_prompt</code> field",
+                    "type": "string"
+                  },
+                  "web_search": {
+                    "description": "<em>enable web search for current information</em><br>optional field<br>when enabled, the AI model can access and cite current web information;<br><strong>Note:</strong> refer to the <a href=\"https://docs.dataforseo.com/v3/ai_optimization/claude/llm_responses/models/\">Models endpoint</a> for a list of models that support <code>web_search</code>; <br>default value: <code>false</code>;<br>The cost of the parameter can be calculated on the <a title=\"Anthropic API Pricing\" href=\"https://docs.anthropic.com/en/docs/about-claude/pricing\" target=\"_blank\" rel=\"noopener noreferrer\">Pricing</a> page",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "web_search_city": {
+                    "description": "<em>city name of the location used for searching the web</em><br>optional field<br>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "web_search_country_iso_code": {
+                    "description": "<em>ISO country code of the location used for searching the web</em><br>optional field<br>possible values: <code>'AR','AT','AU','BE','BR','CA','CH','CL','CN','DE','DK','ES','FI','FR','GB','HK','ID','IN','IT','JP','KR','MX','MY','NL','NO','NZ','PH','PL','PT','RU','SA','SE','TR','TW','US','ZA'</code>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "type": "array"
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_usd",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.0567,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## 费用与请求规则
+
+按用量计费；默认请求预估费用：$0.0567 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 

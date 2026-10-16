@@ -1,86 +1,80 @@
 ---
 title: Build a Market Intelligence Agent with AIsa
-description: Combine financial data, filings, news, prediction markets, social signals, and model synthesis in a verifiable market-research workflow.
+sidebarTitle: Market Intelligence Agent
+description: Combine prices, financial metrics, SEC filings, news, and prediction-market signals in a verifiable market-research workflow your agent runs through AIsa.
+icon: chart-line
 ---
 
-A market intelligence agent should separate **market data**, **source evidence**, and **analysis**. Prices and metrics describe what happened; filings and news provide primary context; social or prediction-market signals may help explain expectations but should not be treated as verified outcomes.
+## The problem
 
-## Choose the capability
+Investors, analysts, and strategy teams want a fast read on a company or event without stitching together five data vendors. The risk is a report that blends stale prices, unsourced claims, and speculation into one confident paragraph. A good outcome separates observed data (with timestamps and units), source-backed events (with filing or article links), and clearly labeled signals and scenarios.
 
-| Need | Start with |
-| --- | --- |
-| Equity fundamentals, filings, analyst data, and macro context | [MarketPulse](/agent-skills/marketpulse) |
-| Broad market and company data | [AIsa Market](/agent-skills/market) |
-| Cross-source trend forecast | [Trend Forecast](/agent-skills/trend-forecast) |
-| Prediction-market data | [Prediction Market Data](/agent-skills/prediction-market-data) |
-| Application-controlled financial calls | [Financial API Reference](/api-reference/financial/get_prices) |
-| Final comparison or report | [Model inference](/guides/models) |
+## Prompt
 
-## Recommended workflow
+Give this to your agent once AIsa is [connected via MCP](/agent-quickstart):
 
-### 1. Define scope
+```txt wrap
+Use AIsa to build a market brief on ticker <TICKER> for <time horizon, e.g. the last quarter>.
+Find the right AIsa tools with `search` and quote paid calls with `batch_quote`. Ask me before any paid call, with the list of calls you plan to make.
+Collect: current price snapshot, key financial metrics, the most recent 10-Q/10-K and its relevant items, recent company news, and any related prediction markets.
+Record the timestamp and units for every number. Verify material news against filings or company releases.
+Return sections: Observed data | Source-backed events | Signals (prediction markets, sentiment) | Interpretation | Risks and missing evidence | Data cutoff.
+This is read-only research: do not place trades, change portfolios, or set alerts.
+```
 
-Specify the asset, company, market, event, and time horizon. Distinguish between:
+Variant for an event rather than a company: `Track <event> using prediction markets and news; label market odds as expectations, not outcomes.`
 
-- Historical analysis.
-- Current-state monitoring.
-- Scenario analysis.
-- Forecasting.
+## APIs and Skills used
 
-A forecast should never be presented as a verified fact.
+Through MCP, your agent reaches these via a few meta tools at `https://mcp.aisa.one/mcp`: `search`, `list_categories`, `get_details`, and `batch_quote` are free; `batch_use` (up to 20 calls) is billed per call.
 
-### 2. Collect structured data
+| Step | What the agent calls | Reference |
+| --- | --- | --- |
+| Current price | Last price, day change, timestamp | [Stock Price Snapshot](/api-reference/financial/get_prices-snapshot) |
+| History | OHLCV bars for a date range | [Historical Stock Prices](/api-reference/financial/get_prices) |
+| Fundamentals | Current ratio set | [Financial Metrics Snapshot](/api-reference/financial/get_financial-metrics-snapshot) |
+| Filings | Filing index, then item text | [SEC Filings](/api-reference/financial/get_filings), [Filing Items](/api-reference/financial/get_filings-items) |
+| News | Recent headlines with source and link | [Company News](/api-reference/financial/get_news) |
+| Market signals | Polymarket and Kalshi markets | [Polymarket Markets](/api-reference/prediction-market/get_polymarket-markets), [Kalshi Markets](/api-reference/prediction-market/get_kalshi-markets) |
+| Reusable workflow | Equity data, filings, estimates, macro | [MarketPulse](/agent-skills/marketpulse), [Trend Forecast](/agent-skills/trend-forecast) |
+| Synthesis | A supported model, after retrieval | [Models](/guides/models) |
 
-Retrieve only the data required for the question, such as:
+## Example output
 
-- Prices and volume.
-- Financial metrics or statements.
-- Filings and filing sections.
-- Earnings or analyst information.
-- Relevant macro indicators.
+<Note>Illustrative only. The ticker, figures, and links are placeholders, not real market data.</Note>
 
-Record the timestamp and units for every time-sensitive value.
+```md
+## EXMPL (Example Corp): brief, data cutoff 2026-01-15 16:00 ET
 
-### 3. Add primary-source context
+| Observed data      | Value        | As of            | Source            |
+| ------------------ | ------------ | ---------------- | ----------------- |
+| Last price         | <price> USD  | 2026-01-15 16:00 | prices/snapshot   |
+| Gross margin (TTM) | <x>%         | 2026-01-15       | metrics/snapshot  |
 
-Use filings, company releases, and official data when available. Use news to discover developments, then verify material claims against the most direct source possible.
+Source-backed events
+- 10-Q filed 2026-01-08; Item 1A adds a new supply-chain risk. [filing link]
 
-### 4. Add optional market signals
+Signals (not outcomes)
+- A prediction market on "<event question>" trades at <p> implied probability.
 
-Prediction markets and social discussion can indicate expectations, attention, or disagreement. Label them as signals rather than ground truth.
+Risks and missing evidence
+- No guidance update found after the 10-Q.
+```
 
-Do not combine values from different sources without checking their definitions, currency, frequency, and observation time.
+## Guardrails
 
-### 5. Synthesize with a model
+- **Separate data layers.** Prices and metrics describe what happened; filings and releases provide primary context; news is for discovery; and prediction markets and social chatter are signals, not facts.
+- **Timestamp everything.** Record units, currency, and observation time. Do not combine values from different sources without checking definitions and frequency.
+- **Label forecasts.** A scenario or forecast is never presented as a verified fact, and the output is not personalized financial advice.
+- **Read-only by default.** Do not place trades, alter portfolios, publish, or trigger alerts unless the user explicitly requests that separate action and an authorized path exists.
+- **Quote, then ask.** Get a free quote with `batch_quote` and run the same calls with `batch_use` only after approval. A quote checks the estimate, not the final charge. See [Billing & Credits](/guides/pricing).
+- **When AIsa may not be necessary:** a dedicated market-data provider is simpler if you need only one dataset and already manage the analysis, model, and billing layers.
 
-Ask the model to separate:
+## Related
 
-- Observed data.
-- Source-backed events.
-- Interpretation.
-- Scenarios and assumptions.
-- Risks and missing evidence.
-
-### 6. Verify before delivery
-
-- Recheck prices and time-sensitive metrics.
-- Link filings or primary evidence.
-- State the cutoff time.
-- Mark forecasts and opinions clearly.
-- Avoid presenting the output as personalized financial advice.
-
-## Read versus write behavior
-
-Market research is normally read-only. Do not place trades, alter portfolios, publish content, or trigger alerts unless the user explicitly requests that separate action and the relevant authorization path exists.
-
-## Minimal documentation set
-
-- [How It Works](/how-it-works)
-- One selected market Skill or API family
-- [Authentication](/guides/authentication)
-- [Models](/guides/models) for synthesis
-- [Security](/guides/security)
-
-## When AIsa may not be necessary
-
-A dedicated market-data provider may be simpler when the application only needs one dataset and already owns the analysis, model, and billing layers.
+<CardGroup cols={2}>
+  <Card title="MarketPulse" icon="chart-column" href="/agent-skills/marketpulse">Equity data Skill for agents.</Card>
+  <Card title="Prediction Market Data" icon="scale-balanced" href="/agent-skills/prediction-market-data">Polymarket and Kalshi data.</Card>
+  <Card title="Research Agent" icon="magnifying-glass" href="/use-cases/research-agent">Source-backed web research.</Card>
+  <Card title="Security & Privacy" icon="shield" href="/guides/security">Agent safety controls.</Card>
+</CardGroup>

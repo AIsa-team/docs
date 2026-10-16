@@ -18,7 +18,141 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
 
 {/* aisa-contract-details:start */}
 
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/tavily/extract
+- **可用状态:** enabled
+- **请求 URL 模板:** https://api.aisa.one/apis/v1/tavily/extract
+- **Runtime 事实版本:** ea2301436db90d0b30e55885326cd5057bea93ff7d26d9bced8e1ae7f1911ef4
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/tavily.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_tavily_extract",
+  "method": "POST",
+  "path": "/apis/v1/tavily/extract",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "properties": {
+            "chunks_per_source": {
+              "default": 3,
+              "description": "Maximum number of relevant chunks returned per source. Available only when query is provided.",
+              "maximum": 5,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "extract_depth": {
+              "default": "basic",
+              "description": "Depth of the extraction process.",
+              "enum": [
+                "basic",
+                "advanced"
+              ],
+              "type": "string"
+            },
+            "format": {
+              "default": "markdown",
+              "description": "Format of the extracted web page content.",
+              "enum": [
+                "markdown",
+                "text"
+              ],
+              "type": "string"
+            },
+            "include_favicon": {
+              "default": false,
+              "description": "Include the favicon URL for each result.",
+              "type": "boolean"
+            },
+            "include_images": {
+              "default": false,
+              "description": "Include a list of images extracted from the URLs.",
+              "type": "boolean"
+            },
+            "include_usage": {
+              "default": false,
+              "description": "Include credit usage information in the response.",
+              "type": "boolean"
+            },
+            "query": {
+              "description": "User intent for reranking extracted content chunks.",
+              "type": "string"
+            },
+            "timeout": {
+              "description": "Maximum time in seconds to wait for URL extraction. If omitted, default timeouts depend on extract_depth: 10 seconds for basic and 30 seconds for advanced.",
+              "format": "float",
+              "maximum": 60,
+              "minimum": 1,
+              "type": "number"
+            },
+            "urls": {
+              "description": "The URL or URLs to extract content from. A single URL string and an array of URL strings are both accepted.",
+              "example": [
+                "https://en.wikipedia.org/wiki/Artificial_intelligence"
+              ],
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
+            }
+          },
+          "required": [
+            "urls"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_units",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.024,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body",
+    "unit": "tavily_credit",
+    "unit_rate_usd": 0.008
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## 费用与请求规则
+
+按用量计费；默认请求预估费用：\$0.024 USD（不是固定价格）。 声明的单位费率：每 tavily_credit \$0.008 USD。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 

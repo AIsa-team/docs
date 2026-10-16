@@ -24,6 +24,7 @@ If --output is omitted, writes to stdout.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -65,7 +66,29 @@ def publication_yaml(document):
                      default_flow_style=False, sort_keys=False,
                      allow_unicode=True, width=120)
 
-# The Mintlify placeholder spec — skip it
+DISCOVERY_BEGIN = "<!-- aisa-contract-source:start -->"
+DISCOVERY_END = "<!-- aisa-contract-source:end -->"
+
+
+def discovery_index_block(raw):
+    sha = hashlib.sha256(raw).hexdigest()
+    return (f"{DISCOVERY_BEGIN}\nDeclared API contract (OpenAPI YAML SHA-256): {sha}.\n"
+            "[Complete OpenAPI JSON](https://aisa.one/openapi.json) and "
+            "[YAML](https://aisa.one/openapi.yaml) describe the same full contract. "
+            "[Readable request contracts](https://aisa.one/docs/llms-full.txt) include "
+            "methods, required parameters, authentication and reference prices.\n"
+            f"{DISCOVERY_END}")
+
+
+def update_discovery_index(text, raw):
+    block = discovery_index_block(raw)
+    pattern = re.escape(DISCOVERY_BEGIN) + r".*?" + re.escape(DISCOVERY_END)
+    if re.search(pattern, text, re.S):
+        return re.sub(pattern, lambda _: block, text, flags=re.S)
+    return text.rstrip() + "\n\n" + block + "\n"
+
+
+# The aggregate JSON is an output, never a provider input (prevents recursion).
 SKIP_FILES = {"openapi.json", "pending.json", "coverage.json", "coverage-sources.json", "nav-groups.json"}
 
 # Map each spec file to a category tag
@@ -387,18 +410,20 @@ def load_spec(filepath):
         return source_json_load(f)
 
 
-def endpoint_page_links():
-    root = Path(OPENAPI_DIR).parent
+def endpoint_page_links(root=None):
+    from contract_page_links import page_reference
+    root = Path(root) if root is not None else Path(OPENAPI_DIR).parent
     links = {}
     for page in sorted((root / "api-reference").rglob("*.mdx")):
-        match = re.search(r"^openapi:\s*['\"]?(openapi/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", page.read_text(), re.M)
-        if match:
-            key = (Path(match[1]).name, match[2].lower(), match[3])
+        reference = page_reference(page.read_text())
+        if reference:
+            spec, method, path = reference
+            key = (Path(spec).name, method, path)
             links.setdefault(key, "https://aisa.one/docs/" + page.relative_to(root).with_suffix("").as_posix())
     return links
 
 
-def build_unified_spec():
+def build_unified_spec(*, root=None, page_links=None):
     """Merge all individual specs into one OpenAPI 3.1 document."""
     unified = {
         "openapi": "3.1.0",
@@ -470,17 +495,19 @@ def build_unified_spec():
     }
 
     tags_seen = set()
-    page_links = endpoint_page_links()
-    registry_path = Path(OPENAPI_DIR) / "registry.yaml"
+    openapi_dir = Path(root) / 'openapi' if root is not None else Path(OPENAPI_DIR)
+    if page_links is None:
+        page_links = endpoint_page_links(openapi_dir.parent)
+    registry_path = openapi_dir / "registry.yaml"
     registry = yaml.safe_load(registry_path.read_text()) if registry_path.exists() else {}
     registrations = (registry or {}).get("providers", {})
-    files = sorted(os.listdir(OPENAPI_DIR))
+    files = sorted(os.listdir(openapi_dir))
 
     for filename in files:
         if filename in SKIP_FILES or not filename.endswith(".json"):
             continue
 
-        filepath = os.path.join(OPENAPI_DIR, filename)
+        filepath = openapi_dir / filename
         tag = FILE_TAG_MAP.get(filename, "Other")
 
         try:
@@ -662,6 +689,12 @@ def main():
         os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
         with open(args.output, "w") as f:
             f.write(output)
+        json_path = Path(args.output).resolve().parent / "openapi/openapi.json"
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(json.dumps(unified, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
+        index_path = Path(args.output).resolve().parent / "llms.txt"
+        if index_path.is_file():
+            index_path.write_text(update_discovery_index(index_path.read_text(), output.encode("utf-8")))
         sales_path = Path(args.output).resolve().parent / SALES_CATALOG_PATH
         sales_path.parent.mkdir(parents=True, exist_ok=True)
         sales_path.write_bytes(sales_catalog_bytes(unified, output.encode("utf-8")))

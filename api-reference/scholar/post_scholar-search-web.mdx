@@ -28,15 +28,19 @@ curl -X POST "https://api.aisa.one/apis/v1/scholar/search/web?query=self-correct
 // It carries everything needed to connect, authorize and run this example —
 // no key to paste, one click of Allow in the browser.
 {
-  "operation_id": "post_scholar_search_web",
-  "arguments": {
-    "query": "self-correcting%20agent%20frameworks",
-    "max_num_results": "5"
-  },
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_scholar_search_web",
+      "arguments": {
+        "query": "self-correcting%20agent%20frameworks",
+        "max_num_results": "5"
+      }
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -47,13 +51,14 @@ curl -X POST "https://api.aisa.one/apis/v1/scholar/search/web?query=self-correct
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/api-reference/scholar/post_scholar-search-web.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -64,7 +69,108 @@ curl -X POST "https://api.aisa.one/apis/v1/scholar/search/web?query=self-correct
 
 {/* aisa-contract-details:start */}
 
+## Request contract
+
+- **Method and path:** POST /apis/v1/scholar/search/web
+- **Availability:** enabled
+- **Request URL template:** https://api.aisa.one/apis/v1/scholar/search/web
+- **as&#95;yhi:** query; optional
+- **as&#95;ylo:** query; optional
+- **max&#95;num&#95;results:** query; optional
+- **query:** query; required
+- **Runtime facts:** 60c867b8f9840a96a156bdf04dd69950d866b01ed2d659222e3225a3a7facb5e
+
+[Complete OpenAPI definition](https://aisa.one/docs/openapi/scholar.json)
+
+Effective request and pricing declaration (including authentication and referenced schemas):
+
+```json
+{
+  "operationId": "post_scholar_search_web",
+  "method": "POST",
+  "path": "/apis/v1/scholar/search/web",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "description": "Year of publication upper bound",
+      "in": "query",
+      "name": "as_yhi",
+      "schema": {
+        "maximum": 2030,
+        "minimum": 1900,
+        "type": [
+          "integer",
+          "null"
+        ]
+      }
+    },
+    {
+      "description": "Year of publication lower bound",
+      "in": "query",
+      "name": "as_ylo",
+      "schema": {
+        "maximum": 2030,
+        "minimum": 1900,
+        "type": [
+          "integer",
+          "null"
+        ]
+      }
+    },
+    {
+      "description": "Maximum number of search results to return, up to 100",
+      "in": "query",
+      "name": "max_num_results",
+      "schema": {
+        "default": 10,
+        "maximum": 100,
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    {
+      "description": "Search query for scholarly materials",
+      "in": "query",
+      "name": "query",
+      "required": true,
+      "schema": {
+        "example": "machine learning",
+        "type": "string"
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "fixed_success",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.01,
+    "estimate_source": "profile_seed",
+    "evidence_source": "request_snapshot"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## Cost and request rules
+
+Published reference price: $0.01 USD per successful request. Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 

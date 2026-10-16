@@ -1,87 +1,80 @@
 ---
 title: Build a Research Agent with AIsa
-description: Choose AIsa search APIs, research Skills, evidence rules, and model synthesis for a source-backed research agent.
+sidebarTitle: Research Agent
+description: Give your agent live web, academic, and citation-backed search through AIsa, then synthesize a source-backed brief with evidence rules.
+icon: magnifying-glass
 ---
 
-A research agent usually needs two distinct capabilities:
+## The problem
 
-1. Retrieval of current or authoritative sources.
-2. Model reasoning to compare, summarize, and explain the evidence.
+Analysts, founders, and engineers need answers that depend on current information: what changed, who said it, and whether a claim holds up. Relying on model recall alone yields stale information and cannot cite sources. A good outcome is a concise brief in which every material claim links to a retrieved source with a publication date, contradictions are surfaced, and the research cutoff time is stated.
 
-Do not use model inference alone for claims that depend on current information.
+## Prompt
 
-## Choose the research surface
+Give this to your agent (Claude Code, Cursor, Codex, and others) once AIsa is [connected via MCP](/agent-quickstart):
 
-| Requirement | Start with |
-| --- | --- |
-| Reusable multi-source workflow | [Multi-source Search Skill](/agent-skills/search) |
-| Recent cross-source brief | [Last 30 Days](/agent-skills/last30days) |
-| Citation-backed deep research | [Perplexity Deep Research](/agent-skills/perplexity-research) |
-| Academic papers | [Scholar Search](/agent-skills/scholar-search) |
-| Application-controlled retrieval | [Direct API Reference](/api-reference) |
-| Final synthesis or formatting | [Model inference](/guides/models) |
+```txt wrap
+Use AIsa to research: <your question>. Time range: <e.g. last 90 days>. Preferred sources: official docs, filings, original announcements, peer-reviewed papers.
+Find the right AIsa search tools with `search`, and quote each paid call with `batch_quote` first. Ask me before any paid call, and tell me the expected number of calls.
+Retrieve before you synthesize: search for candidates, then fetch the full text of every source you cite. Do not cite anything you did not retrieve.
+Return a brief with: (1) verified facts, each with URL and publication date; (2) interpretation; (3) contradictions between sources; (4) open questions; (5) the research cutoff time.
+```
 
-Use a Skill when the workflow is reusable and the agent should follow an established process. Use direct APIs when the application needs to control source selection, sequencing, caching, or ranking itself.
+For academic questions, replace the source line with: `Use scholarly sources only; include authors, year, and venue for each paper.`
 
-## Recommended workflow
+## APIs and Skills used
 
-### 1. Define the research question
+Through MCP, your agent reaches these via a few meta tools at `https://mcp.aisa.one/mcp`: `search`, `list_categories`, `get_details`, and `batch_quote` are free; `batch_use` (up to 20 calls) is billed per call.
 
-Specify:
+| Step | What the agent calls | Reference |
+| --- | --- | --- |
+| Discover sources | Web search with extracted page text | [Tavily Search](/api-reference/search/post_tavily-search) |
+| Read full pages | Content extraction for URLs it already has | [Tavily Extract](/api-reference/search/post_tavily-extract) |
+| Multi-pass answer with citations | Perplexity Sonar Pro | [Sonar Pro](/api-reference/perplexity/post_perplexity-sonar-pro) |
+| Academic papers | Scholarly article search | [Search Scholarly Articles](/api-reference/scholar/post_scholar-search-scholar) |
+| Recent cross-platform signal | 30-day brief across social and web sources | [Last 30 Days](/agent-skills/last30days) |
+| Reusable workflow | Web, scholar, Tavily, and Sonar in one Skill | [Multi-source Search](/agent-skills/multi-source-search) |
+| Synthesis | A supported model, after retrieval | [Models](/guides/models) |
 
-- The exact decision or claim the research should support.
-- The required time range.
-- Preferred source types or domains.
-- Geographic or language constraints.
-- The expected output and citation format.
+Use a Skill when the research method is reusable. Call APIs directly when your application must control source selection, sequencing, caching, or ranking.
 
-### 2. Retrieve before synthesizing
+## Example output
 
-Use search results for discovery, then fetch full source pages when you need verifiable evidence. Only run LLM synthesis after gathering the primary sources. Snippets and model recall should not be treated as authoritative primary evidence.
+<Note>Illustrative only. Names, URLs, and dates are placeholders, not real data.</Note>
 
-### 3. Compare sources
+```md
+## Brief: Has Example Corp shipped its v2 API? (cutoff: 2026-01-15 09:00 UTC)
 
-For material claims:
+Verified facts
+- Example Corp announced v2 general availability on 2026-01-10. [example.com/blog/v2-ga, 2026-01-10]
+- The v1 endpoints are deprecated, not yet removed. [docs.example.com/changelog, 2026-01-11]
 
-- Prefer official documentation, filings, original announcements, or primary datasets.
-- Record publication dates and source URLs.
-- Identify contradictions instead of silently merging them.
-- Mark claims that remain uncertain or depend on one source.
+Interpretation
+- Migration pressure is moderate: no removal date is published.
 
-### 4. Use a model for synthesis
+Contradictions
+- A third-party post says v1 shuts down in March; the official changelog gives no date. [example.org/news/123]
 
-After retrieval, pass the relevant evidence to a supported model. Ask it to separate:
+Open questions
+- Pricing for v2 is not stated in any retrieved source.
+```
 
-- Verified facts.
-- Interpretation.
-- Open questions.
-- Recommendations.
+## Guardrails
 
-The model should not invent citations or claim access to sources that were not retrieved.
+- **Retrieve, then synthesize.** Snippets and model recall are leads, not evidence. Fetch the full source for any material claim.
+- **Prefer primary sources.** Prioritize primary sources (official docs, filings, original announcements, datasets) and record both the URL and publication date.
+- **Surface contradictions.** Report conflicting information instead of merging it, and mark claims that rest on a single source.
+- **No invented citations.** The model must not cite or claim access to sources that were not retrieved.
+- **Verify before delivery.** Verify that each citation resolves, recheck time-sensitive numbers, remove unsupported claims, and state the research cutoff time.
+- **Quote, then ask.** Get a free quote with `batch_quote` and run the same calls with `batch_use` only after approval. A quote checks the estimate, not the final charge. See [Billing & Credits](/guides/pricing).
+- **Load only what you need.** Ingest only the selected Skill or API documentation pages, [Authentication](/guides/authentication), and [Models](/guides/models). Do not load the entire API reference.
+- **When AIsa may not be necessary:** A single specialized search provider can be simpler if you use only one source type, need no reusable Skills, and already manage your own model and billing integrations. See [When to use AIsa](/how-it-works#when-to-use-aisa).
 
-### 5. Verify the output
+## Related
 
-Before delivering the result:
-
-- Confirm each important citation resolves to the intended source.
-- Recheck time-sensitive numbers.
-- Remove unsupported claims.
-- State the research cutoff time.
-
-## Minimal documentation set
-
-An agent building this workflow should normally read only:
-
-- [Agent Quickstart](/agent-quickstart)
-- [How It Works](/how-it-works)
-- The selected Skill or API pages
-- [Authentication](/guides/authentication)
-- [Models](/guides/models) if model synthesis is required
-
-Do not ingest the entire API reference unless the task truly needs broad endpoint discovery.
-
-## When AIsa may not be necessary
-
-A single specialized search provider may be simpler when the workflow uses one source type, does not need reusable Skills, and already has an established model and billing integration.
-
-For product-fit guidance, see [How It Works](/how-it-works#when-to-use-aisa).
+<CardGroup cols={2}>
+  <Card title="Connect via MCP" icon="plug" href="/agent-quickstart">Set up AIsa in your agent.</Card>
+  <Card title="How It Works" icon="diagram-project" href="/how-it-works">Endpoints, billing, and what you own.</Card>
+  <Card title="Market Intelligence Agent" icon="chart-line" href="/use-cases/market-intelligence-agent">Add market data and filings.</Card>
+  <Card title="Perplexity Deep Research" icon="book-open" href="/agent-skills/perplexity-research">Long, cited research reports.</Card>
+</CardGroup>

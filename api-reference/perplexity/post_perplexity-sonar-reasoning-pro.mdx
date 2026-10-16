@@ -31,20 +31,24 @@ curl -X POST "https://api.aisa.one/apis/v1/perplexity/sonar-reasoning-pro" \
 // It carries everything needed to connect, authorize and run this example —
 // no key to paste, one click of Allow in the browser.
 {
-  "operation_id": "post_perplexity_sonar_reasoning_pro",
-  "arguments": {
-    "model": "sonar-reasoning-pro",
-    "messages": [
-      {
-        "role": "user",
-        "content": "Analyze whether Tesla stock is overvalued based on current P/E ratio compared to industry averages"
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_perplexity_sonar_reasoning_pro",
+      "arguments": {
+        "model": "sonar-reasoning-pro",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Analyze whether Tesla stock is overvalued based on current P/E ratio compared to industry averages"
+          }
+        ]
       }
-    ]
-  },
-  "max_price_usd": 0.05
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -55,13 +59,14 @@ curl -X POST "https://api.aisa.one/apis/v1/perplexity/sonar-reasoning-pro" \
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/api-reference/perplexity/post_perplexity-sonar-reasoning-pro.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -72,7 +77,193 @@ curl -X POST "https://api.aisa.one/apis/v1/perplexity/sonar-reasoning-pro" \
 
 {/* aisa-contract-details:start */}
 
+## Request contract
+
+- **Method and path:** POST /apis/v1/perplexity/sonar-reasoning-pro
+- **Availability:** enabled
+- **Request URL template:** https://api.aisa.one/apis/v1/perplexity/sonar-reasoning-pro
+- **Runtime facts:** fb88776539957bfc86000a34a6c0da10e10cbeecf9d65c8ae1d78688c170faac
+
+[Complete OpenAPI definition](https://aisa.one/docs/openapi/perplexity.json)
+
+Effective request and pricing declaration (including authentication and referenced schemas):
+
+```json
+{
+  "operationId": "post_perplexity_sonar_reasoning_pro",
+  "method": "POST",
+  "path": "/apis/v1/perplexity/sonar-reasoning-pro",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "example": {
+          "messages": [
+            {
+              "content": "Analyze whether Tesla stock is overvalued based on current P/E ratio compared to industry averages",
+              "role": "user"
+            }
+          ],
+          "model": "sonar-reasoning-pro"
+        },
+        "schema": {
+          "properties": {
+            "frequency_penalty": {
+              "default": 1,
+              "description": "Penalizes new tokens based on their existing frequency in the text so far. Positive values decrease the likelihood of repeating the same line verbatim.",
+              "maximum": 2,
+              "minimum": 0,
+              "type": "number"
+            },
+            "max_tokens": {
+              "description": "The maximum number of tokens to generate in the response.",
+              "type": "integer"
+            },
+            "messages": {
+              "description": "A list of messages comprising the conversation so far.",
+              "items": {
+                "properties": {
+                  "content": {
+                    "description": "The content of the message.",
+                    "type": "string"
+                  },
+                  "role": {
+                    "description": "The role of the message author.",
+                    "enum": [
+                      "system",
+                      "user",
+                      "assistant"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "role",
+                  "content"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "model": {
+              "description": "The Sonar model to use.",
+              "enum": [
+                "sonar",
+                "sonar-pro",
+                "sonar-reasoning-pro",
+                "sonar-deep-research"
+              ],
+              "type": "string"
+            },
+            "presence_penalty": {
+              "default": 0,
+              "description": "Penalizes new tokens based on whether they appear in the text so far. Positive values increase the likelihood of talking about new topics.",
+              "maximum": 2,
+              "minimum": -2,
+              "type": "number"
+            },
+            "return_citations": {
+              "default": true,
+              "description": "Whether to return citations and search results in the response.",
+              "type": "boolean"
+            },
+            "search_context": {
+              "default": "low",
+              "description": "Controls how much search context to use. Affects per-request cost.",
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "type": "string"
+            },
+            "search_domain_filter": {
+              "description": "Limit search to specific domains.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "search_recency_filter": {
+              "description": "Filter search results by recency.",
+              "enum": [
+                "month",
+                "week",
+                "day",
+                "hour"
+              ],
+              "type": "string"
+            },
+            "stream": {
+              "default": false,
+              "description": "Whether to stream the response using server-sent events.",
+              "type": "boolean"
+            },
+            "temperature": {
+              "default": 0.2,
+              "description": "Sampling temperature between 0 and 2. Lower values make output more focused and deterministic.",
+              "maximum": 2,
+              "minimum": 0,
+              "type": "number"
+            },
+            "top_k": {
+              "default": 0,
+              "description": "The number of tokens to keep for top-k filtering.",
+              "maximum": 2048,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "top_p": {
+              "default": 0.9,
+              "description": "Nucleus sampling parameter. The model considers tokens with top_p probability mass.",
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          "required": [
+            "model",
+            "messages"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_usd",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.03499,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## Cost and request rules
+
+Usage-based billing; Default request estimate: $0.03499 USD (not a fixed price). Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 

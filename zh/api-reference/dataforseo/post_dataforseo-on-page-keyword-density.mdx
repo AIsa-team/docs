@@ -24,12 +24,16 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/on_page/keyword_density" \
 // 连接、授权、跑通这个例子需要的东西都在里面 ——
 // 不用粘贴任何 key，浏览器里点一次 Allow 就好。
 {
-  "operation_id": "post_dataforseo_on_page_keyword_density",
-  "arguments": {},
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_dataforseo_on_page_keyword_density",
+      "arguments": {}
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -40,13 +44,14 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/on_page/keyword_density" \
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/zh/api-reference/dataforseo/post_dataforseo-on-page-keyword-density.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -57,7 +62,154 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/on_page/keyword_density" \
 
 {/* aisa-contract-details:start */}
 
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/dataforseo/on&#95;page/keyword&#95;density
+- **可用状态:** enabled
+- **请求 URL 模板:** https://api.aisa.one/apis/v1/dataforseo/on&#95;page/keyword&#95;density
+- **Runtime 事实版本:** 6ab8fec17df1d5dcdff2e036dd1eb40587752b774ec040ab4eb0cc6946c3dd3c
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/dataforseo.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_dataforseo_on_page_keyword_density",
+  "method": "POST",
+  "path": "/apis/v1/dataforseo/on_page/keyword_density",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "example": [
+            {
+              "filters": [
+                "frequency",
+                ">",
+                5
+              ],
+              "id": "09101923-1535-0216-0000-2389a8854b70",
+              "keyword_length": 2,
+              "url": "https://dataforseo.com/"
+            }
+          ],
+          "items": {
+            "oneOf": [
+              {
+                "example": [
+                  {
+                    "filters": [
+                      "frequency",
+                      ">",
+                      5
+                    ],
+                    "id": "09101923-1535-0216-0000-2389a8854b70",
+                    "keyword_length": 2,
+                    "url": "https://dataforseo.com/"
+                  }
+                ],
+                "properties": {
+                  "filters": {
+                    "description": "<em>array of results filtering parameters</em><br>optional field<br><strong>you can add several filters at once (8 filters maximum)</strong><br>you should set a logical operator <code>and</code>, <code>or</code> between the conditions<br>the following operators are supported:<br><code>regex</code>, <code>not_regex</code>, <code>=</code>, <code>&lt;&gt;</code>, <code>in</code>, <code>not_in</code>, <code>like</code>, <code>not_like</code><br>you can use the <code>%</code> operator with <code>like</code> and <code>not_like</code> to match any string of zero or more characters<br>example:<br><code>[\"keyword\",\"=\",\"%seo%\"]</code><p><code>[[\"keyword\",\"=\",\"%seo%\"],<br>\"and\",<br>[\"frequency\",\"&lt;\",\"6\"]]</code><p><code>[[\"keyword\",\"not_like\",\"%seo%\"],<br>\"and\",<br>[[\"frequency\",\"&gt;\",\"6\"],\"or\",[\"density\",\"&gt;\",\"0.02\"]]]</code><p>The full list of possible filters is available <a href=\"/v3/on_page/filters_and_thresholds/?bash\" target=\"_blank\" rel=\"noopener noreferrer\">by this link.</a>",
+                    "items": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  },
+                  "id": {
+                    "description": "<em>ID of the task</em><br><strong>required field</strong><br>you can get this ID in the response of the <a href=\"/v3/on_page/task_post/\">Task POST</a> endpoint<br>example:<br>\"07131248-1535-0216-1000-17384017ad04\"",
+                    "type": "string"
+                  },
+                  "keyword_length": {
+                    "description": "<em>number of words for a keyword</em><br><strong>required field</strong><br>possible values:<br><code>1</code>, <code>2</code>, <code>3</code>, <code>4</code>, <code>5</code>",
+                    "type": "integer"
+                  },
+                  "limit": {
+                    "description": "<em>the maximum number of returned keywords</em><br>optional field<br>default value: <code>100</code><br>maximum value: <code>1000</code>",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "order_by": {
+                    "description": "<em>results sorting rules</em><br>optional field<br>you can use the same values as in the <code>filters</code> array to sort the results<br>possible sorting types:<br><code>asc</code> - results will be sorted in the ascending order<br><code>desc</code> - results will be sorted in the descending order<br>you should use a comma to set up a sorting type<br>example:<br><code>[\"frequency,desc\"]</code><br><strong>note that you can set no more than three sorting rules in a single request</strong><br>you should use a comma to separate several sorting rules<br>example:<br><code>[\"keyword,asc\",\"frequency,desc\"]</code>",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  },
+                  "tag": {
+                    "description": "<em>user-defined task identifier</em><br>optional field<br><em>the character limit is 255</em><br>you can use this parameter to identify the task and match it with the result<br>you will find the specified <code>tag</code> value in the <code>data</code> object of the response",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "url": {
+                    "description": "<em>page URL</em><br>optional field<br><strong>if you do not specify a page here, the results will be provided for the whole website</strong><br>if you use this field, the API response will contain only keywords from the specified page<br>a page should be specified with absolute URL (including <code>http://</code> or <code>https://</code>)",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "type": "array"
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_usd",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.012,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## 费用与请求规则
+
+按用量计费；默认请求预估费用：$0.012 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 

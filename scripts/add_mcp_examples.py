@@ -192,15 +192,17 @@ LEAD = {
 
 
 def mcp_block(operation_id: str, args: dict, doc_path: str, lang: str) -> str:
+    # The same calls go to batch_quote and then batch_use: the server quotes
+    # before it runs, and the quote is what the user approves.
     call = json.dumps(
-        {"operation_id": operation_id, "arguments": args, "max_price_usd": 0.05},
+        {"calls": [{"call_id": "1", "tool": operation_id, "arguments": args}]},
         indent=2, ensure_ascii=False)
     lead = "\n".join(LEAD.get(lang, LEAD["en"]))
     return f"""```jsonc MCP
 {lead}
 {call}
 // ── for the agent ─────────────────────────────────────────────────────────
-// {MARK}, then call its `use` tool with the JSON above.
+// {MARK}, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   {MCP_ORIGIN}/mcp
 //   transport  streamable-http
@@ -211,13 +213,14 @@ def mcp_block(operation_id: str, args: dict, doc_path: str, lang: str) -> str:
 //   Codex        codex mcp add aisa --url {MCP_ORIGIN}/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa {MCP_ORIGIN}/mcp
 //   Cursor / VS Code   a "url" entry for {MCP_ORIGIN}/mcp in the MCP config
-// The server lists five tools over {MCP_ORIGIN}/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches {MCP_ORIGIN}/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   {DOCS}/{doc_path}.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```"""
 
 

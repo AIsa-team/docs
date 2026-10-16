@@ -26,12 +26,16 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/keywords_data/dataforseo_t
 // It carries everything needed to connect, authorize and run this example —
 // no key to paste, one click of Allow in the browser.
 {
-  "operation_id": "post_dataforseo_keywords_trends_demography_live",
-  "arguments": {},
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_dataforseo_keywords_trends_demography_live",
+      "arguments": {}
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -42,13 +46,14 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/keywords_data/dataforseo_t
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/api-reference/dataforseo/post_dataforseo-keywords-data-dataforseo-trends-demography-live.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -59,7 +64,158 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/keywords_data/dataforseo_t
 
 {/* aisa-contract-details:start */}
 
+## Request contract
+
+- **Method and path:** POST /apis/v1/dataforseo/keywords&#95;data/dataforseo&#95;trends/demography/live
+- **Availability:** enabled
+- **Request URL template:** https://api.aisa.one/apis/v1/dataforseo/keywords&#95;data/dataforseo&#95;trends/demography/live
+- **Runtime facts:** 6ab8fec17df1d5dcdff2e036dd1eb40587752b774ec040ab4eb0cc6946c3dd3c
+
+[Complete OpenAPI definition](https://aisa.one/docs/openapi/dataforseo.json)
+
+Effective request and pricing declaration (including authentication and referenced schemas):
+
+```json
+{
+  "operationId": "post_dataforseo_keywords_trends_demography_live",
+  "method": "POST",
+  "path": "/apis/v1/dataforseo/keywords_data/dataforseo_trends/demography/live",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "example": [
+            {
+              "date_from": "2023-01-01",
+              "date_to": "2024-01-01",
+              "keywords": [
+                "rugby",
+                "cricket"
+              ],
+              "location_name": "United States",
+              "type": "web"
+            }
+          ],
+          "items": {
+            "oneOf": [
+              {
+                "example": [
+                  {
+                    "date_from": "2023-01-01",
+                    "date_to": "2024-01-01",
+                    "keywords": [
+                      "rugby",
+                      "cricket"
+                    ],
+                    "location_name": "United States",
+                    "type": "web"
+                  }
+                ],
+                "properties": {
+                  "date_from": {
+                    "description": "<em>starting date of the time range</em><br>optional field<br>if you don't specify this field, the current day and month of the preceding year will be used by default<br>minimal value for the <code>web</code> type: <code>2004-01-01</code><br>minimal value for other types: <code>2008-01-01</code><br>date format: <code>\"yyyy-mm-dd\"</code><br>example:<br><code>\"2019-01-15\"</code>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "date_to": {
+                    "description": "<em>ending date of the time range</em><br>optional field<br>if you don't specify this field, the today's date will be used by default<br>date format: <code>\"yyyy-mm-dd\"</code><br>example:<br><code>\"2019-01-15\"</code>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "keywords": {
+                    "description": "<em>keywords</em><br><strong>required field</strong><br>the maximum number of keywords you can specify: 5<br>avoid symbols and special characters (e.g., UTF symbols, emojis);<br>specifying non-Latin characters, you’ll get data for the countries where they are used<p>learn more about rules and limitations of <code>keyword</code> and <code>keywords</code> fields in DataForSEO APIs in this <a href=\"https://dataforseo.com/help-center/rules-and-limitations-of-keyword-and-keywords-fields-in-dataforseo-apis\" rel=\"noopener noreferrer\" target=\"_blank\">Help Center article</a>",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "location_code": {
+                    "description": "<em>search engine location code</em><br>optional field<br>if you don't use this field, you will recieve global results<br><strong>if you use this field, you don't need to specify <code>location_name</code></strong><br>you can receive the list of available locations of the search engines with their <code>location_code</code> by making a separate request to <code>https://api.dataforseo.com/v3/keywords_data/dataforseo_trends/locations</code><br><strong>note that the data will be provided for the country the specified <code>location_code</code> belongs to;</strong><br>example:<br><code class=\"long-string\">2840</code>",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "location_name": {
+                    "description": "<em>full name of search engine location</em><br>optional field<br>if you don't use this field, you will recieve global results<br><strong>if you use this field, you don't need to specify <code>location_code</code></strong><br>you can receive the list of available locations of the search engine with their <code>location_name</code> by making a separate request to <code>https://api.dataforseo.com/v3/keywords_data/dataforseo_trends/locations</code><br><strong>note that the data will be provided for the country the specified <code>location_name</code> belongs to;</strong><br>example:<br><code class=\"long-string\">United Kingdom</code>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "tag": {
+                    "description": "<em>user-defined task identifier</em><br>optional field<br><em>the character limit is 255</em><br>you can use this parameter to identify the task and match it with the result<br>you will find the specified <code>tag</code> value in the <code>data</code> object of the response",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "time_range": {
+                    "description": "<em>preset time ranges</em><br>optional field<br>if you specify <code>date_from</code> or <code>date_to</code> parameters, this field will be ignored when setting a task<br><em>possible values for all <code>type</code> parameters:</em><br><code>past_4_hours</code>, <code>past_day</code>, <code>past_7_days</code>, <code>past_30_days</code>, <code>past_90_days</code>, <code>past_12_months</code>, <code>past_5_years</code>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "type": {
+                    "description": "type of element",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "type": "array"
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_usd",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.0024,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## Cost and request rules
+
+Usage-based billing; Default request estimate: $0.0024 USD (not a fixed price). Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 

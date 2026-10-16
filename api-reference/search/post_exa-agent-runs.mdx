@@ -18,7 +18,130 @@ Hand a research task to an agent that works in the background. `query` and an `I
 
 {/* aisa-contract-details:start */}
 
+## Request contract
+
+- **Method and path:** POST /apis/v1/exa/agent/runs
+- **Availability:** enabled
+- **Request URL template:** https://api.aisa.one/apis/v1/exa/agent/runs
+- **Idempotency-Key:** header; required
+- **X-AISA-Max-Price-USD:** header; optional
+- **X-AISA-Cost-Mode:** header; optional
+- **Runtime facts:** d10529a4463a002dd39ad505e0bc30212230a00b2034082221e854d90728a9b8
+
+[Complete OpenAPI definition](https://aisa.one/docs/openapi/exa.json)
+
+Effective request and pricing declaration (including authentication and referenced schemas):
+
+```json
+{
+  "operationId": "post_exa_agent_runs",
+  "method": "POST",
+  "path": "/apis/v1/exa/agent/runs",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "description": "Trimmed UTF-8 length must be 1 through 191 bytes.",
+      "in": "header",
+      "name": "Idempotency-Key",
+      "required": true,
+      "schema": {
+        "pattern": "\\S",
+        "type": "string"
+      }
+    },
+    {
+      "description": "Optional maximum customer authorization in USD, validated by the runtime price parser.",
+      "in": "header",
+      "name": "X-AISA-Max-Price-USD",
+      "schema": {
+        "type": "string"
+      }
+    },
+    {
+      "description": "Return a read-only cost quote instead of submitting a job.",
+      "in": "header",
+      "name": "X-AISA-Cost-Mode",
+      "schema": {
+        "enum": [
+          "quote"
+        ],
+        "type": "string"
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "example": {
+          "query": "Find the official documentation for Go"
+        },
+        "schema": {
+          "additionalProperties": false,
+          "properties": {
+            "effort": {
+              "default": "minimal",
+              "description": "Only minimal effort is supported; omitted, empty and null values normalize to minimal.",
+              "enum": [
+                null,
+                "",
+                "minimal"
+              ],
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "query": {
+              "description": "Non-empty query after trimming whitespace.",
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "systemPrompt": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "default_request_estimate_usd": 0.1,
+    "description": "Customer normal-tier reference, with the public PAYG multiplier. Authenticated plan and user tier may differ; a quote uses the actual caller and payload.",
+    "estimate_source": "configured_fixed_price",
+    "kind": "fixed_request"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## Cost and request rules
+
+Default request estimate: $0.1 USD (not a fixed price). Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 

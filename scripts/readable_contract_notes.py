@@ -36,17 +36,87 @@ def formula_text(formula):
     return " + ".join(str(v) for v in [formula.get("fixed_units", ""), expression] if v != "") or None
 
 
-def readable_block(operation, language="en", translate=None):
+def request_details(operation, document, method, path, spec_path, language="en"):
+    """Render effective request declarations and exact, cycle-safe ref closure."""
+    zh = language == "zh"
+    def t(en, cn): return cn if zh else en
+    from compose_openapi import effective_object, effective_security, referenced_components
+    def resolve(value):
+        return effective_object(value, document)
+    item = document.get("paths", {}).get(path, {})
+    parameters = {}
+    for value in item.get("parameters", []) + operation.get("parameters", []):
+        value = resolve(value)
+        parameters[(value.get("in"), value.get("name"))] = value
+    request = {"operationId": operation.get("operationId"), "method": method.upper(), "path": path,
+               "servers": operation.get("servers", item.get("servers", document.get("servers", []))),
+               "parameters": list(parameters.values())}
+    if "security" in operation or "security" in document:
+        request["security"] = operation.get("security", document.get("security"))
+    if "requestBody" in operation:
+        request["requestBody"] = operation["requestBody"]
+    if "x-aisa-status" in operation:
+        request["x-aisa-status"] = operation["x-aisa-status"]
+    if "x-aisa-pricing" in operation:
+        request["x-aisa-pricing"] = operation["x-aisa-pricing"]
+    # Reuse the composer's instance-aware closure: example/default values that
+    # happen to contain a "$ref" are data, and discriminator mappings are refs.
+    components = referenced_components(request, document)
+    schemes, missing_schemes = effective_security(operation, document)
+    if schemes:
+        components.setdefault("securitySchemes", {}).update(schemes)
+    if missing_schemes:
+        request["x-aisa-documentation-limitations"] = [
+            "unresolved_security_scheme:" + name for name in missing_schemes]
+    if components:
+        request["components"] = components
+    lines = ["## " + t("Request contract", "请求规范"), "",
+             "- **" + t("Method and path", "方法与路径") + ":** " + safe(method.upper() + " " + path)]
+    if "x-aisa-status" in operation:
+        lines.append("- **" + t("Availability", "可用状态") + ":** " + safe(operation["x-aisa-status"]))
+    if operation.get("x-aisa-status") == "disabled":
+        lines += ["", t("**This endpoint is disabled and cannot be called. Its historical request, schema and pricing declarations are retained for reference.**",
+                        "**此接口已停用，无法调用。历史请求、schema 和价格声明仅保留供参考。**"), ""]
+    for limitation in request.get("x-aisa-documentation-limitations", []):
+        lines.append("- **" + t("Incomplete historical declaration (disabled)", "未启用的历史声明不完整") + ":** " + safe(limitation))
+    for server in request["servers"]:
+        if isinstance(server, dict) and isinstance(server.get("url"), str):
+            lines.append("- **" + t("Request URL template", "请求 URL 模板") + ":** " + safe(server["url"].rstrip("/") + path))
+    for parameter in parameters.values():
+        required = t("required", "必填") if parameter.get("required") else t("optional", "可选")
+        lines.append("- **" + safe(parameter.get("name", "?")) + ":** " + safe(str(parameter.get("in", "?"))) + "; " + required)
+    revision = document.get("info", {}).get("x-aisa-document", {})
+    if revision.get("facts_hash"):
+        lines.append("- **" + t("Runtime facts", "Runtime 事实版本") + ":** " + safe(revision["facts_hash"]))
+    lines += ["", "[" + t("Complete OpenAPI definition", "完整 OpenAPI 定义") + "](https://aisa.one/docs/" + spec_path + ")", "",
+              t("Effective request and pricing declaration (including authentication and referenced schemas):", "有效请求与价格声明（包括认证和引用的 schema）："), ""]
+    serialized = json.dumps(request, ensure_ascii=False, indent=2, allow_nan=False)
+    # A source string cannot terminate this fenced code block.
+    fence = "`" * max(3, 1 + max((len(run) for run in re.findall(r"`+", serialized)), default=0))
+    return lines + [fence + "json", serialized, fence, ""]
+
+
+def readable_block(operation, language="en", translate=None, *, document=None, method=None, path=None, spec_path=None):
     zh = language == "zh"
     def t(en, cn): return cn if zh else en
     def line(label, value): return f"- **{label}:** {safe(value)}"
     pricing = operation.get("x-aisa-pricing") or {}
     constraints = operation.get("x-aisa-constraints") or {}
     notes = constraints.get("notes") or []
-    if not pricing and not notes:
+    if not pricing and not notes and document is None:
         return ""
-    lines = [BEGIN, "", "## " + t("Cost and request rules", "费用与请求规则"), ""]
+    lines = [BEGIN, ""]
+    if document is not None:
+        lines += request_details(operation, document, method, path, spec_path, language)
+    if pricing or notes:
+        lines += ["## " + t("Cost and request rules", "费用与请求规则"), ""]
     if pricing:
+        from pricing_prose import pricing_summary
+        summary = pricing_summary(pricing, language)
+        # Paired currency signs would become inline math in Mintlify MDX.
+        if summary.count("$") >= 2:
+            summary = summary.replace("$", r"\$")
+        lines += [summary, ""]
         lines += [t("Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.", "公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。"), ""]
         labels = {
             "default_request_estimate_usd": t("Default request reference estimate (USD)", "默认请求参考估价（USD）"),
@@ -120,8 +190,8 @@ def readable_block(operation, language="en", translate=None):
     return "\n".join(lines)
 
 
-def update_readable_block(text, operation, language="en", translate=None):
-    block = readable_block(operation, language, translate)
+def update_readable_block(text, operation, language="en", translate=None, **context):
+    block = readable_block(operation, language, translate, **context)
     if not block:
         return strip_generated_block(text)
     pattern = re.escape(BEGIN) + r".*?" + re.escape(END)

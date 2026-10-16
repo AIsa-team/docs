@@ -1,0 +1,139 @@
+---
+title: "Article SEO + GEO Review"
+description: "Review one article draft or published URL for SEO and GEO (AI search visibility) and get a scored report with competitor gaps, AI citation checks, and rewrite suggestions."
+---
+
+[View on GitHub →](https://github.com/AIsa-team/agent-skills/tree/main/marketing/article-seo-geo-review)
+
+**SEO and GEO review for one article, in one command.** Give the skill a Markdown draft or a published URL. It measures the target keyword, pulls the live Google SERP and AI Mode answer, parses top-ranking competitor pages, queries AI answer engines to see what they return and whom they cite, runs deterministic on-page checks, and returns a scored Markdown report plus a JSON evidence file.
+
+## Install
+
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill article-seo-geo-review
+```
+
+```bash AIsa CLI
+npm install -g @aisa-one/cli
+aisa skills install article-seo-geo-review
+```
+</CodeGroup>
+
+After installing, start a new agent session so the skill loads.
+
+## What can agents do with it?
+
+<CardGroup cols={2}>
+  <Card title="Pre-publish review" icon="file-pen">
+    "Review draft.md for SEO and tell me whether AI Overviews would cite it."
+  </Card>
+  <Card title="Published URL audit" icon="globe">
+    "Run an SEO + GEO review on https://example.com/blog/post and show me the scorecard."
+  </Card>
+  <Card title="Content gaps" icon="code-compare">
+    "Compare my article with the pages ranking for 'generative engine optimization' and list what they cover that I don't."
+  </Card>
+  <Card title="AI citation checks" icon="quote-right">
+    "Give me the top rewrite suggestions to make this post citable by ChatGPT and Perplexity."
+  </Card>
+</CardGroup>
+
+## Requirements
+
+```bash
+export AISA_API_KEY="your-aisa-api-key"
+```
+
+- Python 3.9 or later (standard library only)
+- If the variable is not set, the script also reads `AISA_API_KEY=...` from `~/.aisa/credentials`.
+
+## Compatibility
+
+Works with any agentskills.io-compatible harness, including Claude Code, Claude, OpenAI Codex, Cursor, Gemini CLI, OpenCode, Goose, OpenClaw, Hermes, and other runtimes that support skill folders.
+
+## Quick start
+
+```bash
+# 1. Free and offline: deterministic on-page checks and a provisional score
+python3 scripts/review_article.py audit draft.md
+
+# 2. Show the planned paid calls and the spend estimate, without calling anything
+python3 scripts/review_article.py review draft.md --dry-run
+
+# 3. After you approve the estimate: the full review
+python3 scripts/review_article.py review draft.md --yes \
+  --out review.md --json-out review.json --cache-dir .review-cache
+
+# Published article (adds domain authority and "does any AI engine cite you" checks)
+python3 scripts/review_article.py review https://example.com/blog/post --yes --out review.md
+```
+
+## Spend approval
+
+The data calls are billed to your AIsa balance, so the skill never runs paid stages before you approve them:
+
+1. `review <source> --dry-run` prints every planned call with a nominal and a documented maximum total.
+2. You approve that scope.
+3. The agent re-runs the command with `--yes`. Without `--yes`, the script prints the plan and exits with code `2`. `--max-usd` rejects any plan whose documented maximum exceeds it.
+
+The report's **Spend** section lists every call with its reported cost. `--cache-dir` stores raw responses so re-runs and re-renders are free.
+
+## Pipeline
+
+`Keyword → SERP → Competitors → Content gap → SEO audit → GEO audit → Rewrite suggestions → Scorecard`
+
+| Stage | Source |
+| --- | --- |
+| Keywords | `--keyword`, or the AIsa LLM proposes one primary and up to five secondary keywords; metrics from DataForSEO `keyword_overview` cross-checked with Semrush `keyword-overview` |
+| SERP | DataForSEO Google organic (top 10, People Also Ask, featured snippet, AI Overview presence) and Google AI Mode with cited pages |
+| Competitors | Top `--top` pages (default 5) parsed with DataForSEO `content_parsing` and rated with Semrush `domain-overview` |
+| GEO engines | Google AI Mode, Google AI Overview (Oxylabs), ChatGPT and Perplexity (DataForSEO `llm_responses`), and `llm_mentions` top domains by default; Gemini, Claude, and Oxylabs AI Mode are opt-in via `--engines` |
+| Checks | Deterministic SEO and GEO checks, each with pass / warn / fail / n/a, evidence, and a fix |
+| Rewrites | Up to 12 prioritized suggestions from the AIsa LLM gateway, limited to facts in the evidence (`--no-llm` uses the deterministic fixes) |
+
+The report scores SEO and GEO each from 0 to 100, averages them, and assigns a grade from A to F. A failed engine is reported as a data gap, not as "not cited".
+
+## Commands
+
+| Command | Purpose | Paid calls |
+| --- | --- | --- |
+| `audit <src>` | On-page SEO + GEO checks and provisional score | None for files; one content-parsing call for URLs |
+| `parse <src>` | Dump the normalized article model | Same as `audit` |
+| `review <src>` | Full pipeline and report | Yes, gated by `--dry-run` / `--yes` |
+| `keywords <src>` | Keyword extraction and metrics | Yes |
+| `serp --keyword K` | Organic SERP and AI Mode | Yes |
+| `competitors --keyword K` | Parse and rate top pages | Yes |
+| `geo --keyword K [--url U]` | Query AI engines; `--url` checks citations | Yes |
+| `render --from review.json [--rescore]` | Re-render Markdown from saved JSON | None |
+
+Shared flags: `--keyword`, `--site-domain`, `--location-code` (default `2840`, United States), `--language-code` (default `en`), `--database` (Semrush, default `us`), `--geo-location`, `--top`, `--engines`, `--fast`, `--deep`, `--model` (or `AISA_REVIEW_MODEL`), `--no-llm`, `--cache-dir`, `--out`, `--json-out`. `review` adds `--dry-run`, `--yes`, and `--max-usd`.
+
+## When to use
+
+- "Review this article for SEO before we publish."
+- "Will AI Overviews or ChatGPT cite this post? What do I change?"
+- "Run a GEO audit on this URL."
+- "Give me an SEO + GEO scorecard and rewrite suggestions."
+
+Do not use this skill for keyword research from scratch (use [SEO Keyword Research](/agent-skills/seo-keyword-research)), full technical site audits, backlink audits, or writing the article. For a draft, pass `--site-domain` so internal links and "is my domain cited" can be evaluated before publishing.
+
+## Get started
+
+1. Sign up at [aisa.one](https://aisa.one) and create an API key in the console.
+2. Set it in your shell: `export AISA_API_KEY="your-key"`.
+3. Install the skill with one of the commands under [Install](#install), then start a new agent session.
+
+## Related
+
+<CardGroup cols={3}>
+  <Card title="SEO Keyword Research" icon="magnifying-glass-chart" href="/agent-skills/seo-keyword-research">
+    Build a keyword strategy before you write.
+  </Card>
+  <Card title="DataForSEO keyword overview" icon="chart-column" href="/api-reference/dataforseo/post_dataforseo-dataforseo-labs-google-keyword-overview-live">
+    Volume, difficulty, intent, and CPC endpoint.
+  </Card>
+  <Card title="Semrush keyword overview" icon="chart-simple" href="/api-reference/semrush/get_semrush-keyword-overview">
+    Cross-check keyword metrics.
+  </Card>
+</CardGroup>

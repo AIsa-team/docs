@@ -26,12 +26,16 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/merchant/google/reviews/ta
 // 连接、授权、跑通这个例子需要的东西都在里面 ——
 // 不用粘贴任何 key，浏览器里点一次 Allow 就好。
 {
-  "operation_id": "post_dataforseo_merchant_google_reviews_submit",
-  "arguments": {},
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_dataforseo_merchant_google_reviews_submit",
+      "arguments": {}
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -42,13 +46,14 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/merchant/google/reviews/ta
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/zh/api-reference/dataforseo/post_dataforseo-merchant-google-reviews-task-post.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -59,7 +64,169 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/merchant/google/reviews/ta
 
 {/* aisa-contract-details:start */}
 
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/dataforseo/merchant/google/reviews/task&#95;post
+- **可用状态:** enabled
+- **请求 URL 模板:** https://api.aisa.one/apis/v1/dataforseo/merchant/google/reviews/task&#95;post
+- **Runtime 事实版本:** 6ab8fec17df1d5dcdff2e036dd1eb40587752b774ec040ab4eb0cc6946c3dd3c
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/dataforseo.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_dataforseo_merchant_google_reviews_submit",
+  "method": "POST",
+  "path": "/apis/v1/dataforseo/merchant/google/reviews/task_post",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "items": {
+            "allOf": [
+              {
+                "anyOf": [
+                  {
+                    "required": [
+                      "location_name"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "location_code"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "location_coordinate"
+                    ]
+                  }
+                ]
+              },
+              {
+                "anyOf": [
+                  {
+                    "required": [
+                      "language_name"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "language_code"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "properties": {
+              "data_docid": {
+                "description": "unique identifier of the SERP data element optional field we recommend specifying data_docid together with product_id and gid for optimal results; you can get this value for a certain element by making a separate request to the Google Shopping Products endpoint example: 13071766526042404278",
+                "type": "string"
+              },
+              "depth": {
+                "description": "parsing depth optional field number of reviews in SERP; we strongly recommend setting the parsing depth in the multiples of ten, because our system processes ten reviews in a row; maximum value: 8000 default value: 10 Your account will be billed per each SERP containing up to 10 results; Setting depth above 10 may result in additional charges if the search engine returns more than 10 results; The cost can be calculated on the Pricing page.",
+                "type": "integer"
+              },
+              "gid": {
+                "description": "global product identifier on Google Shopping required field we recommend specifying gid together with data_docid and product_id for optimal results; you can get this value for a certain product by making a separate request to the Google Shopping Products endpoint example: 4702526954592161872 learn more about the parameter in this help center guide",
+                "type": "string"
+              },
+              "language_code": {
+                "description": "search engine language code required field if you don’t specify language_name if you use this field, you don’t need to specify language_name you can receive the list of available languages with their language_code parameters by making a separate request to https://api.dataforseo.com/v3/merchant/google/languages example: en_GB",
+                "type": "string"
+              },
+              "language_name": {
+                "description": "full name of search engine language required field if you don’t specify language_code if you use this field, you don’t need to specify language_code you can receive the list of available languages with their language_name parameters by making a separate request to https://api.dataforseo.com/v3/merchant/google/languages example: English (United Kingdom)",
+                "type": "string"
+              },
+              "location_code": {
+                "description": "search engine location code required field if you don’t specify location_name or location_coordinate if you use this field, you don’t need to specify location_name or location_coordinate you can receive the list of available locations with their location_code parameters by making a separate request to https://api.dataforseo.com/v3/merchant/google/locations example: 9045969",
+                "type": "integer"
+              },
+              "location_coordinate": {
+                "description": "GPS coordinates of a location required field if you don’t specify location_name or location_code if you use this field, you don’t need to specify location_name or location_code location_coordinate parameter should be specified in the “latitude,longitude,radius” format the maximum number of decimal digits for “latitude” and “longitude”: 7 the minimum value for “radius”: 199.9 example: 53.476225,-2.243572,200",
+                "type": "string"
+              },
+              "location_name": {
+                "description": "full name of search engine location required field if you don’t specify location_code or location_coordinate if you use this field, you don’t need to specify location_code or location_coordinate you can receive the list of available locations with their location_name parameters by making a separate request to https://api.dataforseo.com/v3/merchant/google/locations example: HA1,England,United Kingdom",
+                "type": "string"
+              },
+              "pingback_url": {
+                "description": "notification URL of a completed task optional field when a task is completed we will notify you by GET request sent to the URL you have specified you can use the ‘$id’ string as a $id variable and ‘$tag’ as urlencoded $tag variable. We will set the necessary values before sending the request. example: http://your-server.com/pingscript?id=$id http://your-server.com/pingscript?id=$id&tag=$tag Note: special characters in pingback_url will be urlencoded; i.a., the # character will be encoded into %23 learn more on our Help Center",
+                "type": "string"
+              },
+              "postback_data": {
+                "description": "postback_url datatype optional field corresponds to the datatype that will be sent to your server possible values: advanced",
+                "type": "string"
+              },
+              "postback_url": {
+                "description": "URL for sending task results optional field once the task is completed, we will send a POST request with its results compressed in the gzip format to the postback_url you specified you can use the ‘$id’ string as a $id variable and ‘$tag’ as urlencoded $tag variable. We will set the necessary values before sending the request. example: http://your-server.com/postbackscript?id=$id http://your-server.com/postbackscript?id=$id&tag=$tag Note: special characters in postback_url will be urlencoded; i.a., the # character will be encoded into %23 learn more on our Help Center",
+                "type": "string"
+              },
+              "priority": {
+                "description": "task priority optional field can take the following values: 1 – normal execution priority (set by default) 2 – high execution priority You will be additionally charged for the tasks with high execution priority. the cost can be calculated on the Pricing page.",
+                "type": "integer"
+              },
+              "product_id": {
+                "description": "unique product identifier on Google Shopping optional field we recommend specifying product_id together with data_docid and gid for optimal results; you can get this value for a certain product by making a separate request to the Google Shopping Products endpoint example: 4485466949985702538 learn more about the parameter in this help center guide",
+                "type": "string"
+              },
+              "se_domain": {
+                "description": "search engine domain optional field we choose the relevant search engine domain automatically according to the location and language you specify however, you can set a custom search engine domain in this field example: google.co.uk, google.com.au, google.de, etc.",
+                "type": "string"
+              },
+              "tag": {
+                "description": "user-defined task identifier optional field the character limit is 255 you can use this parameter to identify the task and match it with the result you will find the specified tag value in the data object of the response",
+                "type": "string"
+              }
+            },
+            "required": [
+              "gid"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_usd",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.012,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## 费用与请求规则
+
+按用量计费；默认请求预估费用：$0.012 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 

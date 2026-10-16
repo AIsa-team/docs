@@ -26,12 +26,16 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/business_data/trustpilot/r
 // It carries everything needed to connect, authorize and run this example —
 // no key to paste, one click of Allow in the browser.
 {
-  "operation_id": "post_dataforseo_business_trustpilot_reviews_submit",
-  "arguments": {},
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_dataforseo_business_trustpilot_reviews_submit",
+      "arguments": {}
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -42,13 +46,14 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/business_data/trustpilot/r
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/api-reference/dataforseo/post_dataforseo-business-data-trustpilot-reviews-task-post.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -59,7 +64,136 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/business_data/trustpilot/r
 
 {/* aisa-contract-details:start */}
 
+## Request contract
+
+- **Method and path:** POST /apis/v1/dataforseo/business&#95;data/trustpilot/reviews/task&#95;post
+- **Availability:** enabled
+- **Request URL template:** https://api.aisa.one/apis/v1/dataforseo/business&#95;data/trustpilot/reviews/task&#95;post
+- **Runtime facts:** 6ab8fec17df1d5dcdff2e036dd1eb40587752b774ec040ab4eb0cc6946c3dd3c
+
+[Complete OpenAPI definition](https://aisa.one/docs/openapi/dataforseo.json)
+
+Effective request and pricing declaration (including authentication and referenced schemas):
+
+```json
+{
+  "operationId": "post_dataforseo_business_trustpilot_reviews_submit",
+  "method": "POST",
+  "path": "/apis/v1/dataforseo/business_data/trustpilot/reviews/task_post",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "example": [
+            {
+              "depth": 40,
+              "domain": "www.thepearlsource.com"
+            }
+          ],
+          "items": {
+            "oneOf": [
+              {
+                "example": [
+                  {
+                    "depth": 40,
+                    "domain": "www.thepearlsource.com"
+                  }
+                ],
+                "properties": {
+                  "depth": {
+                    "description": "<em>parsing depth</em><br>optional field<br>number of reviews to be returned from the API response<br>we strongly recommend setting the parsing depth in the multiples of twenty, because our system processes twenty reviews in a row<br>default value: <code>20</code><br>maximum value: <code>200</code><br><strong>Your account will be billed per each SERP containing up to 20 results;</strong> <br>Setting depth above 20 may result in additional charges if the search engine returns more than 20 results</a>;<br>The cost can be calculated on the <a title=\"Pricing\" href=\"https://dataforseo.com/pricing/business-data/business-data-api-trustpilot-reviews-pricing\" target=\"_blank\" rel=\"noopener noreferrer\">Pricing</a> page.",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "domain": {
+                    "description": "<em>domain of the local establishment</em><br><strong>required field</strong><br>domain of the local establishment on Trustpilot;<br>you can find the domain in the URL of every business listed on Trustpilot<br>example:<br><code>www.thepearlsource.com</code><br><code>https://www.trustpilot.com/review/<strong>www.thepearlsource.com</strong></code>",
+                    "type": "string"
+                  },
+                  "pingback_url": {
+                    "description": "<em>notification URL of a completed task</em><br>optional field<br>when a task is completed we will notify you by GET request sent to the URL you have specified<br>you can use the ‘$id’ string as a <code>$id</code> variable and ‘$tag’ as urlencoded <code>$tag</code> variable. We will set the necessary values before sending the request.<br>example:<br><code>http://your-server.com/pingscript?id=$id</code><br><code>http://your-server.com/pingscript?id=$id&amp;tag=$tag</code><br><strong>Note:</strong> special characters in <code>pingback_url</code> will be urlencoded; <br>i.a., the <code>#</code> character will be encoded into <code>%23</code><p>learn more on our <a href=\"https://dataforseo.com/help-center/pingbacks-postbacks-with-dataforseo-api\" target=\"_blank\" rel=\"noopener noreferrer\">Help Center</a>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "postback_url": {
+                    "description": "<em>URL for sending task results</em><br>optional field<br>once the task is completed, we will send a POST request with its results compressed in the <code>gzip</code> format to the <code>postback_url</code> you specified<br>you can use the ‘$id’ string as a <code>$id</code> variable and ‘$tag’ as urlencoded <code>$tag</code> variable. We will set the necessary values before sending the request.<br>example:<br><code>http://your-server.com/postbackscript?id=$id</code><br><code>http://your-server.com/postbackscript?id=$id&amp;tag=$tag</code><br><strong>Note:</strong> special characters in <code>postback_url</code> will be urlencoded; <br>i.a., the <code>#</code> character will be encoded into <code>%23</code><p>learn more on our <a href=\"https://dataforseo.com/help-center/pingbacks-postbacks-with-dataforseo-api\" target=\"_blank\" rel=\"noopener noreferrer\">Help Center</a>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "priority": {
+                    "description": "<em>task priority</em><br>optional field<br>can take the following values:<br>1 – normal execution priority (set by default)<br>2 – high execution priorityYou will be additionally charged for the tasks with high execution priority.<br>The cost can be calculated on the <a title=\"Pricing\" href=\"https://dataforseo.com/pricing/business-data/business-data-api-trustpilot-reviews-pricing\" target=\"_blank\" rel=\"noopener noreferrer\">Pricing</a> page.",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "sort_by": {
+                    "description": "<em>results sorting parameter</em><br>optional field<br>you can use this field to sort the results;<br>possible sorting parameters:<br><code>recency</code> — most recent reviews first;<br><code>relevance</code> — most relevant reviews first;<br>default value: <code>relevance</code>",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "tag": {
+                    "description": "<em>user-defined task identifier</em><br>optional field<br><em>the character limit is 255</em><br>you can use this parameter to identify the task and match it with the result<br>you will find the specified <code>tag</code> value in the <code>data</code> object of the response",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "type": "array"
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_usd",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.2428,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## Cost and request rules
+
+Usage-based billing; Default request estimate: $0.2428 USD (not a fixed price). Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 

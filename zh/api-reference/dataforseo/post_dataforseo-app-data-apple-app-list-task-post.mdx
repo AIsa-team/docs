@@ -26,12 +26,16 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/app_data/apple/app_list/ta
 // 连接、授权、跑通这个例子需要的东西都在里面 ——
 // 不用粘贴任何 key，浏览器里点一次 Allow 就好。
 {
-  "operation_id": "post_dataforseo_app_apple_app_list_submit",
-  "arguments": {},
-  "max_price_usd": 0.05
+  "calls": [
+    {
+      "call_id": "1",
+      "tool": "post_dataforseo_app_apple_app_list_submit",
+      "arguments": {}
+    }
+  ]
 }
 // ── for the agent ─────────────────────────────────────────────────────────
-// Register the AIsa MCP server, then call its `use` tool with the JSON above.
+// Register the AIsa MCP server, then call its `batch_quote` tool with the JSON above.
 //   name       aisa
 //   endpoint   https://mcp.aisa.one/mcp
 //   transport  streamable-http
@@ -42,13 +46,14 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/app_data/apple/app_list/ta
 //   Codex        codex mcp add aisa --url https://mcp.aisa.one/mcp
 //   Claude Code  claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
 //   Cursor / VS Code   a "url" entry for https://mcp.aisa.one/mcp in the MCP config
-// The server lists five tools over https://mcp.aisa.one/servers worth of APIs:
-// search, get_details, use, batch_use, list_categories. search and
-// get_details are free; use is billed per call and max_price_usd refuses
-// anything above the cap before spending. This operation's full contract —
-// every argument, the response shape, the price and the pitfalls — is at
+// The server reaches https://mcp.aisa.one/servers worth of APIs through a few meta
+// tools: search, list_categories, get_details, batch_quote, batch_use.
+// search, get_details and batch_quote are free; batch_use is billed per
+// call. This operation's full contract — every argument, the response
+// shape, the price and the pitfalls — is at
 //   https://aisa.one/docs/zh/api-reference/dataforseo/post_dataforseo-app-data-apple-app-list-task-post.md
-// Then run the call and show me the result.
+// Show me the quoted cost. Once I approve, run the same calls with
+// batch_use and show me the result.
 ```
 </CodeGroup>
 
@@ -59,7 +64,175 @@ curl -X POST "https://api.aisa.one/apis/v1/dataforseo/app_data/apple/app_list/ta
 
 {/* aisa-contract-details:start */}
 
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/dataforseo/app&#95;data/apple/app&#95;list/task&#95;post
+- **可用状态:** enabled
+- **请求 URL 模板:** https://api.aisa.one/apis/v1/dataforseo/app&#95;data/apple/app&#95;list/task&#95;post
+- **Runtime 事实版本:** 6ab8fec17df1d5dcdff2e036dd1eb40587752b774ec040ab4eb0cc6946c3dd3c
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/dataforseo.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_dataforseo_app_apple_app_list_submit",
+  "method": "POST",
+  "path": "/apis/v1/dataforseo/app_data/apple/app_list/task_post",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "example": [
+            {
+              "app_category": "games",
+              "app_collection": "top_free_ios",
+              "language_code": "en",
+              "location_code": 2840
+            }
+          ],
+          "items": {
+            "oneOf": [
+              {
+                "example": [
+                  {
+                    "app_category": "games",
+                    "app_collection": "top_free_ios",
+                    "language_code": "en",
+                    "location_code": 2840
+                  }
+                ],
+                "properties": {
+                  "app_category": {
+                    "description": "application category on the App Storeoptional fieldyou can filter the results by app category;example:lifestyle;you can review the full list of available categories here or by making a separate request to https://api.dataforseo.com/v3/app_data/apple/categories",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "app_collection": {
+                    "description": "app collectionrequired fieldapp collection on App Store from which apps will be collected;you can specify the following values:top_free_ios, top_paid_ios, top_grossing_ios, new_ios, new_free_ios, new_paid_ios",
+                    "type": "string"
+                  },
+                  "depth": {
+                    "description": "parsing depthoptional fieldnumber of apps to be returned from the App Store SERP;default value: 100maximum value: 100Your account will be billed per each SERP containing up to 100 results; The cost can be calculated on the Pricing page.",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "language_code": {
+                    "description": "\"search engine language coderequired field if you don't specify language_nameif you use this field, you don't need to specify language_nameyou can receive the list of available languages with their language_code_by making a separate request to https://api.dataforseo.com/v3/app_data/apple/languagesexample:en",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "language_name": {
+                    "description": "full name of search engine languagerequired field if you don't specify language_codeif you use this field, you don't need to specify language_codeyou can receive the list of available languages with language_name by making a separate request to https://api.dataforseo.com/v3/app_data/apple/languagesexample:English",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "location_code": {
+                    "description": "search engine location coderequired field if you don't specify location_nameif you use this field, you don't need to specify location_nameyou can receive the list of available locations of the search engine with their location_code by making a separate request to https://api.dataforseo.com/v3/app_data/apple/locationsexample:9061121",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "location_name": {
+                    "description": "full name of search engine locationrequired field if you don't specify location_codeif you use this field, you don't need to specify location_codeyou can receive the list of available locations of the search engine with their location_name by making a separate request to https://api.dataforseo.com/v3/app_data/apple/locationsexample:West Los Angeles,California,United States",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "pingback_url": {
+                    "description": "notification URL of a completed taskoptional fieldwhen a task is completed we will notify you by GET request sent to the URL you have specifiedyou can use the ‘$id’ string as a $id variable and ‘$tag’ as urlencoded $tag variable. We will set the necessary values before sending the request.example:http://your-server.com/pingscript?id=$idhttp://your-server.com/pingscript?id=$id&tag=$tagNote: special characters in pingback_url will be urlencoded; i.a., the # character will be encoded into %23learn more on our Help Center",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "postback_data": {
+                    "description": "postback_url datatyperequired field if you specify postback_urlcorresponds to the datatype that will be sent to your serverpossible values:advanced",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "postback_url": {
+                    "description": "URL for sending task resultsoptional fieldonce the task is completed, we will send a POST request with its results compressed in the gzip format to the postback_url you specifiedyou can use the ‘$id’ string as a $id variable and ‘$tag’ as urlencoded $tag variable. We will set the necessary values before sending the request.example:http://your-server.com/postbackscript?id=$idhttp://your-server.com/postbackscript?id=$id&tag=$tagNote: special characters in postback_url will be urlencoded; i.a., the # character will be encoded into %23learn more on our Help Center",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "priority": {
+                    "description": "task priorityoptional fieldcan take the following values:1 – normal execution priority (set by default)2 – high execution priorityYou will be additionally charged for the tasks with high execution priority.The cost can be calculated on the Pricing page.",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "tag": {
+                    "description": "user-defined task identifieroptional fieldthe character limit is 255you can use this parameter to identify the task and match it with the resultyou will find the specified tag value in the data object of the response",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "type": "array"
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_usd",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.012,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
 ## 费用与请求规则
+
+按用量计费；默认请求预估费用：$0.012 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 

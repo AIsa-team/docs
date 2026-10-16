@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  actions: read # Authenticate the fixed original schema/registry publisher artifacts.
 
 concurrency:
   group: pull-openapi
@@ -50,6 +51,11 @@ jobs:
         run: python -m unittest discover -s scripts/tests -v
       - name: Acquire one complete fresh immutable Runtime release
         run: python scripts/fetch_runtime_release.py --current --output /tmp/formal-runtime-facts
+      - name: Select the verified Runtime publication mode
+        id: runtime_mode
+        run: |
+          mode=$(python scripts/runtime_publication.py mode --facts-dir /tmp/formal-runtime-facts)
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
       - name: Restore attributed source maintenance evidence
         uses: actions/cache/restore@v4
         with:
@@ -65,11 +71,21 @@ jobs:
         id: pull
         env:
           REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
+          RUNTIME_MODE: ${{ steps.runtime_mode.outputs.mode }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set +e
-          python scripts/pull_openapi.py --write --facts-dir /tmp/formal-runtime-facts \
-            --baseline-ref "$REVIEWED_BASELINE" \
-            --readiness-report /tmp/contract-readiness.json
+          if [ "$RUNTIME_MODE" = canonical ]; then
+            python scripts/runtime_publication.py stage --write --facts-dir /tmp/formal-runtime-facts \
+              --baseline-ref "$REVIEWED_BASELINE" --report /tmp/contract-readiness.json
+          elif [ "$RUNTIME_MODE" = facts ]; then
+            python scripts/pull_openapi.py --write --facts-dir /tmp/formal-runtime-facts \
+              --baseline-ref "$REVIEWED_BASELINE" \
+              --readiness-report /tmp/contract-readiness.json
+          else
+            echo 'Unverified Runtime mode; refusing fallback.' >&2
+            exit 1
+          fi
           status=$?
           set -e
           if [ "$status" -eq 2 ]; then
@@ -95,11 +111,21 @@ jobs:
         if: steps.pull.outputs.available == 'false'
         run: echo 'Runtime contracts were unavailable. Published files were preserved.' >> "$GITHUB_STEP_SUMMARY"
       - name: Consolidate generated contracts
-        if: steps.pull.outputs.available == 'true'
+        if: steps.pull.outputs.available == 'true' && steps.runtime_mode.outputs.mode == 'facts'
         run: python scripts/runtime_consolidate_openapi.py --output openapi.yaml
       - name: Generate payment discovery from the same staged contracts
         if: steps.pull.outputs.available == 'true'
-        run: python scripts/generate_payment_discovery.py
+        run: |
+          python scripts/refresh_payment_publication.py --facts-dir /tmp/formal-runtime-facts \
+            --observation-report /tmp/payment-observation.json
+          python scripts/generate_payment_discovery.py
+      - name: Retain real payment observations without renewing unchanged publication
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: payment-observation
+          path: /tmp/payment-observation.json
+          if-no-files-found: ignore
       - name: Validate page references
         if: steps.pull.outputs.available == 'true'
         run: python scripts/validate_runtime_api_reference_slugs.py --generated-only
@@ -107,11 +133,21 @@ jobs:
         if: steps.pull.outputs.available == 'true'
         env:
           REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
+          RUNTIME_MODE: ${{ steps.runtime_mode.outputs.mode }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python scripts/check_contract_candidate.py --facts-dir /tmp/formal-runtime-facts \
-            --baseline-ref "$REVIEWED_BASELINE" \
-            --published-ref "$(git rev-parse HEAD)" \
-            --report /tmp/formal-contract-readiness.json
+          if [ "$RUNTIME_MODE" = canonical ]; then
+            python scripts/runtime_publication.py assess --facts-dir /tmp/formal-runtime-facts \
+              --baseline-ref "$REVIEWED_BASELINE" --report /tmp/formal-contract-readiness.json
+          elif [ "$RUNTIME_MODE" = facts ]; then
+            python scripts/check_contract_candidate.py --facts-dir /tmp/formal-runtime-facts \
+              --baseline-ref "$REVIEWED_BASELINE" \
+              --published-ref "$(git rev-parse HEAD)" \
+              --report /tmp/formal-contract-readiness.json
+          else
+            echo 'Unverified Runtime mode; refusing fallback.' >&2
+            exit 1
+          fi
       - name: Retain formal publication assessment
         if: always()
         uses: actions/upload-artifact@v4
@@ -121,6 +157,8 @@ jobs:
           if-no-files-found: ignore
       - name: Export the passed same-commit publication pointer
         if: steps.pull.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: >-
           python scripts/export_contract_publication.py
           --facts-dir /tmp/formal-runtime-facts
@@ -129,7 +167,7 @@ jobs:
         if: steps.pull.outputs.available == 'true'
         run: git diff --stat >> "$GITHUB_STEP_SUMMARY"
       - name: Commit contract mirrors and coverage
-        id: publish
+        id: prepare
         if: github.ref == 'refs/heads/main' && steps.pull.outputs.available == 'true' && (inputs.publish == true || (github.event_name != 'workflow_dispatch' && vars.RUNTIME_CONTRACT_PUBLISH != 'false'))
         env:
           PUBLISH_RUN_ID: ${{ github.run_id }}
@@ -137,7 +175,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add openapi api-reference zh/api-reference docs.json openapi.yaml docs/publication discovery/payment-evidence.json discovery/openapi.json
+          git add openapi api-reference zh/api-reference docs.json llms.txt openapi.yaml docs/publication discovery/payment-evidence.json discovery/openapi.json
           if git diff --cached --quiet; then exit 0; fi
           # Export deliberately retains an equivalent authorized publication.
           # Non-graph observations alone cannot create a new consumer identity.
@@ -149,10 +187,51 @@ jobs:
           python scripts/publication_origin.py record --run-id "$PUBLISH_RUN_ID" --attempt "$PUBLISH_RUN_ATTEMPT"
           git add docs/publication/release-origin.json
           git commit -m 'chore: regenerate runtime API contract mirrors'
+          echo "candidate_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "assessed_base=$assessed_base" >> "$GITHUB_OUTPUT"
+      - name: Export and verify original schema inputs for the local formal commit
+        id: supply_mode
+        if: steps.prepare.outputs.candidate_commit != ''
+        env:
+          CANDIDATE_COMMIT: ${{ steps.prepare.outputs.candidate_commit }}
+          PUBLISH_RUN_ID: ${{ github.run_id }}
+          PUBLISH_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          legacy=$(python scripts/schema_bundle_supply.py mode --repo . --docs-ref "$CANDIDATE_COMMIT")
+          echo "legacy=$legacy" >> "$GITHUB_OUTPUT"
+          if [ "$legacy" = true ]; then
+            python scripts/schema_bundle_supply.py build \
+              --repo . --docs-ref "$CANDIDATE_COMMIT" \
+              --source-receipts .cache/source-reviews.json \
+              --run-id "$PUBLISH_RUN_ID" --run-attempt "$PUBLISH_RUN_ATTEMPT" \
+              --output "$RUNNER_TEMP/schema-bundle-supply"
+          elif [ "$legacy" != false ]; then
+            exit 1
+          fi
+      - name: Retain immutable schema input candidate before publication
+        id: schema_bundle
+        if: steps.prepare.outputs.candidate_commit != '' && steps.supply_mode.outputs.legacy == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-input-bundle-v2-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/schema-bundle-supply/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Push the assessed commit after schema supply succeeds
+        id: publish
+        if: steps.prepare.outputs.candidate_commit != ''
+        env:
+          CANDIDATE_COMMIT: ${{ steps.prepare.outputs.candidate_commit }}
+          ASSESSED_BASE: ${{ steps.prepare.outputs.assessed_base }}
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$CANDIDATE_COMMIT" ] || [ "$(git show -s --format=%P HEAD)" != "$ASSESSED_BASE" ]; then
+            echo 'Local publication commit changed after schema export.' >&2
+            exit 1
+          fi
           # The formal receipt describes this exact graph. Never incorporate
           # concurrent main changes after assessment; retry from new inputs.
           git fetch origin main
-          if [ "$(git rev-parse origin/main)" != "$assessed_base" ]; then
+          if [ "$(git rev-parse origin/main)" != "$ASSESSED_BASE" ]; then
             echo 'Main changed after contract assessment; publication must be retried.' >&2
             exit 1
           fi

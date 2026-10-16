@@ -184,7 +184,7 @@ class PaymentDiscoveryTests(unittest.TestCase):
         self.assertLess(index['Consolidate generated contracts'], index['Generate payment discovery from the same staged contracts'])
         self.assertLess(index['Generate payment discovery from the same staged contracts'], index['Check formal artifact readiness before publication'])
         self.assertLess(index['Check formal artifact readiness before publication'], index['Export the passed same-commit publication pointer'])
-        stage = next(s['run'] for s in steps if s.get('id') == 'publish')
+        stage = next(s['run'] for s in steps if s.get('id') == 'prepare')
         for file in module.PAYMENT_FILES:
             self.assertIn(file, stage)
 
