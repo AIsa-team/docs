@@ -1,132 +1,96 @@
 ---
 title: "Rate Limits"
-description: "Request-per-minute, token-per-minute, and concurrency limits on the AIsa API, how to read rate-limit headers, and how to request a quota increase."
+description: "How AIsa throttles requests: per-model success limits on some models, upstream provider 429s, and how to handle 429 responses with Retry-After."
 sidebarTitle: "Rate Limits"
 icon: "gauge"
 ---
 
-Every AIsa API endpoint applies rate limits to protect both the gateway and upstream providers. Limits are enforced per API key. This page documents the defaults, how to read the rate-limit headers, and how to handle throttling gracefully.
+AIsa does not publish fixed request-per-minute (RPM), token-per-minute (TPM), or concurrency tiers, and responses do not carry `X-RateLimit-*` headers. A `429 Too Many Requests` can come from one of the sources below. In every case, wait for `Retry-After` when it is present and back off before retrying.
 
-## What's limited
+## Where a 429 comes from
 
-AIsa enforces three dimensions of capacity:
+| Source | Applies to | How to recognize it |
+| --- | --- | --- |
+| Per-model success limit | Only models that have a limit configured | `error.code = "model_success_rate_limit_exceeded"` with a `Retry-After` header |
+| Upstream provider | Any model or data API | The provider throttled the request and no fallback attempt succeeded; the body follows the [endpoint's error format](/api-reference/errors) |
+| Async capacity | Async data API jobs | `{"error": "integration async capacity is unavailable"}` with `Retry-After: 2` |
 
-| Dimension       | Applies to                              | What it measures                                                |
-| --------------- | --------------------------------------- | --------------------------------------------------------------- |
-| **RPM**         | All endpoints                           | Requests per minute                                             |
-| **TPM**         | LLM inference endpoints                 | Input + output tokens per minute (combined)                     |
-| **Concurrency** | Streaming + long-running endpoints      | Simultaneous in-flight requests                                 |
+### Per-model success limit
 
-<Note>
-  TPM counts **input + output** tokens together. A request that sends 10K tokens and generates 5K tokens consumes 15K TPM.
-</Note>
+Some models cap how many **successful** calls one account can make to that model within a rolling window of hours. Failed calls do not count toward the limit. Most models have no such limit.
 
-## Default limits per tier
+When the cap is reached, the gateway returns `429` with a `Retry-After` header (seconds) and this body:
 
-| Tier            | RPM    | TPM           | Concurrency | Who gets it                             |
-| --------------- | -----: | ------------: | ----------: | --------------------------------------- |
-| **Free**        |    60  |      60,000   |           5 | New accounts with \$1 signup credit      |
-| **Starter**     |   600  |     600,000   |          20 | After first paid top-up                 |
-| **Growth**      | 3,000  |   3,000,000   |          50 | \$500+ topped up OR approved application |
-| **Enterprise**  | Custom |        Custom |      Custom | Contact sales                           |
-
-<Tip>
-  Moving from **Free → Starter** is automatic on your first top-up in the [AIsa console](https://console.aisa.one/). Higher tiers require a quota-increase request — see [Requesting a quota increase](#requesting-a-quota-increase).
-</Tip>
-
-### Per-endpoint overrides
-
-Some endpoints have tighter default limits independent of your tier because the upstream provider caps throughput:
-
-| Endpoint group                      | Default override                       |
-| ----------------------------------- | -------------------------------------- |
-| `POST /chat/completions` (GPT-5.4)  | RPM capped at upstream quota           |
-| `POST /messages` (Claude Opus)      | RPM capped at upstream quota           |
-| `POST /perplexity/sonar-deep-research` | 5 RPM per key (long-running)        |
-| `/v1beta/models/*:generateContent` | 30 RPM per key                  |
-
-## Reading rate-limit headers
-
-Every response (including `429`) includes four headers:
-
-```
-X-RateLimit-Limit-Requests:    600
-X-RateLimit-Remaining-Requests: 587
-X-RateLimit-Limit-Tokens:      600000
-X-RateLimit-Remaining-Tokens:  592104
-X-RateLimit-Reset-Requests:    1745012400
-X-RateLimit-Reset-Tokens:      1745012400
-Retry-After:                   3
+```json
+{
+  "error": {
+    "message": "model <model-id> is limited to 100 successful calls per 1h0m0s for this user",
+    "code": "model_success_rate_limit_exceeded",
+    "model": "<model-id>",
+    "limit": 100,
+    "window_seconds": 3600,
+    "retry_after_seconds": 812,
+    "reset_at": "2026-10-14T09:30:00Z"
+  }
+}
 ```
 
-| Header                            | Meaning                                         |
-| --------------------------------- | ----------------------------------------------- |
-| `X-RateLimit-Limit-Requests`      | Your RPM cap                                    |
-| `X-RateLimit-Remaining-Requests`  | Requests remaining this minute                  |
-| `X-RateLimit-Limit-Tokens`        | Your TPM cap                                    |
-| `X-RateLimit-Remaining-Tokens`    | Tokens remaining this minute                    |
-| `X-RateLimit-Reset-Requests`      | UNIX timestamp when the request counter resets  |
-| `X-RateLimit-Reset-Tokens`        | UNIX timestamp when the token counter resets    |
-| `Retry-After`                     | (429 only) Seconds until you can retry          |
+The values above are illustrative. `reset_at` is when the oldest counted call leaves the window and a slot frees up.
 
 ## Handling 429 responses
 
 <Steps>
-  <Step title="Detect a 429">
-    The response body follows the standard [error shape](/api-reference/errors) with `error.type = "rate_limit_error"` and a `code` of `rate_limit_exceeded`, `upstream_rate_limit`, or `quota_exceeded`.
-  </Step>
   <Step title="Honor `Retry-After`">
-    Always wait at least the number of seconds in `Retry-After` before the next attempt. Never retry immediately.
+    When the header is present, wait at least that many seconds before the next attempt. Never retry immediately.
   </Step>
-  <Step title="Use exponential backoff + jitter">
-    After the initial wait, double the delay on each subsequent 429, with ±25% jitter. Cap at 30 seconds. See the [retry example](/api-reference/errors#retry-guidance).
+  <Step title="Use exponential backoff with jitter">
+    Without `Retry-After`, start around 1 second, double the delay on each consecutive 429, add ±25% jitter, and cap the delay. See [Retry guidance](/api-reference/errors#retry-guidance).
   </Step>
-  <Step title="Prefer queuing over retrying">
-    Instead of tight retry loops, queue requests and drain them at a rate below your RPM. A simple token-bucket with a leak rate of `RPM/60` requests per second is robust.
+  <Step title="Switch models for success limits">
+    `model_success_rate_limit_exceeded` is per model. If you cannot wait until `reset_at`, send the request to a different model.
   </Step>
-  <Step title="Stay under the cap">
-    Monitor `X-RateLimit-Remaining-*` on every response. When it drops below 10% of the limit, slow down preemptively — avoiding the 429 entirely.
+  <Step title="Queue instead of looping">
+    For batch workloads, queue requests and drain them at a steady rate rather than retrying in a tight loop.
   </Step>
 </Steps>
 
-## Example: staying under the limit
+## Example: retry on 429
 
 ```python
-from openai import OpenAI
+import time
+from openai import OpenAI, RateLimitError
 
 client = OpenAI(base_url="https://api.aisa.one/v1", api_key="sk-aisa-...")
 
-response = client.chat.completions.with_raw_response.create(
-    model="gpt-4.1-mini",
+def create_with_retry(max_attempts=5, **kwargs):
+    delay = 1.0
+    for attempt in range(max_attempts):
+        try:
+            return client.chat.completions.create(**kwargs)
+        except RateLimitError as err:
+            if attempt == max_attempts - 1:
+                raise
+            retry_after = err.response.headers.get("retry-after")
+            time.sleep(float(retry_after) if retry_after else delay)
+            delay = min(delay * 2, 30)
+
+response = create_with_retry(
+    model="qwen3.7-flash",
     messages=[{"role": "user", "content": "Hello"}],
 )
-remaining = int(response.headers.get("x-ratelimit-remaining-requests", 1000))
-if remaining < 50:
-    # Throttle preemptively — sleep a bit before the next call
-    time.sleep(1.0)
-body = response.parse()
 ```
 
-## Requesting a quota increase
+## Need more capacity?
 
-If you need higher limits for production traffic:
-
-1. Top up your balance in the [AIsa console](https://console.aisa.one/) — moving from Free → Starter is automatic.
-2. For Growth or Enterprise tiers, email [developer@aisa.one](mailto:developer@aisa.one) with:
-   - Your workspace ID
-   - Expected peak RPM and TPM
-   - Which models or endpoints you need the increase for
-   - A brief description of your use case
-
-Approvals for Growth typically land within one business day; Enterprise is negotiated with a dedicated account team.
+If a per-model limit or upstream throttling blocks a production workload, contact [developer@aisa.one](mailto:developer@aisa.one) with the model or endpoint, your expected peak request rate, and a short description of the use case.
 
 ## Related
 
 <CardGroup cols={2}>
   <Card title="Error Codes" icon="triangle-exclamation" href="/api-reference/errors">
-    Full list of HTTP status codes and recommended responses.
+    Response formats and retry guidance.
   </Card>
   <Card title="Usage Logs" icon="chart-line" href="/guides/dashboard/overview#usage-and-logs">
-    Per-request billing and rate-limit telemetry in the dashboard.
+    Per-request status and billing in the dashboard.
   </Card>
 </CardGroup>

@@ -11,7 +11,7 @@ description: "把 AIsa 配置为 OpenClaw 的 LLM provider，然后用一段 pro
 
 ## 1. 将 AIsa 用作 LLM provider
 
-如果你希望完全控制 OpenClaw 的模型配置——自定义模型列表、fallback chains、存储在系统 keychain 中的 auth profiles，或按 channel 路由——可以直接编辑 `openclaw.json`。
+如果你希望完全控制 OpenClaw 的模型配置——自定义模型列表、fallback chains、存放在 OpenClaw auth store 中的凭据，或按 channel 路由——可以直接编辑 `openclaw.json`。
 
 ### 第 1 步：获取 AIsa API key
 
@@ -60,7 +60,7 @@ export AISA_API_KEY="YOUR_AISA_API_KEY"
           { "id": "kimi-k2.5", "name": "Kimi K2.5" },
           { "id": "claude-opus-4-8", "name": "Claude Opus 4.8" },
           { "id": "gemini-3.5-flash", "name": "Gemini 3.5 Flash" },
-          { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash" },
+          { "id": "deepseek-v4.1-flash", "name": "DeepSeek V4.1 Flash" },
           { "id": "qwen3.7-max", "name": "Qwen3.7 Max" },
           { "id": "MiniMax-M3", "name": "MiniMax M3" },
           { "id": "glm-5", "name": "GLM 5" }
@@ -148,65 +148,36 @@ Use AIsa capabilities to search the web and summarize the latest information abo
 }
 ```
 
-### Auth Profile（Keychain 存储）
+### 把 key 存入 OpenClaw 的 auth store
 
-把 API key 存入系统 keychain，避免写进 `openclaw.json`：
+把 API key 保存到 OpenClaw 的本地 auth store，避免写进 `openclaw.json`：
 
-<Steps>
-  <Step title="声明 auth profile">
-    ```json
-    {
-      "auth": {
-        "profiles": {
-          "aisa:default": {
-            "provider": "aisa",
-            "mode": "api_key"
-          }
-        }
-      }
-    }
-    ```
-  </Step>
-  <Step title="通过 OpenClaw CLI 保存 key">
-    ```bash
-    openclaw auth set aisa:default --key "$AISA_API_KEY"
-    ```
-  </Step>
-  <Step title="在 provider config 中引用 profile">
-    ```json
-    "providers": {
-      "aisa": {
-        "apiKey": "auth:aisa:default",
-        "baseUrl": "https://api.aisa.one/v1",
-        "api": "openai-completions"
-      }
-    }
-    ```
-  </Step>
-</Steps>
+```bash
+printf "%s\n" "$AISA_API_KEY" | openclaw models auth paste-api-key --provider aisa
+```
+
+key 会保存在 `aisa:manual` profile 下（可用 `--profile-id` 自定义名称）。OpenClaw 会从 auth store 读取凭据，因此可以从 `models.providers.aisa` 中删掉 `apiKey`。
 
 ### 按 Channel 设置模型
 
-在每个 messaging platform 上使用不同模型：
+在特定聊天中使用不同模型。`channels.modelByChannel.<platform>` 下的 key 是该平台的频道或群组 ID，值为 `aisa/<model-id>`：
 
 ```json
 {
-  "telegram": {
-    "agents": {
-      "defaults": {
-        "model": { "primary": "aisa/kimi-k2.5" }
-      }
-    }
-  },
-  "discord": {
-    "agents": {
-      "defaults": {
-        "model": { "primary": "aisa/claude-opus-4-8" }
+  "channels": {
+    "modelByChannel": {
+      "telegram": {
+        "-1001234567890": "aisa/kimi-k2.5"
+      },
+      "discord": {
+        "123456789012345678": "aisa/claude-opus-4-8"
       }
     }
   }
 }
 ```
+
+OpenClaw 会严格校验 `openclaw.json`：根级出现 `telegram`、`discord` 这类未知 key 时，Gateway 会拒绝启动。
 
 ## 监控用量
 

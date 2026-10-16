@@ -12,7 +12,7 @@ This guide has two parts:
 
 ## 1. Use AIsa as the LLM provider
 
-If you want full control over OpenClaw's model configuration — custom model lists, fallback chains, auth profiles stored in your system keychain, or per-channel routing — edit `openclaw.json` directly.
+If you want full control over OpenClaw's model configuration — custom model lists, fallback chains, credentials in OpenClaw's auth store, or per-channel routing — edit `openclaw.json` directly.
 
 ### Step 1: Get your AIsa API key
 
@@ -159,65 +159,36 @@ If the primary model fails (due to an upstream outage or rate limit), OpenClaw c
 }
 ```
 
-### Auth profiles (keychain storage)
+### Store the key in OpenClaw's auth store
 
-Keep your API key out of `openclaw.json` by storing it in your system keychain:
+Keep your API key out of `openclaw.json` by saving it in OpenClaw's local auth store:
 
-<Steps>
-  <Step title="Declare an auth profile">
-    ```json
-    {
-      "auth": {
-        "profiles": {
-          "aisa:default": {
-            "provider": "aisa",
-            "mode": "api_key"
-          }
-        }
-      }
-    }
-    ```
-  </Step>
-  <Step title="Store the key via OpenClaw CLI">
-    ```bash
-    openclaw auth set aisa:default --key "$AISA_API_KEY"
-    ```
-  </Step>
-  <Step title="Reference the profile in your provider config">
-    ```json
-    "providers": {
-      "aisa": {
-        "apiKey": "auth:aisa:default",
-        "baseUrl": "https://api.aisa.one/v1",
-        "api": "openai-completions"
-      }
-    }
-    ```
-  </Step>
-</Steps>
+```bash
+printf "%s\n" "$AISA_API_KEY" | openclaw models auth paste-api-key --provider aisa
+```
+
+The key is saved under the `aisa:manual` profile (pass `--profile-id` to name it differently). OpenClaw resolves the credential from the auth store, so you can remove `apiKey` from `models.providers.aisa`.
 
 ### Per-channel models
 
-Run a different model on each messaging platform:
+Run a different model in specific chats. Keys under `channels.modelByChannel.<platform>` are channel or group IDs on that platform; values are `aisa/<model-id>`:
 
 ```json
 {
-  "telegram": {
-    "agents": {
-      "defaults": {
-        "model": { "primary": "aisa/kimi-k2.5" }
-      }
-    }
-  },
-  "discord": {
-    "agents": {
-      "defaults": {
-        "model": { "primary": "aisa/claude-opus-4-8" }
+  "channels": {
+    "modelByChannel": {
+      "telegram": {
+        "-1001234567890": "aisa/kimi-k2.5"
+      },
+      "discord": {
+        "123456789012345678": "aisa/claude-opus-4-8"
       }
     }
   }
 }
 ```
+
+OpenClaw validates `openclaw.json` strictly: unknown top-level keys such as `telegram` or `discord` make the Gateway refuse to start.
 
 ## Monitoring usage
 
