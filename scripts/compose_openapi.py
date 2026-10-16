@@ -881,6 +881,18 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         if unforwarded_query:
                             raise ValueError("source query parameters are not forwarded by runtime: "
                                              + ", ".join(unforwarded_query))
+                        caller_headers = runtime.get("x-aisa-caller-headers", [])
+                        if not isinstance(caller_headers, list) or not all(isinstance(name, str) for name in caller_headers):
+                            raise ValueError("invalid runtime caller-header forwarding declaration")
+                        forwarded_headers = {"accept", *(name.lower() for name in caller_headers)}
+                        unforwarded_headers = sorted({
+                            p["name"] for p in mirror.get("parameters", [])
+                            if p.get("in") == "header"
+                            and p.get("name", "").lower() not in auth_names | forwarded_headers
+                        })
+                        if unforwarded_headers:
+                            raise ValueError("source header parameters are not forwarded by runtime: "
+                                             + ", ".join(unforwarded_headers))
                         parameters = {
                             (p["in"], p["name"]): p for p in mirror.get("parameters", [])
                             if p.get("name", "").lower() not in auth_names

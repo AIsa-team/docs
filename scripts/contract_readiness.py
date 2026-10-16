@@ -153,6 +153,8 @@ def reason_code(reason):
     """
     text = str(reason or '').lower().strip()
     for needles, code in (
+        (('source query parameters are not forwarded by runtime',), 'unforwarded_source_query'),
+        (('source header parameters are not forwarded by runtime',), 'unforwarded_source_header'),
         (('upstream operation missing',), 'upstream_operation_missing'),
         (('upstream selector has no matching',), 'upstream_selector_no_match'),
         (('ambiguous',), 'ambiguous_source'),

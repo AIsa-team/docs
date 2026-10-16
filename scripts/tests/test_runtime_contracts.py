@@ -53,6 +53,21 @@ def operation(document):
 
 
 class CompositionTests(unittest.TestCase):
+    def test_provider_header_needs_forwarding_even_when_runtime_declares_its_type(self):
+        runtime, upstream = facts("mixed"), mirror()
+        header = {"name": "Parallel-Beta", "in": "header", "schema": {"type": "string"}}
+        operation(runtime)["parameters"].append(copy.deepcopy(header))
+        operation(upstream)["parameters"].extend([
+            header, {"name": "Accept", "in": "header", "schema": {"type": "string"}}])
+        _, pending = compose(runtime, upstream)
+        self.assertEqual(pending[0]["reason"], "source header parameters are not forwarded by runtime: Parallel-Beta")
+        from contract_readiness import reason_code
+        self.assertEqual(reason_code(pending[0]["reason"]), "unforwarded_source_header")
+        operation(runtime)["x-aisa-caller-headers"] = ["parallel-beta"]
+        document, pending = compose(runtime, upstream)
+        self.assertEqual(pending, [])
+        self.assertIn(header, operation(document)["parameters"])
+
     def test_any_mpp_permission_is_projected_per_method(self):
         runtime, upstream = facts("provider", "x-aisa-any"), mirror()
         operation(runtime)["x-aisa-capabilities"] = {"mpp": True, "mpp_methods": ["GET"]}

@@ -130,6 +130,7 @@ class NonFredResponseTests(unittest.TestCase):
         doc,_=cloudsway.convert_reference((FIXTURES/'wrapper_cloudsway_smart.html').read_bytes())
         runtime=facts('provider');op=operation(runtime);path=next(iter(runtime['paths']))
         op['x-aisa-query-policy']={'request_wins':True}
+        op['x-aisa-caller-headers']=['Pragma']  # Explicit synthetic transport for this response-only test.
         op['x-aisa-passthrough']=True;op['x-aisa-upstream-path']='/apis/v1/search/smart';op['responses']={'200':{'description':'unknown'}}
         runtime['paths']={path:{'get':op}}
         before,pending_before=compose(runtime)

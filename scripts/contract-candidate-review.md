@@ -96,6 +96,13 @@ and consumed provider authentication stay distinct; authentication/signature
 fields without proven ownership remain blocked. Runtime-owned handlers require
 their own handler/transport evidence.
 
+The Composer guards on this branch also mark unforwarded source query and
+generic header inputs pending, including optional inputs. A Runtime parameter's
+type alone does not prove header transport. Activate these guards only after
+the corresponding immutable Profile repairs and authentication ownership
+decisions have been reviewed and published. Do not manufacture forwarding
+metadata or approve new debt to make a consumer comparison pass.
+
 ```sh
 python -m unittest discover -s scripts/tests -v
 python -m unittest discover -s scripts/tests/w3_verification -v
