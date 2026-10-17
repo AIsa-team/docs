@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from identity_compatibility import operations, validate_document_identities
 from import_duffel_reference import NextData, ORIGIN, envelope
 from readable_contract_notes import BEGIN, END, readable_block
-from runtime_localize_openapi_zh import split_frontmatter
+from runtime_localize_openapi_zh import split_frontmatter, strip_translatable, translation
 from source_json import loads
 from validate_runtime_api_reference_slugs import validate as validate_slugs
 
@@ -119,6 +119,47 @@ class OfficialOrderDeclarationTests(unittest.TestCase):
             (root / PAGE).parent.mkdir(parents=True)
             (root / PAGE).write_text(text)
             return validate_slugs(root, generated_only=True)
+
+
+class DuffelFlightsDerivedViewTests(unittest.TestCase):
+    """Locale document and page blocks are projections of the English source."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.catalog = json.loads((REPO / 'translations/openapi-zh.json').read_text())
+        cls.english = json.loads((REPO / 'openapi/duffel-flights.json').read_text())
+        cls.localized = json.loads((REPO / 'openapi/zh/duffel-flights.json').read_text())
+
+    def note(self, value):
+        try:
+            return translation(self.catalog, value)
+        except KeyError:
+            return value
+
+    def test_localized_protocol_and_prices_match_english(self):
+        self.assertEqual(strip_translatable(self.localized), strip_translatable(self.english))
+        localized = {(path, method): op for path, method, op in operations(self.localized)}
+        for path, method, operation in operations(self.english):
+            self.assertEqual(localized[(path, method)].get('x-aisa-pricing'), operation.get('x-aisa-pricing'), path)
+
+    def test_every_duffel_flights_page_block_is_generated_from_english(self):
+        checked = 0
+        for language, prefix in (('en', ''), ('zh', 'zh/')):
+            for page in sorted((REPO / prefix / 'api-reference/duffel').glob('*.mdx')):
+                text = page.read_text()
+                reference = yaml.safe_load(split_frontmatter(text)[0])['openapi']
+                spec, method, path = reference.split()
+                if spec != f'openapi/{prefix}duffel-flights.json':
+                    continue
+                expected = readable_block(self.english['paths'][path][method.lower()], language, self.note,
+                                          document=self.english, method=method.lower(), path=path, spec_path=spec)
+                with self.subTest(page=page.relative_to(REPO).as_posix()):
+                    self.assertEqual(re.findall(re.escape(BEGIN) + r'.*?' + re.escape(END), text, re.S), [expected])
+                    pricing = self.english['paths'][path][method.lower()].get('x-aisa-pricing', {})
+                    if pricing.get('customer_pricing') == 'fixed_success':
+                        self.assertNotIn('customer_multiplier', pricing)
+                checked += 1
+        self.assertEqual(checked, 28)
 
 
 if __name__ == '__main__':
