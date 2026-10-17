@@ -19,6 +19,18 @@ class TikHubRegionInputsTests(unittest.TestCase):
         doc = json.loads((ROOT / review['source_file']).read_text())
         source = doc['info'].pop('x-aisa-source')
         self.assertEqual(source['content_hash'], digest(doc))
+        # Validate this historical amendment against its exact source, after
+        # undoing the separately reviewed later nullable-only amendment.
+        later = json.loads((ROOT / 'docs/current-source-review-20261017/tikhub-nullability-review.json').read_text())
+        self.assertEqual(source['prior_source'], later['prior_source'])
+        for edit in reversed(later['edits']):
+            parent = doc
+            for key in edit['pointer'][:-1]:
+                parent = parent[key]
+            self.assertEqual(digest(parent[edit['pointer'][-1]]), edit['after_sha256'])
+            parent[edit['pointer'][-1]] = copy.deepcopy(edit['before'])
+        source = source['prior_source']
+        self.assertEqual(source['content_hash'], digest(doc))
         self.assertEqual(source['prior_source'], review['prior_source'])
         self.assertEqual(policy_errors(source), [])
         for key in ('kind', 'url', 'fetched_at', 'owner', 'refresh_policy', 'review_period_days', 'policy_revision'):
