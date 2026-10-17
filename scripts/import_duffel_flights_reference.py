@@ -9,7 +9,7 @@ from compose_openapi import digest, schema_30_to_31
 from import_duffel_reference import NextData, ORIGIN, REFERENCE, SDK_REVISION, envelope
 from source_json import loads
 
-CONVERTER = 'scripts/import_duffel_flights_reference.py@2'
+CONVERTER = 'scripts/import_duffel_flights_reference.py@3'
 SDK_HASHES = {
     "src__types__ClientType.ts": "3aa0ea34054d294f71deaad9005eba83e841cfb70588ca47b6ba55a9f59161b5",
     "src__Client.ts": "0de07d39cc8dd3faae13561cd2e291e7bcaaf58761433bd35db4d929bc8d6b7b",
@@ -33,7 +33,10 @@ OPERATIONS = {
         'get-offer-by-id': ('GET', '/air/offers/{id}', False, False, True),
         'get-offers': ('GET', '/air/offers', True, False, True),
     },
-    'orders': {'create-order': ('POST', '/air/orders', False, True, True)},
+    'orders': {
+        'create-order': ('POST', '/air/orders', False, True, True),
+        'get-order-by-id': ('GET', '/air/orders/{id}', False, False, True),
+    },
     'order-change-requests': {
         'get-order-change-request-by-id': ('GET', '/air/order_change_requests/{id}', False, False, True),
         'create-order-change-request': ('POST', '/air/order_change_requests', False, True, True),

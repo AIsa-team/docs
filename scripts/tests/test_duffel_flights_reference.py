@@ -69,6 +69,42 @@ class DuffelFlightsReferenceTest(unittest.TestCase):
         self.assertEqual(response['properties']['data'], self.resource('order-cancellations')['model'])
         self.assertNotIn('status', response['properties'])
 
+    def test_order_read_uses_exact_official_route_parameters_and_order_model(self):
+        resource = self.resource('orders')
+        [official] = [row for row in resource['operations'] if row['slug'] == 'get-order-by-id']
+        self.assertEqual(official['endpoint'], {
+            'method': 'GET', 'uri': 'https://api.duffel.com/air/orders/{id}'})
+        operation = self.source['paths']['/air/orders/{id}']['get']
+        self.assertEqual(operation['parameters'], official['requestParameters'])
+        self.assertNotIn('requestBody', operation)
+        self.assertEqual(set(operation['responses']), {'2XX'})
+        schema = operation['responses']['2XX']['content']['application/json']['schema']
+        self.assertEqual(schema['properties']['data'], resource['model'])
+        self.assertNotIn('get-order-by-id', {
+            row['operation'] for row in self.source['info']['x-aisa-source']['skipped_operations']})
+
+    def test_order_read_rejects_changed_official_route_or_unexpected_body(self):
+        path = self.directory / 'orders.html'
+        original = path.read_bytes()
+        from import_duffel_reference import ORIGIN
+        # Change only this operation, leaving the existing create declaration valid.
+        for change, message in [
+                (lambda row: row['endpoint'].update(uri=ORIGIN + '/air/order_changes/{id}'),
+                 'operation identity'),
+                (lambda row: row.update(bodyDataSchema={'type': 'object'}),
+                 'request body declaration')]:
+            document = json.loads(''.join(NextData(original).parts))
+            [operation] = [row for row in document['props']['pageProps']['resource']['operations']
+                           if row['slug'] == 'get-order-by-id']
+            change(operation)
+            original_data = ''.join(NextData(original).parts).encode()
+            try:
+                path.write_bytes(original.replace(original_data, json.dumps(document).encode()))
+                with self.assertRaisesRegex(ValueError, message):
+                    convert(self.directory, '2026-10-09T03:46:00Z')
+            finally:
+                path.write_bytes(original)
+
     def test_rejects_changed_sdk_or_endpoint(self):
         name = next(iter(SDK_HASHES))
         path = self.directory / name
@@ -88,9 +124,9 @@ class DuffelFlightsReferenceTest(unittest.TestCase):
         finally:
             path.write_bytes(original)
 
-    def test_actual_converted_source_has_valid_openapi_and_13_operations(self):
+    def test_actual_converted_source_has_valid_openapi_and_14_operations(self):
         validate(self.source)
-        self.assertEqual(sum(len(item) for item in self.source['paths'].values()), 13)
+        self.assertEqual(sum(len(item) for item in self.source['paths'].values()), 14)
         self.assertEqual(self.source['info']['x-aisa-source']['kind'], 'manual')
 
 
