@@ -5,6 +5,15 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      probe_recovery_evidence_read:
+        description: Read-only probe of existing CI Read App access to private Services source evidence
+        type: boolean
+        default: false
+      services_run_id:
+        description: Exact Services Actions run to inspect and read its bounded artifact
+        type: string
+        default: '39039629558'
 
 permissions:
   contents: read
@@ -33,3 +42,62 @@ jobs:
       # acceptance input whose relative links are not site routes.
       - name: Broken links and redirect destinations
         run: npx --yes mint@4.2.1006 broken-links --files '**/*.mdx' --check-redirects
+
+  probe-recovery-evidence-read:
+    if: github.event_name == 'workflow_dispatch' && inputs.probe_recovery_evidence_read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Mint an existing scoped CI Read App token
+        id: read-app
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.AISA_CI_READ_APP_ID }}
+          private-key: ${{ secrets.AISA_CI_READ_APP_PRIVATE_KEY }}
+          owner: AIsa-team
+          repositories: AIsaServices
+          permission-actions: read
+          permission-contents: read
+      - name: Probe actual private Services run and bounded artifact access
+        env:
+          GH_TOKEN: ${{ steps.read-app.outputs.token }}
+          SERVICES_RUN_ID: ${{ inputs.services_run_id }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, re, urllib.request, urllib.parse
+          run = os.environ['SERVICES_RUN_ID']
+          if not re.fullmatch('[1-9][0-9]{0,23}', run):
+              raise SystemExit('Invalid run pin')
+          token = os.environ['GH_TOKEN']
+          class Redirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, url):
+                  if not url.startswith('https://'):
+                      raise ValueError('Non-HTTPS redirect')
+                  result = super().redirect_request(req, fp, code, msg, headers, url)
+                  if urllib.parse.urlparse(req.full_url).netloc != urllib.parse.urlparse(url).netloc:
+                      result.remove_header('Authorization')
+                  return result
+          opener = urllib.request.build_opener(Redirect())
+          def read(path, limit):
+              request = urllib.request.Request('https://api.github.com/repos/AIsa-team/AIsaServices/' + path,
+                  headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json'})
+              with opener.open(request, timeout=30) as response:
+                  raw = response.read(limit + 1)
+              if len(raw) > limit:
+                  raise ValueError('Probe exceeds bound')
+              return raw
+          try:
+              metadata = json.loads(read('actions/runs/' + run, 1 << 20))
+              artifacts = json.loads(read('actions/runs/' + run + '/artifacts', 1 << 20))['artifacts']
+              choices = [a for a in artifacts if not a['expired'] and a['size_in_bytes'] <= 2 << 20]
+              if not choices:
+                  raise ValueError('No bounded live artifact available')
+              chosen = choices[0]
+              raw = read('actions/artifacts/' + str(chosen['id']) + '/zip', 2 << 20)
+              print(json.dumps({'status': 'existing_CI_Read_App_private_Services_access_verified',
+                  'run_id': metadata['id'], 'head_sha': metadata['head_sha'],
+                  'artifact_id': chosen['id'], 'archive_sha256': hashlib.sha256(raw).hexdigest(),
+                  'archive_bytes': len(raw), 'writes': 0}))
+          except Exception as exc:
+              raise SystemExit('Private Services evidence probe rejected: ' + type(exc).__name__)
+          PY
