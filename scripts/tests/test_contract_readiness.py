@@ -45,6 +45,59 @@ class ReadinessTests(unittest.TestCase):
         self.assertEqual('passed', result['status'])
         self.assertEqual(before, args)
 
+    def test_agreement_cannot_hide_missing_uri_input(self):
+        for parameters in ([], [{'name': 'id', 'in': 'query', 'schema': {'type': 'string'}}]):
+            with self.subTest(parameters=parameters):
+                f, d, c = fixture('/items/{id}')
+                for document in (f['p'], d['p']):
+                    document['paths']['/items/{id}']['get']['parameters'] = copy.deepcopy(parameters)
+                before = copy.deepcopy((f, d, c))
+                result = check_readiness(f, d, c)
+                self.assertEqual('failed', result['status'])
+                self.assertIn('missing_path_parameter', self.errors(result))
+                error = next(e for e in result['providers']['p']['errors']
+                             if e['code'] == 'missing_path_parameter')
+                self.assertEqual('id', error['parameter'])
+                self.assertEqual(before, (f, d, c))
+
+    def test_uri_parameters_must_be_required_and_match_placeholders(self):
+        for required in (None, False, 1):
+            with self.subTest(required=required):
+                f, d, c = fixture('/items/{id}')
+                parameter = {'name': 'id', 'in': 'path', 'schema': {'type': 'string'}}
+                if required is not None:
+                    parameter['required'] = required
+                for document in (f['p'], d['p']):
+                    document['paths']['/items/{id}']['get']['parameters'] = [copy.deepcopy(parameter)]
+                self.assertIn('path_parameter_not_required', self.errors(check_readiness(f, d, c)))
+        f, d, c = fixture('/items')
+        for document in (f['p'], d['p']):
+            document['paths']['/items']['get']['parameters'] = [
+                {'name': 'id', 'in': 'path', 'required': True, 'schema': {'type': 'string'}}]
+        self.assertIn('path_parameter_without_placeholder', self.errors(check_readiness(f, d, c)))
+
+    def test_uri_path_item_refs_and_operation_overrides(self):
+        f, d, c = fixture('/items/{id}/children/{child_id}')
+        for document in (f['p'], d['p']):
+            document['components'] = {'parameters': {'Id': {
+                'name': 'id', 'in': 'path', 'required': True, 'schema': {'type': 'string'}}}}
+            item = document['paths']['/items/{id}/children/{child_id}']
+            item['parameters'] = [{'$ref': '#/components/parameters/Id'},
+                                  {'name': 'child_id', 'in': 'path', 'required': True,
+                                   'schema': {'type': 'integer'}}]
+        self.assertEqual('passed', check_readiness(f, d, c)['status'])
+        for document in (f['p'], d['p']):
+            document['paths']['/items/{id}/children/{child_id}']['get']['parameters'] = [
+                {'name': 'id', 'in': 'path', 'required': False, 'schema': {'type': 'string'}}]
+        self.assertIn('path_parameter_not_required', self.errors(check_readiness(f, d, c)))
+
+    def test_uri_check_preserves_reviewed_pending_source_debt(self):
+        f, d, c = pending_fixture('/items/{id}')
+        result = check_readiness(f, d, c, copy.deepcopy(c))
+        self.assertEqual('passed', result['status'])
+        self.assertEqual(1, len(result['providers']['p']['existing_pending']))
+        self.assertNotIn('missing_path_parameter', self.errors(result))
+
     def test_missing_inputs_not_assessed(self):
         for args in [(None, {}, {}), ({}, {}, {'providers': {}})]:
             self.assertEqual('not_assessed', check_readiness(*args)['status'])
@@ -239,6 +292,9 @@ class ReadinessTests(unittest.TestCase):
         f, d, c = fixture('/jobs', 'submit', 'post')
         for path, method, oid in [('/jobs', 'get', 'list'), ('/jobs/{jobId}', 'get', 'detail'), ('/jobs/{jobId}/cancel', 'post', 'cancel')]:
             op = {'operationId': oid, 'x-aisa-validation': 'runtime', 'x-aisa-identity-source': 'derived'}
+            if '{jobId}' in path:
+                op['parameters'] = [{'name': 'jobId', 'in': 'path', 'required': True,
+                                     'schema': {'type': 'string'}}]
             for doc in (f['p'], d['p']):
                 doc['paths'].setdefault(path, {})[method] = copy.deepcopy(op)
             c['providers']['p'].append({'path': path, 'method': method.upper(), 'operation_id': oid, 'status': 'composed'})

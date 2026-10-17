@@ -53,6 +53,21 @@ def operation(document):
 
 
 class CompositionTests(unittest.TestCase):
+    def test_provider_header_needs_forwarding_even_when_runtime_declares_its_type(self):
+        runtime, upstream = facts("mixed"), mirror()
+        header = {"name": "Parallel-Beta", "in": "header", "schema": {"type": "string"}}
+        operation(runtime)["parameters"].append(copy.deepcopy(header))
+        operation(upstream)["parameters"].extend([
+            header, {"name": "Accept", "in": "header", "schema": {"type": "string"}}])
+        _, pending = compose(runtime, upstream)
+        self.assertEqual(pending[0]["reason"], "source header parameters are not forwarded by runtime: Parallel-Beta")
+        from contract_readiness import reason_code
+        self.assertEqual(reason_code(pending[0]["reason"]), "unforwarded_source_header")
+        operation(runtime)["x-aisa-caller-headers"] = ["parallel-beta"]
+        document, pending = compose(runtime, upstream)
+        self.assertEqual(pending, [])
+        self.assertIn(header, operation(document)["parameters"])
+
     def test_any_mpp_permission_is_projected_per_method(self):
         runtime, upstream = facts("provider", "x-aisa-any"), mirror()
         operation(runtime)["x-aisa-capabilities"] = {"mpp": True, "mpp_methods": ["GET"]}
@@ -129,11 +144,35 @@ class CompositionTests(unittest.TestCase):
             runtime = facts("mixed")
             operation(runtime)["x-aisa-query-policy"] = {"request_wins": False, "ignore_undeclared": ignore}
             document, pending = compose(runtime, upstream)
-            self.assertFalse(pending)
-            self.assertEqual([p["name"] for p in operation(document)["parameters"]], ["switch"])
+            self.assertEqual(document["paths"], {})
+            self.assertEqual(pending[0]["reason"],
+                             "source query parameters are not forwarded by runtime: upstream_only")
         operation(runtime)["x-aisa-query-policy"]["request_wins"] = True
         document, _ = compose(runtime, upstream)
         self.assertEqual([p["name"] for p in operation(document)["parameters"]], ["switch", "upstream_only"])
+
+    def test_optional_query_loss_is_pending_for_provider_and_mixed_contracts(self):
+        for validation in ("provider", "mixed"):
+            runtime, upstream = facts(validation), mirror()
+            operation(runtime)["x-aisa-query-policy"] = {"request_wins": False}
+            upstream["paths"]["/provider/test"]["post"]["parameters"].extend([
+                {"in": "query", "name": "cursor", "required": False,
+                 "schema": {"type": "string"}},
+                {"in": "query", "name": "after", "schema": {"type": "string"}}])
+            document, pending = compose(runtime, upstream)
+            self.assertEqual(document["paths"], {})
+            self.assertEqual(pending, [{"operation_id": "published_identity",
+                "path": "/apis/v1/similarweb/test", "method": "POST",
+                "reason": "source query parameters are not forwarded by runtime: after, cursor"}])
+            # Declaring precisely these inputs restores composition; provider
+            # credentials remain hidden and do not create a false omission.
+            operation(runtime)["parameters"].extend([
+                {"in": "query", "name": "cursor", "schema": {"type": "string"}},
+                {"in": "query", "name": "after", "schema": {"type": "string"}}])
+            document, pending = compose(runtime, upstream)
+            self.assertFalse(pending)
+            self.assertEqual([p["name"] for p in operation(document)["parameters"]],
+                             ["after", "cursor", "switch"])
 
     def test_nested_mixed_body_preserves_undeclared_provider_fields(self):
         runtime, upstream = facts("mixed"), mirror()

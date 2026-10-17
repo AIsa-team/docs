@@ -47,7 +47,13 @@ class UpstreamSelectorTests(unittest.TestCase):
             self.assertEqual(op['x-aisa-pricing'],operation(source)['x-aisa-pricing'])
 
     def test_fixed_engine_is_supplied_by_runtime(self):
-        doc,pending=compose(selected_facts(mode='fixed'),upstreams())
+        runtime = selected_facts(mode='fixed')
+        # Fixed selector plus a closed query policy must explicitly declare
+        # each caller input that this synthetic Runtime supports.
+        operation(runtime)['parameters'] += [copy.deepcopy(p) for p in
+            upstreams()[0]['paths']['/search']['get']['parameters']
+            if p['in'] == 'query' and p['name'] not in {'engine', 'api_key'}]
+        doc,pending=compose(runtime,upstreams())
         self.assertEqual(pending,[])
         self.assertNotIn('engine',[p['name'] for p in operation(doc).get('parameters',[])])
 

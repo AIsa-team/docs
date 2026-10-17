@@ -67,6 +67,7 @@ class ReviewedSourceImportTests(unittest.TestCase):
             import hashlib
             op['x-aisa-upstream-path'] = '/search/test-account/smart'
             op['x-aisa-query-policy'] = {'request_wins': True}
+            op['x-aisa-caller-headers'] = ['Pragma']  # Synthetic request transport, independent of importing its source.
             mirror['info']['x-aisa-source']['upstream_path_sha256'] = hashlib.sha256(op['x-aisa-upstream-path'].encode()).hexdigest()
             runtime['paths'] = {'/apis/v1/search/smart': {'x-aisa-any': op}}
             (root/'facts/category.json').write_text(json.dumps({'apis': [{'id': 'search'}]}))

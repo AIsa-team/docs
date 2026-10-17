@@ -87,6 +87,26 @@ def _runtime_parameter_errors(fact, facts_document, operation, document):
     return errors
 
 
+def _path_parameter_errors(path, operation, document):
+    """Check URI inputs independently of Runtime/candidate agreement."""
+    placeholders = set(re.findall(r'\{([^{}]+)\}', path))
+    declared = {}
+    try:
+        for raw in operation.get('parameters', []):
+            parameter = resolve(raw, document, preserve_recursive=True)
+            if parameter.get('in') == 'path':
+                _parameter_contract(parameter, document)
+                declared[parameter['name']] = parameter
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:
+        return [('unresolved_path_parameter_declaration', str(exc))]
+    errors = [('missing_path_parameter', name) for name in sorted(placeholders - declared.keys())]
+    errors.extend(('path_parameter_not_required', name) for name in sorted(declared)
+                  if declared[name].get('required') is not True)
+    errors.extend(('path_parameter_without_placeholder', name)
+                  for name in sorted(declared.keys() - placeholders))
+    return errors
+
+
 def _body_contract(body):
     """Compare request semantics, excluding body/media prose and examples."""
     if not isinstance(body, dict) or not isinstance(body.get('content'), dict) or not body['content']:
@@ -133,6 +153,8 @@ def reason_code(reason):
     """
     text = str(reason or '').lower().strip()
     for needles, code in (
+        (('source query parameters are not forwarded by runtime',), 'unforwarded_source_query'),
+        (('source header parameters are not forwarded by runtime',), 'unforwarded_source_header'),
         (('upstream operation missing',), 'upstream_operation_missing'),
         (('upstream selector has no matching',), 'upstream_selector_no_match'),
         (('ambiguous',), 'ambiguous_source'),
@@ -438,6 +460,10 @@ def check_readiness(facts_by_provider, documents_by_provider, coverage,
             elif row.get('status') == 'composed':
                 if retained:
                     result['errors'].append(_error('retained_claims_fresh_composition', provider, path, method))
+                if op:
+                    for code, parameter in _path_parameter_errors(path, op, document):
+                        result['errors'].append(_error(code, provider, path, method,
+                                                       op.get('operationId'), parameter=parameter))
                 if not op and _valid_document(document):
                     result['errors'].append(_error('composed_operation_missing', provider, path, method))
                 elif op and (not op.get('operationId') or row.get('operation_id') != op['operationId']):
