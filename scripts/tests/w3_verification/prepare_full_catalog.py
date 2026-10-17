@@ -11,11 +11,13 @@ from collections import Counter
 import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 import sys
 import subprocess
 import tarfile
 import time
+from urllib.parse import urlsplit
 
 ARCHIVE_SHA256 = 'f2b35c81df49b3a31053f3b4e8978778e52556d2d36536c23f4d7f28f8e0f02f'
 
@@ -48,12 +50,362 @@ def apply_policy_fixture(root, fixture, policy_fields, validate_policy):
         path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + '\n')
 
 
-def reconcile(expected, candidate, coverage):
-    """Compare complete identity sets with frozen evidence, not just totals."""
+METHODS = {'get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace'}
+# Merged source guards: a supplier input Runtime does not forward is pending,
+# never silently dropped. They are the only accepted cause of a blocked
+# provider retaining its last-good document in this frozen replay.
+SOURCE_GUARD_REASON_CODES = {'unforwarded_source_query', 'unforwarded_source_header'}
+IDENTITY_BLOCK = re.compile(r"published identity changed or disappeared: (\S+) \(\('([^']+)', '([a-z]+)'\)\)")
+# A row whose identity key is unchanged must not silently change these.
+STABLE_ROW_FIELDS = ('catalog', 'reason', 'reason_code', 'validation', 'schema_source')
+EXECUTION_FIELDS = ('x-aisa-pricing', 'x-aisa-status', 'x-aisa-query-policy',
+                    'x-aisa-upstream-path', 'x-aisa-capabilities', 'x-aisa-passthrough')
+LEGACY_UNCOMPOSED, LEGACY_DISABLED = 'not_in_composed_runtime_contract', 'runtime_explicitly_disabled'
+# Aggregates and ledgers, not independently published contract documents.
+NON_CONTRACT_FILES = {'openapi.json', 'pending.json', 'coverage.json', 'coverage-sources.json', 'nav-groups.json'}
+
+
+def _row_key(provider, row):
+    return (provider, row['path'], row['method'], row.get('operation_id'), row['status'])
+
+
+def _legacy_key(row):
+    return (row.get('source'), row.get('path'), row.get('method'), row.get('operation_id'), row.get('status'), row.get('reason'))
+
+
+def _route_operations(document, helpers):
+    """Effective operations keyed by full public path, independent of server prefixes.
+
+    Path Item references and Path Item parameters are resolved with OpenAPI
+    inheritance; an operation parameter overrides only the same (in, name).
+    """
+    effective_object, effective_public_operation = helpers
+    prefix = urlsplit((document.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
+    result = {}
+    for route, raw in document.get('paths', {}).items():
+        item = effective_object(raw, document)
+        for method, op in item.items():
+            if method in METHODS:
+                result[(prefix + route, method)] = effective_public_operation(item, op, document)
+    return result
+
+
+def _resolved_routes(name, documents, helpers, errors):
+    resolved = {}
+    for provider, document in documents.items():
+        try:
+            resolved[provider] = _route_operations(document, helpers)
+        except (ValueError, KeyError, TypeError, AttributeError) as exc:
+            errors.append(('unresolvable_document', name, provider, str(exc)))
+            resolved[provider] = {}
+    return resolved
+
+
+def _block_causes(provider, entries, frozen_entries, reason_code):
+    """Classify new pending entries; only merged source guards may block."""
+    known = {(row.get('path'), row.get('method'), row.get('reason')) for row in frozen_entries}
+    guarded, identity, unaccepted = set(), [], []
+    for row in entries:
+        if (row.get('path'), row.get('method'), row.get('reason')) in known:
+            continue
+        match = IDENTITY_BLOCK.fullmatch(str(row.get('reason') or '')) if row.get('path') is None else None
+        if match:
+            identity.append((match.group(2), match.group(3).upper()))
+        elif row.get('path') is not None and reason_code(row.get('reason')) in SOURCE_GUARD_REASON_CODES:
+            guarded.add((row['path'], row['method']))
+        else:
+            unaccepted.append((provider, row.get('path'), row.get('method'), row.get('reason')))
+    for path, method in identity:
+        if (path, method) not in guarded and (path, 'ANY') not in guarded:
+            unaccepted.append((provider, path, method, 'identity block not caused by a source guard'))
+    return guarded, bool(identity), unaccepted
+
+
+def _runtime_operation(facts, row, helpers):
+    effective_object, effective_public_operation = helpers
+    item = facts['paths'].get(row['path'])
+    if item is None:
+        return None
+    item = effective_object(item, facts)
+    runtime = item.get(row['method'].lower(), item.get('x-aisa-any'))
+    return None if runtime is None else effective_public_operation(item, runtime, facts)
+
+
+def _unforwarded_inputs(document, routes, runtime, row, helpers):
+    """Independently list caller inputs a published operation exposes but Runtime drops."""
+    forwarded = {(p['in'], p['name']) for p in runtime.get('parameters', [])}
+    headers = {'accept', *(name.lower() for name in runtime.get('x-aisa-caller-headers', []))}
+    query_passthrough = runtime.get('x-aisa-query-policy', {}).get('request_wins', False)
+    auth = {'authorization', 'x-api-key', 'api-key'} | {
+        scheme['name'].lower() for scheme in (helpers[0](value, document) for value in
+                                              document.get('components', {}).get('securitySchemes', {}).values())
+        if scheme.get('name')}
+    method = row['method'].lower()
+    exposed = []
+    for (path, actual), op in routes.items():
+        if path != row['path'] or method not in ('any', actual):
+            continue
+        for parameter in op.get('parameters', []):
+            name, place = parameter.get('name', ''), parameter.get('in')
+            if place == 'header' and name.lower() not in auth | headers and ('header', name) not in forwarded:
+                exposed.append((actual.upper(), op.get('operationId'), 'header', name))
+            elif place == 'query' and not query_passthrough and name.lower() not in auth and ('query', name) not in forwarded:
+                exposed.append((actual.upper(), op.get('operationId'), 'query', name))
+    return exposed
+
+
+def reconcile_ledger(previous, coverage, last_good, documents, pending, frozen_pending, facts, reason_code, helpers):
+    """Account for every frozen and candidate coverage row by explicit rule.
+
+    Runs on every comparison, including identical identity sets: multiplicity,
+    stable row fields, runtime status and fresh-input exposure are checked even
+    when nothing transitions. A changed row must belong to a provider whose
+    recomposition was blocked solely by merged source guards and which retains
+    its byte-equal last-good document. Retained rows stay pending; an
+    ``x-aisa-any`` route may collapse to one ANY row only when the frozen
+    per-method rows are exactly the retained last-good operations at that route.
+    Every published operation of a covered provider needs a coverage row, so no
+    operation escapes the exposure check. Fresh operations must not expose
+    unforwarded inputs; retained ones may only keep exposures already published
+    by the frozen last-good document, and are reported as such.
+    """
+    errors = []
+    frozen = {provider: rows for provider, rows in previous['providers'].items()}
+    current = {provider: rows for provider, rows in coverage['providers'].items()}
+    frozen_keys = [_row_key(p, row) for p, rows in frozen.items() for row in rows]
+    current_keys = [_row_key(p, row) for p, rows in current.items() for row in rows]
+    for name, keys in (('frozen', frozen_keys), ('candidate', current_keys)):
+        duplicates = sorted(key for key, count in Counter(keys).items() if count > 1)
+        errors.extend(('duplicate_coverage_row', name, *key) for key in duplicates)
+    if set(frozen) != set(current):
+        errors.append(('provider_set_changed', sorted(set(frozen) ^ set(current))))
+    routes = _resolved_routes('candidate', documents, helpers, errors)
+    prior_routes = _resolved_routes('last_good', last_good, helpers, errors)
+    unchanged = set(frozen_keys) & set(current_keys)
+    whole_retained = {provider for provider, rows in current.items() if rows and all(
+        row['status'] == 'pending' and row.get('publication_state') == 'retained' for row in rows)}
+    frozen_rows = {_row_key(p, row): row for p, rows in frozen.items() for row in rows}
+    for provider, rows in current.items():
+        for row in rows:
+            key = _row_key(provider, row)
+            if row['status'] == 'composed' and row.get('publication_state') is not None:
+                errors.append(('composed_row_claims_retention', *key))
+            if key not in unchanged:
+                continue
+            old = frozen_rows[key]
+            errors.extend(('unchanged_row_field_changed', *key, field) for field in STABLE_ROW_FIELDS
+                          if old.get(field) != row.get(field))
+            state = row.get('publication_state')
+            if state != old.get('publication_state') and not (
+                    old.get('publication_state') is None and state == 'retained' and provider in whole_retained):
+                errors.append(('unchanged_row_field_changed', *key, 'publication_state'))
+    retained, causes, collapsed, exposures = {}, {}, [], {'composed': [], 'retained_preexisting': []}
+    legacy_rows = {_legacy_key(row)[:4] for row in coverage.get('legacy_operations', [])
+                   if row.get('status') == 'retained_legacy'}
+    legacy_only = []
+    accounted_frozen, accounted_current = set(unchanged), set(unchanged)
+    for provider in sorted(set(frozen) & set(current)):
+        rows = current[provider]
+        lost = [row for row in frozen[provider] if _row_key(provider, row) not in unchanged]
+        added = [row for row in rows if _row_key(provider, row) not in unchanged]
+        if provider in whole_retained and (lost or added):
+            guarded, identity_blocked, unaccepted = _block_causes(provider, pending.get(provider, []),
+                                                                  frozen_pending.get(provider, []), reason_code)
+            errors.extend(('unaccepted_block_cause', *item) for item in unaccepted)
+            if not guarded or not identity_blocked:
+                errors.append(('retention_without_source_guard_block', provider))
+            if documents.get(provider) != last_good.get(provider) or provider not in last_good:
+                errors.append(('retained_document_not_last_good', provider))
+            causes[provider] = sorted(f'{path} {method}' for path, method in guarded)
+            retained_ops = prior_routes.get(provider, {})
+            by_route = {}
+            for row in lost:
+                by_route.setdefault(row['path'], []).append(row)
+            for row in added:
+                mapped = [old for old in by_route.get(row['path'], [])
+                          if (old['method'], old.get('operation_id')) == (row['method'], row.get('operation_id'))]
+                if row['method'] == 'ANY' and not mapped:
+                    fact = facts.get(provider, {}).get('paths', {}).get(row['path'], {}).get('x-aisa-any')
+                    mapped = [old for old in by_route.get(row['path'], []) if old['method'] != 'ANY']
+                    published = {(m.upper(), op.get('operationId')) for (path, m), op in retained_ops.items() if path == row['path']}
+                    if not fact or fact.get('operationId') != row.get('operation_id'):
+                        errors.append(('any_collapse_without_runtime_any', provider, row['path'], row.get('operation_id')))
+                        mapped = []
+                    elif {(old['method'], old.get('operation_id')) for old in mapped} != published or not published:
+                        errors.append(('any_collapse_hides_retained_operation', provider, row['path'],
+                                       sorted(published ^ {(old['method'], old.get('operation_id')) for old in mapped})))
+                        mapped = []
+                    else:
+                        collapsed.append((provider, row['path'], sorted(old['method'] for old in mapped)))
+                # binding_hash is not compared: its derivation changed after W0
+                # even for unchanged rows. Runtime fact presence is the invariant.
+                fact_item = facts.get(provider, {}).get('paths', {}).get(row['path'], {})
+                if mapped and row['method'].lower() not in fact_item and 'x-aisa-any' not in fact_item:
+                    errors.append(('retained_row_without_runtime_fact', provider, row['path'], row['method']))
+                    mapped = []
+                if mapped:
+                    accounted_current.add(_row_key(provider, row))
+                    accounted_frozen.update(_row_key(provider, old) for old in mapped)
+            for row in lost:
+                if row['status'] != 'composed':
+                    continue
+                kept = retained_ops.get((row['path'], row['method'].lower()))
+                if kept is None:
+                    errors.append(('retained_operation_missing', provider, row['path'], row['method'], row.get('operation_id')))
+                elif kept.get('operationId') != row.get('operation_id'):
+                    errors.append(('retained_identity_changed', provider, row['path'], row['method']))
+            retained[provider] = {'frozen_rows': len(lost), 'candidate_rows': len(added),
+                                  'retained_operations': len(retained_ops)}
+    for provider in sorted(current):
+        rows = current[provider]
+        if provider not in facts:
+            errors.append(('missing_runtime_facts', provider))
+            continue
+        if provider not in documents:
+            errors.append(('missing_candidate_document', provider))
+        document, published = documents.get(provider, {}), routes.get(provider, {})
+        covered = {(row['path'], row['method'].lower()) for row in rows}
+        for (path, method), op in sorted(published.items()):
+            if (path, method) in covered or (path, 'any') in covered:
+                continue
+            # Unregistered history has no Runtime fact; it must be the explicit
+            # retained-legacy projection the legacy ledger accounts for.
+            if op.get('x-aisa-contract-state') == 'retained_legacy' and \
+                    (f'openapi/{provider}.json', path, method.upper(), op.get('operationId')) in legacy_rows:
+                legacy_only.append((provider, path, method.upper(), op.get('operationId')))
+                continue
+            errors.append(('operation_without_coverage_row', provider, path, method.upper(), op.get('operationId')))
+        for row in rows:
+            runtime = _runtime_operation(facts[provider], row, helpers)
+            if runtime is None:
+                if row['status'] == 'composed' or row.get('publication_state') != 'retained':
+                    errors.append(('row_without_runtime_fact', provider, row['path'], row['method']))
+                continue
+            if 'runtime_status' in row and row['runtime_status'] != runtime.get('x-aisa-status'):
+                errors.append(('runtime_status_mismatch', provider, row['path'], row['method']))
+            exposed = _unforwarded_inputs(document, published, runtime, row, helpers)
+            if not exposed:
+                continue
+            if row['status'] == 'composed' or row.get('publication_state') != 'retained':
+                exposures['composed'].extend((provider, row['path'], *item) for item in exposed)
+                continue
+            prior_ops = prior_routes.get(provider, {})
+            for method, operation_id, place, name in exposed:
+                prior = prior_ops.get((row['path'], method.lower()), {})
+                if prior.get('operationId') != operation_id or not any(
+                        (p.get('in'), p.get('name')) == (place, name) for p in prior.get('parameters', [])):
+                    exposures['composed'].append((provider, row['path'], method, operation_id, place, name))
+                else:
+                    exposures['retained_preexisting'].append((provider, row['path'], method, operation_id, place, name))
+    errors.extend(('unforwarded_input_exposed', *item) for item in exposures['composed'])
+    unaccounted_frozen = sorted(set(frozen_keys) - accounted_frozen)
+    unaccounted_current = sorted(set(current_keys) - accounted_current)
+    errors.extend(('unaccounted_frozen_row', *key) for key in unaccounted_frozen)
+    errors.extend(('unaccounted_candidate_row', *key) for key in unaccounted_current)
+    return {'frozen_rows': len(frozen_keys), 'candidate_rows': len(current_keys), 'unchanged_rows': len(unchanged),
+            'retained_frozen_rows': sum(row['frozen_rows'] for row in retained.values()),
+            'retained_candidate_rows': sum(row['candidate_rows'] for row in retained.values()),
+            'retained_providers': retained, 'source_guard_block_causes': causes,
+            'any_collapsed_routes': collapsed,
+            'exposure_checked_rows': sum(len(rows) for provider, rows in current.items() if provider in facts),
+            'retained_legacy_operations_without_runtime_fact': legacy_only,
+            'retained_preexisting_unforwarded_inputs': len(exposures['retained_preexisting']),
+            'retained_preexisting_unforwarded_input_providers': dict(Counter(item[0] for item in exposures['retained_preexisting'])),
+            'unaccounted_frozen_rows': len(unaccounted_frozen), 'unaccounted_candidate_rows': len(unaccounted_current),
+            'errors': [list(error) for error in errors], 'status': 'failed' if errors else 'passed'}
+
+
+def reconcile_legacy(previous, coverage, last_good, documents, retained_providers, index, helpers):
+    """Account for legacy coverage rows and handwritten documents against last-good.
+
+    Added legacy rows may only project every last-good operation of a guarded,
+    retained provider. A reason may only be refined to an explicit Runtime
+    disable when the frozen Runtime index tombstones that path and the
+    published operation is disabled. Legacy documents keep their identities.
+    """
+    errors = []
+    frozen = Counter(_legacy_key(row) for row in previous.get('legacy_operations', []))
+    current = Counter(_legacy_key(row) for row in coverage.get('legacy_operations', []))
+    for name, counts in (('frozen', frozen), ('candidate', current)):
+        errors.extend(('duplicate_legacy_row', name, *key) for key, count in sorted(counts.items()) if count > 1)
+    tombstones = {row.get('path') for row in index.get('coverage', {}).get('excluded_endpoints', [])
+                  if isinstance(row, dict) and row.get('status') == 'disabled'}
+    routes = _resolved_routes('candidate', documents, helpers, errors)
+    prior_routes = _resolved_routes('last_good', last_good, helpers, errors)
+    lost, added = set(frozen) - set(current), set(current) - set(frozen)
+    accounted_lost, accounted_added, refined, projected = set(), set(), [], {}
+    def source_name(source):
+        return str(source or '').removeprefix('openapi/').removesuffix('.json')
+    for old in sorted(lost):
+        new = old[:5] + (LEGACY_DISABLED,)
+        op = routes.get(source_name(old[0]), {}).get((old[1], str(old[2]).lower()), {})
+        if old[4:] == ('retained_legacy', LEGACY_UNCOMPOSED) and new in added and old[1] in tombstones \
+                and op.get('operationId') == old[3] and op.get('x-aisa-status') == 'disabled':
+            accounted_lost.add(old)
+            accounted_added.add(new)
+            refined.append(old[:4])
+    frozen_routes = {(source_name(key[0]), key[1], key[2], key[3]) for key in frozen}
+    for key in sorted(added - accounted_added):
+        provider = source_name(key[0])
+        prior = prior_routes.get(provider, {}).get((key[1], str(key[2]).lower()), {})
+        if provider in retained_providers and key[4:] == ('retained_legacy', LEGACY_UNCOMPOSED) \
+                and prior.get('operationId') == key[3]:
+            accounted_added.add(key)
+            projected.setdefault(provider, set()).add((key[1], key[2], key[3]))
+    for provider in sorted(retained_providers):
+        expected_rows = {(path, method.upper(), op.get('operationId')) for (path, method), op in prior_routes.get(provider, {}).items()
+                         if (provider, path, method.upper(), op.get('operationId')) not in frozen_routes}
+        if projected.get(provider, set()) != expected_rows:
+            errors.append(('retained_legacy_projection_incomplete', provider,
+                           sorted(expected_rows ^ projected.get(provider, set()))))
+    errors.extend(('unaccounted_frozen_legacy_row', *key) for key in sorted(lost - accounted_lost))
+    errors.extend(('unaccounted_candidate_legacy_row', *key) for key in sorted(added - accounted_added))
+    disabled = {(source_name(key[0]), key[1], str(key[2]).lower()) for key in current if key[5] == LEGACY_DISABLED}
+    handwritten = sorted(name for name, document in last_good.items()
+                         if not document.get('info', {}).get('x-aisa-document', {}).get('composer_version'))
+    for name in handwritten:
+        if name not in documents:
+            errors.append(('legacy_document_missing', name))
+            continue
+        before, after = prior_routes.get(name, {}), routes.get(name, {})
+        if {k: op.get('operationId') for k, op in before.items()} != {k: op.get('operationId') for k, op in after.items()}:
+            errors.append(('legacy_document_identity_changed', name))
+            continue
+        for key, op in sorted(before.items()):
+            for field in EXECUTION_FIELDS:
+                if op.get(field) == after[key].get(field):
+                    continue
+                if field == 'x-aisa-status' and after[key].get(field) == 'disabled' and (name, *key) in disabled:
+                    continue
+                errors.append(('legacy_execution_metadata_changed', name, *key, field))
+    errors.extend(('legacy_document_added', name) for name in sorted(set(documents) - set(last_good))
+                  if not documents[name].get('info', {}).get('x-aisa-document', {}).get('composer_version'))
+    return {'frozen_rows': sum(frozen.values()), 'candidate_rows': sum(current.values()),
+            'unchanged_rows': sum((frozen & current).values()),
+            'retained_projection_rows': {provider: len(rows) for provider, rows in sorted(projected.items())},
+            'disabled_reason_refinements': refined, 'handwritten_documents': len(handwritten),
+            'errors': [list(error) for error in errors], 'status': 'failed' if errors else 'passed'}
+
+
+def reconcile(expected, candidate, coverage, last_good_root):
+    """Compare complete identity sets and ledgers with frozen evidence, not just totals.
+
+    ``last_good_root`` is required: without the frozen last-good input, runtime
+    facts and pending ledgers this cannot certify retention or exposure, so no
+    path returns ``passed`` without those checks.
+    """
+    if last_good_root is None:
+        raise ValueError('full-set reconciliation requires the frozen last-good input root')
+    import yaml
+    from compose_openapi import effective_object, effective_public_operation
+    from contract_readiness import reason_code
+    from runtime_registry import combine_facts
+    from pull_openapi import normalize_paths
+    helpers = (effective_object, effective_public_operation)
     previous = json.loads((expected / 'openapi/coverage.json').read_text())
+    written = json.loads((candidate / 'openapi/coverage.json').read_text())
     def rows(value):
-        return {(provider, row['path'], row['method'], row.get('operation_id'), row['status'])
-                for provider, entries in value['providers'].items() for row in entries}
+        return [_row_key(provider, row) for provider, entries in value['providers'].items() for row in entries]
     def operations(root):
         result = {}
         for path in (root / 'openapi').glob('*.json'):
@@ -61,20 +413,50 @@ def reconcile(expected, candidate, coverage):
             if not doc.get('info', {}).get('x-aisa-document', {}).get('composer_version'):
                 continue
             for route, item in doc.get('paths', {}).items():
-                for method, op in item.items():
-                    if method in {'get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace'}:
+                for method, op in effective_object(item, doc).items():
+                    if method in METHODS:
                         result[(path.name, route, method, op.get('operationId'))] = op
         return result
+    def contract_documents(root):
+        result = {}
+        for path in sorted((root / 'openapi').glob('*.json')):
+            document = json.loads(path.read_text())
+            if path.name not in NON_CONTRACT_FILES and isinstance(document, dict) and isinstance(document.get('paths'), dict):
+                result[path.stem] = document
+        return result
     before, after = operations(expected), operations(candidate)
-    fields = ('x-aisa-pricing', 'x-aisa-status', 'x-aisa-query-policy',
-              'x-aisa-upstream-path', 'x-aisa-capabilities', 'x-aisa-passthrough')
     changed = [(identity, field) for identity, op in before.items() if identity in after
-               for field in fields if op.get(field) != after[identity].get(field)]
-    return {'coverage_rows': len(rows(coverage)), 'composed_operations': len(after),
-            'coverage_identity_sets_equal': rows(previous) == rows(coverage),
-            'operation_identity_sets_equal': before.keys() == after.keys(),
-            'execution_metadata_changes': changed,
-            'status': 'passed' if rows(previous) == rows(coverage) and before.keys() == after.keys() and not changed else 'failed'}
+               for field in EXECUTION_FIELDS if op.get(field) != after[identity].get(field)]
+    registry = yaml.safe_load((candidate / 'openapi/registry.yaml').read_text())['providers']
+    facts = {}
+    for provider in coverage['providers']:
+        catalogs = (registry.get(provider) or {}).get('group', [provider])
+        paths = [candidate / f'facts/{catalog}.json' for catalog in catalogs]
+        if all(path.is_file() for path in paths):
+            facts[provider] = normalize_paths(combine_facts(
+                {catalog: json.loads(path.read_text()) for catalog, path in zip(catalogs, paths)}, provider))
+    def pending(root):
+        return json.loads((root / 'openapi/pending.json').read_text()).get('providers', {})
+    last_good, documents = contract_documents(last_good_root), contract_documents(candidate)
+    def providers(values):
+        return {name: values[name] for name in coverage['providers'] if name in values}
+    ledger = reconcile_ledger(previous, coverage, providers(last_good), providers(documents),
+                              pending(candidate), pending(expected), facts, reason_code, helpers)
+    index_path = candidate / 'facts/index.json'
+    legacy = reconcile_legacy(previous, coverage, last_good, documents, set(ledger['retained_providers']),
+                              json.loads(index_path.read_text()) if index_path.is_file() else {}, helpers)
+    file_matches = json.loads(json.dumps(coverage)) == written
+    result = {'coverage_rows': len(set(rows(coverage))), 'coverage_row_entries': len(rows(coverage)),
+              'composed_operations': len(after),
+              'coverage_identity_sets_equal': set(rows(previous)) == set(rows(coverage)),
+              'coverage_identity_multisets_equal': Counter(rows(previous)) == Counter(rows(coverage)),
+              'coverage_file_matches_composition': file_matches,
+              'operation_identity_sets_equal': before.keys() == after.keys(),
+              'execution_metadata_changes': changed,
+              'coverage_ledger': ledger, 'legacy_ledger': legacy}
+    result['status'] = 'passed' if (ledger['status'] == 'passed' and legacy['status'] == 'passed' and file_matches
+                                    and before.keys() == after.keys() and not changed) else 'failed'
+    return result
 
 
 def main():
@@ -151,7 +533,7 @@ def main():
     pending = [row for rows in coverage['providers'].values() for row in rows if row['status'] == 'pending']
     responses = [row for rows in coverage['response_gaps'].values() for row in rows]
     maintenance = source_report(candidate)
-    full_set = reconcile(args.output / 'expected', candidate, coverage)
+    full_set = reconcile(args.output / 'expected', candidate, coverage, last_good_root=args.output / 'input')
     receipt = {'scope': 'offline W1/W2 diagnostic candidate; no debt approval/publication/live execution',
         'archive_sha256': ARCHIVE_SHA256, 'composed_providers': len(summary),
         'policy_fixture_sha256': hashlib.sha256(args.policy_fixture.read_bytes()).hexdigest(),
