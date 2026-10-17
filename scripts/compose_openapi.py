@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit, unquote
 
-VERSION = "22"
+VERSION = "23"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -521,6 +521,36 @@ def retain_source_annotations(declared: dict, source: dict) -> dict:
     return result
 
 
+def retain_provider_parameter_guidance(parameter: dict, source: dict) -> dict:
+    """Present missing supplier restrictions without inventing Runtime validation.
+
+    A query value may intentionally use a Runtime string schema while the
+    supplier describes an integer/date. Reattaching JSON Schema bounds or
+    defaults would change the Runtime contract or constrain the wrong type.
+    Keep that supplier declaration in the field's visible guidance instead.
+    """
+    declared, upstream = parameter.get('schema'), source.get('schema')
+    if not isinstance(declared, dict) or not isinstance(upstream, dict):
+        return parameter
+    keys = ('enum', 'const', 'default', 'format', 'minimum', 'maximum',
+            'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf', 'pattern',
+            'minLength', 'maxLength', 'minItems', 'maxItems', 'uniqueItems')
+    missing = {key: copy.deepcopy(upstream[key]) for key in keys
+               if key in upstream and key not in declared}
+    if not missing:
+        return parameter
+    if 'type' in upstream:
+        missing = {'type': copy.deepcopy(upstream['type']), **missing}
+    note = 'Provider reference (supplier schema): `' + json.dumps(
+        missing, sort_keys=True, ensure_ascii=False, separators=(',', ':')) + '`.'
+    result = copy.deepcopy(parameter)
+    description = result.get('description') or declared.get('description') or ''
+    if note in description:
+        return result
+    result['description'] = description.rstrip() + ('\n\n' if description else '') + note
+    return result
+
+
 def merge_object(upstream: dict, declared: dict) -> dict:
     merged = flatten_object(upstream)
     names = set(declared.get("properties", {}))
@@ -852,7 +882,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             merged = retain_source_annotations(parameter, original)
                             if isinstance(parameter.get("schema"), dict) and isinstance(original.get("schema"), dict):
                                 merged["schema"] = retain_source_annotations(parameter["schema"], original["schema"])
-                            parameters[key] = merged
+                            parameters[key] = retain_provider_parameter_guidance(merged, original)
                         if parameters:
                             operation["parameters"] = [parameter_wire_default(parameters[k]) for k in sorted(parameters)]
                         if mirror.get("requestBody") or runtime.get("requestBody"):

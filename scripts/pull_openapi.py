@@ -19,7 +19,8 @@ from urllib.request import Request, urlopen
 import yaml
 
 import api_nav_groups
-from compose_openapi import METHODS, compose, digest, resolve_fragment
+from compose_openapi import (METHODS, compose, digest, resolve_fragment,
+                             effective_parameters, effective_security)
 from import_upstream import import_source
 from runtime_registry import discover, combine_facts, public_mirror_index, published_documents, previous_for_facts, coverage_rows, disabled_legacy_paths, source_configurations, legacy_coverage_row
 from source_json import loads as source_json_loads, load as source_json_load, UnsupportedNumericPrecision
@@ -70,7 +71,28 @@ def retain_unregistered_history(document: dict, facts: dict, history: dict) -> l
             continue
         if old['operationId'] in current_ids:
             continue
-        operation = resolve_fragment(old, history, document, "retained_history.json")
+        historic = copy.deepcopy(old)
+        parameters = effective_parameters(history['paths'][path], old, history)
+        if parameters:
+            historic['parameters'] = parameters
+        historic.setdefault('security', copy.deepcopy(history.get('security', [])))
+        # Resolve authentication independently of request-schema references.
+        # A historic public "Bearer" alias may bind to the current platform's
+        # single HTTP Bearer scheme; unrelated missing schemes stay unresolved.
+        security, missing = effective_security({**historic, 'x-aisa-status': 'disabled',
+            'x-aisa-contract-state': 'retained_legacy'}, history)
+        if 'Bearer' in missing:
+            current_security, _ = effective_security({}, facts)
+            if len(current_security) == 1:
+                scheme = next(iter(current_security.values()))
+                if scheme.get('type') == 'http' and str(scheme.get('scheme', '')).lower() == 'bearer':
+                    security['Bearer'] = copy.deepcopy(scheme)
+        auth = {'components': {'securitySchemes': security}, 'security': historic['security']}
+        from runtime_consolidate_openapi import merge_components
+        document.setdefault('components', {})
+        merge_components(document, auth, 'retained_history.json')
+        historic['security'] = auth['security']
+        operation = resolve_fragment(historic, history, document, "retained_history.json")
         # Page links are added and hashed by generate_pages after composition.
         # Feeding the previous run's derived link back here creates hash churn.
         operation.pop("x-aisa-docs-url", None)
