@@ -132,6 +132,21 @@ The formal publisher separately acquires a fresh release and assesses the exact
 staged graph before exporting its publication pointer. Candidate CI success does
 not authorize a formal release or assert that consumers have converged.
 
+Runtime payment capabilities may include optional `mpp_methods` and
+`x402_methods` lists. Composer keeps the immutable native operation identity and
+limits each concrete method's payment flag to the declared uppercase methods.
+An empty list disables that surface for every method; an absent list preserves
+the previous behavior. Lists never enable a false payment flag. Capability keys,
+types and method lists are validated before composition; unknown fields,
+duplicate methods and nonstandard or nonuppercase methods are rejected.
+These declarations describe payment eligibility, not supplier credential
+ownership or successful authentication. They do not waive request-forwarding
+checks or grant installed-image, publication or deployment qualification.
+
+```sh
+python -m unittest discover -s scripts/tests -p 'test_payment_method_capabilities.py'
+```
+
 For mixed request bodies, an explicit Runtime array `items: {}` leaves its
 children provider-owned. Composer preserves the reviewed source item schema at
 that same array position while keeping Runtime's array type and bounds.

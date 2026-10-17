@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit, unquote
 
-VERSION = "23"
+VERSION = "24"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -24,6 +24,42 @@ NAMED_CONTRACT_MAPS = {"properties", "patternProperties", "$defs", "definitions"
 # consumers inspect references inside them, although OpenAPI validators ignore
 # them. Keep the original in the upstream mirror, not the public projection.
 NON_PUBLIC_EXTENSIONS = {"x-stainless-override-schema"}
+
+
+def validate_payment_capabilities(operation: dict) -> None:
+    """Keep optional Runtime payment method declarations closed and exact.
+
+    Missing declarations retain the historical facts behavior. Method lists
+    restrict an existing true capability; they never enable a payment surface.
+    """
+    if "x-aisa-capabilities" not in operation:
+        return
+    capabilities = operation["x-aisa-capabilities"]
+    allowed = {"mpp", "mpp_methods", "x402", "x402_methods", "quote", "max_price", "idempotency"}
+    if not isinstance(capabilities, dict) or set(capabilities) - allowed:
+        raise ValueError("invalid runtime payment capabilities")
+    for name in ("mpp", "x402"):
+        if name in capabilities and type(capabilities[name]) is not bool:
+            raise ValueError("runtime payment capability must be boolean")
+        field = name + "_methods"
+        if field in capabilities:
+            methods = capabilities[field]
+            if (not isinstance(methods, list) or len(methods) > len(METHODS)
+                    or any(type(method) is not str or method.lower() not in METHODS
+                           or method != method.upper() for method in methods)
+                    or len(set(methods)) != len(methods)):
+                raise ValueError("invalid runtime payment method declaration")
+    for name in ("max_price", "idempotency"):
+        if name in capabilities and not isinstance(capabilities[name], str):
+            raise ValueError("invalid runtime payment capability text")
+    if "quote" in capabilities:
+        quote = capabilities["quote"]
+        if (not isinstance(quote, dict)
+                or set(quote) - {"header", "value", "supported", "reason", "endpoint"}
+                or any(name in quote and not isinstance(quote[name], str)
+                       for name in ("header", "value", "reason", "endpoint"))
+                or "supported" in quote and type(quote["supported"]) is not bool):
+            raise ValueError("invalid runtime quote capability")
 
 
 def map_contract_children(node: dict, transform) -> dict:
@@ -781,6 +817,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
             if method not in METHODS and method != "x-aisa-any":
                 continue
             runtime = effective_public_operation(path_item, runtime, facts)
+            validate_payment_capabilities(runtime)
             base_id = runtime.get("operationId")
             if not base_id or runtime.get("x-aisa-status") not in {"enabled", "disabled"}:
                 raise ValueError("runtime operation requires immutable operationId and status")
@@ -839,8 +876,10 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             raise ValueError("upstream operation missing")
                     operation = copy.deepcopy(runtime)
                     capabilities = operation.get("x-aisa-capabilities", {})
-                    if "mpp_methods" in capabilities:
-                        capabilities["mpp"] = capabilities.get("mpp") is True and actual_method.upper() in capabilities["mpp_methods"]
+                    for payment in ("mpp", "x402"):
+                        if payment + "_methods" in capabilities:
+                            capabilities[payment] = (capabilities.get(payment) is True
+                                and actual_method.upper() in capabilities[payment + "_methods"])
                     # Direct Runtime identity, before public ANY expansion or retained
                     # published aliases. Consumers must not guess this binding.
                     operation["x-aisa-runtime-operation"] = {
