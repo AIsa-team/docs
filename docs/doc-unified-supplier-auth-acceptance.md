@@ -34,6 +34,22 @@ transport shape can be produced. It says nothing about key validity, account
 scope, entitlement, provider availability or successful business execution.
 The command fails when confirmed gaps or incomplete coverage remain.
 
+For TikHub, `scripts/audit_tikhub_supplier_auth.py` adds a bounded primary-source
+review using the official SDK spec and client at commit
+`1ede56bcc53f8c037744cbe2b70c93541b5cf840`. It accepts only the reviewed exact
+file hashes, inspects the client's `DEFAULT_BASE_URL` without executing its
+code, and verifies each actual Runtime upstream method/path before comparing
+the stored auth name and server-inspected value format. This does not replace
+the curated request mirror or relax its request limits.
+
+Use the same arguments as the base audit, plus `--primary-spec` pointing to that
+commit's `spec/openapi.json` and `--primary-client` pointing to its
+`src/tikhub/_base_client.py`. The reviewed scope has 954 enabled methods:
+952 have compatible Bearer transport, one primary operation declares no
+security requirement, and one route is absent from this pinned primary spec.
+Missing routes, missing declarations and pre-existing source-binding failures
+remain explicit; none establishes valid credentials or business success.
+
 The 2026-10-17 audit found 21 Parallel methods with `Authorization` configured
 instead of the official `x-api-key`, plus 13 CLOB methods requiring a five-header
 authentication group absent from generic injection. Live read-only Parallel
@@ -50,4 +66,4 @@ three-field auth patch must not be sent as the entire `SaveProvider` input:
 that API replaces additional fields. Preserve the exact current record, use
 the existing transaction/audit/publication/cache path, and verify adoption.
 
-Validation: `PYTHONPATH=scripts:scripts/tests python -m unittest test_supplier_auth_audit`.
+Validation: `PYTHONPATH=scripts:scripts/tests python -m unittest test_supplier_auth_audit test_tikhub_supplier_auth`.
