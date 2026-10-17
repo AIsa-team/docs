@@ -221,6 +221,13 @@ Focused validation: `python -m unittest discover -s scripts/tests -p "test_respo
 The existing publication workflow exports `docs/publication/current.json` only
 when the complete formal readiness gate passes. New or changed request/response
 debts, unknown source maintenance, or missing Runtime inputs prevent publication.
+Every composed public URI placeholder must also have a matching required path
+parameter with a declared schema or content. Matching Runtime and document
+omissions cannot satisfy this check; query parameters with the same name do not
+bind URI placeholders. Path Item inheritance, local references and operation
+overrides are resolved before checking. This checks URI input completeness, not
+supplier execution or business success. Existing pending source debt retains
+its separate review requirements.
 Failed runs leave the published last-good pointer unchanged. Successful checks
 with the same C and unchanged source authorization retain the existing valid
 pointer and receipts; observation timestamps alone do not advance main or restart
