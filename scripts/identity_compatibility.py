@@ -214,14 +214,18 @@ def canonicalize_localized(document, history):
 
 
 def validate_document_identities(documents, history):
-    canonical_ids, aliases = set(), {}
+    canonical_ids, aliases, owners = set(), {}, {}
     for document in documents.values():
         generated = bool(document.get('info', {}).get('x-aisa-document', {}).get('document_hash'))
         bindings = {}
-        for _, _, operation in operations(document):
+        for path, method, operation in operations(document):
             canonical = operation.get('operationId')
             if canonical:
                 canonical_ids.add(canonical)
+                # Legacy and runtime copies of one route may share its ID; a
+                # second route borrowing it would shadow the published owner.
+                if owners.setdefault(canonical, (path, method)) != (path, method):
+                    raise ValueError('operation identity has multiple route owners: ' + canonical)
             if generated and history is not None and canonical in history.aliases and KEY not in operation:
                 raise ValueError('published locale identity disappeared: ' + canonical)
             if KEY in operation:
