@@ -7,6 +7,7 @@ from jsonschema import Draft7Validator
 from compose_openapi import compose, digest
 from runtime_registry import public_mirror_index
 from test_runtime_contracts import facts, operation
+from apollo_source_history import undo_object_body_amendment
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -17,6 +18,7 @@ class ApolloBulkUpdateRequestTests(unittest.TestCase):
         doc = json.loads((ROOT / review['source_file']).read_text())
         source = doc['info'].pop('x-aisa-source')
         self.assertEqual(source['content_hash'], digest(doc))
+        source = undo_object_body_amendment(self, ROOT, doc, source)
         self.assertEqual(source['prior_source'], review['prior_source'])
         for key in ('kind', 'url', 'fetched_at', 'owner', 'refresh_policy', 'review_period_days', 'policy_revision'):
             self.assertEqual(source[key], review['prior_source'][key])

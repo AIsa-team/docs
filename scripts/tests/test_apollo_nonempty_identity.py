@@ -6,6 +6,7 @@ import unittest
 from jsonschema import Draft7Validator
 from compose_openapi import digest
 from source_governance import policy_errors
+from apollo_source_history import undo_object_body_amendment
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -33,6 +34,7 @@ class ApolloNonemptyIdentityTests(unittest.TestCase):
         doc = json.loads((ROOT / review['source_file']).read_text())
         source = doc['info'].pop('x-aisa-source')
         self.assertEqual(source['content_hash'], digest(doc))
+        source = undo_object_body_amendment(self, ROOT, doc, source)
         later = json.loads((ROOT / 'docs/current-source-review-20261017/apollo-bulk-update-request-review.json').read_text())
         self.assertEqual(source['prior_source'], later['prior_source'])
         self.assertEqual(doc['paths'][later['source_path']]['post']['requestBody'], later['official_request_body'])
