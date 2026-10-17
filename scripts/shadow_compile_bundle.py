@@ -18,6 +18,7 @@ from runtime_consolidate_openapi import (build_unified_spec, inject_x402_annotat
                                         remove_v2_path_mirrors, validate_reference_closure)
 from schema_input_bundle import (HEX40, HEX64, canonical, load_bundle, regular_read,
                                  require, sha, strict_json)
+from readiness_rejection import ReadinessRejected, complete_diagnostic
 
 
 def load_runtime(root, *, artifact_revision, compiler_revision, receipt_sha256):
@@ -109,10 +110,10 @@ def compile_verified_inputs(bundle, facts, runtime, *, output, input_kind='publi
             readiness_context=context, identity_history=bundle.history, page_link_index=links,
             reuse_unchanged_documents=False)
         report = context['report']
-        require(report['status'] == 'passed' and not report.get('global_errors') and
+        if not (report['status'] == 'passed' and not report.get('global_errors') and
                 not report.get('missing_inputs') and not report.get('blocked_providers') and
-                not any(row.get('blocked') for row in summary.values()),
-                'Offline native graph did not pass existing readiness gates')
+                not any(row.get('blocked') for row in summary.values())):
+            raise ReadinessRejected(complete_diagnostic(report, summary))
         documents = context['documents']
         if presentation is None:
             require_historical_primary_links(original, {name: documents[name] for name in summary})
