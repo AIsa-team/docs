@@ -442,6 +442,37 @@ class FullRegistryTests(unittest.TestCase):
         self.assertTrue(all(row['reason'] == 'runtime_contract_unavailable' for row in rows))
         self.assertFalse((self.root / 'openapi/missing.json').exists())
 
+    def test_blocked_provider_rebinds_legacy_pages_to_unchanged_retained_document(self):
+        self.sources({'alpha': contract('alpha')})
+        self.publish(self.pull()[0])
+        published = (self.root / 'openapi/alpha.json').read_text()
+        (self.root / 'openapi/legacy-alpha.json').write_text(json.dumps({
+            'openapi': '3.1.0', 'info': {'title': 'Retired owner'}, 'paths': {}}))
+        for prefix in ('', 'zh/'):
+            page = self.root / (prefix + 'api-reference/alpha/alpha_test.mdx')
+            page.write_text(page.read_text().replace('alpha.json GET', 'legacy-alpha.json GET'))
+        self.sources({'alpha': {}})
+        (self.root / 'facts/inventory').mkdir()
+        (self.root / 'facts/inventory/alpha.json').write_text(json.dumps({
+            'api': {'endpoint_groups': [{'endpoints': [
+                {'method': 'GET', 'path': '/apis/v1/alpha/test', 'operation_id': 'alpha_test'}]}]}}))
+        context = {}
+        changes, summary = stage(self.root, self.root / 'facts', 'unused', readiness_context=context)
+        self.assertEqual(summary['alpha']['blocked'], 'runtime_contract_unavailable')
+        self.assertNotIn(self.root / 'openapi/alpha.json', changes)
+        self.assertEqual(context['documents']['alpha'], json.loads(published))
+        row = context['coverage']['providers']['alpha'][0]
+        self.assertEqual((row['status'], row['publication_state']), ('pending', 'retained'))
+        self.assertEqual(context['report']['status'], 'failed')
+        for prefix in ('', 'zh/'):
+            page = self.root / (prefix + 'api-reference/alpha/alpha_test.mdx')
+            self.assertIn('openapi/' + prefix + 'alpha.json GET', changes[page])
+        self.publish(changes)
+        from publication_surface import validate_surfaces
+        self.assertEqual(validate_surfaces(self.root)['status'], 'passed')
+        self.assertEqual((self.root / 'openapi/alpha.json').read_text(), published)
+        self.assertEqual(self.pull()[0], {})
+
     def test_legacy_consumer_metadata_uses_registry_sources(self):
         (self.root / 'openapi/registry.yaml').write_text('auto_register: true\nproviders:\n  twitter:\n    legacy_sources: [twitter-actions]\n')
         legacy = contract('twitter')

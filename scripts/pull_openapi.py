@@ -641,6 +641,15 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             documents[path.stem] = json.loads(content)
     if with_pages:
         catalog = read_json(root / "translations/openapi-zh.json", {"entries": {}})
+        # A blocked recomposition can retain a previously published managed
+        # document while old pages still reference its retired legacy owner.
+        # Rebind presentation to that unchanged document by stable identity;
+        # coverage remains pending/retained and grants no freshness evidence.
+        for provider, result in summary.items():
+            retained = documents.get(provider, {})
+            if result.get('blocked') and retained.get('info', {}).get('x-aisa-document', {}).get('document_hash'):
+                generate_pages(root, provider, retained, changes, retained,
+                               decorate_links=False, page_references=page_references)
         refresh_localized_documents(root, documents, changes, catalog, identity_history)
     if with_pages:
         refresh_legacy_page_blocks(root, documents, changes, catalog)
