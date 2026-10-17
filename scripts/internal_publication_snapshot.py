@@ -16,6 +16,8 @@ import stat
 from fetch_runtime_release import MAX_FILE, MAX_TOTAL, validate_release_files
 from schema_input_bundle import HEX40, HEX64, canonical, load_bundle, require, sha, strict_json
 from shadow_compile_bundle import compile_verified_inputs
+from readiness_rejection import (EXIT_READINESS_REJECTED, ReadinessRejected,
+                                 SnapshotReadinessRejected, snapshot_proof)
 
 MAX_METADATA = 1 << 20
 MAX_FILES = 512
@@ -126,8 +128,11 @@ def compile_snapshot(bundle_root, snapshot_root, *, bundle_sha256, docs_ref,
     bundle = load_bundle(bundle_root, expected_manifest_sha256=bundle_sha256, expected_docs_ref=docs_ref)
     facts, binding = load_snapshot(snapshot_root, snapshot_sha256=snapshot_sha256,
         generation=generation, source_digest=source_digest, compiler_revision=compiler_revision)
-    return compile_verified_inputs(bundle, facts, binding, output=output,
-                                   input_kind='internal_publication_snapshot')
+    try:
+        return compile_verified_inputs(bundle, facts, binding, output=output,
+                                       input_kind='internal_publication_snapshot')
+    except ReadinessRejected as exc:
+        raise SnapshotReadinessRejected(snapshot_proof(exc.diagnostic, bundle.validation, binding)) from None
 
 
 def main(argv=None):
@@ -146,6 +151,11 @@ def main(argv=None):
         result = compile_snapshot(args.bundle, args.snapshot, bundle_sha256=args.bundle_sha256,
             docs_ref=args.docs_ref, snapshot_sha256=args.snapshot_sha256, generation=args.generation,
             source_digest=args.source_digest, compiler_revision=args.compiler_revision, output=args.output)
+    except SnapshotReadinessRejected as exc:
+        # The core's private workspace cleanup has completed before this frame.
+        # This is a rejection, not a canonical artifact or expected-failure pass.
+        print(canonical(exc.proof).decode(), end='', flush=True)
+        raise SystemExit(EXIT_READINESS_REJECTED) from None
     except (ValueError, TypeError, KeyError, OSError) as exc:
         # Private adapter diagnostics never echo paths, JSON values or payloads.
         parser.exit(1, 'Internal snapshot shadow rejected: ' + type(exc).__name__ + '\n')
