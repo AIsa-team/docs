@@ -154,7 +154,9 @@ class ProvenanceTests(unittest.TestCase):
         self.assertEqual(expand_document(result), expand_document(original))
         self.assertLess(len(json.dumps(result, indent=2).encode()), 2_000_000)
         self.assertEqual(len(result['info'][KEY]), 1)
-        self.assertEqual(len(result['paths']), 32)
+        # Provenance compaction must preserve the actual publication inventory;
+        # a later reviewed Runtime release may add or retire FRED routes.
+        self.assertEqual(set(result['paths']), set(original['paths']))
 
 
 if __name__ == '__main__':
