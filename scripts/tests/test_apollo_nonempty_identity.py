@@ -33,6 +33,12 @@ class ApolloNonemptyIdentityTests(unittest.TestCase):
         doc = json.loads((ROOT / review['source_file']).read_text())
         source = doc['info'].pop('x-aisa-source')
         self.assertEqual(source['content_hash'], digest(doc))
+        later = json.loads((ROOT / 'docs/current-source-review-20261017/apollo-bulk-update-request-review.json').read_text())
+        self.assertEqual(source['prior_source'], later['prior_source'])
+        self.assertEqual(doc['paths'][later['source_path']]['post']['requestBody'], later['official_request_body'])
+        doc['paths'][later['source_path']]['post']['requestBody'] = copy.deepcopy(later['previous_request_body'])
+        source = source['prior_source']
+        self.assertEqual(source['content_hash'], digest(doc))
         self.assertEqual(source['prior_source'], review['prior_source'])
         self.assertFalse(policy_errors(source))
         for key in ('kind', 'url', 'fetched_at', 'owner', 'refresh_policy', 'review_period_days', 'policy_revision'):
