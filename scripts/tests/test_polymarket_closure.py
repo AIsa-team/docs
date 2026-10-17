@@ -21,7 +21,7 @@ from identity_compatibility import metadata, localize_identities
 from source_governance import initial_policy, validate_receipt
 from datetime import datetime, timezone
 from test_runtime_contracts import facts, operation
-from catalog_fixture import ARCHIVE
+from catalog_fixture import ARCHIVE, catalog_root
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -206,7 +206,7 @@ class PolymarketCandidateTests(unittest.TestCase):
         sources, acquisitions = load_official_sources_archive(ROOT / 'scripts/tests/fixtures/polymarket-official-sources-20261008.tar.gz')
         snapshot = load_frozen_facts(ARCHIVE)
         before = copy.deepcopy(snapshot)
-        report, documents = build_candidate(plan, snapshot, sources, published_documents(ROOT))
+        report, documents = build_candidate(plan, snapshot, sources, published_documents(catalog_root()))
         self.assertEqual(snapshot, before)
         self.assertEqual(report['counts'], {
             'target_endpoints': 89, 'current_routing_metadata_verified': 0, 'frozen_source_method_verified_candidates': 81,
@@ -255,7 +255,7 @@ class PolymarketCandidateTests(unittest.TestCase):
         current = json.loads((ROOT / 'scripts/tests/fixtures/polymarket-current-binding-map-20261008.json').read_text())
         sources, _ = load_official_sources_archive(ROOT / 'scripts/tests/fixtures/polymarket-official-sources-20261008.tar.gz')
         frozen = load_frozen_facts(ARCHIVE)
-        report, _ = build_candidate(plan, frozen, sources, published_documents(ROOT), current)
+        report, _ = build_candidate(plan, frozen, sources, published_documents(catalog_root()), current)
         self.assertEqual(report['counts']['current_routing_metadata_verified'], 89)
         self.assertEqual(report['counts']['blocked_endpoints'], 8)
         self.assertEqual(report['counts']['candidate_method_identities'], 87)
@@ -286,7 +286,7 @@ class PolymarketCandidateTests(unittest.TestCase):
                 elif variant == 'writes': changed['production_writes'] = 1
                 elif variant == 'query': row['target_has_query'] = True
                 with self.assertRaises(ValueError):
-                    build_candidate(plan, frozen, sources, published_documents(ROOT), changed)
+                    build_candidate(plan, frozen, sources, published_documents(catalog_root()), changed)
 
 
 

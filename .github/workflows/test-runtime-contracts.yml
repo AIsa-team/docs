@@ -128,7 +128,33 @@ jobs:
           python-version: '3.12'
       - name: Install assessment dependencies
         run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
+      - name: Select explicit source-only recovery authorization
+        id: input_recovery
+        if: needs.changes.outputs.input_candidate == 'true'
+        env:
+          OPERATOR_INPUT_RECOVERY_BINDING: ${{ vars.CONTRACT_INPUT_RECOVERY_BINDING }}
+        run: python scripts/read_recovery_input_qualification.py --select
+      - name: Generate existing scoped qualifier-evidence read token
+        if: steps.input_recovery.outputs.selected == 'true'
+        id: recovery_read
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.AISA_CI_READ_APP_ID }}
+          private-key: ${{ secrets.AISA_CI_READ_APP_PRIVATE_KEY }}
+          owner: AIsa-team
+          repositories: |
+            AIsaServices
+            docs
+          permission-actions: read
+          permission-contents: read
+      - name: Check exact authenticated source-only input qualification
+        if: steps.input_recovery.outputs.selected == 'true'
+        env:
+          GH_TOKEN: ${{ steps.recovery_read.outputs.token }}
+          OPERATOR_INPUT_RECOVERY_BINDING: ${{ vars.CONTRACT_INPUT_RECOVERY_BINDING }}
+        run: python scripts/read_recovery_input_qualification.py --output /tmp/reviewed-input-candidate
       - name: Acquire one complete fresh immutable Runtime release
+        if: steps.input_recovery.outputs.selected != 'true'
         run: |
           python scripts/fetch_runtime_release.py --current \
             --output /tmp/runtime-contract-evidence
@@ -155,7 +181,7 @@ jobs:
             --published-ref "$PUBLISHED_REF" \
             --report /tmp/contract-readiness.json
       - name: Check explicit reviewed source-only input without claiming formal output
-        if: needs.changes.outputs.input_candidate == 'true'
+        if: needs.changes.outputs.input_candidate == 'true' && steps.input_recovery.outputs.selected != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
