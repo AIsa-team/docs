@@ -11,9 +11,10 @@ import hashlib
 import json
 import re
 from typing import Any
+from upstream_auth_transports import server_auth_headers
 from urllib.parse import urlsplit, unquote
 
-VERSION = "24"
+VERSION = "25"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -846,6 +847,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
             for actual_method in methods:
                 try:
                     mirror = {}
+                    selected_document = {}
                     operation_source = {}
                     response_operation, response_document = {}, {}
                     if validation != "runtime" or method == "x-aisa-any":
@@ -874,6 +876,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             response_document = {"openapi": selected.get("openapi", "3.1.0"), "components": selected.get("response_components", {})}
                         else:
                             raise ValueError("upstream operation missing")
+                    server_auth = server_auth_headers(runtime, facts.get("info", {}).get("x-aisa-provider"), actual_method, selected_document, mirror)
                     operation = copy.deepcopy(runtime)
                     capabilities = operation.get("x-aisa-capabilities", {})
                     for payment in ("mpp", "x402"):
@@ -927,7 +930,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         unforwarded_headers = sorted({
                             p["name"] for p in mirror.get("parameters", [])
                             if p.get("in") == "header"
-                            and p.get("name", "").lower() not in auth_names | forwarded_headers
+                            and p.get("name", "").lower() not in auth_names | server_auth | forwarded_headers
                         })
                         if unforwarded_headers:
                             raise ValueError("source header parameters are not forwarded by runtime: "
@@ -935,6 +938,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         parameters = {
                             (p["in"], p["name"]): p for p in mirror.get("parameters", [])
                             if p.get("name", "").lower() not in auth_names
+                            and not (p.get("in") == "header" and p.get("name", "").lower() in server_auth)
                             and (p.get("in") != "query" or query_passthrough or (p["in"], p["name"]) in runtime_fields)
                         }
                         for parameter in runtime.get("parameters", []):
