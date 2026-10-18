@@ -42,6 +42,11 @@ on:
       - 'zh/guides/**'
   workflow_dispatch:
     inputs:
+      read_app_probe:
+        description: Verify existing Docs Read App credential access only; not source qualification
+        required: false
+        type: boolean
+        default: false
       published_ref:
         description: Full 40-character Git SHA of the known published identity baseline
         required: true
@@ -51,6 +56,38 @@ permissions:
   contents: read
 
 jobs:
+  probe-existing-read-app:
+    if: github.event_name == 'workflow_dispatch' && inputs.read_app_probe == true && github.ref == 'refs/heads/codex/existing-read-app-docs-probe-20261018'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Mint existing Read App token for two fixed repositories
+        id: probe_read
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.AISA_CI_READ_APP_ID }}
+          private-key: ${{ secrets.AISA_CI_READ_APP_PRIVATE_KEY }}
+          owner: AIsa-team
+          repositories: |
+            AIsaServices
+            docs
+          permission-actions: read
+          permission-contents: read
+      - name: Probe fixed historical metadata without qualifying source
+        env:
+          GH_TOKEN: ${{ steps.probe_read.outputs.token }}
+          READ_APP_SLUG: ${{ steps.probe_read.outputs.app-slug }}
+          READ_APP_ID: ${{ vars.AISA_CI_READ_APP_ID }}
+        run: python -B scripts/probe_existing_read_app.py
   changes:
     runs-on: ubuntu-latest
     outputs:
