@@ -29,11 +29,11 @@ class ChangeScopeTests(unittest.TestCase):
         original = next(row for row in steps if row.get('name') == 'Check actual candidate readiness')
         candidate = next(row for row in steps if 'check_reviewed_schema_inputs.py' in row.get('run', ''))
         self.assertEqual(original['if'], "needs.changes.outputs.input_candidate != 'true'")
-        self.assertEqual(candidate['if'], "needs.changes.outputs.input_candidate == 'true' && steps.input_recovery.outputs.selected != 'true'")
+        self.assertEqual(candidate['if'], "needs.changes.outputs.input_candidate == 'true' && steps.input_recovery.outputs.selected != 'true' && steps.open_input_diagnostic.outputs.selected != 'true'")
         recovery = next(row for row in steps if 'read_recovery_input_qualification.py --output' in row.get('run', ''))
-        self.assertEqual(recovery['if'], "steps.input_recovery.outputs.selected == 'true'")
+        self.assertEqual(recovery['if'], "steps.input_recovery.outputs.selected == 'true' && steps.open_input_diagnostic.outputs.selected != 'true'")
         acquire = next(row for row in steps if 'fetch_runtime_release.py --current' in row.get('run', ''))
-        self.assertEqual(acquire['if'], "steps.input_recovery.outputs.selected != 'true'")
+        self.assertEqual(acquire['if'], "steps.input_recovery.outputs.selected != 'true' && steps.open_input_diagnostic.outputs.selected != 'true'")
         self.assertIn('--base "$INPUT_BASE"', candidate['run'])
 
     def test_input_review_and_regression_attachments_do_not_admit_execution_or_outputs(self):
