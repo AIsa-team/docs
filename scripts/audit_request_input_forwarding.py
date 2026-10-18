@@ -14,7 +14,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import yaml
-from upstream_auth_transports import server_auth_headers
+from upstream_auth_transports import server_auth_headers, request_auth_headers
 
 from canonical_import import configured_inputs
 from compose_openapi import (METHODS, apply_upstream_selector,
@@ -122,7 +122,7 @@ def audit_provider(provider, facts, upstream, mirrors, bindings, include_headers
             base = dict(provider=provider, path=prefix + path,
                         runtime_operation_id=runtime['operationId'],
                         runtime_status=runtime.get('x-aisa-status'))
-            if runtime.get('x-aisa-validation') == 'runtime' and 'x-aisa-upstream-auth' not in runtime:
+            if runtime.get('x-aisa-validation') == 'runtime' and 'x-aisa-upstream-auth' not in runtime and 'x-aisa-request-auth' not in runtime:
                 rows.append(dict(base, method=method.upper(), status='runtime_owned'))
                 continue
             try:
@@ -154,7 +154,8 @@ def audit_provider(provider, facts, upstream, mirrors, bindings, include_headers
                     # A descriptor is always validated, even in query-only mode.
                     resolved_source = dict(source, parameters=[resolve(p, document, preserve_recursive=True) for p in source.get('parameters', [])])
                     server_auth = server_auth_headers(runtime, provider, actual, document, resolved_source)
-                    headers = missing_header_inputs(runtime, source, document, [*auth, *server_auth]) if include_headers else []
+                    request_auth = request_auth_headers(runtime, provider, actual, document, resolved_source, public_path=prefix + path)
+                    headers = missing_header_inputs(runtime, source, document, [*auth, *server_auth, *request_auth]) if include_headers else []
                     bodies, body_status = missing_body_inputs(runtime, source, document, facts) if include_bodies else ([], None)
                     cookies = sorted({p['name'] for raw in source.get('parameters', [])
                                       for p in [resolve(raw, document, preserve_recursive=True)]
