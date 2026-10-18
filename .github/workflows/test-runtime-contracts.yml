@@ -128,14 +128,140 @@ jobs:
           python-version: '3.12'
       - name: Install assessment dependencies
         run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
+      # Independent public envelope selects only this exact open source PR.
+      # Root replaces this deliberately unusable pin after the Services reader freezes.
+      - name: Select exact open-input diagnostic consumer
+        id: open_input_diagnostic
+        if: needs.changes.outputs.input_candidate == 'true'
+        env:
+          OPERATOR_OPEN_INPUT_DIAGNOSTIC_BINDING: ${{ vars.CONTRACT_OPEN_INPUT_DIAGNOSTIC_BINDING }}
+          OPERATOR_INPUT_RECOVERY_BINDING: ${{ vars.CONTRACT_INPUT_RECOVERY_BINDING }}
+          REVIEWED_OPEN_INPUT_READER_REVISION: '0000000000000000000000000000000000000000'
+          METADATA_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -B - <<'PY'
+          import datetime, hashlib, json, os, pathlib, re, subprocess, sys, urllib.request
+          SCOPE = 'reviewed_open_input_diagnostic_compatibility_only_not_strict_readiness_or_publication'
+          SELECTION_SCOPE = 'reviewed_open_input_diagnostic_operator_selection_v1'
+          def require(ok):
+              if not ok: raise ValueError('Open input selection rejected')
+          def load(raw):
+              def pairs(rows):
+                  result = {}
+                  for key, value in rows:
+                      require(key not in result); result[key] = value
+                  return result
+              return json.loads(raw, object_pairs_hook=pairs, parse_constant=lambda _: require(False))
+          def closed(value, keys):
+              require(type(value) is dict and set(value) == set(keys)); return value
+          def digest(raw): return hashlib.sha256(raw).hexdigest()
+          def pin(value, n): require(type(value) is str and re.fullmatch('[0-9a-f]{%d}' % n, value))
+          def stamp(value):
+              require(type(value) is str and len(value) <= 40)
+              result=datetime.datetime.fromisoformat(value.replace('Z','+00:00'))
+              require(result.tzinfo is not None and result.utcoffset().total_seconds() == 0); return result
+          def git(*args):
+              return subprocess.check_output(['git', '-c', 'core.hooksPath=/dev/null', *args],
+                  env={'PATH':'/usr/bin:/bin','HOME':'/nonexistent','GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':'/dev/null'}, timeout=15)
+          def same_pr(pr, req):
+              return (type(pr) is dict and type(pr.get('number')) is int and pr['number'] == req['docs_pr'] and
+                  pr.get('state') == 'open' and pr.get('merged') is False and
+                  all(pr.get(side, {}).get('sha') == req[key] and pr.get(side, {}).get('repo', {}).get('full_name') == 'AIsa-team/docs'
+                      for side, key in [('head','head_revision'),('base','base_revision')]) and pr['base'].get('ref') == 'main')
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, *args, **kwargs): raise ValueError('Redirect rejected')
+          def metadata(path):
+              token = os.environ['METADATA_TOKEN']; require(token and '\n' not in token and '\r' not in token)
+              request = urllib.request.Request('https://api.github.com/repos/AIsa-team/docs/' + path,
+                  headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
+              with urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect()).open(request, timeout=20) as response:
+                  require(response.status == 200); raw = response.read((8 << 20) + 1)
+              require(len(raw) <= 8 << 20); return load(raw)
+          def select():
+              raw = os.environ.get('OPERATOR_OPEN_INPUT_DIAGNOSTIC_BINDING', '')
+              if not raw or os.environ.get('GITHUB_EVENT_NAME') != 'pull_request': return None
+              require(len(raw.encode()) <= 60000)
+              envelope = closed(load(raw), ('schema_version','scope','reader_revision','request_raw','request_sha256','binding_raw','binding_sha256'))
+              require(type(envelope['schema_version']) is int and envelope['schema_version'] == 1 and envelope['scope'] == SELECTION_SCOPE)
+              reader = os.environ['REVIEWED_OPEN_INPUT_READER_REVISION']; pin(reader,40); require(reader != '0'*40 and envelope['reader_revision'] == reader)
+              for key in ('request_raw','binding_raw'): require(type(envelope[key]) is str and len(envelope[key].encode()) <= 40000)
+              for key in ('request_sha256','binding_sha256'): pin(envelope[key],64)
+              require(digest(envelope['request_raw'].encode()) == envelope['request_sha256'] and digest(envelope['binding_raw'].encode()) == envelope['binding_sha256'])
+              req = load(envelope['request_raw'])
+              require(type(req) is dict)
+              event_raw = pathlib.Path(os.environ['GITHUB_EVENT_PATH']).read_bytes(); require(len(event_raw) <= 8 << 20)
+              event = load(event_raw); pr = event.get('pull_request', {})
+              # A binding for a different source PR is inert; it never selects a fallback for this R.
+              if req.get('head_revision') != pr.get('head', {}).get('sha'): return None
+              closed(req, ('schema_version','scope','mode','docs_pr','base_revision','head_revision','main_revision',
+                  'candidate_compiler_inputs','qualifier_revision','workflow_sha256','source_api_revision','source_export_revision',
+                  'source_export_lock_sha256','source_binary_identity_canonical_sha256','ssh_target_sha256','known_hosts_sha256',
+                  'original_source','original_snapshot_sha256','materialized_snapshot_sha256','historical_formal_ref',
+                  'source_context_sha256','source_receipts_sha256','changed_paths_sha256','diagnostic_expectation','issued_at','expires_at'))
+              require(type(req['schema_version']) is int and req['schema_version'] == 3 and req['scope'] == SCOPE and req['mode'] == 'open_reviewed_input_diagnostic_qualification')
+              require(type(req['docs_pr']) is int and req['docs_pr'] > 0)
+              for key in ('base_revision','head_revision','main_revision','qualifier_revision','source_api_revision','source_export_revision','historical_formal_ref'): pin(req[key],40)
+              for key in ('workflow_sha256','source_export_lock_sha256','source_binary_identity_canonical_sha256','ssh_target_sha256','known_hosts_sha256','original_snapshot_sha256','materialized_snapshot_sha256','source_context_sha256','source_receipts_sha256','changed_paths_sha256'): pin(req[key],64)
+              pins = closed(req['candidate_compiler_inputs'], ('composer_revision','source_manifest_sha256','docs_ref','bundle_manifest_sha256','protocol_version'))
+              pin(pins['composer_revision'],40); pin(pins['docs_ref'],40)
+              pin(pins['source_manifest_sha256'],64); pin(pins['bundle_manifest_sha256'],64)
+              require(pins['protocol_version'] == 'aisa-runtime-canonical-v1' and pins['docs_ref'] == req['head_revision'])
+              source=closed(req['original_source'],('schema_version','generation','source_digest','compiler_revision','compiler_inputs'))
+              require(source['schema_version'] == '1' and type(source['generation']) is int and 0 <= source['generation'] < 1 << 64 and source['compiler_revision'] == req['source_api_revision'])
+              pin(source['source_digest'],64)
+              oldpins=closed(source['compiler_inputs'],('composer_revision','source_manifest_sha256','docs_ref','bundle_manifest_sha256','protocol_version'))
+              for key in ('composer_revision','docs_ref'): pin(oldpins[key],40)
+              for key in ('source_manifest_sha256','bundle_manifest_sha256'): pin(oldpins[key],64)
+              require(oldpins['protocol_version'] == 'aisa-runtime-canonical-v1')
+              diagnostic=closed(req['diagnostic_expectation'],('normalization','diagnostic_sha256','provider_count','blocked_provider_count','diagnostic_entry_count'))
+              require(diagnostic['normalization'] == 'complete_readiness_multiset_v1'); pin(diagnostic['diagnostic_sha256'],64)
+              for key in ('provider_count','blocked_provider_count','diagnostic_entry_count'): require(type(diagnostic[key]) is int and 0 <= diagnostic[key] < 1 << 32)
+              require(req['main_revision'] == req['base_revision'] and req['head_revision'] != req['base_revision'])
+              require(os.environ.get('GITHUB_REPOSITORY') == 'AIsa-team/docs' and event.get('repository',{}).get('full_name') == 'AIsa-team/docs' and type(event.get('number')) is int and event['number'] == req['docs_pr'] and same_pr(pr, req))
+              old = os.environ.get('OPERATOR_INPUT_RECOVERY_BINDING','')
+              if old:
+                  previous = load(old)
+                  require(not (type(previous) is dict and previous.get('head_revision') == req['head_revision'] and previous.get('base_revision') == req['base_revision']))
+              binding = closed(load(envelope['binding_raw']), ('schema_version','scope','request_sha256','reader_revision','run_id','run_attempt','artifact_id','archive_sha256','issued_at','expires_at'))
+              require(type(binding['schema_version']) is int and binding['schema_version'] == 3 and binding['scope'] == SCOPE and binding['request_sha256'] == envelope['request_sha256'] and binding['reader_revision'] == reader)
+              pin(binding['archive_sha256'],64)
+              for key in ('run_id','run_attempt','artifact_id'): require(type(binding[key]) is int and binding[key] > 0)
+              now = datetime.datetime.now(datetime.timezone.utc)
+              for value in (req, binding):
+                  start,end=stamp(value['issued_at']),stamp(value['expires_at']); require(start <= now < end and 0 < (end-start).total_seconds() <= 3600)
+              git('merge-base','--is-ancestor',pins['composer_revision'],req['base_revision'])
+              git('merge-base','--is-ancestor',req['base_revision'],req['head_revision'])
+              require(git('show',pins['composer_revision']+':scripts/source_governance.py') == git('show',req['base_revision']+':scripts/source_governance.py'))
+              changed=sorted(git('diff','--name-only',req['base_revision'],req['head_revision']).decode().splitlines())
+              require(digest((json.dumps(changed,sort_keys=True,separators=(',',':'))+'\n').encode()) == req['changed_paths_sha256'])
+              namespace={'__name__':'reviewed_scope'}
+              exec(compile(git('show',pins['composer_revision']+':scripts/contract_change_scope.py'), '<immutable reviewed classifier>', 'exec'),namespace)
+              require(namespace['is_reviewed_input_change'](changed))
+              require(metadata('branches/main')['commit']['sha'] == req['base_revision'] and same_pr(metadata('pulls/'+str(req['docs_pr'])),req))
+              # Recheck both leases after the bounded Git/metadata work, before minting the App token.
+              now=datetime.datetime.now(datetime.timezone.utc)
+              for value in (req,binding): require(stamp(value['issued_at']) <= now < stamp(value['expires_at']))
+              out=pathlib.Path(os.environ['RUNNER_TEMP'])/'open-input-reader-input'; out.mkdir(mode=0o700)
+              for name,key in [('request.json','request_raw'),('binding.json','binding_raw')]:
+                  fd=os.open(out/name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+                  with os.fdopen(fd,'wb') as stream: stream.write(envelope[key].encode())
+              return {'request_sha256':envelope['request_sha256'],'binding_sha256':envelope['binding_sha256'],'base_revision':req['base_revision']}
+          try:
+              selected=select()
+              with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+                  output.write('selected='+('true' if selected else 'false')+'\n')
+                  for key,value in (selected or {}).items(): output.write(key+'='+value+'\n')
+          except Exception:
+              print('Open input selection rejected',file=sys.stderr); raise SystemExit(1)
+          PY
       - name: Select explicit source-only recovery authorization
         id: input_recovery
-        if: needs.changes.outputs.input_candidate == 'true'
+        if: needs.changes.outputs.input_candidate == 'true' && steps.open_input_diagnostic.outputs.selected != 'true'
         env:
           OPERATOR_INPUT_RECOVERY_BINDING: ${{ vars.CONTRACT_INPUT_RECOVERY_BINDING }}
         run: python scripts/read_recovery_input_qualification.py --select
       - name: Generate existing scoped qualifier-evidence read token
-        if: steps.input_recovery.outputs.selected == 'true'
+        if: steps.input_recovery.outputs.selected == 'true' || steps.open_input_diagnostic.outputs.selected == 'true'
         id: recovery_read
         uses: actions/create-github-app-token@v3
         with:
@@ -148,23 +274,84 @@ jobs:
           permission-actions: read
           permission-contents: read
       - name: Check exact authenticated source-only input qualification
-        if: steps.input_recovery.outputs.selected == 'true'
+        if: steps.input_recovery.outputs.selected == 'true' && steps.open_input_diagnostic.outputs.selected != 'true'
         env:
           GH_TOKEN: ${{ steps.recovery_read.outputs.token }}
           OPERATOR_INPUT_RECOVERY_BINDING: ${{ vars.CONTRACT_INPUT_RECOVERY_BINDING }}
         run: python scripts/read_recovery_input_qualification.py --output /tmp/reviewed-input-candidate
+      - name: Checkout immutable clean Docs base for open-input reader
+        if: steps.open_input_diagnostic.outputs.selected == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.open_input_diagnostic.outputs.base_revision }}
+          path: docs-open-input-anchor
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Checkout independently fixed Services open-input reader
+        if: steps.open_input_diagnostic.outputs.selected == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: AIsa-team/AIsaServices
+          ref: '0000000000000000000000000000000000000000'
+          token: ${{ steps.recovery_read.outputs.token }}
+          path: services-open-input-reader
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Use pinned reader dependency interpreter
+        if: steps.open_input_diagnostic.outputs.selected == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Use exact Services Go toolchain for original snapshot verification
+        if: steps.open_input_diagnostic.outputs.selected == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: services-open-input-reader/go.mod
+          cache: false
+      - name: Install independently pinned reader dependencies
+        if: steps.open_input_diagnostic.outputs.selected == 'true'
+        run: |
+          python3 -m pip install --only-binary=:all: --require-hashes -r services-open-input-reader/scripts/worker-composer/requirements.txt
+      - name: Check exact authenticated open-input diagnostic qualification
+        if: steps.open_input_diagnostic.outputs.selected == 'true'
+        env:
+          GH_TOKEN: ${{ steps.recovery_read.outputs.token }}
+          REQUEST_SHA256: ${{ steps.open_input_diagnostic.outputs.request_sha256 }}
+          BINDING_SHA256: ${{ steps.open_input_diagnostic.outputs.binding_sha256 }}
+        run: |
+          python3 -I -B - <<'PY'
+          import os, pathlib, runpy, sys
+          root=pathlib.Path(os.environ['GITHUB_WORKSPACE'])
+          reader=root/'services-open-input-reader/scripts/worker-composer/read_reviewed_recovery_input.py'
+          inputs=pathlib.Path(os.environ['RUNNER_TEMP'])/'open-input-reader-input'
+          sys.path.insert(0,str(reader.parent))
+          sys.argv=[str(reader),'--request',str(inputs/'request.json'),'--request-sha256',os.environ['REQUEST_SHA256'],
+              '--binding',str(inputs/'binding.json'),'--binding-sha256',os.environ['BINDING_SHA256'],
+              '--event-file',os.environ['GITHUB_EVENT_PATH'],'--docs-root',str(root/'docs-open-input-anchor'),
+              '--output',str(pathlib.Path(os.environ['RUNNER_TEMP'])/'open-input-diagnostic-assessment')]
+          runpy.run_path(str(reader),run_name='__main__')
+          PY
+      - name: Retain input-only diagnostic consumer receipt
+        if: steps.open_input_diagnostic.outputs.selected == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-open-input-diagnostic-consumer
+          path: ${{ runner.temp }}/open-input-diagnostic-assessment/receipt.json
+          if-no-files-found: error
       - name: Acquire one complete fresh immutable Runtime release
-        if: steps.input_recovery.outputs.selected != 'true'
+        if: steps.input_recovery.outputs.selected != 'true' && steps.open_input_diagnostic.outputs.selected != 'true'
         run: |
           python scripts/fetch_runtime_release.py --current \
             --output /tmp/runtime-contract-evidence
       - name: Restore attributed source-maintenance receipts
+        if: steps.open_input_diagnostic.outputs.selected != 'true'
         uses: actions/cache/restore@v4
         with:
           path: .cache/source-reviews.json
           key: source-reviews-assess-${{ github.run_id }}
           restore-keys: source-reviews-
       - name: Combine reviewed source evidence with newer observations
+        if: steps.open_input_diagnostic.outputs.selected != 'true'
         run: >-
           python scripts/prepare_source_receipts.py
           --reviewed docs/current-source-review-20261009/merged-source-reviews.json
@@ -181,7 +368,7 @@ jobs:
             --published-ref "$PUBLISHED_REF" \
             --report /tmp/contract-readiness.json
       - name: Check explicit reviewed source-only input without claiming formal output
-        if: needs.changes.outputs.input_candidate == 'true' && steps.input_recovery.outputs.selected != 'true'
+        if: needs.changes.outputs.input_candidate == 'true' && steps.input_recovery.outputs.selected != 'true' && steps.open_input_diagnostic.outputs.selected != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
