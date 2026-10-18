@@ -11,10 +11,10 @@ import hashlib
 import json
 import re
 from typing import Any
-from upstream_auth_transports import server_auth_headers
+from upstream_auth_transports import server_auth_headers, request_auth_headers
 from urllib.parse import urlsplit, unquote
 
-VERSION = "25"
+VERSION = "26"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -206,6 +206,17 @@ def effective_parameters(path_item: dict, operation: dict, document: dict) -> li
 
 
 def effective_public_operation(path_item: dict, operation: dict, document: dict) -> dict:
+    if 'x-aisa-request-auth' in operation:
+        # Do not let normal OpenAPI parameter merging erase ambiguous credential declarations.
+        for scope in (path_item, operation):
+            seen = set()
+            for raw in scope.get('parameters', []):
+                parameter = effective_object(raw, document)
+                name = parameter.get('name', '').lower()
+                if parameter.get('in') == 'header' and name in {'relayer_api_key', 'relayer_api_key_address'}:
+                    if name in seen:
+                        raise ValueError('duplicate caller-auth parameter')
+                    seen.add(name)
     result = copy.deepcopy(operation)
     parameters = effective_parameters(path_item, operation, document)
     if parameters or "parameters" in operation:
@@ -833,7 +844,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     candidates = [source for source in candidates if source.get("info", {}).get("x-aisa-source", {}).get("url") == bound_source]
                     if len(candidates) != 1:
                         raise ValueError("public operation source binding must select exactly one locked source")
-                upstream_matches = select_upstream_operations(candidates, runtime.get("x-aisa-upstream-path"), runtime.get("x-aisa-upstream-selector")) if validation != "runtime" or method == "x-aisa-any" else {}
+                upstream_matches = select_upstream_operations(candidates, runtime.get("x-aisa-upstream-path"), runtime.get("x-aisa-upstream-selector")) if validation != "runtime" or method == "x-aisa-any" or "x-aisa-request-auth" in runtime else {}
                 if bound_source and not upstream_matches:
                     raise ValueError("bound source does not match the runtime upstream path and selector")
                 upstream_item = {key: value[1] for key, value in upstream_matches.items()}
@@ -850,7 +861,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     selected_document = {}
                     operation_source = {}
                     response_operation, response_document = {}, {}
-                    if validation != "runtime" or method == "x-aisa-any":
+                    if validation != "runtime" or method == "x-aisa-any" or "x-aisa-request-auth" in runtime:
                         if actual_method in upstream_item:
                             selected_document = upstream_matches[actual_method][0]
                             operation_source = selected_document.get("info", {}).get("x-aisa-source", {})
@@ -877,6 +888,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         else:
                             raise ValueError("upstream operation missing")
                     server_auth = server_auth_headers(runtime, facts.get("info", {}).get("x-aisa-provider"), actual_method, selected_document, mirror)
+                    request_auth = request_auth_headers(runtime, facts.get("info", {}).get("x-aisa-provider"), actual_method, selected_document, mirror, public_path=public_path)
                     operation = copy.deepcopy(runtime)
                     capabilities = operation.get("x-aisa-capabilities", {})
                     for payment in ("mpp", "x402"):
@@ -930,7 +942,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         unforwarded_headers = sorted({
                             p["name"] for p in mirror.get("parameters", [])
                             if p.get("in") == "header"
-                            and p.get("name", "").lower() not in auth_names | server_auth | forwarded_headers
+                            and p.get("name", "").lower() not in auth_names | server_auth | request_auth | forwarded_headers
                         })
                         if unforwarded_headers:
                             raise ValueError("source header parameters are not forwarded by runtime: "
