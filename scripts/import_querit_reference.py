@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 from compose_openapi import digest
 
 REFERENCE_URL = "https://www.querit.ai/en/docs/reference/post-for-coding-agents"
-VERSION = "scripts/import_querit_reference.py@1"
+VERSION = "scripts/import_querit_reference.py@2"
 
 
 def clean(value):
@@ -135,19 +135,26 @@ def schema_from_tables(tables):
             if required not in (None, "Yes", "No"):
                 raise ValueError("unknown required marker")
             default = entry.get("Default")
+            prose = None
             if default not in (None, "—", "server default"):
                 try:
                     value = json.loads(default)
                 except ValueError:
                     if schema.get("type") != "string":
-                        raise ValueError("unrecognized typed default") from None
+                        # The official table may describe the server behaviour in
+                        # words (for example "Full available body text") instead
+                        # of stating a value. That is documentation of an
+                        # unspecified default, like "server default": keep the
+                        # sentence and infer no value.
+                        prose = default
                     value = default
-                expected = {"integer": int, "number": (int, float), "boolean": bool, "string": str}.get(schema.get("type"))
-                if expected is None or not isinstance(value, expected) or (schema.get("type") in ("integer", "number") and isinstance(value, bool)):
-                    raise ValueError("default does not match official type")
-                schema["default"] = value
-            elif default == "server default":
-                schema["description"] += ". Default: server default (value unspecified)."
+                if prose is None:
+                    expected = {"integer": int, "number": (int, float), "boolean": bool, "string": str}.get(schema.get("type"))
+                    if expected is None or not isinstance(value, expected) or (schema.get("type") in ("integer", "number") and isinstance(value, bool)):
+                        raise ValueError("default does not match official type")
+                    schema["default"] = value
+            if default == "server default" or prose is not None:
+                schema["description"] += ". Default: " + (prose or "server default") + " (value unspecified)."
             bounds = re.search(r"\bbetween (-?\d+) and (-?\d+)\b", description)
             if bounds and schema.get("type") in {"integer", "number"}:
                 schema["minimum"], schema["maximum"] = map(int, bounds.groups())

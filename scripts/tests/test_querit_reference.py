@@ -61,6 +61,20 @@ class QueritReferenceTests(unittest.TestCase):
         self.assertEqual(schema["properties"]["future_field"]["default"], 2)
         self.assertIn("future_field", schema["required"])
 
+    def test_prose_default_on_typed_field_is_documented_not_inferred(self):
+        """The official table describes the contentMaxChars default in words
+        ("Full available body text"); nothing is inferred and the sentence stays."""
+        row = '<tr><td>contentMaxChars</td><td>integer</td><td>No</td><td>Full available body text</td><td>Max characters</td></tr>'
+        document, _ = convert_reference(html(row))
+        schema = operation(document)["requestBody"]["content"]["application/json"]["schema"]
+        field = schema["properties"]["contentMaxChars"]
+        self.assertEqual(field["type"], "integer")
+        self.assertNotIn("default", field)
+        self.assertEqual(field["description"], "Max characters. Default: Full available body text (value unspecified).")
+        self.assertNotIn("contentMaxChars", schema.get("required", []))
+        self.assertTrue(Draft202012Validator(schema).is_valid({"input": "test", "contentMaxChars": 500}))
+        self.assertFalse(Draft202012Validator(schema).is_valid({"input": "test", "contentMaxChars": "all"}))
+
     def test_changed_types_columns_and_ambiguous_field_constraints_fail_closed(self):
         cases = [html().replace(b'<td>integer</td>', b'<td>mystery</td>', 1),
                  html().replace(b'<th>Required</th>', b'<th>Maybe</th>'),
