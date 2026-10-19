@@ -87,7 +87,8 @@ class QueritReferenceTests(unittest.TestCase):
                  # prose: an empty cell, a number inside prose or a JSON literal in
                  # another spelling still states a value and is not documented away.
                  typed_default(''), typed_default('10 (max 50)'), typed_default('0 (unlimited)'),
-                 typed_default('False'), typed_default('None'), typed_default('NULL'), typed_default('1_000')]
+                 typed_default('False'), typed_default('None'), typed_default('NULL'), typed_default('nil'),
+                 typed_default('undefined'), typed_default('1_000')]
         for source in cases:
             with self.subTest(source=source[:80]), self.assertRaises(ValueError):
                 convert_reference(source)

@@ -148,7 +148,7 @@ def schema_from_tables(tables):
                         # sentence and infer no value. An empty cell, a cell
                         # that carries a number or a JSON literal in another
                         # spelling still states a value and stays fail-closed.
-                        if not default or re.search(r"\d", default) or default.lower() in {"true", "false", "null"}:
+                        if not default or re.search(r"\d", default) or default.lower() in {"true", "false", "null", "none", "nil", "undefined"}:
                             raise ValueError("unrecognized typed default") from None
                         prose = default
                     value = default
