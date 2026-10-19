@@ -145,7 +145,11 @@ def schema_from_tables(tables):
                         # words (for example "Full available body text") instead
                         # of stating a value. That is documentation of an
                         # unspecified default, like "server default": keep the
-                        # sentence and infer no value.
+                        # sentence and infer no value. An empty cell, a cell
+                        # that carries a number or a JSON literal in another
+                        # spelling still states a value and stays fail-closed.
+                        if not default or re.search(r"\d", default) or default.lower() in {"true", "false", "null"}:
+                            raise ValueError("unrecognized typed default") from None
                         prose = default
                     value = default
                 if prose is None:
