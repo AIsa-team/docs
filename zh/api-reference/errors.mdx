@@ -38,6 +38,19 @@ Integration API 保留多种兼容错误格式。`error` 可以是字符串或�
 
 对于这一路径，缺少凭据时的 `404` 不能证明端点不存在。排查路由可用性前先提供 AISA 凭据，并区分报价模式与执行模式。这些观察不保证所有端点都采用相同认证状态码或错误结构。
 
+跨路由来看，**完全不带凭据**的请求不会得到统一的状态码，而且 HTTP 方法并不是区分依据。2026-10-19 使用文档记录的方法观察到：
+
+| 路由类型（无凭据） | 已观察到的响应 |
+| --- | --- |
+| 不存在的路径，任何方法（`GET` 或 `POST /apis/v1/nope`） | `402`，带 MPP 支付质询 |
+| 带有按次机器支付报价的已知路由，例如 `GET /apis/v1/fred/series`、`GET /apis/v1/agentmail/api-keys`、`POST /apis/v1/querit/search` | `402`，带 MPP 支付质询 |
+| `GET /v1/models` 和 `GET /v1/credits/balance` | `402`，带 MPP 支付质询 |
+| 其他已知数据路由，与方法无关，例如 `GET /apis/v1/similarweb/website-traffic-snapshot`、`GET /apis/v1/exa/search`、`POST /apis/v1/exa/search`、`POST /apis/v1/apollo/mixed_people/api_search`、`POST /apis/v1/dataforseo/serp/google/organic/live/advanced` | `404`，正文为 `{"error":"api endpoint not found"}`，尽管路由存在 |
+| `/v1` 模型路由，例如 `POST /v1/chat/completions` | `401`，`code: missing_api_key` |
+| 任何路由，使用**无效**的 Key | `401`，`code: invalid_api_key` |
+
+因此缺少 Key 会按路由分别返回 `402`、`404` 或 `401`，而无效 Key 始终返回 `401`。无凭据时的 `402` 是网关的支付质询（不存在的路径也会收到它），并不表示余额不足。不要把 `401` 当作唯一的"未登录"信号，也不要把 `GET /v1/models` 当作业务访问的证明：它成功只是传输层检查。请改用一次免费的受保护调用验证集成（MCP 的 `account` 操作，CLI 的 `aisa balance`）。
+
 ## 文档与销售数据源的可用性
 
 Website 的契约和销售数据端点单独报告来源可用性，不与 Integration API 的执行错误混淆。

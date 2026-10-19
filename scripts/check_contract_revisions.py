@@ -53,6 +53,41 @@ def read_public_bytes(url):
         return response.read()
 
 
+def read_public_page(url):
+    """One bounded HTML/Markdown request returning (status, bytes, location).
+
+    No proxies; redirects are not followed: a 3xx answer is returned with its
+    Location header (public_surface_checks accepts one same-origin 307/308 for
+    provider pages). A non-2xx answer is an observation, not an exception, so
+    the website's soft 404 and retired pages are judged by status and title.
+    The response is always closed, including on 3xx, before returning.
+    """
+    from urllib.error import HTTPError
+    from urllib.request import HTTPRedirectHandler, ProxyHandler, build_opener
+
+    class NoAutoRedirect(HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None  # urllib then raises HTTPError carrying the 3xx response
+
+    request = Request(url, headers={'Accept': 'text/html, text/markdown, text/plain', 'Cache-Control': 'no-cache'})
+    try:
+        response = build_opener(ProxyHandler({}), NoAutoRedirect()).open(request, timeout=30)
+    except HTTPError as error:
+        response = error
+    with response:
+        started, size, chunks = time.monotonic(), 0, []
+        while True:
+            if time.monotonic() - started > 30:
+                raise TimeoutError('Public page read exceeded time budget')
+            chunk = response.read(65536)
+            if not chunk:
+                return response.status, b''.join(chunks), response.headers.get('Location')
+            size += len(chunk)
+            if size > 4 * 1024 * 1024:
+                raise ValueError('Public page exceeds byte limit')
+            chunks.append(chunk)
+
+
 def website_metadata(raw, expected_sha256):
     """Bind the actual served aggregate before inspecting its provider metadata."""
     if hashlib.sha256(raw).hexdigest() != expected_sha256:
@@ -266,7 +301,7 @@ def assess(documents, runtime=None, website=None, router=None,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--all-surfaces', action='store_true', help='Also require complete JSON, llms content, visible bilingual page samples, MCP loaded source and all Router schemas')
+    parser.add_argument('--all-surfaces', action='store_true', help='Also require complete JSON, llms content, visible bilingual page samples, MCP loaded source, all Router schemas, website provider/MCP/sales pages and the Agent Discovery page')
     parser.add_argument('--all-doc-pages', action='store_true', help='With --all-surfaces, read every formal bilingual HTML page instead of sampling')
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--state', type=Path, default=Path('.cache/contract-revisions/state.json'))
@@ -407,6 +442,44 @@ def main():
         assessment['public_surfaces'] = extra
         assessment['missing_inputs'] = sorted(set(assessment['missing_inputs'] + extra['missing_inputs']))
         assessment['mismatches'] = sorted(set(assessment['mismatches'] + extra['mismatches']))
+        from public_surface_checks import check_website_surfaces, fixed_sales_catalog
+        expected_sales = None
+        try:
+            if not args.expected_docs_ref:
+                raise ValueError('Sales verification requires a fixed formal publication')
+            expected_sales = fixed_sales_catalog(args.root, args.expected_docs_ref)
+        except Exception as exc:
+            assessment['missing_inputs'].append('fixed_sales_catalog:unavailable:' + type(exc).__name__)
+        def website_reader(name, url):
+            if args.evidence_dir:
+                extension = '.json' if name in ('website-sales-catalog', 'mcp-servers') else '.html' if name == 'website-mcp-page' else '.md'
+                return (args.evidence_dir / (name + extension)).read_bytes()
+            if name in ('website-sales-catalog', 'mcp-servers'):
+                return read_public_bytes(url)
+            # The two JSON surfaces above use the existing read_public_bytes
+            # reader like every other JSON surface; pages go through the
+            # status-aware reader and must answer 200 directly.
+            status, raw, _ = read_public_page(url)
+            if status != 200:
+                raise ValueError('Public page answered HTTP ' + str(status))
+            return raw
+        def page_reader(name, url):
+            # Offline evidence: <name>.html plus optional <name>.status and
+            # <name>.location files (a redirect target is read as
+            # website-provider-page-<id>-<target slug>.html).
+            if args.evidence_dir:
+                stem = name.replace(':', '-')
+                status_file = args.evidence_dir / (stem + '.status')
+                location_file = args.evidence_dir / (stem + '.location')
+                status = int(status_file.read_text().strip()) if status_file.exists() else 200
+                location = location_file.read_text().strip() if location_file.exists() else None
+                return status, (args.evidence_dir / (stem + '.html')).read_bytes(), location
+            return read_public_page(url)
+        website = check_website_surfaces(spec, accepted_refs, read_bytes=website_reader, read_page=page_reader,
+                                         expected_sales=expected_sales)
+        assessment['website_surfaces'] = website
+        assessment['missing_inputs'] = sorted(set(assessment['missing_inputs'] + website['missing_inputs']))
+        assessment['mismatches'] = sorted(set(assessment['mismatches'] + website['mismatches']))
         from rendered_page_checks import fixed_pages, check_rendered_pages
         try:
             pages = fixed_pages(args.root, args.expected_docs_ref)
