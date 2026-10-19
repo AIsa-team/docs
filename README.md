@@ -264,7 +264,10 @@ Readiness reports distinguish `deferred_pending` and `deferred_response_pending`
 from the independently reviewed 93 disabled baseline items in `existing_pending`
 and `existing_response_pending`. Exact identity, binding, source, reason, status,
 and response declaration fingerprints must match; changed or additional gaps
-still fail. Each reported gap also carries `runtime_binding` copied from the same
+still fail. A response gap on an operation the Runtime reports as `disabled` is
+listed in `disabled_response_pending`: it is visible debt that does not block
+publication, and because the Runtime status is part of the gap identity it
+blocks again as `new_response_pending` the moment the operation is enabled. Each reported gap also carries `runtime_binding` copied from the same
 Runtime input (native identity, method, path, status, revision, and public pricing)
 for consumer reconciliation; it is evidence, not method or schema authority.
 The exporter checks the fixed policy and both report scopes before publishing.

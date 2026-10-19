@@ -96,6 +96,29 @@ class GapEvidenceTests(unittest.TestCase):
         self.assertEqual(run({'response_gaps': {'p': changed}})['status'], 'failed')
         self.assertEqual(run({'response_gaps': {}})['status'], 'failed')
 
+    def test_runtime_disabled_response_debt_is_visible_but_not_blocking(self):
+        disabled = dict(self.fact, **{'x-aisa-status': 'disabled'})
+        facts = {'paths': {'/read': {'get': disabled}}}
+        doc = {'paths': {'/read': {'get': dict(disabled, responses={'200': {'description': 'unknown'}})}}}
+        rows = [{'path': '/read', 'method': 'GET', 'binding_hash': 'binding',
+                 'source_binding_hash': 'request', 'response_source_binding_hash': 'response'}]
+        gaps = response_gap_rows(doc, facts, rows)
+        self.assertEqual([row['runtime_status'] for row in gaps], ['disabled'])
+        coverage = {'schema_version': 2, 'providers': {'p': rows}, 'response_gaps': {'p': gaps}}
+        report = {'status': 'passed', 'blocked_providers': [], 'providers': {'p': {'errors': [], 'status': 'passed'}}}
+        assess_response_gaps(report, {'p': facts}, {'p': doc}, coverage, {'response_gaps': {}})
+        self.assertEqual(report['status'], 'passed'); self.assertEqual(report['blocked_providers'], [])
+        self.assertEqual(report['providers']['p']['new_response_pending'], [])
+        self.assertEqual(report['providers']['p']['disabled_response_pending'], gaps)
+        # The same debt blocks again once the runtime enables the operation.
+        enabled_doc = {'paths': {'/read': {'get': dict(self.fact, responses={'200': {'description': 'unknown'}})}}}
+        enabled_gaps = response_gap_rows(enabled_doc, self.facts, rows)
+        coverage = {'schema_version': 2, 'providers': {'p': rows}, 'response_gaps': {'p': enabled_gaps}}
+        report = {'status': 'passed', 'blocked_providers': [], 'providers': {'p': {'errors': [], 'status': 'passed'}}}
+        assess_response_gaps(report, {'p': self.facts}, {'p': enabled_doc}, coverage, {'response_gaps': {}})
+        self.assertEqual(report['status'], 'failed'); self.assertEqual(report['providers']['p']['disabled_response_pending'], [])
+        self.assertNotEqual(gap_key(gaps[0]), gap_key(enabled_gaps[0]))
+
 
 if __name__ == '__main__':
     unittest.main()

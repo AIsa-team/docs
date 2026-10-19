@@ -109,7 +109,9 @@ Historical success schemas/examples remain a labeled, versioned fallback when
 no current authority supplies the payload. Unknown response declarations and
 unresolved response references appear in `x-aisa-response-pending` and provider
 metadata `response_pending`, separately from request pending. These are source
-gaps, not execution failures or additional endpoint admission gates. A complete
+gaps, not execution failures or additional endpoint admission gates. Response
+gaps on Runtime-disabled operations are reported as `disabled_response_pending`
+and do not block publication until the Runtime enables the operation. A complete
 request publication is not a claim of complete response documentation.
 204/205 No Content and explicitly unconstrained JSON schemas are valid responses.
 Editorial notes append to runtime constraint notes with stable deduplication.

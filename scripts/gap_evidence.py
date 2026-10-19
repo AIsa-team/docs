@@ -272,7 +272,8 @@ def assess_response_gaps(report, facts, documents, coverage, baseline, deferred_
         current = response_gap_rows(documents.get(provider, {}), facts.get(provider, {}), coverage['providers'].get(provider, []),
             response_identity_v2=bool(deferred_definitions and deferred_definitions.response_v2_keys))
         declared = coverage.get('response_gaps', {}).get(provider)
-        result.update(new_response_pending=[], existing_response_pending=[], deferred_response_pending=[])
+        result.update(new_response_pending=[], existing_response_pending=[], deferred_response_pending=[],
+                      disabled_response_pending=[])
         if declared != current:
             result['errors'].append({'code': 'response_gap_accounting_mismatch', 'provider': provider})
         approved = {gap_key(row) for row in (baseline or {}).get('response_gaps', {}).get(provider, [])} - {None}
@@ -284,6 +285,12 @@ def assess_response_gaps(report, facts, documents, coverage, baseline, deferred_
             target = 'existing_response_pending' if baseline_match else 'new_response_pending'
             if target == 'new_response_pending' and deferred_definitions is not None and deferred_definitions.matches(provider, 'response', gap_key(row)):
                 target = 'deferred_response_pending'
+            if target == 'new_response_pending' and row.get('runtime_status') == 'disabled':
+                # The runtime does not serve a disabled operation, so its missing
+                # success payload is visible debt, not a publication blocker. The
+                # row keeps its exact identity and becomes blocking again the
+                # moment the runtime enables it (runtime_status is part of the key).
+                target = 'disabled_response_pending'
             result[target].append(row)
         if result['errors'] or result['new_response_pending']:
             result['status'] = report['status'] = 'failed'

@@ -529,7 +529,8 @@ def check_readiness(facts_by_provider, documents_by_provider, coverage,
     for provider, result in report['providers'].items():
         fact_ops = dict(_operations(facts.get(provider, {}), True))
         for field in ('new_pending', 'existing_pending', 'deferred_pending',
-                      'new_response_pending', 'existing_response_pending', 'deferred_response_pending'):
+                      'new_response_pending', 'existing_response_pending', 'deferred_response_pending',
+                      'disabled_response_pending'):
             for row in result.get(field, []):
                 method, path = str(row.get('method', '')).lower(), row.get('path')
                 native_method = method if (path, method) in fact_ops else 'x-aisa-any'
