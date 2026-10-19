@@ -147,6 +147,54 @@ class RevisionTests(unittest.TestCase):
             self.assertIn('docs-json:unavailable', result['missing_inputs'])
             self.assertEqual(result['router_schemas']['verified_operations'], 0)
 
+    def test_all_surfaces_merges_website_checks_with_offline_page_evidence(self):
+        import json
+        import tempfile
+        from unittest.mock import patch
+        documents, runtime, website, router = self.fixture()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'openapi.yaml').write_text(yaml.safe_dump({'info': {'x-aisa-document': {'providers': documents}}}))
+            self.write_website_version(root)
+            for name, value in [('runtime', runtime), ('router', router)]:
+                (root / (name + '.json')).write_text(json.dumps(value))
+            (root / 'website-provider-page-example.html').write_bytes(b'<title>API Not Found - AIsa</title>')
+            (root / 'website-provider-page-example.status').write_text('200\n')
+            report = root / 'report.json'
+            seen = {}
+            def website(spec, accepted_refs, *, read_bytes, read_page, expected_sales):
+                seen['refs'] = accepted_refs
+                seen['page'] = read_page('website-provider-page:example', 'https://aisa.one/api/example')
+                seen['expected_sales'] = expected_sales
+                try:
+                    read_bytes('website-sales-catalog', 'https://aisa.one/api/sales-api-data')
+                except FileNotFoundError:
+                    seen['sales_missing'] = True
+                return {'missing_inputs': ['website-sales-catalog:unavailable:FileNotFoundError'],
+                        'mismatches': ['website-provider-pages:example:not_found'], 'observations': {}}
+            with patch.object(sys, 'argv', ['monitor', '--root', str(root), '--all-surfaces',
+                    '--evidence-dir', str(root), '--acceptance', '--expected-docs-ref', 'a' * 40,
+                    '--report', str(report)]), patch('builtins.print'), \
+                    patch('check_contract_revisions.verified_empty_catalogs', return_value={}), \
+                    patch('public_surface_checks.fixed_request_blocks', return_value={}), \
+                    patch('public_surface_checks.fixed_payment_bytes', return_value=b'{}'), \
+                    patch('public_surface_checks.fixed_sales_catalog', side_effect=ValueError('no sales view')), \
+                    patch('public_surface_checks.check_surfaces', return_value={'missing_inputs': [], 'mismatches': []}), \
+                    patch('public_surface_checks.check_website_surfaces', side_effect=website), \
+                    patch('router_surface_checks.check_router_surface', return_value={
+                        'missing_inputs': [], 'mismatches': [], 'verified_operations': 0}):
+                self.assertEqual(main(), 1)
+            self.assertEqual(seen['refs'], {'a' * 40})
+            self.assertEqual(seen['page'], (200, b'<title>API Not Found - AIsa</title>'))
+            self.assertIsNone(seen['expected_sales'])
+            self.assertTrue(seen['sales_missing'])
+            result = json.loads(report.read_text())
+            self.assertEqual(result['status'], 'not_assessed')
+            self.assertIn('website-provider-pages:example:not_found', result['mismatches'])
+            self.assertIn('website-sales-catalog:unavailable:FileNotFoundError', result['missing_inputs'])
+            self.assertIn('fixed_sales_catalog:unavailable:ValueError', result['missing_inputs'])
+            self.assertEqual(result['website_surfaces']['mismatches'], ['website-provider-pages:example:not_found'])
+
     def test_matching_provider_hashes_cannot_hide_wrong_website_source(self):
         for field, replacement, expected in [
                 ('docsRevision', 'b' * 40, 'website:docs_revision_mismatch'),

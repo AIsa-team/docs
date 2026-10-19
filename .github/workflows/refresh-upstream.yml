@@ -89,21 +89,50 @@ jobs:
           else
             echo 'changed=true' >> "$GITHUB_OUTPUT"
           fi
+      - name: Fail when an automatic source acquisition lapses within 6 hours
+        # Visible before the receipt expires: the next scheduled run is 12 hours
+        # away, so a due time inside this window cannot be renewed in time.
+        run: >-
+          python scripts/refresh_upstream.py --audit-only
+          --receipts .cache/source-reviews.json --due-within-hours 6
+          --report /tmp/upstream-acquisition-window.json
       - name: Acquire fresh Runtime inputs for the review candidate
         if: steps.source-changes.outputs.changed == 'true'
         run: python scripts/fetch_runtime_release.py --current --output /tmp/source-review-runtime
+      - name: Select the verified Runtime mode for the review candidate
+        if: steps.source-changes.outputs.changed == 'true'
+        id: runtime_mode
+        run: |
+          mode=$(python scripts/runtime_publication.py mode --facts-dir /tmp/source-review-runtime)
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
       - name: Compose and assess the complete source review candidate
         if: steps.source-changes.outputs.changed == 'true'
         env:
           REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
+          RUNTIME_MODE: ${{ steps.runtime_mode.outputs.mode }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python scripts/pull_openapi.py --write --facts-dir /tmp/source-review-runtime \
-            --baseline-ref "$REVIEWED_BASELINE" --readiness-mode pr \
-            --readiness-report /tmp/source-review-composition.json
-          python scripts/runtime_consolidate_openapi.py --output openapi.yaml
+          # Same staging as pull-openapi.yml: a canonical Runtime release is
+          # projected by runtime_publication.py stage (which also writes the
+          # aggregate, pages, llms index and sales view); a fact-only release
+          # keeps the local composer path. Neither writes a publication pointer.
+          if [ "$RUNTIME_MODE" = canonical ]; then
+            python scripts/runtime_publication.py stage --write --facts-dir /tmp/source-review-runtime \
+              --baseline-ref "$REVIEWED_BASELINE" --source-receipts .cache/source-reviews.json \
+              --report /tmp/source-review-composition.json
+          elif [ "$RUNTIME_MODE" = facts ]; then
+            python scripts/pull_openapi.py --write --facts-dir /tmp/source-review-runtime \
+              --baseline-ref "$REVIEWED_BASELINE" --readiness-mode pr \
+              --readiness-report /tmp/source-review-composition.json
+            python scripts/runtime_consolidate_openapi.py --output openapi.yaml
+          else
+            echo 'Unverified Runtime mode; refusing fallback.' >&2
+            exit 1
+          fi
           python scripts/validate_runtime_api_reference_slugs.py --generated-only
           python scripts/check_contract_candidate.py --facts-dir /tmp/source-review-runtime \
             --baseline-ref "$REVIEWED_BASELINE" --published-ref "$(git rev-parse HEAD)" \
+            --source-receipts .cache/source-reviews.json \
             --report /tmp/source-review-readiness.json
           # This is a review candidate. Only pull-openapi exports formal receipts.
           git diff --exit-code -- docs/publication/current.json \
@@ -117,6 +146,7 @@ jobs:
             /tmp/source-review-composition.json
             /tmp/source-review-readiness.json
             /tmp/source-review-runtime/acquisition-receipt.json
+            /tmp/upstream-acquisition-window.json
           if-no-files-found: ignore
       - name: Generate scoped source review token
         id: review-token

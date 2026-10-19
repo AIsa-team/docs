@@ -371,6 +371,58 @@ Concrete operations carry `x-aisa-runtime-operation` with the original Runtime
 copied before public method expansion; it grants no missing request authority
 and lets consumers bind public aliases without guessing native identities.
 
+### Website, MCP page, sales catalog and Agent Discovery checks
+
+`check_contract_revisions.py --all-surfaces` also reads the website surfaces
+that consumers reach from the publication, with independent codes
+(`scripts/public_surface_checks.py`, `check_website_surfaces`). Every read is
+bounded and a surface that cannot be read is a `missing_inputs` entry, never a
+pass:
+
+- `website-provider-pages`: for every provider id in the publication (aggregate
+  `info.x-aisa-document.providers` with a `document_hash`, united with the live
+  `/api/sales-api-data` provider ids) `https://aisa.one/api/<id>` must answer
+  200 and must not be the soft 404 (`API Not Found` in the HTML title):
+  `<id>:not_found`, `<id>:http_<status>`. One impossible slug must not answer a
+  200 page (`unknown-slug:unknown_slug_returns_200`, or
+  `unknown-slug:soft_404_returns_200` when it is a 200 soft 404) and the
+  retired `image-generation-via-chat` page must not answer 200
+  (`image-generation-via-chat:retired_page_returns_200`).
+- `website-mcp-page`: the headline counts on `https://aisa.one/mcp` must agree
+  with `https://mcp.aisa.one/servers` (`tool_count_mismatch` against
+  `toolCount`, `server_count_mismatch` against `serverCount`,
+  `category_count_mismatch` against the category entry points), and every
+  quoted `$<amount> <operation>` example must equal the sales catalog
+  `operations[].quote.amount` (`<name>:example_price_mismatch`,
+  `<name>:example_operation_unknown`). MCP tool names may drop the HTTP method
+  prefix of the operation id.
+- `website-sales-catalog`: `/api/sales-api-data` `docs_revision` must be an
+  accepted ref (`docs_revision_mismatch`), `contract_release` must equal the
+  expected publication pointer (`contract_release_mismatch`), and each
+  provider's `endpoint_count` must equal the non-disabled operations the
+  hash-bound `docs/publication/sales-catalog.json` attributes to that registry
+  provider (`<id>:endpoint_count_mismatch`, `<id>:provider_missing`,
+  `<id>:provider_not_in_publication`); operations without a registry provider
+  are the website's `models` group.
+- `docs-discovery-page`: simple string rules on the rendered body of
+  `https://aisa.one/docs/guides/agent-discovery.md` after the generated `>`
+  header (`DISCOVERY_PAGE_RULES`): it must link `https://aisa.one/llms.txt` as
+  the agent setup guide, must not label it "Product llms.txt", must present
+  MCP + OAuth, must keep direct HTTP as the documented fallback and must not
+  present Bearer-key requests as the primary flow.
+- `website-llms:http_verification_rule_conflict` and
+  `website-llms:no_credential_error_rule_conflict`: the agent setup guide at
+  `https://aisa.one/llms.txt` (served by the website, not from this
+  repository) must not state that an authenticated `GET /v1/models` returning
+  200 verifies the connection, nor that `401` is the only "not signed in"
+  answer; the CLI page and the Errors page table are authoritative.
+
+Offline evidence for these checks lives beside the existing files:
+`website-sales-catalog.json`, `mcp-servers.json`, `website-mcp-page.html`,
+`docs-discovery-page.md`, and `website-provider-page-<slug>.html` with an
+optional `website-provider-page-<slug>.status`. Validate with
+`python -m unittest discover -s scripts/tests -p 'test_website_surface_checks.py'`.
+
 ### Upstream maintenance credentials
 
 `refresh-upstream.yml` acquires official automatic sources every 12 hours and

@@ -2,7 +2,7 @@
 """Stage official mirror updates for review, retaining removed published routes."""
 import argparse
 import copy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 from compose_openapi import METHODS, resolve
@@ -70,6 +70,34 @@ def source_evidence(source, checked_at):
     return {'url': source.get('url'), 'content_hash': source.get('content_hash'),
             'fetched_at': fetched_at, 'source_age_seconds': age,
             'converter': source.get('converter')}
+
+
+def acquisition_lapses(sources, checked_at, within_hours):
+    """Automatic sources whose next acquisition is due within the window.
+
+    An automatic source with no computable due time (no valid receipt) is a
+    lapse too: its authorization cannot be shown to outlast the window.
+    """
+    if not isinstance(within_hours, (int, float)) or isinstance(within_hours, bool) or within_hours < 0:
+        raise ValueError('within_hours must be a non-negative number')
+    horizon = checked_at + timedelta(hours=within_hours)
+    lapses = []
+    for name in sorted(sources):
+        row = sources[name]
+        if row.get('policy') != 'automatic':
+            continue
+        due = row.get('next_acquisition_due_at')
+        try:
+            due_at = datetime.fromisoformat(due.replace('Z', '+00:00')) if isinstance(due, str) else None
+        except ValueError:
+            due_at = None
+        if due_at is not None and due_at.tzinfo is None:
+            due_at = None
+        if due_at is None or due_at <= horizon:
+            lapses.append({'source': name, 'owner': row.get('owner'), 'status': row.get('status'),
+                           'freshness': row.get('freshness'), 'next_acquisition_due_at': due,
+                           'seconds_until_due': None if due_at is None else int((due_at - checked_at).total_seconds())})
+    return lapses
 
 
 def refresh(root, fetch=import_source, checked_at=None, receipts=None, attempts=None):
@@ -142,14 +170,15 @@ def refresh(root, fetch=import_source, checked_at=None, receipts=None, attempts=
     return changes, report
 
 
-if __name__ == '__main__':
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--write', action='store_true')
     parser.add_argument('--report', type=Path)
     parser.add_argument('--receipts', type=Path, help='Existing workflow receipt report/cache; no receipt inferred from fetched_at')
     parser.add_argument('--audit-only', action='store_true', help='Assess all source policies/receipts without fetching or writing')
-    args = parser.parse_args()
+    parser.add_argument('--due-within-hours', type=float, help='Fail (exit 1, GitHub error annotations) when an automatic source acquisition is due within this many hours')
+    args = parser.parse_args(argv)
     saved = json.loads(args.receipts.read_text()) if args.receipts and args.receipts.exists() else {}
     receipts = saved.get('receipts', {})
     attempts = saved.get('attempts', {})
@@ -162,4 +191,15 @@ if __name__ == '__main__':
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(rendered)
     print(rendered)
-    raise SystemExit(0 if report['status'] == 'passed' else (3 if report['status'] == 'not_assessed' else 1))
+    if args.due_within_hours is not None:
+        checked_at = datetime.fromisoformat(report['checked_at'])
+        lapses = acquisition_lapses(report['sources'], checked_at, args.due_within_hours)
+        for row in lapses:
+            print(f"::error title=Upstream acquisition due::{row['source']} (owner {row['owner']}) next acquisition due "
+                  f"{row['next_acquisition_due_at']} is within {args.due_within_hours:g} hours; status {row['status']}/{row['freshness']}")
+        return 1 if lapses else 0
+    return 0 if report['status'] == 'passed' else (3 if report['status'] == 'not_assessed' else 1)
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
