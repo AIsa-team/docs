@@ -48,18 +48,183 @@ Effective request and pricing declaration (including authentication and referenc
   "requestBody": {
     "content": {
       "application/json": {
+        "examples": {
+          "Basic Account Creation": {
+            "value": {
+              "accounts": [
+                {
+                  "domain": "acme.com",
+                  "name": "Acme Corporation",
+                  "phone": "+1-555-0135"
+                },
+                {
+                  "domain": "example.com",
+                  "linkedin_url": "https://linkedin.com/company/techstart",
+                  "name": "TechStart Inc"
+                }
+              ]
+            }
+          },
+          "With CRM IDs (Returns Existing Without Updating)": {
+            "value": {
+              "accounts": [
+                {
+                  "name": "New Name",
+                  "phone": "+1-555-0159",
+                  "salesforce_id": "001pJNj9pix2idKsfj"
+                },
+                {
+                  "hubspot_id": "12345678",
+                  "name": "Another New Name"
+                }
+              ]
+            }
+          },
+          "With Custom Fields and Labels": {
+            "value": {
+              "accounts": [
+                {
+                  "account_stage_id": "507f1f77bcf86cd799439014",
+                  "domain": "example.com",
+                  "name": "Enterprise Client",
+                  "typed_custom_fields": {
+                    "507f1f77bcf86cd799439020": "High Value",
+                    "507f1f77bcf86cd799439021": "Q4 2025"
+                  }
+                }
+              ],
+              "append_label_names": [
+                "Enterprise",
+                "Priority"
+              ]
+            }
+          },
+          "With Deduplication (Returns Existing Without Updating)": {
+            "value": {
+              "accounts": [
+                {
+                  "domain": "existing-company.com",
+                  "name": "New Company Name"
+                }
+              ],
+              "run_dedupe": true
+            }
+          }
+        },
         "schema": {
           "properties": {
             "accounts": {
-              "description": "Array of accounts to create",
-              "type": "string"
+              "description": "Array of account attribute objects (maximum 100 accounts per request)",
+              "items": {
+                "properties": {
+                  "account_stage_id": {
+                    "description": "Account stage/pipeline stage ID (BSON::ObjectId format)",
+                    "example": "507f1f77bcf86cd799439014",
+                    "type": "string"
+                  },
+                  "domain": {
+                    "description": "Company domain (e.g., 'example.com')",
+                    "example": "acme.com",
+                    "type": "string"
+                  },
+                  "facebook_url": {
+                    "description": "Facebook page URL",
+                    "example": "https://facebook.com/acme",
+                    "type": "string"
+                  },
+                  "hubspot_id": {
+                    "description": "HubSpot company ID for CRM integration",
+                    "example": "12345678",
+                    "type": "string"
+                  },
+                  "linkedin_url": {
+                    "description": "LinkedIn company page URL",
+                    "example": "https://linkedin.com/company/acme",
+                    "type": "string"
+                  },
+                  "merged_crm_ids": {
+                    "description": "Additional CRM IDs for deduplication",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "name": {
+                    "description": "Account name",
+                    "example": "Acme Corporation",
+                    "type": "string"
+                  },
+                  "organization_id": {
+                    "description": "Apollo organization ID",
+                    "example": "507f1f77bcf86cd799439012",
+                    "type": "string"
+                  },
+                  "owner_id": {
+                    "description": "Account owner user ID (BSON::ObjectId format). Defaults to current user if not provided",
+                    "example": "507f1f77bcf86cd799439013",
+                    "type": "string"
+                  },
+                  "parent_account_id": {
+                    "description": "Parent account ID for account hierarchy (BSON::ObjectId format)",
+                    "example": "507f1f77bcf86cd799439016",
+                    "type": "string"
+                  },
+                  "phone": {
+                    "description": "Company phone number",
+                    "example": "+1-555-0135",
+                    "type": "string"
+                  },
+                  "phone_status_cd": {
+                    "description": "Phone validation status",
+                    "type": "string"
+                  },
+                  "raw_address": {
+                    "description": "Company address",
+                    "example": "123 Main St, San Francisco, CA 94105",
+                    "type": "string"
+                  },
+                  "salesforce_id": {
+                    "description": "Salesforce account ID for CRM integration",
+                    "example": "001pJNj9pix2idKsfj",
+                    "type": "string"
+                  },
+                  "twitter_url": {
+                    "description": "Twitter profile URL",
+                    "example": "https://twitter.com/acme",
+                    "type": "string"
+                  },
+                  "typed_custom_fields": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Custom field values as key-value pairs where key is the field_id and value is the field_value",
+                    "example": {
+                      "507f1f77bcf86cd799439020": "High Value",
+                      "507f1f77bcf86cd799439021": "Q4 2025"
+                    },
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              },
+              "maxItems": 100,
+              "type": "array"
             },
             "append_label_names": {
-              "description": "Label names to append to each created account",
-              "type": "string"
+              "description": "Array of label names to add to ALL accounts in this request",
+              "example": [
+                "Enterprise",
+                "High Priority"
+              ],
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
             },
             "run_dedupe": {
-              "description": "Enable deduplication. Default false.",
+              "default": false,
+              "description": "Enable aggressive deduplication by domain, organization_id, and name. When false (default), only matches by CRM IDs. When true, also matches by domain, organization_id, and name. Existing accounts are returned without modification in both modes",
+              "example": true,
               "type": "boolean"
             }
           },
