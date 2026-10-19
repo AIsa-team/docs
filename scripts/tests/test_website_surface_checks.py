@@ -77,6 +77,14 @@ class WebsiteSurfaceChecks(unittest.TestCase):
         reads = []
         pages = {'https://aisa.one/api/twitter': (307, b'', 'https://aisa.one/api/twitter-api'),
                  'https://aisa.one/api/twitter-api': (200, page('Twitter API - AIsa')),
+                 'https://aisa.one/api/financial': (307, b'', '/api/financial-api'),
+                 'https://aisa.one/api/financial-api': (200, page('Financial API - AIsa')),
+                 'https://aisa.one/api/scholar': (308, b'', 'scholar-api'),
+                 'https://aisa.one/api/scholar-api': (200, page('Scholar API - AIsa')),
+                 'https://aisa.one/api/relative-offsite': (307, b'', '//example.com/api/x'),
+                 'https://aisa.one/api/relative-gone': (307, b'', '/api/relative-gone-card'),
+                 'https://aisa.one/api/relative-gone-card': (200, page('API Not Found - AIsa')),
+                 'https://aisa.one/api/empty-location': (307, b'', ''),
                  'https://aisa.one/api/gone': (308, b'', 'https://aisa.one/api/gone-card'),
                  'https://aisa.one/api/gone-card': (200, page('API Not Found - AIsa')),
                  'https://aisa.one/api/chain': (307, b'', 'https://aisa.one/api/chain-2'),
@@ -90,16 +98,27 @@ class WebsiteSurfaceChecks(unittest.TestCase):
             reads.append((name, url))
             return pages[url]
         mismatches, missing, observations = check_provider_pages(
-            {'twitter', 'gone', 'chain', 'offsite', 'http-origin', 'permanent'}, read_page)
+            {'twitter', 'financial', 'scholar', 'gone', 'chain', 'offsite', 'http-origin', 'permanent',
+             'relative-offsite', 'relative-gone', 'empty-location'}, read_page)
         self.assertEqual(missing, [])
         self.assertEqual(mismatches, [
             'website-provider-pages:chain:redirect_target_not_found',
+            'website-provider-pages:empty-location:redirect_offsite',
             'website-provider-pages:gone:redirect_target_not_found',
             'website-provider-pages:http-origin:redirect_offsite',
             'website-provider-pages:offsite:redirect_offsite',
-            'website-provider-pages:permanent:http_301'])
+            'website-provider-pages:permanent:http_301',
+            'website-provider-pages:relative-gone:redirect_target_not_found',
+            'website-provider-pages:relative-offsite:redirect_offsite'])
         self.assertEqual(observations['twitter'], {'status': 307, 'title': '', 'location': 'https://aisa.one/api/twitter-api',
+                                                   'resolved_location': 'https://aisa.one/api/twitter-api',
                                                    'target': {'status': 200, 'title': 'Twitter API - AIsa'}})
+        # Path-only and bare relative Locations, as Next.js emits them, resolve against the request URL.
+        self.assertEqual(observations['financial']['resolved_location'], 'https://aisa.one/api/financial-api')
+        self.assertEqual(observations['financial']['target']['status'], 200)
+        self.assertEqual(observations['scholar']['resolved_location'], 'https://aisa.one/api/scholar-api')
+        self.assertIn(('website-provider-page:financial:financial-api', 'https://aisa.one/api/financial-api'), reads)
+        self.assertNotIn('target', observations['relative-offsite'])
         self.assertEqual(observations['offsite']['location'], 'https://example.com/api/offsite')
         self.assertNotIn('target', observations['offsite'])
         self.assertIn(('website-provider-page:twitter:twitter-api', 'https://aisa.one/api/twitter-api'), reads)
@@ -121,6 +140,11 @@ class WebsiteSurfaceChecks(unittest.TestCase):
                     self.send_header('Location', 'http://%s:%d/api/twitter-api' % self.server.server_address)
                     self.send_header('Content-Length', '0')
                     self.end_headers()
+                elif self.path == '/api/financial':
+                    self.send_response(307)
+                    self.send_header('Location', '/api/twitter-api')  # path-only, as Next.js emits
+                    self.send_header('Content-Length', '0')
+                    self.end_headers()
                 elif self.path == '/api/twitter-api':
                     body = page('Twitter API - AIsa')
                     self.send_response(200); self.send_header('Content-Length', str(len(body))); self.end_headers()
@@ -139,19 +163,24 @@ class WebsiteSurfaceChecks(unittest.TestCase):
             with warnings.catch_warnings():
                 warnings.simplefilter('error', ResourceWarning)
                 redirect = read_public_page(origin + '/api/twitter')
+                relative = read_public_page(origin + '/api/financial')
                 target = read_public_page(origin + '/api/twitter-api')
                 missing = read_public_page(origin + '/api/nothing')
                 gc.collect()
             self.assertEqual(redirect, (307, b'', origin + '/api/twitter-api'))
+            self.assertEqual(relative, (307, b'', '/api/twitter-api'))
             self.assertEqual((target[0], target[2]), (200, None))
             self.assertIn(b'Twitter API - AIsa', target[1])
             self.assertEqual(missing[0], 404)
             self.assertIn(b'API Not Found', missing[1])
             with __import__('unittest.mock').mock.patch('public_surface_checks.PROVIDER_PAGE_ORIGIN', origin), \
                     __import__('unittest.mock').mock.patch('public_surface_checks.PROVIDER_PAGE', origin + '/api/{}'):
-                mismatches, missing_inputs, observations = check_provider_pages({'twitter'}, lambda name, url: read_public_page(url))
+                mismatches, missing_inputs, observations = check_provider_pages(
+                    {'twitter', 'financial'}, lambda name, url: read_public_page(url))
             self.assertEqual((mismatches, missing_inputs), ([], []))
             self.assertEqual(observations['twitter']['target']['status'], 200)
+            self.assertEqual(observations['financial']['resolved_location'], origin + '/api/twitter-api')
+            self.assertEqual(observations['financial']['target']['title'], 'Twitter API - AIsa')
         finally:
             server.shutdown()
             server.server_close()

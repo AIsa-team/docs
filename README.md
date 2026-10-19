@@ -384,8 +384,9 @@ pass:
   `/api/sales-api-data` provider ids) `https://aisa.one/api/<id>` must answer
   200 and must not be the soft 404 (`API Not Found` in the HTML title):
   `<id>:not_found`, `<id>:http_<status>`. Exactly one temporary same-origin
-  redirect (307/308 with a `Location` on `https://aisa.one`) to such a page
-  is accepted and recorded as `{status, location, target}`; otherwise
+  redirect (307/308 whose `Location`, resolved against the request URL so a
+  path-only `/api/<slug>` counts, is on `https://aisa.one`) to such a page is
+  accepted and recorded as `{status, location, resolved_location, target}`; otherwise
   `<id>:redirect_offsite` or `<id>:redirect_target_not_found` (any other
   status, a second redirect, or a soft 404 target). One impossible slug must not answer a
   200 page (`unknown-slug:unknown_slug_returns_200`, or

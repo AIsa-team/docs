@@ -11,7 +11,7 @@ import json
 import re
 import subprocess
 import tarfile
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 from source_json import loads
 import yaml
@@ -477,12 +477,16 @@ def read_provider_page(name, url, read_page):
     observation = {'status': status, 'title': html_title(raw)}
     if status in PROVIDER_PAGE_REDIRECTS:
         observation['location'] = location
-        parts = urlsplit(location) if isinstance(location, str) else None
+        # Next.js emits path-only Locations (`/api/twitter-api`); resolve them
+        # against the request URL before the same-origin test.
+        resolved = urljoin(url, location) if isinstance(location, str) and location.strip() else None
+        parts = urlsplit(resolved) if resolved else None
         if (parts is None or parts.scheme + '://' + (parts.netloc or '') != PROVIDER_PAGE_ORIGIN
                 or parts.username or parts.password or not parts.path.startswith('/')):
             return 'redirect_offsite', observation
+        observation['resolved_location'] = resolved
         target_slug = parts.path.rstrip('/').rsplit('/', 1)[-1] or 'root'
-        target_status, target_raw, *_ = read_page(name + ':' + target_slug, location)
+        target_status, target_raw, *_ = read_page(name + ':' + target_slug, resolved)
         observation['target'] = {'status': target_status, 'title': html_title(target_raw)}
         if target_status != 200 or SOFT_404_TITLE in observation['target']['title']:
             return 'redirect_target_not_found', observation
