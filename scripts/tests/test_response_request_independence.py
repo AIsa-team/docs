@@ -101,7 +101,6 @@ class ResponseRequestIndependenceTests(unittest.TestCase):
             lambda: self.fact.update(security=[]),
             lambda: self.facts['components']['securitySchemes']['bearerAuth'].update(scheme='basic'),
             lambda: self.fact['responses'].update({'201': {'description': 'unknown'}}),
-            lambda: self.fact.update({'x-aisa-status': 'disabled'}),
             lambda: self.upstream['info']['x-aisa-source'].update(url='https://other.example/spec'),
             lambda: self.upstream['paths']['/read']['post']['responses'].update({'202': {'content': {
                 'application/json': {'schema': {'type': 'object'}}}}}),
@@ -114,6 +113,19 @@ class ResponseRequestIndependenceTests(unittest.TestCase):
                 _, after = self.evidence()
                 self.assertNotEqual(gap_key(before[0]), gap_key(after[0]))
                 self.assertEqual(self.assessment(before)['status'], 'failed')
+
+    def test_runtime_disabled_status_is_new_debt_that_does_not_block(self):
+        _, before = self.evidence()
+        self.fact.update({'x-aisa-status': 'disabled'})
+        _, after = self.evidence()
+        # The status is part of the gap identity, so the approved debt no longer
+        # matches; the runtime serves nothing for a disabled operation, so the
+        # new debt is recorded in disabled_response_pending without blocking.
+        self.assertNotEqual(gap_key(before[0]), gap_key(after[0]))
+        report = self.assessment(before)
+        self.assertEqual(report['status'], 'passed')
+        self.assertEqual([row['runtime_status'] for row in report['providers']['p']['disabled_response_pending']], ['disabled'])
+        self.assertEqual(report['providers']['p']['new_response_pending'], [])
 
     def test_public_method_and_path_are_bound_independently(self):
         original = response_runtime_binding(self.fact, self.facts, '/read', 'POST')

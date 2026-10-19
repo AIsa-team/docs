@@ -17,7 +17,8 @@ SCOPE = 'aisa-internal-snapshot-readiness-rejection'
 STATUSES = {'passed', 'failed', 'not_assessed'}
 TOP_LISTS = ('global_errors', 'blocked_providers', 'missing_inputs', 'legacy_route_overlaps')
 PENDING_LISTS = ('new_pending', 'existing_pending', 'deferred_pending',
-                 'new_response_pending', 'existing_response_pending', 'deferred_response_pending')
+                 'new_response_pending', 'existing_response_pending', 'deferred_response_pending',
+                 'disabled_response_pending')
 PROVIDER_LISTS = ('errors', 'missing_inputs', *PENDING_LISTS)
 REASON_CODES = frozenset(('unforwarded_source_query', 'unforwarded_source_header',
     'upstream_operation_missing', 'upstream_selector_no_match', 'ambiguous_source',
