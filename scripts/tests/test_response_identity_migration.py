@@ -18,7 +18,6 @@ from deferred_definitions import (_apply_response_identity_v2, canonical_key,
                                   RESPONSE_IDENTITY_MIGRATION_SHA256, FRED_MIGRATION_SHA256,
                                   validate_report_deferrals, RELAYER_DEFERRAL)
 from formal_assessment import CANONICAL
-from gap_evidence import gap_key
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -32,11 +31,14 @@ class ResponseIdentityMigrationTests(unittest.TestCase):
             provider, kind, old = json.loads(value)
             if kind == 'response':
                 self.rows.append(self.binding(provider, old, 'deferred_enabled_response'))
-        for provider, rows in json.loads((ROOT / 'openapi/coverage.json').read_text())['response_gaps'].items():
-            for row in rows:
-                if row['runtime_status'] == 'disabled':
-                    old = json.loads(json.dumps(gap_key(row)))
-                    self.rows.append(self.binding(provider, old, 'reviewed_disabled_response_baseline'))
+        # The reviewed disabled baseline is the exact pair recorded by the
+        # authenticated migration, not every response gap whose runtime status
+        # is disabled today: a publication may disable further operations later
+        # (their debt is reported as disabled_response_pending, not migrated).
+        record = json.loads((ROOT / REBINDING_PATH).read_text())['response_identity_migration']
+        for row in record['bindings']:
+            if row['scope'] == 'reviewed_disabled_response_baseline':
+                self.rows.append(self.binding(row['provider'], list(row['old_gate_identity']), 'reviewed_disabled_response_baseline'))
         self.migration = {
             'schema_version': 1, 'original_policy_sha256': POLICY_SHA256,
             'baseline_ref': '78ef376841ead8cde10a79651958790be5a0531c',
