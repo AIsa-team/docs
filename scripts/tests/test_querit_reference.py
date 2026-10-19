@@ -61,12 +61,34 @@ class QueritReferenceTests(unittest.TestCase):
         self.assertEqual(schema["properties"]["future_field"]["default"], 2)
         self.assertIn("future_field", schema["required"])
 
+    def test_prose_default_on_typed_field_is_documented_not_inferred(self):
+        """The official table describes the contentMaxChars default in words
+        ("Full available body text"); nothing is inferred and the sentence stays."""
+        row = '<tr><td>contentMaxChars</td><td>integer</td><td>No</td><td>Full available body text</td><td>Max characters</td></tr>'
+        document, _ = convert_reference(html(row))
+        schema = operation(document)["requestBody"]["content"]["application/json"]["schema"]
+        field = schema["properties"]["contentMaxChars"]
+        self.assertEqual(field["type"], "integer")
+        self.assertNotIn("default", field)
+        self.assertEqual(field["description"], "Max characters. Default: Full available body text (value unspecified).")
+        self.assertNotIn("contentMaxChars", schema.get("required", []))
+        self.assertTrue(Draft202012Validator(schema).is_valid({"input": "test", "contentMaxChars": 500}))
+        self.assertFalse(Draft202012Validator(schema).is_valid({"input": "test", "contentMaxChars": "all"}))
+
     def test_changed_types_columns_and_ambiguous_field_constraints_fail_closed(self):
+        def typed_default(cell):
+            return html('<tr><td>limit</td><td>integer</td><td>No</td><td>' + cell + '</td><td>Limit</td></tr>')
         cases = [html().replace(b'<td>integer</td>', b'<td>mystery</td>', 1),
                  html().replace(b'<th>Required</th>', b'<th>Maybe</th>'),
                  html().replace(b'<td>Yes</td>', b'<td>Conditional</td>'),
                  html().replace(b'<td>false</td>', b'<td>10</td>'),
-                 html().replace(b'locale.names allowed values:', b'unknown.names allowed values:')]
+                 html().replace(b'locale.names allowed values:', b'unknown.names allowed values:'),
+                 # A typed default must be a JSON value, "server default" or value-free
+                 # prose: an empty cell, a number inside prose or a JSON literal in
+                 # another spelling still states a value and is not documented away.
+                 typed_default(''), typed_default('10 (max 50)'), typed_default('0 (unlimited)'),
+                 typed_default('False'), typed_default('None'), typed_default('NULL'), typed_default('nil'),
+                 typed_default('undefined'), typed_default('1_000')]
         for source in cases:
             with self.subTest(source=source[:80]), self.assertRaises(ValueError):
                 convert_reference(source)
