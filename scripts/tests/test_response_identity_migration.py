@@ -16,7 +16,7 @@ sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
 from deferred_definitions import (_apply_response_identity_v2, canonical_key,
                                   load_deferred_definitions, POLICY_SHA256, POLICY_PATH, REBINDING_PATH,
                                   RESPONSE_IDENTITY_MIGRATION_SHA256, FRED_MIGRATION_SHA256,
-                                  validate_report_deferrals)
+                                  validate_report_deferrals, RELAYER_DEFERRAL)
 from formal_assessment import CANONICAL
 from gap_evidence import gap_key
 
@@ -54,7 +54,7 @@ class ResponseIdentityMigrationTests(unittest.TestCase):
         current = load_deferred_definitions(ROOT)
         self.assertEqual(len(current.response_v2_keys), 53)
         self.assertEqual(len(current.response_baseline_rebindings), 2)
-        self.assertEqual(len(current.keys), 60)
+        self.assertEqual(len(current.keys), 60 + len(RELAYER_DEFERRAL["items"]))  # CR003 + CR004
         self.assertEqual(current.metadata['scope'], {'request': 10, 'response': 50})
         self.assertEqual(current.metadata['effective_scope'], {'request': 7, 'response': 53})
         prior = json.loads(raw)
@@ -90,7 +90,7 @@ class ResponseIdentityMigrationTests(unittest.TestCase):
             self.assertFalse(self.policy.matches(row['provider'], 'response', row['new_gate_identity']))
         _apply_response_identity_v2(self.policy, self.migration)
         self.assertEqual(self.policy.keys, before)
-        self.assertEqual(len(before), 60)
+        self.assertEqual(len(before), 60 + len(RELAYER_DEFERRAL["items"]))  # CR003 + CR004
         for row in self.rows:
             provider, old, new = row['provider'], row['old_gate_identity'], row['new_gate_identity']
             if old[-1] == 'enabled':

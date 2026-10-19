@@ -115,7 +115,7 @@ def _errors(rows):
 def _policy(value):
     required = {'policy_id', 'path', 'sha256', 'scope'}
     require(type(value) is dict and required <= set(value) <=
-            required | {'rebinding', 'effective_scope'} and
+            required | {'rebinding', 'effective_scope', 'additional_policies'} and
             type(value['policy_id']) is str and value['policy_id'] and
             type(value['path']) is str and value['path'] and
             type(value['sha256']) is str and HEX64.fullmatch(value['sha256']),
@@ -125,6 +125,16 @@ def _policy(value):
             require(type(value[field]) is dict and set(value[field]) == {'request', 'response'} and
                     all(_uint(count) for count in value[field].values()),
                     'Invalid readiness policy scope')
+    if 'additional_policies' in value:
+        rows = value['additional_policies']
+        require(type(rows) is list and rows and all(
+                    type(row) is dict and set(row) == required and
+                    type(row['policy_id']) is str and row['policy_id'] and
+                    type(row['path']) is str and row['path'] and
+                    type(row['sha256']) is str and HEX64.fullmatch(row['sha256']) and
+                    type(row['scope']) is dict and set(row['scope']) == {'request', 'response'} and
+                    all(_uint(count) for count in row['scope'].values()) for row in rows),
+                'Invalid readiness additional policy metadata')
     if 'rebinding' in value:
         row = value['rebinding']
         require(type(row) is dict and set(row) == {'path', 'sha256'} and

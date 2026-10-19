@@ -231,6 +231,18 @@ schema or identity change on a path still present in runtime facts: those remain
 pending or block the affected provider. Inactive historical pages cannot block
 otherwise valid current contracts from refreshing.
 
+A route still present in runtime facts whose composition is pending normally
+blocks its provider when it was already published ("published identity changed
+or disappeared"), and the published spec/pages stay untouched. Only when that
+route's exact readiness gate identity is an approved deferral (CR003/CR004) does
+the composer instead keep the previously published operation, with
+`x-aisa-status: disabled`, `x-aisa-contract-state: retained_pending` and the
+composer's real reason in `x-aisa-contract-pending`. Its coverage row stays
+`pending` with that reason, so readiness lists it as `deferred_pending` rather
+than presenting it as complete; the identity check exempts only that approved
+route, and a different ID on any route still fails. Canonical import treats the
+retained copy as the same producer pending row, never as an extra declaration.
+
 An upstream registry entry can set `file: provider-official.json` to select a
 reviewed official mirror while retaining the original public-route mirror for
 old identities and response schemas. Paths match the effective OpenAPI server

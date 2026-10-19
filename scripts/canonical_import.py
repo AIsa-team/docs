@@ -56,13 +56,23 @@ def diagnostic_pending(provider, facts, native, readiness, upstream, bindings):
                         'Producer pending diagnostic differs from fixed source')
                 pending.update(diagnostic)
             result.append(pending)
+    producer = {(row['path'], row['method']): row for kind in ('existing_pending', 'deferred_pending', 'new_pending')
+                for row in readiness.get(kind, [])}
     for path, method, operation in operations(native):
         reason = operation.get('x-aisa-contract-pending')
         if not reason:
             continue
+        identity = (path, method.upper())
+        if operation.get('x-aisa-contract-state') == 'retained_pending':
+            # A published identity retained on a route the producer left pending
+            # is that same pending row, never an additional declaration.
+            row = producer.get(identity)
+            require(row is not None and row['operation_id'] == operation.get('operationId')
+                    and row['reason'] == reason and operation.get('x-aisa-status') == 'disabled',
+                    'Retained pending operation differs from producer pending')
+            continue
         require(operation.get('x-aisa-contract-state') == 'retained_legacy' and isinstance(reason, str),
                 'Unsupported canonical pending declaration')
-        identity = (path, method.upper())
         require(identity not in seen, 'Retained pending overlaps producer pending')
         seen.add(identity)
         result.append({'path': path, 'method': method.upper(),

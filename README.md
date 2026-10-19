@@ -260,6 +260,19 @@ OpenAPI methods or tools. The 50 operations with proven requests retain their
 existing response-pending representation. No schema, routing, price, or provider
 authority is inferred by this decision.
 
+CR004 (`CR004-polymarket-relayer-20261019`, `RELAYER_DEFERRAL` in
+[`scripts/deferred_definitions.py`](scripts/deferred_definitions.py)) records the
+user's 2026-10-19 decision to defer the three Polymarket Relayer operations that
+need caller or builder credential headers (`/apis/v1/polymarket/relayer/api/keys`,
+`POST /apis/v1/polymarket/submit`, `GET /apis/v1/polymarket/transactions`) until
+Services #672 adds the runtime auth descriptors and its Docs counterpart is
+ported to main as an ordinary PR. It is code-pinned by content hash, loads with
+CR003 (whose bytes are unchanged), and accepts only those three exact
+`unforwarded_source_header` request identities for runtime-enabled operations.
+The operations are not published as complete: their previously published copies
+are retained as disabled `retained_pending` operations, and the other Relayer
+operations publish normally.
+
 Readiness reports distinguish `deferred_pending` and `deferred_response_pending`
 from the independently reviewed 93 disabled baseline items in `existing_pending`
 and `existing_response_pending`. Exact identity, binding, source, reason, status,
