@@ -44,7 +44,7 @@ def operations(spec):
                 yield path, method, operation
 
 
-def assert_identities(previous: dict, current: dict) -> None:
+def assert_identities(previous: dict, current: dict, pending: set = frozenset()) -> None:
     old = {(p, m): op["operationId"] for p, m, op in operations(previous)}
     new = {(p, m): op["operationId"] for p, m, op in operations(current)}
     current_ids = set(new.values())
@@ -53,15 +53,69 @@ def assert_identities(previous: dict, current: dict) -> None:
         # generate_pages rebinds its existing page URLs to the current route.
         if route not in new and operation_id in current_ids:
             continue
+        # An exactly approved deferred route is reported as its pending row with
+        # the composer's real reason (retain_pending_history keeps the published
+        # copy). That is not an identity change; a different ID on the route, or
+        # an unapproved pending route, still is. Method 'any' covers the path.
+        if route not in new and (route in pending or (route[0], "any") in pending):
+            continue
         if new.get(route) != operation_id:
             raise ValueError(f"published identity changed or disappeared: {operation_id} ({route})")
+
+
+def _retain_history_operation(document: dict, facts: dict, history: dict, path: str, method: str,
+                              old: dict, state: str, reason: str) -> dict:
+    """Copy one previously published operation into document, never as active."""
+    historic = copy.deepcopy(old)
+    parameters = effective_parameters(history['paths'][path], old, history)
+    if parameters:
+        historic['parameters'] = parameters
+    historic.setdefault('security', copy.deepcopy(history.get('security', [])))
+    # Resolve authentication independently of request-schema references.
+    # A historic public "Bearer" alias may bind to the current platform's
+    # single HTTP Bearer scheme; unrelated missing schemes stay unresolved.
+    security, missing = effective_security({**historic, 'x-aisa-status': 'disabled',
+        'x-aisa-contract-state': 'retained_legacy'}, history)
+    if 'Bearer' in missing:
+        current_security, _ = effective_security({}, facts)
+        if len(current_security) == 1:
+            scheme = next(iter(current_security.values()))
+            if scheme.get('type') == 'http' and str(scheme.get('scheme', '')).lower() == 'bearer':
+                security['Bearer'] = copy.deepcopy(scheme)
+    if state != 'retained_legacy' and set(missing) - set(security):
+        # Only legacy history may carry unresolved historical security debt.
+        raise ValueError(f"retained pending operation has unresolved security scheme: {old.get('operationId')}")
+    auth = {'components': {'securitySchemes': security}, 'security': historic['security']}
+    from runtime_consolidate_openapi import merge_components
+    document.setdefault('components', {})
+    merge_components(document, auth, 'retained_history.json')
+    historic['security'] = auth['security']
+    operation = resolve_fragment(historic, history, document, "retained_history.json")
+    # Page links are added and hashed by generate_pages after composition.
+    # Feeding the previous run's derived link back here creates hash churn.
+    operation.pop("x-aisa-docs-url", None)
+    operation["x-aisa-status"] = "disabled"
+    operation["x-aisa-contract-state"] = state
+    operation["x-aisa-contract-pending"] = reason
+    document["paths"].setdefault(path, {})[method] = operation
+    return operation
+
+
+def _finish_retention(document: dict, history: dict, retained: list) -> None:
+    if retained:
+        from source_provenance import merge_provenance, validate_document
+        merge_provenance(document, history)
+        validate_document(document)
+        metadata = document["info"]["x-aisa-document"]
+        metadata["document_hash"] = digest({"composed": metadata["document_hash"], "retained": {row["operation_id"]: document["paths"][row["path"]][row["method"].lower()] for row in retained}})
 
 
 def retain_unregistered_history(document: dict, facts: dict, history: dict) -> list:
     """Keep old links visible without presenting unregistered routes as active.
 
     This only handles paths absent from the complete runtime provider document.
-    A failed composition or changed ID on a present path must still fail review.
+    A changed ID on a present path must still fail review; a present path whose
+    composition is pending is handled by retain_pending_history.
     """
     prefix = normalize_paths(facts)
     current_ids = {op['operationId'] for _, _, op in operations(document)}
@@ -71,43 +125,76 @@ def retain_unregistered_history(document: dict, facts: dict, history: dict) -> l
             continue
         if old['operationId'] in current_ids:
             continue
-        historic = copy.deepcopy(old)
-        parameters = effective_parameters(history['paths'][path], old, history)
-        if parameters:
-            historic['parameters'] = parameters
-        historic.setdefault('security', copy.deepcopy(history.get('security', [])))
-        # Resolve authentication independently of request-schema references.
-        # A historic public "Bearer" alias may bind to the current platform's
-        # single HTTP Bearer scheme; unrelated missing schemes stay unresolved.
-        security, missing = effective_security({**historic, 'x-aisa-status': 'disabled',
-            'x-aisa-contract-state': 'retained_legacy'}, history)
-        if 'Bearer' in missing:
-            current_security, _ = effective_security({}, facts)
-            if len(current_security) == 1:
-                scheme = next(iter(current_security.values()))
-                if scheme.get('type') == 'http' and str(scheme.get('scheme', '')).lower() == 'bearer':
-                    security['Bearer'] = copy.deepcopy(scheme)
-        auth = {'components': {'securitySchemes': security}, 'security': historic['security']}
-        from runtime_consolidate_openapi import merge_components
-        document.setdefault('components', {})
-        merge_components(document, auth, 'retained_history.json')
-        historic['security'] = auth['security']
-        operation = resolve_fragment(historic, history, document, "retained_history.json")
-        # Page links are added and hashed by generate_pages after composition.
-        # Feeding the previous run's derived link back here creates hash churn.
-        operation.pop("x-aisa-docs-url", None)
-        operation["x-aisa-status"] = "disabled"
-        operation["x-aisa-contract-state"] = "retained_legacy"
-        operation["x-aisa-contract-pending"] = "not_in_runtime_contract"
-        document["paths"].setdefault(path, {})[method] = operation
+        operation = _retain_history_operation(document, facts, history, path, method, old,
+                                              "retained_legacy", "not_in_runtime_contract")
         retained.append({"path": path, "method": method.upper(), "operation_id": operation["operationId"], "reason": "not_in_runtime_contract"})
-    if retained:
-        from source_provenance import merge_provenance, validate_document
-        merge_provenance(document, history)
-        validate_document(document)
-        metadata = document["info"]["x-aisa-document"]
-        metadata["document_hash"] = digest({"composed": metadata["document_hash"], "retained": {row["operation_id"]: document["paths"][row["path"]][row["method"].lower()] for row in retained}})
+    _finish_retention(document, history, retained)
     return retained
+
+
+def retain_pending_history(document: dict, facts: dict, history: dict, unresolved: list,
+                           routes: set | None = None) -> list:
+    """Keep a published operation whose current runtime route the composer left pending.
+
+    The route is still in runtime facts, so this is not legacy history: the
+    composer could not produce a complete contract for it in this run (for
+    example, runtime does not forward a caller credential header the source
+    requires). Dropping the operation would silently remove its published
+    identity and page; presenting the previous definition as active would claim
+    a contract runtime does not currently honor. The previous definition is
+    retained as disabled, ``x-aisa-contract-state: retained_pending``, with the
+    composer's exact pending reason. Coverage keeps the composer's pending row,
+    so readiness classifies the debt instead of publishing it as complete.
+
+    Only the published identity of that exact pending route is retained; a
+    composed route whose identity changed still fails ``assert_identities``.
+    ``routes`` limits retention to those (path, method) pairs. Returns retained
+    rows for diagnostics; the pending rows already exist.
+    """
+    runtime_paths = normalize_paths(facts).get("paths", {})
+    reasons = {}
+    for row in unresolved:
+        path, method, reason = row.get("path"), str(row.get("method") or "").lower(), row.get("reason")
+        if isinstance(path, str) and path in runtime_paths and method and isinstance(reason, str) and reason:
+            reasons.setdefault((path, method), reason)
+    current_ids = {op['operationId'] for _, _, op in operations(document)}
+    retained = []
+    for path, method, old in operations(history):
+        reason = reasons.get((path, method), reasons.get((path, "any")))
+        if reason is None or old.get('operationId') in current_ids:
+            continue
+        if routes is not None and (path, method) not in routes:
+            continue
+        if method in document.get("paths", {}).get(path, {}):
+            continue
+        operation = _retain_history_operation(document, facts, history, path, method, old,
+                                              "retained_pending", reason)
+        current_ids.add(operation["operationId"])
+        retained.append({"path": path, "method": method.upper(), "operation_id": operation["operationId"], "reason": reason})
+    _finish_retention(document, history, retained)
+    return retained
+
+
+def deferred_pending_routes(provider: str, facts: dict, document: dict, history: dict, unresolved: list,
+                            deferred, rows_for) -> set:
+    """Pending routes whose retained published copy is an exactly approved deferral.
+
+    Without an exact approval the provider keeps today's behavior: a published
+    identity the composer could not produce blocks the provider and leaves its
+    published files untouched. ``rows_for(document)`` returns the provider's
+    enriched coverage rows; readiness recomputes and checks the same key.
+    """
+    if deferred is None:
+        return set()
+    trial = copy.deepcopy(document)
+    retained = retain_pending_history(trial, facts, history, unresolved)
+    if not retained:
+        return set()
+    from contract_readiness import _pending_key
+    candidates = {(row["path"], row["method"].lower()) for row in retained}
+    return {(row["path"], row["method"].lower()) for row in rows_for(trial)
+            if row.get("status") == "pending" and (row["path"], row["method"].lower()) in candidates
+            and deferred.matches(provider, "request", _pending_key(row))}
 
 
 def fetch_json(url: str, etag: str | None = None):
@@ -511,14 +598,18 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                 upstream = upstream_documents if isinstance(configured, list) else (upstream_documents[0] if upstream_documents else None)
                 history = previous_for_facts(facts, original_documents, provider)
                 document, unresolved = compose(facts, upstream, overlay, history, public_mirrors, source_bindings)
-                coverage["providers"][provider] = coverage_rows(facts, document, unresolved, catalogs)
                 from gap_evidence import enrich_coverage
-                enrich_coverage(coverage['providers'][provider], facts, upstream, public_mirrors, source_bindings,
-                                response_identity_v2=response_identity_v2)
+                def rows_for(candidate):
+                    return enrich_coverage(coverage_rows(facts, candidate, unresolved, catalogs), facts, upstream,
+                                           public_mirrors, source_bindings, response_identity_v2=response_identity_v2)
+                deferred_routes = deferred_pending_routes(provider, facts, document, history, unresolved, deferred, rows_for)
+                if deferred_routes:
+                    retain_pending_history(document, facts, history, unresolved, deferred_routes)
+                coverage["providers"][provider] = rows_for(document)
                 active_history = copy.deepcopy(history)
                 runtime_paths = normalize_paths(facts)["paths"]
                 active_history["paths"] = {p: item for p, item in history["paths"].items() if p in runtime_paths}
-                assert_identities(active_history, normalize_paths(document))
+                assert_identities(active_history, normalize_paths(document), deferred_routes)
             except (ValueError, HTTPError, URLError, TimeoutError) as exc:
                 if not registry.get("auto_register"):
                     raise

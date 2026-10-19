@@ -13,6 +13,40 @@ REBINDING_PATH = 'docs/deferred-age-response-rebinding-20261012.json'
 REBINDING_SHA256 = '92137542ef16cea002f25b2f5033406dc88d6d28d39efd23d6f94401d2dc4c50'
 FRED_MIGRATION_SHA256 = 'c77c56e6530dc146956fb9c51f58bbc6791b80b3ba0d63f909f59f0de3d92d50'
 RESPONSE_IDENTITY_MIGRATION_SHA256 = 'd0af755342167b54205fda53e6c86fb4277e1782db588469bbd40d70b68bb375'
+# CR004: a separate, later user approval, code-pinned here because schema input
+# bundles carry a closed, cross-repository input membership. CR003 bytes stay
+# untouched; this record only adds its own exact request keys.
+_RELAYER_REASON = 'unforwarded_source_header'
+RELAYER_DEFERRAL = {
+    'policy_id': 'CR004-polymarket-relayer-20261019',
+    'authorization': 'User (2026-10-19): Relayer 的接口本次在 Docs 里按延期处理、不发布，#672 之后作为正常 PR 移植到 main',
+    'decision': 'deferred; definitions remain pending, not completed',
+    'until': ('Services PR #672 (caller-owned key-list and builder auth descriptors) is on Services main; '
+              'its Docs counterpart is then ported to main as an ordinary PR and this record is removed'),
+    'evidence': {'docs_revision': 'e445f43046ce3b1cf2daea3aa9bf28567c720312',
+                 'runtime': 'Services main production runtime facts (snapshot G939) have no '
+                            'x-aisa-request-auth / x-aisa-upstream-auth descriptor for these operations'},
+    'scope': {'request': 3, 'response': 0},
+    'items': [
+        {'provider': 'polymarket-relayer', 'kind': 'request', 'gate_identity': [
+            'polymarket-relayer', 'any_polymarket_relayer_apis_v1_polymarket_relayer_f3537f',
+            '/apis/v1/polymarket/relayer/api/keys', 'GET',
+            'sha256:29bf36fb154b3d9eeab786b93f5995a18be91bf9d019be5359fe515c173cc524', _RELAYER_REASON,
+            'sha256:18204754c3f45b420bf0da9cf9c57a02e69aebc220d04abf27d8ca1b75e99012', 'enabled']},
+        {'provider': 'polymarket-relayer', 'kind': 'request', 'gate_identity': [
+            'polymarket-relayer', 'any_polymarket_relayer_apis_v1_polymarket_submit',
+            '/apis/v1/polymarket/submit', 'POST',
+            'sha256:b4eca409728bb05ebf46c0761fedf2eb3554ef7a2f9a07e1aec2811f028050a4', _RELAYER_REASON,
+            'sha256:71333b7b539b1d6a951d4085e6c03f141f6cf6d841eef6a15509f282a866ae0e', 'enabled']},
+        {'provider': 'polymarket-relayer', 'kind': 'request', 'gate_identity': [
+            'polymarket-relayer', 'any_polymarket_relayer_apis_v1_polymarket_transactions',
+            '/apis/v1/polymarket/transactions', 'GET',
+            'sha256:29ae89d1301e76571703e9414c27c24b73b56ee7fb8ad28edd9f6a7b6fff12f7', _RELAYER_REASON,
+            'sha256:fb2c7fab4d590d693382c1b67dd6f0446005544359c61fa18a184fda5eeb58b2', 'enabled']},
+    ],
+}
+RELAYER_DEFERRAL_PATH = 'scripts/deferred_definitions.py#RELAYER_DEFERRAL'
+RELAYER_DEFERRAL_SHA256 = '1f84c17c1f94fe1bdd84772369fa523e7e142ad459c1b4c1643a61f33a8e7e16'
 
 
 def canonical_key(provider, kind, key):
@@ -149,7 +183,40 @@ def load_deferred_definitions(root):
         policy.metadata['effective_scope'] = {'request': 7, 'response': 53}
     if binding_sha == RESPONSE_IDENTITY_MIGRATION_SHA256:
         _apply_response_identity_v2(policy, record.get('response_identity_migration', {}))
+    _apply_relayer_policy(policy)
     return policy
+
+
+def relayer_deferral_digest(record=None):
+    raw = json.dumps(RELAYER_DEFERRAL if record is None else record, sort_keys=True,
+                     separators=(',', ':'), ensure_ascii=False)
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _apply_relayer_policy(policy, record=None):
+    """Add CR004's exact Relayer request keys to a loaded CR003 policy.
+
+    Each key is the readiness gate identity of one runtime-enabled Relayer
+    operation the composer leaves pending because runtime does not forward the
+    source's credential headers. Any other provider, kind, reason, status, or a
+    key already covered by CR003 is outside this approval; an edited record
+    fails closed instead of silently widening it.
+    """
+    value = RELAYER_DEFERRAL if record is None else record
+    if relayer_deferral_digest(value) != RELAYER_DEFERRAL_SHA256:
+        raise ValueError('Relayer deferral record differs from approved exact content')
+    items = value['items']
+    keys = {canonical_key(item['provider'], item['kind'], item['gate_identity']) for item in items}
+    if (value['scope'] != {'request': len(items), 'response': 0} or len(keys) != len(items)
+            or any(item['provider'] != 'polymarket-relayer' or item['kind'] != 'request'
+                   or len(item['gate_identity']) != 8 or item['gate_identity'][0] != 'polymarket-relayer'
+                   or item['gate_identity'][5] != _RELAYER_REASON or item['gate_identity'][-1] != 'enabled'
+                   for item in items)
+            or keys & policy.keys):
+        raise ValueError('Invalid Relayer deferral scope')
+    policy.keys = policy.keys | keys
+    policy.metadata['additional_policies'] = [{'policy_id': value['policy_id'], 'path': RELAYER_DEFERRAL_PATH,
+                                               'sha256': RELAYER_DEFERRAL_SHA256, 'scope': dict(value['scope'])}]
 
 
 def validate_report_deferrals(root, report):

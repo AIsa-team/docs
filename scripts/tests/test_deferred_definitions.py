@@ -7,7 +7,8 @@ import tempfile
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from deferred_definitions import (DeferredDefinitions, load_deferred_definitions, POLICY_PATH,
-                                  POLICY_SHA256, REBINDING_PATH, REBINDING_SHA256, FRED_MIGRATION_SHA256, validate_report_deferrals, canonical_key)
+                                  POLICY_SHA256, REBINDING_PATH, REBINDING_SHA256, FRED_MIGRATION_SHA256, validate_report_deferrals, canonical_key,
+                                  RELAYER_DEFERRAL)
 from contract_readiness import check_readiness, _pending_key, binding_hash
 from gap_evidence import gap_key, response_gap_rows
 from publication_surface import publication_hashes
@@ -79,7 +80,7 @@ class DeferredDefinitionTests(unittest.TestCase):
 
     def test_exact_rebinding_is_hashed_and_cannot_expand_or_survive_tampering(self):
         policy = load_deferred_definitions(self.original_root)
-        self.assertEqual(len(policy.keys), 60)
+        self.assertEqual(len(policy.keys), 60 + len(RELAYER_DEFERRAL["items"]))  # CR003 + CR004
         self.assertEqual(publication_hashes(self.original_root)[REBINDING_PATH], REBINDING_SHA256)
         self.assertEqual(policy.metadata['rebinding'], {'path': REBINDING_PATH, 'sha256': REBINDING_SHA256})
         raw = (self.original_root / REBINDING_PATH).read_bytes()
@@ -109,7 +110,7 @@ class DeferredDefinitionTests(unittest.TestCase):
                 path.write_bytes((ROOT / name).read_bytes())
             (root / REBINDING_PATH).write_bytes(raw)
             policy = load_deferred_definitions(root)
-            self.assertEqual(len(policy.keys), 60)
+            self.assertEqual(len(policy.keys), 60 + len(RELAYER_DEFERRAL["items"]))  # CR003 + CR004
             self.assertEqual(policy.metadata['scope'], {'request': 10, 'response': 50})
             self.assertEqual(policy.metadata['effective_scope'], {'request': 7, 'response': 53})
             migration = json.loads(raw)['request_response_migration']
