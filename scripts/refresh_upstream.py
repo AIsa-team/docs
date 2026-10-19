@@ -192,6 +192,10 @@ def main(argv=None):
         args.report.write_text(rendered)
     print(rendered)
     if args.due_within_hours is not None:
+        # Exit code semantics with this option: 0 when no automatic source is
+        # due within the window, 1 when at least one is (each printed as a
+        # GitHub error annotation). The report status does not affect the
+        # exit code here; the workflow reports it through its own steps.
         checked_at = datetime.fromisoformat(report['checked_at'])
         lapses = acquisition_lapses(report['sources'], checked_at, args.due_within_hours)
         for row in lapses:

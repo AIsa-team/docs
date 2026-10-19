@@ -279,6 +279,13 @@ class SourceReviewWorkflowTests(unittest.TestCase):
         self.assertIn('--audit-only', step['run'])
         self.assertIn('--due-within-hours 6', step['run'])
         self.assertNotIn('if', step)
+        # A lapse must not suppress the review PR; it is reported at the end.
+        self.assertTrue(step['continue-on-error'])
+        self.assertEqual(step['id'], 'acquisition-window')
+        final = workflow['jobs']['refresh']['steps'][-1]
+        self.assertEqual(final['if'], "steps.acquisition-window.outcome == 'failure'")
+        self.assertIn('exit 1', final['run'])
+        self.assertGreater(names.index(final['name']), names.index('Report acquisition, policy or missing/overdue review failures'))
 
     def test_candidate_cannot_replace_formal_publication_pointer(self):
         result, _ = self.run_candidate_step(change_pointer=True)

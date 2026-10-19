@@ -42,13 +42,13 @@ Across routes, a request **without any credential** is not answered with one sta
 
 | Route family (no credential) | Observed response |
 | --- | --- |
-| `GET /v1/models` and GET data routes eligible for [machine payments](/integrations/machine-payments), for example `GET /apis/v1/fred/series` or `GET /apis/v1/agentmail/api-keys` | `402` with an MPP payment challenge; the challenge also answers an unknown GET path such as `GET /apis/v1/this-route-does-not-exist` |
-| MPP-eligible POST data routes, for example `POST /apis/v1/querit/search` | `402` with an MPP payment challenge |
-| Other data routes, for example `POST /apis/v1/exa/search`, `POST /apis/v1/apollo/mixed_people/api_search`, or `POST /apis/v1/dataforseo/serp/google/organic/live/advanced` | `404` with `{"error":"api endpoint not found"}` although the route exists |
-| Model routes, for example `POST /v1/chat/completions` | `401` with `code: missing_api_key` |
+| Any `GET`, known or unknown path: `GET /v1/models`, `GET /apis/v1/fred/series`, `GET /apis/v1/agentmail/api-keys` (none of them in the [MPP catalog](/integrations/machine-payments)), and `GET /apis/v1/this-route-does-not-exist` | `402` with an MPP payment challenge |
+| `POST` on an MPP-eligible route, for example `POST /apis/v1/querit/search`, and `POST` on an unknown path | `402` with an MPP payment challenge |
+| `POST` on a known data route that is not MPP-eligible, for example `POST /apis/v1/exa/search`, `POST /apis/v1/apollo/mixed_people/api_search`, or `POST /apis/v1/dataforseo/serp/google/organic/live/advanced` | `404` with `{"error":"api endpoint not found"}` although the route exists |
+| `/v1` relay routes, for example `POST /v1/chat/completions` | `401` with `code: missing_api_key` |
 | Any route with an **invalid** key | `401` with `code: invalid_api_key` |
 
-So a missing key is reported as `402`, `404`, or `401` depending on the route, while an invalid key is always `401`. A `402` without a credential is a payment challenge, not a balance problem. Do not read `401` as the only "not signed in" signal, and do not use `GET /v1/models` as proof of business access: success there is only a transport check. Verify an integration with a free protected call instead (the `account` operation over MCP, `aisa balance` with the CLI).
+So a missing key is reported as `402`, `404`, or `401` depending on the method and route, while an invalid key is always `401`. A credential-less `402` is the gateway's payment challenge, not a statement that the route is in the MPP catalog or that a balance is low. Do not read `401` as the only "not signed in" signal, and do not use `GET /v1/models` as proof of business access: success there is only a transport check. Verify an integration with a free protected call instead (the `account` operation over MCP, `aisa balance` with the CLI).
 
 ## Documentation and sales-source availability
 

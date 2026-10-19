@@ -92,6 +92,10 @@ jobs:
       - name: Fail when an automatic source acquisition lapses within 6 hours
         # Visible before the receipt expires: the next scheduled run is 12 hours
         # away, so a due time inside this window cannot be renewed in time.
+        # The lapse must not suppress a review PR for unrelated changed
+        # sources, so the failure is reported by the final step instead.
+        id: acquisition-window
+        continue-on-error: true
         run: >-
           python scripts/refresh_upstream.py --audit-only
           --receipts .cache/source-reviews.json --due-within-hours 6
@@ -176,3 +180,8 @@ jobs:
       - name: Report acquisition, policy or missing/overdue review failures
         if: steps.refresh.outcome == 'failure'
         run: exit 1
+      - name: Report automatic source acquisitions due within 6 hours
+        if: steps.acquisition-window.outcome == 'failure'
+        run: |
+          echo 'An automatic source acquisition is due within 6 hours; see the error annotations and upstream-acquisition-window.json.' >&2
+          exit 1

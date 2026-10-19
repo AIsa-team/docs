@@ -383,7 +383,11 @@ pass:
   `info.x-aisa-document.providers` with a `document_hash`, united with the live
   `/api/sales-api-data` provider ids) `https://aisa.one/api/<id>` must answer
   200 and must not be the soft 404 (`API Not Found` in the HTML title):
-  `<id>:not_found`, `<id>:http_<status>`. One impossible slug must not answer a
+  `<id>:not_found`, `<id>:http_<status>`. Exactly one temporary same-origin
+  redirect (307/308 with a `Location` on `https://aisa.one`) to such a page
+  is accepted and recorded as `{status, location, target}`; otherwise
+  `<id>:redirect_offsite` or `<id>:redirect_target_not_found` (any other
+  status, a second redirect, or a soft 404 target). One impossible slug must not answer a
   200 page (`unknown-slug:unknown_slug_returns_200`, or
   `unknown-slug:soft_404_returns_200` when it is a 200 soft 404) and the
   retired `image-generation-via-chat` page must not answer 200
@@ -394,8 +398,13 @@ pass:
   `category_count_mismatch` against the category entry points), and every
   quoted `$<amount> <operation>` example must equal the sales catalog
   `operations[].quote.amount` (`<name>:example_price_mismatch`,
-  `<name>:example_operation_unknown`). MCP tool names may drop the HTTP method
-  prefix of the operation id.
+  `<name>:example_operation_unknown`). `toolCount` is the duplicate-inclusive
+  sum of every server's own tool count (a tool pinned under several aliased
+  servers counts once per server), not the number of distinct tools reachable
+  through `search`; the page's largest tool figure must be that sum. Example
+  prices are compared exactly for fixed and usage_based quotes alike, because
+  the page derives its figure from the same sales catalog at build time. MCP
+  tool names may drop the HTTP method prefix of the operation id.
 - `website-sales-catalog`: `/api/sales-api-data` `docs_revision` must be an
   accepted ref (`docs_revision_mismatch`), `contract_release` must equal the
   expected publication pointer (`contract_release_mismatch`), and each
@@ -411,7 +420,9 @@ pass:
   MCP + OAuth, must keep direct HTTP as the documented fallback and must not
   present Bearer-key requests as the primary flow.
 - `website-llms:http_verification_rule_conflict` and
-  `website-llms:no_credential_error_rule_conflict`: the agent setup guide at
+  `website-llms:no_credential_error_rule_conflict`: forbidden-phrase
+  regression guards (`WEBSITE_LLMS_RULE_CONFLICTS`), not a positive check of
+  the wording. The agent setup guide at
   `https://aisa.one/llms.txt` (served by the website, not from this
   repository) must not state that an authenticated `GET /v1/models` returning
   200 verifies the connection, nor that `401` is the only "not signed in"
@@ -419,8 +430,9 @@ pass:
 
 Offline evidence for these checks lives beside the existing files:
 `website-sales-catalog.json`, `mcp-servers.json`, `website-mcp-page.html`,
-`docs-discovery-page.md`, and `website-provider-page-<slug>.html` with an
-optional `website-provider-page-<slug>.status`. Validate with
+`docs-discovery-page.md`, and `website-provider-page-<slug>.html` with
+optional `website-provider-page-<slug>.status` and `.location` files (a
+redirect target is `website-provider-page-<slug>-<target slug>.html`). Validate with
 `python -m unittest discover -s scripts/tests -p 'test_website_surface_checks.py'`.
 
 ### Upstream maintenance credentials

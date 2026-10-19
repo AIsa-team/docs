@@ -54,17 +54,24 @@ def read_public_bytes(url):
 
 
 def read_public_page(url):
-    """Bounded HTML/Markdown read returning (status, bytes); no redirects, no proxies.
+    """One bounded HTML/Markdown request returning (status, bytes, location).
 
-    A non-2xx answer is an observation, not an exception: the website's soft
-    404 and retired pages are judged by status and title.
+    No proxies; redirects are not followed: a 3xx answer is returned with its
+    Location header (public_surface_checks accepts one same-origin 307/308 for
+    provider pages). A non-2xx answer is an observation, not an exception, so
+    the website's soft 404 and retired pages are judged by status and title.
+    The response is always closed, including on 3xx, before returning.
     """
     from urllib.error import HTTPError
-    from urllib.request import ProxyHandler, build_opener
-    from fetch_runtime_release import NoRedirect
+    from urllib.request import HTTPRedirectHandler, ProxyHandler, build_opener
+
+    class NoAutoRedirect(HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None  # urllib then raises HTTPError carrying the 3xx response
+
     request = Request(url, headers={'Accept': 'text/html, text/markdown, text/plain', 'Cache-Control': 'no-cache'})
     try:
-        response = build_opener(ProxyHandler({}), NoRedirect()).open(request, timeout=30)
+        response = build_opener(ProxyHandler({}), NoAutoRedirect()).open(request, timeout=30)
     except HTTPError as error:
         response = error
     with response:
@@ -74,7 +81,7 @@ def read_public_page(url):
                 raise TimeoutError('Public page read exceeded time budget')
             chunk = response.read(65536)
             if not chunk:
-                return response.status, b''.join(chunks)
+                return response.status, b''.join(chunks), response.headers.get('Location')
             size += len(chunk)
             if size > 4 * 1024 * 1024:
                 raise ValueError('Public page exceeds byte limit')
@@ -449,17 +456,24 @@ def main():
                 return (args.evidence_dir / (name + extension)).read_bytes()
             if name in ('website-sales-catalog', 'mcp-servers'):
                 return read_public_bytes(url)
-            status, raw = read_public_page(url)
+            # The two JSON surfaces above use the existing read_public_bytes
+            # reader like every other JSON surface; pages go through the
+            # status-aware reader and must answer 200 directly.
+            status, raw, _ = read_public_page(url)
             if status != 200:
                 raise ValueError('Public page answered HTTP ' + str(status))
             return raw
         def page_reader(name, url):
-            # Offline evidence: <name>.html plus an optional <name>.status file.
+            # Offline evidence: <name>.html plus optional <name>.status and
+            # <name>.location files (a redirect target is read as
+            # website-provider-page-<id>-<target slug>.html).
             if args.evidence_dir:
                 stem = name.replace(':', '-')
                 status_file = args.evidence_dir / (stem + '.status')
+                location_file = args.evidence_dir / (stem + '.location')
                 status = int(status_file.read_text().strip()) if status_file.exists() else 200
-                return status, (args.evidence_dir / (stem + '.html')).read_bytes()
+                location = location_file.read_text().strip() if location_file.exists() else None
+                return status, (args.evidence_dir / (stem + '.html')).read_bytes(), location
             return read_public_page(url)
         website = check_website_surfaces(spec, accepted_refs, read_bytes=website_reader, read_page=page_reader,
                                          expected_sales=expected_sales)

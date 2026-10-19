@@ -11,6 +11,7 @@ import json
 import re
 import subprocess
 import tarfile
+from urllib.parse import urlsplit
 
 from source_json import loads
 import yaml
@@ -28,6 +29,11 @@ RETIRED_PROVIDER_SLUGS = ('image-generation-via-chat',)
 # OpenAI/Anthropic/Gemini model routes and `account`) under this sales id.
 SALES_UNREGISTERED_PROVIDER = 'models'
 SOFT_404_TITLE = 'API Not Found'
+# A provider page may answer with exactly one temporary same-origin redirect
+# (307/308 to https://aisa.one/...) to its curated card; the target must then
+# be a 200 page that is not the soft 404. Any other redirect is a failure.
+PROVIDER_PAGE_REDIRECTS = (307, 308)
+PROVIDER_PAGE_ORIGIN = 'https://aisa.one'
 # Agent setup guide (https://aisa.one/llms.txt) lines that contradict the CLI
 # page ("Success on /v1/models ... does not prove authenticated business
 # access") and the Errors page table (no key: 402 MPP challenge / 404 / 401
@@ -373,8 +379,21 @@ def match_operation(name, quotes):
 
 
 def compare_mcp_page(text, servers, sales):
+    """MCP page headline figures versus the live `/servers` catalog and sales quotes.
+
+    `toolCount` in `/servers` is the duplicate-inclusive sum of every server's
+    own tool count: a tool pinned under several aliased servers is counted once
+    per server. It is not the number of distinct tools reachable through
+    `search`. The page must print that summed figure as its largest tool
+    number; per-category rows are smaller and are not compared.
+
+    Example prices are compared exactly (Decimal equality) for fixed and
+    usage_based quotes alike: the page derives its figure from the same sales
+    catalog at build time, so a rounded or stale figure is a mismatch.
+    """
     errors, observed = [], mcp_page_numbers(text)
-    counts = {'tools': servers.get('toolCount'), 'servers': servers.get('serverCount'),
+    counts = {'tools': servers.get('toolCount'),  # duplicate-inclusive sum over servers
+              'servers': servers.get('serverCount'),
               'categories': sum(1 for row in servers.get('entrypoints', []) if isinstance(row, dict) and row.get('kind') == 'category')}
     for key, expected in counts.items():
         values = observed[key]
@@ -445,6 +464,36 @@ def compare_discovery_page(raw):
     return sorted(errors)
 
 
+def read_provider_page(name, url, read_page):
+    """One request plus at most one accepted same-origin temporary redirect.
+
+    `read_page(name, url)` returns `(status, body)` or `(status, body, location)`
+    for a single request without following redirects. Returns
+    `(outcome, observation)` where outcome is 'ok', 'not_found', 'http',
+    'redirect_offsite' or 'redirect_target_not_found'.
+    """
+    status, raw, *rest = read_page(name, url)
+    location = rest[0] if rest else None
+    observation = {'status': status, 'title': html_title(raw)}
+    if status in PROVIDER_PAGE_REDIRECTS:
+        observation['location'] = location
+        parts = urlsplit(location) if isinstance(location, str) else None
+        if (parts is None or parts.scheme + '://' + (parts.netloc or '') != PROVIDER_PAGE_ORIGIN
+                or parts.username or parts.password or not parts.path.startswith('/')):
+            return 'redirect_offsite', observation
+        target_slug = parts.path.rstrip('/').rsplit('/', 1)[-1] or 'root'
+        target_status, target_raw, *_ = read_page(name + ':' + target_slug, location)
+        observation['target'] = {'status': target_status, 'title': html_title(target_raw)}
+        if target_status != 200 or SOFT_404_TITLE in observation['target']['title']:
+            return 'redirect_target_not_found', observation
+        return 'ok', observation
+    if status != 200:
+        return 'http', observation
+    if SOFT_404_TITLE in observation['title']:
+        return 'not_found', observation
+    return 'ok', observation
+
+
 def check_provider_pages(provider_ids, read_page):
     """Every publication provider has a real website page; unknown/retired slugs do not."""
     mismatches, missing, observations = [], [], {}
@@ -453,19 +502,19 @@ def check_provider_pages(provider_ids, read_page):
             mismatches.append('website-provider-pages:' + name + ':invalid_provider_id')
             continue
         try:
-            status, raw = read_page('website-provider-page:' + name, PROVIDER_PAGE.format(name))
-            title = html_title(raw)
-            observations[name] = {'status': status, 'title': title}
-            if status != 200:
-                mismatches.append('website-provider-pages:' + name + ':http_' + str(status))
-            elif SOFT_404_TITLE in title:
-                mismatches.append('website-provider-pages:' + name + ':not_found')
+            outcome, observation = read_provider_page('website-provider-page:' + name, PROVIDER_PAGE.format(name), read_page)
+            observations[name] = observation
+            if outcome == 'http':
+                mismatches.append('website-provider-pages:' + name + ':http_' + str(observation['status']))
+            elif outcome != 'ok':
+                mismatches.append('website-provider-pages:' + name + ':' + outcome)
         except Exception as exc:
             missing.append('website-provider-pages:' + name + ':unavailable:' + type(exc).__name__)
     for name, code in [(UNKNOWN_PROVIDER_SLUG, 'unknown-slug:unknown_slug_returns_200'),
                        *((slug, slug + ':retired_page_returns_200') for slug in RETIRED_PROVIDER_SLUGS)]:
         try:
-            status, raw = read_page('website-provider-page:' + name, PROVIDER_PAGE.format(name))
+            # A redirect is not followed here: the slug itself must not be a 200 page.
+            status, raw, *_ = read_page('website-provider-page:' + name, PROVIDER_PAGE.format(name))
             observations[name] = {'status': status, 'title': html_title(raw)}
             if status == 200 and SOFT_404_TITLE not in observations[name]['title']:
                 mismatches.append('website-provider-pages:' + code)
@@ -530,5 +579,5 @@ def check_website_surfaces(spec, accepted_refs, *, read_bytes, read_page, expect
         mismatches.extend(compare_discovery_page(raw))
     except Exception as exc:
         missing.append('docs-discovery-page:unavailable:' + type(exc).__name__)
-    return {'scope': 'website provider pages (200 and not the soft 404; unknown and retired slugs not 200); MCP page counts versus /servers and example prices versus sales quotes; sales catalog revision, release and per-provider counts; Agent Discovery page rules',
+    return {'scope': 'website provider pages (200 and not the soft 404, or one same-origin 307/308 to such a page; unknown and retired slugs not 200); MCP page headline counts versus /servers (toolCount is the duplicate-inclusive per-server sum) and exact example prices versus sales quotes; sales catalog revision, release and per-provider counts; Agent Discovery page rules',
             'observations': observations, 'missing_inputs': sorted(set(missing)), 'mismatches': sorted(set(mismatches))}

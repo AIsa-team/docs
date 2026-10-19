@@ -185,7 +185,7 @@ class RevisionTests(unittest.TestCase):
                         'missing_inputs': [], 'mismatches': [], 'verified_operations': 0}):
                 self.assertEqual(main(), 1)
             self.assertEqual(seen['refs'], {'a' * 40})
-            self.assertEqual(seen['page'], (200, b'<title>API Not Found - AIsa</title>'))
+            self.assertEqual(seen['page'], (200, b'<title>API Not Found - AIsa</title>', None))
             self.assertIsNone(seen['expected_sales'])
             self.assertTrue(seen['sales_missing'])
             result = json.loads(report.read_text())

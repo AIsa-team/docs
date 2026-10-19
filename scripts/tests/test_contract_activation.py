@@ -137,12 +137,13 @@ class ActivationTests(unittest.TestCase):
                 def schema_read(_, method, url, payload=None):
                     return current['router'] if url == METADATA else {'tools': {oid: current['rows'][oid] for oid in payload['tools']}}
                 def read_page(url):
+                    # Single request semantics: (status, body, Location).
                     if url in current['payloads']:
-                        return 200, current['payloads'][url]
+                        return 200, current['payloads'][url], None
                     slug = url.rsplit('/', 1)[1]
                     if slug in providers:
-                        return 200, ('<title>' + slug + ' API - AIsa</title>').encode()
-                    return 404, ('<title>' + SOFT_404_TITLE + ' - AIsa</title>').encode()
+                        return 200, ('<title>' + slug + ' API - AIsa</title>').encode(), None
+                    return 404, ('<title>' + SOFT_404_TITLE + ' - AIsa</title>').encode(), None
                 with patch.object(sys, 'argv', argv), patch('builtins.print'), \
                     patch('check_contract_revisions.read_public', side_effect=read), \
                     patch('check_contract_revisions.read_public_page', side_effect=read_page), \

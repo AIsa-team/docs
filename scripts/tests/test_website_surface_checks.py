@@ -5,9 +5,9 @@ import sys
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from public_surface_checks import (DISCOVERY_PAGE_RULES, RETIRED_PROVIDER_SLUGS, UNKNOWN_PROVIDER_SLUG,
-                                   WEBSITE_LLMS_RULE_CONFLICTS, check_surfaces, check_website_surfaces,
-                                   compare_discovery_page, compare_mcp_page, compare_sales_catalog,
-                                   fixed_sales_catalog, mcp_page_prices, page_text)
+                                   WEBSITE_LLMS_RULE_CONFLICTS, check_provider_pages, check_surfaces,
+                                   check_website_surfaces, compare_discovery_page, compare_mcp_page,
+                                   compare_sales_catalog, fixed_sales_catalog, mcp_page_prices, page_text)
 
 
 def page(title, body=''):
@@ -72,6 +72,89 @@ class WebsiteSurfaceChecks(unittest.TestCase):
         self.assertEqual(result['missing_inputs'], [])
         self.pages[UNKNOWN_PROVIDER_SLUG] = (200, page('Unknown Provider - AIsa'))
         self.assertIn('website-provider-pages:unknown-slug:unknown_slug_returns_200', self.check()['mismatches'])
+
+    def test_one_same_origin_temporary_redirect_to_a_real_page_is_accepted(self):
+        reads = []
+        pages = {'https://aisa.one/api/twitter': (307, b'', 'https://aisa.one/api/twitter-api'),
+                 'https://aisa.one/api/twitter-api': (200, page('Twitter API - AIsa')),
+                 'https://aisa.one/api/gone': (308, b'', 'https://aisa.one/api/gone-card'),
+                 'https://aisa.one/api/gone-card': (200, page('API Not Found - AIsa')),
+                 'https://aisa.one/api/chain': (307, b'', 'https://aisa.one/api/chain-2'),
+                 'https://aisa.one/api/chain-2': (307, b'', 'https://aisa.one/api/chain-3'),
+                 'https://aisa.one/api/offsite': (307, b'', 'https://example.com/api/offsite'),
+                 'https://aisa.one/api/http-origin': (307, b'', 'http://aisa.one/api/http-origin'),
+                 'https://aisa.one/api/permanent': (301, b'', 'https://aisa.one/api/permanent-card'),
+                 'https://aisa.one/api/' + UNKNOWN_PROVIDER_SLUG: (307, b'', 'https://aisa.one/api/unknown-card'),
+                 'https://aisa.one/api/' + RETIRED_PROVIDER_SLUGS[0]: (404, page('API Not Found - AIsa'))}
+        def read_page(name, url):
+            reads.append((name, url))
+            return pages[url]
+        mismatches, missing, observations = check_provider_pages(
+            {'twitter', 'gone', 'chain', 'offsite', 'http-origin', 'permanent'}, read_page)
+        self.assertEqual(missing, [])
+        self.assertEqual(mismatches, [
+            'website-provider-pages:chain:redirect_target_not_found',
+            'website-provider-pages:gone:redirect_target_not_found',
+            'website-provider-pages:http-origin:redirect_offsite',
+            'website-provider-pages:offsite:redirect_offsite',
+            'website-provider-pages:permanent:http_301'])
+        self.assertEqual(observations['twitter'], {'status': 307, 'title': '', 'location': 'https://aisa.one/api/twitter-api',
+                                                   'target': {'status': 200, 'title': 'Twitter API - AIsa'}})
+        self.assertEqual(observations['offsite']['location'], 'https://example.com/api/offsite')
+        self.assertNotIn('target', observations['offsite'])
+        self.assertIn(('website-provider-page:twitter:twitter-api', 'https://aisa.one/api/twitter-api'), reads)
+        self.assertNotIn('https://example.com/api/offsite', [url for _, url in reads])
+        self.assertNotIn('https://aisa.one/api/chain-3', [url for _, url in reads])
+        self.assertNotIn('https://aisa.one/api/unknown-card', [url for _, url in reads])
+        self.assertEqual(observations[UNKNOWN_PROVIDER_SLUG]['status'], 307)
+
+    def test_live_page_reader_returns_redirects_unfollowed_and_closes_the_response(self):
+        import gc
+        import http.server
+        import threading
+        import warnings
+        from check_contract_revisions import read_public_page
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == '/api/twitter':
+                    self.send_response(307)
+                    self.send_header('Location', 'http://%s:%d/api/twitter-api' % self.server.server_address)
+                    self.send_header('Content-Length', '0')
+                    self.end_headers()
+                elif self.path == '/api/twitter-api':
+                    body = page('Twitter API - AIsa')
+                    self.send_response(200); self.send_header('Content-Length', str(len(body))); self.end_headers()
+                    self.wfile.write(body)
+                else:
+                    body = page('API Not Found - AIsa')
+                    self.send_response(404); self.send_header('Content-Length', str(len(body))); self.end_headers()
+                    self.wfile.write(body)
+            def log_message(self, *args):
+                pass
+        server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            origin = 'http://%s:%d' % server.server_address
+            with warnings.catch_warnings():
+                warnings.simplefilter('error', ResourceWarning)
+                redirect = read_public_page(origin + '/api/twitter')
+                target = read_public_page(origin + '/api/twitter-api')
+                missing = read_public_page(origin + '/api/nothing')
+                gc.collect()
+            self.assertEqual(redirect, (307, b'', origin + '/api/twitter-api'))
+            self.assertEqual((target[0], target[2]), (200, None))
+            self.assertIn(b'Twitter API - AIsa', target[1])
+            self.assertEqual(missing[0], 404)
+            self.assertIn(b'API Not Found', missing[1])
+            with __import__('unittest.mock').mock.patch('public_surface_checks.PROVIDER_PAGE_ORIGIN', origin), \
+                    __import__('unittest.mock').mock.patch('public_surface_checks.PROVIDER_PAGE', origin + '/api/{}'):
+                mismatches, missing_inputs, observations = check_provider_pages({'twitter'}, lambda name, url: read_public_page(url))
+            self.assertEqual((mismatches, missing_inputs), ([], []))
+            self.assertEqual(observations['twitter']['target']['status'], 200)
+        finally:
+            server.shutdown()
+            server.server_close()
 
     def test_provider_ids_come_from_publication_and_sales_union_and_unreadable_pages_are_missing(self):
         self.sales['providers'].append({'id': 'sales-only', 'endpoint_count': 1})
