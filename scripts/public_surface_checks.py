@@ -41,8 +41,8 @@ PROVIDER_PAGE_ORIGIN = 'https://aisa.one'
 WEBSITE_LLMS_RULE_CONFLICTS = {
     # Only the old /v1/models claim conflicts; the current guide verifies on
     # `/v1/credits/balance` and may say that call "returns 200 with the balance".
-    'http_verification_rule_conflict': 'v1/models` with the Bearer header returns 200',
-    'no_credential_error_rule_conflict': '`401`: not signed in or invalid key',
+    'http_verification_rule_conflict': re.compile(r'/v1/models\S*\s+with the Bearer header returns 200', re.I),
+    'no_credential_error_rule_conflict': re.compile(re.escape('`401`: not signed in or invalid key')),
 }
 # Agent Discovery page (string presence/absence on the rendered Markdown body,
 # after the generated `>` header block). Matched case-insensitively.
@@ -279,7 +279,7 @@ def check_surfaces(spec, expected_hash, accepted_refs, *, read_bytes, expected_r
                     mismatches.append(name + ':formal_version_missing')
                 if 'https://aisa.one/openapi.json' not in text or not any('/' + ref + '/openapi.yaml' in text for ref in accepted_refs):
                     mismatches.append(name + ':versioned_schema_links_missing')
-                mismatches.extend(name + ':' + code for code, needle in WEBSITE_LLMS_RULE_CONFLICTS.items() if needle in text)
+                mismatches.extend(name + ':' + code for code, pattern in WEBSITE_LLMS_RULE_CONFLICTS.items() if pattern.search(text))
             elif name == 'docs-llms':
                 if expected_hash not in text:
                     mismatches.append(name + ':formal_version_missing')

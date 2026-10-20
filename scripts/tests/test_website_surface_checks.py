@@ -310,6 +310,12 @@ class WebsiteSurfaceChecks(unittest.TestCase):
         result = check_surfaces({'info': {}}, digest, {self.ref},
             read_bytes=lambda name, url: payloads[name], expected_requests={})
         self.assertNotIn('website-llms:http_verification_rule_conflict', result['mismatches'])
+        for variant in (b'- HTTP (D): GET /v1/models with the Bearer header returns 200.\n',
+                        b'- HTTP (D): `GET https://api.aisa.one/v1/models/` with the bearer header returns 200.\n'):
+            payloads['website-llms'] = llms + variant
+            result = check_surfaces({'info': {}}, digest, {self.ref},
+                read_bytes=lambda name, url: payloads[name], expected_requests={})
+            self.assertIn('website-llms:http_verification_rule_conflict', result['mismatches'])
 
     def test_fully_disabled_providers_need_no_website_page(self):
         spec = {'paths': {
