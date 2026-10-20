@@ -132,6 +132,37 @@ The formal publisher separately acquires a fresh release and assesses the exact
 staged graph before exporting its publication pointer. Candidate CI success does
 not authorize a formal release or assert that consumers have converged.
 
+Runtime payment capabilities may include optional `mpp_methods` and
+`x402_methods` lists. Composer keeps the immutable native operation identity and
+limits each concrete method's payment flag to the declared uppercase methods.
+An empty list disables that surface for every method; an absent list preserves
+the previous behavior. Lists never enable a false payment flag. Capability keys,
+types and method lists are validated before composition; unknown fields,
+duplicate methods and nonstandard or nonuppercase methods are rejected.
+These declarations describe payment eligibility, not supplier credential
+ownership or successful authentication. They do not waive request-forwarding
+checks or grant installed-image, publication or deployment qualification.
+
+```sh
+python -m unittest discover -s scripts/tests -p 'test_payment_method_capabilities.py'
+```
+
+For mixed request bodies, an explicit Runtime array `items: {}` leaves its
+children provider-owned. Composer preserves the reviewed source item schema at
+that same array position while keeping Runtime's array type and bounds.
+Constrained Runtime items and mismatched source types keep the existing Runtime
+override. This changes documentation only, without changing request validation:
+
+```sh
+python -m unittest discover -s scripts/tests -p 'test_open_array_items.py'
+```
+
+For Runtime-owned query parameters, missing supplier constraints and formats
+remain visible as `Provider reference (supplier schema)` guidance in the field
+description. The machine-readable schema retains the exact Runtime contract,
+including its wire type and defaults. Supplier hints do not add gateway
+validation or imply that a supplier default is installed by the gateway.
+
 ## Acquire an actual Runtime release for contract review
 
 After the Runtime operator supplies the **actual published artifact revision**
@@ -179,11 +210,39 @@ remain subject to the strict readiness check. Source review receipts do not
 provide the independently approved baseline or prove a code-only Docs commit was
 published. See [reviewed source inputs](docs/current-source-review-20261009/README.md).
 
+The loader supports a separately reviewed response-debt identity migration in
+`docs/deferred-age-response-rebinding-20261012.json`. The existing c77 input
+retains legacy response identities; compiler support alone does not activate the
+new identity. Only the separately reviewed exact migration record selects it and
+preserves the original
+60-item approval bytes and clocks (now 7 request and 53 response gaps). Its 53
+enabled and 2 disabled-baseline response identities bind the public operation,
+route/method, effective public security and scheme definitions, published
+upstream selector/response provenance, selected source and response declarations.
+Request parameters/body, opaque Profile revision and pricing are excluded from
+that response-only identity. Response/source/route/auth changes still require an
+exact approved match; unknown payloads remain explicitly unknown. Old reviewed
+input records retain their original identity behavior. Composer and canonical
+metadata projection use the same authenticated record; the existing closed
+bundle exporter includes that same file, without another registry or Runtime
+protocol. This grants no execution or private-provider-auth guarantee.
+
+Focused validation: `python -m unittest discover -s scripts/tests -p "test_response*.py"`
+(also `test_deferred_definitions.py` and
+`test_canonical_import.py`).
+
 ### Formal publication current pointer (same commit)
 
 The existing publication workflow exports `docs/publication/current.json` only
 when the complete formal readiness gate passes. New or changed request/response
 debts, unknown source maintenance, or missing Runtime inputs prevent publication.
+Every composed public URI placeholder must also have a matching required path
+parameter with a declared schema or content. Matching Runtime and document
+omissions cannot satisfy this check; query parameters with the same name do not
+bind URI placeholders. Path Item inheritance, local references and operation
+overrides are resolved before checking. This checks URI input completeness, not
+supplier execution or business success. Existing pending source debt retains
+its separate review requirements.
 Failed runs leave the published last-good pointer unchanged. Successful checks
 with the same C and unchanged source authorization retain the existing valid
 pointer and receipts; observation timestamps alone do not advance main or restart
@@ -201,11 +260,27 @@ OpenAPI methods or tools. The 50 operations with proven requests retain their
 existing response-pending representation. No schema, routing, price, or provider
 authority is inferred by this decision.
 
+CR004 (`CR004-polymarket-relayer-20261019`, `RELAYER_DEFERRAL` in
+[`scripts/deferred_definitions.py`](scripts/deferred_definitions.py)) records the
+user's 2026-10-19 decision to defer the three Polymarket Relayer operations that
+need caller or builder credential headers (`/apis/v1/polymarket/relayer/api/keys`,
+`POST /apis/v1/polymarket/submit`, `GET /apis/v1/polymarket/transactions`) until
+Services #672 adds the runtime auth descriptors and its Docs counterpart is
+ported to main as an ordinary PR. It is code-pinned by content hash, loads with
+CR003 (whose bytes are unchanged), and accepts only those three exact
+`unforwarded_source_header` request identities for runtime-enabled operations.
+The operations are not published as complete: their previously published copies
+are retained as disabled `retained_pending` operations, and the other Relayer
+operations publish normally.
+
 Readiness reports distinguish `deferred_pending` and `deferred_response_pending`
 from the independently reviewed 93 disabled baseline items in `existing_pending`
 and `existing_response_pending`. Exact identity, binding, source, reason, status,
 and response declaration fingerprints must match; changed or additional gaps
-still fail. Each reported gap also carries `runtime_binding` copied from the same
+still fail. A response gap on an operation the Runtime reports as `disabled` is
+listed in `disabled_response_pending`: it is visible debt that does not block
+publication, and because the Runtime status is part of the gap identity it
+blocks again as `new_response_pending` the moment the operation is enabled. Each reported gap also carries `runtime_binding` copied from the same
 Runtime input (native identity, method, path, status, revision, and public pricing)
 for consumer reconciliation; it is evidence, not method or schema authority.
 The exporter checks the fixed policy and both report scopes before publishing.
@@ -295,6 +370,71 @@ Concrete operations carry `x-aisa-runtime-operation` with the original Runtime
 `operation_id`, public `path` and uppercase `method` (including `ANY`). This is
 copied before public method expansion; it grants no missing request authority
 and lets consumers bind public aliases without guessing native identities.
+
+### Website, MCP page, sales catalog and Agent Discovery checks
+
+`check_contract_revisions.py --all-surfaces` also reads the website surfaces
+that consumers reach from the publication, with independent codes
+(`scripts/public_surface_checks.py`, `check_website_surfaces`). Every read is
+bounded and a surface that cannot be read is a `missing_inputs` entry, never a
+pass:
+
+- `website-provider-pages`: for every provider id in the publication (aggregate
+  `info.x-aisa-document.providers` with a `document_hash`, united with the live
+  `/api/sales-api-data` provider ids) `https://aisa.one/api/<id>` must answer
+  200 and must not be the soft 404 (`API Not Found` in the HTML title):
+  `<id>:not_found`, `<id>:http_<status>`. Exactly one temporary same-origin
+  redirect (307/308 whose `Location`, resolved against the request URL so a
+  path-only `/api/<slug>` counts, is on `https://aisa.one`) to such a page is
+  accepted and recorded as `{status, location, resolved_location, target}`; otherwise
+  `<id>:redirect_offsite` or `<id>:redirect_target_not_found` (any other
+  status, a second redirect, or a soft 404 target). One impossible slug must not answer a
+  200 page (`unknown-slug:unknown_slug_returns_200`, or
+  `unknown-slug:soft_404_returns_200` when it is a 200 soft 404) and the
+  retired `image-generation-via-chat` page must not answer 200
+  (`image-generation-via-chat:retired_page_returns_200`).
+- `website-mcp-page`: the headline counts on `https://aisa.one/mcp` must agree
+  with `https://mcp.aisa.one/servers` (`tool_count_mismatch` against
+  `toolCount`, `server_count_mismatch` against `serverCount`,
+  `category_count_mismatch` against the category entry points), and every
+  quoted `$<amount> <operation>` example must equal the sales catalog
+  `operations[].quote.amount` (`<name>:example_price_mismatch`,
+  `<name>:example_operation_unknown`). `toolCount` is the duplicate-inclusive
+  sum of every server's own tool count (a tool pinned under several aliased
+  servers counts once per server), not the number of distinct tools reachable
+  through `search`; the page's largest tool figure must be that sum. Example
+  prices are compared exactly for fixed and usage_based quotes alike, because
+  the page derives its figure from the same sales catalog at build time. MCP
+  tool names may drop the HTTP method prefix of the operation id.
+- `website-sales-catalog`: `/api/sales-api-data` `docs_revision` must be an
+  accepted ref (`docs_revision_mismatch`), `contract_release` must equal the
+  expected publication pointer (`contract_release_mismatch`), and each
+  provider's `endpoint_count` must equal the non-disabled operations the
+  hash-bound `docs/publication/sales-catalog.json` attributes to that registry
+  provider (`<id>:endpoint_count_mismatch`, `<id>:provider_missing`,
+  `<id>:provider_not_in_publication`); operations without a registry provider
+  are the website's `models` group.
+- `docs-discovery-page`: simple string rules on the rendered body of
+  `https://aisa.one/docs/guides/agent-discovery.md` after the generated `>`
+  header (`DISCOVERY_PAGE_RULES`): it must link `https://aisa.one/llms.txt` as
+  the agent setup guide, must not label it "Product llms.txt", must present
+  MCP + OAuth, must keep direct HTTP as the documented fallback and must not
+  present Bearer-key requests as the primary flow.
+- `website-llms:http_verification_rule_conflict` and
+  `website-llms:no_credential_error_rule_conflict`: forbidden-phrase
+  regression guards (`WEBSITE_LLMS_RULE_CONFLICTS`), not a positive check of
+  the wording. The agent setup guide at
+  `https://aisa.one/llms.txt` (served by the website, not from this
+  repository) must not state that an authenticated `GET /v1/models` returning
+  200 verifies the connection, nor that `401` is the only "not signed in"
+  answer; the CLI page and the Errors page table are authoritative.
+
+Offline evidence for these checks lives beside the existing files:
+`website-sales-catalog.json`, `mcp-servers.json`, `website-mcp-page.html`,
+`docs-discovery-page.md`, and `website-provider-page-<slug>.html` with
+optional `website-provider-page-<slug>.status` and `.location` files (a
+redirect target is `website-provider-page-<slug>-<target slug>.html`). Validate with
+`python -m unittest discover -s scripts/tests -p 'test_website_surface_checks.py'`.
 
 ### Upstream maintenance credentials
 

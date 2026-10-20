@@ -151,6 +151,38 @@ class StageInjectionTests(unittest.TestCase):
         self.addCleanup(self.fixture.tearDown)
         self.root = self.fixture.root
 
+    def test_uri_omission_blocks_readiness_until_runtime_input_is_repaired(self):
+        fact_path = self.root / 'facts/similarweb.json'
+        fact = json.loads(fact_path.read_bytes())
+        public_path = '/apis/v1/similarweb/test/{id}'
+        fact['paths'][public_path] = fact['paths'].pop('/apis/v1/similarweb/test')
+        fact['paths'][public_path]['post']['responses']['200']['content'] = {
+            'application/json': {'schema': {'type': 'object', 'properties': {'ok': {'type': 'boolean'}}}}}
+        fact_path.write_bytes(canonical(fact))
+        from test_contract_readiness import index
+        runtime_index = index([public_path])
+        runtime_index['providers'][0]['id'] = 'similarweb'
+        runtime_index['coverage']['projected_endpoints'][0]['provider'] = 'similarweb'
+        (self.root / 'facts/index.json').write_bytes(canonical(runtime_index))
+        context = {'offline': True}
+        changes, _ = stage(self.root, self.root / 'facts', 'unused', with_pages=False,
+                           readiness_context=context, identity_history=None,
+                           reuse_unchanged_documents=False)
+        result = context['report']
+        self.assertEqual('failed', result['status'])
+        errors = result['providers']['similarweb']['errors']
+        self.assertEqual([('missing_path_parameter', 'id')],
+                         [(e['code'], e.get('parameter')) for e in errors])
+        self.assertIn(self.root / 'openapi/similarweb.json', changes)
+        fact['paths'][public_path]['post']['parameters'].append(
+            {'name': 'id', 'in': 'path', 'required': True, 'schema': {'type': 'string'}})
+        fact_path.write_bytes(canonical(fact))
+        context = {'offline': True}
+        stage(self.root, self.root / 'facts', 'unused', with_pages=False,
+              readiness_context=context, identity_history=None,
+              reuse_unchanged_documents=False)
+        self.assertEqual('passed', context['report']['status'])
+
     def test_same_previous_hash_cannot_mask_independent_output(self):
         self.fixture.write(stage(self.root, self.root / 'facts', 'unused')[0])
         path = self.root / 'openapi/similarweb.json'

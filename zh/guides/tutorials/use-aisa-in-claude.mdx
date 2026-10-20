@@ -1,0 +1,111 @@
+---
+title: "在 Claude 中使用 AIsa"
+sidebarTitle: "Claude"
+icon: "/images/integrations/claude.svg"
+description: "通过 MCP 服务器 URL 和浏览器登录，将 AIsa 作为自定义连接器添加到 Claude。该连接器同样适用于 Claude Code。"
+---
+
+Claude 将远程 MCP 服务器作为连接器进行连接。只需添加一次 AIsa 的 MCP 服务器并通过浏览器登录，Claude 即可代表你调用 AIsa 功能，包括网络搜索、社交平台（X、Reddit）、金融、销售调研以及模型。无需复制任何 API key。
+
+AIsa MCP 服务器：
+
+```txt
+https://mcp.aisa.one/mcp
+```
+
+## 前提条件
+
+开始之前，请确保你拥有：
+
+- AIsa 账户（[console.aisa.one](https://console.aisa.one)）。你将通过浏览器登录。
+- 网页端、桌面端或移动端的 Claude，且当前套餐支持自定义连接器
+
+## 1. 添加连接器
+
+1. 在 Claude 中，打开 **Settings** → **Connectors**。
+2. 点击 **Add custom connector**。
+3. 输入 `AIsa` 作为名称，输入 `https://mcp.aisa.one/mcp` 作为远程 MCP 服务器 URL，然后点击 **Add**。
+
+<Note>
+  在 Team 和 Enterprise 套餐中，需要 Owner 先为组织添加连接器。随后成员即可在各自的 **Connectors** 设置中连接。
+</Note>
+
+## 2. 通过浏览器登录
+
+点击 **AIsa** 连接器上的 **Connect**。在浏览器窗口中登录 AIsa 并点击 **Allow**。随后连接器页面会显示服务器 URL 和 AIsa 的工具。
+
+## 3. 设置工具权限
+
+在 **Tool permissions** 下，AIsa 的工具分为两组。两组初始状态均为 **Needs approval**：
+
+| 分组 | 工具 | 费用 |
+| --- | --- | --- |
+| **Read-only tools** | 搜索工具和计划、浏览目录、获取工具 schema、为调用获取报价而不实际运行 | 免费 |
+| **Write/delete tools** | 运行 AIsa 操作、批量执行已发布的 AIsa 工具 | 按次计费 |
+
+你可以将只读分组设置为 **Always allow**。将写入分组保留为 **Needs approval**，以便 Claude 在每次付费调用前询问你。
+
+## 4. 使用 AIsa 功能
+
+在新建对话中，打开 **+** 菜单，确保连接器下的 **AIsa** 已启用，然后输入：
+
+```txt wrap
+使用 AIsa 检查我的账户，然后查找你选择的一家公司的三条最新公开动态，并附带来源链接。在执行任何付费调用前先询问我。
+```
+
+## Claude Code
+
+如果你使用 Claude 账户登录 Claude Code，在 Claude 中添加的连接器在此处也同样可用。运行 `/mcp` 确认列表中包含 AIsa。
+
+如果你使用 API key 登录 Claude Code，可直接添加服务器并通过 `/mcp` 登录：
+
+```bash
+claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
+```
+
+<Accordion title="让 Claude Code 使用 AIsa 模型">
+  AIsa 也提供与 Anthropic 兼容的端点。在你的 Shell 中设置以下变量，或在 `~/.claude/settings.json` 的 `env` 下配置。基础 URL 中不要包含 `/v1`；Claude Code 会自行追加 `/v1/messages`。
+
+  ```bash
+  export ANTHROPIC_BASE_URL="https://api.aisa.one"
+  export ANTHROPIC_AUTH_TOKEN="sk-aisa-..."
+  export ANTHROPIC_MODEL="claude-opus-4-8"
+  export ANTHROPIC_SMALL_FAST_MODEL="claude-haiku-4-5-20251001"
+  ```
+
+  当 Claude Code 提示你登录时，选择 API key 选项。[目录](/zh/guides/models)中的任何 Claude 模型 ID 均可使用。
+</Accordion>
+
+## 快速参考
+
+| 项目 | 值 |
+| --- | --- |
+| MCP 服务器 | `https://mcp.aisa.one/mcp` |
+| 添加位置 | **Settings** → **Connectors** → **Add custom connector** |
+| 登录 | **Connect** → 在浏览器中登录 AIsa → **Allow** |
+| API key | 不需要 |
+| 计费 | 只读工具免费；写入工具按次计费 |
+
+## 故障排查
+
+| 问题 | 解决方法 |
+| --- | --- |
+| **Add custom connector** 缺失 | 你的套餐或组织可能不允许使用自定义连接器。在 Team 和 Enterprise 套餐中，请让 Owner 添加 AIsa |
+| 登录窗口在完成前已关闭 | 再次点击 **AIsa** 连接器上的 **Connect** |
+| Claude 在处理请求时未使用 AIsa | 检查对话的 **+** 菜单中是否已启用 **AIsa**，并在提示词中写明“使用 AIsa” |
+| 调用因余额不足而失败 | 在[控制台](https://console.aisa.one)充值，然后让 Claude 重试 |
+| Claude Code 中缺少 AIsa | 运行 `/mcp`。如果 **aisa** 需要认证，选中它并登录 |
+
+## 相关
+
+<CardGroup cols={3}>
+  <Card title="通过 MCP 连接" icon="plug" href="/zh/agent-quickstart">
+    适用于 Codex、Cursor、VS Code 及其他客户端的 MCP 配置指南。
+  </Card>
+  <Card title="在 Codex 中使用 AIsa" icon="terminal" href="/zh/guides/tutorials/use-aisa-in-codex">
+    将 AIsa MCP 服务器添加到 OpenAI 的 Codex CLI。
+  </Card>
+  <Card title="计费与额度" icon="wallet" href="/zh/guides/pricing">
+    报价、上限与结算费用。
+  </Card>
+</CardGroup>

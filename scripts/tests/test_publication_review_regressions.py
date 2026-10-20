@@ -203,7 +203,7 @@ class PublicationRaceTests(unittest.TestCase):
 
 
 class SourceReviewWorkflowTests(unittest.TestCase):
-    def run_candidate_step(self, fail_at='', change_pointer=False):
+    def run_candidate_step(self, fail_at='', change_pointer=False, runtime_mode='facts'):
         workflow = yaml.safe_load((REPO / '.github/workflows/refresh-upstream.yml').read_text())
         step = next(step for step in workflow['jobs']['refresh']['steps']
                     if step.get('name') == 'Compose and assess the complete source review candidate')
@@ -229,8 +229,9 @@ class SourceReviewWorkflowTests(unittest.TestCase):
                                     env={**os.environ, 'PATH': str(executable.parent) + os.pathsep + os.environ['PATH'],
                                          'CALLS': str(calls), 'FAIL_AT': fail_at,
                                          'CHANGE_POINTER': '1' if change_pointer else '0',
+                                         'RUNTIME_MODE': runtime_mode,
                                          'REVIEWED_BASELINE': 'a' * 40})
-            return result, calls.read_text().splitlines()
+            return result, calls.read_text().splitlines() if calls.exists() else []
 
     def test_candidate_requires_every_stage_before_accepting_graph(self):
         result, calls = self.run_candidate_step()
@@ -238,12 +239,53 @@ class SourceReviewWorkflowTests(unittest.TestCase):
         self.assertEqual(calls, ['scripts/pull_openapi.py', 'scripts/runtime_consolidate_openapi.py',
                                  'scripts/validate_runtime_api_reference_slugs.py', 'scripts/check_contract_candidate.py'])
 
+    def test_canonical_candidate_uses_the_same_stage_as_the_publisher_without_formal_output(self):
+        # Same staging command as pull-openapi.yml; no assess/export step may
+        # follow, so the candidate never claims a formal publication.
+        result, calls = self.run_candidate_step(runtime_mode='canonical')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, ['scripts/runtime_publication.py',
+                                 'scripts/validate_runtime_api_reference_slugs.py', 'scripts/check_contract_candidate.py'])
+        workflow = yaml.safe_load((REPO / '.github/workflows/refresh-upstream.yml').read_text())
+        step = next(step for step in workflow['jobs']['refresh']['steps']
+                    if step.get('name') == 'Compose and assess the complete source review candidate')
+        self.assertIn('runtime_publication.py stage --write', step['run'])
+        self.assertNotIn('runtime_publication.py assess', step['run'])
+        self.assertNotIn('export_contract_publication.py', step['run'])
+        self.assertIn('Only pull-openapi exports formal receipts', step['run'])
+        publisher = yaml.safe_load((REPO / '.github/workflows/pull-openapi.yml').read_text())
+        stage = next(step for step in publisher['jobs']['compose']['steps'] if step.get('name') == 'Stage contracts')
+        self.assertIn('runtime_publication.py stage --write', stage['run'])
+        for mode in ('', 'unknown'):
+            result, calls = self.run_candidate_step(runtime_mode=mode)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(calls, [])
+
     def test_failed_composition_or_formal_assessment_stops_candidate(self):
-        for failure in ('scripts/pull_openapi.py', 'scripts/check_contract_candidate.py'):
-            with self.subTest(failure=failure):
-                result, calls = self.run_candidate_step(fail_at=failure)
+        for mode, failure in (('facts', 'scripts/pull_openapi.py'), ('facts', 'scripts/check_contract_candidate.py'),
+                              ('canonical', 'scripts/runtime_publication.py'), ('canonical', 'scripts/check_contract_candidate.py')):
+            with self.subTest(mode=mode, failure=failure):
+                result, calls = self.run_candidate_step(fail_at=failure, runtime_mode=mode)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(calls[-1], failure)
+
+    def test_acquisition_window_step_runs_before_candidate_composition(self):
+        workflow = yaml.safe_load((REPO / '.github/workflows/refresh-upstream.yml').read_text())
+        names = [step.get('name') for step in workflow['jobs']['refresh']['steps']]
+        window = names.index('Fail when an automatic source acquisition lapses within 6 hours')
+        self.assertLess(names.index('Retain successful observations without refreshing failed reviews'), window)
+        self.assertLess(window, names.index('Compose and assess the complete source review candidate'))
+        step = workflow['jobs']['refresh']['steps'][window]
+        self.assertIn('--audit-only', step['run'])
+        self.assertIn('--due-within-hours 6', step['run'])
+        self.assertNotIn('if', step)
+        # A lapse must not suppress the review PR; it is reported at the end.
+        self.assertTrue(step['continue-on-error'])
+        self.assertEqual(step['id'], 'acquisition-window')
+        final = workflow['jobs']['refresh']['steps'][-1]
+        self.assertEqual(final['if'], "steps.acquisition-window.outcome == 'failure'")
+        self.assertIn('exit 1', final['run'])
+        self.assertGreater(names.index(final['name']), names.index('Report acquisition, policy or missing/overdue review failures'))
 
     def test_candidate_cannot_replace_formal_publication_pointer(self):
         result, _ = self.run_candidate_step(change_pointer=True)

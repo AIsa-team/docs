@@ -71,6 +71,38 @@ candidates are assessed separately.
 
 ## Validation
 
+Consumer agreement must also be checked against source-to-Runtime input
+forwarding. Before accepting a unified candidate, run:
+
+```sh
+python scripts/audit_request_input_forwarding.py \
+  --root REVIEWED_INPUT_ROOT \
+  --runtime-dir VERIFIED_RUNTIME_CAPTURE \
+  --output request-input-forwarding.json --include-headers
+```
+
+The root contains the reviewed registry and upstream sources; the capture
+contains each catalog's Runtime facts JSON. The check scans every configured
+provider, including expanded ANY methods, and exits nonzero for unforwarded
+query fields or unverifiable source operations. Optional fields count too.
+All consumers can agree while still omitting a required business input such as
+an identity or pagination cursor. This check changes no Profile or publication
+debt. It establishes query and optional generic header forwarding only; body semantics, provider acceptance
+and live adoption require their own evidence. Cached captures do not establish
+current production state. With `--include-headers`, generic header parameters
+also require the Runtime caller-header forwarding declaration. A typed header
+parameter alone does not prove forwarding. Existing generic `Accept` handling
+and consumed provider authentication stay distinct; authentication/signature
+fields without proven ownership remain blocked. Runtime-owned handlers require
+their own handler/transport evidence.
+
+The Composer guards on this branch also mark unforwarded source query and
+generic header inputs pending, including optional inputs. A Runtime parameter's
+type alone does not prove header transport. Activate these guards only after
+the corresponding immutable Profile repairs and authentication ownership
+decisions have been reviewed and published. Do not manufacture forwarding
+metadata or approve new debt to make a consumer comparison pass.
+
 ```sh
 python -m unittest discover -s scripts/tests -v
 python -m unittest discover -s scripts/tests/w3_verification -v

@@ -1,0 +1,139 @@
+---
+title: "文章 SEO + GEO 审查"
+description: "审查一篇文章草稿或已发布的 URL，评估 SEO 和 GEO（AI 搜索可见性），获得带评分的报告，包含竞争对手差距、AI 引用检查和改写建议。"
+---
+
+[在 GitHub 上查看 →](https://github.com/AIsa-team/agent-skills/tree/main/marketing/article-seo-geo-review)
+
+**一条命令完成一篇文章的 SEO 和 GEO 审查。** 给 Skill 一份 Markdown 草稿或一个已发布的 URL。它会衡量目标关键词、拉取实时 Google SERP 和 AI Mode 回答、解析排名靠前的竞争对手页面、查询 AI 回答引擎以查看它们返回的内容和引用了谁、运行确定性页面检查，最后返回一份带评分的 Markdown 报告和一个 JSON 证据文件。
+
+## 安装
+
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill article-seo-geo-review
+```
+
+```bash AIsa CLI
+npm install -g @aisa-one/cli
+aisa skills install article-seo-geo-review
+```
+</CodeGroup>
+
+安装完成后，启动一个新的智能体会话以加载该 Skill。
+
+## 智能体可以用它做什么？
+
+<CardGroup cols={2}>
+  <Card title="发布前审查" icon="file-pen">
+    “审查 draft.md 的 SEO，并告诉我 AI Overviews 是否会引用它。”
+  </Card>
+  <Card title="已发布 URL 审计" icon="globe">
+    “对 https://example.com/blog/post 运行 SEO + GEO 审查，并展示评分卡。”
+  </Card>
+  <Card title="内容差距" icon="code-compare">
+    “将我的文章与排名 'generative engine optimization' 的页面对比，列出它们覆盖了而我没有的内容。”
+  </Card>
+  <Card title="AI 引用检查" icon="quote-right">
+    “给我优先级最高的改写建议，使这篇文章可被 ChatGPT 和 Perplexity 引用。”
+  </Card>
+</CardGroup>
+
+## 前置条件
+
+```bash
+export AISA_API_KEY="your-aisa-api-key"
+```
+
+- Python 3.9 或更高版本（仅需标准库）
+- 如果未设置该环境变量，脚本也会从 `~/.aisa/credentials` 读取 `AISA_API_KEY=...`。
+
+## 兼容性
+
+适用于任何兼容 agentskills.io 的运行环境，包括 Claude Code、Claude、OpenAI Codex、Cursor、Gemini CLI、OpenCode、Goose、OpenClaw、Hermes，以及其他支持 Skill 文件夹的运行时。
+
+## 快速开始
+
+```bash
+# 1. Free and offline: deterministic on-page checks and a provisional score
+python3 scripts/review_article.py audit draft.md
+
+# 2. Show the planned paid calls and the spend estimate, without calling anything
+python3 scripts/review_article.py review draft.md --dry-run
+
+# 3. After you approve the estimate: the full review
+python3 scripts/review_article.py review draft.md --yes \
+  --out review.md --json-out review.json --cache-dir .review-cache
+
+# Published article (adds domain authority and "does any AI engine cite you" checks)
+python3 scripts/review_article.py review https://example.com/blog/post --yes --out review.md
+```
+
+## 消费批准
+
+数据调用从你的 AIsa 余额中扣费，因此该 Skill 在你批准之前绝不会运行付费阶段：
+
+1. `review <source> --dry-run` 打印每个计划调用及其标称费用和文档记录的最大总额。
+2. 你批准该范围。
+3. 智能体使用 `--yes` 重新运行命令。不带 `--yes` 时，脚本打印计划并以退出码 `2` 退出。`--max-usd` 会拒绝任何文档记录的最大值超出该限额的计划。
+
+报告的 **Spend** 部分列出每次调用及其报告的费用。`--cache-dir` 存储原始响应，使重新运行和重新渲染免费。
+
+## 流水线
+
+`Keyword → SERP → Competitors → Content gap → SEO audit → GEO audit → Rewrite suggestions → Scorecard`
+
+| 阶段 | 来源 |
+| --- | --- |
+| 关键词 | `--keyword`，或由 AIsa LLM 提议一个主关键词和最多五个次要关键词；指标来自 DataForSEO `keyword_overview`，并与 Semrush `keyword-overview` 交叉验证 |
+| SERP | DataForSEO Google 自然搜索（前 10 名、People Also Ask、精选摘要、AI Overview 存在情况）和 Google AI Mode 及被引用的页面 |
+| 竞争对手 | 前 `--top` 个页面（默认 5 个），使用 DataForSEO `content_parsing` 解析并用 Semrush `domain-overview` 评级 |
+| GEO 引擎 | 默认包含 Google AI Mode、Google AI Overview (Oxylabs)、ChatGPT 和 Perplexity (DataForSEO `llm_responses`) 以及 `llm_mentions` 热门域名；Gemini、Claude 和 Oxylabs AI Mode 通过 `--engines` 可选启用 |
+| 检查 | 确定性 SEO 和 GEO 检查，每项包含 pass / warn / fail / n/a、证据和修复建议 |
+| 改写 | 最多 12 条来自 AIsa LLM 网关的优先级排序建议，仅限于证据中的事实（`--no-llm` 使用确定性修复建议） |
+
+报告分别为 SEO 和 GEO 评分（0 到 100），取平均值，并分配 A 到 F 的等级。引擎失败报告为数据缺口，而非“未被引用”。
+
+## 命令
+
+| 命令 | 用途 | 付费调用 |
+| --- | --- | --- |
+| `audit <src>` | 页面 SEO + GEO 检查及临时评分 | 文件无付费调用；URL 有一次 content-parsing 调用 |
+| `parse <src>` | 导出标准化的文章模型 | 同 `audit` |
+| `review <src>` | 完整流水线和报告 | 是，受 `--dry-run` / `--yes` 控制 |
+| `keywords <src>` | 关键词提取和指标 | 是 |
+| `serp --keyword K` | 自然搜索 SERP 和 AI Mode | 是 |
+| `competitors --keyword K` | 解析并评级排名靠前的页面 | 是 |
+| `geo --keyword K [--url U]` | 查询 AI 引擎；`--url` 检查引用情况 | 是 |
+| `render --from review.json [--rescore]` | 从保存的 JSON 重新渲染 Markdown | 无 |
+
+共享标志：`--keyword`、`--site-domain`、`--location-code`（默认 `2840`，美国）、`--language-code`（默认 `en`）、`--database`（Semrush，默认 `us`）、`--geo-location`、`--top`、`--engines`、`--fast`、`--deep`、`--model`（或 `AISA_REVIEW_MODEL`）、`--no-llm`、`--cache-dir`、`--out`、`--json-out`。`review` 额外支持 `--dry-run`、`--yes` 和 `--max-usd`。
+
+## 使用场景
+
+- “在发布前审查这篇文章的 SEO。”
+- “AI Overviews 或 ChatGPT 会引用这篇文章吗？我需要改什么？”
+- “对这个 URL 运行 GEO 审计。”
+- “给我一份 SEO + GEO 评分卡和改写建议。”
+
+不要将此 Skill 用于从零开始的关键词研究（请使用 [SEO 关键词研究](/zh/agent-skills/seo-keyword-research)）、完整的技术站点审计、外链审计或撰写文章。对于草稿，传入 `--site-domain` 以便在发布前评估内部链接和“我的域名是否被引用”。
+
+## 开始使用
+
+1. 在 [aisa.one](https://aisa.one) 注册并在控制台中创建 API key。
+2. 在终端中设置：`export AISA_API_KEY="your-key"`。
+3. 使用[安装](#安装)部分中的命令安装 Skill，然后启动一个新的智能体会话。
+
+## 相关
+
+<CardGroup cols={3}>
+  <Card title="SEO 关键词研究" icon="magnifying-glass-chart" href="/zh/agent-skills/seo-keyword-research">
+    在写作之前制定关键词策略。
+  </Card>
+  <Card title="DataForSEO 关键词概览" icon="chart-column" href="/zh/api-reference/dataforseo/post_dataforseo-dataforseo-labs-google-keyword-overview-live">
+    搜索量、难度、意图和 CPC 端点。
+  </Card>
+  <Card title="Semrush 关键词概览" icon="chart-simple" href="/zh/api-reference/semrush/get_semrush-keyword-overview">
+    交叉验证关键词指标。
+  </Card>
+</CardGroup>

@@ -3,7 +3,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from refresh_upstream import preserve_removed, refresh
+from refresh_upstream import acquisition_lapses, preserve_removed, refresh
 
 class RefreshTests(unittest.TestCase):
     def test_retention_never_replaces_new_parent_with_rewritten_old_dependency(self):
@@ -188,3 +188,58 @@ class RefreshTests(unittest.TestCase):
         retained, removed = preserve_removed(before, updated, 'provider.json')
         self.assertEqual(removed, ['GET /old'])
         self.assertEqual(retained['paths']['/old']['get']['operationId'], 'old')
+
+
+class AcquisitionLapseTests(unittest.TestCase):
+    def test_only_automatic_sources_due_within_window_or_without_due_time_are_lapses(self):
+        from datetime import datetime, timedelta, timezone
+        now = datetime(2026, 10, 19, 12, tzinfo=timezone.utc)
+        def row(policy, due, **extra):
+            return {'policy': policy, 'next_acquisition_due_at': due, 'owner': 'docs', 'status': 'unchanged', 'freshness': 'fresh', **extra}
+        sources = {
+            'soon.json': row('automatic', (now + timedelta(hours=5)).isoformat()),
+            'later.json': row('automatic', (now + timedelta(hours=7)).isoformat()),
+            'past.json': row('automatic', (now - timedelta(hours=1)).isoformat(), freshness='overdue'),
+            'unknown.json': row('automatic', None, freshness='unknown'),
+            'zulu.json': row('automatic', (now + timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M:%SZ')),
+            'manual.json': row('manual', None),
+            'pinned.json': row('pinned', None),
+        }
+        lapses = acquisition_lapses(sources, now, 6)
+        self.assertEqual([row['source'] for row in lapses], ['past.json', 'soon.json', 'unknown.json', 'zulu.json'])
+        by_name = {row['source']: row for row in lapses}
+        self.assertEqual(by_name['soon.json']['seconds_until_due'], 5 * 3600)
+        self.assertEqual(by_name['past.json']['seconds_until_due'], -3600)
+        self.assertIsNone(by_name['unknown.json']['seconds_until_due'])
+        self.assertEqual([row['source'] for row in acquisition_lapses(sources, now, 0)], ['past.json', 'unknown.json'])
+        with self.assertRaises(ValueError):
+            acquisition_lapses(sources, now, -1)
+
+    def test_cli_due_window_fails_with_annotation_without_fetching_or_writing(self):
+        import io
+        import json
+        import tempfile
+        from datetime import datetime, timedelta, timezone
+        from unittest.mock import patch
+        import refresh_upstream
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'openapi/upstream').mkdir(parents=True)
+            (root / 'openapi/upstream/provider.json').write_text(json.dumps({'info': {'x-aisa-source': {
+                'kind': 'provider_openapi', 'url': 'https://example.test/schema', 'content_hash': 'old'}}, 'paths': {}}))
+            now = datetime.now(timezone.utc)
+            report = {'checked_at': now.isoformat(), 'status': 'passed', 'sources': {
+                'provider.json': {'policy': 'automatic', 'owner': 'docs', 'status': 'unchanged', 'freshness': 'fresh',
+                                  'next_acquisition_due_at': (now + timedelta(hours=2)).isoformat()}}}
+            arguments = ['--root', str(root), '--audit-only', '--due-within-hours', '6']
+            with patch.object(refresh_upstream, 'source_report', return_value=report) as audit, \
+                    patch.object(refresh_upstream, 'refresh') as fetch, \
+                    patch('sys.stdout', new_callable=io.StringIO) as out:
+                self.assertEqual(refresh_upstream.main(arguments), 1)
+            self.assertIn('::error title=Upstream acquisition due::provider.json', out.getvalue())
+            audit.assert_called_once()
+            fetch.assert_not_called()
+            report['sources']['provider.json']['next_acquisition_due_at'] = (now + timedelta(hours=9)).isoformat()
+            with patch.object(refresh_upstream, 'source_report', return_value=report), \
+                    patch('sys.stdout', new_callable=io.StringIO):
+                self.assertEqual(refresh_upstream.main(arguments), 0)

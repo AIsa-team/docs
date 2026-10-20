@@ -48,7 +48,7 @@ def apply_policy_fixture(root, fixture, policy_fields, validate_policy):
         path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + '\n')
 
 
-def reconcile(expected, candidate, coverage):
+def reconcile(expected, candidate, coverage, input_root=None, policy_fixture=None):
     """Compare complete identity sets with frozen evidence, not just totals."""
     previous = json.loads((expected / 'openapi/coverage.json').read_text())
     def rows(value):
@@ -70,11 +70,18 @@ def reconcile(expected, candidate, coverage):
               'x-aisa-upstream-path', 'x-aisa-capabilities', 'x-aisa-passthrough')
     changed = [(identity, field) for identity, op in before.items() if identity in after
                for field in fields if op.get(field) != after[identity].get(field)]
+    migration = None
+    same_coverage = rows(previous) == rows(coverage)
+    if input_root is not None:
+        from w0_expectation_migration import verify_migration
+        migration = verify_migration(expected, candidate, coverage, input_root, policy_fixture)
+    coverage_verified = same_coverage if input_root is None else migration is not None
     return {'coverage_rows': len(rows(coverage)), 'composed_operations': len(after),
             'coverage_identity_sets_equal': rows(previous) == rows(coverage),
+            'reviewed_stricter_diagnostic_migration': migration,
             'operation_identity_sets_equal': before.keys() == after.keys(),
             'execution_metadata_changes': changed,
-            'status': 'passed' if rows(previous) == rows(coverage) and before.keys() == after.keys() and not changed else 'failed'}
+            'status': 'passed' if coverage_verified and before.keys() == after.keys() and not changed else 'failed'}
 
 
 def main():
@@ -151,7 +158,7 @@ def main():
     pending = [row for rows in coverage['providers'].values() for row in rows if row['status'] == 'pending']
     responses = [row for rows in coverage['response_gaps'].values() for row in rows]
     maintenance = source_report(candidate)
-    full_set = reconcile(args.output / 'expected', candidate, coverage)
+    full_set = reconcile(args.output / 'expected', candidate, coverage, args.output / 'input', args.policy_fixture)
     receipt = {'scope': 'offline W1/W2 diagnostic candidate; no debt approval/publication/live execution',
         'archive_sha256': ARCHIVE_SHA256, 'composed_providers': len(summary),
         'policy_fixture_sha256': hashlib.sha256(args.policy_fixture.read_bytes()).hexdigest(),

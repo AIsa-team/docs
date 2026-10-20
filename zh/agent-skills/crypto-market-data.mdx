@@ -1,77 +1,176 @@
 ---
-title: "Crypto Market Data"
-description: "面向 Agent 的实时与历史加密货币市场数据。"
+title: "加密货币行情数据"
+description: "为自主智能体提供实时和历史加密货币行情数据——价格、币种详情、图表、OHLC K 线、按合约地址查询 token、市值筛选、交易所行情、分类、热门搜索和加密新闻。"
 ---
 
 [在 GitHub 上查看 →](https://github.com/AIsa-team/agent-skills/tree/main/financial/crypto-market-data)
 
-Crypto Market Data 让 Agent 查询加密货币价格、币种详情、图表、OHLC K 线、合约地址 代币查询、市值筛选、交易所行情代码 和分类数据。
+
+**为自主智能体提供完整的加密货币行情数据。** 一个 `AISA_API_KEY` 即可解锁 CoinGecko——价格、图表、OHLC K 线、链上 token 查询、交易所行情、热门币种和新闻。智能体研究、筛选和跟踪加密市场所需的一切。
 
 ## 安装
 
-```bash
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill crypto-market-data
+```
+
+```bash AIsa CLI
 npm install -g @aisa-one/cli
 aisa skills install crypto-market-data
 ```
+</CodeGroup>
 
-## Agent 可以做什么？
+安装完成后请启动新的智能体会话，以加载该 Skill。
+
+## 智能体可以用它做什么？
 
 <CardGroup cols={2}>
-  <Card title="实时价格" icon="bitcoin-sign">
-    查询 BTC、ETH、SOL 等币种现价和 24h 变化。
+  <Card title="价格跟踪" icon="dollar-sign">
+    “获取当前 BTC 和 ETH 的 USD 与 EUR 价格，以及 24 小时涨跌幅。”
   </Card>
-  <Card title="历史图表" icon="chart-area">
-    获取 市场走势图、区间走势图和 OHLC K 线。
+  <Card title="历史图表" icon="chart-line">
+    “拉取比特币 30 天 USD 价格图表，用于我的仪表板。”
   </Card>
-  <Card title="Token 查询" icon="magnifying-glass">
-    按合约地址查询 token 信息。
+  <Card title="OHLC K 线" icon="chart-candlestick">
+    “返回以太坊最近 7 天的 OHLC K 线数据。”
   </Card>
-  <Card title="市场筛选" icon="filter">
-    按市值、交易量、分类或交易所数据筛选。
+  <Card title="链上 token 查询" icon="magnifying-glass-dollar">
+    “识别地址 0xA0b8…eB48 上的 ERC-20 token 并获取其价格。”
+  </Card>
+  <Card title="市值筛选" icon="ranking-star">
+    “按市值降序显示排名前 25 的币种。”
+  </Card>
+  <Card title="交易所研究" icon="building-columns">
+    “列出 Binance 行情，按信任评分排序。”
   </Card>
 </CardGroup>
 
-## 快速开始
+## 核心能力
+
+- **简单价格** — 当前法币和加密货币价格，可选包含市值 / 24 小时成交量 / 24 小时涨跌幅
+- **币种数据** — 完整币种资料、列表、历史快照、行情图表、OHLC K 线、行情
+- **基于合约的查询** — 通过受支持平台（Ethereum、BSC、Polygon 等）上的合约地址解析 token，拉取其价格或完整资料
+- **市场与筛选** — 按市值排列的币种，支持灵活排序和分页
+- **分类** — 分类列表及每个分类下的市场排行榜（DeFi、AI、L1 等）
+- **交易所** — 交易所列表、详细数据、交易对、ID 映射
+- **热门与新闻** — 热门搜索关键词和当前加密新闻（CoinGecko 新闻受上游套餐限制）
+
+## 快速上手
 
 ```bash
-# 当前价格与 24h 变化
-curl "https://api.aisa.one/apis/v1/coingecko/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true" \
-  -H "Authorization: Bearer $AISA_API_KEY"
+export AISA_API_KEY="your-key"
+```
 
-# 市值列表
-curl "https://api.aisa.one/apis/v1/coingecko/coins/markets?vs_currency=usd&order=market_cap_desc" \
+### 简单价格
+
+```bash
+# Current prices with 24h change
+python3 scripts/coingecko_client.py simple price \
+  --ids bitcoin,ethereum --vs usd,eur --include-24hr-change
+
+# Or direct curl
+curl "https://api.aisa.one/apis/v1/coingecko/simple/price?ids=bitcoin,ethereum&vs_currencies=usd,eur&include_24hr_change=true" \
   -H "Authorization: Bearer $AISA_API_KEY"
 ```
 
-## 何时使用
+### 市值筛选
 
-- 加密资产价格监控
-- Token 基本信息和合约查询
-- 历史走势、OHLC 和波动分析
-- 交易所行情代码 和市场分类研究
+```bash
+python3 scripts/coingecko_client.py coins markets \
+  --vs usd --order market_cap_desc --per-page 25
+```
 
-## 何时不要使用
+### 历史图表
 
-- 不要把价格接口当成交易执行接口。
-- 不要在没有风险说明的情况下输出投资建议。
-- 对低流动性 token 需要提示数据和价格风险。
+```bash
+python3 scripts/coingecko_client.py coins chart --id bitcoin --vs usd --days 30
+```
 
-## 使用要求
+### OHLC K 线
 
-需要 `AISA_API_KEY`。查询参数以 CoinGecko 风格为主，具体字段见 API reference。
+```bash
+python3 scripts/coingecko_client.py coins ohlc --id bitcoin --vs usd --days 7
+```
+
+### 按合约地址查询 token
+
+```bash
+python3 scripts/coingecko_client.py coins contract \
+  --platform ethereum \
+  --address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+```
+
+### 交易所行情
+
+```bash
+python3 scripts/coingecko_client.py exchanges tickers \
+  --id binance --order trust_score_desc
+```
+
+## 适用场景
+
+- 加密货币价格跟踪与投资组合分析
+- 通过链上合约地址识别 token
+- 市值筛选与分类概览
+- 交易所级别的研究（信任评分、交易对、行情）
+- 用于报告和仪表板的当前与历史加密数据
+
+## 不适用场景
+
+- 传统股票数据——请使用 [MarketPulse](/zh/agent-skills/marketpulse)
+- 预测市场订单簿深度——请使用 [Prediction Market Data](/zh/agent-skills/prediction-market-data)
+- 链上钱包操作（余额查询、交易追踪）——需要其他专用工具
+
+## 环境要求
+
+- Python 3、`curl`、POSIX shell
+- `AISA_API_KEY`（[在 aisa.one 注册](https://aisa.one)）
+- 兼容 agentskills.io 标准运行框架
+
+## 端点参考
+
+| 端点                                                          | 方法   | 用途                                                                                                     |
+| ------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
+| `/coingecko/simple/price`                                     | GET    | [简单价格](/zh/api-reference/coingecko/get_coingecko-simple-price)                                                    |
+| `/coingecko/simple/supported_vs_currencies`                   | GET    | [支持的货币](/zh/api-reference/coingecko/get_coingecko-simple-supported-vs-currencies)                                    |
+| `/coingecko/simple/token_price/{id}`                          | GET    | [按 token 地址查询价格](/zh/api-reference/coingecko/get_coingecko-simple-token-price-id)                      |
+| `/coingecko/coins/list`                                       | GET    | [币种列表](/zh/api-reference/coingecko/get_coingecko-coins-list)                                                        |
+| `/coingecko/coins/markets`                                    | GET    | [币种市场](/zh/api-reference/coingecko/get_coingecko-coins-markets)                                                  |
+| `/coingecko/coins/{id}`                                       | GET    | [按 ID 查询币种数据](/zh/api-reference/coingecko/get_coingecko-coins-id)                                              |
+| `/coingecko/coins/{id}/history`                               | GET    | [币种历史数据](/zh/api-reference/coingecko/get_coingecko-coins-id-history)                                    |
+| `/coingecko/coins/{id}/market_chart`                          | GET    | [币种历史图表](/zh/api-reference/coingecko/get_coingecko-coins-id-market-chart)                                  |
+| `/coingecko/coins/{id}/market_chart/range`                    | GET    | [币种行情图表区间](/zh/api-reference/coingecko/get_coingecko-coins-id-market-chart-range)                              |
+| `/coingecko/coins/{id}/ohlc`                                  | GET    | [币种 OHLC](/zh/api-reference/coingecko/get_coingecko-coins-id-ohlc)                                                          |
+| `/coingecko/coins/{id}/tickers`                               | GET    | [币种行情](/zh/api-reference/coingecko/get_coingecko-coins-id-tickers)                                                    |
+| `/coingecko/coins/{id}/contract/{contract_address}`                    | GET    | [按 token 地址查询币种数据](/zh/api-reference/coingecko/get_coingecko-coins-id-contract-contract-address)                        |
+| `/coingecko/coins/{id}/contract/{contract_address}/market_chart`       | GET    | [按合约查询历史图表](/zh/api-reference/coingecko/get_coingecko-coins-id-contract-contract-address-market-chart)               |
+| `/coingecko/coins/{id}/contract/{contract_address}/market_chart/range` | GET    | [按合约查询历史图表区间](/zh/api-reference/coingecko/get_coingecko-coins-id-contract-contract-address-market-chart-range)       |
+| `/coingecko/coins/categories/list`                            | GET    | [分类列表](/zh/api-reference/coingecko/get_coingecko-coins-categories-list)                                              |
+| `/coingecko/coins/categories`                                 | GET    | [带市场数据的分类](/zh/api-reference/coingecko/get_coingecko-coins-categories)                      |
+| `/coingecko/exchanges`                                        | GET    | [交易所列表](/zh/api-reference/coingecko/get_coingecko-exchanges)                                                |
+| `/coingecko/exchanges/list`                                   | GET    | [交易所 ID 映射](/zh/api-reference/coingecko/get_coingecko-exchanges-list)                                        |
+| `/coingecko/exchanges/{id}`                                   | GET    | [按 ID 查询交易所数据](/zh/api-reference/coingecko/get_coingecko-exchanges-id)                                      |
+| `/coingecko/exchanges/{id}/tickers`                           | GET    | [交易所行情](/zh/api-reference/coingecko/get_coingecko-exchanges-id-tickers)                                            |
+| `/coingecko/search/trending`                                  | GET    | [热门搜索](/zh/api-reference/coingecko/get_coingecko-search-trending)                                              |
+| `/coingecko/news`                                             | GET    | [加密新闻](/zh/api-reference/coingecko/get_coingecko-news)                                                      |
+
 ## 开始使用
 
-```bash
-export AISA_API_KEY="YOUR_AISA_API_KEY"
-npm install -g @aisa-one/cli
-aisa skills install crypto-market-data
-```
+1. 在 [aisa.one](https://aisa.one) 注册，并在控制台创建一个 API key。
+2. 在终端中设置：`export AISA_API_KEY="your-key"`。
+3. 使用[安装](#安装)章节中的任一命令安装该 Skill，然后启动新的智能体会话。
 
 ## 相关
 
 <CardGroup cols={3}>
-  <Card title="AIsa Market" icon="chart-line" href="/zh/agent-skills/market">股票与加密综合数据。</Card>
-  <Card title="Trend Forecast" icon="bullseye" href="/zh/agent-skills/trend-forecast">多信号趋势预测。</Card>
-  <Card title="CoinGecko API" icon="code" href="/api-reference/coingecko/get_coingecko-simple-price">CoinGecko endpoint。</Card>
+  <Card title="CoinGecko API 参考" icon="coins" href="/zh/api-reference/coingecko/get_coingecko-simple-price">
+    该 Skill 封装的所有端点，附带交互式测试工具。
+  </Card>
+  <Card title="MarketPulse" icon="chart-line" href="/zh/agent-skills/marketpulse">
+    股票市场版——股票、财务数据、报告、宏观经济。
+  </Card>
+  <Card title="Prediction Market Data" icon="scale-balanced" href="/zh/agent-skills/prediction-market-data">
+    Polymarket 和 Kalshi 的事件概率数据。
+  </Card>
 </CardGroup>
-

@@ -11,9 +11,10 @@ import hashlib
 import json
 import re
 from typing import Any
+from upstream_auth_transports import server_auth_headers, request_auth_headers
 from urllib.parse import urlsplit, unquote
 
-VERSION = "20"
+VERSION = "26"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -24,6 +25,42 @@ NAMED_CONTRACT_MAPS = {"properties", "patternProperties", "$defs", "definitions"
 # consumers inspect references inside them, although OpenAPI validators ignore
 # them. Keep the original in the upstream mirror, not the public projection.
 NON_PUBLIC_EXTENSIONS = {"x-stainless-override-schema"}
+
+
+def validate_payment_capabilities(operation: dict) -> None:
+    """Keep optional Runtime payment method declarations closed and exact.
+
+    Missing declarations retain the historical facts behavior. Method lists
+    restrict an existing true capability; they never enable a payment surface.
+    """
+    if "x-aisa-capabilities" not in operation:
+        return
+    capabilities = operation["x-aisa-capabilities"]
+    allowed = {"mpp", "mpp_methods", "x402", "x402_methods", "quote", "max_price", "idempotency"}
+    if not isinstance(capabilities, dict) or set(capabilities) - allowed:
+        raise ValueError("invalid runtime payment capabilities")
+    for name in ("mpp", "x402"):
+        if name in capabilities and type(capabilities[name]) is not bool:
+            raise ValueError("runtime payment capability must be boolean")
+        field = name + "_methods"
+        if field in capabilities:
+            methods = capabilities[field]
+            if (not isinstance(methods, list) or len(methods) > len(METHODS)
+                    or any(type(method) is not str or method.lower() not in METHODS
+                           or method != method.upper() for method in methods)
+                    or len(set(methods)) != len(methods)):
+                raise ValueError("invalid runtime payment method declaration")
+    for name in ("max_price", "idempotency"):
+        if name in capabilities and not isinstance(capabilities[name], str):
+            raise ValueError("invalid runtime payment capability text")
+    if "quote" in capabilities:
+        quote = capabilities["quote"]
+        if (not isinstance(quote, dict)
+                or set(quote) - {"header", "value", "supported", "reason", "endpoint"}
+                or any(name in quote and not isinstance(quote[name], str)
+                       for name in ("header", "value", "reason", "endpoint"))
+                or "supported" in quote and type(quote["supported"]) is not bool):
+            raise ValueError("invalid runtime quote capability")
 
 
 def map_contract_children(node: dict, transform) -> dict:
@@ -169,6 +206,17 @@ def effective_parameters(path_item: dict, operation: dict, document: dict) -> li
 
 
 def effective_public_operation(path_item: dict, operation: dict, document: dict) -> dict:
+    if 'x-aisa-request-auth' in operation:
+        # Do not let normal OpenAPI parameter merging erase ambiguous credential declarations.
+        for scope in (path_item, operation):
+            seen = set()
+            for raw in scope.get('parameters', []):
+                parameter = effective_object(raw, document)
+                name = parameter.get('name', '').lower()
+                if parameter.get('in') == 'header' and name in {'relayer_api_key', 'relayer_api_key_address'}:
+                    if name in seen:
+                        raise ValueError('duplicate caller-auth parameter')
+                    seen.add(name)
     result = copy.deepcopy(operation)
     parameters = effective_parameters(path_item, operation, document)
     if parameters or "parameters" in operation:
@@ -481,6 +529,76 @@ def flatten_object(schema: dict) -> dict:
     return result
 
 
+def retain_source_annotations(declared: dict, source: dict) -> dict:
+    """Runtime owns constraints; missing descriptive annotations retain their source."""
+    result = copy.deepcopy(declared)
+    runtime_values = declared.get("schema", declared)
+    source_values = source.get("schema", source)
+    for key in ("description", "summary", "title"):
+        if key not in result and key in source:
+            annotation = copy.deepcopy(source[key])
+            if (isinstance(annotation, str) and isinstance(runtime_values, dict) and isinstance(source_values, dict)
+                    and "default" in runtime_values and "default" in source_values
+                    and runtime_values["default"] != source_values["default"]
+                    and isinstance(source_values["default"], (str, int, float, bool))
+                    and isinstance(runtime_values["default"], (str, int, float, bool))):
+                # The source's usage guidance is useful, but its explicitly
+                # labelled default must follow the public Runtime declaration.
+                before = str(source_values["default"])
+                value = runtime_values["default"]
+                after = value if isinstance(value, str) else json.dumps(value)
+                annotation = re.sub(r'(\bdefault(?: value)?(?: is| of|:)?\s+)' + re.escape(before) + r'(?![\w.])',
+                                    lambda match: match[1] + after, annotation, flags=re.I)
+            result[key] = annotation
+    # Different wire types can legitimately need different examples. A source
+    # suggestion never becomes a Runtime default or changes requiredness.
+    same_type = "type" in declared and source.get("type") == declared["type"]
+    integer_example = (declared.get("type") == "integer" and source.get("type") == "number"
+                       and isinstance(source.get("example"), int) and not isinstance(source["example"], bool))
+    ignored = SCHEMA_ANNOTATIONS | {"default"}
+    source_constraints = {key: value for key, value in source.items() if key not in ignored}
+    runtime_constraints = {key: value for key, value in declared.items() if key not in ignored}
+    if integer_example:
+        source_constraints["type"] = "integer"
+    # Same type alone cannot prove an example respects a narrower bound or enum.
+    # Keep uncertain examples out rather than adding a second schema validator.
+    if (same_type or integer_example) and source_constraints == runtime_constraints:
+        for key in ("example", "examples"):
+            if key not in result and key in source and (same_type or key == "example"):
+                result[key] = copy.deepcopy(source[key])
+    return result
+
+
+def retain_provider_parameter_guidance(parameter: dict, source: dict) -> dict:
+    """Present missing supplier restrictions without inventing Runtime validation.
+
+    A query value may intentionally use a Runtime string schema while the
+    supplier describes an integer/date. Reattaching JSON Schema bounds or
+    defaults would change the Runtime contract or constrain the wrong type.
+    Keep that supplier declaration in the field's visible guidance instead.
+    """
+    declared, upstream = parameter.get('schema'), source.get('schema')
+    if not isinstance(declared, dict) or not isinstance(upstream, dict):
+        return parameter
+    keys = ('enum', 'const', 'default', 'format', 'minimum', 'maximum',
+            'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf', 'pattern',
+            'minLength', 'maxLength', 'minItems', 'maxItems', 'uniqueItems')
+    missing = {key: copy.deepcopy(upstream[key]) for key in keys
+               if key in upstream and key not in declared}
+    if not missing:
+        return parameter
+    if 'type' in upstream:
+        missing = {'type': copy.deepcopy(upstream['type']), **missing}
+    note = 'Provider reference (supplier schema): `' + json.dumps(
+        missing, sort_keys=True, ensure_ascii=False, separators=(',', ':')) + '`.'
+    result = copy.deepcopy(parameter)
+    description = result.get('description') or declared.get('description') or ''
+    if note in description:
+        return result
+    result['description'] = description.rstrip() + ('\n\n' if description else '') + note
+    return result
+
+
 def merge_object(upstream: dict, declared: dict) -> dict:
     merged = flatten_object(upstream)
     names = set(declared.get("properties", {}))
@@ -489,8 +607,15 @@ def merge_object(upstream: dict, declared: dict) -> dict:
         original = merged.setdefault("properties", {}).get(name, {})
         if value.get("properties") and isinstance(original, dict) and original.get("type", "object") == "object":
             merged["properties"][name] = merge_object(original, value)
+        elif (value.get("type") == "array" and value.get("items") == {}
+              and isinstance(original, dict) and original.get("type") == "array"
+              and isinstance(original.get("items"), dict)):
+            # Runtime owns this array and its bounds, but an explicit empty
+            # items schema makes no declaration about the provider's children.
+            merged["properties"][name] = retain_source_annotations(value, original)
+            merged["properties"][name]["items"] = copy.deepcopy(original["items"])
         else:
-            merged["properties"][name] = copy.deepcopy(value)
+            merged["properties"][name] = retain_source_annotations(value, original) if isinstance(original, dict) else copy.deepcopy(value)
     merged.pop("required", None)
     if required:
         merged["required"] = sorted(required)
@@ -704,6 +829,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
             if method not in METHODS and method != "x-aisa-any":
                 continue
             runtime = effective_public_operation(path_item, runtime, facts)
+            validate_payment_capabilities(runtime)
             base_id = runtime.get("operationId")
             if not base_id or runtime.get("x-aisa-status") not in {"enabled", "disabled"}:
                 raise ValueError("runtime operation requires immutable operationId and status")
@@ -718,7 +844,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     candidates = [source for source in candidates if source.get("info", {}).get("x-aisa-source", {}).get("url") == bound_source]
                     if len(candidates) != 1:
                         raise ValueError("public operation source binding must select exactly one locked source")
-                upstream_matches = select_upstream_operations(candidates, runtime.get("x-aisa-upstream-path"), runtime.get("x-aisa-upstream-selector")) if validation != "runtime" or method == "x-aisa-any" else {}
+                upstream_matches = select_upstream_operations(candidates, runtime.get("x-aisa-upstream-path"), runtime.get("x-aisa-upstream-selector")) if validation != "runtime" or method == "x-aisa-any" or "x-aisa-request-auth" in runtime else {}
                 if bound_source and not upstream_matches:
                     raise ValueError("bound source does not match the runtime upstream path and selector")
                 upstream_item = {key: value[1] for key, value in upstream_matches.items()}
@@ -732,9 +858,10 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
             for actual_method in methods:
                 try:
                     mirror = {}
+                    selected_document = {}
                     operation_source = {}
                     response_operation, response_document = {}, {}
-                    if validation != "runtime" or method == "x-aisa-any":
+                    if validation != "runtime" or method == "x-aisa-any" or "x-aisa-request-auth" in runtime:
                         if actual_method in upstream_item:
                             selected_document = upstream_matches[actual_method][0]
                             operation_source = selected_document.get("info", {}).get("x-aisa-source", {})
@@ -760,11 +887,15 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             response_document = {"openapi": selected.get("openapi", "3.1.0"), "components": selected.get("response_components", {})}
                         else:
                             raise ValueError("upstream operation missing")
+                    server_auth = server_auth_headers(runtime, facts.get("info", {}).get("x-aisa-provider"), actual_method, selected_document, mirror)
+                    request_auth = request_auth_headers(runtime, facts.get("info", {}).get("x-aisa-provider"), actual_method, selected_document, mirror, public_path=public_path)
                     operation = copy.deepcopy(runtime)
                     query_restriction = None
                     capabilities = operation.get("x-aisa-capabilities", {})
-                    if "mpp_methods" in capabilities:
-                        capabilities["mpp"] = capabilities.get("mpp") is True and actual_method.upper() in capabilities["mpp_methods"]
+                    for payment in ("mpp", "x402"):
+                        if payment + "_methods" in capabilities:
+                            capabilities[payment] = (capabilities.get(payment) is True
+                                and actual_method.upper() in capabilities[payment + "_methods"])
                     # Direct Runtime identity, before public ANY expansion or retained
                     # published aliases. Consumers must not guess this binding.
                     operation["x-aisa-runtime-operation"] = {
@@ -807,12 +938,41 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                                     parameter.setdefault("example", value)
                         if bound_source and not query_passthrough and any(p.get("in") == "query" and p.get("required") and (p["in"], p["name"]) not in runtime_fields for p in mirror.get("parameters", [])):
                             raise ValueError("bound source requires query parameters that runtime does not forward")
+                        unforwarded_query = sorted({
+                            p["name"] for p in mirror.get("parameters", [])
+                            if p.get("in") == "query"
+                            and p.get("name", "").lower() not in auth_names
+                            and not query_passthrough
+                            and (p["in"], p["name"]) not in runtime_fields
+                        })
+                        if unforwarded_query:
+                            raise ValueError("source query parameters are not forwarded by runtime: "
+                                             + ", ".join(unforwarded_query))
+                        caller_headers = runtime.get("x-aisa-caller-headers", [])
+                        if not isinstance(caller_headers, list) or not all(isinstance(name, str) for name in caller_headers):
+                            raise ValueError("invalid runtime caller-header forwarding declaration")
+                        forwarded_headers = {"accept", *(name.lower() for name in caller_headers)}
+                        unforwarded_headers = sorted({
+                            p["name"] for p in mirror.get("parameters", [])
+                            if p.get("in") == "header"
+                            and p.get("name", "").lower() not in auth_names | server_auth | request_auth | forwarded_headers
+                        })
+                        if unforwarded_headers:
+                            raise ValueError("source header parameters are not forwarded by runtime: "
+                                             + ", ".join(unforwarded_headers))
                         parameters = {
                             (p["in"], p["name"]): p for p in mirror.get("parameters", [])
                             if p.get("name", "").lower() not in auth_names
+                            and not (p.get("in") == "header" and p.get("name", "").lower() in server_auth)
                             and (p.get("in") != "query" or query_passthrough or (p["in"], p["name"]) in runtime_fields)
                         }
-                        parameters.update({(p["in"], p["name"]): copy.deepcopy(p) for p in runtime.get("parameters", [])})
+                        for parameter in runtime.get("parameters", []):
+                            key = (parameter["in"], parameter["name"])
+                            original = parameters.get(key, {})
+                            merged = retain_source_annotations(parameter, original)
+                            if isinstance(parameter.get("schema"), dict) and isinstance(original.get("schema"), dict):
+                                merged["schema"] = retain_source_annotations(parameter["schema"], original["schema"])
+                            parameters[key] = retain_provider_parameter_guidance(merged, original)
                         if parameters:
                             operation["parameters"] = [parameter_wire_default(parameters[k]) for k in sorted(parameters)]
                         if mirror.get("requestBody") or runtime.get("requestBody"):

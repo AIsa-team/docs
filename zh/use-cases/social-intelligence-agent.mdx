@@ -1,107 +1,82 @@
 ---
-title: 用 AIsa 构建社交情报 Agent
-description: 设计以只读为先的社交与媒体研究工作流，把来源证据、模型解读和经审批的外部操作区分开。
+title: 使用 AIsa 构建社媒情报智能体
+sidebarTitle: "社媒情报智能体"
+description: 设计跨 X、Reddit 和 YouTube 的读优先社媒与媒体调研工作流，严格隔离来源凭证、模型解读与经批准的行动。
+icon: hashtag
 ---
 
-社交情报 agent 采集公开的社交或媒体信号，用于研究、监测、创作者发现或内容分析。它应当把来源记录视为证据、把模型输出视为解读，并把发布或互动视为需要单独授权的写操作。
+## 痛点
 
-这套工作流面向来源受限的分析，而不是无限制的监控或自动发帖。
+市场、产品和社区团队经常需要了解新发布、特定话题或竞争对手的被讨论情况，以及哪些创作者值得合作。原始信息流往往充斥着噪音，如果任由模型自行发挥，它极易凭空捏造情感倾向、受众画像或发展趋势。理想的产出是一份附带凭证链接的简报：明确范围与时间窗口、提炼带有代表性链接的高频主题、单独标注模型解读，并如实陈述采样局限性。发布内容或开展互动则始终是独立且须经批准的步骤。
 
-## 选择能力
+## 提示词
 
-| 需求 | 从哪里开始 |
-| --- | --- |
-| X/Twitter 的资料、帖子、趋势、列表、社区或对话数据 | [Twitter API 参考](/zh/api-reference/twitter/get_twitter-user-info) |
-| YouTube 视频发现 | [YouTube Search API](/zh/api-reference/search/get_youtube-search) |
-| 跨多个来源的近期信号 | [Last 30 Days](/zh/agent-skills/last30days) |
-| 可复用的 X/Twitter 研究工作流 | [Twitter Autopilot](/zh/agent-skills/twitter-autopilot) |
-| 相似创作者发现 | [WaveInflu 相似创作者](/zh/api-reference/waveinflu/post_waveinflu-similar) |
-| 由应用控制的 endpoint 组合 | [API 参考](/zh/api-reference) |
+当 AIsa [通过 MCP 连接](/zh/agent-quickstart)后，将此提示词提供给你的智能体：
 
-当监测或分析方法可复用时，使用 Agent Skill。当应用必须控制查询、分页、去重、打分、存储或特定来源的处理逻辑时，使用直接 API。
+```txt wrap
+使用 AIsa 分析过去 <14> 天内 X、Reddit 和 YouTube 上关于 <topic or product> 的公开讨论（语言：<languages>）。
+使用 `search` 查找合适的 AIsa 工具，并使用 `batch_quote` 为付费调用获取报价。在发起任何付费调用前必须先询问我，并告诉我你计划获取的结果页数。
+每条记录必须保留：平台、规范 URL、作者或频道 handle、发布时间以及返回的原始指标。
+返回：(1) 范围和所使用的查询词；(2) 3–5 个高频主题，每个主题附带 2–3 个代表性链接；(3) 高频问题或投诉；(4) 你的解读（单独标注）；(5) 信息缺口与采样局限性。
+切勿推断来源未明确说明的人口统计学特征、敏感特征或意图。切勿发帖、点赞、关注或回复。
+```
 
-## 推荐工作流
+创作者发现变体：`Find 10 creators on YouTube or TikTok who cover <topic>, similar to @example_handle. Show handle, platform, profile URL, and why they fit. Leave out contact emails and AI-inferred demographic fields until I approve the shortlist.`
 
-### 1. 明确研究问题
+## 使用的 API 与 Skill
 
-指定主题、实体、时间窗口、平台、语言和所需输出。不要在没有明确目的的情况下大范围采集社交数据。
+通过 MCP，你的智能体可通过 `https://mcp.aisa.one/mcp` 上的几个元工具调用这些能力：`search`、`list_categories`、`get_details` 和 `batch_quote` 是免费的；`batch_use`（单次最多 20 次调用）按调用次数计费。
 
-例如：
+| 步骤 | 智能体调用内容 | 参考 |
+| --- | --- | --- |
+| X 帖子 | 带有高级运算符的关键词搜索，最新（Latest）或热门（Top） | [Advanced Search](/zh/api-reference/twitter/get_twitter-tweet-advanced-search) |
+| X 个人资料 | 通过 handle 获取公开个人资料 | [Get User Info](/zh/api-reference/twitter/get_twitter-user-info) |
+| Reddit | 搜索公开 subreddit | [Reddit Search](/zh/api-reference/reddit/get_reddit-search) |
+| YouTube | 视频、频道、播放列表 | [YouTube Search](/zh/api-reference/search/get_youtube-search), [YouTube SERP](/zh/agent-skills/youtube-serp) |
+| 跨平台简报 | 附带引用的 30 天排序与聚类简报 | [Last 30 Days](/zh/agent-skills/last30days) |
+| 创作者发现 | 基于简报或种子账号发现创作者 | [Creator AI Search](/zh/api-reference/waveinflu/post_waveinflu-ai-search), [Similar Creators](/zh/api-reference/waveinflu/post_waveinflu-similar), [KOL Creator Discovery](/zh/agent-skills/kol-creator-discovery) |
+| 可复用 X 工作流 | 读端点加上受 OAuth 门控的互动操作 | [Twitter Autopilot](/zh/agent-skills/twitter-autopilot) |
+| 写操作（门控） | 代表已认证用户发布帖子 | [Post Twitter](/zh/api-reference/twitter/post_twitter-post-twitter) |
 
-- 跟踪某次产品发布在选定公开来源中的讨论情况。
-- 找出某个特定社区中反复出现的问题。
-- 比较各创作者在指定时间窗口内对某话题的覆盖。
-- 为内容简报寻找素材。
+当监控方法可复用时，使用 Skill。当你的应用必须控制查询、分页、去重、评分或存储时，直接调用 API。
 
-### 2. 采集来源受限的记录
+## 输出示例
 
-使用相关性最高的最小 API 集合，并保留：
+<Note>仅供演示。文中的 handle、链接和统计数字均为占位符，并非真实帖子或账号。</Note>
 
-- 来源平台和规范 URL。
-- 任务需要时保留作者或频道标识。
-- 发布时间和获取时间。
-- 查询和筛选参数。
-- 来源返回的原始指标。
+```md
+## "Example App 2.0" launch: public discussion, last 14 days (EN)
+Scope: X (Latest, 3 pages), Reddit (2 subreddits), YouTube (top 20 videos). Retrieved 2026-01-15.
 
-不要把"没有搜到结果"当成"不存在相关讨论"的证明。
+Themes
+1. Setup confusion around the new login flow: x.com/example_handle/status/000, reddit.com/r/example/comments/000
+2. Praise for offline mode: youtube.com/watch?v=EXAMPLE000
 
-### 3. 归一化但不抹掉出处
+Recurring questions
+- "Does 2.0 still support exports?" (seen in <n> threads)
 
-应用可以为分析而归一化时间戳、标识符、互动字段和文本。请保留原始来源引用，让每条归一化记录仍可审计。
+Interpretation (model, not source data)
+- Early reaction skews toward usability rather than pricing.
 
-区分：
+Limits
+- X results capped at 3 pages; no non-English sources; absence of discussion is not proof none exists.
+```
 
-- 来源提供的字段。
-- 应用计算得到的指标。
-- 模型生成的标签或摘要。
-- 缺失、无法访问或不确定的数据。
+## 安全护栏
 
-### 4. 谨慎分析规律
+- **限定目的的收集**。先明确话题、实体、时间窗口、平台和语言。这是有明确来源边界的分析，而非开放式的监视。
+- **保留溯源信息**。必要时可规范化时间戳和指标，但每条记录都必须保留原始 URL。严格区分来源字段、衍生指标、模型标签与缺失数据。
+- **审慎分析**。在得出结论前，对比多条记录（在可能的情况下比对多种来源类型）。搜索结果为空并不证明不存在相关讨论。
+- **隐私保护**。仅收集符合目的所需的数据，遵守平台条款，避免推断敏感特征，绝不暴露凭证或无关的个人数据。创作者搜索可能会返回 AI 推断的性别、年龄段、族裔和联系邮箱；仅在合法且必要时方可使用这些字段。
+- **读取不等于互动**。发帖、点赞、关注、回复或私信都需要 OAuth 和明确批准：展示确切的内容与目标，仅执行一次，并验证结果。应将自动化互动视为具有声誉风险的写操作。
+- **先报价，再询问**。使用 `batch_quote` 获取免费报价，且仅在获得批准后才通过 `batch_use` 执行相同的调用。报价仅用于核对预估费用，并非最终收费。参见 [计费与额度](/zh/guides/pricing)。
+- **何时可能不需要 AIsa**：如果你仅使用单一数据源，已经拥有稳定的认证与合规控制，且不需要模型或 Skill，直接对接平台会更简单。
 
-模型可以聚类主题、比较叙事、总结反复出现的问题或识别候选信号。但它不应编造来源无法佐证的受众画像、意图、情绪、身份或因果关系。
+## 相关
 
-对于重要结论，应比对多条记录，并尽可能使用不止一种来源类型。
-
-### 5. 输出带证据链接的简报
-
-一份有用的结果应包含：
-
-- 范围和时间窗口。
-- 来源和采集方法。
-- 观察到的主题或变化。
-- 有代表性的链接或记录。
-- 单独标注的模型解读。
-- 数据缺口、抽样限制和不确定性。
-
-### 6. 为外部操作设置关卡
-
-读取公开社交数据，并不等于获得发帖、点赞、关注、回复、私信或修改账号的授权。
-
-执行外部操作之前：
-
-1. 确认已连接的账号和所需权限。
-2. 展示确切的内容、对象和预期效果。
-3. 在策略要求时获得确认。
-4. 以最小范围执行一次操作。
-5. 校验产生的外部状态。
-
-## 隐私与安全边界
-
-- 只采集既定目的所需的数据。
-- 遵守平台条款、适用的隐私要求和受众预期。
-- 不要从社交行为推断敏感特征。
-- 不要暴露凭证、私密账号数据或无关的个人信息。
-- 把自动互动视为写操作，它带有声誉和合规风险。
-
-## 最小文档集合
-
-- [按目标查找能力](/zh/by-goal)
-- [按接口查找能力](/zh/by-interface)
-- 具体的社交、创作者或媒体 endpoint 页面
-- [认证](/zh/guides/authentication)
-- [安全](/zh/guides/security)
-- [Agent Skills 与直接 API](/zh/concepts/agent-skills-vs-direct-apis)
-
-## 什么时候未必需要 AIsa
-
-如果应用只使用一个来源、已经具备稳定的认证和合规控制，也不需要模型、可复用 Skills 或其他 AIsa 资源，那么直接对接平台可能更简单。
+<CardGroup cols={2}>
+  <Card title="Skill 还是直接调用 API？" icon="circle-question" href="/zh/guides/faq#智能体应该使用-skill-还是直接调用-api？">选择合适的接入方式。</Card>
+  <Card title="销售调研智能体" icon="handshake" href="/zh/use-cases/sales-research-agent">企业客户、联系人与触达。</Card>
+  <Card title="身份认证" icon="key" href="/zh/guides/authentication">API key 与 OAuth。</Card>
+  <Card title="安全与隐私" icon="shield" href="/zh/guides/security">智能体安全控制。</Card>
+</CardGroup>

@@ -276,5 +276,35 @@ class ReviewedInputTests(unittest.TestCase):
         self.assertEqual((self.root / bundle.INPUT_RECEIPTS_PATH).read_bytes(), receipt)
         self.assertEqual(result['source_governance']['sources']['one.json']['last_successful_review_at'], self.now.isoformat())
 
+    def test_review_attachments_still_run_real_input_export_authorization_and_composition(self):
+        attachments = {
+            'scripts/tests/test_source_regression.py': b'raise AssertionError("not compiler input")\n',
+            'docs/current-source-review-20261009/merged-source-reviews.json': bundle.canonical(self.saved),
+            'docs/current-source-review-20261016/one-request-location-review.json': b'{"kind":"review-notes"}\n',
+        }
+        for name, raw in attachments.items():
+            self.write(name, raw)
+        self.ref = self.commit('Reviewed input with regression and attributed review attachments')
+        facts = self.facts_fixture()
+        original_receipt = (self.root / bundle.INPUT_RECEIPTS_PATH).read_bytes()
+        with patch.object(gate, 'inspect_publication', return_value={'expected_docs_ref': self.formal}):
+            result = gate.assess_reviewed_input(self.root, facts, self.formal,
+                Path(self.temp.name) / 'with-attachments', checked_at=self.now)
+            self.assertTrue(set(attachments) <= set(result['changed_paths']))
+            self.assertEqual(result['source_governance']['status'], 'passed')
+            compiled = bundle.strict_json((Path(self.temp.name) / 'with-attachments/candidate/native/one.json').read_bytes())
+            self.assertTrue(compiled['paths']['/request']['get']['parameters'][0]['required'])
+            members = bundle.strict_json((Path(self.temp.name) / 'with-attachments/bundle/manifest.json').read_bytes())['files']
+            self.assertFalse(any(row['path'].removeprefix('input/') in attachments for row in members))
+            self.assertEqual((self.root / bundle.INPUT_RECEIPTS_PATH).read_bytes(), original_receipt)
+            with self.assertRaisesRegex(ValueError, 'Current input source authorization'):
+                gate.assess_reviewed_input(self.root, facts, self.formal,
+                    Path(self.temp.name) / 'expired-attachments', checked_at=self.now + timedelta(days=2))
+            self.write('scripts/compose_openapi.py', b'raise AssertionError("mixed compiler edit")\n')
+            self.commit('Disallowed compiler mixed with reviewed source')
+            with self.assertRaisesRegex(ValueError, 'closed source-only'):
+                gate.assess_reviewed_input(self.root, facts, self.formal,
+                    Path(self.temp.name) / 'mixed-compiler', checked_at=self.now)
+
 
 if __name__ == '__main__': unittest.main()

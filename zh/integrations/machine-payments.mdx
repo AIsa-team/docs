@@ -1,0 +1,77 @@
+---
+title: "AI 智能体机器支付（MPP）"
+sidebarTitle: "机器支付"
+icon: "coins"
+description: "通过机器支付协议（MPP）按请求为指定的 AIsa 数据端点付费，无需 API key；同时了解自主智能体在付费前所需的预算、批准和审计控制。"
+---
+
+大多数智能体通过 API key 或 [MCP 服务器](/zh/agent-quickstart)访问 AIsa，每次调用从预付余额中扣除。部分只读数据端点还支持[机器支付协议（MPP）](https://mpp.dev)：智能体通过 HTTP 402 逐请求付费，无需 AIsa 账户或 API key。
+
+| | API key 或 MCP | MPP |
+| --- | --- | --- |
+| 覆盖范围 | 所有模型和 API 端点 | 部分只读数据端点 |
+| 账户 | 需要 AIsa 账户及预付余额 | 不需要；客户端逐请求付费 |
+| 计费 | 每次调用从余额中扣除 | 通过 MPP 质询逐请求结算 |
+| 适用场景 | 持续使用、按 key 预算控制和用量日志 | 持有 MPP 钱包的智能体偶尔调用 |
+
+## 付费请求的工作流程
+
+<Steps>
+  <Step title="不带 key 调用端点">
+    发送普通请求，例如 `GET https://api.aisa.one/apis/v1/polymarket/oi`，不附加 `Authorization` 头。
+  </Step>
+  <Step title="读取 402 质询">
+    AIsa 返回 `402 Payment Required`，响应体为 `application/problem+json`，并附带 `WWW-Authenticate: Payment ...` 头。质询指定了方法（目前为 `tempo`）、意图（`charge`）、过期时间以及 `request` 参数中的付款条款。实时质询即为该请求的权威价格。
+  </Step>
+  <Step title="付款并重试">
+    MPP 客户端完成质询付款，然后使用 `Authorization: Payment <credential>` 重新发送相同请求。成功后，响应携带数据，客户端保留付款凭证。
+  </Step>
+</Steps>
+
+请使用 MPP 客户端，而非手动实现整个流程：TypeScript SDK 和 CLI `mppx` 以及其他 SDK 均列于 [mpp.dev](https://mpp.dev)。同一请求使用 `Authorization: Bearer $AISA_API_KEY` 则跳过质询，直接从你的 AIsa 余额扣费。
+
+## 哪些端点支持 MPP
+
+完整列表维护在 `https://api.aisa.one/openapi.json`（OpenAPI 3.1）的支付发现文档中。其中每个操作都包含 `x-payment-info` 及其 MPP 报价，并记录了 `402` 响应。目前覆盖预测市场、金融数据和网页搜索等同步只读数据；模型、账户端点（如[积分余额](/zh/api-reference/credits-balance)）以及写操作需要 API key。
+
+设计流程前请以该文档为准，而非本页面：未列于其中的端点不支持 MPP。文档不列出 MPP 价格；发现文档中的价格仅供参考，实时质询中的条款才是实际费用。
+
+## 需要预先确定的控制措施
+
+付费是具有财务副作用的操作。将其视为与其他特权操作一样对待，在智能体自主付费之前确定以下控制：
+
+| 控制项 | 问题 |
+| --- | --- |
+| 单次请求上限 | 一次调用最多可花费多少？ |
+| 任务和时间上限 | 一个工作流、一天或一个月最多可消费多少？ |
+| 批准策略 | 哪些金额或端点需要人工批准？ |
+| 重试策略 | 失败的请求能否在不重复付费的情况下重试？ |
+| 审计记录 | 需要保留哪些请求、金额、端点和结果字段？ |
+| 失败处理 | 付款已结算但结果不可用时如何处理？ |
+
+将工具选择与授权分开：智能体可以判断某个付费端点有用，但不一定被允许购买。先估算费用，与策略比较，在策略要求时获取批准，执行一次，然后同时验证凭证和数据后再记录结果。
+
+## 智能体安全规则
+
+- 持有钱包、key 或已连接的 MCP 服务器并不等于有权消费。
+- 绝不打印钱包密钥、凭证、签名或授权头。
+- 不要循环发起计费重试；每次新请求都是一笔新费用。
+- 付款前阅读质询条款，超出批准金额时立即停止。
+- 将已结算的付款视为“已付费”，而非“任务成功”：还须检查响应内容。
+
+## 相关
+
+<CardGroup cols={2}>
+  <Card title="计费与积分" icon="credit-card" href="/zh/guides/pricing">
+    余额计费、费用报价和按 key 限额的工作方式。
+  </Card>
+  <Card title="自主 API 采购" icon="cart-shopping" href="/zh/use-cases/autonomous-api-purchasing">
+    包含批准和对账步骤的完整采购工作流。
+  </Card>
+  <Card title="智能体发现" icon="radar" href="/zh/guides/agent-discovery">
+    Agent Card、OpenAPI 和 MCP 入口，面向自主智能体。
+  </Card>
+  <Card title="安全与隐私" icon="shield" href="/zh/guides/security">
+    密钥处理、操作与支付安全。
+  </Card>
+</CardGroup>

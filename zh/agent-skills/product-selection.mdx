@@ -1,0 +1,103 @@
+---
+title: "产品选品"
+description: "挑选要销售的产品，比较目标市场与渠道，并基于 AIsa 实时数据计算可行的到岸成本定价。"
+---
+
+[在 GitHub 上查看 →](https://github.com/AIsa-team/agent-skills/tree/main/marketing/product-selection)
+
+**面向卖家的产品–市场–定价决策。** 研究卖什么、卖到哪里、通过哪个渠道，然后基于经过验证的成本定价。实时数据来自 AIsa MCP 服务器；内置的 TypeScript 辅助工具在离线环境下完成排名与单位经济计算。
+
+## 安装
+
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill product-selection
+```
+
+```bash AIsa CLI
+npm install -g @aisa-one/cli
+aisa skills install product-selection
+```
+</CodeGroup>
+
+安装完成后，请启动一个新的智能体会话以加载该 Skill。
+
+## 智能体能做什么？
+
+<CardGroup cols={2}>
+  <Card title="从零开始探索" icon="compass">
+    没有预设偏好：构建 3–5 个市场假设，并在每个假设中测试 2–3 个产品系列。
+  </Card>
+  <Card title="固定市场或产品" icon="location-dot">
+    锁定已选的市场或产品，围绕它比较不同的产品、市场或渠道。
+  </Card>
+  <Card title="到岸成本定价" icon="calculator">
+    根据显式成本、费用、汇率和退货率计算价格底线、边际贡献和利润，并包含下行情景。
+  </Card>
+  <Card title="可比价格" icon="scale-balanced">
+    在比较竞品价格前，先统一汇率、税费、运费和包装规格的口径。
+  </Card>
+</CardGroup>
+
+## 前提条件
+
+- **实时研究：** 需要通过 `https://mcp.aisa.one/mcp` 连接 AIsa MCP，并在你的智能体客户端中完成授权。参见[通过 MCP 连接](/zh/agent-quickstart)。
+- **离线辅助工具：** 需要 Node.js 22 或更高版本。编译好的 JavaScript 已包含在 `dist/` 中，无需执行 `npm install`，也不需要 API key。
+
+如果 MCP 连接缺失或未授权，智能体会提供端点和配置步骤，并在尝试实时研究前暂停。它会继续用你提供的数据做规划和计算，并明确披露任何数据缺口，而不会静默回退到普通网页搜索。
+
+## 实时研究的工作方式
+
+该 Skill 使用 MCP 服务器自身的工具（`search`、`get_details`、`use`、`batch_use` 以及免费的 `list_categories`）：
+
+1. **发现**：通过 `search` 找到满足特定数据需求的操作。
+2. **检查**：通过 `get_details` 查看其 schema、可用性和价格信息。
+3. **核实费用**：在发起任何付费调用前，对照你授权的消费额度检查，未覆盖时会请求确认。
+4. **使用**：通过 `use` 或 `batch_use` 调用操作，并在每条数据旁记录检索时间、提供方和来源 URL。
+
+默认顺序：先用 Tavily search/extract 获取官方市场信息和准入规则，然后用 DataForSEO 关键词和趋势分析需求，再用产品/竞品工具或公开列表获取可比价格。仅在需要时才加入 Similarweb 来评估网站或渠道适配度。付费调用从你的 AIsa 余额中扣费。
+
+## 离线辅助工具
+
+```bash
+node dist/cli.js --help
+node dist/cli.js plan assets/explore-input.json
+node dist/cli.js price assets/pricing-example.json
+```
+
+| 命令 | 输入 / 用途 |
+| --- | --- |
+| `plan` | `{markets?, products?, channels?}` → 场景路径和 MCP 发现意图 |
+| `rank` | 基于数据支撑的机会维度和门控 → 启发式评分区间和数据覆盖度（示例：`assets/ranking-example.json`） |
+| `price` | 完整的经济模型输入，或 `{scenarios:[{name,input}]}` → 价格底线和报价经济分析 |
+| `compare-prices` | 预过滤的观测数据 → 经汇率/税费/运费/包装规格标准化后的到手价四分位数及排除项 |
+
+传入 `-` 可从 stdin 读取 JSON。结果以 JSON 格式写入 stdout；退出码 `2` 表示输入无效或计算错误。这些辅助工具不发起任何网络请求，也不会执行 MCP 请求。
+
+## 适用场景
+
+- 产品选品与产品–市场匹配研究
+- 电商平台品类调研与竞品价格对比
+- 针对指定产品和市场的到岸成本定价
+
+该 Skill 将每个选项视为 **市场 × 产品规格 × 渠道 × 履约路径**。合规、渠道或经济模型门控未通过意味着“在当前假设下不应进入”，缺失的成本永远不会被默认为零。推荐结果不会下达库存订单、创建商品列表、投放广告或联系供应商。
+
+## 开始使用
+
+1. 将你的智能体连接到 AIsa MCP 服务器并登录：[通过 MCP 连接](/zh/agent-quickstart)。
+2. 使用[安装](#安装)部分的命令安装该 Skill，然后启动一个新的智能体会话。
+3. 向智能体提供你的起点（尚未选定、已选市场、已选产品、或两者皆有）以及采购、渠道和预算约束。
+
+## 相关
+
+<CardGroup cols={3}>
+  <Card title="通过 MCP 连接" icon="plug" href="/zh/agent-quickstart">
+    将 AIsa MCP 服务器添加到你的智能体。
+  </Card>
+  <Card title="SEO 关键词研究" icon="magnifying-glass-chart" href="/zh/agent-skills/seo-keyword-research">
+    用 DataForSEO 做更深入的关键词需求研究。
+  </Card>
+  <Card title="Similarweb" icon="chart-area" href="/zh/agent-skills/use-similarweb">
+    网站流量与渠道情报。
+  </Card>
+</CardGroup>

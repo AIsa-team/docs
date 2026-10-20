@@ -28,7 +28,8 @@ class ActivationTests(unittest.TestCase):
         bytes are separate. Only the formal authorization boundary is mocked.
         No checker is replaced with a pre-assessed pass.
         """
-        from public_surface_checks import JSON_SURFACES, TEXT_SURFACES
+        from public_surface_checks import (DISCOVERY_PAGE, JSON_SURFACES, MCP_PAGE, MCP_SERVERS, SALES_CATALOG,
+                                           SOFT_404_TITLE, TEXT_SURFACES)
         from router_surface_checks import METADATA, canonical, digest
         providers = sorted(yaml.safe_load((SCRIPTS.parent / 'openapi/registry.yaml').read_text())['providers'])
         began = datetime.now(timezone.utc) - timedelta(minutes=15)
@@ -75,16 +76,23 @@ class ActivationTests(unittest.TestCase):
                             **({'required': ['q']} if number else {})}}
                 aggregate = {'openapi': '3.1.0', 'info': {'x-aisa-document': {'providers': metadata}},
                     'paths': {path: item for document in documents.values() for path, item in document['paths'].items()}}
+                sales_view = {'openapi': '3.1.0', 'paths': {path: {method: {'operationId': op['operationId'],
+                    'x-aisa-registry-provider': path.rsplit('/', 1)[1]} for method, op in item.items()}
+                    for path, item in aggregate['paths'].items()}}
                 files = {'openapi.yaml': yaml.safe_dump(aggregate).encode(),
                     'openapi/registry.yaml': yaml.safe_dump(registry).encode(),
                     'discovery/openapi.json': canonical(aggregate),
+                    'docs/publication/sales-catalog.json': canonical({'schema_version': 1, 'document': sales_view}),
                     **{'openapi/' + p + '.json': canonical(d) for p, d in documents.items()},
                     **{p: text.encode() for p, text in pages.items()}}
                 for path, raw in files.items():
                     target = root / path; target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(raw)
                 pointer = root / 'docs/publication/current.json'; pointer.parent.mkdir(parents=True, exist_ok=True)
-                pointer.write_bytes(canonical({'status': 'passed', 'files_sha256': {
-                    p: hashlib.sha256(raw).hexdigest() for p, raw in files.items()}}))
+                release = hashlib.sha256(b'release-' + str(number).encode()).hexdigest()
+                pointer.write_bytes(canonical({'status': 'passed', 'contract_release': release,
+                    'sales_catalog': {'path': 'docs/publication/sales-catalog.json',
+                                      'sha256': hashlib.sha256(files['docs/publication/sales-catalog.json']).hexdigest()},
+                    'files_sha256': {p: hashlib.sha256(raw).hexdigest() for p, raw in files.items()}}))
                 git('add', 'openapi.yaml', 'openapi', 'discovery', 'api-reference', 'zh', 'docs'); git('commit', '-qm', 'isolated semantic round ' + str(number))
                 ref = git('rev-parse', 'HEAD'); sha = hashlib.sha256(files['openapi.yaml']).hexdigest()
                 for row in rows.values(): row['documentation']['provenance']['docs_sha'] = ref
@@ -97,7 +105,16 @@ class ActivationTests(unittest.TestCase):
                     TEXT_SURFACES['website-llms']: (sha + ' ' + ref + ' https://aisa.one/openapi.json https://raw.githubusercontent.com/AIsa-team/docs/' + ref + '/openapi.yaml').encode(),
                     TEXT_SURFACES['docs-llms']: (sha + ' openapi.json').encode(),
                     TEXT_SURFACES['mcp-llms']: ref.encode(),
-                    TEXT_SURFACES['docs-llms-full']: ''.join(pages[p] for p in pages if not p.startswith('zh/')).encode()})
+                    TEXT_SURFACES['docs-llms-full']: ''.join(pages[p] for p in pages if not p.startswith('zh/')).encode(),
+                    SALES_CATALOG: canonical({'docs_revision': ref, 'contract_release': release,
+                        'providers': [{'id': p, 'endpoint_count': 1} for p in providers],
+                        'operations': [{'operation_id': 'get_' + p, 'provider': p, 'quote': {'amount': str(number + .0123)}} for p in providers]}),
+                    MCP_SERVERS: canonical({'serverCount': len(providers), 'toolCount': len(providers),
+                        'entrypoints': [{'slug': 'aisa', 'kind': 'root'}, {'slug': 'seo', 'kind': 'category'}]}),
+                    MCP_PAGE: ('<title>MCP</title><p>' + str(len(providers)) + ' servers; ' + str(len(providers)) +
+                        ' tools reachable; 1 categories; $' + str(number + .0123) + ' ' + providers[0] + '</p>').encode(),
+                    DISCOVERY_PAGE: b'# Agent Discovery\n[agent setup guide](https://aisa.one/llms.txt) '
+                        b'https://mcp.aisa.one/mcp OAuth; direct HTTP is the fallback.\n'})
                 for path, page in pages.items():
                     request = json.loads(page.split('```json\n')[1].split('\n```')[0])
                     payloads['https://aisa.one/docs/' + path.removesuffix('.mdx')] = (
@@ -119,8 +136,17 @@ class ActivationTests(unittest.TestCase):
                     return {'mode': 'formal', 'docsRevision': current['ref'], 'contentHash': current['sha']}
                 def schema_read(_, method, url, payload=None):
                     return current['router'] if url == METADATA else {'tools': {oid: current['rows'][oid] for oid in payload['tools']}}
+                def read_page(url):
+                    # Single request semantics: (status, body, Location).
+                    if url in current['payloads']:
+                        return 200, current['payloads'][url], None
+                    slug = url.rsplit('/', 1)[1]
+                    if slug in providers:
+                        return 200, ('<title>' + slug + ' API - AIsa</title>').encode(), None
+                    return 404, ('<title>' + SOFT_404_TITLE + ' - AIsa</title>').encode(), None
                 with patch.object(sys, 'argv', argv), patch('builtins.print'), \
                     patch('check_contract_revisions.read_public', side_effect=read), \
+                    patch('check_contract_revisions.read_public_page', side_effect=read_page), \
                     patch('check_contract_revisions.read_public_bytes', side_effect=lambda url: current['payloads'][url]), \
                     patch('check_contract_revisions.urlopen', side_effect=lambda request, **kw: io.BytesIO(current['payloads'][request.full_url])), \
                     patch('router_surface_checks.PublicSchemaReader.__call__', new=schema_read), \

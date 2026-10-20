@@ -21,7 +21,7 @@ from identity_compatibility import metadata, localize_identities
 from source_governance import initial_policy, validate_receipt
 from datetime import datetime, timezone
 from test_runtime_contracts import facts, operation
-from catalog_fixture import ARCHIVE
+from catalog_fixture import ARCHIVE, catalog_root
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -200,21 +200,27 @@ class PolymarketCandidateTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     build_candidate(plan, frozen, sources, publications)
 
-    def test_actual_89_targets_source_proofs_and_exact_three_debts(self):
+    def test_actual_89_targets_keep_three_route_and_five_header_debts(self):
         from runtime_registry import published_documents
         plan = json.loads((ROOT / 'scripts/tests/fixtures/polymarket-targets-snapshot-20261008.json').read_text())
         sources, acquisitions = load_official_sources_archive(ROOT / 'scripts/tests/fixtures/polymarket-official-sources-20261008.tar.gz')
         snapshot = load_frozen_facts(ARCHIVE)
         before = copy.deepcopy(snapshot)
-        report, documents = build_candidate(plan, snapshot, sources, published_documents(ROOT))
+        report, documents = build_candidate(plan, snapshot, sources, published_documents(catalog_root()))
         self.assertEqual(snapshot, before)
         self.assertEqual(report['counts'], {
-            'target_endpoints': 89, 'current_routing_metadata_verified': 0, 'frozen_source_method_verified_candidates': 86,
-            'blocked_endpoints': 3, 'candidate_method_identities': 92,
-            'composed_operations_including_established_routes': 95,
-            'request_pending': 3, 'response_pending': 0})
+            'target_endpoints': 89, 'current_routing_metadata_verified': 0, 'frozen_source_method_verified_candidates': 81,
+            'blocked_endpoints': 8, 'candidate_method_identities': 87,
+            'composed_operations_including_established_routes': 90,
+            'request_pending': 8, 'response_pending': 0})
         self.assertEqual({row['public_path'] for row in report['decisions'] if row['disposition'] == 'blocked'},
-            {'/apis/v1/polymarket/order/{orderID}', '/apis/v1/polymarket/trades', '/apis/v1/polymarket/public-search'})
+            {'/apis/v1/polymarket/order/{orderID}', '/apis/v1/polymarket/trades', '/apis/v1/polymarket/public-search',
+             '/apis/v1/polymarket/deposit', '/apis/v1/polymarket/withdraw', '/apis/v1/polymarket/submit',
+             '/apis/v1/polymarket/transactions', '/apis/v1/polymarket/relayer/api/keys'})
+        headers = [pending for row in report['decisions'] for pending in row.get('pending', [])
+                   if pending['reason'].startswith('source header parameters are not forwarded by runtime: ')]
+        self.assertEqual(len(headers), 5)
+        self.assertEqual(sum('RELAYER_API_KEY' in row['reason'] for row in headers), 3)
         established = {(path, op['operationId']) for document in documents.values()
                        for path, item in document['paths'].items() for op in item.values()
                        if op['operationId'] in {'get_polymarket_markets', 'get_polymarket_events', 'get_polymarket_activity'}}
@@ -243,16 +249,16 @@ class PolymarketCandidateTests(unittest.TestCase):
             target['servers'] = [{'url': 'https://clob.polymarket.com'}]
             self.assertEqual(build_candidate(plan, frozen, sources, {})[0]['counts']['candidate_method_identities'], 5)
 
-    def test_actual_current89_metadata_matches_but_three_route_conflicts_remain(self):
+    def test_actual_current89_metadata_does_not_resolve_route_or_header_conflicts(self):
         from runtime_registry import published_documents
         plan = json.loads((ROOT / 'scripts/tests/fixtures/polymarket-targets-snapshot-20261008.json').read_text())
         current = json.loads((ROOT / 'scripts/tests/fixtures/polymarket-current-binding-map-20261008.json').read_text())
         sources, _ = load_official_sources_archive(ROOT / 'scripts/tests/fixtures/polymarket-official-sources-20261008.tar.gz')
         frozen = load_frozen_facts(ARCHIVE)
-        report, _ = build_candidate(plan, frozen, sources, published_documents(ROOT), current)
+        report, _ = build_candidate(plan, frozen, sources, published_documents(catalog_root()), current)
         self.assertEqual(report['counts']['current_routing_metadata_verified'], 89)
-        self.assertEqual(report['counts']['blocked_endpoints'], 3)
-        self.assertEqual(report['counts']['candidate_method_identities'], 92)
+        self.assertEqual(report['counts']['blocked_endpoints'], 8)
+        self.assertEqual(report['counts']['candidate_method_identities'], 87)
         self.assertTrue(all(row['current_routing_metadata_verified'] for row in report['decisions']))
         self.assertFalse(any(row['current_binding_verified'] for row in report['decisions']))
         self.assertFalse(report['apply_authorized'])
@@ -280,7 +286,7 @@ class PolymarketCandidateTests(unittest.TestCase):
                 elif variant == 'writes': changed['production_writes'] = 1
                 elif variant == 'query': row['target_has_query'] = True
                 with self.assertRaises(ValueError):
-                    build_candidate(plan, frozen, sources, published_documents(ROOT), changed)
+                    build_candidate(plan, frozen, sources, published_documents(catalog_root()), changed)
 
 
 

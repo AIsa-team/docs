@@ -1,95 +1,80 @@
 ---
-title: 用 AIsa 构建研究型 Agent
-description: 为有来源支撑的研究型 agent 选择 AIsa 搜索 API、研究类 Skills、证据规则和模型综合方式。
+title: 使用 AIsa 构建研究智能体
+sidebarTitle: "研究智能体"
+description: 通过 AIsa 为你的智能体提供实时网络、学术和带引用的搜索能力，再遵循证据规则综合出有来源支持的简报。
+icon: magnifying-glass
 ---
 
-研究型 agent 通常需要两种不同的能力：
+## 问题
 
-1. 检索实时或权威来源。
-2. 用模型推理对证据做比较、总结和解释。
+分析师、创始人与工程师都需要依赖最新信息的答案：发生了什么变化、谁说的，以及某个说法是否站得住脚。仅依赖模型记忆会产生过时信息，且无法引用来源。理想的成果是一份简明扼要的简报：每项实质性主张都链接到带有发布日期的检索来源、明确指出矛盾之处，并注明研究截止时间。
 
-对于依赖实时信息的结论，不要只靠模型推理。
+## 提示词
 
-## 选择研究入口
+在 AIsa [通过 MCP 连接](/zh/agent-quickstart)后，将以下内容提供给你的智能体（Claude Code、Cursor、Codex 等）：
 
-| 需求 | 从哪里开始 |
-| --- | --- |
-| 可复用的多源工作流 | [多源搜索 Skill](/zh/agent-skills/multi-source-search) |
-| 跨来源的近期简报 | [Last 30 Days](/zh/agent-skills/last30days) |
-| 带引用的深度研究 | [Perplexity Deep Research](/zh/agent-skills/perplexity-research) |
-| 学术论文 | [Scholar Search](/zh/agent-skills/scholar-search) |
-| 由应用控制的检索 | [直接 API 参考](/zh/api-reference) |
-| 最终综合或排版 | [模型推理](/zh/guides/models) |
-
-当工作流可复用、且 agent 应遵循成熟流程时，使用 Skill。当应用需要自己控制来源选择、调用顺序、缓存或排序时，使用直接 API。
-
-## 推荐工作流
-
-### 1. 明确研究问题
-
-需要指定：
-
-- 这项研究要支撑的具体决策或结论。
-- 需要的时间范围。
-- 偏好的来源类型或站点。
-- 地域或语言限制。
-- 期望的输出和引用格式。
-
-### 2. 先检索，再综合
-
-用搜索结果做发现，然后抓取需要作为证据的来源页面。
-
-```text
-搜索结果是发现。
-抓取到的页面是证据。
-生成的摘要是综合。
+```txt wrap
+使用 AIsa 研究：<你的问题>。时间范围：<例如：最近 90 天>。首选来源：官方文档、监管文件、原始公告、同行评审论文。
+使用 `search` 查找合适的 AIsa 搜索工具，并在调用前先用 `batch_quote` 对每个付费调用报价。在进行任何付费调用前先询问我，并告诉我预计的调用次数。
+先检索再综合：搜索候选内容，然后获取你引用的每个来源的全文。不要引用任何你未检索到的内容。
+返回一份简报，包含：(1) 已验证的事实，每项均附带 URL 和发布日期；(2) 深度解读；(3) 来源之间的矛盾点；(4) 悬而未决的问题；(5) 研究截止时间。
 ```
 
-不要把摘要片段、模型记忆或生成的答案等同于一手来源。
+对于学术问题，将来源那一行替换为：`Use scholarly sources only; include authors, year, and venue for each paper.`
 
-### 3. 比较来源
+## 使用的 API 与 Skill
 
-对于关键结论：
+通过 MCP，你的智能体可以通过位于 `https://mcp.aisa.one/mcp` 的几个元工具访问这些能力：`search`、`list_categories`、`get_details` 和 `batch_quote` 是免费的；`batch_use`（单次最多 20 次调用）按调用计费。
 
-- 优先采用官方文档、申报文件、原始公告或一手数据集。
-- 记录发布日期和来源 URL。
-- 发现矛盾时要指出，而不是悄悄合并。
-- 标注仍存在不确定性、或只有单一来源支撑的结论。
+| 步骤 | 智能体调用的内容 | 参考 |
+| --- | --- | --- |
+| 发现来源 | 包含提取网页文本的网络搜索 | [Tavily Search](/zh/api-reference/search/post_tavily-search) |
+| 读取完整页面 | 提取已知 URL 的内容 | [Tavily Extract](/zh/api-reference/search/post_tavily-extract) |
+| 带引用的多轮回答 | Perplexity Sonar Pro | [Sonar Pro](/zh/api-reference/perplexity/post_perplexity-sonar-pro) |
+| 学术论文 | 学术文章搜索 | [Search Scholarly Articles](/zh/api-reference/scholar/post_scholar-search-scholar) |
+| 近期跨平台信号 | 涵盖社交媒体和网络来源的 30 天简报 | [Last 30 Days](/zh/agent-skills/last30days) |
+| 可复用工作流 | 将网络、学术、Tavily 和 Sonar 整合于单个 Skill | [Multi-source Search](/zh/agent-skills/multi-source-search) |
+| 综合分析 | 检索后使用支持的模型 | [Models](/zh/guides/models) |
 
-### 4. 用模型做综合
+当研究方法可复用时，使用 Skill。当你的应用程序必须控制来源选择、顺序编排、缓存或排序时，直接调用 API。
 
-检索完成后，把相关证据交给受支持的模型，并要求它区分：
+## 示例输出
 
-- 已核实的事实。
-- 解读。
-- 尚待回答的问题。
-- 建议。
+<Note>仅供演示。名称、URL 和日期均为占位符，非真实数据。</Note>
 
-模型不应编造引用，也不应声称访问过未被检索的来源。
+```md
+## Brief: Has Example Corp shipped its v2 API? (cutoff: 2026-01-15 09:00 UTC)
 
-### 5. 校验输出
+Verified facts
+- Example Corp announced v2 general availability on 2026-01-10. [example.com/blog/v2-ga, 2026-01-10]
+- The v1 endpoints are deprecated, not yet removed. [docs.example.com/changelog, 2026-01-11]
 
-交付结果之前：
+Interpretation
+- Migration pressure is moderate: no removal date is published.
 
-- 确认每条重要引用都能指向预期来源。
-- 复查时效性强的数字。
-- 删除缺乏支撑的结论。
-- 说明研究的信息截止时间。
+Contradictions
+- A third-party post says v1 shuts down in March; the official changelog gives no date. [example.org/news/123]
 
-## 最小文档集合
+Open questions
+- Pricing for v2 is not stated in any retrieved source.
+```
 
-构建这类工作流的 agent 通常只需要阅读：
+## 护栏
 
-- [Agent 快速上手](/zh/agent-quickstart)
-- [按目标查找能力](/zh/by-goal)
-- 所选 Skill 或 API 页面
-- [认证](/zh/guides/authentication)
-- 如果需要模型综合，再看[模型](/zh/guides/models)
+- **先检索，再综合**。摘要片段和模型记忆只是线索，不是证据。对任何实质性主张都必须获取完整的来源。
+- **首选一手来源**。优先考虑一手来源（官方文档、监管文件、原始公告、数据集），并记录 URL 与发布日期。
+- **呈现矛盾之处**。如实报告冲突信息而非将其合并，并标记仅依赖单一来源的主张。
+- **严禁捏造引用**。模型不得引用或声称访问未检索到的来源。
+- **交付前核实**。核实每个引用均能正常访问，复核具有时效性的数字，移除缺乏支持的主张，并注明研究截止时间。
+- **先报价，再询问**。使用 `batch_quote` 获取免费报价，且仅在获得批准后才使用 `batch_use` 执行相同的调用。报价检查的是预估费用，而非最终扣费。参见 [计费与额度](/zh/guides/pricing)。
+- **仅加载所需内容**。仅载入选定的 Skill 或 API 文档页面、[身份验证](/zh/guides/authentication)以及 [模型](/zh/guides/models)。不要加载整个 API 参考文档。
+- **何时可能不需要 AIsa？** 如果你只使用一种来源类型、不需要可复用的 Skill，并且已经自行管理模型和计费集成，那么使用单一专用搜索提供商可能会更简单。参见 [何时使用 AIsa](/zh/how-it-works#何时使用-aisa)。
 
-除非任务确实需要广泛的 endpoint 发现，否则不要把整份 API 参考都读进上下文。
+## 相关
 
-## 什么时候未必需要 AIsa
-
-如果工作流只用一种来源类型、不需要可复用的 Skills，并且已经有成熟的模型和计费集成，那么直接接入单一的专业搜索提供商可能更简单。
-
-产品匹配方面的建议参见[何时使用 AIsa](/zh/evaluate/when-to-use-aisa)。
+<CardGroup cols={2}>
+  <Card title="通过 MCP 连接" icon="plug" href="/zh/agent-quickstart">在你的智能体中设置 AIsa。</Card>
+  <Card title="工作原理" icon="diagram-project" href="/zh/how-it-works">端点、计费以及所有权归属。</Card>
+  <Card title="市场情报智能体" icon="chart-line" href="/zh/use-cases/market-intelligence-agent">添加市场数据和监管文件。</Card>
+  <Card title="Perplexity Deep Research" icon="book-open" href="/zh/agent-skills/perplexity-research">包含引用的长篇研究报告。</Card>
+</CardGroup>

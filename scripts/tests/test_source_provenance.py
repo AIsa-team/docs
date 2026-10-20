@@ -80,6 +80,73 @@ class ProvenanceTests(unittest.TestCase):
         document = compact_document(fixture())
         self.assertFalse(any(KEY in path for path, _ in iter_spec_strings(document)))
 
+    def test_retained_history_restores_only_the_platform_bearer_alias(self):
+        from compose_openapi import effective_security
+        original = fixture()
+        original['paths']['/test']['get']['security'] = [{'Bearer': []}]
+        facts = {'paths': {}, 'servers': [{'url': 'https://api.aisa.one'}],
+                 'security': [{'currentAuth': []}], 'components': {'securitySchemes': {
+                     'currentAuth': {'type': 'http', 'scheme': 'bearer'}}}}
+        candidate = {'paths': {}, 'info': {'x-aisa-document': {'document_hash': 'new'}}}
+        retain_unregistered_history(candidate, facts, original)
+        operation = candidate['paths']['/test']['get']
+        schemes, missing = effective_security(operation, candidate)
+        self.assertEqual(missing, [])
+        self.assertEqual(schemes, {'Bearer': {'type': 'http', 'scheme': 'bearer'}})
+        self.assertEqual(operation['x-aisa-status'], 'disabled')
+        original['paths']['/test']['get']['security'] = [{'UnknownCustomAuth': []}]
+        second = {'paths': {}, 'info': {'x-aisa-document': {'document_hash': 'new'}}}
+        retain_unregistered_history(second, facts, original)
+        self.assertEqual(effective_security(second['paths']['/test']['get'], second)[1], ['UnknownCustomAuth'])
+
+    def test_retained_history_keeps_inherited_parameters_and_security_definitions(self):
+        from compose_openapi import effective_security
+        original = fixture()
+        original['security'] = [{'PreviousAuth': []}]
+        original['components'] = {'securitySchemes': {'PreviousAuth': {
+            'type': 'apiKey', 'in': 'header', 'name': 'X-Previous'}}}
+        original['paths']['/test']['parameters'] = [
+            {'name': 'trace', 'in': 'query', 'schema': {'type': 'string'}}]
+        candidate = {'paths': {}, 'info': {'x-aisa-document': {'document_hash': 'new'}}}
+        retain_unregistered_history(candidate, {'paths': {}}, original)
+        operation = candidate['paths']['/test']['get']
+        self.assertEqual([p['name'] for p in operation['parameters']], ['trace', 'q'])
+        self.assertEqual(effective_security(operation, candidate), ({'PreviousAuth': {
+            'type': 'apiKey', 'in': 'header', 'name': 'X-Previous'}}, []))
+
+    def test_history_collection_preserves_inherited_auth_before_retention(self):
+        from compose_openapi import effective_security
+        original = fixture()
+        original['security'] = [{'PreviousAuth': []}]
+        original['components'] = {'securitySchemes': {'PreviousAuth': {
+            'type': 'apiKey', 'in': 'header', 'name': 'X-Previous'}}}
+        before = copy.deepcopy(original)
+        history = previous_for_facts({'paths': {}}, {'example': original}, 'example')
+        candidate = {'paths': {}, 'info': {'x-aisa-document': {'document_hash': 'new'}}}
+        retain_unregistered_history(candidate, {'paths': {}}, history)
+        self.assertEqual(effective_security(candidate['paths']['/test']['get'], candidate),
+            ({'PreviousAuth': {'type': 'apiKey', 'in': 'header', 'name': 'X-Previous'}}, []))
+        self.assertEqual(original, before)
+
+    def test_retained_auth_collision_renames_only_the_historic_scheme(self):
+        from compose_openapi import effective_security
+        original = fixture()
+        original['security'] = [{'Auth': []}]
+        original['components'] = {'securitySchemes': {'Auth': {
+            'type': 'apiKey', 'in': 'header', 'name': 'X-Previous'}}}
+        history = previous_for_facts({'paths': {}}, {'example': original}, 'example')
+        candidate = {'paths': {}, 'security': [{'Auth': []}],
+            'components': {'securitySchemes': {'Auth': {'type': 'http', 'scheme': 'bearer'}}},
+            'info': {'x-aisa-document': {'document_hash': 'new'}}}
+        retain_unregistered_history(candidate, {'paths': {}}, history)
+        operation = candidate['paths']['/test']['get']
+        schemes, missing = effective_security(operation, candidate)
+        self.assertFalse(missing)
+        self.assertEqual(len(schemes), 1)
+        self.assertEqual(next(iter(schemes.values())), {
+            'type': 'apiKey', 'in': 'header', 'name': 'X-Previous'})
+        self.assertEqual(candidate['components']['securitySchemes']['Auth'], {'type': 'http', 'scheme': 'bearer'})
+
     def test_committed_fred_evidence_rehydrates_and_stays_small(self):
         path = Path(__file__).resolve().parents[2] / 'openapi/fred.json'
         original = json.loads(path.read_text())
@@ -87,7 +154,9 @@ class ProvenanceTests(unittest.TestCase):
         self.assertEqual(expand_document(result), expand_document(original))
         self.assertLess(len(json.dumps(result, indent=2).encode()), 2_000_000)
         self.assertEqual(len(result['info'][KEY]), 1)
-        self.assertEqual(len(result['paths']), 32)
+        # Provenance compaction must preserve the actual publication inventory;
+        # a later reviewed Runtime release may add or retire FRED routes.
+        self.assertEqual(set(result['paths']), set(original['paths']))
 
 
 if __name__ == '__main__':

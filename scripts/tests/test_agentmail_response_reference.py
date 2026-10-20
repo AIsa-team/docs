@@ -67,7 +67,7 @@ class AgentMailResponseTests(unittest.TestCase):
         facts = {'openapi':'3.1.0','info':{'x-aisa-document':{'facts_hash':'synthetic'}},'paths':{}}
         for _, path in OPERATIONS:
             public = path.replace('/v0', '/apis/v1/agentmail', 1)
-            facts['paths'][public] = {'x-aisa-any': {'operationId': 'route_'+str(len(facts['paths'])), 'x-aisa-validation':'provider','x-aisa-passthrough':True,'x-aisa-upstream-path':path,'x-aisa-status':'enabled','x-aisa-pricing':{'price':1},'responses':{'200':{'description':'Successful response'}}}}
+            facts['paths'][public] = {'x-aisa-any': {'operationId': 'route_'+str(len(facts['paths'])), 'x-aisa-validation':'provider','x-aisa-query-policy':{'request_wins':True},'x-aisa-passthrough':True,'x-aisa-upstream-path':path,'x-aisa-status':'enabled','x-aisa-pricing':{'price':1},'responses':{'200':{'description':'Successful response'}}}}
         old, old_pending = compose(facts, before)
         new, new_pending = compose(facts, after)
         self.assertEqual(old_pending, new_pending)

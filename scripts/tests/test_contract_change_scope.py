@@ -29,8 +29,33 @@ class ChangeScopeTests(unittest.TestCase):
         original = next(row for row in steps if row.get('name') == 'Check actual candidate readiness')
         candidate = next(row for row in steps if 'check_reviewed_schema_inputs.py' in row.get('run', ''))
         self.assertEqual(original['if'], "needs.changes.outputs.input_candidate != 'true'")
-        self.assertEqual(candidate['if'], "needs.changes.outputs.input_candidate == 'true'")
+        self.assertEqual(candidate['if'], "needs.changes.outputs.input_candidate == 'true' && steps.input_recovery.outputs.selected != 'true' && steps.open_input_diagnostic.outputs.selected != 'true'")
+        recovery = next(row for row in steps if 'read_recovery_input_qualification.py --output' in row.get('run', ''))
+        self.assertEqual(recovery['if'], "steps.input_recovery.outputs.selected == 'true' && steps.open_input_diagnostic.outputs.selected != 'true'")
+        acquire = next(row for row in steps if 'fetch_runtime_release.py --current' in row.get('run', ''))
+        self.assertEqual(acquire['if'], "steps.input_recovery.outputs.selected != 'true' && steps.open_input_diagnostic.outputs.selected != 'true'")
         self.assertIn('--base "$INPUT_BASE"', candidate['run'])
+
+    def test_input_review_and_regression_attachments_do_not_admit_execution_or_outputs(self):
+        source = ['docs/schema-inputs/context.json', 'docs/schema-inputs/source-receipts.json',
+                  'openapi/upstream/apollo.json']
+        attachments = ['scripts/tests/test_apollo_people_request_location.py',
+                       'docs/current-source-review-20261009/merged-source-reviews.json',
+                       'docs/current-source-review-20261016/apollo-people-request-location-review.json']
+        self.assertTrue(is_reviewed_input_change(source + attachments))
+        self.assertFalse(is_reviewed_input_change(attachments))
+        self.assertFalse(is_reviewed_input_change(source[1:] + attachments))
+        for extra in ('scripts/compose_openapi.py', 'scripts/check_reviewed_schema_inputs.py',
+                      'scripts/contract_change_scope.py', 'scripts/tests/__init__.py',
+                      'scripts/tests/helper.py', 'scripts/tests/fixtures/test_hidden.py',
+                      'scripts/tests/test_../escape.py', '.github/workflows/test-runtime-contracts.yml',
+                      'openapi/apollo.json', 'openapi.yaml', 'openapi/overlays/apollo.json',
+                      'docs/publication/current.json', 'api-reference/apollo.mdx',
+                      'docs/current-source-review-20261016/review.py',
+                      'docs/current-source-review-20261016/unknown.json',
+                      'docs/current-source-review-20261016/../apollo-review.json'):
+            with self.subTest(extra=extra):
+                self.assertFalse(is_reviewed_input_change(source + attachments + [extra]))
 
     def test_guide_only_edits_run_protocol_checks_without_republishing_contracts(self):
         root = Path(__file__).resolve().parents[2]

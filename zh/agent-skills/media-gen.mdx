@@ -1,95 +1,111 @@
 ---
 title: "Media Gen"
-description: "面向自主 Agent 的统一媒体生成。Gemini 兼容 GenerateContent 用于文本/多模态调用；图像/媒体生成路由。一个 API key，覆盖两类模态。"
+description: "通过 AIsa 的图像与视频路由，利用 Seedream、Wan 和 GPT Image 模型为自主智能体提供图像与视频生成能力。"
 ---
 
 [在 GitHub 上查看 →](https://github.com/AIsa-team/agent-skills/tree/main/creative/media-gen)
 
-**面向自主 Agent 的 AI 媒体生成。** 一个 `AISA_API_KEY` 即可解锁 Gemini 兼容 GenerateContent，以及图像/媒体生成路由。
+**使用单个 AIsa API key 生成图像与视频**。该 Skill 指引你的智能体针对图像或视频请求选用相应的模型和路由，并内置了用于 Seedream 图像生成的 `media_gen_client.py`。
 
 ## 安装
 
-如果还没有安装 AIsa CLI，请先安装：
-
-```bash
-npm install -g @aisa-one/cli
+<CodeGroup>
+```bash npx skills
+npx skills add AIsa-team/agent-skills --skill media-gen
 ```
 
-然后安装该技能：
-
-```bash
+```bash AIsa CLI
+npm install -g @aisa-one/cli
 aisa skills install media-gen
 ```
+</CodeGroup>
 
-## Agent 可以用它做什么？
+安装完成后，启动一个新的智能体会话以便加载该 Skill。
+
+## 智能体可以用它做什么？
 
 <CardGroup cols={2}>
-  <Card title="营销创意" icon="palette">
-    “为产品发布 deck 生成一张电影感 hero image。”
+  <Card title="营销素材" icon="palette">
+    “生成一张小熊猫的超细节产品照，摄影棚布光，锐利对焦。”
   </Card>
-  <Card title="社交内容" icon="hashtag">
-    “为下一条帖子创建适合社交媒体的图片变体。”
+  <Card title="大画幅图像" icon="image">
+    “生成 2048×2048 杂志封面：新黑色电影风格侦探肖像，胶片颗粒质感。”
   </Card>
-  <Card title="故事板" icon="film">
-    “生成 6 个关键帧，展示用户旅程的 happy path。”
+  <Card title="文生视频" icon="film">
+    “黄昏时分霓虹赛博朋克天际线的宏大交代镜头，5 秒。”
   </Card>
-  <Card title="参考图像" icon="image">
-    “使用这张静态 mock 作为生成创意的视觉上下文。”
-  </Card>
-  <Card title="照片级真实感" icon="camera">
-    “8K 超精细赛博朋克城市天际线，霓虹灯在雨中闪烁。”
-  </Card>
-  <Card title="Agent 报告" icon="chart-simple">
-    “为研究报告 Agent 生成视觉插图。”
+  <Card title="图生视频" icon="clapperboard">
+    “以此参考图像为起点，镜头平缓推近并带有视差效果。”
   </Card>
 </CardGroup>
 
-## 核心能力
+## 环境要求
 
-- **Gemini 兼容生成** —— 使用 `POST /v1beta/models/{model}:generateContent`，并选择经过验证的模型（如 `gemini-3.5-flash`）进行原生 Gemini 格式的内容生成。
+- Python 3 和 POSIX shell
+- 环境变量中配置 `AISA_API_KEY`
+
+生成调用根据模型的不同，按每次请求或每个输出从你的 AIsa 余额中计费。各模型类型的具体计费方式请参阅 [AI 模型价格](/zh/guides/pricing#模型)。
+
+## 当前模型与路由
+
+线上网关支持以下多媒体模型。查看 [`GET /v1/models`](/zh/guides/models) 获取当前列表；每个模型均列出了其首选路由。
+
+| 类别 | 模型 | 路由 |
+| --- | --- | --- |
+| 图像 | `seedream-5-0-260128`, `wan2.7-image`, `wan2.7-image-pro`, `gpt-image-2`, `gpt-image-2.5-flare`, `gpt-image-2.5-sunburst` | `POST /v1/images/generations` |
+| 视频 | `wan2.7-t2v`, `wan2.7-i2v`, `wan2.7-r2v` | `POST /v1/video/generations`，随后 `GET /v1/video/generations/{task_id}` |
+
+<Warning>
+该 Skill 内置的客户端目前仍指向较旧的路由和模型 ID。其 `image` 命令支持 Seedream（`--model seedream-5-0-260128`），但它会将 Wan 图像模型发送到 `/v1/chat/completions`（该端点已不再提供图像模型服务），且其 `video-*` 命令调用的是已废弃的视频路由。在该 Skill 更新之前，请通过上述路由生成 Wan 图像与视频，不要通过客户端。
+</Warning>
+
+- **Seedream** 会拒绝低于 3,686,400 像素的图像（例如 `1024×1024`）。请使用如 `1920x1920` 或 `2048x2048` 的尺寸。`wan2.7-image` 支持更小的尺寸。
+- 视频生成是异步的：先创建任务，然后通过 `task_id` 轮询直至完成。
+- `n` 中的每张图像均单独计费。可以在同一请求中添加 `X-AISA-Cost-Mode: quote` 先获取免费报价；详见 [计费与额度](/zh/guides/pricing)。
 
 ## 快速开始
 
+使用该 Skill 的客户端（Seedream）：
+
 ```bash
 export AISA_API_KEY="your-key"
+
+python3 scripts/media_gen_client.py image \
+  --model seedream-5-0-260128 \
+  --prompt "Neo-noir detective portrait, film grain" \
+  --size 2048x2048 \
+  --out out.png
 ```
 
-### Gemini 兼容生成
+任意图像模型，直接通过 HTTP 调用：
 
 ```bash
-curl -X POST "https://api.aisa.one/v1beta/models/gemini-3.5-flash:generateContent" \
-  -H "Authorization: Bearer ***" \
+curl -sS -X POST "https://api.aisa.one/v1/images/generations" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "contents": [
-      {"role": "user", "parts": [{"text": "Return exactly: ok"}]}
-    ],
-    "generationConfig": {"maxOutputTokens": 16}
+    "model": "wan2.7-image-pro",
+    "prompt": "Ultra-detailed product shot of a red panda, studio lighting",
+    "n": 1,
+    "size": "2048x2048"
   }'
 ```
 
-响应遵循 Gemini `GenerateContentResponse` 结构，生成文本位于 `candidates[0].content.parts[0].text`。
-
-## 端点参考
-
-| Endpoint                                                  | 方法 | 用途                                                                                                 |
-| --------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------- |
-| `/v1beta/models/{model}:generateContent`                  | POST   | [Gemini 兼容生成](/api-reference/chat/post_models-model-generatecontent)                                     |
+请求与响应字段详见 [图像生成](/zh/api-reference/chat/post_images-generations)。
 
 ## 开始使用
 
-1. 在 [aisa.one](https://aisa.one) 注册（新账户有 \$1 免费额度）。
-2. 从控制台生成 API key。
-3. `export AISA_API_KEY="your-key"` 并安装技能：
-   ```bash
-   npm install -g @aisa-one/cli
-   aisa skills install media-gen
-   ```
+1. 在 [aisa.one](https://aisa.one) 注册并在控制台中创建 API key。
+2. 在你的 Shell 中设置：`export AISA_API_KEY="your-key"`。
+3. 使用 [安装](#安装) 中的任一命令安装该 Skill，然后启动一个新的智能体会话。
 
 ## 相关
 
-<CardGroup cols={3}>
-  <Card title="Gemini generateContent" icon="google" href="/api-reference/chat/post_models-model-generatecontent">
-    Gemini 兼容生成端点参考。
+<CardGroup cols={2}>
+  <Card title="图像生成" icon="image" href="/zh/api-reference/chat/post_images-generations">
+    兼容 OpenAI 的图像生成端点以及当前支持的图像模型。
+  </Card>
+  <Card title="模型目录" icon="list" href="/zh/guides/models">
+    当前的各模型 ID、模态和路由。
   </Card>
 </CardGroup>

@@ -1,118 +1,78 @@
 ---
-title: "AIsa 快速开始 - 面向 AI Agent 的统一 LLM API"
-description: >-
-  AIsa 统一模型网关快速开始：创建账号、获取 API Key，并用 OpenAI 兼容方式调用实时模型目录。
+title: "获取 API Key 并发起第一次调用"
+sidebarTitle: "API Key 与第一次调用"
+icon: "key"
+description: "创建 AIsa 账户、生成 API key，并用 curl 向模型和数据 API 发起第一次请求。"
 ---
 
-本指南会带你完成第一次 AIsa API 调用。完成后，你可以用一个统一 endpoint 访问 AIsa 的实时模型目录，并继续使用熟悉的 OpenAI 兼容 SDK。
+本页带你从零开始，在几分钟内完成一次可用的请求。全程只需一个 API key 和普通 HTTP。
 
-## 准备工作
+## 1. 创建账户和 key
 
-开始前你需要：
+1. 在 [console.aisa.one](https://console.aisa.one) 使用邮箱、Google 或 GitHub 注册。新账户自带免费额度供测试。
+2. 打开 [API Keys](https://console.aisa.one/api-keys)。系统已为你创建了一个 key，复制即可。Key 以 `sk-` 开头。
+3. 将其存为环境变量，而非写在代码里：
 
-1. 一个 AIsa 账号。
-2. 一个从 AIsa 控制台生成的 API Key。
-3. 基本了解 OpenAI 风格的 Chat Completions API。
-
-新注册账号会获得免费测试额度，可在浏览器里的 Model Playground 或直接通过 REST API 使用。
-
-## 第 1 步：创建账号并获取 API Key
-
-1. 打开 [AIsa 控制台](https://console.aisa.one/) 并注册账号。你可以使用邮箱注册（需先验证邮箱再设置密码），也可以通过 Google 或 GitHub 登录。注册完成后会直接进入控制台。
-
-2. 注册完成后进入 API Keys 页面。系统会为你生成一个可用的 key。请立即复制并安全保存，它会用于后续所有 API 请求和用量计费。
-
-3. 如果需要为不同项目、环境或成员创建独立 key，可以随时回到 API Keys 页面新增。新建或编辑 key 时，可以为它设置 quota（该 key 的消费上限），也可以开启不限额度取消这个上限。
-
-> 注意：key 的 quota 是这个 key 自身的消费上限，不等于账号总余额。实际可用额度取决于 key quota 和钱包余额中较低的一项。共享 key 给不同项目或成员时，这可以避免单个 key 花光全部余额。
-
-推荐的做法是「一个服务或环境一个 key」，例如开发环境用小额度 key、生产环境用大额度 key，这样吊销或轮换任何一个 key 都不会影响其他集成。完整的 key 管理建议见 [身份认证](/zh/guides/authentication)。
-
-API Key 会用于认证所有请求，并直接关联你的用量计费，因此务必妥善保管：不要写进客户端代码，不要提交到公开仓库，也不要放在未加保护的环境变量里。
-
-## 第 2 步：发起第一次 API 请求
-
-AIsa 的统一 endpoint 是：
-
-```text
-https://api.aisa.one/v1
+```bash
+export AISA_API_KEY="sk-..."
 ```
 
-如果你已经在使用 OpenAI SDK，通常只需要替换三个值：
+你可以随时创建更多 key——每个应用或环境一个是个好习惯——并为每个 key 设置消费上限。详见[身份验证](/zh/guides/authentication)。
 
-* `base_url`：指向 AIsa endpoint。
-* `api_key`：使用你的 AIsa API Key。
-* `model`：填写 AIsa 支持的模型 ID。
+## 2. 调用模型
 
-### cURL 示例
-
-```curl
-curl --request POST \
-  --url https://api.aisa.one/v1/chat/completions \
-  --header "Authorization: Bearer ${AISA_API_KEY}" \
-  --header "Content-Type: application/json" \
-  --data '
-{
-  "model": "gpt-5.4-mini",
-  "messages": [
-    {
-      "role": "user",
-      "content": "Explain the concept of an AI gateway in one concise sentence."
-    }
-  ],
-  "stream": false
-}'
+```bash
+curl https://api.aisa.one/v1/chat/completions \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-5.4-mini",
+    "messages": [{"role": "user", "content": "Explain an AI gateway in one sentence."}]
+  }'
 ```
 
-返回结构与 OpenAI Chat Completions 类似，包含 `choices`、生成的 `message` 和用量统计。
+响应遵循 OpenAI Chat Completions 格式：回答位于 `choices[0].message.content`，`usage` 报告被计费的 token 数。将 `model` 替换为[模型目录](/zh/guides/models)中的任意 ID——`claude-haiku-4-5-20251001`、`deepseek-v4.1-flash`、`gemini-3.5-flash`——无需改动其他任何内容。
 
-## 第 3 步：使用官方 SDK
+<Note>
+  始终在带有 JSON body 的请求中发送 `Content-Type: application/json`；缺少该 header 会导致请求被拒绝。
+</Note>
 
-AIsa 兼容 OpenAI SDK，因此不需要额外安装专用客户端。
+## 3. 调用数据 API
 
-```python
-import os
-from openai import OpenAI
+数据 API 位于 `https://api.aisa.one/apis/v1`，使用同一个 API key。例如，执行一次网页搜索：
 
-client = OpenAI(
-    api_key=os.environ["AISA_API_KEY"],
-    base_url="https://api.aisa.one/v1"
-)
-
-response = client.chat.completions.create(
-    model="gpt-5.4-mini",
-    messages=[
-        {"role": "user", "content": "Explain the concept of an AI gateway in one concise sentence."}
-    ],
-    stream=False
-)
-
-print(response.choices[0].message.content)
+```bash
+curl https://api.aisa.one/apis/v1/tavily/search \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "latest developments in AI agents"}'
 ```
 
-```typescript
-import OpenAI from "openai";
+浏览 [API 参考](/zh/api-reference)查看完整端点列表（金融、社交、搜索、SEO 等），每个端点都附有交互式 playground。数据 API 调用会产生费用：部分端点按次收取固定费用，其余则根据请求返回的内容按量计费。详见[计费与额度](/zh/guides/pricing)了解报价和消费上限。
 
-const client = new OpenAI({
-  apiKey: process.env.AISA_API_KEY,
-  baseURL: "https://api.aisa.one/v1",
-});
+## 4. 查看消费情况
 
-async function main() {
-  const response = await client.chat.completions.create({
-    model: "gpt-5.4-mini",
-    messages: [
-      { role: "user", content: "Explain the concept of an AI gateway in one concise sentence." }
-    ],
-    stream: false,
-  });
+每次调用都会出现在 [控制台 → Usage & Logs](https://console.aisa.one/logs) 中，包含端点、模型、token 数和费用。若要通过代码读取相同的汇总数据：
 
-  console.log(response.choices[0].message.content);
-}
-
-main();
+```bash
+curl --get https://api.aisa.one/v1/usage \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  --data-urlencode "start_time=$(($(date +%s) - 86400))"
 ```
 
-## 下一步
+## 后续步骤
 
-完成基础调用后，可以继续查看 [身份认证](/zh/guides/authentication)、[模型目录](/zh/guides/models) 或 [API 参考](/zh/api-reference)。
+<CardGroup cols={2}>
+  <Card title="OpenAI / Anthropic SDK" icon="arrows-rotate" href="/zh/get-started/sdk-compatibility">
+    只需更改 base URL 和 key，即可使用你现有的 SDK。
+  </Card>
+  <Card title="连接你的智能体" icon="plug" href="/zh/agent-quickstart">
+    通过 MCP 将 AIsa 作为工具接入 Claude Code、Codex 或 Cursor。
+  </Card>
+  <Card title="计费与额度" icon="credit-card" href="/zh/guides/pricing">
+    token 和调用如何计费、报价与消费上限。
+  </Card>
+  <Card title="控制台" icon="gauge-high" href="/zh/guides/dashboard/overview">
+    余额、key、playground 和逐请求日志。
+  </Card>
+</CardGroup>

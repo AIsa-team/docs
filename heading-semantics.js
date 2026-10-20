@@ -24,7 +24,9 @@
     var text = normalizedText(heading);
     if (text === "Documentation Index") return true;
     if (text === "Related" && heading.id === "related") return true;
-    if (text === "On this page") return true;
+    // zh pages: Mintlify keeps "Documentation Index" in English but localizes the TOC label.
+    if ((text === "相关" || text === "相关页面") && heading.id === text) return true;
+    if (text === "On this page" || text === "在此页面") return true;
 
     return Boolean(heading.closest(GENERATED_HEADING_SELECTOR));
   }
