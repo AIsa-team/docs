@@ -7,7 +7,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from public_surface_checks import (DISCOVERY_PAGE_RULES, RETIRED_PROVIDER_SLUGS, UNKNOWN_PROVIDER_SLUG,
                                    WEBSITE_LLMS_RULE_CONFLICTS, check_provider_pages, check_surfaces,
                                    check_website_surfaces, compare_discovery_page, compare_mcp_page,
-                                   compare_sales_catalog, fixed_sales_catalog, mcp_page_prices, page_text)
+                                   compare_sales_catalog, fixed_sales_catalog, fully_disabled_providers,
+                                   mcp_page_prices, page_text)
 
 
 def page(title, body=''):
@@ -301,6 +302,31 @@ class WebsiteSurfaceChecks(unittest.TestCase):
         result = check_surfaces({'info': {}}, digest, {self.ref},
             read_bytes=lambda name, url: payloads[name], expected_requests={})
         self.assertFalse([error for error in result['mismatches'] if error.startswith('website-llms:')])
+        # The current guide's verify line (credits balance, "returns 200 with the balance") is not a conflict.
+        payloads['website-llms'] = llms.replace(
+            b'`GET https://api.aisa.one/v1/models` with the Bearer header returns 200.',
+            b'`GET https://api.aisa.one/v1/credits/balance` with the Bearer header returns 200 with the balance. '
+            b'`GET /v1/models` is only a transport check.')
+        result = check_surfaces({'info': {}}, digest, {self.ref},
+            read_bytes=lambda name, url: payloads[name], expected_requests={})
+        self.assertNotIn('website-llms:http_verification_rule_conflict', result['mismatches'])
+        for variant in (b'- HTTP (D): GET /v1/models with the Bearer header returns 200.\n',
+                        b'- HTTP (D): `GET https://api.aisa.one/v1/models/` with the bearer header returns 200.\n'):
+            payloads['website-llms'] = llms + variant
+            result = check_surfaces({'info': {}}, digest, {self.ref},
+                read_bytes=lambda name, url: payloads[name], expected_requests={})
+            self.assertIn('website-llms:http_verification_rule_conflict', result['mismatches'])
+
+    def test_fully_disabled_providers_need_no_website_page(self):
+        spec = {'paths': {
+            '/off/a': {'post': {'x-aisa-provider': 'off', 'x-aisa-status': 'disabled'}},
+            '/off/b': {'get': {'x-aisa-provider': 'off', 'x-aisa-status': 'disabled'}},
+            '/mixed/a': {'get': {'x-aisa-provider': 'mixed', 'x-aisa-status': 'disabled'},
+                         'post': {'x-aisa-provider': 'mixed'}},
+            '/on/a': {'get': {'x-aisa-registry-provider': 'on'}},
+        }}
+        self.assertEqual(fully_disabled_providers(spec), {'off'})
+        self.assertEqual(fully_disabled_providers({'info': {}}), set())
 
 
 if __name__ == '__main__':

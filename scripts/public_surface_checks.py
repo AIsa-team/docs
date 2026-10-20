@@ -39,8 +39,10 @@ PROVIDER_PAGE_ORIGIN = 'https://aisa.one'
 # access") and the Errors page table (no key: 402 MPP challenge / 404 / 401
 # missing_api_key by route; invalid key: 401). Presence is a mismatch.
 WEBSITE_LLMS_RULE_CONFLICTS = {
-    'http_verification_rule_conflict': 'with the Bearer header returns 200',
-    'no_credential_error_rule_conflict': '`401`: not signed in or invalid key',
+    # Only the old /v1/models claim conflicts; the current guide verifies on
+    # `/v1/credits/balance` and may say that call "returns 200 with the balance".
+    'http_verification_rule_conflict': re.compile(r'/v1/models\S*\s+with the Bearer header returns 200', re.I),
+    'no_credential_error_rule_conflict': re.compile(re.escape('`401`: not signed in or invalid key')),
 }
 # Agent Discovery page (string presence/absence on the rendered Markdown body,
 # after the generated `>` header block). Matched case-insensitively.
@@ -277,7 +279,7 @@ def check_surfaces(spec, expected_hash, accepted_refs, *, read_bytes, expected_r
                     mismatches.append(name + ':formal_version_missing')
                 if 'https://aisa.one/openapi.json' not in text or not any('/' + ref + '/openapi.yaml' in text for ref in accepted_refs):
                     mismatches.append(name + ':versioned_schema_links_missing')
-                mismatches.extend(name + ':' + code for code, needle in WEBSITE_LLMS_RULE_CONFLICTS.items() if needle in text)
+                mismatches.extend(name + ':' + code for code, pattern in WEBSITE_LLMS_RULE_CONFLICTS.items() if pattern.search(text))
             elif name == 'docs-llms':
                 if expected_hash not in text:
                     mismatches.append(name + ':formal_version_missing')
@@ -332,6 +334,21 @@ def fixed_sales_catalog(root, ref):
         raise ValueError('Expected publication has no contract release')
     return {'docs_ref': ref, 'contract_release': release, 'provider_counts': counts,
             'sha256': hashlib.sha256(raw).hexdigest()}
+
+
+def fully_disabled_providers(spec):
+    """Provider ids whose operations in the aggregate are all `x-aisa-status: disabled`."""
+    states = {}
+    for item in (spec.get('paths') or {}).values():
+        if not isinstance(item, dict):
+            continue
+        for method, operation in item.items():
+            if method not in ('get', 'post', 'put', 'patch', 'delete', 'head', 'options') or not isinstance(operation, dict):
+                continue
+            provider = operation.get('x-aisa-provider') or operation.get('x-aisa-registry-provider')
+            if isinstance(provider, str):
+                states.setdefault(provider, set()).add(operation.get('x-aisa-status') == 'disabled')
+    return {provider for provider, disabled in states.items() if disabled == {True}}
 
 
 def html_title(raw):
@@ -553,6 +570,10 @@ def check_website_surfaces(spec, accepted_refs, *, read_bytes, read_page, expect
         missing.append('website-sales-catalog:unavailable:' + type(exc).__name__)
     providers = spec.get('info', {}).get('x-aisa-document', {}).get('providers', {})
     provider_ids = {name for name, metadata in providers.items() if isinstance(metadata, dict) and metadata.get('document_hash')}
+    # A provider whose every published operation is disabled is not sold and has
+    # no website page (the sales view leaves it out); requiring one would fail a
+    # correct 404. Providers with no operation in the aggregate keep the check.
+    provider_ids -= fully_disabled_providers(spec)
     if sales is not None:
         provider_ids.update(row['id'] for row in sales['providers'] if isinstance(row, dict) and isinstance(row.get('id'), str))
     if not provider_ids:
