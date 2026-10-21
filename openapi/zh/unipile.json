@@ -1,0 +1,1012 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Unipile LinkedIn API",
+    "version": "1.0.0",
+    "description": "LinkedIn data and messaging through your connected accounts: profiles, companies, chats, posts, network, structured search, and Recruiter job-slot credits. Bring your own LinkedIn account (connect once through the hosted authorization link), then read and act through one AIsa credential."
+  },
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Accounts",
+      "description": "Connected-account discovery and binding liveness."
+    },
+    {
+      "name": "Profiles",
+      "description": "Member and company profiles."
+    },
+    {
+      "name": "Messaging",
+      "description": "Conversations, messages, and attachments."
+    },
+    {
+      "name": "Posts",
+      "description": "Member posts and their comments."
+    },
+    {
+      "name": "Network",
+      "description": "Connections and invitations."
+    },
+    {
+      "name": "Search",
+      "description": "Structured LinkedIn search and its parameter helper."
+    },
+    {
+      "name": "Recruiter",
+      "description": "Recruiter contract quota endpoints."
+    }
+  ],
+  "paths": {
+    "/apis/v1/unipile/accounts": {
+      "get": {
+        "operationId": "get_unipile_accounts",
+        "summary": "List Connected Accounts",
+        "description": "Lists every LinkedIn account hosted on AIsa's Unipile tenant. Use it to discover `account_id` values (the `DA…` identifiers) required by every other endpoint, and as a liveness probe for your binding.",
+        "tags": [
+          "Accounts"
+        ],
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "description": "Filter by provider type. Omit or pass `linkedin`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "linkedin"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "AccountList"
+                      ]
+                    },
+                    "accounts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/me": {
+      "get": {
+        "operationId": "get_unipile_linkedin_me",
+        "summary": "Own Profile",
+        "description": "Returns the AccountOwnerProfile of the connected LinkedIn account: name, headline, premium status, organizations, and contact details. Requires `account_id` as a query parameter. $0.005 per request.",
+        "tags": [
+          "Profiles"
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "description": "Connected account id from List Connected Accounts (`DA…`).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "AccountOwnerProfile"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/users/{identifier}": {
+      "get": {
+        "operationId": "get_unipile_linkedin_user",
+        "summary": "User Profile",
+        "description": "Fetch a UserProfile by Unipile internal id or public identifier (e.g. `acme-ceo`). Public identifiers resolve through the classic API only. Optional `linkedin_sections` returns detailed sections — heavy section use is throttled by LinkedIn. $0.01 per request.",
+        "tags": [
+          "Profiles"
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "description": "Member internal id or public identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "description": "Connected account id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "linkedin_sections",
+            "in": "query",
+            "required": false,
+            "description": "Comma-separated detail sections (throttled by LinkedIn).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "UserProfile"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/company/profile": {
+      "get": {
+        "operationId": "get_unipile_linkedin_company",
+        "summary": "Company Profile",
+        "description": "Fetch a CompanyProfile (industry, headcount, description, and more) by company identifier. Numeric company ids are verified working; public identifiers such as `microsoft` follow the same upstream contract. $0.01 per request.",
+        "tags": [
+          "Profiles"
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "description": "Connected account id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "identifier",
+            "in": "query",
+            "required": true,
+            "description": "Company identifier (numeric id verified; public identifier per upstream docs).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "CompanyProfile"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/chats": {
+      "get": {
+        "operationId": "get_unipile_linkedin_chats",
+        "summary": "List Chats",
+        "description": "Returns a ChatList with cursor pagination. Right after connecting an account, the first upstream sync may still be running — recent conversations can take a few minutes to appear. $0.005 per request.",
+        "tags": [
+          "Messaging"
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "description": "Connected account id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Pagination cursor from a previous page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "ChatList"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/chats/{chat_id}/messages": {
+      "get": {
+        "operationId": "get_unipile_linkedin_chat_messages",
+        "summary": "Chat Messages",
+        "description": "Returns a MessageList for the given chat_id with cursor pagination. Message objects embed attachments, reactions, and read receipts inline. $0.005 per request.",
+        "tags": [
+          "Messaging"
+        ],
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "description": "Conversation id from List Chats.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "description": "Connected account id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "MessageList"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/messages/{message_id}/attachments/{attachment_id}": {
+      "get": {
+        "operationId": "get_unipile_linkedin_attachment",
+        "summary": "Download Attachment",
+        "description": "Streams the binary content of a message attachment. Take `message_id` and `attachment_id` from the `attachments[]` array inside message objects returned by Chat Messages. $0.005 per request.",
+        "tags": [
+          "Messaging"
+        ],
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "description": "Message id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "required": true,
+            "description": "Attachment id from the message's attachments array.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "description": "Connected account id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/users/{user_id}/posts": {
+      "get": {
+        "operationId": "get_unipile_linkedin_user_posts",
+        "summary": "User Posts",
+        "description": "Returns a PostList for the given user with cursor pagination. $0.01 per request.",
+        "tags": [
+          "Posts"
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "description": "Member id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "description": "Connected account id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "PostList"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/posts/{post_id}": {
+      "get": {
+        "operationId": "get_unipile_linkedin_post",
+        "summary": "Post Detail",
+        "description": "Fetch one post by its id (activity URN form). $0.005 per request.",
+        "tags": [
+          "Posts"
+        ],
+        "parameters": [
+          {
+            "name": "post_id",
+            "in": "path",
+            "required": true,
+            "description": "Post id (activity URN).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "description": "Connected account id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "Post"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/posts/{post_id}/comments": {
+      "get": {
+        "operationId": "get_unipile_linkedin_post_comments",
+        "summary": "Post Comments",
+        "description": "Returns the comment thread of a post by post_id. $0.005 per request.",
+        "tags": [
+          "Posts"
+        ],
+        "parameters": [
+          {
+            "name": "post_id",
+            "in": "path",
+            "required": true,
+            "description": "Post id (activity URN).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "description": "Connected account id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "CommentList"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/relations": {
+      "get": {
+        "operationId": "get_unipile_linkedin_relations",
+        "summary": "Relations",
+        "description": "Returns a UserRelationsList with cursor pagination. A freshly connected account may show an empty list until the initial upstream sync completes. $0.005 per request.",
+        "tags": [
+          "Network"
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "description": "Connected account id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "UserRelationsList"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/invitations/sent": {
+      "get": {
+        "operationId": "get_unipile_linkedin_invitations_sent",
+        "summary": "Invitations Sent",
+        "description": "Returns an InvitationList of InvitationSent entries with cursor pagination. $0.005 per request.",
+        "tags": [
+          "Network"
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "description": "Connected account id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "InvitationList"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/invitations/received": {
+      "get": {
+        "operationId": "get_unipile_linkedin_invitations_received",
+        "summary": "Invitations Received",
+        "description": "Returns an InvitationList of InvitationReceived entries with cursor pagination. $0.005 per request.",
+        "tags": [
+          "Network"
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "description": "Connected account id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "InvitationList"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/search/parameters": {
+      "get": {
+        "operationId": "get_unipile_linkedin_search_parameters",
+        "summary": "Search Parameters",
+        "description": "Maps human keywords (locations, industries, …) to the filter ids that LinkedIn Search expects. This helper endpoint is free of charge.",
+        "tags": [
+          "Search"
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "description": "Connected account id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "description": "Filter facet type, e.g. `LOCATION`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "keywords",
+            "in": "query",
+            "required": true,
+            "description": "Keywords to resolve.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Max results.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "LinkedinSearchParametersList"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/search": {
+      "post": {
+        "operationId": "post_unipile_linkedin_search",
+        "summary": "LinkedIn Search",
+        "description": "Executes a LinkedIn search with structured filters (`api`, `category`, `keywords`, optional `parameters[]` ids from Search Parameters). Returns ranked results. People search via the classic API is verified in production. $0.02 per request.",
+        "tags": [
+          "Search"
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "description": "Connected account id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "LinkedinSearchResponse"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "api",
+                  "category",
+                  "keywords"
+                ],
+                "properties": {
+                  "api": {
+                    "type": "string",
+                    "description": "Search API flavor.",
+                    "enum": [
+                      "classic",
+                      "smart"
+                    ]
+                  },
+                  "category": {
+                    "type": "string",
+                    "description": "Search category.",
+                    "enum": [
+                      "people",
+                      "companies",
+                      "jobs"
+                    ]
+                  },
+                  "keywords": {
+                    "type": "string",
+                    "description": "Free-text query."
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "description": "Max results."
+                  },
+                  "parameters": {
+                    "type": "array",
+                    "description": "Structured filter objects from Search Parameters.",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/recruiter/job-slots-credits/{account_id}": {
+      "get": {
+        "operationId": "get_unipile_linkedin_job_slots_credits",
+        "summary": "Recruiter Job Slots Credits",
+        "description": "Returns total / used / available job-slot credits for the LinkedIn Recruiter contract attached to a connected Recruiter account. Behind the scenes this proxies the upstream v2 endpoint `GET /v2/{account_id}/linkedin/recruiter/job-slots-credits`; on AIsa the account id rides in the request path. $0.005 per request.",
+        "tags": [
+          "Recruiter"
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "description": "Connected Recruiter account id (`DA…`).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "JobSlotsCredits"
+                      ]
+                    },
+                    "total": {
+                      "type": "number",
+                      "description": "Total job slots in the Recruiter contract."
+                    },
+                    "used": {
+                      "type": "number",
+                      "description": "Job slots currently in use."
+                    },
+                    "available": {
+                      "type": "number",
+                      "description": "Job slots still available."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
