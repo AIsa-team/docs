@@ -102,6 +102,107 @@
         }
       }
     },
+    "/apis/v1/unipile/hosted/link": {
+      "post": {
+        "operationId": "post_unipile_apis_v1_unipile_hosted_link",
+        "summary": "Hosted Auth Link",
+        "description": "Returns a HostedAuthUrl that you send the end user to. They complete the LinkedIn sign-in on Unipile's hosted page, so no credentials ever touch your system. When the flow finishes your `notify_url` receives the new `account_id`, which is what every other endpoint needs. Generate a fresh link per attempt: links also expire on Unipile's daily restart regardless of `expiresOn`. $0.000001 per request.",
+        "tags": [
+          "Accounts"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "HostedAuthUrl"
+                      ]
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "Hosted authorization URL to send the user to."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "providers",
+                  "api_url"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "`create` connects a new account, `reconnect` re-authenticates an existing one.",
+                    "enum": [
+                      "create",
+                      "reconnect"
+                    ]
+                  },
+                  "providers": {
+                    "type": "array",
+                    "description": "Provider list, for example `[\"LINKEDIN\"]`.",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "api_url": {
+                    "type": "string",
+                    "description": "Your Unipile server URL, for example `https://{subdomain}.unipile.com:{port}`."
+                  },
+                  "expiresOn": {
+                    "type": "string",
+                    "description": "ISO 8601 UTC expiry, for example `2026-12-31T23:59:59.999Z`."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Label echoed back in events so you can match the account to your own user."
+                  },
+                  "notify_url": {
+                    "type": "string",
+                    "description": "Callback notified once the connection completes."
+                  },
+                  "success_redirect_url": {
+                    "type": "string",
+                    "description": "Browser redirect after a successful connection."
+                  },
+                  "failure_redirect_url": {
+                    "type": "string",
+                    "description": "Browser redirect after a failed connection."
+                  },
+                  "reconnect_account": {
+                    "type": "string",
+                    "description": "Account id to re-authenticate. Required when `type` is `reconnect`."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/apis/v1/unipile/linkedin/me": {
       "get": {
         "operationId": "get_unipile_linkedin_me",
@@ -449,6 +550,217 @@
           },
           "402": {
             "description": "Insufficient balance."
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/chats/{chat_id}/messages/send": {
+      "post": {
+        "operationId": "post_unipile_linkedin_send_message",
+        "summary": "Send Message",
+        "description": "Sends a text message into an existing chat. Write action: LinkedIn applies daily messaging limits of roughly 100-150 messages per account, and the recipient must already share a conversation with you. Use Start Chat to reach someone you have no conversation with yet. $0.02 per request.",
+        "tags": [
+          "Messaging"
+        ],
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "description": "Conversation id from List Chats.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "MessageSent"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "account_id",
+                  "text"
+                ],
+                "properties": {
+                  "account_id": {
+                    "type": "string",
+                    "description": "Connected account id the message is sent from."
+                  },
+                  "text": {
+                    "type": "string",
+                    "description": "Message body."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/chats/send": {
+      "post": {
+        "operationId": "post_unipile_linkedin_start_chat",
+        "summary": "Start Chat",
+        "description": "Creates a LinkedIn conversation with one or more members and sends the opening message in a single call. Write action: same daily messaging limits as Send Message. Pass each recipient's provider id (`ACoAA…`), which you can resolve from a public identifier with the User Profile endpoint. $0.02 per request.",
+        "tags": [
+          "Messaging"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "MessageSent"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "account_id",
+                  "attendees_ids",
+                  "text"
+                ],
+                "properties": {
+                  "account_id": {
+                    "type": "string",
+                    "description": "Connected account id the message is sent from."
+                  },
+                  "attendees_ids": {
+                    "type": "array",
+                    "description": "Provider ids (`ACoAA…`) of the recipients.",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "text": {
+                    "type": "string",
+                    "description": "Opening message body."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/messages/{message_id}/reaction": {
+      "post": {
+        "operationId": "post_unipile_linkedin_reaction",
+        "summary": "Message Reaction",
+        "description": "Adds an emoji reaction to an existing message. Write action: counts toward the account's engagement limits. $0.02 per request.",
+        "tags": [
+          "Messaging"
+        ],
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "description": "Message id to react to.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "MessageReaction"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "account_id",
+                  "reaction"
+                ],
+                "properties": {
+                  "account_id": {
+                    "type": "string",
+                    "description": "Connected account id."
+                  },
+                  "reaction": {
+                    "type": "string",
+                    "description": "Native emoji to react with, for example a thumbs-up."
+                  }
+                }
+              }
+            }
           }
         }
       }
