@@ -933,6 +933,219 @@
         }
       }
     },
+    "/apis/v1/unipile/linkedin/posts": {
+      "post": {
+        "operationId": "post_unipile_linkedin_create_post",
+        "summary": "Create Post",
+        "description": "Publishes a post as the connected account. Write action, and the result is publicly visible on LinkedIn, so treat it as irreversible. The request must be `multipart/form-data`: a JSON body is rejected while upstream parses attachments. Add an image with `-F \"attachments=@image.jpg\"`, mention someone by putting `{{0}}` in the text and passing `mentions[0][profile_id]` / `mentions[0][name]`, or post on behalf of a company you administer by passing `as_organization` with the company id. $0.02 per request.",
+        "tags": [
+          "Posts"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "PostCreated"
+                      ]
+                    },
+                    "post_id": {
+                      "type": "string",
+                      "description": "Id of the published post."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "account_id",
+                  "text"
+                ],
+                "properties": {
+                  "account_id": {
+                    "type": "string",
+                    "description": "Connected account id the post is published from."
+                  },
+                  "text": {
+                    "type": "string",
+                    "description": "Post body. Use `{{0}}` placeholders to reference entries of the `mentions` array."
+                  },
+                  "attachments": {
+                    "type": "array",
+                    "description": "Files to attach, one `-F \"attachments=@file\"` per file. Either several images or a single file of another type; images are capped at 6012x6012 px.",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  },
+                  "external_link": {
+                    "type": "string",
+                    "description": "URL rendered as a preview card. Must also appear in `text` or it is appended automatically."
+                  },
+                  "as_organization": {
+                    "type": "string",
+                    "description": "Company id to publish on behalf of. Your account must administer that company page."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/posts/{post_id}/comments/send": {
+      "post": {
+        "operationId": "post_unipile_linkedin_post_comment",
+        "summary": "Post Comment",
+        "description": "Posts a comment on an existing post. Write action: the comment is publicly visible. `text` is capped at 1250 characters. $0.02 per request.",
+        "tags": [
+          "Posts"
+        ],
+        "parameters": [
+          {
+            "name": "post_id",
+            "in": "path",
+            "required": true,
+            "description": "Post id to comment on (activity URN).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "CommentCreated"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "account_id",
+                  "text"
+                ],
+                "properties": {
+                  "account_id": {
+                    "type": "string",
+                    "description": "Connected account id the comment is posted from."
+                  },
+                  "text": {
+                    "type": "string",
+                    "description": "Comment body, at most 1250 characters."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apis/v1/unipile/linkedin/posts/reaction/send": {
+      "post": {
+        "operationId": "post_unipile_linkedin_post_reaction",
+        "summary": "Post Reaction",
+        "description": "Adds a reaction (like) to an existing post. Write action: the reaction is publicly visible. Pass the post's `social_id` as `post_id` — take it from the Post Detail or User Posts response, because the id visible in a LinkedIn post URL does not always resolve. $0.02 per request.",
+        "tags": [
+          "Posts"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "PostReaction"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key."
+          },
+          "402": {
+            "description": "Insufficient balance."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "account_id",
+                  "post_id"
+                ],
+                "properties": {
+                  "account_id": {
+                    "type": "string",
+                    "description": "Connected account id."
+                  },
+                  "post_id": {
+                    "type": "string",
+                    "description": "`social_id` of the post to react to, not the id from its URL."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/apis/v1/unipile/linkedin/relations": {
       "get": {
         "operationId": "get_unipile_linkedin_relations",
