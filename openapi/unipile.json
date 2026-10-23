@@ -46,67 +46,11 @@
     }
   ],
   "paths": {
-    "/apis/v1/unipile/accounts": {
-      "get": {
-        "operationId": "get_unipile_accounts",
-        "summary": "List Connected Accounts",
-        "description": "Lists every LinkedIn account hosted on AIsa's Unipile tenant. Use it to discover `account_id` values (the `DA…` identifiers) required by every other endpoint, and as a liveness probe for your binding.",
-        "tags": [
-          "Accounts"
-        ],
-        "parameters": [
-          {
-            "name": "provider",
-            "in": "query",
-            "required": false,
-            "description": "Filter by provider type. Omit or pass `linkedin`.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "linkedin"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "object": {
-                      "type": "string",
-                      "enum": [
-                        "AccountList"
-                      ]
-                    },
-                    "accounts": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key."
-          },
-          "402": {
-            "description": "Insufficient balance."
-          }
-        }
-      }
-    },
     "/apis/v1/unipile/hosted/link": {
       "post": {
         "operationId": "post_unipile_apis_v1_unipile_hosted_link",
         "summary": "Hosted Auth Link",
-        "description": "Returns a HostedAuthUrl that you send the end user to. They complete the LinkedIn sign-in on Unipile's hosted page, so no credentials ever touch your system. When the flow finishes your `notify_url` receives the new `account_id`, which is what every other endpoint needs. Links expire on Unipile's daily restart regardless of `expiresOn`, so generate a fresh link each time a user wants to connect. $0.000001 per request.",
+        "description": "Returns a HostedAuthUrl that you send the end user to. They complete the LinkedIn sign-in on Unipile's hosted page, so no credentials ever touch your system. When the flow completes, Unipile POSTs to your `notify_url` the event `{\"status\":\"CREATION_SUCCESS\",\"account_id\":\"DA…\",\"name\":\"…\"}` — store that account_id, it is the identifier every other endpoint requires, and there is intentionally no listing endpoint to re-discover it. The `name` you set here is echoed back, so use it to map the account to your own user. Reply 200 within 30 seconds or the event is retried five times; consider verifying a shared-secret header on your endpoint. Links expire on Unipile's daily restart regardless of `expiresOn`, so generate a fresh link each time a user wants to connect. $0.000001 per request.",
         "tags": [
           "Accounts"
         ],
@@ -228,7 +172,7 @@
             "name": "account_id",
             "in": "query",
             "required": true,
-            "description": "Connected account id from List Connected Accounts (`DA…`).",
+            "description": "Connected account id delivered to your `notify_url` webhook by Hosted Auth Link (`DA…`).",
             "schema": {
               "type": "string"
             }
