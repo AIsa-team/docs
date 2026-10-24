@@ -134,7 +134,9 @@ class CompositionTests(unittest.TestCase):
         schema = operation(document)["requestBody"]["content"]["application/json"]["schema"]
         self.assertNotIn("allOf", schema)
         self.assertEqual(schema["properties"]["limit"], {"type": "integer", "maximum": 5})
-        self.assertEqual(schema["required"], ["email"])
+        # The Runtime bounds limit but does not require it; the provider still does.
+        self.assertEqual(schema["required"], ["email", "limit"])
+        self.assertEqual(operation(document)["x-aisa-provider-required"], ["body:limit"])
         self.assertIn("email", schema["properties"])
 
     def test_query_policy_does_not_expose_rejected_or_ignored_parameters(self):
@@ -182,7 +184,48 @@ class CompositionTests(unittest.TestCase):
         self.assertFalse(pending)
         schema = operation(document)["requestBody"]["content"]["application/json"]["schema"]["properties"]["options"]
         self.assertEqual(schema["properties"], {"limit": {"type": "integer"}, "country": {"type": "string"}})
-        self.assertEqual(schema["required"], ["country"])
+        self.assertEqual(schema["required"], ["country", "limit"])
+        self.assertEqual(operation(document)["x-aisa-provider-required"], ["body:options.limit"])
+
+    def test_provider_required_inputs_stay_required_where_runtime_does_not_validate_them(self):
+        for validation in ("provider", "mixed"):
+            with self.subTest(validation=validation):
+                runtime, upstream = facts(validation), mirror()
+                operation(upstream)["parameters"].append({"in": "query", "name": "userName", "required": True, "schema": {"type": "string"}})
+                operation(runtime)["parameters"].append({"in": "query", "name": "userName", "required": False, "schema": {"type": "string"}})
+                document, pending = compose(runtime, upstream)
+                self.assertFalse(pending)
+                op = operation(document)
+                self.assertTrue(next(p for p in op["parameters"] if p["name"] == "userName")["required"])
+                self.assertEqual(op["x-aisa-provider-required"], ["query:userName"])
+
+    def test_runtime_default_or_cross_field_rule_keeps_provider_input_optional(self):
+        for change in ("default", "required_any_of", "conditional"):
+            with self.subTest(change=change):
+                runtime, upstream = facts("mixed"), mirror()
+                operation(upstream)["parameters"].append({"in": "query", "name": "userName", "required": True, "schema": {"type": "string"}})
+                declared = {"in": "query", "name": "userName", "required": False, "schema": {"type": "string"}}
+                if change == "default":
+                    declared["schema"]["default"] = "aisa"
+                elif change == "required_any_of":
+                    operation(runtime)["x-aisa-constraints"] = {"required_any_of": [["userName", "userId"]]}
+                else:
+                    operation(runtime)["x-aisa-constraints"] = {"conditional_requirements": [
+                        {"if": {"name": "mode", "in": "query", "selector": "mode"},
+                         "then": [{"name": "userName", "in": "query", "selector": "userName"}]}]}
+                operation(runtime)["parameters"].append(declared)
+                document, pending = compose(runtime, upstream)
+                self.assertFalse(pending)
+                op = operation(document)
+                self.assertFalse(next(p for p in op["parameters"] if p["name"] == "userName").get("required"))
+                self.assertNotIn("x-aisa-provider-required", op)
+
+    def test_runtime_validated_contract_keeps_its_own_requiredness(self):
+        runtime = facts("runtime")
+        operation(runtime)["parameters"].append({"in": "query", "name": "userName", "required": False, "schema": {"type": "string"}})
+        document, pending = compose(runtime, mirror())
+        self.assertFalse(pending)
+        self.assertNotIn("x-aisa-provider-required", operation(document))
 
     def test_unsupported_upstream_is_pending(self):
         for ref in ("https://provider.example/schema.json", "#/components/schemas/Missing"):

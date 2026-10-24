@@ -599,14 +599,54 @@ def retain_provider_parameter_guidance(parameter: dict, source: dict) -> dict:
     return result
 
 
-def merge_object(upstream: dict, declared: dict) -> dict:
+def provider_required(source_required: bool, declared: dict, schema: dict, name: str, constrained: set) -> bool:
+    """Whether a provider-required field the Runtime declares as optional stays required.
+
+    The Runtime marks a field required only where it validates it. Under provider
+    or mixed validation the provider still rejects a call without it, so callers
+    must send it, unless the Runtime supplies a default or governs it with a
+    cross-field rule (required_any_of, conditional requirements).
+    """
+    return (source_required and not declared.get("required") is True
+            and "default" not in (schema if isinstance(schema, dict) else {})
+            and name not in constrained)
+
+
+def constrained_names(runtime: dict) -> set:
+    """Field names the Runtime's cross-field constraints refer to."""
+    names = set()
+
+    def visit(node, in_group=False):
+        if isinstance(node, dict):
+            names.update(node[key] for key in ("name", "selector") if isinstance(node.get(key), str))
+            for key, value in node.items():
+                visit(value, in_group or key == "required_any_of")
+        elif isinstance(node, list):
+            for value in node:
+                visit(value, in_group)
+        elif in_group and isinstance(node, str):
+            names.add(node)
+    constraints = runtime.get("x-aisa-constraints", {})
+    for key, value in (constraints.items() if isinstance(constraints, dict) else ()):
+        if key != "notes":
+            visit({key: value})
+    return names
+
+
+def merge_object(upstream: dict, declared: dict, constrained: set = frozenset(), kept: list | None = None,
+                 prefix: str = "") -> dict:
     merged = flatten_object(upstream)
     names = set(declared.get("properties", {}))
-    required = (set(merged.get("required", [])) - names) | set(declared.get("required", []))
+    source_required = set(merged.get("required", []))
+    required = (source_required - names) | set(declared.get("required", []))
     for name, value in declared.get("properties", {}).items():
+        if name not in required and provider_required(name in source_required, {}, value, prefix + name, constrained):
+            required.add(name)
+            if kept is not None:
+                kept.append(prefix + name)
         original = merged.setdefault("properties", {}).get(name, {})
         if value.get("properties") and isinstance(original, dict) and original.get("type", "object") == "object":
-            merged["properties"][name] = merge_object(original, value)
+            merged["properties"][name] = merge_object(original, value, constrained, kept, prefix + name + ".")
         elif (value.get("type") == "array" and value.get("items") == {}
               and isinstance(original, dict) and original.get("type") == "array"
               and isinstance(original.get("items"), dict)):
@@ -625,7 +665,7 @@ def merge_object(upstream: dict, declared: dict) -> dict:
     return merged
 
 
-def merge_body(upstream: dict, runtime: dict) -> dict:
+def merge_body(upstream: dict, runtime: dict, constrained: set = frozenset(), kept: list | None = None) -> dict:
     if not runtime:
         return copy.deepcopy(upstream)
     if not upstream:
@@ -639,7 +679,7 @@ def merge_body(upstream: dict, runtime: dict) -> dict:
         declared = contract.get("schema", {})
         if not declared.get("properties"):
             continue
-        original["schema"] = merge_object(original.get("schema", {}), declared)
+        original["schema"] = merge_object(original.get("schema", {}), declared, constrained, kept)
         # Upstream request examples describe the complete body. Runtime examples
         # only cover declared fields and must not replace the complete example.
     return result
@@ -953,17 +993,31 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             and not (p.get("in") == "header" and p.get("name", "").lower() in server_auth)
                             and (p.get("in") != "query" or query_passthrough or (p["in"], p["name"]) in runtime_fields)
                         }
+                        constrained = constrained_names(runtime)
+                        # Provider-required inputs the Runtime declares optional but does not validate.
+                        kept_required = []
                         for parameter in runtime.get("parameters", []):
                             key = (parameter["in"], parameter["name"])
                             original = parameters.get(key, {})
                             merged = retain_source_annotations(parameter, original)
                             if isinstance(parameter.get("schema"), dict) and isinstance(original.get("schema"), dict):
                                 merged["schema"] = retain_source_annotations(parameter["schema"], original["schema"])
+                            if provider_required(original.get("required") is True, parameter, parameter.get("schema"),
+                                                 parameter["name"], constrained):
+                                merged["required"] = True
+                                kept_required.append(f'{parameter["in"]}:{parameter["name"]}')
                             parameters[key] = retain_provider_parameter_guidance(merged, original)
                         if parameters:
                             operation["parameters"] = [parameter_wire_default(parameters[k]) for k in sorted(parameters)]
                         if mirror.get("requestBody") or runtime.get("requestBody"):
-                            operation["requestBody"] = merge_body(mirror.get("requestBody", {}), runtime.get("requestBody", {}))
+                            body_kept = []
+                            operation["requestBody"] = merge_body(mirror.get("requestBody", {}), runtime.get("requestBody", {}),
+                                                                  constrained, body_kept)
+                            kept_required.extend(f"body:{name}" for name in body_kept)
+                        if kept_required:
+                            # Required because the provider rejects calls without them; the Runtime
+                            # does not validate these, so consumers can tell the two apart.
+                            operation["x-aisa-provider-required"] = sorted(kept_required)
                         operation["x-aisa-source"] = copy.deepcopy(operation_source)
                     editorial = overlay.get(operation["operationId"], overlay.get(base_id, {}))
                     description = editorial.get("description") or runtime.get("description") or mirror.get("description")
