@@ -39,6 +39,12 @@ jobs:
             --diagnostic "$RUNNER_TEMP/unipile-source-diagnostic.json" \
             > "$RUNNER_TEMP/unipile-bundle-result.json" \
             2> "$RUNNER_TEMP/unipile-bundle-error.txt"
+      - name: Diagnose expired inputs through real official acquisitions
+        if: failure() && steps.bundle.outcome == 'failure'
+        run: |
+          python -B .github/scripts/reacquire_blocked_sources.py --repo . \
+            --diagnostic "$RUNNER_TEMP/unipile-source-diagnostic.json" \
+            --output "$RUNNER_TEMP/unipile-source-reacquisition.json"
       - name: Summarize validation scope and results
         if: always()
         env:
@@ -69,6 +75,14 @@ jobs:
               for row in report['sources']:
                   lines.append('| ' + row['name'] + ' | ' + ('global' if row['global'] else 'provider')
                                + ' | ' + row['freshness'] + ' | ' + str(row['last_successful_review_at']) + ' |')
+          reacquired = Path(os.environ['RUNNER_TEMP']) / 'unipile-source-reacquisition.json'
+          if reacquired.exists():
+              report = json.loads(reacquired.read_text())
+              lines.extend(['', '### Official reacquisition diagnostic', '',
+                            '| Source | Observation |', '| --- | --- |'])
+              for row in report['sources']:
+                  lines.append('| ' + row['name'] + ' | ' + row['status'] + ' |')
+              lines.extend(['', 'No mirrors or committed receipts were changed by these observations.'])
           lines.extend(['', 'This run validates candidate code and public source inputs.',
                         'It does not replay a current production snapshot, activate a Services lock, publish documentation, or deploy production.'])
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
@@ -82,3 +96,4 @@ jobs:
             ${{ runner.temp }}/unipile-bundle-result.json
             ${{ runner.temp }}/unipile-bundle-error.txt
             ${{ runner.temp }}/unipile-source-diagnostic.json
+            ${{ runner.temp }}/unipile-source-reacquisition.json
