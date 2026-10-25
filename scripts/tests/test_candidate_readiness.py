@@ -62,7 +62,7 @@ class CandidateReadinessTests(unittest.TestCase):
         self.git('commit', '-qm', 'Reviewed fixture coverage')
         return self.git('rev-parse', 'HEAD')
 
-    def publish_official_fixture(self):
+    def publish_official_fixture(self, source_required=True):
         op = self.fact['paths']['/apis/v1/alpha/read']['get']
         op.update({'x-aisa-validation': 'provider', 'x-aisa-upstream-path': '/read',
                    'x-aisa-query-policy': {'request_wins': True}, 'security': [{'Bearer': []}]})
@@ -75,12 +75,43 @@ class CandidateReadinessTests(unittest.TestCase):
             'kind': 'provider_openapi', 'url': 'https://provider.example/openapi.json',
             'content_hash': 'sha256:fixture', 'fetched_at': '2026-09-30', 'converter': 'fixture@1'}},
             'paths': {'/read': {'get': {
-                'parameters': [{'name': 'q', 'in': 'query', 'required': True, 'schema': {'type': 'integer'}}],
+                'parameters': [{'name': 'q', 'in': 'query', 'required': source_required, 'schema': {'type': 'integer'}}],
                 'requestBody': {'required': True, 'content': {'application/json': {'schema': {
                     'type': 'object', 'required': ['query'], 'properties': {'query': {'type': 'string'}}}}}}}}}}
         (self.root / 'openapi/upstream/alpha.json').write_text(json.dumps(source))
         self.assertEqual(self.publish(), 0)
         return self.root / 'openapi/alpha.json'
+
+    def test_provider_required_composition_passes_but_cannot_self_certify_forged_requiredness(self):
+        # Exercise the full stage/publish and independent fresh graph assessment,
+        # not just the Runtime-ownership helper. Source authority is checked here.
+        for source_required in (False, True):
+            with self.subTest(source_required=source_required):
+                self.fact['paths']['/apis/v1/alpha/read']['get']['parameters'] = [
+                    {'name': 'q', 'in': 'query', 'required': False, 'schema': {'type': 'integer'}}]
+                # Each source fixture starts with its own published graph.
+                for p in (self.root / 'openapi').glob('*.json'):
+                    p.unlink()
+                upstream = self.root / 'openapi/upstream'
+                if upstream.exists():
+                    for p in upstream.glob('*.json'):
+                        p.unlink()
+                    upstream.rmdir()
+                path = self.publish_official_fixture(source_required=source_required)
+                document = json.loads(path.read_text())
+                actual = document['paths']['/apis/v1/alpha/read']['get']
+                self.assertEqual(actual['parameters'][0]['required'], source_required)
+                self.assertEqual(assess_candidate(self.root, self.facts)['status'], 'passed')
+                actual['parameters'][0]['required'] = not source_required
+                actual['x-aisa-provider-required'] = ['query:q']  # An assertion is not source evidence.
+                path.write_text(json.dumps(document))
+                report = assess_candidate(self.root, self.facts)
+                self.assertEqual(report['status'], 'failed', report)
+                self.assertIn('composed_request_contract_mismatch',
+                              [row['code'] for row in report['providers']['alpha']['errors']])
+                before = path.read_bytes()
+                self.assertEqual(self.publish(), 1)
+                self.assertEqual(path.read_bytes(), before)
 
     def test_online_cache_shape_replays_offline_without_network(self):
         self.assertEqual(self.publish(), 0)
