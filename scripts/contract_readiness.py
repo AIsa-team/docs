@@ -15,11 +15,12 @@ from urllib.parse import urlsplit
 METHODS = frozenset(('get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'))
 
 # Reuse the composer's local-only reference and wire-default rules. These
-# helpers perform no fetching and keep provider auth/merge policy out of here.
+# helpers perform no fetching. Parameter requiredness follows the same Runtime
+# ownership boundary as composition; independent recomposition proves its source.
 try:
-    from .compose_openapi import merge_body, parameter_wire_default, referenced_components, resolve, effective_public_operation
+    from .compose_openapi import merge_body, parameter_wire_default, referenced_components, resolve, effective_public_operation, provider_required, constrained_names
 except ImportError:  # CLI imports scripts directly on sys.path.
-    from compose_openapi import merge_body, parameter_wire_default, referenced_components, resolve, effective_public_operation
+    from compose_openapi import merge_body, parameter_wire_default, referenced_components, resolve, effective_public_operation, provider_required, constrained_names
 
 
 def _schema_contract(value, link=False):
@@ -72,18 +73,34 @@ def _parameter_contract(parameter, document):
 
 
 def _runtime_parameter_errors(fact, facts_document, operation, document):
+    """Check Runtime-owned declarations, not the authority of provider fields.
+
+    Under provider/mixed validation, Runtime optionality does not assert that
+    the provider accepts omission. Source authority must still be established
+    by independent fresh recomposition, never by this helper or a candidate's
+    x-aisa-provider-required annotation.
+    """
     errors = []
     try:
         # Path-level parameters precede operation-level overrides in _operations.
-        required = dict(_parameter_contract(p, facts_document) for p in fact.get('parameters', []))
+        declared = [resolve(p, facts_document, preserve_recursive=True) for p in fact.get('parameters', [])]
+        declarations = {(p['in'], p['name']): p for p in declared}
+        required = dict(_parameter_contract(p, facts_document) for p in declared)
         actual = dict(_parameter_contract(p, document) for p in operation.get('parameters', []))
     except (ValueError, KeyError, TypeError) as exc:
         return [('unresolved_parameter_declaration', str(exc))]
     for key, contract in required.items():
         if key not in actual:
             errors.append(('missing_runtime_parameter', ':'.join(key)))
-        elif contract != actual[key]:
-            errors.append(('runtime_parameter_contract_mismatch', ':'.join(key)))
+        else:
+            parameter = declarations[key]
+            if (fact.get('x-aisa-validation') in {'provider', 'mixed'}
+                    and actual[key]['required'] is True
+                    and provider_required(True, parameter, parameter.get('schema'),
+                                          parameter['name'], constrained_names(fact))):
+                contract = {**contract, 'required': True}
+            if contract != actual[key]:
+                errors.append(('runtime_parameter_contract_mismatch', ':'.join(key)))
     return errors
 
 
