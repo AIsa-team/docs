@@ -655,5 +655,93 @@ class ReadinessTests(unittest.TestCase):
         self.assertNotEqual(before, binding_hash(op))
 
 
+class ProviderRequiredOwnershipTests(unittest.TestCase):
+    def inputs(self, validation='provider', runtime_required=False, actual_required=True):
+        facts, documents, coverage = fixture()
+        for document, required in ((facts['p'], runtime_required), (documents['p'], actual_required)):
+            op = document['paths']['/search']['get']
+            op.update({'x-aisa-validation': validation, 'x-aisa-status': 'enabled',
+                       'parameters': [{'name': 'q', 'in': 'query', 'required': required,
+                                       'schema': {'type': 'string', 'enum': ['a', 'b']}}],
+                       'responses': {'200': {'description': 'OK', 'content': {
+                           'application/json': {'schema': {'type': 'object'}}}}}})
+        documents['p']['paths']['/search']['get']['x-aisa-source'] = {'kind': 'provider_openapi'}
+        return facts, documents, coverage
+
+    def assert_mismatch(self, inputs):
+        report = check_readiness(*inputs)
+        self.assertEqual(report['status'], 'failed', report)
+        self.assertIn('runtime_parameter_contract_mismatch',
+                      [row['code'] for row in report['providers']['p']['errors']])
+
+    def test_provider_and_mixed_optional_runtime_fields_can_be_provider_required(self):
+        for validation in ('provider', 'mixed'):
+            with self.subTest(validation=validation):
+                inputs = self.inputs(validation)
+                before = copy.deepcopy(inputs)
+                report = check_readiness(*inputs)
+                self.assertEqual(report['status'], 'passed', report)
+                self.assertEqual(inputs, before)
+                # This tests Runtime ownership only; no candidate annotation is needed.
+                self.assertNotIn('x-aisa-provider-required', inputs[1]['p']['paths']['/search']['get'])
+
+    def test_runtime_boundary_defaults_constraints_and_reverse_direction_stay_strict(self):
+        cases = ('runtime', 'default', 'required_any_of', 'conditional', 'reverse')
+        for case in cases:
+            with self.subTest(case=case):
+                inputs = self.inputs('runtime' if case == 'runtime' else 'mixed',
+                                     runtime_required=case == 'reverse', actual_required=case != 'reverse')
+                fact = inputs[0]['p']['paths']['/search']['get']
+                actual = inputs[1]['p']['paths']['/search']['get']
+                actual['x-aisa-provider-required'] = ['query:q']  # Cannot override Runtime ownership.
+                if case == 'default':
+                    fact['parameters'][0]['schema']['default'] = 'a'
+                    actual['parameters'][0]['schema']['default'] = 'a'
+                elif case == 'required_any_of':
+                    fact['x-aisa-constraints'] = {'required_any_of': [['q', 'id']]}
+                elif case == 'conditional':
+                    fact['x-aisa-constraints'] = {'conditional_requirements': [
+                        {'if': {'name': 'mode'}, 'then': [{'name': 'q'}]}]}
+                self.assert_mismatch(inputs)
+
+    def test_other_wire_contract_fields_are_never_excused_by_requiredness(self):
+        changes = ('type', 'enum', 'style', 'explode', 'default', 'allowReserved', 'allowEmptyValue')
+        for change in changes:
+            with self.subTest(change=change):
+                inputs = self.inputs()
+                actual = inputs[1]['p']['paths']['/search']['get']['parameters'][0]
+                if change == 'type':
+                    actual['schema']['type'] = 'integer'
+                elif change == 'enum':
+                    actual['schema']['enum'] = ['a']
+                elif change == 'default':
+                    actual['schema']['default'] = 'a'
+                elif change == 'style':
+                    actual['style'] = 'simple'
+                else:
+                    actual[change] = False if change == 'explode' else True
+                self.assert_mismatch(inputs)
+
+    def test_referenced_runtime_default_still_prevents_requirement_strengthening(self):
+        inputs = self.inputs()
+        fact_document = inputs[0]['p']
+        fact = fact_document['paths']['/search']['get']
+        parameter = fact['parameters'][0]
+        parameter['schema']['default'] = 'a'
+        fact_document['components'] = {'parameters': {'Q': parameter}}
+        fact['parameters'] = [{'$ref': '#/components/parameters/Q'}]
+        actual = inputs[1]['p']['paths']['/search']['get']
+        actual['parameters'][0]['schema']['default'] = 'a'
+        self.assert_mismatch(inputs)
+
+    def test_parameter_location_change_is_still_a_missing_runtime_input(self):
+        inputs = self.inputs()
+        inputs[1]['p']['paths']['/search']['get']['parameters'][0]['in'] = 'header'
+        report = check_readiness(*inputs)
+        self.assertEqual(report['status'], 'failed', report)
+        self.assertIn('missing_runtime_parameter',
+                      [row['code'] for row in report['providers']['p']['errors']])
+
+
 if __name__ == '__main__':
     unittest.main()
