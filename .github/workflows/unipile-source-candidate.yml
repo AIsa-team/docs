@@ -34,17 +34,11 @@ jobs:
       - name: Export fixed candidate bundle without publication
         id: bundle
         run: |
-          python -B .github/scripts/diagnose_schema_input_export.py --repo . --docs-ref "$GITHUB_SHA" \
+          python -B scripts/export_schema_input_bundle.py --repo . --docs-ref "$GITHUB_SHA" \
+            --baseline-ref 78ef376841ead8cde10a79651958790be5a0531c --bundle-version 3 \
             --output "$RUNNER_TEMP/unipile-bundle" \
-            --diagnostic "$RUNNER_TEMP/unipile-source-diagnostic.json" \
             > "$RUNNER_TEMP/unipile-bundle-result.json" \
             2> "$RUNNER_TEMP/unipile-bundle-error.txt"
-      - name: Diagnose expired inputs through real official acquisitions
-        if: failure() && steps.bundle.outcome == 'failure'
-        run: |
-          python -B .github/scripts/reacquire_blocked_sources.py --repo . \
-            --diagnostic "$RUNNER_TEMP/unipile-source-diagnostic.json" \
-            --output "$RUNNER_TEMP/unipile-source-reacquisition.json"
       - name: Summarize validation scope and results
         if: always()
         env:
@@ -66,23 +60,6 @@ jobs:
           if result.exists() and result.stat().st_size:
               report = json.loads(result.read_text())
               lines.extend(['', 'Bundle manifest SHA256: `' + str(report.get('manifest_sha256')) + '`'])
-          diagnostic = Path(os.environ['RUNNER_TEMP']) / 'unipile-source-diagnostic.json'
-          if diagnostic.exists():
-              report = json.loads(diagnostic.read_text())
-              lines.extend(['', '### Exact source assessment', '',
-                            '| Source | Scope | Freshness | Last confirmed review |',
-                            '| --- | --- | --- | --- |'])
-              for row in report['sources']:
-                  lines.append('| ' + row['name'] + ' | ' + ('global' if row['global'] else 'provider')
-                               + ' | ' + row['freshness'] + ' | ' + str(row['last_successful_review_at']) + ' |')
-          reacquired = Path(os.environ['RUNNER_TEMP']) / 'unipile-source-reacquisition.json'
-          if reacquired.exists():
-              report = json.loads(reacquired.read_text())
-              lines.extend(['', '### Official reacquisition diagnostic', '',
-                            '| Source | Observation |', '| --- | --- |'])
-              for row in report['sources']:
-                  lines.append('| ' + row['name'] + ' | ' + row['status'] + ' |')
-              lines.extend(['', 'No mirrors or committed receipts were changed by these observations.'])
           lines.extend(['', 'This run validates candidate code and public source inputs.',
                         'It does not replay a current production snapshot, activate a Services lock, publish documentation, or deploy production.'])
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
@@ -95,6 +72,3 @@ jobs:
           path: |
             ${{ runner.temp }}/unipile-bundle-result.json
             ${{ runner.temp }}/unipile-bundle-error.txt
-            ${{ runner.temp }}/unipile-source-diagnostic.json
-            ${{ runner.temp }}/unipile-source-reacquisition.json
-            ${{ runner.temp }}/reacquired-public-sources/*.json
