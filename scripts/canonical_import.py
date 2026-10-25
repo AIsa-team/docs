@@ -341,13 +341,26 @@ def schema_input_view_files(repository, current_view, docs_ref, previous_ref, *,
             require(sha(raw) == digest and regular_read(current, name) == raw,
                     'Prior native publication differs from current input view')
             previous_native[Path(name).stem] = strict_json(raw)
-    require(set(published_documents(current)) == set(previous_native), 'Current native graph differs from prior formal graph')
     previous_registry = git.read(previous_ref, 'openapi/registry.yaml')
     current_registry = regular_read(current, 'openapi/registry.yaml')
     require(sha(previous_registry) == previous_pointer['files_sha256'].get('openapi/registry.yaml') and
             (current_registry == previous_registry or
              reviewed and current_registry == frozen_files['openapi/registry.yaml']),
             'Current registry is not the prior assessed projection')
+    current_native_names = set(published_documents(current))
+    previous_native_names = set(previous_native)
+    reviewed_additions = set()
+    if reviewed:
+        frozen_registry = yaml.load(frozen_files['openapi/registry.yaml'], Loader=UniqueLoader)
+        prior_registry = yaml.load(previous_registry, Loader=UniqueLoader)
+        reviewed_additions = set(frozen_registry['providers']) - set(prior_registry['providers'])
+    # A reviewed registration may already have a draft native file before its
+    # first formal promotion. Those draft bytes never enter frozen_files: the
+    # verified Runtime supplies the new output. Every prior native above still
+    # requires exact original bytes; unrelated additions remain rejected.
+    require(previous_native_names <= current_native_names and
+            current_native_names - previous_native_names <= reviewed_additions,
+            'Current native graph differs from prior formal graph')
     files = {}
     for name, raw in frozen_files.items():
         files[name] = raw

@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import subprocess
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -199,6 +200,70 @@ class RegistryReplayTests(unittest.TestCase):
         self.git('add', '.')
         self.git('-c', 'user.name=Ken', '-c', 'user.email=ken@aisa.one', 'commit', '-qm', 'Fixture publication')
         return self.git('rev-parse', 'HEAD').decode().strip()
+
+    def reviewed_provider_registration(self):
+        self.git('init', '-q')
+        previous = self.seal_publication('a' * 64)
+        prior_native = (self.root / 'openapi/one.json').read_bytes()
+        self.registry['providers']['new'] = {'display_name': 'New API', 'description': ''}
+        self.write_registry()
+        for name in ('context.json', 'source-receipts.json'):
+            path = self.root / 'docs/schema-inputs' / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'{}\n')
+        (self.root / 'openapi/new.json').write_bytes(canonical(document('new', 'Draft only')))
+        self.git('add', '.')
+        self.git('-c', 'user.name=Ken', '-c', 'user.email=ken@aisa.one',
+                 'commit', '-qm', 'Reviewed provider registration')
+        revision = self.git('rev-parse', 'HEAD').decode().strip()
+        # Input loading/authentication is tested separately. This seam receives
+        # a verified bundle whose compatibility document is the original one.
+        bundle = SimpleNamespace(contents={
+            'input/openapi/registry.yaml': (self.root / 'openapi/registry.yaml').read_bytes(),
+            'input/openapi/one.json': prior_native,
+        })
+        return previous, revision, bundle
+
+    def reviewed_input_view(self, previous, revision, bundle):
+        with patch('publication_origin.inspect_publication', return_value={
+                'expected_docs_ref': previous, 'contract_release': 'a' * 64}), \
+             patch('canonical_input_assessment.load_reviewed_inputs', return_value=bundle):
+            return importer.schema_input_view_files(self.root, self.root, revision, previous,
+                compiler_inputs={'docs_ref': revision, 'bundle_manifest_sha256': 'b' * 64})
+
+    def test_reviewed_new_provider_draft_is_not_used_as_a_formal_input(self):
+        previous, revision, bundle = self.reviewed_provider_registration()
+        files, _ = self.reviewed_input_view(previous, revision, bundle)
+        self.assertNotIn('openapi/new.json', files)
+        self.assertEqual(files['openapi/one.json'], bundle.contents['input/openapi/one.json'])
+
+    def test_reviewed_registration_still_rejects_unregistered_extra_native(self):
+        previous, revision, bundle = self.reviewed_provider_registration()
+        (self.root / 'openapi/rogue.json').write_bytes(canonical(document('rogue')))
+        with self.assertRaisesRegex(ValueError, 'Current native graph differs'):
+            self.reviewed_input_view(previous, revision, bundle)
+
+    def test_reviewed_registration_still_rejects_changes_to_prior_native_bytes(self):
+        previous, revision, bundle = self.reviewed_provider_registration()
+        path = self.root / 'openapi/one.json'
+        path.write_bytes(path.read_bytes() + b'\n')
+        with self.assertRaisesRegex(ValueError, 'Prior native publication differs'):
+            self.reviewed_input_view(previous, revision, bundle)
+
+    def test_reviewed_registration_still_rejects_missing_prior_native(self):
+        previous, revision, bundle = self.reviewed_provider_registration()
+        (self.root / 'openapi/one.json').unlink()
+        with self.assertRaises((ValueError, OSError)):
+            self.reviewed_input_view(previous, revision, bundle)
+
+    def test_unreviewed_extra_native_still_requires_prior_formal_membership(self):
+        self.git('init', '-q')
+        previous = self.seal_publication('a' * 64)
+        (self.root / 'openapi/new.json').write_bytes(canonical(document('new')))
+        with patch('publication_origin.inspect_publication', return_value={
+                'expected_docs_ref': previous, 'contract_release': 'a' * 64}), \
+             self.assertRaisesRegex(ValueError, 'Current native graph differs'):
+            importer.schema_input_view_files(self.root, self.root, previous, previous)
 
     def test_two_real_git_publication_views_restore_same_frozen_schema_registry(self):
         self.git('init', '-q')
