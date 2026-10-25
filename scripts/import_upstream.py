@@ -12,6 +12,8 @@ from runtime_registry import KEY
 from import_brave_reference import INDEX_URL as BRAVE_INDEX_URL, import_reference
 from import_fred_reference import INDEX as FRED_INDEX_URL, import_reference as import_fred_reference
 from import_querit_reference import REFERENCE_URL as QUERIT_REFERENCE_URL, import_reference as import_querit_reference
+from import_unipile_reference import (V1_URL as UNIPILE_V1_URL, JOB_SLOTS_URL as UNIPILE_JOB_SLOTS_URL,
+                                     convert_reference as import_unipile_reference)
 from import_parallel_legacy_events import SOURCE_URL as PARALLEL_LEGACY_URL, extract as extract_parallel_legacy
 from wrapper_twitter_reference import REFERENCE_URL as TWITTER_REFERENCE_URL, import_reference as import_twitter_reference
 from wrapper_cloudsway_reference import REFERENCE_URL as CLOUDSWAY_REFERENCE_URL, import_reference as import_cloudsway_reference
@@ -166,6 +168,8 @@ def import_source(provider, url):
         document, metadata = import_reference(fetch)
     elif url == QUERIT_REFERENCE_URL:
         document, metadata = import_querit_reference(fetch)
+    elif url in (UNIPILE_V1_URL, UNIPILE_JOB_SLOTS_URL):
+        document, metadata = import_unipile_reference(fetch(url), url)
     else:
         raw = fetch(url)
         document = source_json_loads(raw) if raw.lstrip().startswith((b'{', b'[')) else yaml.load(raw, Loader=OfficialSourceLoader)

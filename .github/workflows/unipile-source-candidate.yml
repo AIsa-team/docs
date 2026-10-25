@@ -1,0 +1,39 @@
+name: Validate Unipile contract inputs
+
+on:
+  push:
+    branches: [codex/unipile-contract-inputs-20261025]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
+      - name: Verify actual official Unipile inputs and composition regression
+        run: python -B -m unittest scripts.tests.test_unipile_reference scripts.tests.test_source_governance -v
+      - name: Verify existing source and composition integration
+        run: >-
+          python -B -m unittest scripts.tests.test_official_upstream_sources
+          scripts.tests.test_candidate_readiness scripts.tests.test_internal_publication_snapshot
+          scripts.tests.test_reviewed_schema_inputs scripts.tests.test_schema_input_bundle -v
+      - name: Export fixed candidate bundle without publication
+        run: |
+          python -B scripts/export_schema_input_bundle.py --repo . --docs-ref "$GITHUB_SHA" \
+            --baseline-ref 78ef376841ead8cde10a79651958790be5a0531c --bundle-version 3 \
+            --output "$RUNNER_TEMP/unipile-bundle" > "$RUNNER_TEMP/unipile-bundle-result.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unipile-candidate-input-verification
+          path: ${{ runner.temp }}/unipile-bundle-result.json
