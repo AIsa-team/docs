@@ -12,6 +12,8 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}/scripts/tests
     steps:
       - uses: actions/checkout@v4
         with:
@@ -21,19 +23,51 @@ jobs:
           python-version: '3.12'
       - run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
       - name: Verify actual official Unipile inputs and composition regression
+        id: unipile
         run: python -B -m unittest scripts.tests.test_unipile_reference scripts.tests.test_source_governance -v
       - name: Verify existing source and composition integration
+        id: integration
         run: >-
           python -B -m unittest scripts.tests.test_official_upstream_sources
           scripts.tests.test_candidate_readiness scripts.tests.test_internal_publication_snapshot
           scripts.tests.test_reviewed_schema_inputs scripts.tests.test_schema_input_bundle -v
       - name: Export fixed candidate bundle without publication
+        id: bundle
         run: |
           python -B scripts/export_schema_input_bundle.py --repo . --docs-ref "$GITHUB_SHA" \
             --baseline-ref 78ef376841ead8cde10a79651958790be5a0531c --bundle-version 3 \
-            --output "$RUNNER_TEMP/unipile-bundle" > "$RUNNER_TEMP/unipile-bundle-result.json"
+            --output "$RUNNER_TEMP/unipile-bundle" > "$RUNNER_TEMP/unipile-bundle-result.json" \
+            2> "$RUNNER_TEMP/unipile-bundle-error.txt"
+      - name: Summarize validation scope and results
+        if: always()
+        env:
+          UNIPILE_RESULT: ${{ steps.unipile.outcome }}
+          INTEGRATION_RESULT: ${{ steps.integration.outcome }}
+          BUNDLE_RESULT: ${{ steps.bundle.outcome }}
+        run: |
+          python -B - <<'PY'
+          import json, os
+          from pathlib import Path
+          result = Path(os.environ['RUNNER_TEMP']) / 'unipile-bundle-result.json'
+          lines = ['## Unipile candidate input verification',
+                   '', 'Candidate: `' + os.environ['GITHUB_SHA'] + '`', '',
+                   '| Check | Result |', '| --- | --- |']
+          for label, key in [('Official input regression', 'UNIPILE_RESULT'),
+                             ('Existing integration tests', 'INTEGRATION_RESULT'),
+                             ('Fixed bundle export', 'BUNDLE_RESULT')]:
+              lines.append('| ' + label + ' | ' + os.environ.get(key, 'not run') + ' |')
+          if result.exists() and result.stat().st_size:
+              report = json.loads(result.read_text())
+              lines.extend(['', 'Bundle manifest SHA256: `' + str(report.get('manifest_sha256')) + '`'])
+          lines.extend(['', 'This run validates candidate code and public source inputs.',
+                        'It does not replay a current production snapshot, activate a Services lock, publish documentation, or deploy production.'])
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write('\n'.join(lines) + '\n')
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: unipile-candidate-input-verification
-          path: ${{ runner.temp }}/unipile-bundle-result.json
+          path: |
+            ${{ runner.temp }}/unipile-bundle-result.json
+            ${{ runner.temp }}/unipile-bundle-error.txt
