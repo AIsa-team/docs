@@ -11,8 +11,8 @@
     "x-aisa-source": {
       "kind": "provider_openapi",
       "url": "https://docs.polymarket.com/api-spec/clob-openapi.yaml",
-      "fetched_at": "2026-10-16T13:12:53.937057+00:00",
-      "content_hash": "sha256:f159fa5b14be55822ba5146547ae1eacb12f40cbe8d317b2215b3f68add079dc",
+      "fetched_at": "2026-10-25T13:24:34.053789+00:00",
+      "content_hash": "sha256:3666cfd2ca388f5400c453312f171ca4919612c2448ef97065709bf06746cbbc",
       "converter": "scripts/import_upstream.py@3",
       "owner": "AIsa-team/docs",
       "refresh_policy": "automatic",
@@ -4494,7 +4494,7 @@
     "/notifications": {
       "get": {
         "summary": "Get notifications",
-        "description": "Retrieves all unread notifications for the authenticated user.\n\nNotification types include:\n- Order cancellation\n- Order fill (taker or maker)\n- Market registered\n- Market resolved\n- Reward payout\n- Child comment created\n",
+        "description": "Retrieves all unread notifications for the authenticated user.\n\nNotification types include:\n- Order cancellation\n- Order fill (taker or maker)\n- Market registered\n- Market resolved\n- Reward payout\n- Child comment created\n- Taker tier upgraded (type 11)\n",
         "operationId": "getNotifications",
         "tags": [
           "Notifications"
@@ -5932,7 +5932,7 @@
     "/rebates/current": {
       "get": {
         "summary": "Get current rebated fees for a maker",
-        "description": "Returns the current rebated fees for a maker address on a given date.\n\nEach entry includes the condition ID, asset address, and the USDC amount rebated.\n\nThis endpoint does not require authentication.\n",
+        "description": "Returns the current rebated fees for a maker address on a given date.\nReturns null when the maker has no rebated-fee rows.\n\nEach entry includes the condition ID, asset address, and the USDC amount rebated.\n\nThis endpoint does not require authentication.\n",
         "operationId": "getCurrentRebatedFees",
         "tags": [
           "Rebates"
@@ -5967,6 +5967,7 @@
               "application/json": {
                 "schema": {
                   "type": "array",
+                  "nullable": true,
                   "items": {
                     "$ref": "#/components/schemas/RebatedFees"
                   }
@@ -6026,7 +6027,7 @@
     "/heartbeats": {
       "post": {
         "summary": "Send heartbeat",
-        "description": "Sends a heartbeat signal to maintain active session status.\nIf heartbeats are not sent regularly, all open orders for the user will be automatically canceled.\nThis is useful for automated trading systems that need to ensure orders are canceled\nif the system becomes unresponsive.\n",
+        "description": "Sends one legacy order heartbeat for the authenticated API key.\nThe first accepted send enables timeout cancellation for all open orders\nowned by that API key, across markets and processes. Keep sending accepted\nheartbeats every 5 seconds. No scheduler or disarm operation is provided;\nstopping sends or closing a client leaves the deadline active.\nIt shares the key's registration with POST /v1/heartbeats and resets the\nexpected modern heartbeat ID to an empty string.\nAfter 10 seconds without an accepted send, a five-second scan removes the\nregistration and queues a best-effort cancel-all attempt. Cancellation\ntiming and success are not guaranteed. Later accepted sends register again.\nA lost response may follow an accepted send. WebSocket keepalive does not\nrefresh this deadline. Stop placing orders and explicitly cancel/verify\norders you intend to remove before shutdown.\n",
         "operationId": "sendHeartbeat",
         "tags": [
           "Trade"
@@ -6086,7 +6087,7 @@
     "/v1/heartbeats": {
       "post": {
         "summary": "Send heartbeat (v1)",
-        "description": "Sends a heartbeat signal with session tracking via heartbeat ID.\n\nThe first request should include an empty or initial heartbeat_id. The response will contain\na new heartbeat_id that must be used in subsequent requests. If the provided heartbeat_id\ndoesn't match the expected value, the request will fail.\n\nIf heartbeats are not sent regularly, all open orders for the user will be automatically canceled.\nThis is useful for automated trading systems that need to ensure orders are canceled\nif the system becomes unresponsive.\n",
+        "description": "Sends one order heartbeat with a rotating ID for the authenticated API key.\nThe first accepted send enables timeout cancellation for all open orders\nowned by that API key, across markets and processes. Keep sending accepted\nheartbeats every 5 seconds. No scheduler or disarm operation is provided;\nstopping sends or closing a client leaves the deadline active.\n\nStart with an empty heartbeat_id and retain each new ID returned by a\nsuccessful response. Serialize sends per key. A mismatch returns HTTP 400\nwith error_msg \"Invalid Heartbeat ID\" and the currently expected\nheartbeat_id, which may be empty after a legacy send. Retry explicitly with\nthat ID. Rejected requests do not refresh the deadline. A lost response may\nfollow an accepted send, so failure does not prove registration is inactive.\n\nAfter 10 seconds without an accepted send, a five-second scan removes the\nregistration and queues a best-effort cancel-all attempt. Cancellation\ntiming and success are not guaranteed. Later accepted sends register again.\nWebSocket keepalive does not refresh this deadline. Stop placing orders and\nexplicitly cancel/verify orders you intend to remove before shutdown.\n",
         "operationId": "sendHeartbeatV1",
         "tags": [
           "Trade"
@@ -6139,15 +6140,33 @@
             }
           },
           "400": {
-            "description": "Invalid heartbeat ID - ID doesn't match expected value",
+            "description": "Invalid payload, or heartbeat ID does not match the registered ID",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HeartbeatErrorResponse"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/HeartbeatErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
                 },
-                "example": {
-                  "error": "Invalid Heartbeat ID",
-                  "heartbeat_id": "550e8400-e29b-41d4-a716-446655440000"
+                "examples": {
+                  "id_mismatch": {
+                    "summary": "Registered ID mismatch (does not refresh deadline)",
+                    "value": {
+                      "error_msg": "Invalid Heartbeat ID",
+                      "heartbeat_id": "550e8400-e29b-41d4-a716-446655440000"
+                    }
+                  },
+                  "invalid_payload": {
+                    "summary": "Body could not be decoded",
+                    "value": {
+                      "error": "Invalid payload"
+                    }
+                  }
                 }
               }
             }
@@ -8165,19 +8184,20 @@
           },
           "type": {
             "type": "integer",
-            "description": "Type of notification:\n- 1: Order cancellation\n- 2: Order fill\n- 3: Market registered\n- 4: Market resolved\n- 5: Reward payout\n- 6: Child comment created\n",
+            "description": "Type of notification:\n- 1: Order cancellation\n- 2: Order fill\n- 3: Market registered\n- 4: Market resolved\n- 5: Reward payout\n- 6: Child comment created\n- 11: Taker tier upgraded\n",
             "enum": [
               1,
               2,
               3,
               4,
               5,
-              6
+              6,
+              11
             ]
           },
           "payload": {
             "type": "object",
-            "description": "Dynamic payload containing notification-specific data",
+            "description": "Notification-specific data. For type 11 (taker tier upgraded),\nprevious_tier, tier, and rebate_bps are integers, and snapshot_date\nis the UTC snapshot day as a YYYY-MM-DD string.\n",
             "additionalProperties": true
           },
           "timestamp": {
@@ -8283,6 +8303,16 @@
             "type": "number",
             "format": "double",
             "description": "Total amount of earnings in the asset"
+          },
+          "native_earnings": {
+            "type": "number",
+            "format": "double",
+            "description": "Native rewards included in the total, when the breakdown is returned"
+          },
+          "sponsored_earnings": {
+            "type": "number",
+            "format": "double",
+            "description": "Sponsored rewards included in the total, when the breakdown is returned"
           },
           "asset_rate": {
             "type": "number",
@@ -8864,7 +8894,7 @@
         "properties": {
           "heartbeat_id": {
             "type": "string",
-            "description": "The heartbeat ID from the previous response. For the first request,\nthis should be empty or a new UUID. Subsequent requests must use\nthe heartbeat_id returned from the previous response.\n",
+            "description": "The heartbeat ID from the previous response. For the first request,\nthis should be empty. Subsequent requests must use\nthe heartbeat_id returned from the previous response.\n",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           }
         }
@@ -8888,19 +8918,18 @@
         "type": "object",
         "description": "Error response when heartbeat ID doesn't match",
         "required": [
-          "error",
+          "error_msg",
           "heartbeat_id"
         ],
         "properties": {
-          "error": {
+          "error_msg": {
             "type": "string",
             "description": "Error message",
             "example": "Invalid Heartbeat ID"
           },
           "heartbeat_id": {
             "type": "string",
-            "format": "uuid",
-            "description": "The expected heartbeat ID that should have been used",
+            "description": "The expected heartbeat ID; can be empty after a legacy send",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           }
         }
