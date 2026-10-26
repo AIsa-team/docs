@@ -1,0 +1,10 @@
+---
+x-aisa-operation-id: "post_unipile_apis_v1_unipile_hosted_link"
+title: "托管授权链接"
+description: "创建托管授权链接，用于接入 LinkedIn 账号。"
+openapi: "openapi/zh/unipile.json POST /apis/v1/unipile/hosted/link"
+---
+
+返回一个 HostedAuthUrl，把终端用户引导到 Unipile 托管页完成 LinkedIn 登录，凭证不会经过你的系统。**托管模式（推荐）：不传 `notify_url`**，AISA 全程代管——轮询 `GET /apis/v1/unipile/me/accounts` 直到账号出现（用户完成登录后通常几秒内），无需自建任何 webhook。**自管模式：传入你自己的 `notify_url`**，流程完成后 Unipile 会向它 POST 事件 `{"status":"CREATION_SUCCESS","account_id":"…","name":"…"}`——请保存 account_id，它是其余所有端点的必需标识（自管模式下没有账号列表端点可重新查询，托管模式用户直接读 `me/accounts`）。你设置的 `name` 会原样回传，用它把账号映射到你自己的用户。请在 30 秒内返回 200，否则事件会重试 5 次；建议在回调端点校验共享密钥头。链接会在 Unipile 每日重启时失效（无论 `expiresOn` 设成什么），每次用户要连接时都新生成一条。注意：同一 LinkedIn 账号重新授权会生成新的 account_id，旧绑定在断开前会一直保留在列表中。
+
+参考价格：每次成功请求 $0.000001 USD。
