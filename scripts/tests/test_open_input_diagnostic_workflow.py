@@ -255,9 +255,9 @@ class OpenInputWorkflowTests(unittest.TestCase):
             if row.get('name') in added: continue
             row=copy.deepcopy(row)
             if row.get('name')=='Check actual candidate readiness':
-                # The narrow canonical presentation branch is intentional.
+                # The canonical presentation and actual-output branches are intentional.
                 # Its nonselected branch must retain the exact original gate.
-                self.assertEqual(sha(row['run'].encode()),'5bbabad1fd8dc18f4e62ba9dbb0643c7e48d824da6baf87f3dcfdbf96dfaec26')
+                self.assertEqual(sha(row['run'].encode()),'ddffec716358fced1bb4b493ec4ce330dc0645938e9718857099907cff04080f')
                 self.assertEqual(row['env'].pop('GH_TOKEN'),'${{ github.token }}')
                 fallback=row['run'].split('\nelse\n',1)[1].rsplit('\nfi',1)[0]
                 row['run']='\n'.join(line[2:] for line in fallback.splitlines())+'\n'

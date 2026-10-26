@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import subprocess
 import sys
 import tempfile
@@ -27,6 +28,32 @@ class PresentationScopeTests(unittest.TestCase):
                      'discovery/openapi.json'):
             with self.subTest(name=name):
                 self.assertFalse(presentation_only(['api-reference/provider/get_operation.mdx', name]))
+
+    def test_workflow_checks_actual_canonical_outputs_with_the_canonical_assessor(self):
+        import yaml
+        root = Path(__file__).resolve().parents[2]
+        workflow = yaml.safe_load((root / '.github/workflows/test-runtime-contracts.yml').read_text())
+        command = next(step['run'] for step in workflow['jobs']['artifact-contracts']['steps']
+                       if step.get('name') == 'Check actual candidate readiness')
+        driver = '''python() {
+          printf '%s\\n' "$*" >> "$TRACE"
+          if [ "$1" = scripts/runtime_publication.py ] && [ "$2" = mode ]; then
+            printf '%s\\n' "$MODE"
+          elif [ "$1" = scripts/check_canonical_presentation_candidate.py ] && [ "$2" = scope ]; then
+            printf '%s\\n' "$PRESENTATION"
+          fi
+        }
+        '''
+        for mode, presentation, expected in [
+            ('canonical', 'false', 'scripts/runtime_publication.py assess'),
+            ('canonical', 'true', 'scripts/check_canonical_presentation_candidate.py assess'),
+            ('facts', 'false', 'scripts/check_contract_candidate.py')]:
+            with self.subTest(mode=mode, presentation=presentation), tempfile.TemporaryDirectory() as folder:
+                trace = Path(folder) / 'commands'
+                subprocess.run(['bash', '-eu', '-c', driver + command], check=True,
+                    env={**os.environ, 'TRACE': str(trace), 'MODE': mode, 'PRESENTATION': presentation,
+                         'PUBLISHED_REF': 'a' * 40, 'REVIEWED_BASELINE': 'b' * 40})
+                self.assertTrue(trace.read_text().splitlines()[-1].startswith(expected))
 
 
 class IsolatedCandidateTests(unittest.TestCase):
