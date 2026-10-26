@@ -247,7 +247,9 @@ class OpenInputWorkflowTests(unittest.TestCase):
         added=('Select exact open-input diagnostic consumer','Checkout immutable clean Docs base for open-input reader',
             'Checkout independently fixed Services open-input reader','Use pinned reader dependency interpreter',
             'Use exact Services Go toolchain for original snapshot verification','Install independently pinned reader dependencies',
-            'Check exact authenticated open-input diagnostic qualification','Retain input-only diagnostic consumer receipt')
+            'Check exact authenticated open-input diagnostic qualification','Retain input-only diagnostic consumer receipt',
+            'Renew due automatic source observations','Retain automatic source renewal observations',
+            'Cache actual source renewal observations')
         original=[]
         for row in rows:
             if row.get('name') in added: continue

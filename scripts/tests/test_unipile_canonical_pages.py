@@ -16,6 +16,16 @@ from pull_openapi import generate_pages
 
 
 class UnipileCanonicalPagesTests(unittest.TestCase):
+    def test_aliases_preserve_the_latest_connection_request_and_chat_guidance(self):
+        root = Path(__file__).resolve().parents[2]
+        for prefix in ('', 'zh/'):
+            for short, canonical in [('post_unipile-connection-request', 'post_unipile_linkedin_connection_request'),
+                                     ('post_unipile-start-chat', 'post_unipile_linkedin_start_chat')]:
+                folder = root / f'{prefix}api-reference/unipile'
+                with self.subTest(language=prefix or 'en', operation=canonical):
+                    self.assertEqual((folder / (short + '.mdx')).read_text(),
+                                     (folder / (canonical + '.mdx')).read_text())
+
     def test_projection_keeps_existing_category_and_hides_duplicate_aliases(self):
         root = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as folder:

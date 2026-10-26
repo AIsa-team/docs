@@ -13,6 +13,7 @@ from contract_change_scope import git_changed_paths, requires_artifact_check
 from fetch_runtime_release import PublicReader
 from generate_payment_discovery import candidate as payment_catalog
 from refresh_payment_publication import ChallengeReader, ORIGIN, refresh
+from renew_source_receipts import renew
 from runtime_publication import stage_canonical, verified_mode
 from schema_input_bundle import canonical, require
 from validate_runtime_api_reference_slugs import validate as validate_pages
@@ -47,7 +48,7 @@ def observe_payment(root, facts):
     return refresh(root, facts, PublicReader(ORIGIN, deadline), ChallengeReader(deadline))
 
 
-def assess(root, facts, *, base, baseline, payment_observer=observe_payment):
+def assess(root, facts, *, base, baseline, payment_observer=observe_payment, renewal_report=None):
     root, facts = Path(root).resolve(), Path(facts).resolve()
     paths = checked_scope(root, base)
     require(verified_mode(facts) == 'canonical', 'Canonical Runtime acquisition required')
@@ -63,6 +64,15 @@ def assess(root, facts, *, base, baseline, payment_observer=observe_payment):
             cache.write_bytes(receipts)
             staged = stage_canonical(projected, facts, baseline=baseline, write=True)
             require(staged['status'] == 'passed', 'Canonical presentation stage failed')
+            saved, renewed = renew(projected, json.loads(cache.read_bytes()))
+            cache.write_bytes(canonical(saved) + b'\n')
+            # Observations are cache data, not publication files. Retain real
+            # successes/failures even if a later surface or payment gate fails.
+            (root / '.cache/source-reviews.json').write_bytes(cache.read_bytes())
+            if renewal_report is not None:
+                Path(renewal_report).write_bytes(canonical(renewed) + b'\n')
+            require(renewed['status'] == 'passed',
+                    'Global source renewal failed: ' + ', '.join(renewed['global_failures']))
             payment = payment_observer(projected, facts)
             require(payment['status'] == 'passed', 'Payment observation failed')
             (projected / 'discovery/openapi.json').write_text(
@@ -76,6 +86,7 @@ def assess(root, facts, *, base, baseline, payment_observer=observe_payment):
             report['presentation_candidate'] = {'base_revision': base, 'head_revision': head,
                 'changed_paths': paths, 'projected_files': staged['projected_files'],
                 'scope': 'presentation_only_isolated_projection_not_formal_publication'}
+            report['source_renewal'] = renewed
             return report
         finally:
             subprocess.run(['git', 'worktree', 'remove', '--force', str(projected)], cwd=root, check=True)
@@ -97,7 +108,8 @@ def main():
     if not all((args.facts_dir, args.baseline_ref, args.report)):
         parser.error('Assessment requires facts, baseline and report')
     try:
-        report = assess(args.root, args.facts_dir, base=args.base, baseline=args.baseline_ref)
+        report = assess(args.root, args.facts_dir, base=args.base, baseline=args.baseline_ref,
+                        renewal_report=args.report.with_name('source-renewal.json'))
         status = 0 if report['status'] == 'passed' else 1
     except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as exc:
         report = {'status': 'not_assessed', 'evaluation': 'canonical_presentation_candidate', 'error': str(exc)}

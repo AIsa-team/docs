@@ -88,6 +88,39 @@ class IsolatedCandidateTests(unittest.TestCase):
         self.assertEqual((self.root / 'api-reference/provider.mdx').read_text(), 'Reviewed prose\n')
         self.assertEqual(self.git('status', '--porcelain'), '')
 
+    def test_receipts_are_renewed_against_the_new_projection_before_final_assessment(self):
+        import json
+        events = []
+        def stage(projected, *args, **kwargs):
+            (projected / 'openapi/provider.json').write_text('{"projected":true}')
+            (projected / 'discovery').mkdir()
+            events.append('stage')
+            return {'status': 'passed', 'previous_formal_ref': self.base, 'projected_files': 1}
+        def renewal(projected, packet):
+            self.assertEqual((projected / 'openapi/provider.json').read_text(), '{"projected":true}')
+            events.append('renew')
+            return packet, {'status': 'passed', 'global_failures': [], 'scoped_failures': {}}
+        def payment(projected, facts):
+            events.append('payment')
+            return {'status': 'passed'}
+        def final(*args, **kwargs):
+            events.append('assessment')
+            return {'status': 'passed'}
+        report = self.root / '.cache/renewal-report.json'
+        with patch('check_canonical_presentation_candidate.verified_mode', return_value='canonical'), \
+             patch('check_canonical_presentation_candidate.stage_canonical', side_effect=stage), \
+             patch('check_canonical_presentation_candidate.renew', side_effect=renewal), \
+             patch('check_canonical_presentation_candidate.payment_catalog', return_value={}), \
+             patch('check_canonical_presentation_candidate.validate_pages', return_value=[]), \
+             patch('check_canonical_presentation_candidate.assess_canonical_candidate', side_effect=final):
+            result = assess(self.root, Path(self.temp.name) / 'facts', base=self.base,
+                            baseline='reviewed', payment_observer=payment, renewal_report=report)
+        self.assertEqual(events, ['stage', 'renew', 'payment', 'assessment'])
+        self.assertEqual(result['status'], 'passed')
+        self.assertEqual(json.loads(report.read_bytes())['status'], 'passed')
+        self.assertEqual((self.root / 'openapi/provider.json').read_text(), '{}')
+        self.assertEqual(self.git('status', '--porcelain'), '')
+
 
 if __name__ == '__main__':
     unittest.main()
