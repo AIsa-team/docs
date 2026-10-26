@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PATTERN = r'\{/\* settled-cost-parser \*/\}\s*```python\n(.*?)\n```'
 HEADER = 'X-AISA-Customer-Cost-Micros-USD'
 # Both languages document Usage & Logs on the Console overview page.
-USAGE_LOGS = {'': 'guides/dashboard/overview#usage-and-logs', 'zh/': 'guides/dashboard/overview#usage-and-logs'}
+USAGE_LOGS = {'': 'guides/dashboard/overview#usage', 'zh/': 'guides/dashboard/overview#用量'}
 
 
 class CostDeclarationTests(unittest.TestCase):
