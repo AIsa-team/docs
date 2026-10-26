@@ -12,7 +12,7 @@ from check_canonical_presentation_candidate import assess, checked_scope, presen
 class PresentationScopeTests(unittest.TestCase):
     def test_pages_navigation_receipts_and_code_can_be_checked_together(self):
         self.assertTrue(presentation_only(['api-reference/provider/get_operation.mdx',
-            'zh/api-reference/provider/get_operation.mdx', 'docs.json',
+            'zh/api-reference/provider/get_operation.mdx', 'docs.json', 'openapi/nav-groups.json',
             'docs/current-source-review-20261009/merged-source-reviews.json',
             'scripts/check_canonical_presentation_candidate.py',
             '.github/workflows/test-runtime-contracts.yml']))

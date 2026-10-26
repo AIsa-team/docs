@@ -276,11 +276,9 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
         for _, _, operation in operations(document):
             if operation.get('x-aisa-docs-url') != DOCS_PREFIX + selected_pages[operation['operationId']][-1]:
                 raise ValueError('Canonical page binding differs from existing presentation selection')
-    paths = []
     for path, method, operation in operations(document):
         page_names = selected_pages[operation['operationId']]
         for page in page_names:
-            paths.append(page)
             for language, prefix in (("en", ""), ("zh", "zh/")):
                 destination = root / f"{prefix}{page}.mdx"
                 spec_path = f"openapi/{'zh/' if language == 'zh' else ''}{provider}.json"
@@ -348,22 +346,28 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                 elif isinstance(node, str):
                     existing.add(node)
             collect(tab)
-            additions = [prefix + p for p in paths if prefix + p not in existing]
+            # Alternate URLs remain real pages, while an already visible
+            # operation keeps its current category and sidebar entry.
+            additions = [prefix + pages[-1] for pages in selected_pages.values()
+                         if not any(prefix + page in existing for page in pages)]
             if additions:
                 group_name = document["info"].get("title", provider)
                 groups = tab.setdefault("groups", [])
                 # Mapped providers land in their category -> vendor group; only
                 # unmapped titles fall back to a top-level group of their own.
-                target = api_nav_groups.target_for(nav_config, group_name)
-                if target:
-                    label = (lambda name: nav_labels.get(name) or name) if prefix else (lambda name: name)
-                    api_nav_groups.locate(groups, nav_config, target, label).extend(additions)
-                    continue
-                group = next((g for g in groups if g.get("group") == group_name), None)
-                if group is None:
-                    group = {"group": group_name, "pages": []}
-                    groups.append(group)
-                group["pages"].extend(additions)
+                for page in additions:
+                    english_page = page.removeprefix('zh/')
+                    target = (api_nav_groups.page_target(nav_config, english_page) if nav_config else None)
+                    target = target or api_nav_groups.target_for(nav_config, group_name)
+                    if target:
+                        label = (lambda name: nav_labels.get(name) or name) if prefix else (lambda name: name)
+                        api_nav_groups.locate(groups, nav_config, target, label).append(page)
+                        continue
+                    group = next((g for g in groups if g.get("group") == group_name), None)
+                    if group is None:
+                        group = {"group": group_name, "pages": []}
+                        groups.append(group)
+                    group["pages"].append(page)
     content = json.dumps(docs, indent=2, ensure_ascii=False) + "\n"
     if content != docs_path.read_text():
         changes[docs_path] = content

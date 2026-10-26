@@ -22,7 +22,7 @@ def presentation_only(paths):
     artifacts = [name for name in paths if requires_artifact_check([name])]
     return bool(artifacts) and all(
         name.startswith(('api-reference/', 'zh/api-reference/')) and name.endswith('.mdx') or
-        name in {'docs.json', 'api-reference.mdx', 'zh/api-reference.mdx',
+        name in {'docs.json', 'api-reference.mdx', 'zh/api-reference.mdx', 'openapi/nav-groups.json',
                   'docs/current-source-review-20261009/merged-source-reviews.json'}
         for name in artifacts)
 

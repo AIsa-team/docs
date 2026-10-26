@@ -13,6 +13,20 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class PricingProseTests(unittest.TestCase):
+    def test_rate_cleanup_keeps_codegroup_fences_on_their_own_lines(self):
+        example = '```bash REST\ncurl -X POST "https://api.aisa.one/example" \\\n  -d \'{"price": "$9 per request"}\'\n```'
+        page = '---\ntitle: Example\n---\n\nReference price: $0.000001 USD per successful request.\n\n## Example\n\n<CodeGroup>\n' + example + '\n</CodeGroup>\n'
+        result = clean_page(page)
+        self.assertIn('<CodeGroup>\n' + example + '\n</CodeGroup>', result)
+        self.assertNotIn('$0.000001', result)
+        self.assertIn('\n\n' + NOTICE, result)
+        self.assertEqual(clean_page(result), result)
+
+    def test_rate_cleanup_preserves_blank_lines_and_bullets_inside_code(self):
+        example = '```text\n# Pricing\n\n\n; literal\n-\n```'
+        result = clean_text('Billed $9 per request.\n\n' + example + '\n')
+        self.assertIn(example, result)
+
     def test_visible_price_tracks_runtime_in_openapi_localization_pages_and_sales(self):
         from readable_contract_notes import readable_block
         from runtime_localize_openapi_zh import localize_tree
