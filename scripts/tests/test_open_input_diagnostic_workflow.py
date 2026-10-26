@@ -243,6 +243,10 @@ class OpenInputWorkflowTests(unittest.TestCase):
 
     def test_nonselected_parsed_workflow_preserves_every_original_job_and_step(self):
         workflow=yaml.safe_load(WORKFLOW.read_text())
+        self.assertEqual(workflow['jobs']['artifact-contracts']['timeout-minutes'],20)
+        # Runner headroom is intentionally raised for canonical replay. This
+        # normalization still binds every original threshold and legacy step.
+        workflow['jobs']['artifact-contracts']['timeout-minutes']=10
         rows=workflow['jobs']['artifact-contracts']['steps']
         added=('Select exact open-input diagnostic consumer','Checkout immutable clean Docs base for open-input reader',
             'Checkout independently fixed Services open-input reader','Use pinned reader dependency interpreter',

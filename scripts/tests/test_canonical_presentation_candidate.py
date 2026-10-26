@@ -55,6 +55,14 @@ class PresentationScopeTests(unittest.TestCase):
                          'PUBLISHED_REF': 'a' * 40, 'REVIEWED_BASELINE': 'b' * 40})
                 self.assertTrue(trace.read_text().splitlines()[-1].startswith(expected))
 
+    def test_complete_canonical_candidate_has_publication_runner_headroom(self):
+        import yaml
+        root = Path(__file__).resolve().parents[2]
+        workflow = yaml.safe_load((root / '.github/workflows/test-runtime-contracts.yml').read_text())
+        self.assertEqual(workflow['jobs']['artifact-contracts']['timeout-minutes'], 20)
+        from contract_activation import CANDIDATE_BUDGET, CONSUMER_BUDGET
+        self.assertEqual((CANDIDATE_BUDGET, CONSUMER_BUDGET), (3600, 14400))
+
 
 class IsolatedCandidateTests(unittest.TestCase):
     def setUp(self):
