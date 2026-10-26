@@ -330,6 +330,17 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                     changes[destination] = text
     nav_config = api_nav_groups.load(root)
     nav_labels = read_json(root / "translations/openapi-nav-zh.json", {})
+    visible_aliases = set()
+    for language in docs.get("navigation", {}).get("languages", []):
+        if language.get('language') not in ('en', 'zh'):
+            continue
+        for tab in language.get('tabs', []):
+            if tab.get('tab') in {'API Reference', 'API 参考'}:
+                visible_aliases.update(page.removeprefix('zh/') for page in api_nav_groups.nav_pages(tab))
+    # Mirror the union of already visible historical aliases in both locales.
+    # A new canonical URL stays hidden when an existing alias is visible.
+    navigation_pages = {identity: [page for page in pages if page in visible_aliases] or [pages[-1]]
+                        for identity, pages in selected_pages.items()}
     for language in docs.get("navigation", {}).get("languages", []):
         prefix = "zh/" if language.get("language") == "zh" else ""
         for tab in language.get("tabs", []):
@@ -346,10 +357,8 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                 elif isinstance(node, str):
                     existing.add(node)
             collect(tab)
-            # Alternate URLs remain real pages, while an already visible
-            # operation keeps its current category and sidebar entry.
-            additions = [prefix + pages[-1] for pages in selected_pages.values()
-                         if not any(prefix + page in existing for page in pages)]
+            additions = [prefix + page for pages in navigation_pages.values()
+                         for page in pages if prefix + page not in existing]
             if additions:
                 group_name = document["info"].get("title", provider)
                 groups = tab.setdefault("groups", [])
