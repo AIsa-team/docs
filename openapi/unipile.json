@@ -648,7 +648,7 @@
       "post": {
         "operationId": "post_unipile_linkedin_start_chat",
         "summary": "Start Chat",
-        "description": "Creates a LinkedIn conversation with one or more members and sends the opening message in a single call. **LinkedIn rule: the recipient must already be a 1st-degree connection** — list your connections first with the Relations endpoint and use those provider ids. Messaging a non-connection silently hangs upstream (LinkedIn only allows new chats with relations, InMail aside), and the account's own profile is not a valid recipient either. To reach someone who is not yet connected, send a connection invitation (Create Chat Invitation) first, then message them after it is accepted. Write action: same daily messaging limits as Send Message. Pass each recipient's provider id (`ACoAA…`), which you can resolve from a public identifier with the User Profile endpoint. If a call does time out, verify the actual outcome via List Chats and the sent-invitations list before retrying. $0.02 per request.",
+        "description": "Creates a LinkedIn conversation with one or more members and sends the opening message in a single call. **LinkedIn rule: the recipient must already be a 1st-degree connection** — list your connections first with the Relations endpoint and use those provider ids. Messaging a non-connection returns 403 `subscription_required` on this endpoint (LinkedIn only allows new chats with relations, InMail aside), and the account's own profile is not a valid recipient either. **To reach someone who is not yet connected, use the Connection Request endpoint** — it is not subject to this restriction; message them after the invitation is accepted. Write action: same daily messaging limits as Send Message. Pass each recipient's provider id (`ACoAA…`), which you can resolve from a public identifier with the User Profile endpoint. If a call does time out, verify the actual outcome via List Chats and the sent-invitations list before retrying. $0.02 per request.",
         "tags": [
           "Messaging"
         ],
@@ -1319,7 +1319,7 @@
       "post": {
         "operationId": "post_unipile_linkedin_connection_request",
         "summary": "Connection Request",
-        "description": "Invites a LinkedIn member to connect. Identify the recipient by their provider id (`ACoAA…`); resolve it from a public identifier such as `satyanadella` with the User Profile endpoint first. Write action: LinkedIn allows roughly 80-100 invitations per day depending on account age and activity, and accounts with little connection history may be blocked from sending them at all. $0.02 per request.",
+        "description": "Invites a LinkedIn member to connect — **this is the endpoint for reaching people who are not yet connections**, and it is not subject to the subscription restriction that Start Chat hits for non-connections. After the invitation is accepted the member appears in Relations and Start Chat works normally. Identify the recipient by their provider id (`ACoAA…`); resolve it from a public identifier such as `satyanadella` with the User Profile endpoint first. All parameters go in the JSON body (including `account_id`). The returned `invitation_id` can be canceled with Cancel Invitation. Write action: LinkedIn allows roughly 80-100 invitations per day depending on account age and activity, and accounts with little connection history may be blocked from sending them at all. $0.02 per request.",
         "tags": [
           "Network"
         ],
@@ -1340,7 +1340,7 @@
                     },
                     "invitation_id": {
                       "type": "string",
-                      "description": "Id of the sent invitation."
+                      "description": "Id of the sent invitation; pass to Cancel Invitation to withdraw it."
                     },
                     "usage": {
                       "type": "number",
@@ -1365,21 +1365,21 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "provider_id",
-                  "account_id"
+                  "account_id",
+                  "provider_id"
                 ],
                 "properties": {
+                  "account_id": {
+                    "type": "string",
+                    "description": "Connected account id the invitation is sent from. Must be in the body, not the query string."
+                  },
                   "provider_id": {
                     "type": "string",
                     "description": "Provider id of the member to invite (`ACoAA…`)."
                   },
-                  "account_id": {
-                    "type": "string",
-                    "description": "Connected account id the invitation is sent from."
-                  },
                   "message": {
                     "type": "string",
-                    "description": "Optional note attached to the invitation, at most 300 characters."
+                    "description": "Optional note attached to the invitation, at most 300 characters. Echoed back as invitation_text on the sent-invitations list."
                   }
                 }
               }
