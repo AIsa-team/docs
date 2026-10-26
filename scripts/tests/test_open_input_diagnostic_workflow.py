@@ -226,9 +226,14 @@ class OpenInputWorkflowTests(unittest.TestCase):
         self.assertFalse(docs['with']['persist-credentials']);self.assertNotIn('/',docs['with']['path']);self.assertNotIn('/',services['with']['path']);self.assertNotEqual(docs['with']['path'],services['with']['path'])
         for row in rows:
             if 'GH_TOKEN' in row.get('env',{}):
-                self.assertIn(row['name'],('Check exact authenticated source-only input qualification',
-                    'Check exact authenticated open-input diagnostic qualification',
-                    'Check explicit reviewed source-only input without claiming formal output'))
+                if row['name']=='Check actual candidate readiness':
+                    # Authenticate the public historical publisher, using only
+                    # the workflow's own read token, never the private reader App.
+                    self.assertEqual(row['env']['GH_TOKEN'],'${{ github.token }}')
+                else:
+                    self.assertIn(row['name'],('Check exact authenticated source-only input qualification',
+                        'Check exact authenticated open-input diagnostic qualification',
+                        'Check explicit reviewed source-only input without claiming formal output'))
             if row.get('uses','').startswith('actions/upload-artifact'):
                 self.assertNotIn('reader-input',row['with']['path']);self.assertNotIn('github.event_path',row['with']['path'])
         self.assertEqual(byname['Check actual candidate readiness']['if'],"needs.changes.outputs.input_candidate != 'true'")
@@ -247,6 +252,13 @@ class OpenInputWorkflowTests(unittest.TestCase):
         for row in rows:
             if row.get('name') in added: continue
             row=copy.deepcopy(row)
+            if row.get('name')=='Check actual candidate readiness':
+                # The narrow canonical presentation branch is intentional.
+                # Its nonselected branch must retain the exact original gate.
+                self.assertEqual(sha(row['run'].encode()),'5bbabad1fd8dc18f4e62ba9dbb0643c7e48d824da6baf87f3dcfdbf96dfaec26')
+                self.assertEqual(row['env'].pop('GH_TOKEN'),'${{ github.token }}')
+                fallback=row['run'].split('\nelse\n',1)[1].rsplit('\nfi',1)[0]
+                row['run']='\n'.join(line[2:] for line in fallback.splitlines())+'\n'
             if 'if' in row:
                 row['if']=row['if'].replace(" && steps.open_input_diagnostic.outputs.selected != 'true'",'').replace(" || steps.open_input_diagnostic.outputs.selected == 'true'",'')
                 if row['if']=="steps.open_input_diagnostic.outputs.selected != 'true'": del row['if']
