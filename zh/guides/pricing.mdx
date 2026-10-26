@@ -45,7 +45,7 @@ AIsa 按用量计费。你充值一个统一余额，每次模型调用、数据
 
 - 已处理并返回结果的请求会被计费。每次成功的重试会再次计费，因此请谨慎重试。
 - 在处理前被拒绝的请求——凭据错误、速率限制、余额不足、价格超出上限——不计费。
-- 每次调用费率可能因计划或分组不同而异；实际扣费金额显示在 Usage & Logs 中。
+- 每次调用费率可能因计划或分组不同而异；实际扣费金额显示在 Usage 中。
 
 通过 MCP，`search`、`list_categories`、`get_details` 和 `batch_quote` 免费；`batch_use` 按相同费率逐次计费。部分数据端点还支持通过 Machine Payments Protocol (MPP) 按请求付费，无需 API key；详见[机器支付](/zh/integrations/machine-payments)。
 
@@ -55,7 +55,7 @@ AIsa 按用量计费。你充值一个统一余额，每次模型调用、数据
 - **免费报价**：在支持 `X-AISA-Cost-Mode: quote` 的端点上，使用将要执行请求的 API key 发送完全相同的请求。报价反映你当前账户的定价。它不会调用上游提供商，也不会扣减余额。
 - **账户倍率**：`billing_multiplier_ppm` 是你的倍率，单位为百万分之一；除以 1,000,000 即可。例如 1,000,000 表示 1×。发布的参考倍率不能替代你在认证报价中获取的倍率。
 - **微美元单位**：费用字段使用整数微美元（1 USD = 1,000,000 微美元）。
-- **结算费用**：执行后，REST 响应头 `X-AISA-Customer-Cost-Micros-USD`，或成功的原生 Tool 结果中的 `customer_cost_micros_usd`，在存在时报告客户费用。缺失费用元数据意味着未知，而非免费。Tool 的 `cost_estimate` 仍然是估算值，提供商费用不是你的扣款。通过 [Usage & Logs](/zh/guides/dashboard/overview#usage-and-logs) 和余额核对费用；解析细节参见 [API 参考](/zh/api-reference#已结算调用费用)。
+- **结算费用**：执行后，REST 响应头 `X-AISA-Customer-Cost-Micros-USD`，或成功的原生 Tool 结果中的 `customer_cost_micros_usd`，在存在时报告客户费用。缺失费用元数据意味着未知，而非免费。Tool 的 `cost_estimate` 仍然是估算值，提供商费用不是你的扣款。通过 [用量](/zh/guides/dashboard/overview#用量) 和余额核对费用；解析细节参见 [API 参考](/zh/api-reference#已结算调用费用)。
 
 ## 先报价、再审核、后执行
 
@@ -90,7 +90,7 @@ MCP 提供相同的配对操作：`batch_quote` 返回完全相同调用的报�
 --header "Idempotency-Key: ${AISA_IDEMPOTENCY_KEY:?Set AISA_IDEMPOTENCY_KEY}"
 ```
 
-对已准入的请求重用 key 会返回 409，例如 `{"error":"idempotent request already admitted"}`。这可以防止重复准入；但**不会重放原始响应**。如果第一次响应丢失，请检查 Usage & Logs 和已记录的请求 ID（如有）。不要为了绕过冲突而更换 key，也不要盲目重试不确定的付费操作。全新的操作需要新的 key。异步任务和其他 API 系列有各自的约定。
+对已准入的请求重用 key 会返回 409，例如 `{"error":"idempotent request already admitted"}`。这可以防止重复准入；但**不会重放原始响应**。如果第一次响应丢失，请检查 Usage 和已记录的请求 ID（如有）。不要为了绕过冲突而更换 key，也不要盲目重试不确定的付费操作。全新的操作需要新的 key。异步任务和其他 API 系列有各自的约定。
 
 对于日期输入，请遵循各个操作的约束。经典 Similarweb Traffic & Engagement 也接受完整日期，如 `2026-09-01` 到 `2026-09-30`；这不会扩展托管趋势和快照请求的 `YYYY-MM` 仅月份格式。部分校验错误包含一个 `supported` 对象，列出允许的值或范围。如有该信息请使用，但不要假设每个错误都包含此字段。
 
@@ -105,8 +105,8 @@ MCP 提供相同的配对操作：`batch_quote` 返回完全相同调用的报�
 - 哪些金额需要人工确认，以及智能体是否可以回退到更贵的路由。
 - 余额耗尽时的处理方式。
 
-然后运行一个小规模的代表性任务，在 Usage & Logs 中检查记录，衡量整个工作流而非单次调用。
+然后运行一个小规模的代表性任务，在 Usage 中检查记录，衡量整个工作流而非单次调用。
 
 ## 查看消费记录
 
-[控制台 → Usage & Logs](/zh/guides/dashboard/overview#usage-and-logs) 列出每个请求的端点、API key、模型、token 数和扣费金额。`GET /v1/usage` 通过代码返回某个 API key 的每日汇总，`aisa usage` 通过 CLI 实现同样功能。
+[控制台 → 用量](/zh/guides/dashboard/overview#用量) 列出每个请求的端点、API key、模型、token 数和扣费金额。`GET /v1/usage` 通过代码返回某个 API key 的每日汇总，`aisa usage` 通过 CLI 实现同样功能。

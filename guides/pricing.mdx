@@ -47,7 +47,7 @@ What counts as billable:
 
 - A request that is processed and returns a result is billed. Each retry that succeeds is billed again, so make retries deliberate.
 - A request rejected before processing - bad credentials, rate limiting, insufficient balance, a price above your cap - is not billed.
-- Per-call rates can differ by plan or group; the amount actually applied is shown in Usage & Logs.
+- Per-call rates can differ by plan or group; the amount actually applied is shown in Usage.
 
 Through MCP, `search`, `list_categories`, `get_details`, and `batch_quote` are free; `batch_use` is billed per call at the same rates. Selected data endpoints also accept per-request payment through the Machine Payments Protocol (MPP) without an API key; see [Machine Payments](/integrations/machine-payments).
 
@@ -57,7 +57,7 @@ Through MCP, `search`, `list_categories`, `get_details`, and `batch_quote` are f
 - **Free quotes:** On endpoints that support `X-AISA-Cost-Mode: quote`, send the exact request with the API key that will run it. The quote reflects your current account pricing. It does not call the upstream provider or debit your balance.
 - **Account multiplier:** `billing_multiplier_ppm` is your multiplier in parts per million; divide by 1,000,000. For example, 1,000,000 means 1×. A published reference multiplier does not replace the one in your authenticated quote.
 - **Micro-USD units:** Cost fields use integer micro-USD (1 USD = 1,000,000 micro-USD).
-- **Settled cost:** After execution, the REST response header `X-AISA-Customer-Cost-Micros-USD`, or a successful native Tool result's `customer_cost_micros_usd`, reports the customer cost when present. Missing cost metadata means unknown, not free. A Tool `cost_estimate` is still an estimate, and provider cost is not your debit. Reconcile charges with [Usage & Logs](/guides/dashboard/overview#usage-and-logs) and your balance; see the [API reference](/api-reference#settled-call-cost) for parsing details.
+- **Settled cost:** After execution, the REST response header `X-AISA-Customer-Cost-Micros-USD`, or a successful native Tool result's `customer_cost_micros_usd`, reports the customer cost when present. Missing cost metadata means unknown, not free. A Tool `cost_estimate` is still an estimate, and provider cost is not your debit. Reconcile charges with [Usage](/guides/dashboard/overview#usage) and your balance; see the [API reference](/api-reference#settled-call-cost) for parsing details.
 
 ## Quote, review, then execute
 
@@ -92,7 +92,7 @@ For the synchronous Similarweb routes that declare `Idempotency-Key`, generate o
 --header "Idempotency-Key: ${AISA_IDEMPOTENCY_KEY:?Set AISA_IDEMPOTENCY_KEY}"
 ```
 
-Reusing a key for an already admitted request returns 409, such as `{"error":"idempotent request already admitted"}`. This prevents duplicate admission; it does **not replay the original response**. If the first response was lost, check Usage & Logs and the recorded request ID when available. Do not change the key to bypass a conflict or blindly retry an uncertain paid operation. A deliberately new operation needs a new key. Async jobs and other API families have their own contracts.
+Reusing a key for an already admitted request returns 409, such as `{"error":"idempotent request already admitted"}`. This prevents duplicate admission; it does **not replay the original response**. If the first response was lost, check Usage and the recorded request ID when available. Do not change the key to bypass a conflict or blindly retry an uncertain paid operation. A deliberately new operation needs a new key. Async jobs and other API families have their own contracts.
 
 For date inputs, follow the individual operation's constraints. Classic Similarweb Traffic & Engagement also accepts complete dates such as `2026-09-01` through `2026-09-30`; this does not extend the `YYYY-MM` month-only format of managed trend and snapshot requests. Some validation errors include a `supported` object with allowed values or bounds. Use those details when present, but do not assume every error contains this field.
 
@@ -107,8 +107,8 @@ Before scaling, define:
 - Which amounts need a person's confirmation, and whether the agent may fall back to a more expensive route.
 - What happens when the balance runs out.
 
-Then run a small representative task, inspect its records in Usage & Logs, and measure the whole workflow rather than one call.
+Then run a small representative task, inspect its records in Usage, and measure the whole workflow rather than one call.
 
 ## Where to see what you spent
 
-[Console → Usage & Logs](/guides/dashboard/overview#usage-and-logs) lists every request with its endpoint, key, model, tokens, and the amount charged. `GET /v1/usage` returns daily totals for a key from code, and `aisa usage` does the same from the CLI.
+[Console → Usage](/guides/dashboard/overview#usage) lists every request with its endpoint, key, model, tokens, and the amount charged. `GET /v1/usage` returns daily totals for a key from code, and `aisa usage` does the same from the CLI.
