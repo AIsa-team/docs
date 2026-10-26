@@ -361,12 +361,21 @@ jobs:
         env:
           REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
           PUBLISHED_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.published_ref || github.event.pull_request.base.sha || github.event.before }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python scripts/check_contract_candidate.py \
-            --facts-dir /tmp/runtime-contract-evidence \
-            --baseline-ref "$REVIEWED_BASELINE" \
-            --published-ref "$PUBLISHED_REF" \
-            --report /tmp/contract-readiness.json
+          mode=$(python scripts/runtime_publication.py mode --facts-dir /tmp/runtime-contract-evidence)
+          presentation=$(python scripts/check_canonical_presentation_candidate.py scope --base "$PUBLISHED_REF")
+          if [ "$mode" = canonical ] && [ "$presentation" = true ]; then
+            python scripts/check_canonical_presentation_candidate.py assess \
+              --facts-dir /tmp/runtime-contract-evidence --base "$PUBLISHED_REF" \
+              --baseline-ref "$REVIEWED_BASELINE" --report /tmp/contract-readiness.json
+          else
+            python scripts/check_contract_candidate.py \
+              --facts-dir /tmp/runtime-contract-evidence \
+              --baseline-ref "$REVIEWED_BASELINE" \
+              --published-ref "$PUBLISHED_REF" \
+              --report /tmp/contract-readiness.json
+          fi
       - name: Check explicit reviewed source-only input without claiming formal output
         if: needs.changes.outputs.input_candidate == 'true' && steps.input_recovery.outputs.selected != 'true' && steps.open_input_diagnostic.outputs.selected != 'true'
         env:
