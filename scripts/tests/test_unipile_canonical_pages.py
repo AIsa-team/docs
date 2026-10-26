@@ -13,7 +13,8 @@ from runtime_localize_openapi_zh import split_frontmatter
 class UnipileCanonicalPagesTests(unittest.TestCase):
     def test_first_publication_urls_resolve_in_both_languages(self):
         root = Path(__file__).resolve().parents[2]
-        aliases = sorted((root / 'api-reference/unipile').glob('*-*.mdx'))
+        aliases = [path for path in sorted((root / 'api-reference/unipile').glob('*-*.mdx'))
+                   if page_reference(path.read_text())]
         self.assertGreaterEqual(len(aliases), 24)
         for alias in aliases:
             header, _ = split_frontmatter(alias.read_text())
@@ -30,6 +31,17 @@ class UnipileCanonicalPagesTests(unittest.TestCase):
                         (f'openapi/{prefix}unipile.json', method, route))
                     header, _ = split_frontmatter(text)
                     self.assertEqual(yaml.safe_load(header)['x-aisa-operation-id'], identity)
+
+    def test_managed_account_guide_does_not_reference_provider_only_schema(self):
+        root = Path(__file__).resolve().parents[2]
+        for prefix in ('', 'zh/'):
+            text = (root / f'{prefix}api-reference/unipile/get_unipile-me-accounts.mdx').read_text()
+            header, _ = split_frontmatter(text)
+            values = yaml.safe_load(header)
+            self.assertNotIn('openapi', values)
+            self.assertNotIn('x-aisa-operation-id', values)
+            self.assertIn('GET /apis/v1/unipile/me/accounts', text)
+            self.assertIn('Authorization: Bearer YOUR_API_KEY', text)
 
 
 if __name__ == '__main__':
