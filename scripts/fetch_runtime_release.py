@@ -93,7 +93,8 @@ class PublicReader:
             else:
                 require(time.monotonic() <= self.deadline, 'Acquisition deadline exceeded')
                 require(len(raw) <= limit, 'Public file exceeds byte limit')
-                require('110' not in headers.get('warning', ''), 'Stale public metadata rejected')
+                if '110' in headers.get('warning', ''):
+                    raise AcquisitionRejected(stale_diagnostic(target, raw))
                 return raw, headers
             if not retry or attempt == REQUEST_ATTEMPTS:
                 raise AcquisitionRejected(
@@ -114,6 +115,28 @@ def public_target(path):
     if match and member_name(match[1]):
         return 'release/' + match[1]
     return 'public-file'
+
+
+def stale_diagnostic(target, raw):
+    """Expose bounded public release identities without logging response bodies."""
+    fields = ['target=' + target]
+    if target == 'current':
+        try:
+            current = decode(raw)
+        except (ValueError, UnicodeError, TypeError):
+            current = None
+        if isinstance(current, dict):
+            if type(current.get('fresh')) is bool:
+                fields.append('fresh=' + str(current['fresh']).lower())
+            for key in ('generation', 'published_generation'):
+                value = current.get(key)
+                if type(value) is int and 0 <= value < 2**64:
+                    fields.append(f'{key}={value}')
+            for key, pattern in (('compiler_revision', HEX40), ('artifact_revision', HEX64)):
+                value = current.get(key)
+                if isinstance(value, str) and pattern.fullmatch(value):
+                    fields.append(key + '=' + value)
+    return 'Stale public metadata rejected (' + ', '.join(fields) + ')'
 
 
 def validate_current(current, revision, compiler):

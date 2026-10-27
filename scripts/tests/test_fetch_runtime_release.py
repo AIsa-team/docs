@@ -12,7 +12,7 @@ from urllib.error import HTTPError, URLError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from fetch_runtime_release import (acquire, save, sha, PublicReader, NoRedirect,
-                                   AcquisitionRejected, failure_diagnostic, main)
+                                   AcquisitionRejected, failure_diagnostic, main, stale_diagnostic)
 
 
 def encoded(value):
@@ -20,6 +20,27 @@ def encoded(value):
 
 
 class PublicReleaseTests(unittest.TestCase):
+    def test_stale_current_diagnostic_reports_only_valid_public_release_identities(self):
+        raw = encoded({'fresh': False, 'generation': 8, 'published_generation': 7,
+                       'compiler_revision': 'b' * 40, 'artifact_revision': 'c' * 64,
+                       'secret': 'response-body-secret'})
+        message = stale_diagnostic('current', raw)
+        for item in ('target=current', 'fresh=false', 'generation=8',
+                     'published_generation=7', 'compiler_revision=' + 'b' * 40,
+                     'artifact_revision=' + 'c' * 64):
+            self.assertIn(item, message)
+        self.assertNotIn('secret', message)
+
+    def test_stale_diagnostic_omits_malformed_unbounded_or_untrusted_fields(self):
+        for raw in (b'not-json-secret', encoded(['secret']),
+                    encoded({'fresh': 'secret', 'generation': True,
+                             'published_generation': 2**128,
+                             'compiler_revision': 'secret', 'artifact_revision': 'secret'})):
+            self.assertEqual(stale_diagnostic('current', raw),
+                             'Stale public metadata rejected (target=current)')
+        self.assertEqual(stale_diagnostic('category', encoded({'generation': 8})),
+                         'Stale public metadata rejected (target=category)')
+
     def test_transient_timeout_retries_the_same_get_and_returns_only_complete_response(self):
         response = Mock(status=200, headers={})
         response.read.return_value = b'{"fresh":true}'
