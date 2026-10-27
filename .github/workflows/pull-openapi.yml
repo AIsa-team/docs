@@ -94,6 +94,19 @@ jobs:
           fi
           if [ "$status" -ne 0 ]; then exit "$status"; fi
           echo 'available=true' >> "$GITHUB_OUTPUT"
+      - name: Renew due automatic source observations
+        if: steps.pull.outputs.available == 'true'
+        run: >-
+          python scripts/renew_source_receipts.py
+          --receipts .cache/source-reviews.json
+          --report /tmp/source-renewal.json
+      - name: Retain automatic source renewal observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publication-source-renewal
+          path: /tmp/source-renewal.json
+          if-no-files-found: ignore
       - name: Preserve real source acquisition observations
         if: always()
         uses: actions/cache/save@v4

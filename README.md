@@ -133,9 +133,20 @@ staged graph before exporting its publication pointer. Candidate CI success does
 not authorize a formal release or assert that consumers have converged.
 
 Candidate assessment selects the verified acquired Runtime mode. Canonical
-releases use the same canonical assessment as the publisher; facts-only releases
-retain the local composition check. Neither assessment regenerates the candidate
-before inspecting it or accepts stale public metadata.
+artifact changes use the same canonical assessment as the publisher; facts-only
+releases retain the local composition check. Neither path rewrites the checked-out
+PR or accepts stale public metadata.
+
+A PR limited to generator code and `openapi/nav-groups.json` validates the future
+canonical graph in a detached temporary worktree. The committed mirrors stay at
+their last formal publication. This narrow path rejects schema, page, pricing,
+source-review, payment-evidence and publication-output edits; those still inspect
+the actual committed graph. The isolated result cannot authorize a formal export.
+Both paths retain immutable Runtime binding, source, payment and surface checks.
+Due automatic source observations are renewed only by fetching official sources
+and confirming the locked content hash. Changed sources require review; manual
+source approvals and timestamps are retained. Real successes and failures are
+recorded even when a later assessment fails.
 
 The Runtime reader gives each request up to 30 seconds within the unchanged
 180-second acquisition deadline. Timeouts, temporary connection failures and

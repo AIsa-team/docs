@@ -19,20 +19,29 @@ class CandidatePublicationModeTests(unittest.TestCase):
             command = folder / 'python'
             command.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$CALL_LOG"\n'
                 'if [ "$1 $2" = "scripts/runtime_publication.py mode" ]; then\n'
-                '  printf "%s\\n" "$TEST_MODE"\n  exit 0\nfi\nexit "$TEST_STATUS"\n')
+                '  printf "%s\\n" "$TEST_MODE"\n  exit 0\nfi\n'
+                'if [ "$1 $2" = "scripts/check_canonical_presentation_candidate.py scope" ]; then\n'
+                '  printf "%s\\n" "$TEST_PROJECTION"\n  exit 0\nfi\nexit "$TEST_STATUS"\n')
             command.chmod(0o755)
-            for mode, status in (('canonical', 0), ('canonical', 3), ('facts', 0), ('facts', 3), ('invalid', 0)):
+            for mode, status, projection in (
+                    ('canonical', 0, 'false'), ('canonical', 3, 'false'),
+                    ('canonical', 0, 'true'), ('canonical', 3, 'true'),
+                    ('canonical', 0, 'invalid'), ('facts', 0, 'false'),
+                    ('facts', 3, 'false'), ('invalid', 0, 'false')):
                 log = folder / 'calls'
                 log.write_text('')
                 result = subprocess.run(['bash', '-e', '-c', step['run']], capture_output=True, env={
                     **os.environ, 'PATH': str(folder) + os.pathsep + os.environ['PATH'],
                     'CALL_LOG': str(log), 'TEST_MODE': mode, 'TEST_STATUS': str(status),
+                    'TEST_PROJECTION': projection,
                     'REVIEWED_BASELINE': 'a' * 40, 'PUBLISHED_REF': 'b' * 40,
                 })
                 calls = log.read_text()
                 with self.subTest(mode=mode, status=status):
-                    if mode == 'canonical':
-                        self.assertIn('runtime_publication.py assess', calls)
+                    if mode == 'canonical' and projection in ('true', 'false'):
+                        expected = ('check_canonical_presentation_candidate.py assess' if projection == 'true'
+                                    else 'runtime_publication.py assess')
+                        self.assertIn(expected, calls)
                         self.assertNotIn('check_contract_candidate.py', calls)
                         self.assertEqual(result.returncode, status)
                     elif mode == 'facts':

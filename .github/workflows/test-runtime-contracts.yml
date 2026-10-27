@@ -110,7 +110,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.artifacts == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: read
@@ -365,10 +365,19 @@ jobs:
         run: |
           mode=$(python scripts/runtime_publication.py mode --facts-dir /tmp/runtime-contract-evidence)
           if [ "$mode" = canonical ]; then
-            python scripts/runtime_publication.py assess \
-              --facts-dir /tmp/runtime-contract-evidence \
-              --baseline-ref "$REVIEWED_BASELINE" \
-              --report /tmp/contract-readiness.json
+            projection=$(python scripts/check_canonical_presentation_candidate.py scope --base "$PUBLISHED_REF")
+            if [ "$projection" = true ]; then
+              python scripts/check_canonical_presentation_candidate.py assess \
+                --base "$PUBLISHED_REF" --facts-dir /tmp/runtime-contract-evidence \
+                --baseline-ref "$REVIEWED_BASELINE" --report /tmp/contract-readiness.json
+            elif [ "$projection" = false ]; then
+              python scripts/runtime_publication.py assess \
+                --facts-dir /tmp/runtime-contract-evidence \
+                --baseline-ref "$REVIEWED_BASELINE" --report /tmp/contract-readiness.json
+            else
+              echo 'Unverified candidate projection scope.' >&2
+              exit 1
+            fi
           elif [ "$mode" = facts ]; then
             python scripts/check_contract_candidate.py \
               --facts-dir /tmp/runtime-contract-evidence \
@@ -388,6 +397,12 @@ jobs:
           python scripts/check_reviewed_schema_inputs.py \
             --facts-dir /tmp/runtime-contract-evidence \
             --base "$INPUT_BASE" --output /tmp/reviewed-input-candidate
+      - name: Cache actual source renewal observations
+        if: always() && steps.open_input_diagnostic.outputs.selected != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/source-reviews.json
+          key: source-reviews-assess-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Retain candidate assessment
         if: always()
         uses: actions/upload-artifact@v4
@@ -397,6 +412,7 @@ jobs:
             /tmp/contract-readiness.json
             /tmp/runtime-contract-evidence/acquisition-receipt.json
             /tmp/reviewed-input-candidate/receipt.json
+            /tmp/source-renewal.json
           if-no-files-found: ignore
   contracts:
     # Preserve the existing required check and reject skipped formal checks

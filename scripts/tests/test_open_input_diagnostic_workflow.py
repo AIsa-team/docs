@@ -260,9 +260,10 @@ class OpenInputWorkflowTests(unittest.TestCase):
             if type(value) is list:return [normalize(v) for v in value]
             return value
         # Original recovery selection, permissions, triggers and required checks
-        # remain fixed. Candidate assessment now selects the verified Runtime mode;
-        # test_candidate_publication_mode executes that shell for both modes.
-        self.assertEqual(sha(json.dumps(normalize(workflow),sort_keys=True,separators=(',',':')).encode()),'c4af87b569338789c6250a948f373ffeabeacc52db47ce17b08943c77d24605b')
+        # remain fixed. Candidate assessment now selects the verified Runtime
+        # mode and narrowly scoped navigation projection; dedicated tests run
+        # both paths and verify isolated outputs cannot authorize publication.
+        self.assertEqual(sha(json.dumps(normalize(workflow),sort_keys=True,separators=(',',':')).encode()),'853e71856745d7cc31162f4e7f908b272208e725ffb2e06d81f5f9b27cd59a65')
 
     def test_all_run_blocks_are_shell_and_python_syntax_valid(self):
         for job in yaml.safe_load(WORKFLOW.read_text())['jobs'].values():
