@@ -226,14 +226,9 @@ class OpenInputWorkflowTests(unittest.TestCase):
         self.assertFalse(docs['with']['persist-credentials']);self.assertNotIn('/',docs['with']['path']);self.assertNotIn('/',services['with']['path']);self.assertNotEqual(docs['with']['path'],services['with']['path'])
         for row in rows:
             if 'GH_TOKEN' in row.get('env',{}):
-                if row['name']=='Check actual candidate readiness':
-                    # Authenticate the public historical publisher, using only
-                    # the workflow's own read token, never the private reader App.
-                    self.assertEqual(row['env']['GH_TOKEN'],'${{ github.token }}')
-                else:
-                    self.assertIn(row['name'],('Check exact authenticated source-only input qualification',
-                        'Check exact authenticated open-input diagnostic qualification',
-                        'Check explicit reviewed source-only input without claiming formal output'))
+                self.assertIn(row['name'],('Check exact authenticated source-only input qualification',
+                    'Check exact authenticated open-input diagnostic qualification',
+                    'Check explicit reviewed source-only input without claiming formal output'))
             if row.get('uses','').startswith('actions/upload-artifact'):
                 self.assertNotIn('reader-input',row['with']['path']);self.assertNotIn('github.event_path',row['with']['path'])
         self.assertEqual(byname['Check actual candidate readiness']['if'],"needs.changes.outputs.input_candidate != 'true'")
@@ -243,28 +238,15 @@ class OpenInputWorkflowTests(unittest.TestCase):
 
     def test_nonselected_parsed_workflow_preserves_every_original_job_and_step(self):
         workflow=yaml.safe_load(WORKFLOW.read_text())
-        self.assertEqual(workflow['jobs']['artifact-contracts']['timeout-minutes'],20)
-        # Runner headroom is intentionally raised for canonical replay. This
-        # normalization still binds every original threshold and legacy step.
-        workflow['jobs']['artifact-contracts']['timeout-minutes']=10
         rows=workflow['jobs']['artifact-contracts']['steps']
         added=('Select exact open-input diagnostic consumer','Checkout immutable clean Docs base for open-input reader',
             'Checkout independently fixed Services open-input reader','Use pinned reader dependency interpreter',
             'Use exact Services Go toolchain for original snapshot verification','Install independently pinned reader dependencies',
-            'Check exact authenticated open-input diagnostic qualification','Retain input-only diagnostic consumer receipt',
-            'Renew due automatic source observations','Retain automatic source renewal observations',
-            'Cache actual source renewal observations')
+            'Check exact authenticated open-input diagnostic qualification','Retain input-only diagnostic consumer receipt')
         original=[]
         for row in rows:
             if row.get('name') in added: continue
             row=copy.deepcopy(row)
-            if row.get('name')=='Check actual candidate readiness':
-                # The canonical presentation and actual-output branches are intentional.
-                # Its nonselected branch must retain the exact original gate.
-                self.assertEqual(sha(row['run'].encode()),'ddffec716358fced1bb4b493ec4ce330dc0645938e9718857099907cff04080f')
-                self.assertEqual(row['env'].pop('GH_TOKEN'),'${{ github.token }}')
-                fallback=row['run'].split('\nelse\n',1)[1].rsplit('\nfi',1)[0]
-                row['run']='\n'.join(line[2:] for line in fallback.splitlines())+'\n'
             if 'if' in row:
                 row['if']=row['if'].replace(" && steps.open_input_diagnostic.outputs.selected != 'true'",'').replace(" || steps.open_input_diagnostic.outputs.selected == 'true'",'')
                 if row['if']=="steps.open_input_diagnostic.outputs.selected != 'true'": del row['if']

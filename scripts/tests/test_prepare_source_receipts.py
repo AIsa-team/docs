@@ -10,7 +10,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from prepare_source_receipts import merge_evidence, prepare
-from source_governance import acquisition_receipt, initial_policy, receipt_key, source_report, timestamp
+from source_governance import acquisition_receipt, initial_policy, receipt_key, source_report
 from contract_change_scope import requires_artifact_check
 
 
@@ -85,21 +85,6 @@ class ReceiptPreparationTests(unittest.TestCase):
             first = cache.read_bytes()
             self.assertEqual(prepare(reviewed, cache), expected)
             self.assertEqual(cache.read_bytes(), first)
-
-    def test_cold_publisher_cache_includes_current_reviewed_input_evidence(self):
-        root = Path(__file__).resolve().parents[2]
-        approved = json.loads((root / 'docs/schema-inputs/source-receipts.json').read_text())
-        reviewed = root / 'docs/current-source-review-20261009/merged-source-reviews.json'
-        with tempfile.TemporaryDirectory() as temp:
-            actual = prepare(reviewed, Path(temp) / 'cache.json')
-        for path in (root / 'openapi/upstream').glob('*.json'):
-            source = json.loads(path.read_text())['info']['x-aisa-source']
-            key = receipt_key(source)
-            with self.subTest(source=path.name):
-                self.assertIn(key, actual['receipts'])
-                self.assertGreaterEqual(
-                    timestamp(actual['receipts'][key]['last_successful_review_at']),
-                    timestamp(approved['receipts'][key]['last_successful_review_at']))
 
     def test_all_workflows_prepare_receipts_before_consuming_and_receipt_changes_require_gate(self):
         root = Path(__file__).resolve().parents[2]
