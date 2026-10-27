@@ -137,6 +137,13 @@ releases use the same canonical assessment as the publisher; facts-only releases
 retain the local composition check. Neither assessment regenerates the candidate
 before inspecting it or accepts stale public metadata.
 
+The Runtime reader gives each request up to 30 seconds within the unchanged
+180-second acquisition deadline. Timeouts, temporary connection failures and
+transient HTTP statuses retry the same GET at most three times with bounded
+backoff. Retry and failure messages identify the public protocol member, without
+printing origins, credentials or response bodies. Redirects, stale metadata,
+manifest/hash mismatches and changing current pointers remain rejection cases.
+
 Canonical page projection resolves the producer's ID-based URL while preserving
 existing reader aliases and their editorial text in both languages. Existing
 visible aliases remain the sidebar entries; the new canonical URL does not add

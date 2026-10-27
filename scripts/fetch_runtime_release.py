@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 import re
 import shutil
+import socket
+import sys
 import tempfile
 import time
 from urllib.error import HTTPError, URLError
@@ -20,6 +22,8 @@ MAX_TOTAL = 64 << 20
 HEX64 = re.compile(r'[0-9a-f]{64}')
 HEX40 = re.compile(r'[0-9a-f]{40}')
 PROVIDER = re.compile(r'[a-z0-9][a-z0-9_.-]*')
+REQUEST_TIMEOUT = 30
+REQUEST_ATTEMPTS = 3
 
 
 class AcquisitionRejected(ValueError):
@@ -65,25 +69,51 @@ class PublicReader:
         self.opener = build_opener(ProxyHandler({}), NoRedirect())
 
     def __call__(self, path):
-        remaining = self.deadline - time.monotonic()
-        require(remaining > 0, 'Acquisition deadline exceeded')
         match = re.fullmatch(r'/public/api-contract/releases/[0-9a-f]{64}/(contracts/(?:openapi|manifest|readiness)\.json)', path)
         limit = file_limit(match[1], MAX_FILE) if match else MAX_FILE
         request = Request(self.origin + path, headers={'Accept': 'application/json'})
-        try:
-            with self.opener.open(request, timeout=min(10, remaining)) as response:
-                require(response.status == 200, 'Expected HTTP 200')
-                raw = response.read(limit + 1)
-                headers = dict((k.lower(), v) for k, v in response.headers.items())
-        except HTTPError as exc:
-            exc.close()
-            raise AcquisitionRejected('Public metadata request failed: HTTP ' + str(exc.code)) from None
-        except (URLError, TimeoutError, OSError) as exc:
-            raise AcquisitionRejected('Public metadata request failed: ' + type(exc).__name__) from None
-        require(time.monotonic() <= self.deadline, 'Acquisition deadline exceeded')
-        require(len(raw) <= limit, 'Public file exceeds byte limit')
-        require('110' not in headers.get('warning', ''), 'Stale public metadata rejected')
-        return raw, headers
+        target = public_target(path)
+        for attempt in range(1, REQUEST_ATTEMPTS + 1):
+            remaining = self.deadline - time.monotonic()
+            require(remaining > 0, 'Acquisition deadline exceeded')
+            try:
+                with self.opener.open(request, timeout=min(REQUEST_TIMEOUT, remaining)) as response:
+                    require(response.status == 200, 'Expected HTTP 200')
+                    raw = response.read(limit + 1)
+                    headers = dict((k.lower(), v) for k, v in response.headers.items())
+            except HTTPError as exc:
+                failure = 'HTTP ' + str(exc.code)
+                retry = exc.code in (429, 500, 502, 503, 504)
+                exc.close()
+            except (URLError, TimeoutError, OSError) as exc:
+                failure = type(exc).__name__
+                reason = exc.reason if isinstance(exc, URLError) else exc
+                retry = isinstance(reason, (TimeoutError, ConnectionError)) or (
+                    isinstance(reason, socket.gaierror) and reason.errno == socket.EAI_AGAIN)
+            else:
+                require(time.monotonic() <= self.deadline, 'Acquisition deadline exceeded')
+                require(len(raw) <= limit, 'Public file exceeds byte limit')
+                require('110' not in headers.get('warning', ''), 'Stale public metadata rejected')
+                return raw, headers
+            if not retry or attempt == REQUEST_ATTEMPTS:
+                raise AcquisitionRejected(
+                    f'Public metadata request failed: {failure} (target={target}, attempts={attempt})') from None
+            delay = 0.5 * attempt
+            require(self.deadline - time.monotonic() > delay, 'Acquisition deadline exceeded')
+            print(f'Runtime acquisition retry: target={target}, attempt={attempt}, failure={failure}', file=sys.stderr)
+            time.sleep(delay)
+
+
+def public_target(path):
+    """Name only known public protocol members, never origins or arbitrary URLs."""
+    if path == '/public/api-contract/current':
+        return 'current'
+    if path == '/info/apis/category':
+        return 'category'
+    match = re.fullmatch(r'/public/api-contract/releases/[0-9a-f]{64}/(.+)', path)
+    if match and member_name(match[1]):
+        return 'release/' + match[1]
+    return 'public-file'
 
 
 def validate_current(current, revision, compiler):

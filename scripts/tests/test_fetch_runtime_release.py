@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 from urllib.error import HTTPError, URLError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -20,6 +20,58 @@ def encoded(value):
 
 
 class PublicReleaseTests(unittest.TestCase):
+    def test_transient_timeout_retries_the_same_get_and_returns_only_complete_response(self):
+        response = Mock(status=200, headers={})
+        response.read.return_value = b'{"fresh":true}'
+        opened = MagicMock()
+        opened.__enter__.return_value = response
+        for failure in (TimeoutError('secret timeout'), URLError(TimeoutError('secret timeout'))):
+            reader = PublicReader('https://api.aisa.one', float('inf'))
+            reader.opener = Mock()
+            reader.opener.open.side_effect = [failure, opened]
+            with self.subTest(failure=type(failure).__name__), patch('fetch_runtime_release.time.sleep'):
+                raw, _ = reader('/public/api-contract/current')
+                self.assertEqual(raw, b'{"fresh":true}')
+                self.assertEqual(reader.opener.open.call_count, 2)
+                first, second = reader.opener.open.call_args_list
+                self.assertEqual(first.args[0].full_url, second.args[0].full_url)
+                self.assertEqual(first.args[0].get_method(), 'GET')
+
+    def test_request_timeout_allows_slow_metadata_within_the_shared_deadline(self):
+        response = Mock(status=200, headers={})
+        response.read.return_value = b'{}'
+        reader = PublicReader('https://api.aisa.one', 120)
+        reader.opener = MagicMock()
+        reader.opener.open.return_value.__enter__.return_value = response
+        with patch('fetch_runtime_release.time.monotonic', return_value=100):
+            reader('/public/api-contract/current')
+        timeout = reader.opener.open.call_args.kwargs['timeout']
+        self.assertGreater(timeout, 10)
+        self.assertLessEqual(timeout, 20)
+
+    def test_retry_backoff_cannot_extend_the_acquisition_deadline(self):
+        reader = PublicReader('https://api.aisa.one', 10)
+        reader.opener = Mock()
+        reader.opener.open.side_effect = TimeoutError('secret timeout')
+        with patch('fetch_runtime_release.time.monotonic', side_effect=[9, 11]), \
+             patch('fetch_runtime_release.time.sleep') as sleep:
+            with self.assertRaisesRegex(AcquisitionRejected, 'Acquisition deadline exceeded'):
+                reader('/public/api-contract/current')
+        self.assertEqual(reader.opener.open.call_count, 1)
+        sleep.assert_not_called()
+
+    def test_stale_response_and_hash_failure_never_retry_as_network_failures(self):
+        response = Mock(status=200, headers={'Warning': '110 - "Response is stale"'})
+        response.read.return_value = b'{}'
+        reader = PublicReader('https://api.aisa.one', float('inf'))
+        reader.opener = MagicMock()
+        reader.opener.open.return_value.__enter__.return_value = response
+        with patch('fetch_runtime_release.time.sleep') as sleep:
+            with self.assertRaisesRegex(AcquisitionRejected, 'Stale public metadata rejected'):
+                reader('/public/api-contract/current')
+        self.assertEqual(reader.opener.open.call_count, 1)
+        sleep.assert_not_called()
+
     def test_pending_count_boolean_is_not_an_integer_zero(self):
         revision, compiler, reader, *_ = self.fixture(
             mutate_index=lambda index: index['coverage'].update(pending_endpoint_count=False))
@@ -52,9 +104,59 @@ class PublicReleaseTests(unittest.TestCase):
             reader = PublicReader('https://api.aisa.one', float('inf'))
             reader.opener = Mock()
             reader.opener.open.side_effect = exc
-            with self.assertRaises(AcquisitionRejected) as raised:
+            with patch('fetch_runtime_release.time.sleep'), redirect_stderr(io.StringIO()), \
+                 self.assertRaises(AcquisitionRejected) as raised:
                 reader('/public/api-contract/current')
-            self.assertEqual(failure_diagnostic(raised.exception), 'Public metadata request failed: ' + expected)
+            attempts = 3 if isinstance(exc, TimeoutError) else 1
+            self.assertEqual(failure_diagnostic(raised.exception),
+                f'Public metadata request failed: {expected} (target=current, attempts={attempts})')
+            self.assertEqual(reader.opener.open.call_count, attempts)
+
+    def test_timeout_while_reading_reopens_the_same_immutable_member(self):
+        broken = Mock(status=200, headers={})
+        broken.read.side_effect = TimeoutError('secret partial response')
+        complete = Mock(status=200, headers={})
+        complete.read.return_value = b'{"complete":true}'
+        contexts = [MagicMock(), MagicMock()]
+        contexts[0].__enter__.return_value = broken
+        contexts[1].__enter__.return_value = complete
+        reader = PublicReader('https://api.aisa.one', float('inf'))
+        reader.opener = Mock()
+        reader.opener.open.side_effect = contexts
+        path = '/public/api-contract/releases/' + 'a' * 64 + '/contracts/openapi.json'
+        with patch('fetch_runtime_release.time.sleep'):
+            raw, _ = reader(path)
+        self.assertEqual(raw, b'{"complete":true}')
+        self.assertEqual([call.args[0].full_url for call in reader.opener.open.call_args_list],
+                         ['https://api.aisa.one' + path] * 2)
+        contexts[0].__exit__.assert_called_once()
+
+    def test_transient_http_status_retries_but_stale_success_is_rejected(self):
+        response = Mock(status=200, headers={'Warning': '110 - "Response is stale"'})
+        response.read.return_value = b'{}'
+        opened = MagicMock()
+        opened.__enter__.return_value = response
+        reader = PublicReader('https://api.aisa.one', float('inf'))
+        reader.opener = Mock()
+        reader.opener.open.side_effect = [HTTPError('https://secret.invalid', 503, 'secret', {}, None), opened]
+        with patch('fetch_runtime_release.time.sleep') as sleep:
+            with self.assertRaisesRegex(AcquisitionRejected, 'Stale public metadata rejected'):
+                reader('/public/api-contract/current')
+        self.assertEqual(reader.opener.open.call_count, 2)
+        sleep.assert_called_once()
+
+    def test_unknown_target_and_exhausted_timeouts_do_not_expose_request_details(self):
+        reader = PublicReader('https://api.aisa.one', float('inf'))
+        reader.opener = Mock()
+        reader.opener.open.side_effect = TimeoutError('secret error body')
+        stderr = io.StringIO()
+        with patch('fetch_runtime_release.time.sleep'), redirect_stderr(stderr), \
+             self.assertRaises(AcquisitionRejected) as raised:
+            reader('/private-secret?credential=secret')
+        diagnostic = failure_diagnostic(raised.exception)
+        self.assertIn('target=public-file, attempts=3', diagnostic)
+        self.assertEqual(reader.opener.open.call_count, 3)
+        self.assertNotIn('secret', diagnostic + stderr.getvalue())
 
     def fixture(self, mutate_index=None, mutate_current=None):
         compiler = 'b' * 40
