@@ -110,7 +110,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.artifacts == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Complete canonical projection, real source/payment observations and
+    # independent replay need the same headroom as the sole publisher. The
+    # separate 1h candidate / 4h convergence acceptance budgets are unchanged.
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: read
@@ -361,12 +364,24 @@ jobs:
         env:
           REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
           PUBLISHED_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.published_ref || github.event.pull_request.base.sha || github.event.before }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python scripts/check_contract_candidate.py \
-            --facts-dir /tmp/runtime-contract-evidence \
-            --baseline-ref "$REVIEWED_BASELINE" \
-            --published-ref "$PUBLISHED_REF" \
-            --report /tmp/contract-readiness.json
+          mode=$(python scripts/runtime_publication.py mode --facts-dir /tmp/runtime-contract-evidence)
+          presentation=$(python scripts/check_canonical_presentation_candidate.py scope --base "$PUBLISHED_REF")
+          if [ "$mode" = canonical ] && [ "$presentation" = true ]; then
+            python scripts/check_canonical_presentation_candidate.py assess \
+              --facts-dir /tmp/runtime-contract-evidence --base "$PUBLISHED_REF" \
+              --baseline-ref "$REVIEWED_BASELINE" --report /tmp/contract-readiness.json
+          elif [ "$mode" = canonical ]; then
+            python scripts/runtime_publication.py assess --facts-dir /tmp/runtime-contract-evidence \
+              --baseline-ref "$REVIEWED_BASELINE" --report /tmp/contract-readiness.json
+          else
+            python scripts/check_contract_candidate.py \
+              --facts-dir /tmp/runtime-contract-evidence \
+              --baseline-ref "$REVIEWED_BASELINE" \
+              --published-ref "$PUBLISHED_REF" \
+              --report /tmp/contract-readiness.json
+          fi
       - name: Check explicit reviewed source-only input without claiming formal output
         if: needs.changes.outputs.input_candidate == 'true' && steps.input_recovery.outputs.selected != 'true' && steps.open_input_diagnostic.outputs.selected != 'true'
         env:
@@ -376,6 +391,19 @@ jobs:
           python scripts/check_reviewed_schema_inputs.py \
             --facts-dir /tmp/runtime-contract-evidence \
             --base "$INPUT_BASE" --output /tmp/reviewed-input-candidate
+      - name: Retain automatic source renewal observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-source-renewal
+          path: /tmp/source-renewal.json
+          if-no-files-found: ignore
+      - name: Cache actual source renewal observations
+        if: always() && steps.open_input_diagnostic.outputs.selected != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/source-reviews.json
+          key: source-reviews-candidate-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Retain candidate assessment
         if: always()
         uses: actions/upload-artifact@v4

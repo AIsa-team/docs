@@ -146,11 +146,12 @@ def clean_text(text: str, language: str = 'en') -> str:
         chunks[index] = ''.join(parts)
     if not changed:
         return text
-    result = ''.join(chunks)
-    result = re.sub(r'(?m)^[ \t]*[;；][ \t]*', '', result)
-    result = re.sub(r'(?m)^[ \t]*[-*][ \t]*$', '', result)
-    result = re.sub(r'(?m)^#{1,6} (?:Price|Pricing)[ \t]*\n(?=\s*(?:#|$))', '', result)
-    result = re.sub(r'\n{3,}', '\n\n', result).strip()
+    for index in range(0, len(chunks), 2):
+        chunk = re.sub(r'(?m)^[ \t]*[;；][ \t]*', '', chunks[index])
+        chunk = re.sub(r'(?m)^[ \t]*[-*][ \t]*$', '', chunk)
+        chunk = re.sub(r'(?m)^#{1,6} (?:Price|Pricing)[ \t]*\n(?=\s*(?:#|$))', '', chunk)
+        chunks[index] = re.sub(r'\n{3,}', '\n\n', chunk)
+    result = ''.join(chunks).strip()
     if notice not in result:
         result = (result + '\n\n' + notice).strip()
     return result
@@ -214,8 +215,10 @@ def clean_page(text: str, language: str = 'en') -> str:
                     if j < len(cells) and MONEY.search(cells[j]):
                         cells[j] = ' 见当前定价 ' if language == 'zh' else ' See current pricing '
                 lines[i] = '|'.join(cells)
-        chunks[index] = clean_text(''.join(lines), language)
-    body = ''.join(chunks)
+        chunks[index] = ''.join(lines)
+    # Clean the complete body once so the notice cannot strip the newline
+    # before a fenced example or become text inside a CodeGroup.
+    body = clean_text(''.join(chunks), language)
     if (header, body) == original:
         return text
     return '---\n' + header + '\n---\n' + body

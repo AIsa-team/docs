@@ -230,6 +230,36 @@ class PublicationSurfaceTests(unittest.TestCase):
         self.assertIn('Preserve old prose.', zh.read_text())
         self.assertEqual(validate_surfaces(root)['operations'], 1)
 
+    def test_visible_historical_aliases_are_reconciled_across_languages(self):
+        root = self.root
+        first = 'api-reference/fixture/one'
+        second = 'api-reference/fixture/alternate-one'
+        hidden = 'api-reference/fixture/hidden-one'
+        for prefix in ('', 'zh/'):
+            source = root / (prefix + first + '.mdx')
+            for alias in (second, hidden):
+                (root / (prefix + alias + '.mdx')).write_bytes(source.read_bytes())
+        docs = json.loads((root / 'docs.json').read_text())
+        docs['navigation']['languages'][1]['tabs'][0]['groups'] = [
+            {'group': 'Fixture', 'pages': ['zh/' + second]}]
+        (root / 'docs.json').write_text(json.dumps(docs))
+        document = json.loads((root / 'openapi/fixture.json').read_text())
+        changes = {}
+        generate_pages(root, 'fixture', document, changes, document)
+        changes[root / 'openapi/fixture.json'] = json.dumps(document)
+        for path, text in changes.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+        self.assertEqual(validate_surfaces(root)['operations'], 1)
+        from api_nav_groups import nav_pages
+        docs = json.loads((root / 'docs.json').read_text())
+        english = set(nav_pages(docs['navigation']['languages'][0]['tabs'][0]))
+        chinese = set(nav_pages(docs['navigation']['languages'][1]['tabs'][0]))
+        self.assertEqual(english, {first, second})
+        self.assertEqual(chinese, {'zh/' + first, 'zh/' + second})
+        self.assertNotIn(hidden, english)
+        self.assertNotIn('zh/' + hidden, chinese)
+
 
 if __name__ == '__main__':
     unittest.main()

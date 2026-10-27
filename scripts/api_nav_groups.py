@@ -57,9 +57,9 @@ def page_target(config: dict, page: str) -> dict | None:
     return None
 
 
-def _child(items: list, name: str, order: list[str] | None = None, **fields) -> dict:
+def _child(items: list, name: str, order: list[str] | None = None, *, aliases=(), **fields) -> dict:
     for item in items:
-        if isinstance(item, dict) and item.get("group") == name:
+        if isinstance(item, dict) and item.get("group") in (name, *aliases):
             return item
     node = {"group": name, **fields, "pages": []}
     order = order or []
@@ -76,11 +76,13 @@ def locate(groups: list, config: dict, target: dict, label=lambda name: name) ->
     """Return the page list for a target, creating missing levels in configured order."""
     category = next(c for c in config["categories"] if c["name"] == target["category"])
     fields = {"icon": category["icon"]} if category.get("icon") else {}
-    node = _child(groups, label(category["name"]), [label(c["name"]) for c in config["categories"]], **fields)
+    node = _child(groups, label(category["name"]), [label(c["name"]) for c in config["categories"]],
+                  aliases=(category["name"],), **fields)
     if target.get("group"):
-        node = _child(node["pages"], label(target["group"]), [label(g) for g in category["groups"]])
+        node = _child(node["pages"], label(target["group"]), [label(g) for g in category["groups"]],
+                      aliases=(target["group"],))
     if target.get("subgroup"):
-        node = _child(node["pages"], label(target["subgroup"]))
+        node = _child(node["pages"], label(target["subgroup"]), aliases=(target["subgroup"],))
     return node["pages"]
 
 
