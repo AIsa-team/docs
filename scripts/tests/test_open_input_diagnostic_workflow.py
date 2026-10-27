@@ -228,7 +228,10 @@ class OpenInputWorkflowTests(unittest.TestCase):
             if 'GH_TOKEN' in row.get('env',{}):
                 self.assertIn(row['name'],('Check exact authenticated source-only input qualification',
                     'Check exact authenticated open-input diagnostic qualification',
-                    'Check explicit reviewed source-only input without claiming formal output'))
+                    'Check explicit reviewed source-only input without claiming formal output',
+                    'Check actual candidate readiness'))
+                if row['name'] == 'Check actual candidate readiness':
+                    self.assertEqual(row['env']['GH_TOKEN'], '${{ github.token }}')
             if row.get('uses','').startswith('actions/upload-artifact'):
                 self.assertNotIn('reader-input',row['with']['path']);self.assertNotIn('github.event_path',row['with']['path'])
         self.assertEqual(byname['Check actual candidate readiness']['if'],"needs.changes.outputs.input_candidate != 'true'")
@@ -256,9 +259,10 @@ class OpenInputWorkflowTests(unittest.TestCase):
             if type(value) is dict:return {str(k):normalize(v) for k,v in value.items()}
             if type(value) is list:return [normalize(v) for v in value]
             return value
-        # Independent immutable a79 pre-change workflow, including every old run block,
-        # permission, trigger, required aggregate, formal and passed input branch.
-        self.assertEqual(sha(json.dumps(normalize(workflow),sort_keys=True,separators=(',',':')).encode()),'8f2a3055805905f71ca31124fe52e3e7d5b955c1cf71efdb3e6b4dabdb00b6d6')
+        # Original recovery selection, permissions, triggers and required checks
+        # remain fixed. Candidate assessment now selects the verified Runtime mode;
+        # test_candidate_publication_mode executes that shell for both modes.
+        self.assertEqual(sha(json.dumps(normalize(workflow),sort_keys=True,separators=(',',':')).encode()),'c4af87b569338789c6250a948f373ffeabeacc52db47ce17b08943c77d24605b')
 
     def test_all_run_blocks_are_shell_and_python_syntax_valid(self):
         for job in yaml.safe_load(WORKFLOW.read_text())['jobs'].values():

@@ -132,6 +132,18 @@ The formal publisher separately acquires a fresh release and assesses the exact
 staged graph before exporting its publication pointer. Candidate CI success does
 not authorize a formal release or assert that consumers have converged.
 
+Candidate assessment selects the verified acquired Runtime mode. Canonical
+releases use the same canonical assessment as the publisher; facts-only releases
+retain the local composition check. Neither assessment regenerates the candidate
+before inspecting it or accepts stale public metadata.
+
+Canonical page projection resolves the producer's ID-based URL while preserving
+existing reader aliases and their editorial text in both languages. Existing
+visible aliases remain the sidebar entries; the new canonical URL does not add
+a duplicate entry. A conflicting page identity or unrelated producer URL still
+fails projection. The API-owned Unipile account helper keeps its OpenAPI binding;
+its typed contract must be supplied by Runtime before a complete new publication.
+
 Runtime payment capabilities may include optional `mpp_methods` and
 `x402_methods` lists. Composer keeps the immutable native operation identity and
 limits each concrete method's payment flag to the declared uppercase methods.

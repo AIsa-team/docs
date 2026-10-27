@@ -361,12 +361,24 @@ jobs:
         env:
           REVIEWED_BASELINE: ${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}
           PUBLISHED_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.published_ref || github.event.pull_request.base.sha || github.event.before }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python scripts/check_contract_candidate.py \
-            --facts-dir /tmp/runtime-contract-evidence \
-            --baseline-ref "$REVIEWED_BASELINE" \
-            --published-ref "$PUBLISHED_REF" \
-            --report /tmp/contract-readiness.json
+          mode=$(python scripts/runtime_publication.py mode --facts-dir /tmp/runtime-contract-evidence)
+          if [ "$mode" = canonical ]; then
+            python scripts/runtime_publication.py assess \
+              --facts-dir /tmp/runtime-contract-evidence \
+              --baseline-ref "$REVIEWED_BASELINE" \
+              --report /tmp/contract-readiness.json
+          elif [ "$mode" = facts ]; then
+            python scripts/check_contract_candidate.py \
+              --facts-dir /tmp/runtime-contract-evidence \
+              --baseline-ref "$REVIEWED_BASELINE" \
+              --published-ref "$PUBLISHED_REF" \
+              --report /tmp/contract-readiness.json
+          else
+            echo 'Unverified Runtime mode; refusing candidate assessment.' >&2
+            exit 1
+          fi
       - name: Check explicit reviewed source-only input without claiming formal output
         if: needs.changes.outputs.input_candidate == 'true' && steps.input_recovery.outputs.selected != 'true' && steps.open_input_diagnostic.outputs.selected != 'true'
         env:

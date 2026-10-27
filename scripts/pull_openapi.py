@@ -272,15 +272,24 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
             known_ids.setdefault(identity, set()).add(page)
     selected_pages = select_pages(provider, document, known_ids, known)
     if require_existing_links:
-        from contract_page_links import DOCS_PREFIX
+        from contract_page_links import DOCS_PREFIX, slug
         for _, _, operation in operations(document):
-            if operation.get('x-aisa-docs-url') != DOCS_PREFIX + selected_pages[operation['operationId']][-1]:
+            identity = operation['operationId']
+            pages = selected_pages[identity]
+            if operation.get('x-aisa-docs-url') == DOCS_PREFIX + pages[-1]:
+                continue
+            # A provider newly added to the immutable presentation inventory
+            # uses its ID-based URL. Keep reader aliases while materializing
+            # that exact producer URL; never rewrite the producer document.
+            canonical_page = f'api-reference/{provider}/{slug(identity)}'
+            conflict = any(canonical_page in aliases for owner, aliases in known_ids.items()
+                           if owner != identity)
+            if operation.get('x-aisa-docs-url') != DOCS_PREFIX + canonical_page or conflict:
                 raise ValueError('Canonical page binding differs from existing presentation selection')
-    paths = []
+            selected_pages[identity] = [page for page in pages if page != canonical_page] + [canonical_page]
     for path, method, operation in operations(document):
         page_names = selected_pages[operation['operationId']]
         for page in page_names:
-            paths.append(page)
             for language, prefix in (("en", ""), ("zh", "zh/")):
                 destination = root / f"{prefix}{page}.mdx"
                 spec_path = f"openapi/{'zh/' if language == 'zh' else ''}{provider}.json"
@@ -297,8 +306,12 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                 if language == 'zh' and operation.get('x-aisa-identity'):
                     machine_id = operation['x-aisa-identity']['historical_aliases'][0]['operation_id']
                 identity = f"x-aisa-operation-id: {json.dumps(machine_id)}"
-                if destination.exists():
-                    text = destination.read_text()
+                source = destination
+                if not source.exists() and require_existing_links:
+                    source = next((root / f'{prefix}{alias}.mdx' for alias in page_names
+                                   if (root / f'{prefix}{alias}.mdx').is_file()), destination)
+                if source.exists():
+                    text = source.read_text()
                     frontmatter, prose = localization.split_frontmatter(text)
                     frontmatter = localization.replace_frontmatter_value(frontmatter, "title", localized_title)
                     text = "---\n" + frontmatter + "\n---\n" + prose
@@ -332,6 +345,16 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                     changes[destination] = text
     nav_config = api_nav_groups.load(root)
     nav_labels = read_json(root / "translations/openapi-nav-zh.json", {})
+    visible_aliases = set()
+    for language in docs.get('navigation', {}).get('languages', []):
+        if language.get('language') in ('en', 'zh'):
+            for tab in language.get('tabs', []):
+                if tab.get('tab') in ('API Reference', 'API 参考'):
+                    visible_aliases.update(page.removeprefix('zh/') for page in api_nav_groups.nav_pages(tab))
+    # Resolve canonical URLs without duplicating an operation in the sidebar.
+    # Mirror the same visible historical aliases in both supported locales.
+    navigation_pages = [page for pages in selected_pages.values()
+                        for page in ([p for p in pages if p in visible_aliases] or [pages[-1]])]
     for language in docs.get("navigation", {}).get("languages", []):
         prefix = "zh/" if language.get("language") == "zh" else ""
         for tab in language.get("tabs", []):
@@ -348,22 +371,24 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                 elif isinstance(node, str):
                     existing.add(node)
             collect(tab)
-            additions = [prefix + p for p in paths if prefix + p not in existing]
+            additions = [prefix + p for p in navigation_pages if prefix + p not in existing]
             if additions:
                 group_name = document["info"].get("title", provider)
                 groups = tab.setdefault("groups", [])
                 # Mapped providers land in their category -> vendor group; only
                 # unmapped titles fall back to a top-level group of their own.
-                target = api_nav_groups.target_for(nav_config, group_name)
-                if target:
-                    label = (lambda name: nav_labels.get(name) or name) if prefix else (lambda name: name)
-                    api_nav_groups.locate(groups, nav_config, target, label).extend(additions)
-                    continue
-                group = next((g for g in groups if g.get("group") == group_name), None)
-                if group is None:
-                    group = {"group": group_name, "pages": []}
-                    groups.append(group)
-                group["pages"].extend(additions)
+                for page in additions:
+                    target = api_nav_groups.page_target(nav_config, page.removeprefix('zh/')) if nav_config else None
+                    target = target or api_nav_groups.target_for(nav_config, group_name)
+                    if target:
+                        label = (lambda name: nav_labels.get(name) or name) if prefix else (lambda name: name)
+                        api_nav_groups.locate(groups, nav_config, target, label).append(page)
+                        continue
+                    group = next((g for g in groups if g.get("group") == group_name), None)
+                    if group is None:
+                        group = {"group": group_name, "pages": []}
+                        groups.append(group)
+                    group["pages"].append(page)
     content = json.dumps(docs, indent=2, ensure_ascii=False) + "\n"
     if content != docs_path.read_text():
         changes[docs_path] = content

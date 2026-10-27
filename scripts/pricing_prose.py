@@ -214,7 +214,16 @@ def clean_page(text: str, language: str = 'en') -> str:
                     if j < len(cells) and MONEY.search(cells[j]):
                         cells[j] = ' 见当前定价 ' if language == 'zh' else ' See current pricing '
                 lines[i] = '|'.join(cells)
-        chunks[index] = clean_text(''.join(lines), language)
+        segment = ''.join(lines)
+        cleaned = clean_text(segment, language)
+        if cleaned != segment:
+            # clean_text normalizes a standalone paragraph. Here it is between
+            # protected code fences, whose opening/closing lines must retain
+            # their original whitespace boundaries.
+            leading = re.match(r'^\s*', segment).group()
+            trailing = re.search(r'\s*$', segment).group()
+            cleaned = leading + cleaned.strip() + trailing
+        chunks[index] = cleaned
     body = ''.join(chunks)
     if (header, body) == original:
         return text
