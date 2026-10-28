@@ -211,8 +211,9 @@ class PublicationTests(unittest.TestCase):
             redirect.redirect_request(Request('https://api.aisa.one/apis/v1/alpha'), None, 302, 'Found', {}, 'https://other.invalid/')
         reader.opener = Mock()
         reader.opener.open.side_effect = HTTPError('https://api.aisa.one/apis/v1/alpha', 401, 'Unauthorized', {}, None)
-        with self.assertRaisesRegex(ValueError, 'received HTTP 401'):
+        with self.assertRaisesRegex(ValueError, 'received HTTP 401') as rejected:
             reader(self.scope[0])
+        self.assertIn('method=GET, path=/apis/v1/alpha', str(rejected.exception))
         reader.opener.open.side_effect = TimeoutError('timeout')
         with self.assertRaises(TimeoutError):
             reader(self.scope[0])

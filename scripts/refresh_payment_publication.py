@@ -49,7 +49,8 @@ class ChallengeReader:
         except HTTPError as response:
             status, headers = response.code, response.headers
             response.close()
-        require(status == 402, 'Expected unauthenticated HTTP 402; received HTTP ' + str(status))
+        require(status == 402, 'Expected unauthenticated HTTP 402; received HTTP ' + str(status)
+                + f' (method={method}, path={path})')
         require(time.monotonic() <= self.deadline, 'Payment observation deadline exceeded')
         require('110' not in headers.get('Warning', ''), 'Stale payment challenge rejected')
         return {'status': status, 'observed_at': observed, **parse_challenge(headers.get('WWW-Authenticate'))}
