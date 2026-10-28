@@ -65,6 +65,22 @@ class ReadableNotesTests(unittest.TestCase):
                 self.assertIn(canonical, block)
                 self.assertNotIn(r"\$", block)
 
+    def test_request_url_template_is_literal_code_not_escaped_autolink(self):
+        # A bare URL is autolinked by Mintlify, which keeps character references
+        # such as &#95; in both the link text and the href.
+        path = "/apis/v1/dataforseo/ai_optimization/{task_id}/locations_and_languages"
+        operation = {"operationId": "op"}
+        document = {"servers": [{"url": "https://api.aisa.one/"}], "paths": {path: {"get": operation}}}
+        for language, label in (("en", "Request URL template"), ("zh", "请求 URL 模板")):
+            block = readable_block(operation, language, document=document, method="get", path=path, spec_path="openapi/p.json")
+            line = next(row for row in block.splitlines() if row.startswith("- **" + label))
+            self.assertEqual(line, "- **" + label + ":** `https://api.aisa.one" + path + "`")
+            self.assertEqual(update_readable_block(block, operation, language, document=document, method="get", path=path, spec_path="openapi/p.json"), block)
+        from readable_contract_notes import code
+        self.assertEqual(code("a`b"), "``a`b``")
+        self.assertEqual(code("`a"), "`` `a ``")
+        self.assertEqual(code("a\nb"), "`a b`")
+
     def test_exact_large_numbers_and_unknown_formula(self):
         self.assertIn('9007199254740993', readable_block({'x-aisa-pricing': {'maximum_units': 9007199254740993}}))
         self.assertIsNone(formula_text({'input': 'q', 'unknown_operator': 2}))
