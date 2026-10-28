@@ -1,10 +1,469 @@
 ---
 x-aisa-operation-id: "post_unipile_apis_v1_unipile_hosted_link"
-title: "托管授权链接"
+title: "Hosted Auth Link (temp verification)"
 description: "创建托管授权链接，用于接入 LinkedIn 账号。"
 openapi: "openapi/zh/unipile.json POST /apis/v1/unipile/hosted/link"
 ---
-
 返回一个 HostedAuthUrl，把终端用户引导到 Unipile 托管页完成 LinkedIn 登录，凭证不会经过你的系统。**托管模式（推荐）：不传 `notify_url`**，AISA 全程代管——轮询 `GET /apis/v1/unipile/me/accounts` 直到账号出现（用户完成登录后通常几秒内），无需自建任何 webhook。**自管模式：传入你自己的 `notify_url`**，流程完成后 Unipile 会向它 POST 事件 `{"status":"CREATION_SUCCESS","account_id":"…","name":"…"}`——请保存 account_id，它是其余所有端点的必需标识（自管模式下没有账号列表端点可重新查询，托管模式用户直接读 `me/accounts`）。你设置的 `name` 会原样回传，用它把账号映射到你自己的用户。请在 30 秒内返回 200，否则事件会重试 5 次；建议在回调端点校验共享密钥头。链接会在 Unipile 每日重启时失效（无论 `expiresOn` 设成什么），每次用户要连接时都新生成一条。注意：同一 LinkedIn 账号重新授权会生成新的 account_id，旧绑定在断开前会一直保留在列表中。
 
-参考价格：每次成功请求 $0.000001 USD。
+当前 API 价格请查看公开的 x-aisa-pricing 信息；接口支持报价时，请针对实际请求获取报价。
+
+{/* aisa-contract-details:start */}
+
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/unipile/hosted/link
+- **可用状态:** enabled
+- **请求 URL 模板:** `https://api.aisa.one/apis/v1/unipile/hosted/link`
+- **Runtime 事实版本:** 00b882f06149b4c72a4dc077c20cc1c4d86d5a8da50fcc725538d6debed194ac
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/unipile.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_unipile_apis_v1_unipile_hosted_link",
+  "method": "POST",
+  "path": "/apis/v1/unipile/hosted/link",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "anyOf": [
+            {
+              "properties": {
+                "api_url": {
+                  "description": "The url of your Unipile server  : https://{subdomain}.unipile.com:{port}"
+                },
+                "bypass_success_screen": {
+                  "description": "Whether to bypass the hosted auth success screen before accessing the success_redirect_url.",
+                  "type": "boolean"
+                },
+                "disabled_features": {
+                  "description": "An array of features that should be disabled in this account. Accepted values : linkedin_recruiter | linkedin_sales_navigator | linkedin_organizations_mailboxes.",
+                  "items": {
+                    "enum": [
+                      "linkedin_recruiter",
+                      "linkedin_sales_navigator",
+                      "linkedin_organizations_mailboxes"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "disabled_options": {
+                  "description": "An array of options that should be disabled in hosted auth interface. Accepted values : proxy | autoproxy | cookie_auth | credentials_auth | qrcode_auth | pairing_code_auth | sync_limit | language. `qrcode_auth` and `pairing_code_auth` are currently supported for WhatsApp only.",
+                  "items": {
+                    "enum": [
+                      "proxy",
+                      "autoproxy",
+                      "cookie_auth",
+                      "credentials_auth",
+                      "qrcode_auth",
+                      "pairing_code_auth",
+                      "sync_limit",
+                      "language"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "expiresOn": {
+                  "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
+                  "example": "2025-12-31T23:59:59.999Z",
+                  "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
+                },
+                "failure_redirect_url": {
+                  "description": "A url where you might want to redirect the user in case of a failed authentication."
+                },
+                "google_scopes": {
+                  "description": "Optional comma-separated list of scopes to use for GOOGLE_OAUTH accounts",
+                  "format": "googleScopes",
+                  "type": "string"
+                },
+                "microsoft_scopes": {
+                  "description": "Optional comma-separated list of scopes to use for OUTLOOK accounts.\n\nTo enable delegated mailbox authentication, Include Mail.ReadWrite.Shared, Mail.Send.Shared, Contacts.Read.Shared, and User.ReadBasic.All.",
+                  "format": "microsoftScopes",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "This field will be sent back to you in the notify_url to help match the added account with your user.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "notify_url": {
+                  "description": "A url where you can be notified about events related to the authentication process."
+                },
+                "providers": {
+                  "anyOf": [
+                    {
+                      "description": "Data type: string",
+                      "enum": [
+                        "*"
+                      ],
+                      "title": "Any provider",
+                      "type": "string"
+                    },
+                    {
+                      "description": "Data type: string",
+                      "enum": [
+                        "*:MAILING"
+                      ],
+                      "title": "Any mailing provider",
+                      "type": "string"
+                    },
+                    {
+                      "description": "Data type: string",
+                      "enum": [
+                        "*:MESSAGING"
+                      ],
+                      "title": "Any messaging provider",
+                      "type": "string"
+                    },
+                    {
+                      "description": "Data type: string",
+                      "enum": [
+                        "*:CALENDAR"
+                      ],
+                      "title": "Any calendar provider",
+                      "type": "string"
+                    },
+                    {
+                      "description": "Data type: Array of strings. Accepted values: LINKEDIN | WHATSAPP | INSTAGRAM | MESSENGER | TELEGRAM | GOOGLE | OUTLOOK | MAIL | TWITTER",
+                      "items": {
+                        "enum": [
+                          "LINKEDIN",
+                          "WHATSAPP",
+                          "INSTAGRAM",
+                          "MESSENGER",
+                          "TELEGRAM",
+                          "GOOGLE",
+                          "OUTLOOK",
+                          "TWITTER",
+                          "MAIL"
+                        ],
+                        "type": "string"
+                      },
+                      "title": "One or more providers",
+                      "type": "array"
+                    }
+                  ],
+                  "description": "The providers for whom you want to propose to connect an account."
+                },
+                "proxy": {
+                  "properties": {
+                    "host": {
+                      "type": "string"
+                    },
+                    "password": {
+                      "description": "Optional password for proxy’s authentication.",
+                      "type": "string"
+                    },
+                    "port": {
+                      "type": "number"
+                    },
+                    "protocol": {
+                      "enum": [
+                        "https",
+                        "http",
+                        "socks5"
+                      ],
+                      "type": "string"
+                    },
+                    "username": {
+                      "description": "Optional username for proxy’s authentication.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "port",
+                    "host"
+                  ],
+                  "type": "object"
+                },
+                "single_use": {
+                  "description": "Whether the hosted authentication link can be used to connect only one account. Defaults to false.",
+                  "type": "boolean"
+                },
+                "success_redirect_url": {
+                  "description": "A url where you might want to redirect the user in case of a successful authentication."
+                },
+                "sync_limit": {
+                  "properties": {
+                    "MAILING": {
+                      "enum": [
+                        "NO_HISTORY_SYNC"
+                      ],
+                      "type": "string"
+                    },
+                    "MESSAGING": {
+                      "description": "Set a sync limit either for chats, messages or both. Chats limit will apply to each inbox, whereas messages limit will apply to each chat. No value will not apply any limit (default behaviour). Providers partial support.",
+                      "properties": {
+                        "chats": {
+                          "anyOf": [
+                            {
+                              "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
+                              "example": "2025-12-31T23:59:59.999Z",
+                              "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
+                            },
+                            {
+                              "description": "The quantity of data that should be synced from data history. 0 will not sync history.",
+                              "minimum": 0,
+                              "type": "number"
+                            }
+                          ],
+                          "description": "Either a UTC Datetime to start sync from, or a quantity of data."
+                        },
+                        "messages": {
+                          "anyOf": [
+                            {
+                              "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
+                              "example": "2025-12-31T23:59:59.999Z",
+                              "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
+                            },
+                            {
+                              "description": "The quantity of data that should be synced from data history. 0 will not sync history.",
+                              "minimum": 0,
+                              "type": "number"
+                            }
+                          ],
+                          "description": "Either a UTC Datetime to start sync from, or a quantity of data."
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": {
+                  "description": "A litteral value to choose between a connection or a reconnection.",
+                  "enum": [
+                    "create"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "expiresOn",
+                "api_url",
+                "type",
+                "providers"
+              ],
+              "title": "Connection link",
+              "type": "object"
+            },
+            {
+              "properties": {
+                "api_url": {
+                  "description": "The url of your Unipile server  : https://{subdomain}.unipile.com:{port}"
+                },
+                "bypass_success_screen": {
+                  "description": "Whether to bypass the hosted auth success screen before accessing the success_redirect_url.",
+                  "type": "boolean"
+                },
+                "disabled_features": {
+                  "description": "An array of features that should be disabled in this account. Accepted values : linkedin_recruiter | linkedin_sales_navigator | linkedin_organizations_mailboxes.",
+                  "items": {
+                    "enum": [
+                      "linkedin_recruiter",
+                      "linkedin_sales_navigator",
+                      "linkedin_organizations_mailboxes"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "disabled_options": {
+                  "description": "An array of options that should be disabled in hosted auth interface. Accepted values : proxy | autoproxy | cookie_auth | credentials_auth | qrcode_auth | pairing_code_auth | sync_limit | language. `qrcode_auth` and `pairing_code_auth` are currently supported for WhatsApp only.",
+                  "items": {
+                    "enum": [
+                      "proxy",
+                      "autoproxy",
+                      "cookie_auth",
+                      "credentials_auth",
+                      "qrcode_auth",
+                      "pairing_code_auth",
+                      "sync_limit",
+                      "language"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "expiresOn": {
+                  "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
+                  "example": "2025-12-31T23:59:59.999Z",
+                  "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
+                },
+                "failure_redirect_url": {
+                  "description": "A url where you might want to redirect the user in case of a failed authentication."
+                },
+                "google_scopes": {
+                  "description": "Optional comma-separated list of scopes to use for GOOGLE_OAUTH accounts",
+                  "format": "googleScopes",
+                  "type": "string"
+                },
+                "microsoft_scopes": {
+                  "description": "Optional comma-separated list of scopes to use for OUTLOOK accounts.\n\nTo enable delegated mailbox authentication, Include Mail.ReadWrite.Shared, Mail.Send.Shared, Contacts.Read.Shared, and User.ReadBasic.All.",
+                  "format": "microsoftScopes",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "This field will be sent back to you in the notify_url to help match the added account with your user.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "notify_url": {
+                  "description": "A url where you can be notified about events related to the authentication process."
+                },
+                "proxy": {
+                  "properties": {
+                    "host": {
+                      "type": "string"
+                    },
+                    "password": {
+                      "description": "Optional password for proxy’s authentication.",
+                      "type": "string"
+                    },
+                    "port": {
+                      "type": "number"
+                    },
+                    "protocol": {
+                      "enum": [
+                        "https",
+                        "http",
+                        "socks5"
+                      ],
+                      "type": "string"
+                    },
+                    "username": {
+                      "description": "Optional username for proxy’s authentication.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "port",
+                    "host"
+                  ],
+                  "type": "object"
+                },
+                "reconnect_account": {
+                  "description": "The id of the account to reconnect.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "success_redirect_url": {
+                  "description": "A url where you might want to redirect the user in case of a successful authentication."
+                },
+                "sync_limit": {
+                  "properties": {
+                    "MAILING": {
+                      "enum": [
+                        "NO_HISTORY_SYNC"
+                      ],
+                      "type": "string"
+                    },
+                    "MESSAGING": {
+                      "description": "Set a sync limit either for chats, messages or both. Chats limit will apply to each inbox, whereas messages limit will apply to each chat. No value will not apply any limit (default behaviour). Providers partial support.",
+                      "properties": {
+                        "chats": {
+                          "anyOf": [
+                            {
+                              "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
+                              "example": "2025-12-31T23:59:59.999Z",
+                              "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
+                            },
+                            {
+                              "description": "The quantity of data that should be synced from data history. 0 will not sync history.",
+                              "minimum": 0,
+                              "type": "number"
+                            }
+                          ],
+                          "description": "Either a UTC Datetime to start sync from, or a quantity of data."
+                        },
+                        "messages": {
+                          "anyOf": [
+                            {
+                              "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
+                              "example": "2025-12-31T23:59:59.999Z",
+                              "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
+                            },
+                            {
+                              "description": "The quantity of data that should be synced from data history. 0 will not sync history.",
+                              "minimum": 0,
+                              "type": "number"
+                            }
+                          ],
+                          "description": "Either a UTC Datetime to start sync from, or a quantity of data."
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": {
+                  "description": "A litteral value to choose between a connection or a reconnection.",
+                  "enum": [
+                    "reconnect"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "expiresOn",
+                "api_url",
+                "type",
+                "reconnect_account"
+              ],
+              "title": "Reconnection link",
+              "type": "object"
+            }
+          ]
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "fixed_success",
+    "customer_pricing": "fixed_success",
+    "default_request_estimate_usd": 1e-06,
+    "estimate_source": "profile_seed",
+    "evidence_source": "request_snapshot"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
+## 费用与请求规则
+
+公开参考价格：每次成功请求 $0.000001 USD。 最终费用以账户适用价格及实际结算为准。
+
+公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
+
+- **默认请求参考估价（USD）:** 1e-06
+- **计费依据:** fixed&#95;success
+- **结算证据来源:** request&#95;snapshot
+
+{/* aisa-contract-details:end */}

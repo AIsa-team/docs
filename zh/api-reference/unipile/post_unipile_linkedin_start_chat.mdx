@@ -1,10 +1,321 @@
 ---
 x-aisa-operation-id: "post_unipile_linkedin_start_chat"
-title: "发起会话"
+title: "Start Chat"
 description: "发起新会话并发送首条消息。"
 openapi: "openapi/zh/unipile.json POST /apis/v1/unipile/linkedin/chats/send"
 ---
-
 一次调用创建新会话并发出首条消息。**LinkedIn 规则：收件人必须已是一度人脉**——先用「人脉列表」端点列出已有连接并使用其中的 provider id。给非人脉在此端点发消息会收到 403 `subscription_required`（LinkedIn 只允许与一度人脉开新会话，InMail 除外），账号自己的资料也不是有效收件人。**要触达尚未连接的人，请用「发送建联邀请」端点**——它不受此限制；对方接受后再回来发消息。写操作：与「发送消息」相同的每日限额。收件人传 provider id（`ACoAA…`），可先用「用户资料」端点从公共标识解析出来。若调用超时，先通过「会话列表」和已发建联列表核实实际结果，再决定是否重试。
 
-参考价格：每次成功请求 $0.02 USD。
+当前 API 价格请查看公开的 x-aisa-pricing 信息；接口支持报价时，请针对实际请求获取报价。
+
+{/* aisa-contract-details:start */}
+
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/unipile/linkedin/chats/send
+- **可用状态:** enabled
+- **请求 URL 模板:** `https://api.aisa.one/apis/v1/unipile/linkedin/chats/send`
+- **Runtime 事实版本:** 00b882f06149b4c72a4dc077c20cc1c4d86d5a8da50fcc725538d6debed194ac
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/unipile.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_unipile_linkedin_start_chat",
+  "method": "POST",
+  "path": "/apis/v1/unipile/linkedin/chats/send",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "multipart/form-data": {
+        "schema": {
+          "properties": {
+            "account_id": {
+              "description": "An Unipile account id.",
+              "minLength": 1,
+              "title": "AccountIdParam",
+              "type": "string"
+            },
+            "attachments": {
+              "items": {
+                "format": "binary",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "attendees_ids": {
+              "description": "One or more attendee provider ID.\nFor `instagram`, please use the 'provider_messaging_id'.\nFor LinkedIn users, use a `provider_id` starting with: ACo for classic, ACw for Sales Navigator, AE for Recruiter.\nFor LinkedIn company messaging, please use the 'messaging_id'.\nFor WhatsApp, please use '00000000@s.whatsapp.net'.",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "linkedin": {
+              "anyOf": [
+                {
+                  "description": "Standard Linkedin fields",
+                  "properties": {
+                    "api": {
+                      "description": "The Linkedin API that should be used to start chatting (relative feature must be subscribed). Default is classic.",
+                      "enum": [
+                        "classic"
+                      ],
+                      "type": "string"
+                    },
+                    "applicant_id": {
+                      "description": "Mandatory to start a conversation with a job applicant. Use the <strong>List all job postings</strong> route first to retrieve the job posting, and then the <strong>List all applicants to a job posting</strong> route to get the applicant details.",
+                      "type": "string"
+                    },
+                    "group_id": {
+                      "description": "Mandatory to start a conversation with a user within a Group context.",
+                      "type": "string"
+                    },
+                    "inmail": {
+                      "description": "If set to true, start the new conversation with an inMail.",
+                      "type": "boolean"
+                    },
+                    "invitation_id": {
+                      "description": "Mandatory to start a conversation with a user from whom you received an invitation that you have neither accepted nor declined yet.",
+                      "type": "string"
+                    },
+                    "topic": {
+                      "description": "Mandatory to start a conversation with a company.",
+                      "enum": [
+                        "service_request",
+                        "request_demo",
+                        "support",
+                        "careers",
+                        "other"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "title": "Classic options",
+                  "type": "object"
+                },
+                {
+                  "description": "Recruiter Linkedin fields",
+                  "properties": {
+                    "api": {
+                      "description": "The Linkedin API that should be used to start chatting (relative feature must be subscribed).",
+                      "enum": [
+                        "recruiter"
+                      ],
+                      "type": "string"
+                    },
+                    "email_address": {
+                      "description": "The email address of the recipient in case the chat should be started with email instead of inMail",
+                      "type": "string"
+                    },
+                    "follow_up": {
+                      "description": "Allows to schedule a follow-up message. Available for Recruiter PRO account owners only.",
+                      "properties": {
+                        "attachments": {
+                          "items": {
+                            "format": "binary",
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "scheduled_time": {
+                          "anyOf": [
+                            {
+                              "properties": {
+                                "days": {
+                                  "description": "The number of days from here to send the follow-up message.",
+                                  "maximum": 28,
+                                  "minimum": 3,
+                                  "type": "number"
+                                },
+                                "timezone": {
+                                  "description": "The timezone from which the follow-up message is scheduled. Example: 'Europe/Paris', 'America/Phoenix'...",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "days",
+                                "timezone"
+                              ],
+                              "title": "Days based",
+                              "type": "object"
+                            },
+                            {
+                              "properties": {
+                                "timezone": {
+                                  "description": "The timezone from which the follow-up message is scheduled. Example: 'Europe/Paris', 'America/Phoenix'...",
+                                  "type": "string"
+                                },
+                                "weeks": {
+                                  "description": "The number of weeks from here to send the follow-up message.",
+                                  "maximum": 4,
+                                  "minimum": 1,
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "weeks",
+                                "timezone"
+                              ],
+                              "title": "Weeks based",
+                              "type": "object"
+                            }
+                          ]
+                        },
+                        "subject": {
+                          "description": "The subject for the follow-up message.",
+                          "type": "string"
+                        },
+                        "text": {
+                          "description": "The textual content for the follow-up message.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "text",
+                        "scheduled_time"
+                      ],
+                      "title": "Follow-up config",
+                      "type": "object"
+                    },
+                    "hiring_project_id": {
+                      "description": "The ID of the project the chat should be started in",
+                      "type": "string"
+                    },
+                    "inmail_intent": {
+                      "description": "The intent of the InMail. Default value will be HIRE_FOR_CLIENT.",
+                      "enum": [
+                        "HIRE_FOR_CLIENT",
+                        "HIRE_FOR_OWN_COMPANY"
+                      ],
+                      "type": "string"
+                    },
+                    "job_posting_id": {
+                      "description": "The ID of the related job posting in case of an initial contact with a candidate",
+                      "type": "string"
+                    },
+                    "signature": {
+                      "description": "The signature of the sender",
+                      "type": "string"
+                    },
+                    "sourcing_channel": {
+                      "description": "The project's sourcing channel used to start a recruiter conversation.",
+                      "enum": [
+                        "JOB_POSTING_RECOMMENDED_MATCHES",
+                        "JOB_POSTING",
+                        "REFERRAL",
+                        "INTERNAL_CANDIDATES",
+                        "AUTOMATED_SOURCING",
+                        "RECRUITER_SEARCH",
+                        "CAREER_SITE"
+                      ],
+                      "type": "string"
+                    },
+                    "visibility": {
+                      "description": "Define the level of visibility of the conversation within your organization. Default value will be PRIVATE.",
+                      "enum": [
+                        "PUBLIC",
+                        "PRIVATE",
+                        "PROJECT"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "api"
+                  ],
+                  "title": "Recruiter options",
+                  "type": "object"
+                },
+                {
+                  "description": "Sales Navigator Linkedin fields",
+                  "properties": {
+                    "api": {
+                      "description": "The Linkedin API that should be used to start chatting (relative features must be subscribed).",
+                      "enum": [
+                        "sales_navigator"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "api"
+                  ],
+                  "title": "Sales Navigator options",
+                  "type": "object"
+                }
+              ],
+              "description": "Extra fields for Linkedin products"
+            },
+            "subject": {
+              "description": "An optional field to set the subject of the conversation.",
+              "type": "string"
+            },
+            "text": {
+              "description": "The message that will start the new conversation.\nWith LinkedIn recruiter, a range of HTML tags can be used directly in the body of the message to enhance the presentation. The supported tags are &lt;strong&gt; for bold text, &lt;em&gt; for italic text, &lt;a href=\"www.my-link.com\"&gt; for external links, &lt;ul&gt; for unordered lists, &lt;ol&gt; for ordered lists and &lt;li&gt; for list items. Tags can be nested into each other if necessary.",
+              "type": "string"
+            },
+            "video_message": {
+              "description": "(Linkedin) A file to send as video message. WhatsApp: use attachments field.",
+              "format": "binary",
+              "type": "string"
+            },
+            "voice_message": {
+              "description": "(Linkedin | WhatsApp) A file to send as voice message. WhatsApp: prefer .mp3 or .m4a. Linkedin: prefer .m4a. Instagram: use the attachment field and prefer .m4a. Telegram: use the attachment field.",
+              "format": "binary",
+              "type": "string"
+            }
+          },
+          "required": [
+            "account_id",
+            "attendees_ids"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "fixed_success",
+    "customer_pricing": "fixed_success",
+    "default_request_estimate_usd": 0.02,
+    "estimate_source": "profile_seed",
+    "evidence_source": "request_snapshot"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
+## 费用与请求规则
+
+公开参考价格：每次成功请求 $0.02 USD。 最终费用以账户适用价格及实际结算为准。
+
+公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
+
+- **默认请求参考估价（USD）:** 0.02
+- **计费依据:** fixed&#95;success
+- **结算证据来源:** request&#95;snapshot
+
+{/* aisa-contract-details:end */}

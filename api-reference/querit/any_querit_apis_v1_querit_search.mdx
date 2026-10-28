@@ -183,6 +183,16 @@ Effective request and pricing declaration (including authentication and referenc
             "query": {
               "description": "Search term. Supports long natural-language descriptions",
               "type": "string"
+            },
+            "rank": {
+              "description": "Ranking preference. rank.preference boosts one factor on top of the default ranking, see below. Not supported with filters.vertical: \"code\". Default: Default ranking (value unspecified).",
+              "properties": {
+                "preference": {
+                  "description": "Factor to boost. Allowed values: \"relevance\" (closer match to the query), \"freshness\" (more recently published or updated). Required whenever rank is sent",
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "required": [
@@ -192,7 +202,7 @@ Effective request and pricing declaration (including authentication and referenc
         }
       }
     },
-    "description": "Top-level parameters:\nhighlights object form:\ncontentMaxChars body-text limit:\nThis is a top-level integer, not a field inside highlights. Only send it when you need to limit returned body text. With needContent: true and body-content access enabled, it limits the total characters across all strings in each result's sentence array, independently per result. Omit it or send null for the full available body text.\nThe limit counts Unicode code points in UTF-8 body text, preserves sentence order, and may cut the last retained sentence short. It does not include JSON formatting or separators added by your application. It does not limit snippet or highlights, and it does not change page-based billing. Use highlights.maxCharacters (100–8000) to control query-focused fragments separately.\nfilters sub-object:\ntimeRange.date syntax:\nd[n] / w[n] / m[n] / y[n]: last n days / weeks / months / years, e.g. d7, m3\nYYYY-MM-DDtoYYYY-MM-DD: a range, e.g. 2022-04-01to2022-07-30; a single day uses the same to form\ngeo.countries.include allowed values: argentina, australia, brazil, canada, colombia, france, germany, india, indonesia, japan, mexico, nigeria, philippines, south korea, spain, united kingdom, united states.\nlanguages.include allowed values: english, japanese, korean, german, french, spanish, portuguese, russian.\nvertical allowed values: code, finance. Lowercase and strictly enumerated; omit the field for universal search.",
+    "description": "Top-level parameters:\nhighlights object form:\ncontentMaxChars body-text limit:\nThis is a top-level integer, not a field inside highlights. Only send it when you need to limit returned body text. With needContent: true and body-content access enabled, it limits the total characters across all strings in each result's sentence array, independently per result. Omit it or send null for the full available body text.\nThe limit counts Unicode code points in UTF-8 body text, preserves sentence order, and may cut the last retained sentence short. It does not include JSON formatting or separators added by your application. It does not limit snippet or highlights, and it does not change page-based billing. Use highlights.maxCharacters (100–8000) to control query-focused fragments separately.\nfilters sub-object:\ntimeRange.date syntax:\nd[n] / w[n] / m[n] / y[n]: last n days / weeks / months / years, e.g. d7, m3\nYYYY-MM-DDtoYYYY-MM-DD: a range, e.g. 2022-04-01to2022-07-30; a single day uses the same to form\ngeo.countries.include allowed values: argentina, australia, brazil, canada, colombia, france, germany, india, indonesia, japan, mexico, nigeria, philippines, south korea, spain, united kingdom, united states.\nlanguages.include allowed values: english, japanese, korean, german, french, spanish, portuguese, russian.\nvertical allowed values: code, finance. Lowercase and strictly enumerated; omit the field for universal search.\nrank sub-object:\nrank.preference is a boost, not a sort. The default ranking still dominates; results that score better on the chosen factor move up moderately. Do not assume the output is monotonic in that factor, and do not expect a result ranked far down by default to appear just because it is the freshest. Omit rank entirely to keep the default ranking.\nrank returns 400 when:\npreference is missing or empty, e.g. {\"rank\": {}} or {\"rank\": {\"preference\": \"\"}}\npreference is any value other than relevance or freshness\nit is combined with filters.vertical: \"code\" — the code vertical does not support rank yet\nrank can be combined with sort.pageAge, but freshness overlaps heavily with a time sort and adds little visible change.",
     "required": true
   },
   "x-aisa-status": "enabled",

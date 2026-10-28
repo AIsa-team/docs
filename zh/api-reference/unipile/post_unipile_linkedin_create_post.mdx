@@ -1,10 +1,279 @@
 ---
 x-aisa-operation-id: "post_unipile_linkedin_create_post"
-title: "发布帖子"
+title: "Create Post"
 description: "以已连接账号发布 LinkedIn 帖子。"
 openapi: "openapi/zh/unipile.json POST /apis/v1/unipile/linkedin/posts"
 ---
-
 以已连接账号发布帖子。写操作，结果在 LinkedIn 上公开可见，请视为不可撤销。请求必须是 `multipart/form-data`：上游解析附件时 JSON body 会被拒。加图用 `-F "attachments=@image.jpg"`；提及某人时在正文写 `{{0}}` 并传 `mentions[0][profile_id]` 与 `mentions[0][name]`；代公司发文则传 `as_organization`（需是该主页管理员）。
 
-参考价格：每次成功请求 $0.02 USD。
+当前 API 价格请查看公开的 x-aisa-pricing 信息；接口支持报价时，请针对实际请求获取报价。
+
+{/* aisa-contract-details:start */}
+
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/unipile/linkedin/posts
+- **可用状态:** enabled
+- **请求 URL 模板:** `https://api.aisa.one/apis/v1/unipile/linkedin/posts`
+- **Runtime 事实版本:** 00b882f06149b4c72a4dc077c20cc1c4d86d5a8da50fcc725538d6debed194ac
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/unipile.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_unipile_linkedin_create_post",
+  "method": "POST",
+  "path": "/apis/v1/unipile/linkedin/posts",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "multipart/form-data": {
+        "schema": {
+          "properties": {
+            "account_id": {
+              "description": "The id of the account to perform the request from.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "as_organization": {
+              "description": "`Linkedin only` Provide the ID of an organization over which you have control to perform the action on its behalf.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "attachments": {
+              "description": "On `linkedin`, image file resolution is limited to 6012px x 6012px max.",
+              "items": {
+                "format": "binary",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "external_link": {
+              "description": "`Linkedin only` An external link that should be displayed within a preview card. The URL must also be included in the post textual content. Otherwise, it will be automatically added at the end.",
+              "pattern": "^https?://",
+              "type": "string"
+            },
+            "include_job_posting": {
+              "description": "`Linkedin only` The ID of a job posting that should be displayed within a preview card.",
+              "type": "string"
+            },
+            "location": {
+              "description": "`Instagram only`: The location to tag in the post. The best match for the query is used, and a query matching no place leaves the post untagged. On a story, the location is also drawn on the media as a tappable sticker.",
+              "type": "string"
+            },
+            "mentions": {
+              "description": "`Linkedin only`",
+              "items": {
+                "properties": {
+                  "is_company": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "The name of the user as it will be displayed in your message.",
+                    "type": "string"
+                  },
+                  "profile_id": {
+                    "description": "The provider ID of the user, which begins with ACo/ADo for individuals and is a series of digits for companies.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "profile_id"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "post_type": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "feed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "enum": [
+                    "story"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "enum": [
+                    ""
+                  ],
+                  "type": "string"
+                }
+              ],
+              "description": "`Instagram only`: Publish as a regular feed post or as a story. Defaults to `feed` when omitted or empty."
+            },
+            "repost": {
+              "description": "The id of an existing LinkedIn post to publish as repost. For a simple repost without commentary, `text` should be an empty string.",
+              "type": "string"
+            },
+            "targeted_audience": {
+              "description": "`Linkedin only` A set of filters to adjust the target audience of your posts.",
+              "properties": {
+                "headcount": {
+                  "description": "Linkedin native filter : COMPANY SIZE.",
+                  "items": {
+                    "properties": {
+                      "max": {
+                        "enum": [
+                          1,
+                          10,
+                          50,
+                          200,
+                          500,
+                          1000,
+                          5000,
+                          10000
+                        ],
+                        "type": "number"
+                      },
+                      "min": {
+                        "enum": [
+                          2,
+                          11,
+                          51,
+                          201,
+                          501,
+                          1001,
+                          5001,
+                          10001
+                        ],
+                        "type": "number"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "industry": {
+                  "description": "The ID of the parameter. Use type INDUSTRY on the List search parameters route to find out the right ID.\nLinkedin native filter : INDUSTRY.",
+                  "items": {
+                    "pattern": "^\\d+$",
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "job_function": {
+                  "description": "The ID of the parameter. Use type POST_JOB_FUNCTION on the List search parameters route to find out the right ID.\nLinkedin native filter : JOB FUNCTION.",
+                  "items": {
+                    "pattern": "^\\d+$",
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "language": {
+                  "description": "The ID of the parameter. Use type LANGUAGE on the List search parameters route to find out the right ID.\nLinkedin native filter : LANGUAGE.",
+                  "items": {
+                    "pattern": "^[a-z]+_[A-Z]+$",
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "location": {
+                  "description": "The ID of the parameter. Use type LOCATION on the List search parameters route to find out the right ID.\nLinkedin native filter : LOCATION.",
+                  "items": {
+                    "pattern": "^\\d+$",
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "region": {
+                  "description": "The ID of the parameter. Use type REGION on the List search parameters route to find out the right ID.\nLinkedin native filter : REGION.",
+                  "items": {
+                    "pattern": "^\\d+$",
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "school": {
+                  "description": "The ID of the parameter. Use type SCHOOL on the List search parameters route to find out the right ID.\nLinkedin native filter : UNIVERSITY.",
+                  "items": {
+                    "pattern": "^\\d+$",
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "seniority": {
+                  "description": "The ID of the parameter. Use type SENIORITY on the List search parameters route to find out the right ID.\nLinkedin native filter : SENIORITY.",
+                  "items": {
+                    "pattern": "^\\d+$",
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            "text": {
+              "description": "`Linkedin`: You can add a mention by inserting the index of the corresponding entry from the mentions array between two double braces. Example: Hey {{0}}, check this out ! <br>        `Instagram`: To mention a user, use the @ symbol followed by their username. On a story, each mention is drawn on the media as a tappable `@username` sticker and the user is notified; the surrounding text is not displayed. A username that matches no account is left as plain text. Up to 10 mentions per story.",
+              "type": "string"
+            },
+            "video_thumbnail": {
+              "format": "binary",
+              "type": "string"
+            }
+          },
+          "required": [
+            "account_id",
+            "text"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "fixed_success",
+    "customer_pricing": "fixed_success",
+    "default_request_estimate_usd": 0.02,
+    "estimate_source": "profile_seed",
+    "evidence_source": "request_snapshot"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
+## 费用与请求规则
+
+公开参考价格：每次成功请求 $0.02 USD。 最终费用以账户适用价格及实际结算为准。
+
+公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
+
+- **默认请求参考估价（USD）:** 0.02
+- **计费依据:** fixed&#95;success
+- **结算证据来源:** request&#95;snapshot
+
+{/* aisa-contract-details:end */}
