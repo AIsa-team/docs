@@ -2,13 +2,13 @@
   "openapi": "3.0.0",
   "info": {
     "title": "Kalshi Trade API Manual Endpoints",
-    "version": "3.34.0",
+    "version": "3.35.0",
     "description": "Manually defined OpenAPI spec for endpoints being migrated to spec-first approach",
     "x-aisa-source": {
       "kind": "provider_openapi",
       "url": "https://docs.kalshi.com/openapi.yaml",
-      "fetched_at": "2026-10-25T13:24:30.244593+00:00",
-      "content_hash": "sha256:1830b2fb35d03b0bb5b926d635c3bad3587b65890f81f529a844f4e94798d482",
+      "fetched_at": "2026-10-28T12:00:07.248782+00:00",
+      "content_hash": "sha256:0bb86c574146253bf653fe69fbfdb88db71428acc0e81c327629f4a97e0aafac",
       "converter": "scripts/import_upstream.py@3",
       "owner": "AIsa-team/docs",
       "refresh_policy": "automatic",
@@ -2354,7 +2354,7 @@
       "post": {
         "operationId": "IntraExchangeInstanceTransfer",
         "summary": "Intra Account Transfer",
-        "description": "Transfers funds within the same account.\n\nWhen `source_exchange_shard` and `destination_exchange_shard` are the same, Kalshi treats the request as a subaccount transfer. The returned transfer ID appears in the subaccount transfer history.\n\nCross-exchange-index subaccount transfers run in up to three non-atomic steps. If a later step fails, completed steps are not undone, so funds may remain in the primary account on the source or destination exchange index.\n",
+        "description": "Transfers funds within the same account.\n\nSubaccount-restricted API keys can only transfer between `event_contract` exchange indices, with `source_subaccount` and `destination_subaccount` both set to the key's subaccount.\n\nWhen `source_exchange_shard` and `destination_exchange_shard` are the same, Kalshi treats the request as a subaccount transfer. The returned transfer ID appears in the subaccount transfer history.\n\nCross-exchange-index subaccount transfers run in up to three non-atomic steps. If a later step fails, completed steps are not undone, so funds may remain in the primary account on the source or destination exchange index.\n",
         "tags": [
           "portfolio"
         ],
@@ -2868,6 +2868,61 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/portfolio/credit_history": {
+      "get": {
+        "operationId": "GetCreditHistory",
+        "summary": "Get Credit History",
+        "description": "Returns the authenticated member's credit history, newest first.\nFilters apply to credit creation time: `min_ts` is inclusive and `max_ts` is exclusive.\n",
+        "tags": [
+          "portfolio"
+        ],
+        "security": [
+          {
+            "kalshiAccessKey": [],
+            "kalshiAccessSignature": [],
+            "kalshiAccessTimestamp": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/LimitQuery"
+          },
+          {
+            "$ref": "#/components/parameters/CursorQuery"
+          },
+          {
+            "$ref": "#/components/parameters/MinTsQuery"
+          },
+          {
+            "$ref": "#/components/parameters/MaxTsQuery"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Credit history retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetCreditHistoryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -3789,7 +3844,7 @@
         "operationId": "CreateRFQBatch",
         "x-excluded": true,
         "summary": "Create RFQ Batch",
-        "description": "Request quotes on several combos at once, for example every parlay of a round robin. Each child is an ordinary RFQ on one combo market. Makers quote the whole batch, but each child is accepted from whichever maker quotes it best on your side, so the batch may fill from several makers. Accepting takes every child or none, and the children then execute together as one fill-or-kill: every child trades, or none does. Name each child's combo by its market ticker, or by its legs to look up or create the combo in mve_collection_ticker. Every child is sized the same way. rest_remainder must be false, and FCM members cannot create RFQ batches yet (403 rfq_batch_unavailable).",
+        "description": "Request quotes on several combos at once, for example every parlay of a round robin. Each child is an ordinary RFQ on one combo market. Makers quote the whole batch, but each child is accepted from whichever maker quotes it best on your side, so the batch may fill from several makers. Accepting takes every child or none, and the children then execute together as one fill-or-kill: nothing trades unless every child can fill in full. In the rare case that filling one child cancels a maker order another child needed, the batch closes partially executed. Name each child's combo by its market ticker, or by its legs to look up or create the combo in mve_collection_ticker. Size each child with its own contracts_fp or target_cost_dollars, or set one on the batch for every child that has none; every child must be sized the same way, by contracts or by target cost. rest_remainder must be false, and FCM members cannot create RFQ batches yet (403 rfq_batch_unavailable). Makers also see each child as an ordinary RFQ, with rfq_batch_id set, and can quote it as a single RFQ; its best quote counts toward the batch's.",
         "x-mint": {
           "content": "<Note>\nA batch has 2 to 57 child RFQs drawn from at most 6 distinct legs, all\ncombos on one exchange index. You can have at most 2 open RFQ\nbatches (a batch being confirmed or executed no longer counts); with\nreplace_existing, creating a batch closes your oldest open batch\ninstead of failing.\nRFQ batches and single RFQs do not count against each other's limits.\n</Note>\n"
         },
@@ -8969,6 +9024,265 @@
           }
         }
       },
+      "GetMarketIndexesResponse": {
+        "type": "object",
+        "required": [
+          "indexes"
+        ],
+        "properties": {
+          "indexes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarketIndex"
+            }
+          }
+        }
+      },
+      "MarketIndex": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "family",
+          "currency",
+          "units",
+          "session",
+          "available"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable index ID, e.g. `SP500` or `SP500-45`."
+          },
+          "name": {
+            "type": "string",
+            "description": "Index name, e.g. `S&P 500 Information Technology`."
+          },
+          "family": {
+            "type": "string",
+            "description": "Index family, e.g. `S&P 500 GICS Sectors`."
+          },
+          "gics_code": {
+            "type": "string",
+            "description": "GICS sector code, for sector indexes only."
+          },
+          "sector": {
+            "type": "string",
+            "description": "GICS sector name, for sector indexes only."
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217 currency of the index, e.g. `USD`."
+          },
+          "units": {
+            "type": "string",
+            "description": "Unit of index values; always `index_points`."
+          },
+          "session": {
+            "$ref": "#/components/schemas/MarketIndexSession"
+          },
+          "available": {
+            "type": "boolean",
+            "description": "False while the index has no data source; such an index serves no values."
+          },
+          "latest": {
+            "$ref": "#/components/schemas/MarketIndexLatest"
+          }
+        }
+      },
+      "MarketIndexSession": {
+        "type": "object",
+        "description": "The index's regular publication session.",
+        "required": [
+          "timezone",
+          "open",
+          "close",
+          "days"
+        ],
+        "properties": {
+          "timezone": {
+            "type": "string",
+            "description": "IANA time zone of `open` and `close`, e.g. `America/New_York`."
+          },
+          "open": {
+            "type": "string",
+            "description": "Session open, `HH:MM` local time."
+          },
+          "close": {
+            "type": "string",
+            "description": "Session close, `HH:MM` local time."
+          },
+          "days": {
+            "type": "array",
+            "description": "Weekdays the session runs, e.g. `mon`.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "calendar": {
+            "type": "string",
+            "description": "Holiday calendar applied on top of `days`: `us_equity` (US stock market holidays and 1:00 PM early closes)."
+          }
+        }
+      },
+      "MarketIndexLatest": {
+        "type": "object",
+        "required": [
+          "source",
+          "status"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Data source of the value, e.g. `spdji` (S&P Dow Jones Indices) or `massive`."
+          },
+          "status": {
+            "$ref": "#/components/schemas/MarketIndexStatus"
+          },
+          "value": {
+            "type": "number",
+            "format": "double",
+            "description": "Latest index value. Absent when no value is available."
+          },
+          "last_tick_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Time of `value`, unix milliseconds. Absent with `value`."
+          }
+        }
+      },
+      "MarketIndexStatus": {
+        "type": "string",
+        "enum": [
+          "open",
+          "closed",
+          "stale"
+        ],
+        "description": "`open`: in session with a current value. `closed`: outside the session; the value is the latest from the last session. `stale`: in session, but no source has updated in the last two minutes."
+      },
+      "MarketIndexTimeseriesPoint": {
+        "type": "object",
+        "required": [
+          "t",
+          "v"
+        ],
+        "properties": {
+          "t": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix milliseconds."
+          },
+          "v": {
+            "type": "number",
+            "format": "double",
+            "description": "Index value."
+          }
+        }
+      },
+      "GetMarketIndexResponse": {
+        "type": "object",
+        "required": [
+          "index",
+          "source",
+          "status",
+          "interval",
+          "start_ms",
+          "end_ms",
+          "timeseries"
+        ],
+        "properties": {
+          "index": {
+            "$ref": "#/components/schemas/MarketIndex"
+          },
+          "source": {
+            "type": "string",
+            "description": "Data source of `timeseries`."
+          },
+          "status": {
+            "$ref": "#/components/schemas/MarketIndexStatus"
+          },
+          "value": {
+            "type": "number",
+            "format": "double",
+            "description": "Latest index value. Absent when no value is available."
+          },
+          "last_tick_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Time of `value`, unix milliseconds."
+          },
+          "interval": {
+            "type": "string",
+            "description": "Point spacing of `timeseries` (`1m`)."
+          },
+          "start_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Window start, unix milliseconds."
+          },
+          "end_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Window end, unix milliseconds."
+          },
+          "timeseries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarketIndexTimeseriesPoint"
+            }
+          }
+        }
+      },
+      "GetMarketIndexHistoryResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "status",
+          "interval",
+          "start_ms",
+          "end_ms",
+          "timeseries"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Market index ID."
+          },
+          "source": {
+            "type": "string",
+            "description": "Data source of `timeseries`."
+          },
+          "status": {
+            "$ref": "#/components/schemas/MarketIndexStatus"
+          },
+          "last_tick_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Time of the index's latest value, unix milliseconds."
+          },
+          "interval": {
+            "type": "string",
+            "description": "Point spacing of `timeseries` (`1s` or `1m`)."
+          },
+          "start_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Window start, unix milliseconds."
+          },
+          "end_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Window end, unix milliseconds."
+          },
+          "timeseries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarketIndexTimeseriesPoint"
+            }
+          }
+        }
+      },
       "GetWeatherIndexResponse": {
         "type": "object",
         "required": [
@@ -9486,6 +9800,69 @@
           "exchange_index": {
             "type": "integer",
             "description": "Exchange index of the subaccount."
+          }
+        }
+      },
+      "GetCreditHistoryResponse": {
+        "type": "object",
+        "required": [
+          "credits",
+          "cursor"
+        ],
+        "properties": {
+          "credits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreditHistory"
+            }
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Pagination cursor; empty when there are no more results."
+          }
+        }
+      },
+      "CreditHistory": {
+        "type": "object",
+        "required": [
+          "credit_id",
+          "type",
+          "status",
+          "amount_dollars",
+          "reason",
+          "created_time"
+        ],
+        "properties": {
+          "credit_id": {
+            "type": "string",
+            "description": "Unique credit identifier."
+          },
+          "type": {
+            "type": "string",
+            "description": "Credit category."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "pending",
+              "failed",
+              "applied"
+            ],
+            "description": "Credit processing status."
+          },
+          "amount_dollars": {
+            "$ref": "#/components/schemas/FixedPointDollars",
+            "description": "Credit amount in dollars."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Credit description, which may include a market or event ticker."
+          },
+          "created_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time the credit was created."
           }
         }
       },
@@ -11742,6 +12119,11 @@
             "type": "string",
             "format": "date-time",
             "description": "Timestamp when the RFQ was last updated"
+          },
+          "rfq_batch_id": {
+            "type": "string",
+            "description": "Identifier of the RFQ batch this RFQ is a child of. Omitted for an RFQ outside a batch. A child can be quoted like a single RFQ, with the differences described in [Request for Quote](/getting_started/rfqs#rfq-batch-children).",
+            "x-go-type-skip-optional-pointer": true
           }
         }
       },
@@ -12220,7 +12602,7 @@
       },
       "CreateRFQBatchChild": {
         "type": "object",
-        "description": "One combo to request quotes on. Set exactly one of market_ticker and selected_markets.",
+        "description": "One combo to request quotes on. Set exactly one of market_ticker and selected_markets, and optionally the child's own size.",
         "properties": {
           "market_ticker": {
             "type": "string",
@@ -12238,6 +12620,16 @@
             "x-oapi-codegen-extra-tags": {
               "validate": "omitempty,max=6,dive"
             }
+          },
+          "contracts_fp": {
+            "$ref": "#/components/schemas/FixedPointCount",
+            "nullable": true,
+            "description": "Number of contracts requested on this child, in place of the batch's size. Provide at most one of contracts_fp and target_cost_dollars."
+          },
+          "target_cost_dollars": {
+            "$ref": "#/components/schemas/FixedPointDollars",
+            "description": "Target cost of this child, in dollars, in place of the batch's size. Provide at most one of contracts_fp and target_cost_dollars.",
+            "x-go-type-skip-optional-pointer": true
           }
         }
       },
@@ -12267,16 +12659,16 @@
           "contracts_fp": {
             "$ref": "#/components/schemas/FixedPointCount",
             "nullable": true,
-            "description": "Number of contracts requested on every child. Provide exactly one of contracts_fp and target_cost_dollars."
+            "description": "Number of contracts requested on every child that sets no size of its own. Provide at most one of contracts_fp and target_cost_dollars, and one of them unless every child sets its own."
           },
           "target_cost_dollars": {
             "$ref": "#/components/schemas/FixedPointDollars",
-            "description": "Target cost of every child, in dollars. Provide exactly one of contracts_fp and target_cost_dollars.",
+            "description": "Target cost, in dollars, of every child that sets no size of its own. Provide at most one of contracts_fp and target_cost_dollars, and one of them unless every child sets its own.",
             "x-go-type-skip-optional-pointer": true
           },
           "target_cost_excludes_fees": {
             "type": "boolean",
-            "description": "Same as on Create RFQ, applied to every child. Only valid together with target_cost_dollars.",
+            "description": "Same as on Create RFQ, applied to every child. Only valid when the children are sized by target cost.",
             "x-go-type-skip-optional-pointer": true
           },
           "rest_remainder": {
