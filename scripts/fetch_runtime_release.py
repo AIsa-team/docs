@@ -94,7 +94,7 @@ class PublicReader:
                 require(time.monotonic() <= self.deadline, 'Acquisition deadline exceeded')
                 require(len(raw) <= limit, 'Public file exceeds byte limit')
                 if '110' in headers.get('warning', ''):
-                    raise AcquisitionRejected(stale_diagnostic(target, raw))
+                    raise AcquisitionRejected(stale_diagnostic(target, raw, path=path))
                 return raw, headers
             if not retry or attempt == REQUEST_ATTEMPTS:
                 raise AcquisitionRejected(
@@ -117,7 +117,7 @@ def public_target(path):
     return 'public-file'
 
 
-def stale_diagnostic(target, raw):
+def stale_diagnostic(target, raw, *, path=None):
     """Expose bounded public release identities without logging response bodies."""
     fields = ['target=' + target]
     if target == 'current':
@@ -136,7 +136,10 @@ def stale_diagnostic(target, raw):
                 value = current.get(key)
                 if isinstance(value, str) and pattern.fullmatch(value):
                     fields.append(key + '=' + value)
-    return 'Stale public metadata rejected (' + ', '.join(fields) + ')'
+    message = 'Stale public metadata rejected'
+    if path is not None and public_target(path) != 'public-file':
+        message += ': ' + path
+    return message + ' (' + ', '.join(fields) + ')'
 
 
 def validate_current(current, revision, compiler):
