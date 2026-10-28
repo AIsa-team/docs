@@ -56,6 +56,21 @@ class PublicReleaseTests(unittest.TestCase):
                 reader('/public/api-contract/current')
             self.assertEqual(failure_diagnostic(raised.exception), 'Public metadata request failed: ' + expected)
 
+    def test_stale_warning_names_the_fixed_request_path_but_not_header_text(self):
+        response = Mock(status=200)
+        response.read.return_value = b'{}'
+        response.headers.items.return_value = [('Warning', '110 secret-host "Response is Stale"')]
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        reader = PublicReader('https://api.aisa.one', float('inf'))
+        reader.opener = Mock()
+        reader.opener.open.return_value = response
+        with self.assertRaises(AcquisitionRejected) as raised:
+            reader('/public/api-contract/current')
+        message = failure_diagnostic(raised.exception)
+        self.assertEqual(message, 'Stale public metadata rejected: /public/api-contract/current')
+        self.assertNotIn('secret', message)
+
     def fixture(self, mutate_index=None, mutate_current=None):
         compiler = 'b' * 40
         provider = {'info': {'x-aisa-document': {'facts_hash': 'c' * 64}}, 'paths': {}}
