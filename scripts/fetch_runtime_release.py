@@ -82,7 +82,8 @@ class PublicReader:
             raise AcquisitionRejected('Public metadata request failed: ' + type(exc).__name__) from None
         require(time.monotonic() <= self.deadline, 'Acquisition deadline exceeded')
         require(len(raw) <= limit, 'Public file exceeds byte limit')
-        require('110' not in headers.get('warning', ''), 'Stale public metadata rejected')
+        # The fixed request path is ours, not response text, so it is safe to report.
+        require('110' not in headers.get('warning', ''), 'Stale public metadata rejected: ' + path)
         return raw, headers
 
 
