@@ -20,6 +20,14 @@ def safe(value):
     return ''.join(f"&#{ord(c)};" if c in '`*_[]{}<>|\\\n\r' else html.escape(c, quote=True) for c in value)
 
 
+def code(value):
+    """Literal inline code: no autolink, emphasis or MDX expression, so URLs keep raw `_` and `{}`."""
+    value = re.sub(r"[\r\n]+", " ", value)
+    fence = "`" * (1 + max((len(run) for run in re.findall(r"`+", value)), default=0))
+    pad = " " if value[:1] == "`" or value[-1:] == "`" else ""
+    return fence + pad + value + pad + fence
+
+
 def formula_text(formula):
     if not isinstance(formula, dict) or set(formula) - {"input", "inputs", "fixed_units", "unit_scale", "input_multiplier", "unit_rounding"}:
         return None
@@ -81,7 +89,7 @@ def request_details(operation, document, method, path, spec_path, language="en")
         lines.append("- **" + t("Incomplete historical declaration (disabled)", "未启用的历史声明不完整") + ":** " + safe(limitation))
     for server in request["servers"]:
         if isinstance(server, dict) and isinstance(server.get("url"), str):
-            lines.append("- **" + t("Request URL template", "请求 URL 模板") + ":** " + safe(server["url"].rstrip("/") + path))
+            lines.append("- **" + t("Request URL template", "请求 URL 模板") + ":** " + code(server["url"].rstrip("/") + path))
     for parameter in parameters.values():
         required = t("required", "必填") if parameter.get("required") else t("optional", "可选")
         lines.append("- **" + safe(parameter.get("name", "?")) + ":** " + safe(str(parameter.get("in", "?"))) + "; " + required)
