@@ -68,6 +68,17 @@ class PricingProseTests(unittest.TestCase):
         catalog = {'entries': {key_for(source): {'source': source, 'translation': '查询域名。每次收费 $0.02。'}}}
         self.assertNotIn('$0.02', translation(catalog, source))
 
+    def test_page_notice_never_lands_inside_a_component_or_glued_to_a_fence(self):
+        page = ('---\ntitle: Cancel\n---\nLead.\n\nReference price: $0.02 USD per successful request.\n\n'
+                '## Example\n\n<CodeGroup>\n```bash REST\ncurl x\n```\n</CodeGroup>\n')
+        result = clean_page(page)
+        self.assertNotIn('$0.02', result)
+        self.assertIn('\n```bash REST\n', result)
+        self.assertNotIn(NOTICE + '```', result)
+        self.assertLess(result.index(NOTICE), result.index('## Example'))
+        self.assertEqual(result.count(NOTICE), 1)
+        self.assertEqual(clean_page(result), result)
+
     def test_runtime_pricing_wins_over_old_prose_without_mutating_inputs(self):
         runtime, upstream = facts('provider'), mirror()
         operation(runtime).pop('description')

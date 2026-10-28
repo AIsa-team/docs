@@ -96,7 +96,7 @@ def reconcile_free_claim(text, pricing):
                   ' See the published pricing', text)
 
 
-def clean_text(text: str, language: str = 'en') -> str:
+def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
     """Drop price clauses, retaining separate usage rules and non-price prose."""
     if not MONEY.search(text):
         return text
@@ -151,9 +151,24 @@ def clean_text(text: str, language: str = 'en') -> str:
     result = re.sub(r'(?m)^[ \t]*[-*][ \t]*$', '', result)
     result = re.sub(r'(?m)^#{1,6} (?:Price|Pricing)[ \t]*\n(?=\s*(?:#|$))', '', result)
     result = re.sub(r'\n{3,}', '\n\n', result).strip()
-    if notice not in result:
+    if add_notice and notice not in result:
         result = (result + '\n\n' + notice).strip()
     return result
+
+
+def place_notice(body: str, notice: str) -> str:
+    """Put the page notice where the removed price line stood: before the first
+    section heading outside code, never inside a component or glued to a fence."""
+    if notice in body:
+        return body
+    chunks = FENCES.split(body)
+    for index in range(0, len(chunks), 2):
+        match = re.search(r'(?m)^#{2,6} ', chunks[index])
+        if match:
+            head, tail = chunks[index][:match.start()], chunks[index][match.start():]
+            chunks[index] = head.rstrip('\n') + '\n\n' + notice + '\n\n' + tail
+            return ''.join(chunks)
+    return body.rstrip('\n') + '\n\n' + notice + '\n'
 
 
 def clean_document(document: dict) -> dict:
@@ -197,6 +212,7 @@ def clean_page(text: str, language: str = 'en') -> str:
             if updated != value:
                 header = replace_frontmatter_value(header, key, updated)
     # Preserve the useful section/parameter columns of handwritten rate tables.
+    changed_prose = False
     chunks = FENCES.split(body)
     for index in range(0, len(chunks), 2):
         lines = chunks[index].splitlines(keepends=True)
@@ -214,8 +230,18 @@ def clean_page(text: str, language: str = 'en') -> str:
                     if j < len(cells) and MONEY.search(cells[j]):
                         cells[j] = ' 见当前定价 ' if language == 'zh' else ' See current pricing '
                 lines[i] = '|'.join(cells)
-        chunks[index] = clean_text(''.join(lines), language)
+        prose = ''.join(lines)
+        core = prose.strip()
+        # A chunk sits between fences (for example `<CodeGroup>` before its
+        # first block); keep its surrounding newlines so a fence stays on its own line.
+        cleaned = clean_text(core, language, add_notice=False) if core else core
+        if cleaned != core:
+            changed_prose = True
+            prose = prose[:len(prose) - len(prose.lstrip())] + cleaned + prose[len(prose.rstrip()):]
+        chunks[index] = prose
     body = ''.join(chunks)
+    if changed_prose:
+        body = place_notice(body, NOTICE_ZH if language == 'zh' else NOTICE)
     if (header, body) == original:
         return text
     return '---\n' + header + '\n---\n' + body
