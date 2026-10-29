@@ -1,0 +1,45 @@
+name: Dev docs
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-contracts:
+    # Deployment is handled by a separate Mintlify project tracking dev.
+    # Never acquire production Runtime evidence or dispatch to consumers here.
+    if: github.ref == 'refs/heads/dev' || (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'dev')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RUNTIME_YAML_READER_MODULE: /tmp/runtime-yaml-reader/node_modules/js-yaml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install the JavaScript YAML reader
+        run: npm install --prefix /tmp/runtime-yaml-reader --no-audit --no-fund --ignore-scripts js-yaml@4.1.1
+      - name: Install offline test dependencies
+        run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
+      - name: Test composition, publication rules, and branch isolation offline
+        run: python -m unittest discover -s scripts/tests -v
+      - name: Verify frozen acceptance inputs
+        run: python scripts/tests/fixtures/w0-package/scripts/api-contract-acceptance/verify.py
+      - name: Verify policy fixtures
+        run: python -m unittest discover -s scripts/tests/w3_verification -v

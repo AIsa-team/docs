@@ -69,6 +69,13 @@ npx mint dev
 
 The preview is available at `http://localhost:3000` by default.
 
+## Dev deployment
+
+`main` is the production documentation source. `dev` is the source for an
+independent Mintlify project; pushing dev does not publish production contracts
+or notify production consumers. See [dev deployment](docs/dev-deployment.md)
+for project setup, branch boundaries, validation and API environment configuration.
+
 ## OpenAPI Changes
 
 When changing an OpenAPI source, regenerate a local consolidated spec:

@@ -21,6 +21,7 @@ permissions:
   actions: read
 jobs:
   activation-plan:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
@@ -33,7 +34,7 @@ jobs:
           echo "enabled=$(python -c 'import json; print(str(json.load(open("/tmp/activation-plan.json"))["activation_enabled"]).lower())')" >> "$GITHUB_OUTPUT"
   revisions:
     needs: activation-plan
-    if: github.event_name == 'workflow_dispatch' || (needs.activation-plan.outputs.enabled == 'true' && vars.RUNTIME_CONTRACT_ACTIVATION_ENABLED == 'true')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (needs.activation-plan.outputs.enabled == 'true' && vars.RUNTIME_CONTRACT_ACTIVATION_ENABLED == 'true'))
     runs-on: ubuntu-latest
     # Existing surface/provenance checks plus a bounded five-minute read-only
     # Router schema audit, with time left to upload failure evidence.

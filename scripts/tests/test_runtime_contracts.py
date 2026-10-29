@@ -699,7 +699,7 @@ class FullSimilarwebCutoverTests(unittest.TestCase):
                 self.assertIn("content", op["responses"]["200"])
 
 class PublicationWorkflowTests(unittest.TestCase):
-    def test_only_main_can_publish_while_feature_dispatch_still_stages(self):
+    def test_only_main_can_stage_and_publish_production_contracts(self):
         import yaml
         workflow = yaml.safe_load((Path(__file__).resolve().parents[2] / ".github/workflows/pull-openapi.yml").read_text())
         steps = workflow["jobs"]["compose"]["steps"]
@@ -707,9 +707,10 @@ class PublicationWorkflowTests(unittest.TestCase):
         publish = next(step for step in steps if step.get("id") == "publish")
         self.assertEqual(publish["if"], "steps.prepare.outputs.candidate_commit != ''")
         stage_step = next(step for step in steps if step.get("name") == "Stage contracts")
-        self.assertNotIn("if", stage_step, "feature branches must retain dry-run staging")
+        self.assertNotIn("if", stage_step, "main dry runs must assess the same graph as publication")
         self.assertIn("github.event_name == 'workflow_dispatch'", workflow["jobs"]["compose"]["if"],
-                      "manual feature-branch dry runs must remain available while scheduled activation is dormant")
+                      "main dry runs must remain available while scheduled activation is dormant")
+        self.assertIn("github.ref == 'refs/heads/main'", workflow["jobs"]["compose"]["if"])
         cases = [
             ("refs/heads/main", "workflow_dispatch", True, "false", "true", True),
             ("refs/heads/feature", "workflow_dispatch", True, "true", "true", False),

@@ -263,7 +263,8 @@ class WorkflowSupplyTests(unittest.TestCase):
         self.assertEqual(steps[upload]['with']['retention-days'], 90)
         self.assertEqual(job['outputs']['docs_commit'], '${{ steps.publish.outputs.docs_commit }}')
         self.assertEqual(flow['jobs']['notify-consumers']['needs'], 'compose')
-        self.assertEqual(flow['jobs']['notify-consumers']['if'], "needs.compose.outputs.docs_commit != ''")
+        self.assertEqual(flow['jobs']['notify-consumers']['if'],
+                         "github.ref == 'refs/heads/main' && needs.compose.outputs.docs_commit != ''")
 
 
 if __name__ == '__main__':

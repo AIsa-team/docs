@@ -263,6 +263,14 @@ class OpenInputWorkflowTests(unittest.TestCase):
             '--head "$CANDIDATE_HEAD" ${{ github.event_name == \'pull_request\' && \'--merge-base\' || \'\' }} '
             '>> "$GITHUB_OUTPUT"\n')
         scope['run'] = 'python scripts/contract_change_scope.py --base "$BASE" >> "$GITHUB_OUTPUT"\n'
+        # Assert and normalize the dev-isolation guards while retaining the
+        # independent digest of every original production assessment step.
+        trigger = workflow.get('on', workflow.get(True))
+        self.assertEqual(trigger['pull_request'].pop('branches'), ['main'])
+        production_scope = "github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main')"
+        self.assertEqual(workflow['jobs']['changes'].pop('if'), production_scope)
+        self.assertEqual(workflow['jobs']['contracts']['if'], 'always() && (' + production_scope + ')')
+        workflow['jobs']['contracts']['if'] = 'always()'
         def normalize(value):
             if type(value) is dict:return {str(k):normalize(v) for k,v in value.items()}
             if type(value) is list:return [normalize(v) for v in value]

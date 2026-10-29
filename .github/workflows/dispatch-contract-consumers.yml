@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   dispatch:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -27,6 +28,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.docs_commit }}
+          fetch-depth: 0
+      - name: Require a published main revision before issuing consumer credentials
+        env:
+          DOCS_COMMIT: ${{ inputs.docs_commit }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$DOCS_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'Expected an immutable full Docs commit SHA.' >&2
+            exit 1
+          fi
+          git fetch origin main
+          git merge-base --is-ancestor "$DOCS_COMMIT" origin/main
       - name: Generate consumer dispatch token
         id: token
         uses: actions/create-github-app-token@v3

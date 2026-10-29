@@ -16,11 +16,12 @@ permissions:
   actions: read # Authenticate the fixed original schema/registry publisher artifacts.
 
 concurrency:
-  group: pull-openapi
+  group: pull-openapi-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   activation-plan:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
@@ -33,7 +34,7 @@ jobs:
           echo "enabled=$(python -c 'import json; print(str(json.load(open("/tmp/activation-plan.json"))["activation_enabled"]).lower())')" >> "$GITHUB_OUTPUT"
   compose:
     needs: activation-plan
-    if: github.event_name == 'workflow_dispatch' || (needs.activation-plan.outputs.enabled == 'true' && vars.RUNTIME_CONTRACT_ACTIVATION_ENABLED == 'true')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (needs.activation-plan.outputs.enabled == 'true' && vars.RUNTIME_CONTRACT_ACTIVATION_ENABLED == 'true'))
     runs-on: ubuntu-latest
     # Runner headroom for the complete strict graph checks; acceptance remains 1h/4h.
     timeout-minutes: 20
@@ -240,7 +241,7 @@ jobs:
 
   notify-consumers:
     needs: compose
-    if: needs.compose.outputs.docs_commit != ''
+    if: github.ref == 'refs/heads/main' && needs.compose.outputs.docs_commit != ''
     uses: ./.github/workflows/dispatch-contract-consumers.yml
     with:
       docs_commit: ${{ needs.compose.outputs.docs_commit }}
