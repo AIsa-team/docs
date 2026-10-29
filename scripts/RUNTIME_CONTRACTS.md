@@ -137,8 +137,13 @@ include selections without expanding the theme to every operation in a new file.
 
 English titles follow runtime summaries; Chinese titles and schemas use the
 existing translation catalog, with English fallback. No paid/model translation
-runs in this pipeline. New pages/navigation are additive. Disabled operations
-retain their page and a managed status notice.
+runs in this pipeline. Available operations receive navigation entries. Disabled
+operations leave both navigation trees, including any groups emptied by their
+removal. Their existing bilingual URLs retain a managed status notice and
+`noindex: "true"` so search does not advertise unavailable APIs. Reactivation
+restores navigation and removes only the indexing rule owned by this generator;
+independently authored indexing restrictions and prose remain intact.
+Native canonical contract bytes and operation identities remain unchanged.
 
 The `Test runtime contracts` workflow runs the same regression suite for pull
 requests that change contract sources, scripts, workflows or reference pages.
@@ -450,8 +455,10 @@ python scripts/check_contract_candidate.py --source-receipts /path/to/receipts.j
 The W3 code gate also generates the actual EN/ZH schemas, MDX and navigation
 from fixed inputs. `publication_surface.py` compares protocol structure while
 allowing translated prose, checks each page's declared operation ID and ensures
-both navigation trees reach the same runtime operations. The formal checker
-uses that same read-only validator and binds every actual schema/page/navigation
+both navigation trees reach the same available runtime operations. Disabled
+operations retain matching bilingual archive pages, excluded from navigation
+and indexing. The formal checker uses that same read-only validator and binds
+every actual schema/page/navigation
 file in its receipt. Existing page aliases follow their published operation ID
 when a path is normalized; their URLs and prose remain intact.
 
