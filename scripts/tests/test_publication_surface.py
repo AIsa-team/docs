@@ -100,6 +100,55 @@ class PublicationSurfaceTests(unittest.TestCase):
                     validate_surfaces(self.root)
                 page.write_text(original)
 
+    def test_disabled_legacy_pages_leave_navigation_and_search_without_changing_schemas(self):
+        from pull_openapi import refresh_legacy_page_blocks
+        from publication_surface import navigation_pages
+        from runtime_registry import published_documents
+        from runtime_localize_openapi_zh import split_frontmatter
+        import yaml
+        source = {'openapi': '3.1.0', 'info': {'title': 'Legacy Twitter'},
+                  'servers': [{'url': 'https://api.aisa.one/apis/v1'}],
+                  'paths': {'/twitter/spaces/detail': {'get': {'operationId': 'spaceDetail',
+                      'x-aisa-status': 'disabled', 'responses': {'200': {'description': 'Success'}}}}}}
+        schema = self.root / 'openapi/twitter-trend.json'
+        schema.write_text(json.dumps(source))
+        original = schema.read_bytes()
+        docs_path = self.root / 'docs.json'
+        docs = json.loads(docs_path.read_text())
+        for block in docs['navigation']['languages']:
+            prefix = 'zh/' if block['language'] == 'zh' else ''
+            name = prefix + 'api-reference/twitter/spaces'
+            page = self.root / (name + '.mdx')
+            page.parent.mkdir(parents=True, exist_ok=True)
+            page.write_text('---\ntitle: Space detail\nopenapi: "openapi/' + prefix +
+                'twitter-trend.json GET /twitter/spaces/detail"\n---\nHistorical example stays.\n')
+            block['tabs'][0]['groups'].append({'group': 'Twitter', 'pages': [name]})
+        docs_path.write_text(json.dumps(docs))
+        changes = {}
+        refresh_legacy_page_blocks(self.root, published_documents(self.root), changes, {'entries': {}})
+        for path, text in changes.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+        for block in json.loads(docs_path.read_text())['navigation']['languages']:
+            prefix = 'zh/' if block['language'] == 'zh' else ''
+            name = prefix + 'api-reference/twitter/spaces'
+            self.assertNotIn(name, list(navigation_pages(block)))
+            self.assertIn(prefix + 'api-reference/fixture/one', list(navigation_pages(block)))
+            header, prose = split_frontmatter((self.root / (name + '.mdx')).read_text())
+            self.assertIn(yaml.safe_load(header)['noindex'], (True, 'true'))
+            self.assertIn('Historical example stays.', prose)
+        self.assertEqual(schema.read_bytes(), original)
+        validate_surfaces(self.root)
+        valid_navigation = docs_path.read_text()
+        docs_path.write_text(json.dumps(docs))
+        with self.assertRaisesRegex(ValueError, 'disabled runtime page remains in navigation'):
+            validate_surfaces(self.root)
+        docs_path.write_text(valid_navigation)
+        page = self.root / 'api-reference/twitter/spaces.mdx'
+        page.write_text(page.read_text().replace('noindex: "true" # aisa-contract-status\n', ''))
+        with self.assertRaisesRegex(ValueError, 'disabled runtime page is indexable'):
+            validate_surfaces(self.root)
+
     def test_disabled_status_refresh_and_tampering_are_formally_checked(self):
         document = json.loads((self.root / 'openapi/fixture.json').read_text())
         document['paths']['/one']['get']['x-aisa-status'] = 'disabled'

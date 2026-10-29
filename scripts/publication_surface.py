@@ -150,7 +150,7 @@ def validate_surfaces(root, published_ref=None):
             if actual_blocks != [expected_block]:
                 raise ValueError('page readable contract differs from provider: ' + str(path))
             page = path.relative_to(root).with_suffix('').as_posix()
-            if provider in documents and canonical_operation.get('x-aisa-status') == 'disabled':
+            if canonical_operation.get('x-aisa-status') == 'disabled':
                 if page in nav[language]:
                     raise ValueError('disabled runtime page remains in navigation: ' + page)
                 if header.get('noindex') not in (True, 'true'):

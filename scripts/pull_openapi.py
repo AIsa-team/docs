@@ -416,8 +416,9 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
 
 
 def refresh_legacy_page_blocks(root, documents, changes, catalog):
-    """Update only already bound pages; never create pages or navigation."""
+    """Refresh bound legacy pages and hide disabled ones without adding links."""
     import runtime_localize_openapi_zh as localization
+    disabled_pages = set()
     def translated_note(note):
         try:
             return localization.translation(catalog, note)
@@ -442,6 +443,10 @@ def refresh_legacy_page_blocks(root, documents, changes, catalog):
                 raise ValueError("legacy page references missing operation: " + str(page))
             if bool(match[1]) != (language == "zh"):
                 raise ValueError("legacy page references wrong language: " + str(page))
+            disabled = operation.get('x-aisa-status') == 'disabled'
+            if disabled:
+                disabled_pages.add(page.relative_to(root).with_suffix('').as_posix())
+            text = update_disabled_indexing(text, disabled)
             if language == "zh":
                 localized_path = root / reference.split()[0]
                 if not localized_path.exists() and localized_path not in changes:
@@ -449,6 +454,20 @@ def refresh_legacy_page_blocks(root, documents, changes, catalog):
                     changes[localized_path] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
             changes[page] = update_readable_block(text, operation, language, translated_note,
                 document=document, method=method, path=path, spec_path=reference.split()[0])
+    docs_path = root / 'docs.json'
+    if disabled_pages and docs_path.exists():
+        original = changes.get(docs_path, docs_path.read_text())
+        docs = json.loads(original)
+        for language in docs.get('navigation', {}).get('languages', []):
+            for tab in language.get('tabs', []):
+                if tab.get('tab') not in {'API Reference', 'API 参考'}:
+                    continue
+                for key in ('groups', 'pages'):
+                    if isinstance(tab.get(key), list):
+                        tab[key] = remove_disabled_navigation(tab[key], disabled_pages)
+        content = json.dumps(docs, indent=2, ensure_ascii=False) + '\n'
+        if content != original:
+            changes[docs_path] = content
 
 
 def refresh_localized_documents(root, documents, changes, catalog, identity_history=None):

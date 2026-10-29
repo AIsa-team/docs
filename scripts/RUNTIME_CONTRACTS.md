@@ -144,6 +144,9 @@ removal. Their existing bilingual URLs retain a managed status notice and
 restores navigation and removes only the indexing rule owned by this generator;
 independently authored indexing restrictions and prose remain intact.
 Native canonical contract bytes and operation identities remain unchanged.
+Existing pages bound to legacy documents also leave navigation and indexing
+when their operation is disabled. Active legacy pages retain their manually
+managed navigation; this refresh never creates pages or navigation entries.
 
 The `Test runtime contracts` workflow runs the same regression suite for pull
 requests that change contract sources, scripts, workflows or reference pages.
