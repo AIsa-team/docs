@@ -28,9 +28,15 @@ def is_reviewed_input_change(paths):
             all(name in exact or source(name) or is_reviewed_input_attachment(name) for name in paths))
 
 
-def git_changed_paths(root, base, head='HEAD'):
+def git_changed_paths(root, base, head='HEAD', merge_base=False):
     if not base or set(base) == {'0'}:
+        if merge_base:
+            raise ValueError('PR classification requires an available base revision')
         return None
+    if merge_base:
+        # A PR owns changes since its common ancestor. A newer main or a
+        # synthetic merge must not turn main's publication into a PR change.
+        base = subprocess.check_output(['git', 'merge-base', base, head], cwd=root, text=True).strip()
     return subprocess.check_output(['git', 'diff', '--name-only', base, head], cwd=root, text=True).splitlines()
 
 
@@ -42,13 +48,11 @@ def requires_artifact_check(paths):
                            'zh/api-reference.mdx', 'docs/response-source-review-receipts.json') for path in paths)
 
 
-def git_requires_artifact_check(root, base, head='HEAD'):
+def git_requires_artifact_check(root, base, head='HEAD', merge_base=False):
     # An initial push or manual run has no safe code-only comparison.
-    if not base or set(base) == {'0'}:
-        return True
     # Invalid/unavailable revisions fail rather than defaulting to code-only.
-    paths = git_changed_paths(root, base, head)
-    return requires_artifact_check(paths)
+    paths = git_changed_paths(root, base, head, merge_base=merge_base)
+    return paths is None or requires_artifact_check(paths)
 
 
 def verify_required_jobs(needs):
@@ -70,6 +74,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base', default='')
     parser.add_argument('--head', default='HEAD')
+    parser.add_argument('--merge-base', action='store_true',
+                        help='Classify PR changes from the common ancestor of the fixed base and head')
     parser.add_argument('--root', default='.')
     parser.add_argument('--check-jobs', action='store_true', help='Verify GitHub needs results from NEEDS_JSON')
     args = parser.parse_args()
@@ -77,6 +83,7 @@ if __name__ == '__main__':
         verify_required_jobs(json.loads(os.environ['NEEDS_JSON']))
         print('All applicable contract checks passed')
     else:
-        print('artifacts=' + str(git_requires_artifact_check(args.root, args.base, args.head)).lower())
-        paths = git_changed_paths(args.root, args.base, args.head)
+        print('artifacts=' + str(git_requires_artifact_check(args.root, args.base, args.head,
+                                                          merge_base=args.merge_base)).lower())
+        paths = git_changed_paths(args.root, args.base, args.head, merge_base=args.merge_base)
         print('input_candidate=' + str(paths is not None and is_reviewed_input_change(paths)).lower())

@@ -340,6 +340,19 @@ class SurfaceProjectionTests(unittest.TestCase):
             path = self.root / name;path.parent.mkdir(parents=True, exist_ok=True);path.write_bytes(raw)
         self.assertEqual(surfaces.validate_surfaces(self.root)['operations'], 1)
 
+    def test_disabled_canonical_operations_keep_exact_bytes_but_leave_navigation(self):
+        from publication_surface import navigation_pages
+        document = json.loads(self.raw['fixture'])
+        document['paths']['/one']['get']['x-aisa-status'] = 'disabled'
+        self.raw['fixture'] = canonical(document)
+        changes = importer.project_surfaces(self.root, self.raw, self.raw['fixture'], self.metadata)
+        self.assertEqual(changes['openapi/fixture.json'], self.raw['fixture'])
+        self.assertEqual(changes['openapi/openapi.json'], self.raw['fixture'])
+        self.assertEqual(list(navigation_pages(json.loads(changes['docs.json']))), [])
+        for name, raw in changes.items():
+            path = self.root / name;path.parent.mkdir(parents=True, exist_ok=True);path.write_bytes(raw)
+        self.assertEqual(surfaces.validate_surfaces(self.root)['operations'], 1)
+
     def test_projected_gate_rejects_changed_runtime_bytes_metadata_or_sources(self):
         for name in (POLICY_PATH, REBINDING_PATH):
             path = self.root / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b'{}')

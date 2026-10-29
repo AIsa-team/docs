@@ -177,6 +177,67 @@ class ChangeScopeTests(unittest.TestCase):
             with self.assertRaises(subprocess.CalledProcessError):
                 git_requires_artifact_check(root, 'unavailable-revision')
 
+    def test_pr_scope_uses_its_head_when_main_and_the_merge_commit_advance(self):
+        script = Path(__file__).resolve().parents[1] / 'contract_change_scope.py'
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            def git(*args):
+                return subprocess.check_output(['git', *args], cwd=root, text=True).strip()
+            git('init', '-q', '-b', 'main')
+            git('config', 'user.name', 'Test')
+            git('config', 'user.email', 'test@example.invalid')
+            (root / 'scripts').mkdir()
+            (root / 'scripts/generator.py').write_text('before\n')
+            (root / 'docs/publication').mkdir(parents=True)
+            publication = root / 'docs/publication/current.json'
+            publication.write_text('{"generation":1}\n')
+            (root / 'openapi/upstream').mkdir(parents=True)
+            source = root / 'openapi/upstream/source.json'
+            source.write_text('{}\n')
+            git('add', '.'); git('commit', '-qm', 'baseline')
+            base = git('rev-parse', 'HEAD')
+            git('checkout', '-qb', 'pr')
+            (root / 'scripts/generator.py').write_text('after\n')
+            git('add', '.'); git('commit', '-qm', 'code only')
+            head = git('rev-parse', 'HEAD')
+            git('checkout', '-q', 'main')
+            publication.write_text('{"generation":2}\n')
+            git('add', '.'); git('commit', '-qm', 'new main publication')
+            advanced_base = git('rev-parse', 'HEAD')
+            git('merge', '--no-ff', '-qm', 'new synthetic merge', head)
+            merged = git('rev-parse', 'HEAD')
+            # This is the observed failure: the event's base and a newer merge
+            # contain main's publication update even though the PR is code-only.
+            self.assertTrue(git_requires_artifact_check(root, base, merged))
+            for comparison_base in (base, advanced_base):
+                output = subprocess.check_output([sys.executable, str(script),
+                    '--root', str(root), '--base', comparison_base, '--head', head,
+                    '--merge-base'], text=True)
+                self.assertEqual(output.splitlines(), ['artifacts=false', 'input_candidate=false'])
+            git('checkout', '-q', 'pr')
+            source.unlink()
+            git('add', '-u'); git('commit', '-qm', 'real source deletion')
+            changed_head = git('rev-parse', 'HEAD')
+            output = subprocess.check_output([sys.executable, str(script),
+                '--root', str(root), '--base', advanced_base, '--head', changed_head,
+                '--merge-base'], text=True)
+            self.assertEqual(output.splitlines(), ['artifacts=true', 'input_candidate=false'])
+            for invalid in ('unavailable-revision', '0' * 40):
+                with self.subTest(base=invalid), self.assertRaises(subprocess.CalledProcessError):
+                    subprocess.check_output([sys.executable, str(script), '--root', str(root),
+                        '--base', invalid, '--head', head, '--merge-base'], stderr=subprocess.PIPE)
+
+    def test_pr_classifier_receives_fixed_head_and_merge_base_mode(self):
+        workflow = yaml.safe_load((Path(__file__).resolve().parents[2] /
+                                   '.github/workflows/test-runtime-contracts.yml').read_text())
+        steps = workflow['jobs']['changes']['steps']
+        checkout = next(step for step in steps if step.get('uses', '').startswith('actions/checkout@'))
+        self.assertEqual(checkout['with']['ref'], '${{ github.event.pull_request.head.sha || github.sha }}')
+        scope = next(step for step in steps if step.get('id') == 'scope')
+        self.assertEqual(scope['env']['CANDIDATE_HEAD'], '${{ github.event.pull_request.head.sha || github.sha }}')
+        self.assertIn('--head "$CANDIDATE_HEAD"', scope['run'])
+        self.assertIn("github.event_name == 'pull_request' && '--merge-base' || ''", scope['run'])
+
 
 if __name__ == '__main__':
     unittest.main()

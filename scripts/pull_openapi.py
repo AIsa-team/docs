@@ -235,8 +235,38 @@ def existing_page_references(root: Path):
     return references
 
 
+def remove_disabled_navigation(items, disabled_pages):
+    """Remove managed page links and any groups emptied by those removals."""
+    result = []
+    for item in items:
+        if isinstance(item, str):
+            if item not in disabled_pages:
+                result.append(item)
+            continue
+        updated = dict(item)
+        children = [key for key in ('pages', 'groups') if isinstance(item.get(key), list)]
+        for key in children:
+            updated[key] = remove_disabled_navigation(item[key], disabled_pages)
+        if updated != item and not any(updated[key] for key in children):
+            continue
+        result.append(updated)
+    return result
+
+
+def update_disabled_indexing(text, disabled):
+    """Keep archived URLs out of search; preserve independently authored rules."""
+    from runtime_localize_openapi_zh import split_frontmatter
+    header, prose = split_frontmatter(text)
+    owned = 'noindex: "true" # aisa-contract-status'
+    if disabled and not re.search(r'^noindex:', header, re.M):
+        header += '\n' + owned
+    elif not disabled:
+        header = '\n'.join(line for line in header.split('\n') if line != owned)
+    return '---\n' + header + '\n---\n' + prose
+
+
 def generate_pages(root: Path, provider: str, document: dict, changes: dict, previous: dict | None = None, decorate_links: bool = True, page_references=None, require_existing_links: bool = False) -> None:
-    """Append pages/navigation, reusing existing method/path references and prose."""
+    """Refresh stable pages and expose only available operations in navigation."""
     docs_path = root / "docs.json"
     if not docs_path.exists():
         return
@@ -276,11 +306,15 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
         for _, _, operation in operations(document):
             if operation.get('x-aisa-docs-url') != DOCS_PREFIX + selected_pages[operation['operationId']][-1]:
                 raise ValueError('Canonical page binding differs from existing presentation selection')
-    paths = []
+    paths, disabled_pages = [], set()
     for path, method, operation in operations(document):
         page_names = selected_pages[operation['operationId']]
+        disabled = operation.get('x-aisa-status') == 'disabled'
         for page in page_names:
-            paths.append(page)
+            if disabled:
+                disabled_pages.add(page)
+            else:
+                paths.append(page)
             for language, prefix in (("en", ""), ("zh", "zh/")):
                 destination = root / f"{prefix}{page}.mdx"
                 spec_path = f"openapi/{'zh/' if language == 'zh' else ''}{provider}.json"
@@ -313,12 +347,13 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                 # remains intact, including on pre-existing pages.
                 begin, end = "{/* aisa-contract-status:start */}", "{/* aisa-contract-status:end */}"
                 pattern = re.escape(begin) + r".*?" + re.escape(end) + r"\n?"
-                if operation.get("x-aisa-status") == "disabled":
+                if disabled:
                     notice = "当前未启用。" if language == "zh" else "Currently disabled."
                     block = f"{begin}\n{notice}\n{end}\n"
                     text = re.sub(pattern, lambda _: block, text, flags=re.S) if re.search(pattern, text, re.S) else text + block
                 else:
                     text = re.sub(pattern, "", text, flags=re.S)
+                text = update_disabled_indexing(text, disabled)
                 def translated_note(note):
                     try:
                         return localization.translation(catalog, note)
@@ -337,6 +372,10 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
         for tab in language.get("tabs", []):
             if tab.get("tab") not in {"API Reference", "API 参考"}:
                 continue
+            hidden = {prefix + page for page in disabled_pages}
+            for key in ('groups', 'pages'):
+                if isinstance(tab.get(key), list):
+                    tab[key] = remove_disabled_navigation(tab[key], hidden)
             existing = set()
             def collect(node):
                 if isinstance(node, list):
@@ -377,8 +416,9 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
 
 
 def refresh_legacy_page_blocks(root, documents, changes, catalog):
-    """Update only already bound pages; never create pages or navigation."""
+    """Refresh bound legacy pages and hide disabled ones without adding links."""
     import runtime_localize_openapi_zh as localization
+    disabled_pages = set()
     def translated_note(note):
         try:
             return localization.translation(catalog, note)
@@ -403,6 +443,10 @@ def refresh_legacy_page_blocks(root, documents, changes, catalog):
                 raise ValueError("legacy page references missing operation: " + str(page))
             if bool(match[1]) != (language == "zh"):
                 raise ValueError("legacy page references wrong language: " + str(page))
+            disabled = operation.get('x-aisa-status') == 'disabled'
+            if disabled:
+                disabled_pages.add(page.relative_to(root).with_suffix('').as_posix())
+            text = update_disabled_indexing(text, disabled)
             if language == "zh":
                 localized_path = root / reference.split()[0]
                 if not localized_path.exists() and localized_path not in changes:
@@ -410,6 +454,20 @@ def refresh_legacy_page_blocks(root, documents, changes, catalog):
                     changes[localized_path] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
             changes[page] = update_readable_block(text, operation, language, translated_note,
                 document=document, method=method, path=path, spec_path=reference.split()[0])
+    docs_path = root / 'docs.json'
+    if disabled_pages and docs_path.exists():
+        original = changes.get(docs_path, docs_path.read_text())
+        docs = json.loads(original)
+        for language in docs.get('navigation', {}).get('languages', []):
+            for tab in language.get('tabs', []):
+                if tab.get('tab') not in {'API Reference', 'API 参考'}:
+                    continue
+                for key in ('groups', 'pages'):
+                    if isinstance(tab.get(key), list):
+                        tab[key] = remove_disabled_navigation(tab[key], disabled_pages)
+        content = json.dumps(docs, indent=2, ensure_ascii=False) + '\n'
+        if content != original:
+            changes[docs_path] = content
 
 
 def refresh_localized_documents(root, documents, changes, catalog, identity_history=None):

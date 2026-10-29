@@ -100,6 +100,55 @@ class PublicationSurfaceTests(unittest.TestCase):
                     validate_surfaces(self.root)
                 page.write_text(original)
 
+    def test_disabled_legacy_pages_leave_navigation_and_search_without_changing_schemas(self):
+        from pull_openapi import refresh_legacy_page_blocks
+        from publication_surface import navigation_pages
+        from runtime_registry import published_documents
+        from runtime_localize_openapi_zh import split_frontmatter
+        import yaml
+        source = {'openapi': '3.1.0', 'info': {'title': 'Legacy Twitter'},
+                  'servers': [{'url': 'https://api.aisa.one/apis/v1'}],
+                  'paths': {'/twitter/spaces/detail': {'get': {'operationId': 'spaceDetail',
+                      'x-aisa-status': 'disabled', 'responses': {'200': {'description': 'Success'}}}}}}
+        schema = self.root / 'openapi/twitter-trend.json'
+        schema.write_text(json.dumps(source))
+        original = schema.read_bytes()
+        docs_path = self.root / 'docs.json'
+        docs = json.loads(docs_path.read_text())
+        for block in docs['navigation']['languages']:
+            prefix = 'zh/' if block['language'] == 'zh' else ''
+            name = prefix + 'api-reference/twitter/spaces'
+            page = self.root / (name + '.mdx')
+            page.parent.mkdir(parents=True, exist_ok=True)
+            page.write_text('---\ntitle: Space detail\nopenapi: "openapi/' + prefix +
+                'twitter-trend.json GET /twitter/spaces/detail"\n---\nHistorical example stays.\n')
+            block['tabs'][0]['groups'].append({'group': 'Twitter', 'pages': [name]})
+        docs_path.write_text(json.dumps(docs))
+        changes = {}
+        refresh_legacy_page_blocks(self.root, published_documents(self.root), changes, {'entries': {}})
+        for path, text in changes.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+        for block in json.loads(docs_path.read_text())['navigation']['languages']:
+            prefix = 'zh/' if block['language'] == 'zh' else ''
+            name = prefix + 'api-reference/twitter/spaces'
+            self.assertNotIn(name, list(navigation_pages(block)))
+            self.assertIn(prefix + 'api-reference/fixture/one', list(navigation_pages(block)))
+            header, prose = split_frontmatter((self.root / (name + '.mdx')).read_text())
+            self.assertIn(yaml.safe_load(header)['noindex'], (True, 'true'))
+            self.assertIn('Historical example stays.', prose)
+        self.assertEqual(schema.read_bytes(), original)
+        validate_surfaces(self.root)
+        valid_navigation = docs_path.read_text()
+        docs_path.write_text(json.dumps(docs))
+        with self.assertRaisesRegex(ValueError, 'disabled runtime page remains in navigation'):
+            validate_surfaces(self.root)
+        docs_path.write_text(valid_navigation)
+        page = self.root / 'api-reference/twitter/spaces.mdx'
+        page.write_text(page.read_text().replace('noindex: "true" # aisa-contract-status\n', ''))
+        with self.assertRaisesRegex(ValueError, 'disabled runtime page is indexable'):
+            validate_surfaces(self.root)
+
     def test_disabled_status_refresh_and_tampering_are_formally_checked(self):
         document = json.loads((self.root / 'openapi/fixture.json').read_text())
         document['paths']['/one']['get']['x-aisa-status'] = 'disabled'
@@ -117,6 +166,114 @@ class PublicationSurfaceTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'readable contract differs'):
                     validate_surfaces(self.root)
                 page.write_text(original)
+
+    def disabled_fixture(self):
+        document = json.loads((self.root / 'openapi/fixture.json').read_text())
+        document['paths']['/one']['get']['x-aisa-status'] = 'disabled'
+        for prefix in ('', 'zh/'):
+            page = self.root / (prefix + 'api-reference/fixture/one.mdx')
+            page.write_text(page.read_text() + '\nKeep the historical explanation.\n')
+        changes = {}
+        generate_pages(self.root, 'fixture', document, changes)
+        changes[self.root / 'openapi/fixture.json'] = json.dumps(document)
+        for path, text in changes.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+        return document
+
+    def test_disabled_pages_leave_navigation_and_search_but_keep_their_bilingual_urls(self):
+        from publication_surface import navigation_pages
+        from runtime_localize_openapi_zh import split_frontmatter
+        import yaml
+        document = self.disabled_fixture()
+        docs = json.loads((self.root / 'docs.json').read_text())
+        for block in docs['navigation']['languages']:
+            self.assertEqual(block['tabs'][0]['groups'], [])
+            self.assertEqual(list(navigation_pages(block)), [])
+        for prefix in ('', 'zh/'):
+            page = self.root / (prefix + 'api-reference/fixture/one.mdx')
+            header, prose = split_frontmatter(page.read_text())
+            self.assertIn(yaml.safe_load(header)['noindex'], (True, 'true'))
+            self.assertIn('Keep the historical explanation.', prose)
+            self.assertIn('当前未启用。' if prefix else 'Currently disabled.', prose)
+        self.assertEqual(validate_surfaces(self.root)['operations'], 1)
+        changes = {}
+        generate_pages(self.root, 'fixture', document, changes)
+        self.assertNotIn(self.root / 'docs.json', changes)
+        self.assertFalse(any(path.suffix == '.mdx' for path in changes))
+
+    def test_reenabled_pages_return_to_navigation_and_remove_only_managed_noindex(self):
+        from publication_surface import navigation_pages
+        from runtime_localize_openapi_zh import split_frontmatter
+        import yaml
+        document = self.disabled_fixture()
+        document['paths']['/one']['get']['x-aisa-status'] = 'enabled'
+        # A separately authored indexing restriction must survive reactivation.
+        chinese = self.root / 'zh/api-reference/fixture/one.mdx'
+        chinese.write_text(chinese.read_text().replace(
+            'noindex: "true" # aisa-contract-status', 'noindex: true # editorial restriction'))
+        changes = {}
+        generate_pages(self.root, 'fixture', document, changes)
+        changes[self.root / 'openapi/fixture.json'] = json.dumps(document)
+        for path, text in changes.items():
+            path.write_text(text)
+        docs = json.loads((self.root / 'docs.json').read_text())
+        for block in docs['navigation']['languages']:
+            prefix = 'zh/' if block['language'] == 'zh' else ''
+            self.assertIn(prefix + 'api-reference/fixture/one', list(navigation_pages(block)))
+        english_header, english_prose = split_frontmatter((self.root / 'api-reference/fixture/one.mdx').read_text())
+        self.assertNotIn('noindex', yaml.safe_load(english_header))
+        self.assertTrue(yaml.safe_load(split_frontmatter(chinese.read_text())[0])['noindex'])
+        self.assertNotIn('Currently disabled.', english_prose)
+        validate_surfaces(self.root)
+
+    def test_disabled_aliases_leave_nested_groups_without_hiding_available_or_manual_pages(self):
+        document = json.loads((self.root / 'openapi/fixture.json').read_text())
+        alias = 'api-reference/fixture/old-one'
+        available = 'api-reference/fixture/available'
+        manual = 'api-reference/overview'
+        document['paths']['/available'] = copy.deepcopy(document['paths']['/one'])
+        document['paths']['/available']['get']['operationId'] = 'available'
+        document['paths']['/one']['get']['x-aisa-status'] = 'disabled'
+        docs_path = self.root / 'docs.json'
+        docs = json.loads(docs_path.read_text())
+        for block in docs['navigation']['languages']:
+            prefix = 'zh/' if block['language'] == 'zh' else ''
+            page = self.root / (prefix + 'api-reference/fixture/one.mdx')
+            (self.root / (prefix + alias + '.mdx')).write_text(page.read_text())
+            (self.root / (prefix + manual + '.mdx')).write_text('---\ntitle: Overview\n---\nManual overview.\n')
+            block['tabs'][0]['groups'] = [{'group': 'Mixed', 'pages': [
+                {'group': 'Disabled', 'pages': [prefix + alias, prefix + 'api-reference/fixture/one']},
+                {'group': 'Available', 'pages': [prefix + available]}, prefix + manual]}]
+        docs_path.write_text(json.dumps(docs))
+        changes = {}
+        generate_pages(self.root, 'fixture', document, changes)
+        changes[self.root / 'openapi/fixture.json'] = json.dumps(document)
+        for path, text in changes.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+        for block in json.loads(docs_path.read_text())['navigation']['languages']:
+            prefix = 'zh/' if block['language'] == 'zh' else ''
+            self.assertEqual(block['tabs'][0]['groups'], [{'group': 'Mixed', 'pages': [
+                {'group': 'Available', 'pages': [prefix + available]}, prefix + manual]}])
+            self.assertIn('noindex: "true"', (self.root / (prefix + alias + '.mdx')).read_text())
+        self.assertEqual(validate_surfaces(self.root)['operations'], 2)
+
+    def test_formal_surface_rejects_disabled_navigation_or_indexable_archive_pages(self):
+        self.disabled_fixture()
+        docs_path = self.root / 'docs.json'
+        original = docs_path.read_text()
+        docs = json.loads(original)
+        docs['navigation']['languages'][0]['tabs'][0]['groups'].append({
+            'group': 'Stale', 'pages': ['api-reference/fixture/one']})
+        docs_path.write_text(json.dumps(docs))
+        with self.assertRaisesRegex(ValueError, 'disabled runtime page remains in navigation'):
+            validate_surfaces(self.root)
+        docs_path.write_text(original)
+        page = self.root / 'api-reference/fixture/one.mdx'
+        page.write_text(page.read_text().replace('noindex: "true" # aisa-contract-status\n', ''))
+        with self.assertRaisesRegex(ValueError, 'disabled runtime page is indexable'):
+            validate_surfaces(self.root)
 
     def test_translated_prose_is_allowed_but_literal_schema_data_is_not(self):
         self.change_json('openapi/zh/fixture.json', lambda d: d['paths']['/one']['get']['responses']['200'].update(description='成功'))

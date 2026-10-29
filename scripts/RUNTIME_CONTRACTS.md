@@ -137,8 +137,16 @@ include selections without expanding the theme to every operation in a new file.
 
 English titles follow runtime summaries; Chinese titles and schemas use the
 existing translation catalog, with English fallback. No paid/model translation
-runs in this pipeline. New pages/navigation are additive. Disabled operations
-retain their page and a managed status notice.
+runs in this pipeline. Available operations receive navigation entries. Disabled
+operations leave both navigation trees, including any groups emptied by their
+removal. Their existing bilingual URLs retain a managed status notice and
+`noindex: "true"` so search does not advertise unavailable APIs. Reactivation
+restores navigation and removes only the indexing rule owned by this generator;
+independently authored indexing restrictions and prose remain intact.
+Native canonical contract bytes and operation identities remain unchanged.
+Existing pages bound to legacy documents also leave navigation and indexing
+when their operation is disabled. Active legacy pages retain their manually
+managed navigation; this refresh never creates pages or navigation entries.
 
 The `Test runtime contracts` workflow runs the same regression suite for pull
 requests that change contract sources, scripts, workflows or reference pages.
@@ -287,6 +295,11 @@ Fresh request and response declarations are compared with independent compositio
 before any previous document-hash reuse. Parameter/body/authentication and response
 payload/protocol drift fails even when the candidate retains its old hash;
 editorial text and examples remain editable.
+PR scope uses the event's fixed head and its common ancestor with the event's
+base. It does not classify a moving synthetic merge against an older event base:
+main's subsequent publication updates belong to main, not to the PR. Push scope
+still compares the exact before/after revisions, and unavailable PR revisions
+fail classification. Actual PR artifact edits and deletions retain the formal gate.
 It never fetches production or invents missing fixtures. Missing evidence produces
 `not_assessed` and a nonzero exit. Existing pre-rollout caches without endpoint
 evidence are insufficient; seed the cache from the new runtime before treating
@@ -450,8 +463,10 @@ python scripts/check_contract_candidate.py --source-receipts /path/to/receipts.j
 The W3 code gate also generates the actual EN/ZH schemas, MDX and navigation
 from fixed inputs. `publication_surface.py` compares protocol structure while
 allowing translated prose, checks each page's declared operation ID and ensures
-both navigation trees reach the same runtime operations. The formal checker
-uses that same read-only validator and binds every actual schema/page/navigation
+both navigation trees reach the same available runtime operations. Disabled
+operations retain matching bilingual archive pages, excluded from navigation
+and indexing. The formal checker uses that same read-only validator and binds
+every actual schema/page/navigation
 file in its receipt. Existing page aliases follow their published operation ID
 when a path is normalized; their URLs and prose remain intact.
 

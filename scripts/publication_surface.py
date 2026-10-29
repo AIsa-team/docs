@@ -105,8 +105,8 @@ def validate_surfaces(root, published_ref=None):
                 raise ValueError('missing API navigation target: ' + page)
     if set(nav) != {'en', 'zh'}:
         raise ValueError('runtime publication requires EN and ZH API navigation')
-    # Manual overview pages may differ, but every runtime operation must be
-    # represented by a matching page in both navigation trees.
+    # Every Runtime identity keeps bilingual pages. Available operations must
+    # appear in navigation; disabled ones remain non-indexed archive URLs.
     found = {'en': {}, 'zh': {}}
     for language, pattern in (('en', 'api-reference/**/*.mdx'), ('zh', 'zh/api-reference/**/*.mdx')):
         for path in root.glob(pattern):
@@ -150,6 +150,11 @@ def validate_surfaces(root, published_ref=None):
             if actual_blocks != [expected_block]:
                 raise ValueError('page readable contract differs from provider: ' + str(path))
             page = path.relative_to(root).with_suffix('').as_posix()
+            if canonical_operation.get('x-aisa-status') == 'disabled':
+                if page in nav[language]:
+                    raise ValueError('disabled runtime page remains in navigation: ' + page)
+                if header.get('noindex') not in (True, 'true'):
+                    raise ValueError('disabled runtime page is indexable: ' + page)
             canonical = operation.get('x-aisa-identity', {}).get('canonical_operation_id', identity)
             found[language].setdefault((provider, route, method, canonical), set()).add(page)
     count = 0
@@ -163,6 +168,12 @@ def validate_surfaces(root, published_ref=None):
                     continue
                 key = (provider, route, method, operation.get('operationId'))
                 count += 1
+                if operation.get('x-aisa-status') == 'disabled':
+                    english = found['en'].get(key, set())
+                    chinese = found['zh'].get(key, set())
+                    if not english or {'zh/' + page for page in english} != chinese:
+                        raise ValueError('disabled runtime operation missing matching bilingual archive pages: ' + repr(key))
+                    continue
                 english = found['en'].get(key, set()) & set(nav['en'])
                 chinese = found['zh'].get(key, set()) & set(nav['zh'])
                 if not english or {'zh/' + page for page in english} != chinese:
