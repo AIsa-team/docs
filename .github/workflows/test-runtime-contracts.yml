@@ -59,12 +59,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - id: scope
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CANDIDATE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          python scripts/contract_change_scope.py --base "$BASE" >> "$GITHUB_OUTPUT"
+          python scripts/contract_change_scope.py --base "$BASE" --head "$CANDIDATE_HEAD" ${{ github.event_name == 'pull_request' && '--merge-base' || '' }} >> "$GITHUB_OUTPUT"
   code-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 10

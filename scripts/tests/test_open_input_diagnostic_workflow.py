@@ -252,6 +252,17 @@ class OpenInputWorkflowTests(unittest.TestCase):
                 if row['if']=="steps.open_input_diagnostic.outputs.selected != 'true'": del row['if']
             original.append(row)
         workflow['jobs']['artifact-contracts']['steps']=original
+        # Assert the reviewed PR-scope correction, then normalize only those
+        # three fields so the independent original workflow digest still guards
+        # every formal/input job, permission, trigger and required aggregate.
+        checkout, scope = workflow['jobs']['changes']['steps']
+        fixed_head = '${{ github.event.pull_request.head.sha || github.sha }}'
+        self.assertEqual(checkout['with'].pop('ref'), fixed_head)
+        self.assertEqual(scope['env'].pop('CANDIDATE_HEAD'), fixed_head)
+        self.assertEqual(scope['run'], 'python scripts/contract_change_scope.py --base "$BASE" '
+            '--head "$CANDIDATE_HEAD" ${{ github.event_name == \'pull_request\' && \'--merge-base\' || \'\' }} '
+            '>> "$GITHUB_OUTPUT"\n')
+        scope['run'] = 'python scripts/contract_change_scope.py --base "$BASE" >> "$GITHUB_OUTPUT"\n'
         def normalize(value):
             if type(value) is dict:return {str(k):normalize(v) for k,v in value.items()}
             if type(value) is list:return [normalize(v) for v in value]

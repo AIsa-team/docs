@@ -295,6 +295,11 @@ Fresh request and response declarations are compared with independent compositio
 before any previous document-hash reuse. Parameter/body/authentication and response
 payload/protocol drift fails even when the candidate retains its old hash;
 editorial text and examples remain editable.
+PR scope uses the event's fixed head and its common ancestor with the event's
+base. It does not classify a moving synthetic merge against an older event base:
+main's subsequent publication updates belong to main, not to the PR. Push scope
+still compares the exact before/after revisions, and unavailable PR revisions
+fail classification. Actual PR artifact edits and deletions retain the formal gate.
 It never fetches production or invents missing fixtures. Missing evidence produces
 `not_assessed` and a nonzero exit. Existing pre-rollout caches without endpoint
 evidence are insufficient; seed the cache from the new runtime before treating
