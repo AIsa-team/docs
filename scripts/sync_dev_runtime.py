@@ -6,6 +6,7 @@ It never acquires production inputs, approves source receipts, or notifies consu
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import argparse
+import copy
 import json
 from pathlib import Path
 import re
@@ -19,6 +20,7 @@ import yaml
 
 from fetch_runtime_release import PublicReader, decode, require, sha, category_content
 from pull_openapi import stage, update_disabled_indexing
+from check_nav_integrity import nav_pages
 from identity_compatibility import published_history
 from runtime_consolidate_openapi import (build_unified_spec, publication_yaml,
                                         inject_x402_annotations, remove_v2_path_mirrors)
@@ -28,6 +30,10 @@ DEV_ORIGIN = 'https://dev-api.aisa.one'
 ROOT = Path(__file__).resolve().parents[1]
 KEY = re.compile(r'[a-z0-9][a-z0-9_.-]*')
 ARCHIVE_NOTE = '<Warning>This endpoint is unavailable in the current dev Runtime contract snapshot.</Warning>\n\n'
+HISTORIC_NOTES = {
+    'en': '<Warning>This existing API reference is preserved. This endpoint has not been verified in the current dev Runtime contract snapshot.</Warning>\n\n',
+    'zh': '<Warning>此页面保留原有接口文档。该接口尚未在当前 dev Runtime 合同中验证。</Warning>\n\n',
+}
 
 
 def prune_navigation(node, hidden):
@@ -48,8 +54,35 @@ def prune_navigation(node, hidden):
     return node
 
 
+def preserve_navigation(previous, current):
+    """Keep the existing hierarchy and add new generated pages exactly once."""
+    additions = prune_navigation(current, set(nav_pages(previous)))
+
+    def merge(left, right):
+        result = copy.deepcopy(left)
+        if isinstance(left, dict) and isinstance(right, dict):
+            for key, value in right.items():
+                result[key] = merge(result[key], value) if key in result else copy.deepcopy(value)
+        elif isinstance(left, list) and isinstance(right, list):
+            for item in right:
+                key = next((key for key in ('language', 'tab', 'group')
+                            if isinstance(item, dict) and key in item), None)
+                matching = next((i for i, old in enumerate(result)
+                                 if key and isinstance(old, dict) and old.get(key) == item[key]), None)
+                if matching is not None:
+                    result[matching] = merge(result[matching], item)
+                elif item not in result:
+                    result.append(copy.deepcopy(item))
+        return result
+
+    return merge(previous, additions)
+
+
 def scope_presentation(candidate, aggregate, summary):
-    """Keep historic files/identities, but advertise only composed dev contracts."""
+    """Preserve reference navigation; aggregate only verified dev contracts."""
+    config_path = candidate / 'docs.json'
+    config = json.loads(config_path.read_text())
+    listed = set(nav_pages(config.get('navigation', {})))
     active = {key for key, value in summary.items() if not value.get('blocked')}
     for path, item in list(aggregate['paths'].items()):
         for method, operation in list(item.items()):
@@ -65,7 +98,7 @@ def scope_presentation(candidate, aggregate, summary):
     aggregate['info']['x-aisa-environment'] = 'dev'
     aggregate['info']['x-aisa-publication-kind'] = 'live_facts_preview'
     documents = {}
-    hidden = set()
+    hidden, preserved = set(), set()
     for base in ('api-reference', 'zh/api-reference'):
         for page in (candidate / base).rglob('*.mdx'):
             text = page.read_text()
@@ -77,18 +110,24 @@ def scope_presentation(candidate, aggregate, summary):
                 documents[name] = json.loads((candidate / name).read_text())
             provider = Path(name).name.removesuffix('.json').removesuffix('.zh')
             operation = documents[name].get('paths', {}).get(path, {}).get(method.lower())
-            disabled = provider not in active or operation is None or operation.get('x-aisa-status') == 'disabled'
-            text = update_disabled_indexing(text, disabled).replace(ARCHIVE_NOTE, '')
-            if disabled:
-                hidden.add(page.relative_to(candidate).with_suffix('').as_posix())
+            unverified = provider not in active or operation is None or operation.get('x-aisa-status') == 'disabled'
+            reference = page.relative_to(candidate).with_suffix('').as_posix()
+            unlisted = unverified and reference not in listed
+            text = update_disabled_indexing(text, unlisted).replace(ARCHIVE_NOTE, '')
+            for note in HISTORIC_NOTES.values():
+                text = text.replace(note, '')
+            if unverified:
+                if unlisted:
+                    hidden.add(reference)
+                    notice = ARCHIVE_NOTE
+                else:
+                    preserved.add(reference)
+                    notice = HISTORIC_NOTES['zh' if base.startswith('zh/') else 'en']
                 # Put the notice after frontmatter, preserving endpoint identity.
                 end = text.index('\n---\n', 4) + 5
-                text = text[:end] + ARCHIVE_NOTE + text[end:]
+                text = text[:end] + notice + text[end:]
             page.write_text(text)
 
-    config_path = candidate / 'docs.json'
-    config = json.loads(config_path.read_text())
-    config['navigation'] = prune_navigation(config.get('navigation', {}), hidden)
     config['name'] = 'AIsa Dev'
     config.setdefault('markdown', {})['instructions'] = (
         '- Environment: dev. Use a dev API key with `Authorization: Bearer $AISA_API_KEY`.\n'
@@ -98,7 +137,7 @@ def scope_presentation(candidate, aggregate, summary):
         '- Never print, log, or commit API keys.'
     )
     config_path.write_text(json.dumps(config, indent=2, ensure_ascii=False) + '\n')
-    return len(hidden)
+    return {'preserved_historic_pages': len(preserved), 'hidden_historic_pages': len(hidden)}
 
 
 def acquire(reader):
@@ -166,6 +205,7 @@ def inputs_sha256(files):
 
 def generate(root, files):
     """Stage with the existing Composer/page generator; never mutate input files."""
+    previous_navigation = json.loads((root / 'docs.json').read_text()).get('navigation', {})
     with tempfile.TemporaryDirectory(prefix='dev-docs-') as folder:
         candidate = Path(folder) / 'site'
         shutil.copytree(root, candidate, ignore=shutil.ignore_patterns('.git', '.cache', 'node_modules', '__pycache__'))
@@ -194,8 +234,12 @@ def generate(root, files):
         pending = json.loads(pending_path.read_text())
         pending['providers'] = {key: value for key, value in pending['providers'].items() if key in summary}
         pending_path.write_text(json.dumps(pending, indent=2, ensure_ascii=False, sort_keys=True) + '\n')
+        config_path = candidate / 'docs.json'
+        config = json.loads(config_path.read_text())
+        config['navigation'] = preserve_navigation(previous_navigation, config.get('navigation', {}))
+        config_path.write_text(json.dumps(config, indent=2, ensure_ascii=False) + '\n')
         aggregate = build_unified_spec(root=candidate)
-        hidden = scope_presentation(candidate, aggregate, summary)
+        presentation = scope_presentation(candidate, aggregate, summary)
         inject_x402_annotations(aggregate)
         remove_v2_path_mirrors(aggregate)
         (candidate / 'openapi/openapi.json').write_text(json.dumps(aggregate, ensure_ascii=False, separators=(',', ':')) + '\n')
@@ -218,7 +262,7 @@ def generate(root, files):
         report = {'schema_version': 1, 'environment': 'dev', 'runtime_origin': DEV_ORIGIN,
                   'kind': 'live_facts_preview', 'formal_publication': False,
                   'status': 'partial' if blocked or any(pending['providers'].values()) else 'generated',
-                  'blocked_providers': blocked, 'hidden_historic_pages': hidden,
+                  'blocked_providers': blocked, **presentation,
                   'inputs_sha256': inputs_sha256(files),
                   'snapshot_sha256': snapshot_hashes(files),
                   'providers': {key: {field: value for field, value in row.items() if field != 'changed'}
