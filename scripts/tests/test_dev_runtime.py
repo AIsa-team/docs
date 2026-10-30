@@ -89,6 +89,8 @@ class DevRuntimeTests(unittest.TestCase):
             self.assertIn('zh/api-reference/similarweb/published_identity.mdx', outputs)
             self.assertIn('api-reference/similarweb/published_identity', outputs['docs.json'].decode())
             self.assertNotIn('https://api.aisa.one', outputs['openapi/openapi.json'].decode())
+            self.assertIn('raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev/openapi/similarweb.json',
+                          outputs['api-reference/similarweb/published_identity.mdx'].decode())
             self.assertFalse(report['formal_publication'])
             self.assertEqual(report['status'], 'generated')
             self.assertNotIn('obsolete-production-catalog', report['pending']['providers'])

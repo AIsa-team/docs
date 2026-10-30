@@ -143,7 +143,13 @@ def acquire(reader):
 
 def dev_urls(text):
     return (text.replace('https://api.aisa.one', DEV_ORIGIN)
-            .replace('https://console.aisa.one', 'https://dev-console.aisa.one'))
+            .replace('https://console.aisa.one', 'https://dev-console.aisa.one')
+            .replace('https://aisa.one/docs/openapi/',
+                     'https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev/openapi/')
+            .replace('https://aisa.one/openapi.yaml',
+                     'https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev/openapi.yaml')
+            .replace('https://aisa.one/docs/api-reference/', '/api-reference/')
+            .replace('https://aisa.one/docs/zh/api-reference/', '/zh/api-reference/'))
 
 
 def generate(root, files):
