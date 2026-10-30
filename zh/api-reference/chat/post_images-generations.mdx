@@ -23,7 +23,7 @@ openapi: "openapi/zh/openai-images-generations.json POST /images/generations"
 | `seedream-5-0-260128` | 按次请求 | 图像最小尺寸 **3,686,400 像素**（例如 1920×1920） |
 | `wan2.7-image` | 按次请求 | 同时支持 `POST /v1/images/edits` |
 | `wan2.7-image-pro` | 按次请求 | 质量更高的 Wan 路由 |
-| `gpt-image-2` | 按次请求或按张图片；部分路由同时适用 token 计价 | 参见 [AI 模型价格](/zh/guides/pricing#模型) |
+| `gpt-image-2` | 按 1M Token：输入、输出、缓存写入 | 参见 [AI 模型价格](/zh/guides/pricing#模型) |
 | `gpt-image-2.5-flare` | 按 1M Token：输入、输出、缓存读取 | GPT Image 2.5 路由 |
 | `gpt-image-2.5-sunburst` | 按 1M Token：输入、输出、缓存读取 | GPT Image 2.5 路由 |
 
@@ -108,7 +108,7 @@ for (const item of resp.data) {
 |---|---|---|---|
 | `model` | string | 是 | `seedream-5-0-260128`、`wan2.7-image`、`wan2.7-image-pro`、`gpt-image-2`、`gpt-image-2.5-flare`、`gpt-image-2.5-sunburst` 之一 |
 | `prompt` | string | 是 | 要生成图像的文字描述 |
-| `n` | integer | 否 | 生成图像数量。每张按该模型的单次请求费率单独计费 |
+| `n` | integer | 否 | 生成图像数量。按次计费的模型无论 `n` 是多少都只收一次请求费用；按 token 计费的模型按其上报的 token 用量计费 |
 | `size` | string | 否 | `宽x高`。Seedream 路由必须满足 `宽 × 高 ≥ 3,686,400`；`wan2.7-image` 和 `gpt-image-2` 可接受更小尺寸（已验证 `1024x1024` 可用） |
 
 ## 响应
@@ -134,7 +134,7 @@ for (const item of resp.data) {
 **AIsa 的响应在原生 OpenAI schema 之上增加了几处扩展：**
 - 根层级回显 `model`
 - `data[].size`——每张返回图像的实际尺寸
-- `usage`——包含 `generated_images`（用于计费），以及用于 token 核算的 `output_tokens` / `total_tokens`
+- `usage`——模型上报的用量，例如 `generated_images`、`output_tokens` 和 `total_tokens`。按 token 计费的模型按其中的 token 数计费；按次计费的模型每次请求计费一次
 
 <Warning>
   `data[].url` 中的 URL **有效期很短**。请在过期前下载并保存到你自己的存储中。
