@@ -71,7 +71,7 @@ class BranchIsolationTests(unittest.TestCase):
         self.assertTrue(enabled(job['if'], 'refs/heads/dev', 'push'))
         self.assertTrue(enabled(job['if'], 'refs/pull/1/merge', 'pull_request', 'dev'))
         self.assertFalse(enabled(job['if'], 'refs/heads/main'))
-        text = yaml.safe_dump(value)
+        text = yaml.safe_dump(job)
         for production_operation in ('secrets.', 'fetch_runtime_release.py', 'check_contract_candidate.py',
                                      'refresh_payment_publication.py', 'git push', 'gh api',
                                      'create-github-app-token', 'actions/cache'):

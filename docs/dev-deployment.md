@@ -38,9 +38,18 @@ availability and billing depend on the Mintlify account's plan.
 `docs-checks.yml` validates navigation, generated endpoint slugs and links on
 both `main` and `dev`. `dev-docs.yml` runs the existing composition and
 publication regression tests and frozen acceptance fixtures offline on dev
-pushes and PRs targeting dev. It has read-only repository permissions, no App
+pushes and PRs targeting dev. That test job has read-only repository permissions, no App
 credentials, no production Runtime acquisition, no shared source-review cache,
-and no downstream notifications.
+and no downstream notifications. After those checks pass on a push to `dev`,
+the separate `sync-runtime` job reads only `https://dev-api.aisa.one`, generates
+dev contracts/pages/navigation, validates them, and commits to `dev` with the
+repository token. Pull requests cannot run this write job.
+
+The job retains a `dev-runtime-report` Actions artifact. The committed
+`docs/dev-runtime.json` records input hashes, composition results and pending
+definitions. These are dev preview records, not a production formal publication
+pointer or approval receipt. GitHub does not start another push workflow for
+the generated commit made with `GITHUB_TOKEN`; validation happens before push.
 
 These production workflows require `refs/heads/main`, including manual runs:
 
@@ -68,18 +77,48 @@ change the default branch to dev.
 
 ## API environment is a separate configuration
 
-This change isolates Git branches, site publication and repository automation.
-It does not rewrite existing endpoint contracts or production publication
-receipts. The initial dev branch inherits the reviewed content from main,
-including production API servers, production website links and console links.
-An independent Mintlify project does not automatically change those URLs.
+The dev sync fixes its origin in `scripts/sync_dev_runtime.py` and rewrites
+generated API and console addresses to dev. Its aggregate OpenAPI and endpoint
+navigation include only successfully composed dev contracts. Historic endpoint
+files remain for stable links, with an unavailable notice and noindex when they
+are outside that set. Source facts remain unchanged during composition, and
+production publication receipts are retained as history. The generated OpenAPI
+is a dev presentation, not the production canonical artifact. Do not enable the
+production Runtime publisher on dev or relabel a production receipt as dev
+evidence. Website and handbook links still need the separate dev site's domain
+when hosting is configured.
 
-Before using dev docs for API integration, configure the chosen dev addresses
-in `docs.json` (`api.mdx.server`, navbar and relevant links), the relevant
-OpenAPI `servers`, request examples, and download/discovery links. Do not enable
-the production Runtime publisher on dev or relabel a production receipt as dev
-evidence. A future dev Runtime sync must explicitly select dev inputs and keep
-its publication and notifications separate from the production pipeline.
+## Dev Runtime acquisition
+
+Dev exposes live facts at `/info/openapi.json` and
+`/info/openapi/{provider}.json`; it does not have an enabled durable immutable
+release publisher. The gateway's dedicated `dev-runtime-contracts` route allows
+only GET, HEAD and OPTIONS on those public paths, forwarded to api-service in
+namespace `dev`.
+
+The reader requires the complete index, rejects pending projections, matches
+provider facts hashes to index entries, reads each provider twice, and checks
+the index and category again. Changed, missing or stale responses reject the
+entire candidate. Bounded HTTPS requests use no credentials, redirects or
+production fallback. The existing offline Composer and page generator read
+configured source mirrors locally; they never call provider business APIs.
+Undefined or invalid contracts stay pending in the report and are excluded
+from the dev aggregate and endpoint navigation. A partial generation explicitly
+records `status: partial` and `blocked_providers`; it does not assert that every
+Runtime contract passed composition.
+
+Run locally from `dev` (omit `--write` for a dry run):
+
+```sh
+python scripts/sync_dev_runtime.py --write --report /tmp/dev-runtime-report.json
+python scripts/check_nav_integrity.py
+python scripts/validate_runtime_api_reference_slugs.py --generated-only
+```
+
+Sync runs after dev pushes. Scheduled workflows only run from GitHub's default
+branch, so this dev-only workflow does not promise timed polling. A later
+default-branch scheduler must explicitly check out `dev` and retain the same
+dev-only origin and write boundary.
 
 ## Work on dev
 
