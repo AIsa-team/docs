@@ -242,7 +242,7 @@ otherwise valid current contracts from refreshing.
 A route still present in runtime facts whose composition is pending normally
 blocks its provider when it was already published ("published identity changed
 or disappeared"), and the published spec/pages stay untouched. Only when that
-route's exact readiness gate identity is an approved deferral (CR003/CR004) does
+route's exact readiness gate identity is an approved deferral (CR003/CR004/CR005) does
 the composer instead keep the previously published operation, with
 `x-aisa-status: disabled`, `x-aisa-contract-state: retained_pending` and the
 composer's real reason in `x-aisa-contract-pending`. Its coverage row stays
