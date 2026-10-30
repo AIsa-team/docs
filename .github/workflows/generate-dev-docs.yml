@@ -1,0 +1,34 @@
+name: Generate dev Runtime docs
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Regenerate dev docs even when the verified Runtime inputs are unchanged
+        type: boolean
+        default: false
+
+permissions:
+  actions: write
+
+jobs:
+  dispatch-dev:
+    if: github.repository == 'AIsa-team/docs' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      # GitHub schedules run on the default branch. Generation lives only on dev.
+      - uses: actions/github-script@v7
+        env:
+          FORCE_GENERATION: ${{ inputs.force == true }}
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'generate-dev-docs.yml',
+              ref: 'dev',
+              inputs: {force: process.env.FORCE_GENERATION}
+            });
