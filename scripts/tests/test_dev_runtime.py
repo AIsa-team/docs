@@ -180,6 +180,61 @@ class DevRuntimeTests(unittest.TestCase):
             self.assertEqual(json.loads(outputs['openapi/openapi.json'])['paths'], {})
             self.assertNotIn('api-reference/similarweb/published_identity.mdx', outputs)
 
+    def test_existing_reference_survives_generation_and_new_dev_pages_are_added(self):
+        from check_nav_integrity import nav_pages
+        _, _, reader = self.fixture()
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'openapi').mkdir()
+            (root / 'openapi/registry.yaml').write_text('auto_register: true\nproviders: {}\n')
+            document = facts()
+            document['info']['title'] = 'Historic reference'
+            item = document['paths'].pop('/apis/v1/similarweb/test')
+            item['post']['operationId'] = 'historic_identity'
+            # The shared Composer removes this old link; dev must restore it.
+            item['post']['x-aisa-status'] = 'disabled'
+            document['paths']['/apis/v1/historic/test'] = item
+            (root / 'openapi/historic.json').write_text(json.dumps(document))
+            (root / 'openapi/zh').mkdir()
+            document['info']['x-aisa-language'] = 'zh'
+            (root / 'openapi/zh/historic.json').write_text(json.dumps(document))
+            config = {'navigation': {'languages': []}}
+            for language, prefix, tab in [('en', '', 'API Reference'), ('zh', 'zh/', 'API 参考')]:
+                page = root / f'{prefix}api-reference/historic/existing.mdx'
+                page.parent.mkdir(parents=True, exist_ok=True)
+                spec = 'openapi/zh/historic.json' if prefix else 'openapi/historic.json'
+                page.write_text(f'---\nopenapi: "{spec} POST /apis/v1/historic/test"\n'
+                                'noindex: "true" # aisa-contract-status\n---\n' + dev.ARCHIVE_NOTE + 'Existing example\n')
+                config['navigation']['languages'].append({'language': language, 'tabs': [{
+                    'tab': tab, 'groups': [{'group': 'Original category', 'pages': [{
+                        'group': 'Original provider', 'pages': [f'{prefix}api-reference/historic/existing']}]}]}]})
+            (root / 'docs.json').write_text(json.dumps(config))
+            outputs, report = dev.generate(root, dev.acquire(reader))
+            generated = json.loads(outputs['docs.json'])
+            for prefix in ('', 'zh/'):
+                historic = f'{prefix}api-reference/historic/existing'
+                new = f'{prefix}api-reference/similarweb/published_identity'
+                listed = nav_pages(generated['navigation'])
+                self.assertEqual(listed.count(historic), 1)
+                self.assertEqual(listed.count(new), 1)
+                text = outputs[historic + '.mdx'].decode()
+                self.assertIn('Existing example', text)
+                self.assertNotIn(dev.ARCHIVE_NOTE, text)
+                self.assertNotIn('noindex:', text)
+            self.assertEqual(report['preserved_historic_pages'], 2)
+            self.assertNotIn('/apis/v1/historic/test', json.dumps(json.loads(outputs['openapi/openapi.json'])['paths']))
+            self.assertNotIn('historic', json.loads(outputs['openapi/openapi.json'])['info']['x-aisa-document'].get('providers', {}))
+            # The next scheduled generation must retain the directory and notice.
+            for name, raw in outputs.items():
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(raw)
+            repeated, _ = dev.generate(root, dev.acquire(reader))
+            self.assertEqual(outputs['docs.json'], repeated['docs.json'])
+            for prefix in ('', 'zh/'):
+                name = f'{prefix}api-reference/historic/existing.mdx'
+                self.assertEqual(outputs[name], repeated[name])
+
     def test_dev_workflow_only_checks_and_cannot_publish_directly(self):
         import yaml
         root = Path(__file__).resolve().parents[2]
@@ -188,7 +243,7 @@ class DevRuntimeTests(unittest.TestCase):
         self.assertEqual(workflow['permissions'], {'contents': 'read'})
         self.assertNotIn('git push', yaml.safe_dump(workflow))
 
-    def test_historic_and_blocked_contracts_are_hidden_from_dev_navigation_and_aggregate(self):
+    def test_preserved_reference_does_not_add_unverified_contracts_to_the_dev_aggregate(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             (root / 'openapi').mkdir()
@@ -209,18 +264,18 @@ class DevRuntimeTests(unittest.TestCase):
             aggregate = {'info': {}, 'paths': {f'/{key}': {'get': {**fields, 'x-aisa-provider': key}}
                                                for key, fields in operations.items()}}
             summary = {'current': {}, 'disabled': {}, 'blocked': {'blocked': 'invalid contract'}}
-            count = dev.scope_presentation(root, aggregate, summary)
-            self.assertEqual(count, 6)
+            counts = dev.scope_presentation(root, aggregate, summary)
+            self.assertEqual(counts, {'preserved_historic_pages': 6, 'hidden_historic_pages': 0})
             self.assertEqual(set(aggregate['paths']), {'/current'})
             nav = json.loads((root / 'docs.json').read_text())
             self.assertEqual(nav['navigation']['languages'][0]['tabs'][0]['groups'][0]['pages'],
-                             ['api-reference/current/endpoint', 'zh/api-reference/current/endpoint'])
+                             pages)
             page = root / 'api-reference/historic/endpoint.mdx'
-            self.assertIn('noindex:', page.read_text())
-            self.assertIn(dev.ARCHIVE_NOTE, page.read_text())
+            self.assertNotIn('noindex:', page.read_text())
+            self.assertIn(dev.HISTORIC_NOTES['en'], page.read_text())
             # Repeated generation does not duplicate the archive notice.
             dev.scope_presentation(root, aggregate, summary)
-            self.assertEqual(page.read_text().count(dev.ARCHIVE_NOTE), 1)
+            self.assertEqual(page.read_text().count(dev.HISTORIC_NOTES['en']), 1)
 
 
 if __name__ == '__main__':

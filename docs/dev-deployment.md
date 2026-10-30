@@ -72,10 +72,14 @@ change the default branch to dev.
 ## API environment is a separate configuration
 
 The dev sync fixes its origin in `scripts/sync_dev_runtime.py` and rewrites
-generated API and console addresses to dev. Its aggregate OpenAPI and endpoint
-navigation include only successfully composed dev contracts. Historic endpoint
-files remain for stable links, with an unavailable notice and noindex when they
-are outside that set. The registry retains reviewed source configuration; only
+generated API and console addresses to dev. API Reference preserves the existing
+directory and group hierarchy, adding new dev endpoint pages without replacing
+old links. Historic pages absent from the verified dev contract remain visible
+with an English/Chinese notice that they have not been verified in dev. Their
+existing endpoint identities and examples remain intact. The aggregate OpenAPI
+includes only successfully composed dev contracts; keeping a reference page
+does not add an unverified operation to this dev artifact. The registry retains
+reviewed source configuration; only
 dev-indexed catalogs are selected in the private composition candidate.
 Source facts remain unchanged during composition, and
 production publication receipts are retained as history. The generated OpenAPI
@@ -98,8 +102,12 @@ the index and category again. Changed, missing or stale responses reject the
 entire candidate. Bounded HTTPS requests use no credentials, redirects or
 production fallback. The existing offline Composer and page generator read
 configured source mirrors locally; they never call provider business APIs.
-Undefined or invalid contracts stay pending in the report and are excluded
-from the dev aggregate and endpoint navigation. A partial generation explicitly
+Undefined or invalid new contracts stay pending in the report and are excluded
+from the dev aggregate and generated additions. Previously listed references
+remain in their directory with the unverified notice. The generator restores
+the previous navigation after composition and adds new page links only once,
+so subsequent runs cannot discard the old hierarchy. The report counts visible
+historic pages separately from unlisted archived pages. A partial generation explicitly
 records `status: partial` and `blocked_providers`; it does not assert that every
 Runtime contract passed composition.
 
