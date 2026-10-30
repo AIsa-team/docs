@@ -14,15 +14,20 @@ class MintStaticExclusionTests(unittest.TestCase):
         patterns = [line.strip() for line in (ROOT / '.mintignore').read_text().splitlines()
                     if line.strip() and not line.lstrip().startswith('#')]
         self.assertEqual(patterns, ['/openapi.yaml', '/openapi/openapi.json'])
-        redirects = json.loads((ROOT / 'docs.json').read_text())['redirects']
-        for source in ('/openapi.json', '/openapi/openapi.json'):
-            self.assertIn({'source': source, 'destination': 'https://aisa.one/openapi.json', 'permanent': True}, redirects)
-        self.assertTrue((ROOT / 'openapi.yaml').is_file())
         config = json.loads((ROOT / 'docs.json').read_text())
+        redirects = config['redirects']
+        # Dev downloads must use the dev branch; production retains its
+        # canonical website download URLs.
+        dev = config.get('api', {}).get('mdx', {}).get('server', '').startswith('https://dev-api.aisa.one/')
+        base = 'https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev' if dev else 'https://aisa.one'
+        json_url = base + ('/openapi/openapi.json' if dev else '/openapi.json')
+        for source in ('/openapi.json', '/openapi/openapi.json'):
+            self.assertIn({'source': source, 'destination': json_url, 'permanent': True}, redirects)
+        self.assertTrue((ROOT / 'openapi.yaml').is_file())
         self.assertEqual([item for item in config['redirects']
                           if item['source'] == '/openapi.yaml'], [{
             'source': '/openapi.yaml',
-            'destination': 'https://aisa.one/openapi.yaml',
+            'destination': base + '/openapi.yaml',
             'permanent': True,
         }])
         self.assertNotIn('openapi.yaml', json.dumps(config['navigation']))

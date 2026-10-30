@@ -81,7 +81,9 @@ The dev sync fixes its origin in `scripts/sync_dev_runtime.py` and rewrites
 generated API and console addresses to dev. Its aggregate OpenAPI and endpoint
 navigation include only successfully composed dev contracts. Historic endpoint
 files remain for stable links, with an unavailable notice and noindex when they
-are outside that set. Source facts remain unchanged during composition, and
+are outside that set. The registry retains reviewed source configuration; only
+dev-indexed catalogs are selected in the private composition candidate.
+Source facts remain unchanged during composition, and
 production publication receipts are retained as history. The generated OpenAPI
 is a dev presentation, not the production canonical artifact. Do not enable the
 production Runtime publisher on dev or relabel a production receipt as dev

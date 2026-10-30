@@ -148,6 +148,8 @@ def dev_urls(text):
                      'https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev/openapi/')
             .replace('https://aisa.one/openapi.yaml',
                      'https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev/openapi.yaml')
+            .replace('https://aisa.one/openapi.json',
+                     'https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev/openapi/openapi.json')
             .replace('https://aisa.one/docs/api-reference/', '/api-reference/')
             .replace('https://aisa.one/docs/zh/api-reference/', '/zh/api-reference/'))
 
@@ -166,6 +168,7 @@ def generate(root, files):
         ids = {row['id'] for row in decode(files['index.json'])['providers']}
         registry_path = candidate / 'openapi/registry.yaml'
         registry = yaml.safe_load(registry_path.read_text())
+        retained_registry = yaml.safe_load(registry_path.read_text())
         registry['providers'] = {key: value for key, value in registry['providers'].items()
             if set((value or {}).get('group', [key])) <= ids}
         registry_path.write_text(yaml.safe_dump(registry, sort_keys=False, allow_unicode=True))
@@ -197,7 +200,11 @@ def generate(root, files):
             if name.startswith(('scripts/', 'snippets/', 'zh/snippets/')):
                 continue
             outputs[name] = dev_urls(path.read_text()).encode()
-        outputs['openapi/registry.yaml'] = (candidate / 'openapi/registry.yaml').read_bytes()
+        # Scope acquisition/composition in the private candidate while keeping
+        # reviewed source configuration for history and future dev catalogs.
+        retained_registry['providers'].update(yaml.safe_load(registry_path.read_text())['providers'])
+        outputs['openapi/registry.yaml'] = yaml.safe_dump(
+            retained_registry, sort_keys=False, allow_unicode=True).encode()
         report = {'schema_version': 1, 'environment': 'dev', 'runtime_origin': DEV_ORIGIN,
                   'kind': 'live_facts_preview', 'formal_publication': False,
                   'status': 'partial' if blocked or any(pending['providers'].values()) else 'generated',

@@ -78,7 +78,7 @@ class DevRuntimeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             (root / 'openapi').mkdir()
-            (root / 'openapi/registry.yaml').write_text('auto_register: true\nproviders: {}\n')
+            (root / 'openapi/registry.yaml').write_text('auto_register: true\nproviders:\n  historic:\n    upstream: https://provider.example/must-not-fetch.json\n')
             (root / 'openapi/pending.json').write_text('{"providers":{"obsolete-production-catalog":[{"reason":"historic"}]}}')
             config = {'navigation': {'languages': [
                 {'language': language, 'tabs': [{'tab': tab, 'groups': []}]}
@@ -94,6 +94,9 @@ class DevRuntimeTests(unittest.TestCase):
             self.assertFalse(report['formal_publication'])
             self.assertEqual(report['status'], 'generated')
             self.assertNotIn('obsolete-production-catalog', report['pending']['providers'])
+            import yaml
+            self.assertEqual(yaml.safe_load(outputs['openapi/registry.yaml'])['providers']['historic']['upstream'],
+                             'https://provider.example/must-not-fetch.json')
             self.assertNotIn('docs/publication/current.json', outputs)
             self.assertFalse((root / 'openapi/similarweb.json').exists())
 
