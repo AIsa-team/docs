@@ -40,16 +40,11 @@ both `main` and `dev`. `dev-docs.yml` runs the existing composition and
 publication regression tests and frozen acceptance fixtures offline on dev
 pushes and PRs targeting dev. That test job has read-only repository permissions, no App
 credentials, no production Runtime acquisition, no shared source-review cache,
-and no downstream notifications. After those checks pass on a push to `dev`,
-the separate `sync-runtime` job reads only `https://dev-api.aisa.one`, generates
-dev contracts/pages/navigation, validates them, and commits to `dev` with the
-repository token. Pull requests cannot run this write job.
-
-The job retains a `dev-runtime-report` Actions artifact. The committed
-`docs/dev-runtime.json` records input hashes, composition results and pending
-definitions. These are dev preview records, not a production formal publication
-pointer or approval receipt. GitHub does not start another push workflow for
-the generated commit made with `GITHUB_TOKEN`; validation happens before push.
+and no downstream notifications. Generation is owned by the AIsaServices dev release job. This Docs workflow
+only runs read-only checks; it cannot commit generated content. The Services
+job uses a Docs-scoped GitHub App to propose generated OpenAPI, English/Chinese
+MDX pages and navigation in a PR to dev. Review and merge are required before
+Mintlify publishes the result.
 
 These production workflows require `refs/heads/main`, including manual runs:
 
@@ -119,51 +114,45 @@ python scripts/validate_runtime_api_reference_slugs.py --generated-only
 
 ### Automatic generation after AIsaServices dev changes
 
-`generate-dev-docs.yml` checks the deployed dev Runtime every ten minutes:
+The AIsaServices dev release job owns the complete generation path:
 
 ```text
-AIsaServices/dev changes -> dev deployment updates the Runtime contract
-  -> Docs detects a stable changed dev snapshot
-  -> generate OpenAPI, English/Chinese MDX pages and navigation
-  -> validate navigation and endpoint references -> commit only docs/dev
-  -> aisa-docs-dev.mintlify.site publishes docs/dev
+AIsaServices/dev -> publish dev API image -> wait for that Runtime revision
+  -> check out Docs/dev -> acquire stable dev contracts -> generate and validate
+  -> open/update automation/dev-runtime-docs PR with base dev
+  -> reviewer merges -> Mintlify publishes aisa-docs-dev.mintlify.site
 ```
 
-This is pull-based generation from the actual dev API contracts, not a copy of
-Services Markdown. A source change must reach the dev Runtime before its public
-contract is documented. Catalog/configuration changes are detected too. New or
-changed operations go through the existing Composer; blocked contracts remain
-explicitly pending. No business API calls or upstream provider calls are made.
+No main scheduler is required. A source change must reach the dev Runtime before
+its public contract can be generated. The expected immutable source revision is
+checked on every contract response, including all provider documents. A failed
+or mixed rollout preserves the last generated docs. This is a dev preview,
+not a production formal publication or consumer notification.
 
-The job acquires a fresh complete stable snapshot on every check. It skips
-generation when the snapshot fingerprint matches the last generated inputs;
-only the category cache timestamp is ignored. Failed acquisition preserves the
-last generated files and retries at the next interval. GitHub can delay scheduled
-runs, so ten minutes is the polling interval, not a publication deadline.
+The Services dev Environment needs Variable `AISA_DOCS_APP_ID` and Secret
+`AISA_DOCS_APP_PRIVATE_KEY` for a GitHub App installed only on `AIsa-team/docs`,
+with Contents and Pull requests write permissions. The token is scoped to Docs
+for the duration of the job. It creates a review PR, never pushes to main or dev
+and never merges. App-created PRs run the existing Docs checks.
 
-GitHub only runs schedules from the default branch. The scheduler file is
-therefore registered on `main`, but always checks out `dev`, uses only the fixed
-dev origin and pushes only `HEAD:refs/heads/dev`. It shares the dev workflow's
-serialization group and uses only the Docs repository token; no cross-repository
-credentials or Services deployment changes are required. Its initial registration
-also runs a check. Production content and publication workflows are separate.
-
-For an immediate or forced generation, open Actions -> **Generate dev Runtime
-docs** -> **Run workflow**, leave the workflow branch at `main` and optionally
-select `force`. The source checkout and commit destination remain `dev`.
-The `dev-runtime-report` artifact records `unchanged`, `generated`, `partial`
-or `failed` for each run. A push to Docs `dev` also retains the existing full
-checks and generation, regardless of the fingerprint.
+A fresh stable snapshot is acquired even when generation is skipped. Category
+cache timestamps are excluded from both fingerprints and snapshot hashes, so
+unchanged data cannot add timestamp-only commits to the pending PR. New or
+changed contracts use the existing Composer; blocked providers remain explicit
+in `docs/dev-runtime.json` and the Actions generation report. No business API
+or upstream provider calls are made. To retry generation, rerun the failed
+Services dev release job after correcting the deployment or App configuration.
 
 ## Work on dev
 
 ```sh
 git fetch origin
-git switch --track origin/dev
+git switch -c docs/my-change origin/dev
 # Edit MDX or other documentation sources.
 git add <changed-files>
 git commit -m "docs: describe a development change"
-git push origin HEAD:dev
+git push -u origin docs/my-change
+# Open a pull request with base dev; publish only after review and merge.
 ```
 
 For local preview, use Node.js 22 and `npx mint@4.2.1006 dev`. The preview defaults
