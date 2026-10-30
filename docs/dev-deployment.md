@@ -38,18 +38,12 @@ availability and billing depend on the Mintlify account's plan.
 `docs-checks.yml` validates navigation, generated endpoint slugs and links on
 both `main` and `dev`. `dev-docs.yml` runs the existing composition and
 publication regression tests and frozen acceptance fixtures offline on dev
-pushes and PRs targeting dev. That test job has read-only repository permissions, no App
-credentials, no production Runtime acquisition, no shared source-review cache,
-and no downstream notifications. After those checks pass on a push to `dev`,
-the separate `sync-runtime` job reads only `https://dev-api.aisa.one`, generates
-dev contracts/pages/navigation, validates them, and commits to `dev` with the
-repository token. Pull requests cannot run this write job.
-
-The job retains a `dev-runtime-report` Actions artifact. The committed
-`docs/dev-runtime.json` records input hashes, composition results and pending
-definitions. These are dev preview records, not a production formal publication
-pointer or approval receipt. GitHub does not start another push workflow for
-the generated commit made with `GITHUB_TOKEN`; validation happens before push.
+pushes and PRs targeting dev. That test job has read-only repository permissions,
+no App credentials, no production Runtime acquisition, no shared source-review
+cache, and no downstream notifications. `generate-dev-docs.yml` on dev owns
+Runtime acquisition, generation and the review PR. It uses this repository's
+`GITHUB_TOKEN`; AIsaServices does not generate or write documentation. Review
+and merge into dev are required before Mintlify publishes the result.
 
 These production workflows require `refs/heads/main`, including manual runs:
 
@@ -117,53 +111,61 @@ python scripts/check_nav_integrity.py
 python scripts/validate_runtime_api_reference_slugs.py --generated-only
 ```
 
-### Automatic generation after AIsaServices dev changes
+### Automatic generation from the dev Runtime
 
-`generate-dev-docs.yml` checks the deployed dev Runtime every ten minutes:
+Docs owns the same pull-and-generate responsibility as production. Development
+uses the live facts reader above because its formal immutable publisher is not
+enabled:
 
 ```text
-AIsaServices/dev changes -> dev deployment updates the Runtime contract
-  -> Docs detects a stable changed dev snapshot
-  -> generate OpenAPI, English/Chinese MDX pages and navigation
-  -> validate navigation and endpoint references -> commit only docs/dev
-  -> aisa-docs-dev.mintlify.site publishes docs/dev
+AIsaServices/dev -> deploy dev Runtime
+  -> Docs timer dispatches generate-dev-docs.yml at ref dev
+  -> Docs/dev pulls current dev contracts -> generate and validate
+  -> open/update automation/dev-runtime-docs PR with base dev
+  -> reviewer merges -> Mintlify publishes aisa-docs-dev.mintlify.site
 ```
 
-This is pull-based generation from the actual dev API contracts, not a copy of
-Services Markdown. A source change must reach the dev Runtime before its public
-contract is documented. Catalog/configuration changes are detected too. New or
-changed operations go through the existing Composer; blocked contracts remain
-explicitly pending. No business API calls or upstream provider calls are made.
+GitHub schedules execute only from the default branch. The main version of
+`generate-dev-docs.yml` therefore contains only a ten-minute timer and a dispatch
+to the same workflow file at `ref: dev`. It does not check out code, read Runtime
+contracts, generate files or write a branch. The dev version contains the actual
+generator and accepts manual runs and pushes changing generator scripts,
+reviewed schema mirrors or the registry. Merge the generator PR into dev before
+merging the timer PR into main. Both changes require review through PRs.
 
-The job acquires a fresh complete stable snapshot on every check. It skips
-generation when the snapshot fingerprint matches the last generated inputs;
-only the category cache timestamp is ignored. Failed acquisition preserves the
-last generated files and retries at the next interval. GitHub can delay scheduled
-runs, so ten minutes is the polling interval, not a publication deadline.
+The generator always checks out dev. It compares a fresh, verified snapshot's
+content fingerprint against `docs/dev-runtime.json`, rather than waiting for a
+particular Services Git SHA or HTTP revision header. New deployments with changed
+public contracts are picked up on a later timer run. Missing, stale or changing
+responses fail acquisition and preserve published files. This remains a dev
+preview, separate from formal production publication and consumer notification.
 
-GitHub only runs schedules from the default branch. The scheduler file is
-therefore registered on `main`, but always checks out `dev`, uses only the fixed
-dev origin and pushes only `HEAD:refs/heads/dev`. It shares the dev workflow's
-serialization group and uses only the Docs repository token; no cross-repository
-credentials or Services deployment changes are required. Its initial registration
-also runs a check. Production content and publication workflows are separate.
+The generation job requests Contents and Pull requests write permissions for
+the Docs repository's `GITHUB_TOKEN`. In repository Actions settings, allow
+GitHub Actions to create pull requests. No Services-side App credentials are
+required. The token writes only the generated PR branch; the PR targets dev
+and is never automatically merged. GitHub may require a reviewer to select
+**Approve workflows to run** on a bot-created PR before its normal checks run.
 
-For an immediate or forced generation, open Actions -> **Generate dev Runtime
-docs** -> **Run workflow**, leave the workflow branch at `main` and optionally
-select `force`. The source checkout and commit destination remain `dev`.
-The `dev-runtime-report` artifact records `unchanged`, `generated`, `partial`
-or `failed` for each run. A push to Docs `dev` also retains the existing full
-checks and generation, regardless of the fingerprint.
+A fresh stable snapshot is acquired even when generation is skipped. Category
+cache timestamps are excluded from both fingerprints and snapshot hashes, so
+unchanged data cannot add timestamp-only commits to the pending PR. Pushes that
+change generator inputs force generation; manual runs can select `force`.
+New or changed contracts use the existing Composer; blocked providers remain
+explicit in `docs/dev-runtime.json` and the Actions generation report. No
+business API or upstream provider calls are made. To retry, run **Generate dev
+Runtime docs**, selecting dev, or use the main timer's manual dispatch.
 
 ## Work on dev
 
 ```sh
 git fetch origin
-git switch --track origin/dev
+git switch -c docs/my-change origin/dev
 # Edit MDX or other documentation sources.
 git add <changed-files>
 git commit -m "docs: describe a development change"
-git push origin HEAD:dev
+git push -u origin docs/my-change
+# Open a pull request with base dev; publish only after review and merge.
 ```
 
 For local preview, use Node.js 22 and `npx mint@4.2.1006 dev`. The preview defaults

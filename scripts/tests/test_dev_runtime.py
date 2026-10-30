@@ -67,6 +67,7 @@ class DevRuntimeTests(unittest.TestCase):
         fingerprint = dev.inputs_sha256(before)
         values['/info/apis/category']['cached_at'] = 123
         self.assertEqual(dev.inputs_sha256(dev.acquire(reader)), fingerprint)
+        self.assertEqual(dev.snapshot_hashes(dev.acquire(reader)), dev.snapshot_hashes(before))
         values['/info/apis/category']['apis'][0]['endpoint_count'] = 2
         self.assertNotEqual(dev.inputs_sha256(dev.acquire(reader)), fingerprint)
         for name in ('index.json', 'similarweb.json'):
@@ -160,6 +161,9 @@ class DevRuntimeTests(unittest.TestCase):
                              'https://provider.example/must-not-fetch.json')
             self.assertNotIn('docs/publication/current.json', outputs)
             self.assertFalse((root / 'openapi/similarweb.json').exists())
+            values['/info/apis/category']['cached_at'] = 123
+            repeated, _ = dev.generate(root, dev.acquire(reader))
+            self.assertEqual(outputs['docs/dev-runtime.json'], repeated['docs/dev-runtime.json'])
 
     def test_invalid_runtime_capability_is_reported_without_publishing_an_endpoint(self):
         values, _, reader = self.fixture()
@@ -176,18 +180,13 @@ class DevRuntimeTests(unittest.TestCase):
             self.assertEqual(json.loads(outputs['openapi/openapi.json'])['paths'], {})
             self.assertNotIn('api-reference/similarweb/published_identity.mdx', outputs)
 
-    def test_sync_workflow_has_dev_only_write_permission_and_no_production_dispatch(self):
+    def test_dev_workflow_only_checks_and_cannot_publish_directly(self):
         import yaml
         root = Path(__file__).resolve().parents[2]
         workflow = yaml.safe_load((root / '.github/workflows/dev-docs.yml').read_text())
-        job = workflow['jobs']['sync-runtime']
-        self.assertIn("github.ref == 'refs/heads/dev'", job['if'])
-        self.assertIn("github.event_name != 'pull_request'", job['if'])
-        self.assertEqual(job['permissions'], {'contents': 'write'})
-        serialized = yaml.safe_dump(job)
-        self.assertNotIn('secrets.', serialized)
-        self.assertNotIn('dispatch-contract', serialized)
-        self.assertNotIn('HEAD:main', serialized)
+        self.assertEqual(set(workflow['jobs']), {'offline-contracts'})
+        self.assertEqual(workflow['permissions'], {'contents': 'read'})
+        self.assertNotIn('git push', yaml.safe_dump(workflow))
 
     def test_historic_and_blocked_contracts_are_hidden_from_dev_navigation_and_aggregate(self):
         with tempfile.TemporaryDirectory() as folder:

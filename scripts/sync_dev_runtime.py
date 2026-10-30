@@ -154,11 +154,14 @@ def dev_urls(text):
             .replace('https://aisa.one/docs/zh/api-reference/', '/zh/api-reference/'))
 
 
-def inputs_sha256(files):
+def snapshot_hashes(files):
     """Ignore only the catalog cache timestamp when detecting Runtime changes."""
-    hashes = {name: sha(category_content(raw) if name == 'category.json' else raw)
-              for name, raw in sorted(files.items())}
-    return sha(json.dumps(hashes, sort_keys=True, separators=(',', ':')).encode())
+    return {name: sha(category_content(raw) if name == 'category.json' else raw)
+            for name, raw in sorted(files.items())}
+
+
+def inputs_sha256(files):
+    return sha(json.dumps(snapshot_hashes(files), sort_keys=True, separators=(',', ':')).encode())
 
 
 def generate(root, files):
@@ -217,7 +220,7 @@ def generate(root, files):
                   'status': 'partial' if blocked or any(pending['providers'].values()) else 'generated',
                   'blocked_providers': blocked, 'hidden_historic_pages': hidden,
                   'inputs_sha256': inputs_sha256(files),
-                  'snapshot_sha256': {name: sha(raw) for name, raw in sorted(files.items())},
+                  'snapshot_sha256': snapshot_hashes(files),
                   'providers': {key: {field: value for field, value in row.items() if field != 'changed'}
                                 for key, row in summary.items()},
                   'pending': pending}
