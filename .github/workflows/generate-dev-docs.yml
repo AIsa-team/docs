@@ -1,0 +1,85 @@
+name: Generate dev Runtime docs
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Regenerate even when the verified Runtime inputs are unchanged
+        type: boolean
+        default: false
+  push:
+    branches: [dev]
+    paths:
+      - .github/workflows/generate-dev-docs.yml
+      - scripts/**
+      - openapi/registry.yaml
+      - openapi/upstream/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: generate-dev-runtime-docs
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    if: github.repository == 'AIsa-team/docs' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install generation dependencies
+        run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
+      - name: Pull current dev Runtime contracts and generate a validated candidate
+        env:
+          FORCE_GENERATION: ${{ github.event_name == 'push' || inputs.force == true }}
+        run: |
+          options=()
+          if [ "$FORCE_GENERATION" != true ]; then options+=(--if-changed); fi
+          python scripts/sync_dev_runtime.py --write "${options[@]}" \
+            --report "$RUNNER_TEMP/dev-runtime-report.json"
+          git diff --check
+      - name: Retain the acquisition and generation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-runtime-docs-report
+          path: ${{ runner.temp }}/dev-runtime-report.json
+          if-no-files-found: ignore
+      - name: Open or update the generated documentation PR
+        id: propose
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ github.token }}
+          base: dev
+          branch: automation/dev-runtime-docs
+          commit-message: 'docs(dev): refresh dev Runtime contracts'
+          title: 'docs(dev): refresh dev Runtime contracts'
+          body: |
+            Generated in the Docs repository from https://dev-api.aisa.one.
+            Includes validated OpenAPI, English/Chinese endpoint pages and navigation.
+            Read docs/dev-runtime.json and the dev-runtime-docs-report artifact for blocked providers.
+            Review and merge into dev to publish https://aisa-docs-dev.mintlify.site.
+          add-paths: |
+            docs.json
+            openapi.yaml
+            openapi
+            api-reference
+            zh/api-reference
+            docs/dev-runtime.json
+      - name: Record the review PR
+        if: steps.propose.outputs.pull-request-number != ''
+        env:
+          PR_URL: ${{ steps.propose.outputs.pull-request-url }}
+        run: echo "Generated documentation is awaiting review at $PR_URL" >> "$GITHUB_STEP_SUMMARY"

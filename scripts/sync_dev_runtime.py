@@ -230,33 +230,10 @@ def generate(root, files):
         return outputs, report
 
 
-def revision_reader(reader, revision):
-    require(isinstance(revision, str) and re.fullmatch(r'[0-9a-f]{40}', revision),
-            'Expected a full dev Runtime source revision')
-
-    def read(path):
-        raw, headers = reader(path)
-        if path.startswith('/info/openapi'):
-            require(headers.get('x-aisa-runtime-revision') == revision,
-                    'Expected dev Runtime source revision is not deployed')
-        return raw, headers
-    return read
-
-
-def sync(root, *, write=False, if_changed=False, expected_revision=None, reader=None):
+def sync(root, *, write=False, if_changed=False, reader=None):
     branch = subprocess.check_output(['git', 'branch', '--show-current'], cwd=root, text=True).strip()
     require(branch == 'dev', 'Dev Runtime sync requires the dev branch')
-    reader = reader or PublicReader(DEV_ORIGIN, time.monotonic() + (1200 if expected_revision else 600))
-    if expected_revision:
-        reader = revision_reader(reader, expected_revision)
-        deadline = time.monotonic() + 600
-        while True:
-            try:
-                reader('/info/openapi.json')
-                break
-            except ValueError:
-                require(time.monotonic() < deadline, 'Timed out waiting for the dev Runtime source revision')
-                time.sleep(10)
+    reader = reader or PublicReader(DEV_ORIGIN, time.monotonic() + 600)
     files = acquire(reader)
     print('Acquired stable dev Runtime facts: ' + str(len(files) - 2) + ' providers', flush=True)
     previous_path = root / 'docs/dev-runtime.json'
@@ -304,13 +281,10 @@ def main():
     parser.add_argument('--write', action='store_true')
     parser.add_argument('--if-changed', action='store_true',
                         help='Skip generation when verified dev Runtime inputs are unchanged')
-    parser.add_argument('--expected-runtime-revision',
-                        help='Wait for and require this immutable Services revision on every contract response')
     parser.add_argument('--report', type=Path, required=True)
     args = parser.parse_args()
     try:
-        report = sync(args.root, write=args.write, if_changed=args.if_changed,
-                      expected_revision=args.expected_runtime_revision)
+        report = sync(args.root, write=args.write, if_changed=args.if_changed)
         result = 0
     except Exception as exc:
         report = {'environment': 'dev', 'runtime_origin': DEV_ORIGIN,

@@ -38,13 +38,12 @@ availability and billing depend on the Mintlify account's plan.
 `docs-checks.yml` validates navigation, generated endpoint slugs and links on
 both `main` and `dev`. `dev-docs.yml` runs the existing composition and
 publication regression tests and frozen acceptance fixtures offline on dev
-pushes and PRs targeting dev. That test job has read-only repository permissions, no App
-credentials, no production Runtime acquisition, no shared source-review cache,
-and no downstream notifications. Generation is owned by the AIsaServices dev release job. This Docs workflow
-only runs read-only checks; it cannot commit generated content. The Services
-job uses a Docs-scoped GitHub App to propose generated OpenAPI, English/Chinese
-MDX pages and navigation in a PR to dev. Review and merge are required before
-Mintlify publishes the result.
+pushes and PRs targeting dev. That test job has read-only repository permissions,
+no App credentials, no production Runtime acquisition, no shared source-review
+cache, and no downstream notifications. `generate-dev-docs.yml` on dev owns
+Runtime acquisition, generation and the review PR. It uses this repository's
+`GITHUB_TOKEN`; AIsaServices does not generate or write documentation. Review
+and merge into dev are required before Mintlify publishes the result.
 
 These production workflows require `refs/heads/main`, including manual runs:
 
@@ -112,36 +111,50 @@ python scripts/check_nav_integrity.py
 python scripts/validate_runtime_api_reference_slugs.py --generated-only
 ```
 
-### Automatic generation after AIsaServices dev changes
+### Automatic generation from the dev Runtime
 
-The AIsaServices dev release job owns the complete generation path:
+Docs owns the same pull-and-generate responsibility as production. Development
+uses the live facts reader above because its formal immutable publisher is not
+enabled:
 
 ```text
-AIsaServices/dev -> publish dev API image -> wait for that Runtime revision
-  -> check out Docs/dev -> acquire stable dev contracts -> generate and validate
+AIsaServices/dev -> deploy dev Runtime
+  -> Docs timer dispatches generate-dev-docs.yml at ref dev
+  -> Docs/dev pulls current dev contracts -> generate and validate
   -> open/update automation/dev-runtime-docs PR with base dev
   -> reviewer merges -> Mintlify publishes aisa-docs-dev.mintlify.site
 ```
 
-No main scheduler is required. A source change must reach the dev Runtime before
-its public contract can be generated. The expected immutable source revision is
-checked on every contract response, including all provider documents. A failed
-or mixed rollout preserves the last generated docs. This is a dev preview,
-not a production formal publication or consumer notification.
+GitHub schedules execute only from the default branch. The main version of
+`generate-dev-docs.yml` therefore contains only a ten-minute timer and a dispatch
+to the same workflow file at `ref: dev`. It does not check out code, read Runtime
+contracts, generate files or write a branch. The dev version contains the actual
+generator and accepts manual runs and pushes changing generator scripts,
+reviewed schema mirrors or the registry. Merge the generator PR into dev before
+merging the timer PR into main. Both changes require review through PRs.
 
-The Services dev Environment needs Variable `AISA_DOCS_APP_ID` and Secret
-`AISA_DOCS_APP_PRIVATE_KEY` for a GitHub App installed only on `AIsa-team/docs`,
-with Contents and Pull requests write permissions. The token is scoped to Docs
-for the duration of the job. It creates a review PR, never pushes to main or dev
-and never merges. App-created PRs run the existing Docs checks.
+The generator always checks out dev. It compares a fresh, verified snapshot's
+content fingerprint against `docs/dev-runtime.json`, rather than waiting for a
+particular Services Git SHA or HTTP revision header. New deployments with changed
+public contracts are picked up on a later timer run. Missing, stale or changing
+responses fail acquisition and preserve published files. This remains a dev
+preview, separate from formal production publication and consumer notification.
+
+The generation job requests Contents and Pull requests write permissions for
+the Docs repository's `GITHUB_TOKEN`. In repository Actions settings, allow
+GitHub Actions to create pull requests. No Services-side App credentials are
+required. The token writes only the generated PR branch; the PR targets dev
+and is never automatically merged. GitHub may require a reviewer to select
+**Approve workflows to run** on a bot-created PR before its normal checks run.
 
 A fresh stable snapshot is acquired even when generation is skipped. Category
 cache timestamps are excluded from both fingerprints and snapshot hashes, so
-unchanged data cannot add timestamp-only commits to the pending PR. New or
-changed contracts use the existing Composer; blocked providers remain explicit
-in `docs/dev-runtime.json` and the Actions generation report. No business API
-or upstream provider calls are made. To retry generation, rerun the failed
-Services dev release job after correcting the deployment or App configuration.
+unchanged data cannot add timestamp-only commits to the pending PR. Pushes that
+change generator inputs force generation; manual runs can select `force`.
+New or changed contracts use the existing Composer; blocked providers remain
+explicit in `docs/dev-runtime.json` and the Actions generation report. No
+business API or upstream provider calls are made. To retry, run **Generate dev
+Runtime docs**, selecting dev, or use the main timer's manual dispatch.
 
 ## Work on dev
 

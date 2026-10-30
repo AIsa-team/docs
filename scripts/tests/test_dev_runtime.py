@@ -35,22 +35,6 @@ class DevRuntimeTests(unittest.TestCase):
         self.assertEqual(calls.count('/info/apis/category'), 2)
         self.assertTrue(all(path.startswith('/info/') for path in calls))
 
-    def test_revision_pin_rejects_old_or_mixed_contract_responses(self):
-        _, _, reader = self.fixture()
-        expected = 'a' * 40
-        for stale_path in ('/info/openapi.json', '/info/openapi/similarweb.json', None):
-            def stamped(path):
-                raw, headers = reader(path)
-                headers['x-aisa-runtime-revision'] = 'b' * 40 if path == stale_path else expected
-                return raw, headers
-            with self.subTest(stale_path=stale_path):
-                if stale_path:
-                    with self.assertRaises(ValueError): dev.acquire(dev.revision_reader(stamped, expected))
-                else:
-                    self.assertIn('similarweb.json', dev.acquire(dev.revision_reader(stamped, expected)))
-        for invalid in ('dev', 'main', 'a' * 39):
-            with self.assertRaises(ValueError): dev.revision_reader(reader, invalid)
-
     def test_missing_pending_duplicate_or_changed_provider_fails_closed(self):
         for mutation in ('hash', 'duplicate', 'pending', 'path'):
             values, _, reader = self.fixture()
@@ -203,7 +187,6 @@ class DevRuntimeTests(unittest.TestCase):
         self.assertEqual(set(workflow['jobs']), {'offline-contracts'})
         self.assertEqual(workflow['permissions'], {'contents': 'read'})
         self.assertNotIn('git push', yaml.safe_dump(workflow))
-        self.assertFalse((root / '.github/workflows/generate-dev-docs.yml').exists())
 
     def test_historic_and_blocked_contracts_are_hidden_from_dev_navigation_and_aggregate(self):
         with tempfile.TemporaryDirectory() as folder:

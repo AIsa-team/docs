@@ -115,6 +115,34 @@ class BranchIsolationTests(unittest.TestCase):
                                             capture_output=True, text=True)
                     self.assertEqual(result.returncode == 0, expected, result.stderr)
 
+    def test_runtime_generation_only_proposes_generated_files_to_dev(self):
+        value = workflow('generate-dev-docs.yml')
+        trigger = value.get('on', value.get(True))
+        self.assertEqual(set(trigger), {'push', 'workflow_dispatch'})
+        self.assertEqual(trigger['push']['branches'], ['dev'])
+        self.assertNotIn('api-reference/**', trigger['push']['paths'])
+        self.assertNotIn('docs/dev-runtime.json', trigger['push']['paths'])
+        job = value['jobs']['generate']
+        self.assertTrue(enabled(job['if'], 'refs/heads/dev'))
+        for ref in ('refs/heads/main', 'refs/heads/feature', 'refs/pull/1/merge'):
+            self.assertFalse(enabled(job['if'], ref))
+        self.assertEqual(job['permissions'], {'contents': 'write', 'pull-requests': 'write'})
+        checkout = next(step for step in job['steps']
+                        if step.get('uses', '').startswith('actions/checkout@'))
+        self.assertEqual(checkout['with']['ref'], 'dev')
+        proposal = next(step for step in job['steps']
+                        if step.get('uses', '').startswith('peter-evans/create-pull-request@'))
+        self.assertEqual(proposal['with']['base'], 'dev')
+        self.assertEqual(proposal['with']['branch'], 'automation/dev-runtime-docs')
+        self.assertEqual(set(proposal['with']['add-paths'].splitlines()), {
+            'docs.json', 'openapi.yaml', 'openapi', 'api-reference',
+            'zh/api-reference', 'docs/dev-runtime.json'})
+        text = yaml.safe_dump(value)
+        for operation in ('git push', '--expected-runtime-revision', 'secrets.',
+                          'create-github-app-token', 'fetch_runtime_release.py',
+                          'dispatch-contract-consumers', 'gh pr merge', 'enablePullRequestAutoMerge'):
+            self.assertNotIn(operation, text)
+
 
 if __name__ == '__main__':
     unittest.main()
