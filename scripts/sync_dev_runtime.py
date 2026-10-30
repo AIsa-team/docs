@@ -154,6 +154,13 @@ def dev_urls(text):
             .replace('https://aisa.one/docs/zh/api-reference/', '/zh/api-reference/'))
 
 
+def inputs_sha256(files):
+    """Ignore only the catalog cache timestamp when detecting Runtime changes."""
+    hashes = {name: sha(category_content(raw) if name == 'category.json' else raw)
+              for name, raw in sorted(files.items())}
+    return sha(json.dumps(hashes, sort_keys=True, separators=(',', ':')).encode())
+
+
 def generate(root, files):
     """Stage with the existing Composer/page generator; never mutate input files."""
     with tempfile.TemporaryDirectory(prefix='dev-docs-') as folder:
@@ -209,6 +216,7 @@ def generate(root, files):
                   'kind': 'live_facts_preview', 'formal_publication': False,
                   'status': 'partial' if blocked or any(pending['providers'].values()) else 'generated',
                   'blocked_providers': blocked, 'hidden_historic_pages': hidden,
+                  'inputs_sha256': inputs_sha256(files),
                   'snapshot_sha256': {name: sha(raw) for name, raw in sorted(files.items())},
                   'providers': {key: {field: value for field, value in row.items() if field != 'changed'}
                                 for key, row in summary.items()},
@@ -219,12 +227,22 @@ def generate(root, files):
         return outputs, report
 
 
-def sync(root, *, write=False, reader=None):
+def sync(root, *, write=False, if_changed=False, reader=None):
     branch = subprocess.check_output(['git', 'branch', '--show-current'], cwd=root, text=True).strip()
     require(branch == 'dev', 'Dev Runtime sync requires the dev branch')
     reader = reader or PublicReader(DEV_ORIGIN, time.monotonic() + 600)
     files = acquire(reader)
     print('Acquired stable dev Runtime facts: ' + str(len(files) - 2) + ' providers', flush=True)
+    previous_path = root / 'docs/dev-runtime.json'
+    if if_changed and previous_path.exists():
+        previous = json.loads(previous_path.read_text())
+        if (previous.get('environment') == 'dev' and previous.get('runtime_origin') == DEV_ORIGIN
+                and previous.get('formal_publication') is False
+                and previous.get('status') in {'generated', 'partial'}
+                and previous.get('inputs_sha256') == inputs_sha256(files)):
+            return {**previous, 'generation_status': previous['status'], 'status': 'unchanged',
+                    'observed_at': datetime.now(timezone.utc).isoformat(),
+                    'written': False, 'changed_files': []}
     # Private diagnostic inputs. The CLI never reuses these as fresh evidence.
     cache = root / '.cache/dev-runtime-inputs'
     cache.mkdir(parents=True, exist_ok=True)
@@ -258,10 +276,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=ROOT)
     parser.add_argument('--write', action='store_true')
+    parser.add_argument('--if-changed', action='store_true',
+                        help='Skip generation when verified dev Runtime inputs are unchanged')
     parser.add_argument('--report', type=Path, required=True)
     args = parser.parse_args()
     try:
-        report = sync(args.root, write=args.write)
+        report = sync(args.root, write=args.write, if_changed=args.if_changed)
         result = 0
     except Exception as exc:
         report = {'environment': 'dev', 'runtime_origin': DEV_ORIGIN,

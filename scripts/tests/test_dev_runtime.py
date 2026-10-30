@@ -61,6 +61,67 @@ class DevRuntimeTests(unittest.TestCase):
             with self.subTest(target=target), self.assertRaises(ValueError):
                 dev.acquire(changing)
 
+    def test_change_detection_ignores_cache_time_but_tracks_contract_and_catalog_changes(self):
+        values, _, reader = self.fixture()
+        before = dev.acquire(reader)
+        fingerprint = dev.inputs_sha256(before)
+        values['/info/apis/category']['cached_at'] = 123
+        self.assertEqual(dev.inputs_sha256(dev.acquire(reader)), fingerprint)
+        values['/info/apis/category']['apis'][0]['endpoint_count'] = 2
+        self.assertNotEqual(dev.inputs_sha256(dev.acquire(reader)), fingerprint)
+        for name in ('index.json', 'similarweb.json'):
+            changed = dict(before)
+            document = json.loads(changed[name])
+            document['changed_public_contract'] = True
+            changed[name] = json.dumps(document).encode()
+            with self.subTest(file=name):
+                self.assertNotEqual(dev.inputs_sha256(changed), fingerprint)
+
+    def test_unchanged_runtime_skips_generation_and_keeps_committed_files(self):
+        _, calls, reader = self.fixture()
+        files = dev.acquire(reader)
+        calls.clear()
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'docs').mkdir()
+            previous = {'environment': 'dev', 'runtime_origin': dev.DEV_ORIGIN,
+                        'formal_publication': False, 'status': 'partial',
+                        'inputs_sha256': dev.inputs_sha256(files)}
+            marker = root / 'docs/dev-runtime.json'
+            marker.write_text(json.dumps(previous))
+            original = marker.read_bytes()
+            with patch.object(dev.subprocess, 'check_output', return_value='dev'), \
+                    patch.object(dev, 'generate') as generate:
+                result = dev.sync(root, write=True, if_changed=True, reader=reader)
+            generate.assert_not_called()
+            self.assertEqual(result['status'], 'unchanged')
+            self.assertEqual(result['generation_status'], 'partial')
+            self.assertEqual(result['changed_files'], [])
+            self.assertFalse(result['written'])
+            self.assertEqual(marker.read_bytes(), original)
+            # A fresh complete acquisition is mandatory even for a no-op run.
+            self.assertEqual(calls.count('/info/openapi/similarweb.json'), 2)
+
+    def test_changed_runtime_and_forced_generation_do_not_use_the_skip_path(self):
+        _, _, reader = self.fixture()
+        files = dev.acquire(reader)
+        for mutation in ('changed', 'force', 'production', 'failed'):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                (root / 'docs').mkdir()
+                previous = {'environment': 'dev', 'runtime_origin': dev.DEV_ORIGIN,
+                            'formal_publication': False, 'status': 'generated',
+                            'inputs_sha256': dev.inputs_sha256(files)}
+                if mutation == 'changed': previous['inputs_sha256'] = 'old'
+                if mutation == 'production': previous['runtime_origin'] = 'https://api.aisa.one'
+                if mutation == 'failed': previous['status'] = 'failed'
+                (root / 'docs/dev-runtime.json').write_text(json.dumps(previous))
+                with patch.object(dev.subprocess, 'check_output', return_value='dev'), \
+                        patch.object(dev.subprocess, 'run'), \
+                        patch.object(dev, 'generate', return_value=({}, {'status': 'generated'})) as generate:
+                    dev.sync(root, if_changed=mutation != 'force', reader=reader)
+                generate.assert_called_once()
+
     def test_wrong_branch_or_failed_acquisition_never_writes(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -69,7 +130,7 @@ class DevRuntimeTests(unittest.TestCase):
                 with patch.object(dev.subprocess, 'check_output', return_value=branch), \
                      patch.object(dev, 'acquire', side_effect=ValueError('unavailable')), \
                      patch.object(dev, 'generate') as generate, self.assertRaises(ValueError):
-                    dev.sync(root, write=True, reader=object())
+                    dev.sync(root, write=True, if_changed=True, reader=object())
                 generate.assert_not_called()
                 self.assertEqual(marker.read_text(), 'last good docs')
 

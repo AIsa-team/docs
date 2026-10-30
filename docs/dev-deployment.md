@@ -117,10 +117,43 @@ python scripts/check_nav_integrity.py
 python scripts/validate_runtime_api_reference_slugs.py --generated-only
 ```
 
-Sync runs after dev pushes. Scheduled workflows only run from GitHub's default
-branch, so this dev-only workflow does not promise timed polling. A later
-default-branch scheduler must explicitly check out `dev` and retain the same
-dev-only origin and write boundary.
+### Automatic generation after AIsaServices dev changes
+
+`generate-dev-docs.yml` checks the deployed dev Runtime every ten minutes:
+
+```text
+AIsaServices/dev changes -> dev deployment updates the Runtime contract
+  -> Docs detects a stable changed dev snapshot
+  -> generate OpenAPI, English/Chinese MDX pages and navigation
+  -> validate navigation and endpoint references -> commit only docs/dev
+  -> aisa-docs-dev.mintlify.site publishes docs/dev
+```
+
+This is pull-based generation from the actual dev API contracts, not a copy of
+Services Markdown. A source change must reach the dev Runtime before its public
+contract is documented. Catalog/configuration changes are detected too. New or
+changed operations go through the existing Composer; blocked contracts remain
+explicitly pending. No business API calls or upstream provider calls are made.
+
+The job acquires a fresh complete stable snapshot on every check. It skips
+generation when the snapshot fingerprint matches the last generated inputs;
+only the category cache timestamp is ignored. Failed acquisition preserves the
+last generated files and retries at the next interval. GitHub can delay scheduled
+runs, so ten minutes is the polling interval, not a publication deadline.
+
+GitHub only runs schedules from the default branch. The scheduler file is
+therefore registered on `main`, but always checks out `dev`, uses only the fixed
+dev origin and pushes only `HEAD:refs/heads/dev`. It shares the dev workflow's
+serialization group and uses only the Docs repository token; no cross-repository
+credentials or Services deployment changes are required. Its initial registration
+also runs a check. Production content and publication workflows are separate.
+
+For an immediate or forced generation, open Actions -> **Generate dev Runtime
+docs** -> **Run workflow**, leave the workflow branch at `main` and optionally
+select `force`. The source checkout and commit destination remain `dev`.
+The `dev-runtime-report` artifact records `unchanged`, `generated`, `partial`
+or `failed` for each run. A push to Docs `dev` also retains the existing full
+checks and generation, regardless of the fingerprint.
 
 ## Work on dev
 
