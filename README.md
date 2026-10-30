@@ -273,6 +273,16 @@ The operations are not published as complete: their previously published copies
 are retained as disabled `retained_pending` operations, and the other Relayer
 operations publish normally.
 
+CR005 (`CR005-fastmoss-20261030`, `FASTMOSS_DEFERRAL` in the same file) records
+the user's 2026-10-30 decision to defer the two FastMoss creator operations
+(`POST /apis/v1/fastmoss/creator/rank/topEcommerce`,
+`POST /apis/v1/fastmoss/creator/productList`) that Services enabled before Docs
+had an upstream source for them. It has the same code-pinned form as CR004 and
+accepts only those two exact `upstream_operation_missing` request identities.
+Both operations stay pending, not complete, until the FastMoss sources are
+reviewed into Docs and the record is removed. A profile change in Services
+changes the identities, so the record must then be updated or removed.
+
 Readiness reports distinguish `deferred_pending` and `deferred_response_pending`
 from the independently reviewed 93 disabled baseline items in `existing_pending`
 and `existing_response_pending`. Exact identity, binding, source, reason, status,

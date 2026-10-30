@@ -47,6 +47,35 @@ RELAYER_DEFERRAL = {
 }
 RELAYER_DEFERRAL_PATH = 'scripts/deferred_definitions.py#RELAYER_DEFERRAL'
 RELAYER_DEFERRAL_SHA256 = '1f84c17c1f94fe1bdd84772369fa523e7e142ad459c1b4c1643a61f33a8e7e16'
+# CR005: a separate user approval for the FastMoss creator operations Services
+# enabled before Docs had any upstream source for them. Same code-pinned form
+# as CR004; it adds only these exact request keys.
+_FASTMOSS_REASON = 'upstream_operation_missing'
+FASTMOSS_DEFERRAL = {
+    'policy_id': 'CR005-fastmoss-20261030',
+    'authorization': 'User (2026-10-30): Docs 加延期',
+    'decision': 'deferred; definitions remain pending, not completed',
+    'until': ('the FastMoss upstream sources are reviewed into Docs and both operations compose; '
+              'this record is then removed'),
+    'evidence': {'docs_revision': '6ae94090b8558d4384cf3da050dc631e6c396eea',
+                 'runtime': 'Services production enabled FastMoss provider 1000114 (endpoints 1003955, 1003956) '
+                            'from snapshot generation 1175; Docs has no FastMoss upstream source'},
+    'scope': {'request': 2, 'response': 0},
+    'items': [
+        {'provider': 'fastmoss', 'kind': 'request', 'gate_identity': [
+            'fastmoss', 'post_fastmoss_apis_v1_fastmoss_creator_productlist',
+            '/apis/v1/fastmoss/creator/productList', 'POST',
+            'sha256:911894d1780478d6a2107049f08eb4cdde8f63e5c1e6dff2eccb754015da8ae2', _FASTMOSS_REASON,
+            'sha256:ed7eb0e80bc24391bdd8a721f72f7df3b87cff2408ca649cad6c616d5195fb8f', 'enabled']},
+        {'provider': 'fastmoss', 'kind': 'request', 'gate_identity': [
+            'fastmoss', 'post_fastmoss_apis_v1_fastmoss_creator_rank_topecommerce',
+            '/apis/v1/fastmoss/creator/rank/topEcommerce', 'POST',
+            'sha256:e0e341b3e59e42466500db744ccb648397904d9b607b60679b6ccda99a3d4dbc', _FASTMOSS_REASON,
+            'sha256:8e1d0589ad8d4a368d06500f9db73a10436fc61493977557c58a89eb41a48fe3', 'enabled']},
+    ],
+}
+FASTMOSS_DEFERRAL_PATH = 'scripts/deferred_definitions.py#FASTMOSS_DEFERRAL'
+FASTMOSS_DEFERRAL_SHA256 = 'e5abe3fc278b73fa585dc2cfa10e6b6e9284c35f5eb6d6d312f91b8510cfa50b'
 
 
 def canonical_key(provider, kind, key):
@@ -184,6 +213,7 @@ def load_deferred_definitions(root):
     if binding_sha == RESPONSE_IDENTITY_MIGRATION_SHA256:
         _apply_response_identity_v2(policy, record.get('response_identity_migration', {}))
     _apply_relayer_policy(policy)
+    _apply_fastmoss_policy(policy)
     return policy
 
 
@@ -217,6 +247,38 @@ def _apply_relayer_policy(policy, record=None):
     policy.keys = policy.keys | keys
     policy.metadata['additional_policies'] = [{'policy_id': value['policy_id'], 'path': RELAYER_DEFERRAL_PATH,
                                                'sha256': RELAYER_DEFERRAL_SHA256, 'scope': dict(value['scope'])}]
+
+
+def fastmoss_deferral_digest(record=None):
+    raw = json.dumps(FASTMOSS_DEFERRAL if record is None else record, sort_keys=True,
+                     separators=(',', ':'), ensure_ascii=False)
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _apply_fastmoss_policy(policy, record=None):
+    """Add CR005's exact FastMoss request keys after CR003 and CR004.
+
+    Each key is the readiness gate identity of one runtime-enabled FastMoss
+    operation the composer leaves pending because Docs has no upstream source
+    for it. Any other provider, kind, reason, status, or a key already approved
+    elsewhere is outside this approval; an edited record fails closed.
+    """
+    value = FASTMOSS_DEFERRAL if record is None else record
+    if fastmoss_deferral_digest(value) != FASTMOSS_DEFERRAL_SHA256:
+        raise ValueError('FastMoss deferral record differs from approved exact content')
+    items = value['items']
+    keys = {canonical_key(item['provider'], item['kind'], item['gate_identity']) for item in items}
+    if (value['scope'] != {'request': len(items), 'response': 0} or len(keys) != len(items)
+            or any(item['provider'] != 'fastmoss' or item['kind'] != 'request'
+                   or len(item['gate_identity']) != 8 or item['gate_identity'][0] != 'fastmoss'
+                   or item['gate_identity'][5] != _FASTMOSS_REASON or item['gate_identity'][-1] != 'enabled'
+                   for item in items)
+            or keys & policy.keys):
+        raise ValueError('Invalid FastMoss deferral scope')
+    policy.keys = policy.keys | keys
+    policy.metadata.setdefault('additional_policies', []).append(
+        {'policy_id': value['policy_id'], 'path': FASTMOSS_DEFERRAL_PATH,
+         'sha256': FASTMOSS_DEFERRAL_SHA256, 'scope': dict(value['scope'])})
 
 
 def validate_report_deferrals(root, report):

@@ -9,9 +9,11 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from contract_readiness import _pending_key, check_readiness
-from deferred_definitions import (DeferredDefinitions, RELAYER_DEFERRAL, RELAYER_DEFERRAL_PATH,
-                                  RELAYER_DEFERRAL_SHA256, _apply_relayer_policy, canonical_key,
-                                  load_deferred_definitions, relayer_deferral_digest)
+from deferred_definitions import (DeferredDefinitions, FASTMOSS_DEFERRAL, FASTMOSS_DEFERRAL_PATH,
+                                  FASTMOSS_DEFERRAL_SHA256, RELAYER_DEFERRAL, RELAYER_DEFERRAL_PATH,
+                                  RELAYER_DEFERRAL_SHA256, _apply_fastmoss_policy, _apply_relayer_policy,
+                                  canonical_key, fastmoss_deferral_digest, load_deferred_definitions,
+                                  relayer_deferral_digest)
 from pull_openapi import assert_identities, retain_pending_history, stage
 from readiness_rejection import _policy
 from test_full_registry import contract
@@ -170,7 +172,9 @@ class RelayerDeferralRecordTests(unittest.TestCase):
         self.assertEqual(policy.metadata['effective_scope'], {'request': 7, 'response': 53})
         self.assertEqual(policy.metadata['additional_policies'], [{
             'policy_id': 'CR004-polymarket-relayer-20261019', 'path': RELAYER_DEFERRAL_PATH,
-            'sha256': RELAYER_DEFERRAL_SHA256, 'scope': {'request': 3, 'response': 0}}])
+            'sha256': RELAYER_DEFERRAL_SHA256, 'scope': {'request': 3, 'response': 0}}, {
+            'policy_id': 'CR005-fastmoss-20261030', 'path': FASTMOSS_DEFERRAL_PATH,
+            'sha256': FASTMOSS_DEFERRAL_SHA256, 'scope': {'request': 2, 'response': 0}}])
         self.assertEqual(relayer_deferral_digest(), RELAYER_DEFERRAL_SHA256)
         _policy(policy.metadata)
         ids = sorted(item['gate_identity'][1] for item in RELAYER_DEFERRAL['items'])
@@ -203,6 +207,35 @@ class RelayerDeferralRecordTests(unittest.TestCase):
                     [{**metadata['additional_policies'][0], 'sha256': 'x'}]):
             with self.assertRaises(ValueError):
                 _policy({**metadata, 'additional_policies': bad})
+
+
+class FastMossDeferralRecordTests(unittest.TestCase):
+    def test_loaded_after_cr004_with_exactly_two_fastmoss_request_keys(self):
+        policy = load_deferred_definitions(ROOT)
+        self.assertEqual(fastmoss_deferral_digest(), FASTMOSS_DEFERRAL_SHA256)
+        self.assertEqual(policy.metadata['additional_policies'][-1]['policy_id'], 'CR005-fastmoss-20261030')
+        _policy(policy.metadata)
+        self.assertEqual(sorted(item['gate_identity'][2] for item in FASTMOSS_DEFERRAL['items']),
+                         ['/apis/v1/fastmoss/creator/productList', '/apis/v1/fastmoss/creator/rank/topEcommerce'])
+        for item in FASTMOSS_DEFERRAL['items']:
+            key = item['gate_identity']
+            self.assertTrue(policy.matches('fastmoss', 'request', key))
+            self.assertFalse(policy.matches('fastmoss', 'response', key))
+            self.assertFalse(policy.matches('other', 'request', key))
+            for index in range(len(key)):
+                changed = list(key); changed[index] = 'changed'
+                self.assertFalse(policy.matches('fastmoss', 'request', changed), index)
+
+    def test_edited_or_widened_record_fails_closed(self):
+        base = approval('other', [['x'] * 8])
+        widened = copy.deepcopy(FASTMOSS_DEFERRAL)
+        widened['items'].append({**widened['items'][0], 'provider': 'other'})
+        for record in (widened, {**FASTMOSS_DEFERRAL, 'policy_id': 'CR006'}):
+            with self.assertRaisesRegex(ValueError, 'FastMoss deferral record differs'):
+                _apply_fastmoss_policy(copy.deepcopy(base), record)
+        overlap = approval('fastmoss', [FASTMOSS_DEFERRAL['items'][0]['gate_identity']])
+        with self.assertRaisesRegex(ValueError, 'Invalid FastMoss deferral scope'):
+            _apply_fastmoss_policy(overlap)
 
 
 if __name__ == '__main__':
