@@ -23,7 +23,7 @@ The standard OpenAI-compatible `POST /v1/images/generations` endpoint. As of Sep
 | `seedream-5-0-260128` | Per request | Min image size **3,686,400 pixels** (e.g., 1920×1920) |
 | `wan2.7-image` | Per request | Also accepts `POST /v1/images/edits` |
 | `wan2.7-image-pro` | Per request | Higher-quality Wan route |
-| `gpt-image-2` | Per request or per image; token pricing also applies on some routes | See [AI Model Pricing](/guides/pricing#models) |
+| `gpt-image-2` | Per 1M tokens: input, output, cache write | See [AI Model Pricing](/guides/pricing#models) |
 | `gpt-image-2.5-flare` | Per 1M tokens: input, output, cache read | GPT Image 2.5 route |
 | `gpt-image-2.5-sunburst` | Per 1M tokens: input, output, cache read | GPT Image 2.5 route |
 
@@ -108,7 +108,7 @@ for (const item of resp.data) {
 |---|---|---|---|
 | `model` | string | yes | One of `seedream-5-0-260128`, `wan2.7-image`, `wan2.7-image-pro`, `gpt-image-2`, `gpt-image-2.5-flare`, `gpt-image-2.5-sunburst` |
 | `prompt` | string | yes | Text description of the image to generate |
-| `n` | integer | no | Number of images. Each is billed separately at the model's per-request rate |
+| `n` | integer | no | Number of images. A per-request model charges one request price whatever `n` is; a token-priced model charges the tokens it reports |
 | `size` | string | no | `WIDTHxHEIGHT`. Seedream routes must satisfy `width × height ≥ 3,686,400`; `wan2.7-image` and `gpt-image-2` accept smaller sizes (`1024x1024` verified working) |
 
 ## Response
@@ -134,7 +134,7 @@ for (const item of resp.data) {
 **AIsa's response adds a few extensions** over the vanilla OpenAI schema:
 - `model` echoed at the root
 - `data[].size` — actual dimensions of each returned image
-- `usage` — includes `generated_images` (drives billing), plus `output_tokens` / `total_tokens` for token accounting
+- `usage` — as the model reports it, for example `generated_images`, `output_tokens` and `total_tokens`. Token-priced models are charged from the token counts; per-request models are charged once per request
 
 <Warning>
   URLs in `data[].url` are **short-lived**. Download and persist the image to your own storage before it expires.
