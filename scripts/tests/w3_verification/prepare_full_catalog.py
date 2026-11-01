@@ -73,8 +73,16 @@ def reconcile(expected, candidate, coverage, input_root=None, policy_fixture=Non
     migration = None
     same_coverage = rows(previous) == rows(coverage)
     if input_root is not None:
-        from w0_expectation_migration import verify_migration
+        from w0_expectation_migration import load_migration, verify_migration
         migration = verify_migration(expected, candidate, coverage, input_root, policy_fixture)
+        # A migrated pending operation is retained as a disabled copy; that is
+        # the only metadata change the reviewed migration explains.
+        retained = {(entry['row']['path'], entry['row']['method'].lower(), entry['row'].get('operation_id'))
+                    for entry in load_migration()['added_coverage'] if entry['row']['status'] == 'pending'}
+        changed = [(identity, field) for identity, field in changed
+                   if not (field == 'x-aisa-status' and (identity[1], identity[2], identity[3]) in retained
+                           and after[identity].get('x-aisa-status') == 'disabled'
+                           and after[identity].get('x-aisa-contract-state') == 'retained_pending')]
     coverage_verified = same_coverage if input_root is None else migration is not None
     return {'coverage_rows': len(rows(coverage)), 'composed_operations': len(after),
             'coverage_identity_sets_equal': rows(previous) == rows(coverage),
