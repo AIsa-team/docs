@@ -1,0 +1,270 @@
+---
+title: "Search replies"
+openapi: "openapi/zh/firecrawl_alexandria.json POST /apis/v1/firecrawl-alexandria/openreview-net/papers/search_replies"
+x-aisa-operation-id: "openreview-net#papers/search_replies"
+---
+
+
+{/* aisa-contract-details:start */}
+
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/firecrawl-alexandria/openreview-net/papers/search&#95;replies
+- **可用状态:** enabled
+- **请求 URL 模板:** `https://api.aisa.one/apis/v1/firecrawl-alexandria/openreview-net/papers/search_replies`
+- **Runtime 事实版本:** 2bc9ab16713c191fefd3c495d970470b71af9d46f86b3c6f339577690a3f7ce9
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/firecrawl_alexandria.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "openreview-net#papers/search_replies",
+  "method": "POST",
+  "path": "/apis/v1/firecrawl-alexandria/openreview-net/papers/search_replies",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "required": true,
+    "content": {
+      "application/json": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "alexandria": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "capability",
+                "provider",
+                "options"
+              ],
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "enum": [
+                    "openreview-net"
+                  ]
+                },
+                "capability": {
+                  "type": "string",
+                  "enum": [
+                    "papers/search_replies"
+                  ]
+                },
+                "options": {
+                  "type": "object",
+                  "properties": {
+                    "limit": {
+                      "description": "Results per page, 1-100 (default 25).",
+                      "type": "number",
+                      "minimum": 1,
+                      "maximum": 100
+                    },
+                    "offset": {
+                      "description": "Zero-based offset of the first result; pass the previous page's `next_offset` to continue.",
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 10000
+                    },
+                    "query": {
+                      "description": "Search terms matched against the reply content (full-text). Must contain a non-whitespace character.",
+                      "type": "string"
+                    },
+                    "venue": {
+                      "description": "Venue group id to scope the search to, e.g. `ICLR.cc/2025/Conference`. Omit or pass `all` for every venue.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "query"
+                  ]
+                }
+              }
+            },
+            "zeroDataRetention": {
+              "enum": [
+                false
+              ],
+              "type": "boolean"
+            }
+          },
+          "examples": [
+            {
+              "alexandria": {
+                "provider": "openreview-net",
+                "capability": "papers/search_replies",
+                "options": {
+                  "request": {
+                    "limit": 2,
+                    "query": "diffusion",
+                    "venue": "ICLR.cc/2025/Conference"
+                  },
+                  "response": {
+                    "count": 2,
+                    "limit": 2,
+                    "next_offset": 2,
+                    "observed_at_ms": 1790993618001,
+                    "offset": 0,
+                    "query": "diffusion",
+                    "replies": [
+                      {
+                        "comment": null,
+                        "confidence": 5,
+                        "content": {
+                          "code_of_conduct": "Yes",
+                          "confidence": 5,
+                          "contribution": 2,
+                          "flag_for_ethics_review": [
+                            "No ethics review needed."
+                          ],
+                          "presentation": 2,
+                          "questions": "My questions and suggestions are mostly covers in the weaknesses outlined above.",
+                          "rating": 3,
+                          "soundness": 2,
+                          "strengths": "The ablation study design is both interesting and essential to clearing a number of doubts about this paper, although the results are not exactly convincing. The doubts include: 1) Why not directly attack the probing classifier? 2) Why use DiffusionSeq?, etc.",
+                          "summary": "In this paper, the authors proposed DiffusionAttacker as a while-box LLM jailbreaking method, which attacks a LLM by attacking a harmfulness probing classifier trained on its last layer hidden states instead, based on the observation that the jailbreaking prompts produced by some existing jailbreaking methods are often no longer sparable from non-harmful inputs by the classifier. In specific, DiffusionAttacker employs DiffusionSeq models to rewrite malicious requests through denoising to 1) preserve the semantic content, while 2) cheating the probing classifier by end-to-end training (with the help of Gumbel SoftMax for differentiability) with the victim LLM (frozen). DiffusionAttacker is tested on the AdvBench dataset against Llama 3 8b, Mistral 7b, Alpaca 7b (and Vicuna 1.5 7b) models and showed improvement in ASR (by prefix- and GPT-judge), PPL and self-bleu over existing attacks including GCG, AutoDan and ColdAttack. The transfer study showed that jailbreaking prompts generated by DiffusionAttacker are also more likely to jailbreak other models. The ablation study further investigated the impact of each component of DiffusionAttack.",
+                          "weaknesses": "1.  Inadequate Baseline Selection: While the likes of GCG and AutoDAN are of clear resemblance with DiffusionAttacker method-wise (white-box, proxy-target, guidance from gradient), they are not among the most powerful jailbreaking methods. A number of black-box attacks like [1] and [2] can also jailbreak the white-box models while being more fluent, efficient and effective.\n2. Questionable Metric: ASR computed by prefix match is outdated and knowingly unable to reflect the true jailbreaking effectiveness. The GPT-judge used is also not a widely-used or \"strong\" one, in that it is only employing GPT-4o to decide the harmfulness without detailed criteria, judgement on a scale instead of binary, or consideration of content relatedness to the malicious request, etc. as identified by e.g. [2] and [3] as crucial properties for a GPT-judge to evaluate jailbreaking attacks more accurately. There are not adequate reasons to incorporate PPL and Self-Bleu scores as the major metrics. Why is fluency of the jailbreaking prompt an important characteristic to have? There does exist defensive mechanisms that uses PPL to filter suspectable inputs, but they haven't been widely used ever. For instance, in the interactive with LLMs, rare token sequences have good reasons to appear, e.g. ASCII arts, ciphertexts, etc. Bleu-based diversity is also not a guarantee that a jailbreaking method is hard to defend against.\n3. Non-prominent Performance: The ASRs (GPT-based), while higher than the few baselines, are not actually high from today's point of view given that a number of black-box attacks have surpassed them. Many of them also make use of the idea about turning the prompt less harmful by the look to generate jailbreaking prompts. In a sense, DiffusionAttacker is only resorting to the internal hidden states of the victim LLMs which black-box attacks refrain from to do a similar thing while not receiving any benefit in terms of fluency, effectiveness or efficiency. The transfer attack ASRs are also very low to be of practical use.\n4. Questionable Design Choices: Many design choices in the paper are not well-justified, e.g. 1) Why choosing the last-layer hidden states for the classifier, when a number of works has identified middle layers as more effective at probing? 2) Why using DiffusionSeq when there are alternatives like encoder-decoder transfomers and LSTMs? What is special about diffusion models that make it fit for this task? 3) \n5. Inadequate Experiments: Being an attack that stems from representation engineering [4], clearly [5] is a better baseline as it is finetuned specifically to direct harmful representations to benign ones. A number of jailbreaking methods have failed at attack it while exile otherwise, so if DiffusionAttack manages to break [5] due to its similar concepts, then the relatively inadequate performance might be justified a bit as it at least finds some unique situations where it is the only successful attack. Additionally, even in the transfer experiment, only white-box models are used. It is important to see how the prompts generated by DiffusionAttack attacks GPTs, Geminis and Claudes.\n6. Poor Demonstration: The paper provides no examples of the jailbreaking outcomes. There is also no graph to illustrate the change in classifier decision after the attack to validate the hypothesize which motivates this paper.\n7. Questionable Ablation: The advantage of DiffusionAttack over the other design choices is not significant except for fluency which is obviously going to be the case.\n\n[1] Play Guessing Game with LLM: Indirect Jailbreak Attack with Implicit Clues\n[2] WordGame: Efficient & Effective LLM Jailbreak via Simultaneous Obfuscation in Query and Response.\n[3] A StrongREJECT for Empty Jailbreaks\n[4] Representation Engineering: A Top-Down Approach to AI Transparency\n[5] Improving Alignment and Robustness with Circuit Breakers"
+                        },
+                        "contribution": 2,
+                        "created_at_ms": 1730659429985,
+                        "domain": "ICLR.cc/2025/Conference",
+                        "forum": "u08UxVNdIo",
+                        "forum_url": "https://openreview.net/forum?id=u08UxVNdIo&noteId=MjhJoKn4g3",
+                        "id": "MjhJoKn4g3",
+                        "invitation": "ICLR.cc/2025/Conference/Submission3818/-/Official_Review",
+                        "kind": "Official_Review",
+                        "modified_at_ms": 1731427882305,
+                        "number": 4,
+                        "paper_title": "Diffusion Attacker: Diffusion-Driven Prompt Manipulation for LLM Jailbreak",
+                        "paper_venue": "ICLR 2025 Conference Withdrawn Submission",
+                        "paper_venue_id": "ICLR.cc/2025/Conference/Withdrawn_Submission",
+                        "presentation": 2,
+                        "questions": "My questions and suggestions are mostly covers in the weaknesses outlined above.",
+                        "rating": 3,
+                        "readers": [
+                          "everyone"
+                        ],
+                        "reply_to": "u08UxVNdIo",
+                        "signatures": [
+                          "ICLR.cc/2025/Conference/Submission3818/Reviewer_MRHd"
+                        ],
+                        "soundness": 2,
+                        "strengths": "The ablation study design is both interesting and essential to clearing a number of doubts about this paper, although the results are not exactly convincing. The doubts include: 1) Why not directly attack the probing classifier? 2) Why use DiffusionSeq?, etc.",
+                        "summary": "In this paper, the authors proposed DiffusionAttacker as a while-box LLM jailbreaking method, which attacks a LLM by attacking a harmfulness probing classifier trained on its last layer hidden states instead, based on the observation that the jailbreaking prompts produced by some existing jailbreaking methods are often no longer sparable from non-harmful inputs by the classifier. In specific, DiffusionAttacker employs DiffusionSeq models to rewrite malicious requests through denoising to 1) preserve the semantic content, while 2) cheating the probing classifier by end-to-end training (with the help of Gumbel SoftMax for differentiability) with the victim LLM (frozen). DiffusionAttacker is tested on the AdvBench dataset against Llama 3 8b, Mistral 7b, Alpaca 7b (and Vicuna 1.5 7b) models and showed improvement in ASR (by prefix- and GPT-judge), PPL and self-bleu over existing attacks including GCG, AutoDan and ColdAttack. The transfer study showed that jailbreaking prompts generated by DiffusionAttacker are also more likely to jailbreak other models. The ablation study further investigated the impact of each component of DiffusionAttack.",
+                        "title": null,
+                        "weaknesses": "1.  Inadequate Baseline Selection: While the likes of GCG and AutoDAN are of clear resemblance with DiffusionAttacker method-wise (white-box, proxy-target, guidance from gradient), they are not among the most powerful jailbreaking methods. A number of black-box attacks like [1] and [2] can also jailbreak the white-box models while being more fluent, efficient and effective.\n2. Questionable Metric: ASR computed by prefix match is outdated and knowingly unable to reflect the true jailbreaking effectiveness. The GPT-judge used is also not a widely-used or \"strong\" one, in that it is only employing GPT-4o to decide the harmfulness without detailed criteria, judgement on a scale instead of binary, or consideration of content relatedness to the malicious request, etc. as identified by e.g. [2] and [3] as crucial properties for a GPT-judge to evaluate jailbreaking attacks more accurately. There are not adequate reasons to incorporate PPL and Self-Bleu scores as the major metrics. Why is fluency of the jailbreaking prompt an important characteristic to have? There does exist defensive mechanisms that uses PPL to filter suspectable inputs, but they haven't been widely used ever. For instance, in the interactive with LLMs, rare token sequences have good reasons to appear, e.g. ASCII arts, ciphertexts, etc. Bleu-based diversity is also not a guarantee that a jailbreaking method is hard to defend against.\n3. Non-prominent Performance: The ASRs (GPT-based), while higher than the few baselines, are not actually high from today's point of view given that a number of black-box attacks have surpassed them. Many of them also make use of the idea about turning the prompt less harmful by the look to generate jailbreaking prompts. In a sense, DiffusionAttacker is only resorting to the internal hidden states of the victim LLMs which black-box attacks refrain from to do a similar thing while not receiving any benefit in terms of fluency, effectiveness or efficiency. The transfer attack ASRs are also very low to be of practical use.\n4. Questionable Design Choices: Many design choices in the paper are not well-justified, e.g. 1) Why choosing the last-layer hidden states for the classifier, when a number of works has identified middle layers as more effective at probing? 2) Why using DiffusionSeq when there are alternatives like encoder-decoder transfomers and LSTMs? What is special about diffusion models that make it fit for this task? 3) \n5. Inadequate Experiments: Being an attack that stems from representation engineering [4], clearly [5] is a better baseline as it is finetuned specifically to direct harmful representations to benign ones. A number of jailbreaking methods have failed at attack it while exile otherwise, so if DiffusionAttack manages to break [5] due to its similar concepts, then the relatively inadequate performance might be justified a bit as it at least finds some unique situations where it is the only successful attack. Additionally, even in the transfer experiment, only white-box models are used. It is important to see how the prompts generated by DiffusionAttack attacks GPTs, Geminis and Claudes.\n6. Poor Demonstration: The paper provides no examples of the jailbreaking outcomes. There is also no graph to illustrate the change in classifier decision after the attack to validate the hypothesize which motivates this paper.\n7. Questionable Ablation: The advantage of DiffusionAttack over the other design choices is not significant except for fluency which is obviously going to be the case.\n\n[1] Play Guessing Game with LLM: Indirect Jailbreak Attack with Implicit Clues\n[2] WordGame: Efficient & Effective LLM Jailbreak via Simultaneous Obfuscation in Query and Response.\n[3] A StrongREJECT for Empty Jailbreaks\n[4] Representation Engineering: A Top-Down Approach to AI Transparency\n[5] Improving Alignment and Robustness with Circuit Breakers"
+                      },
+                      {
+                        "comment": null,
+                        "confidence": 3,
+                        "content": {
+                          "code_of_conduct": "Yes",
+                          "confidence": 3,
+                          "contribution": 2,
+                          "flag_for_ethics_review": [
+                            "No ethics review needed."
+                          ],
+                          "presentation": 3,
+                          "questions": "I have several questions about this work.\n\n1, How to decide the scaling factors? Since the intervals are [1000,5000], [100,500], [100,500], [100,500], and the values seesm to be integer, then the whole factor space equals 4000 * 400 * 400 * 400, which is quite huge. And the authors present one setting for NASBench201 and other experiments, respectively, so I am wondering whether there is some method or strategy to choose such factors? \n\n2, This work extends the basic motivation of DiffusionNAG, which is rather good and natural. Such extension include three more factors, including number of parameters, number of MACs, and the inference latency. But I am curious that, how about the performance of POMONAG if just considering adding one factor? \n\n3, From one factor, say, accuracy, to three more factors seems strenghening the proposed POMONAG, but my question is, the working mechanism of DiffusionNAG and POMONAG the same different? Although the two diffusion processes consider different factors, which is the obvious difference, but the analysis or discussion is important to interpret this issue.",
+                          "rating": 5,
+                          "soundness": 3,
+                          "strengths": "This paper introduces the ParetoOptimal Many-Objective Neural Architecture Generator (POMONAG), extending DiffusionNAG through a many-objective diffusion process. POMONAG simultaneously considers accuracy, the number of parameters, multiply-accumulate operations (MACs), and inference latency. The experiments validate the performance of the proposed model.",
+                          "summary": "This paper is a direct extension based on DiffusionNAG, which can deal with multi-objective optimization in NAS. These objectives include accuracy, the number of parameters, multiply-accumulate operations (MACs), and inference latency. This motivation is good and natural, and the authors expressed their work clearly, from the motivation to the experiments results. Some details need to be clarified.",
+                          "weaknesses": "1, The multi-objective optimization problem formulation in this work can be given first, which then can be solved by the proposed weighted factors in the reverse diffusion process. But maybe the authors can consider other ways to sovle this. For example, using four single reverse diffusion process each targeting one factor, as DiffusionNAG did, then using multi-objective optimization for further trade-off may also work well.\n\n2, The theoretical analysis should be strehghen. One objective to many objective is a breakthrough, but such process needs more analysis or discussion. Current work lacks such in-depth thinking. \n\n3, Several predictors are needed in this work, but the detailed information these predictors are missing."
+                        },
+                        "contribution": 2,
+                        "created_at_ms": 1730597839913,
+                        "domain": "ICLR.cc/2025/Conference",
+                        "forum": "4y4t7yOvJO",
+                        "forum_url": "https://openreview.net/forum?id=4y4t7yOvJO&noteId=6WNnptOc5w",
+                        "id": "6WNnptOc5w",
+                        "invitation": "ICLR.cc/2025/Conference/Submission4704/-/Official_Review",
+                        "kind": "Official_Review",
+                        "modified_at_ms": 1731428201981,
+                        "number": 3,
+                        "paper_title": "POMONAG: Pareto-Optimal Many-Objective Neural Architecture Generator",
+                        "paper_venue": "Submitted to ICLR 2025",
+                        "paper_venue_id": "ICLR.cc/2025/Conference/Rejected_Submission",
+                        "presentation": 3,
+                        "questions": "I have several questions about this work.\n\n1, How to decide the scaling factors? Since the intervals are [1000,5000], [100,500], [100,500], [100,500], and the values seesm to be integer, then the whole factor space equals 4000 * 400 * 400 * 400, which is quite huge. And the authors present one setting for NASBench201 and other experiments, respectively, so I am wondering whether there is some method or strategy to choose such factors? \n\n2, This work extends the basic motivation of DiffusionNAG, which is rather good and natural. Such extension include three more factors, including number of parameters, number of MACs, and the inference latency. But I am curious that, how about the performance of POMONAG if just considering adding one factor? \n\n3, From one factor, say, accuracy, to three more factors seems strenghening the proposed POMONAG, but my question is, the working mechanism of DiffusionNAG and POMONAG the same different? Although the two diffusion processes consider different factors, which is the obvious difference, but the analysis or discussion is important to interpret this issue.",
+                        "rating": 5,
+                        "readers": [
+                          "everyone"
+                        ],
+                        "reply_to": "4y4t7yOvJO",
+                        "signatures": [
+                          "ICLR.cc/2025/Conference/Submission4704/Reviewer_s4FH"
+                        ],
+                        "soundness": 3,
+                        "strengths": "This paper introduces the ParetoOptimal Many-Objective Neural Architecture Generator (POMONAG), extending DiffusionNAG through a many-objective diffusion process. POMONAG simultaneously considers accuracy, the number of parameters, multiply-accumulate operations (MACs), and inference latency. The experiments validate the performance of the proposed model.",
+                        "summary": "This paper is a direct extension based on DiffusionNAG, which can deal with multi-objective optimization in NAS. These objectives include accuracy, the number of parameters, multiply-accumulate operations (MACs), and inference latency. This motivation is good and natural, and the authors expressed their work clearly, from the motivation to the experiments results. Some details need to be clarified.",
+                        "title": null,
+                        "weaknesses": "1, The multi-objective optimization problem formulation in this work can be given first, which then can be solved by the proposed weighted factors in the reverse diffusion process. But maybe the authors can consider other ways to sovle this. For example, using four single reverse diffusion process each targeting one factor, as DiffusionNAG did, then using multi-objective optimization for further trade-off may also work well.\n\n2, The theoretical analysis should be strehghen. One objective to many objective is a breakthrough, but such process needs more analysis or discussion. Current work lacks such in-depth thinking. \n\n3, Several predictors are needed in this work, but the detailed information these predictors are missing."
+                      }
+                    ],
+                    "source_url": "https://api2.openreview.net/notes/search?term=diffusion&type=terms&content=all&group=ICLR.cc%2F2025%2FConference&source=reply&limit=2&offset=0",
+                    "total": 10000,
+                    "total_capped": true,
+                    "venue": "ICLR.cc/2025/Conference"
+                  },
+                  "recordedAt": "2026-10-03"
+                }
+              },
+              "zeroDataRetention": false
+            }
+          ],
+          "required": [
+            "alexandria",
+            "zeroDataRetention"
+          ]
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_units",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.0005,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body",
+    "unit": "firecrawl_credit",
+    "unit_rate_usd": 0.0001
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
+## 费用与请求规则
+
+按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 firecrawl_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+
+公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
+
+- **默认请求参考估价（USD）:** 0.0005
+- **声明的单位费率（USD）:** 0.0001
+- **计费单位:** firecrawl&#95;credit
+- **计费依据:** response&#95;units
+- **公开参考倍率:** 1.0
+- **结算证据来源:** response&#95;body
+
+{/* aisa-contract-details:end */}

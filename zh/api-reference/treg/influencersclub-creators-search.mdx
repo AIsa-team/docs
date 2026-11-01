@@ -1,0 +1,169 @@
+---
+title: "Find Instagram/TikTok/YouTube influencers by niche & size"
+openapi: "openapi/zh/treg.json POST /apis/v1/treg/influencersclub.creators.search"
+x-aisa-operation-id: "influencersclub.creators.search"
+---
+
+
+{/* aisa-contract-details:start */}
+
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/treg/influencersclub.creators.search
+- **可用状态:** enabled
+- **请求 URL 模板:** `https://api.aisa.one/apis/v1/treg/influencersclub.creators.search`
+- **return&#95;filter&#95;values:** query; 必填
+- **Runtime 事实版本:** 56a3a0f7514566b52bfad6a0e505ae356b3c9a5f32a2a7c9a4acd864e3ba5d12
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/treg.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "influencersclub.creators.search",
+  "method": "POST",
+  "path": "/apis/v1/treg/influencersclub.creators.search",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "examples": {
+        "default": {
+          "value": false
+        },
+        "minimal": {
+          "value": false
+        }
+      },
+      "in": "query",
+      "name": "return_filter_values",
+      "required": true,
+      "schema": {
+        "enum": [
+          false
+        ],
+        "type": "boolean"
+      },
+      "description": "PREMIUM: adds a matched_filters object per creator showing which of your filter values it matched"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "required": true,
+    "content": {
+      "application/json": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "platform": {
+              "description": "one of instagram | youtube | tiktok | twitter | twitch | onlyfans — the filter set changes with it",
+              "type": "string",
+              "examples": [
+                "instagram"
+              ]
+            },
+            "paging": {
+              "description": "{limit, page}; page is 0-indexed. THIS IS THE PRICE DIAL — billed per creator returned",
+              "type": "object",
+              "examples": [
+                {
+                  "limit": 10,
+                  "page": 0
+                }
+              ],
+              "properties": {
+                "limit": {
+                  "maximum": 200,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "limit"
+              ]
+            },
+            "filters": {
+              "description": "platform-specific filter object (send {} to rely on nlp_search alone). Instagram keys include location, profile_language, keywords_in_bio, hashtags, keywords_in_captions, number_of_followers {min,max}, engagement_percent {min,max}, average_likes, follower_growth, last_post, is_verified, brands, audience {age, gender, location, interests}, has_done_brand_deals, promotes_affiliate_links, exclude_handles, exclude_list. TRAPS learned live (2026-08-27): `location` is COUNTRY-level and must be a dictionary value ([\"Brazil\"]) — a city string ('Belo Horizonte, MG') is accepted and silently matches nothing; `profile_language` is a LIST of ISO codes from creators.filters.values ([\"pt\"], not \"portuguese\" → 400); a required brand goes in `brands: [\"nitto\"]` (lowercase), NOT keywords_in_bio (\"Nitto tires\" in a bio matches nothing); keywords_in_bio wants short single words in the creators' own language (\"cabelo\", not \"queda de cabelo\"). On platform tiktok (live 2026-10-04): location, profile_language, number_of_followers and keywords_in_bio filter; keywords_in_captions is silently IGNORED (any value returns the unfiltered total) and hashtags matches loosely — put topic words in keywords_in_bio",
+              "type": "object",
+              "examples": [
+                {
+                  "keywords_in_bio": [
+                    "astronomy"
+                  ],
+                  "number_of_followers": {
+                    "min": 100000
+                  }
+                }
+              ]
+            },
+            "nlp_search": {
+              "description": "a plain-language brief ('fitness creators in New York with over 100k followers') that the API maps onto filters; combinable with explicit filters. The response adds applied_filters and an nlp_search block explaining what was inferred or dropped. An uninterpretable brief 400s and costs nothing. It DROPS constraints it cannot map (a 'Brazilian hair-loss creators' brief came back without the country or topic) — put every hard limit in `filters` and use nlp_search only for the soft part",
+              "type": "string",
+              "examples": [
+                "astronomy and space creators with over 100k followers"
+              ]
+            },
+            "sort": {
+              "description": "{sort_by: relevancy | engagement_rate | number_of_followers | growth_rate, sort_order: asc | desc}",
+              "type": "object",
+              "examples": [
+                {
+                  "sort_by": "number_of_followers",
+                  "sort_order": "desc"
+                }
+              ]
+            }
+          },
+          "required": [
+            "filters",
+            "paging",
+            "platform"
+          ]
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_units",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.03,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_header",
+    "unit": "micro_usd",
+    "unit_rate_usd": 1e-06
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
+## 费用与请求规则
+
+按用量计费；默认请求预估费用：\$0.03 USD（不是固定价格）。 声明的单位费率：每 micro_usd \$0.000001 USD。 最终费用以账户适用价格及实际结算为准。
+
+公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
+
+- **默认请求参考估价（USD）:** 0.03
+- **声明的单位费率（USD）:** 1e-06
+- **计费单位:** micro&#95;usd
+- **计费依据:** response&#95;units
+- **公开参考倍率:** 1.0
+- **结算证据来源:** response&#95;header
+
+{/* aisa-contract-details:end */}
