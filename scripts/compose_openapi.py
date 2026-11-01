@@ -955,7 +955,9 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             operation["operationId"] = candidate if len(candidate) <= 56 else candidate[:49] + "_" + hashlib.sha256(f"{actual_method} {public_path}".encode()).hexdigest()[:6]
                     if validation != "runtime":
                         runtime_fields = {(p["in"], p["name"]) for p in runtime.get("parameters", [])}
-                        query_passthrough = runtime.get("x-aisa-query-policy", {}).get("request_wins", False)
+                        query_policy = runtime.get("x-aisa-query-policy", {})
+                        # open_query runtimes forward undeclared caller query parameters.
+                        query_passthrough = query_policy.get("request_wins", False) or query_policy.get("open_query", False) is True
                         if bound_source and not runtime.get("x-aisa-upstream-selector"):
                             for parameter in mirror.get("parameters", []):
                                 if parameter.get("in") == "query" and parameter.get("required") and isinstance(parameter.get("schema"), dict) and "default" in parameter["schema"]:

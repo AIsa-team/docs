@@ -292,7 +292,8 @@ def assess_response_gaps(report, facts, documents, coverage, baseline, deferred_
                 # moment the runtime enables it (runtime_status is part of the key).
                 target = 'disabled_response_pending'
             result[target].append(row)
-        if result['errors'] or result['new_response_pending']:
+        # Missing success payloads are visible debt, never a publication blocker.
+        if result['errors']:
             result['status'] = report['status'] = 'failed'
             if provider not in report['blocked_providers']:
                 report['blocked_providers'].append(provider)

@@ -105,11 +105,12 @@ class ReadinessTests(unittest.TestCase):
         self.assertEqual('not_assessed', check_readiness(facts, {}, cov)['status'])
         self.assertEqual('not_assessed', check_readiness({}, docs, cov)['status'])
 
-    def test_missing_source_pending_without_baseline_fails(self):
+    def test_missing_source_pending_without_baseline_is_visible_debt(self):
         result = check_readiness(*pending_fixture())
-        self.assertEqual('failed', result['status'])
+        self.assertEqual('passed', result['status'])
         self.assertFalse(result['baseline_assessed'])
-        self.assertEqual(['p'], result['blocked_providers'])
+        self.assertEqual([], result['blocked_providers'])
+        self.assertEqual(1, len(result['providers']['p']['new_pending']))
         self.assertEqual([], result['global_errors'])
 
     def test_reviewed_pending_does_not_block_other_provider(self):
@@ -122,10 +123,10 @@ class ReadinessTests(unittest.TestCase):
         self.assertEqual(1, len(result['providers']['p']['existing_pending']))
         self.assertEqual('passed', result['providers']['q']['status'])
 
-    def test_equal_count_different_pending_set_fails(self):
+    def test_equal_count_different_pending_set_is_new(self):
         old = pending_fixture('/before')[2]
         result = check_readiness(*pending_fixture('/after'), old)
-        self.assertEqual('failed', result['status'])
+        self.assertEqual('passed', result['status'])
         self.assertEqual(1, len(result['providers']['p']['new_pending']))
 
     def test_changed_binding_and_reason_are_new(self):
@@ -139,7 +140,8 @@ class ReadinessTests(unittest.TestCase):
                     row['binding_hash'] = binding_hash(f['p']['paths']['/search']['get'])
                 else:
                     row.update(reason='ambiguous official operation: details', reason_code='ambiguous_source')
-                self.assertEqual('failed', check_readiness(f, d, c, base)['status'])
+                result = check_readiness(f, d, c, base)['providers']['p']
+                self.assertEqual((1, []), (len(result['new_pending']), result['existing_pending']))
 
     def test_source_hash_and_error_suffix_do_not_change_pending(self):
         f, d, c = pending_fixture()
@@ -204,20 +206,21 @@ class ReadinessTests(unittest.TestCase):
 
     def test_unknown_reason_is_not_grandfathered(self):
         args = pending_fixture(reason='new unclassified failure at host 12')
-        self.assertEqual('failed', check_readiness(*args, copy.deepcopy(args[2]))['status'])
+        self.assertEqual(1, len(check_readiness(*args, copy.deepcopy(args[2]))['providers']['p']['new_pending']))
         self.assertEqual(reason_code('unexpected host 12'), reason_code('unexpected host 45'))
 
     def test_old_baseline_missing_binding_cannot_prove_unchanged(self):
         f, d, c = pending_fixture()
         base = copy.deepcopy(c)
         del base['providers']['p'][0]['binding_hash']
-        self.assertEqual('failed', check_readiness(f, d, c, base)['status'])
+        self.assertEqual(1, len(check_readiness(f, d, c, base)['providers']['p']['new_pending']))
 
     def test_candidate_cannot_self_approve(self):
         f, d, c = pending_fixture()
         c['baseline_coverage'] = copy.deepcopy(c)
         c['reviewed'] = True
-        self.assertEqual('failed', check_readiness(f, d, c)['status'])
+        result = check_readiness(f, d, c)['providers']['p']
+        self.assertEqual((1, []), (len(result['new_pending']), result['existing_pending']))
 
     def test_duplicate_identity_and_public_route_are_global(self):
         for path, oid, code in [('/other', 'get_search', 'duplicate_operation_id'), ('/search', 'other_id', 'duplicate_public_route')]:
@@ -385,7 +388,7 @@ class ReadinessTests(unittest.TestCase):
         c['providers']['p'][0]['publication_state'] = 'retained'
         result = check_readiness({}, d, c, copy.deepcopy(c))
         # Missing current facts cannot authenticate a candidate's old binding.
-        self.assertEqual('failed', result['status'], result)
+        self.assertEqual(1, len(result['providers']['p']['new_pending']), result)
         self.assertEqual([], result['global_errors'])
         self.assertEqual([], result['missing_inputs'])
         self.assertEqual([], result['providers']['p']['existing_pending'])

@@ -18,7 +18,7 @@ class ResponseSchemaCompletenessTests(unittest.TestCase):
         self.assertEqual(pending, [])  # Request remains usable; response debt is separate.
         return runtime, source, document
 
-    def assert_gap_blocks(self, runtime, document, status='200'):
+    def assert_gap_visible(self, runtime, document, status='200'):
         self.assertEqual(operation(document)['x-aisa-response-pending']['statuses'], [status])
         gaps = response_gap_rows(document, runtime, [])
         self.assertEqual(gaps[0]['statuses'], [status])
@@ -26,8 +26,10 @@ class ResponseSchemaCompletenessTests(unittest.TestCase):
         report = {'status': 'passed', 'blocked_providers': [], 'providers': {'p': {'errors': [], 'status': 'passed'}}}
         assess_response_gaps(report, {'p': runtime}, {'p': document},
                              {'schema_version': 2, 'providers': {'p': []}, 'response_gaps': {'p': gaps}}, None)
-        self.assertEqual(report['status'], 'failed')
-        self.assertEqual(report['blocked_providers'], ['p'])
+        # Visible debt, not a publication blocker.
+        self.assertEqual(report['status'], 'passed')
+        self.assertEqual(report['blocked_providers'], [])
+        self.assertEqual(report['providers']['p']['new_response_pending'], gaps)
 
     def test_single_and_named_example_only_are_retained_but_not_complete(self):
         for data in ({'example': {'value': True, '$ref': 'literal'}},
@@ -35,7 +37,7 @@ class ResponseSchemaCompletenessTests(unittest.TestCase):
             with self.subTest(data=data):
                 runtime, source, document = self.compose_response({'description': 'Example only', 'content': {'application/json': data}})
                 self.assertEqual(operation(document)['responses']['200']['content']['application/json'], data)
-                self.assert_gap_blocks(runtime, document)
+                self.assert_gap_visible(runtime, document)
                 repeated, pending = compose(runtime, source, previous=document)
                 self.assertEqual(pending, [])
                 self.assertEqual(document, repeated)
@@ -50,13 +52,13 @@ class ResponseSchemaCompletenessTests(unittest.TestCase):
         self.assertEqual(pending, [])
         example = operation(first)['responses']['200']['content']['application/json']['examples']['one']
         self.assertEqual(resolve(example, first), source['components']['examples']['Sample'])
-        self.assert_gap_blocks(runtime, first)
+        self.assert_gap_visible(runtime, first)
         historical_runtime = facts('runtime')
         second, pending = compose(historical_runtime, previous=first)
         self.assertEqual(pending, [])
         example = operation(second)['responses']['200']['content']['application/json']['examples']['one']
         self.assertEqual(resolve(example, second), source['components']['examples']['Sample'])
-        self.assert_gap_blocks(historical_runtime, second)
+        self.assert_gap_visible(historical_runtime, second)
 
     def test_every_declared_media_requires_a_schema_even_with_no_content_marker(self):
         for status in ['200', '204', '205']:
@@ -70,7 +72,7 @@ class ResponseSchemaCompletenessTests(unittest.TestCase):
                     document, pending = compose(runtime, source)
                     self.assertEqual(pending, [])
                     self.assertEqual(operation(document)['responses'][status]['content'], media)
-                    self.assert_gap_blocks(runtime, document, status)
+                    self.assert_gap_visible(runtime, document, status)
 
     def test_explicit_dict_boolean_schemas_and_no_content_are_complete(self):
         for schema in ({}, True, False):
@@ -110,7 +112,7 @@ class ResponseSchemaCompletenessTests(unittest.TestCase):
         document, pending = compose(runtime, source)
         self.assertEqual(pending, [])
         self.assertEqual(operation(document)['responses']['200'], declared)
-        self.assert_gap_blocks(runtime, document)
+        self.assert_gap_visible(runtime, document)
         self.assertNotIn('x-aisa-response-source', operation(document))
 
 

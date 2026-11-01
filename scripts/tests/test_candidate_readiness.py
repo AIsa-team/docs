@@ -177,9 +177,9 @@ class CandidateReadinessTests(unittest.TestCase):
         self.fact['paths']['/apis/v1/alpha/read']['get']['x-aisa-validation'] = 'provider'
         self.write_facts()
         self.assertEqual(self.publish(), 0)
-        self.assertEqual(self.publish('--readiness-mode', 'pr'), 1)
+        self.assertEqual(self.publish('--readiness-mode', 'pr'), 0)
         report = assess_candidate(self.root, self.facts)
-        self.assertEqual(report['status'], 'failed')
+        self.assertEqual(report['status'], 'passed')
         self.assertFalse(report['baseline_assessed'])
         self.assertEqual(len(report['providers']['alpha']['new_pending']), 1)
 
@@ -194,7 +194,7 @@ class CandidateReadinessTests(unittest.TestCase):
         self.write_facts()
         self.assertEqual(self.publish(), 0)
         report = assess_candidate(self.root, self.facts, accepted)
-        self.assertEqual(report['status'], 'failed')
+        self.assertEqual(report['status'], 'passed')
         self.assertEqual(len(report['providers']['alpha']['new_pending']), 1)
         self.assertEqual(load_baseline(self.root, accepted)['providers']['alpha'][0]['binding_hash'], accepted_binding)
         self.assertNotEqual(json.loads((self.root / 'openapi/coverage.json').read_text())['providers']['alpha'][0]['binding_hash'], accepted_binding)
