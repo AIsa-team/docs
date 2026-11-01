@@ -1,0 +1,199 @@
+---
+title: "Search people by title, seniority, department or company"
+openapi: "openapi/zh/treg.json POST /apis/v1/treg/companyenrich.people.search"
+x-aisa-operation-id: "companyenrich.people.search"
+---
+
+
+{/* aisa-contract-details:start */}
+
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/treg/companyenrich.people.search
+- **可用状态:** enabled
+- **请求 URL 模板:** `https://api.aisa.one/apis/v1/treg/companyenrich.people.search`
+- **expand:** query; 可选
+- **Runtime 事实版本:** 56a3a0f7514566b52bfad6a0e505ae356b3c9a5f32a2a7c9a4acd864e3ba5d12
+
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/treg.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "companyenrich.people.search",
+  "method": "POST",
+  "path": "/apis/v1/treg/companyenrich.people.search",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "expand",
+      "in": "query",
+      "required": false,
+      "description": "`education` adds the education block at extra credit cost per person",
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "required": true,
+    "content": {
+      "application/json": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "page": {
+              "enum": [
+                1
+              ],
+              "maximum": 1,
+              "minimum": 1,
+              "type": "integer",
+              "description": "1-based; page * pageSize may not exceed 10,000 — past that use the scroll route"
+            },
+            "pageSize": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer",
+              "description": "1-100, default 10. THIS IS THE PRICE — 2 credits per PERSON returned, so a default page costs 20 credits"
+            },
+            "domains": {
+              "description": "employer domains, up to 2,500 — the usual way to enumerate a company's staff",
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "examples": [
+                [
+                  "stripe.com"
+                ]
+              ]
+            },
+            "positionQuery": {
+              "description": "free-text matches on the person's CURRENT job title; resolve real titles first with the free /positions/autocomplete",
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "examples": [
+                [
+                  "Chief Executive Officer"
+                ]
+              ]
+            },
+            "seniority": {
+              "description": "one or more of owner, founder, c-suite, partner, vp, head, director, manager, senior, entry, intern. NOTE the hyphen in `c-suite` — an underscore is rejected with a bodyless HTTP 400",
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "examples": [
+                [
+                  "c-suite"
+                ]
+              ]
+            },
+            "department": {
+              "description": "hierarchical department slugs, e.g. c-suite/finance-executive, engineering-technical/data-science",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "countries": {
+              "description": "ISO 3166-1 alpha-2 codes",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "query": {
+              "description": "free-text match on the employer's name and domain, max 250 chars",
+              "type": "string"
+            },
+            "companyFilter": {
+              "description": "a nested company lookup — search people at companies matching firmographic criteria rather than a fixed domain list",
+              "type": "object"
+            },
+            "atCurrentCompanyAfter": {
+              "description": "UTC date — only people who joined their current employer after it; the job-change signal",
+              "type": "string"
+            },
+            "atCurrentCompanyBefore": {
+              "description": "UTC date — only people who joined before it",
+              "type": "string"
+            },
+            "atCurrentPositionAfter": {
+              "description": "UTC date — only people promoted into their current role after it",
+              "type": "string"
+            },
+            "atCurrentPositionBefore": {
+              "description": "UTC date",
+              "type": "string"
+            },
+            "education": {
+              "description": "school/degree filter",
+              "type": "object"
+            },
+            "exclude": {
+              "description": "people or companies to drop from the results",
+              "type": "object"
+            }
+          },
+          "required": [
+            "page",
+            "pageSize"
+          ]
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_units",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.0196,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_header",
+    "unit": "micro_usd",
+    "unit_rate_usd": 1e-06
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
+## 费用与请求规则
+
+按用量计费；默认请求预估费用：\$0.0196 USD（不是固定价格）。 声明的单位费率：每 micro_usd \$0.000001 USD。 最终费用以账户适用价格及实际结算为准。
+
+公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
+
+- **默认请求参考估价（USD）:** 0.0196
+- **声明的单位费率（USD）:** 1e-06
+- **计费单位:** micro&#95;usd
+- **计费依据:** response&#95;units
+- **公开参考倍率:** 1.0
+- **结算证据来源:** response&#95;header
+
+{/* aisa-contract-details:end */}
