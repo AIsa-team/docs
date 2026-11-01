@@ -41,7 +41,7 @@
           }
         },
         "x-aisa-document": {
-          "facts_hash": "b05bd10c1f65804d1365e16e8d0787c01638f0abdea53ee0e7f966e42df0f0b5",
+          "facts_hash": "825a2bcc4f802ef9c547fb102e44df243113f7eca00b3f135b29c729b16cf19b",
           "generator_version": "3",
           "protocol_version": "1",
           "schema_version": "1"
@@ -63,8 +63,8 @@
     ],
     "x-aisa-document": {
       "composer_version": "26",
-      "document_hash": "sha256:db7f1b10e4feec69fd541e25bc0aa70851eb7596fab4af0d9d2b0dc9e0f10238",
-      "facts_hash": "b05bd10c1f65804d1365e16e8d0787c01638f0abdea53ee0e7f966e42df0f0b5",
+      "document_hash": "sha256:993cf7ef4ec706681d069b3eacd1bb9a69adf51cdd148ce78a9f6ca34b8ebffd",
+      "facts_hash": "825a2bcc4f802ef9c547fb102e44df243113f7eca00b3f135b29c729b16cf19b",
       "generator_version": "3",
       "protocol_version": "1",
       "response_pending": [],
@@ -218,7 +218,16 @@
                 }
               }
             },
-            "description": "Generated images."
+            "description": "Generated images.",
+            "headers": {
+              "X-AISA-Customer-Cost-Micros-USD": {
+                "description": "The charge settled for this request, in micro-USD. Omitted for requests paid by x402 or MPP, which report payment through that protocol.",
+                "schema": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "default": {
             "description": "Validation, authentication, balance or provider error. Provider refusals, such as content checks, keep their 4xx status."
@@ -245,7 +254,7 @@
           "kind": "model_catalog"
         },
         "x-aisa-revision": {
-          "handler_contract_hash": "e9f28da56a2e0c6b37d2af892ab0ff032efb352b6846d48a006e2407d4a52903"
+          "handler_contract_hash": "5bdfd0468378848ae2cd9bde741c82821b5d14dc745fbe3f9b26e2db0ccda5a2"
         },
         "x-aisa-runtime-operation": {
           "method": "POST",
@@ -397,6 +406,11 @@
                       "description": "Unix seconds.",
                       "type": "integer"
                     },
+                    "customer_cost_micros_usd": {
+                      "description": "The charge collected for this task, in micro-USD; zero when a failed task's hold was released. Present once the task has ended and its charge is confirmed final; absent while it runs or settles, or when finality cannot be confirmed.",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
                     "error": {
                       "properties": {
                         "message": {
@@ -446,7 +460,16 @@
                 }
               }
             },
-            "description": "The task was created."
+            "description": "The task was created.",
+            "links": {
+              "retrieve": {
+                "description": "Poll the task with its id until status is completed, failed or cancelled.",
+                "operationId": "retrieveVideoGeneration",
+                "parameters": {
+                  "task_id": "$response.body#/id"
+                }
+              }
+            }
           },
           "503": {
             "content": {
@@ -483,7 +506,16 @@
                 }
               }
             },
-            "description": "Either the service or the provider was unavailable and no task is pending (retry later), or the submission needs reconciliation. Only the second has code video_submission_pending and a non-empty id: that task and its charge authorization are kept; retrieve it with the id and do not submit a replacement."
+            "description": "Either the service or the provider was unavailable and no task is pending (retry later), or the submission needs reconciliation. Only the second has code video_submission_pending and a non-empty id: that task and its charge authorization are kept; retrieve it with the id and do not submit a replacement.",
+            "links": {
+              "retrieve": {
+                "description": "Only when code is video_submission_pending and id is non-empty: retrieve the kept task instead of submitting a replacement. Other 503s keep no task.",
+                "operationId": "retrieveVideoGeneration",
+                "parameters": {
+                  "task_id": "$response.body#/id"
+                }
+              }
+            }
           },
           "default": {
             "description": "Validation, authentication, balance or provider error. Provider refusals, such as content checks, keep their 4xx status."
@@ -515,7 +547,7 @@
           "kind": "model_catalog"
         },
         "x-aisa-revision": {
-          "handler_contract_hash": "3f814885c369011a20079676ad88db6c8744cf3be09f3e7b061664aa2b41e94a"
+          "handler_contract_hash": "8d26301d9d57726c47e15aa36fda020233e17bc19f8a94bb87b4bd691ee5a029"
         },
         "x-aisa-runtime-operation": {
           "method": "POST",
@@ -573,6 +605,11 @@
                     },
                     "created_at": {
                       "description": "Unix seconds.",
+                      "type": "integer"
+                    },
+                    "customer_cost_micros_usd": {
+                      "description": "The charge collected for this task, in micro-USD; zero when a failed task's hold was released. Present once the task has ended and its charge is confirmed final; absent while it runs or settles, or when finality cannot be confirmed.",
+                      "minimum": 0,
                       "type": "integer"
                     },
                     "error": {
@@ -656,7 +693,7 @@
           "kind": "no_customer_charge"
         },
         "x-aisa-revision": {
-          "handler_contract_hash": "713455922bd554c36abe5350aa3cc8c90df92ad91e50bf76df0f73248bb79b4e"
+          "handler_contract_hash": "39336edf2b1227265beb4dad6c5ecf0db655aabe18cc5bca765e9437caa7e664"
         },
         "x-aisa-runtime-operation": {
           "method": "GET",
