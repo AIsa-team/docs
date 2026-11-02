@@ -271,13 +271,15 @@ class PublicationTests(unittest.TestCase):
                     self.assertEqual(replace.call_count, 3)
                 self.assertEqual(self.publication_bytes(), clean)
 
-    def test_expired_current_source_fails_without_touching_lastgood(self):
-        self.publish_report(); before = self.publication_bytes()
-        expired = self.now + timedelta(days=90)
+    def test_old_hash_bound_receipts_still_publish_long_after_review_hints(self):
+        self.publish_report()
+        later = self.now + timedelta(days=90)
         saved = json.loads((self.root / '.cache/source-reviews.json').read_bytes())
-        self.report['source_governance'] = source_report(self.root, saved['receipts'], checked_at=expired)
-        with self.assertRaises(ValueError): self.publish_report(expired)
-        self.assertEqual(self.publication_bytes(), before)
+        self.report['source_governance'] = source_report(self.root, saved['receipts'], checked_at=later)
+        self.assertEqual('passed', self.report['source_governance']['status'])
+        self.publish_report(later)
+        current = json.loads(self.publication_bytes()['current.json'])
+        self.assertLessEqual(datetime.fromisoformat(current['source_authorization_expires_at']), later)
 
     def test_current_discovery_uses_same_strict_acquirer(self):
         output = self.root / 'discovered'
@@ -368,9 +370,10 @@ class ProviderScopedAuthorizationTests(unittest.TestCase):
                          current['provider_authorization_expires_at'])
 
     def test_one_provider_failure_only_shortens_that_provider(self):
-        # beta's daily acquisition is overdue (due one hour ago); never extended.
+        # beta's acquisition hint passed an hour ago: informational only, no
+        # failure, and the hint is still never extended.
         overdue = self.assess({'beta.json': self.now - timedelta(hours=25)})
-        self.assertEqual(('passed', {'beta': ['beta.json']}), (overdue['status'], overdue['scoped_failures']))
+        self.assertEqual(('passed', {}), (overdue['status'], overdue['scoped_failures']))
         current = self.pointer()
         global_expiry = current['source_authorization_expires_at']
         self.assertEqual(overdue['sources']['source.json']['next_acquisition_due_at'], global_expiry)
@@ -392,8 +395,9 @@ class ProviderScopedAuthorizationTests(unittest.TestCase):
         self.assertEqual('failed', self.report['source_governance']['status'])
         with self.assertRaisesRegex(ValueError, 'not passed'): self.prepared()
         self.attempts.clear()
-        self.assertEqual('failed', self.assess({'source.json': self.now - timedelta(hours=25)})['status'])
-        with self.assertRaises(ValueError): self.prepared()
+        # An old but hash-bound global receipt still publishes.
+        self.assertEqual('passed', self.assess({'source.json': self.now - timedelta(hours=25)})['status'])
+        self.assertLessEqual(datetime.fromisoformat(self.pointer()['source_authorization_expires_at']), self.now)
 
     def test_unattributable_or_ambiguous_sources_keep_old_behaviour(self):
         self.assess({'beta.json': self.now - timedelta(hours=1)})
@@ -410,7 +414,7 @@ class ProviderScopedAuthorizationTests(unittest.TestCase):
         self.assertNotEqual(before['source_authorization_expires_at'], current['source_authorization_expires_at'])
         self.assertEqual(expected, current['source_authorization_expires_at'])
         self.assertEqual(set(current['provider_authorization_expires_at'].values()), {expected})
-        self.assertEqual('failed', self.assess({'beta.json': self.now - timedelta(hours=25)})['status'])
+        self.assertEqual('passed', self.assess({'beta.json': self.now - timedelta(hours=25)})['status'])
         # A legacy report without source_scope keeps the single-field pointer.
         legacy = copy.deepcopy(self.report)
         self.assess({'beta.json': self.now})

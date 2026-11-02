@@ -74,9 +74,11 @@ def source_scope_owners(report):
 def source_expiry(report, now):
     """Return (global expiry, provider expiries or None for the legacy shape).
 
-    Global sources must be fresh and unexpired. A provider-scoped source may be
-    overdue/fetch_failed or already due; it only shortens its providers' expiry
-    to its own existing due time, never extended and never past the global one.
+    Global sources must be fresh. A provider-scoped source may be
+    overdue/fetch_failed; it only shortens its providers' expiry to its own
+    due time, never extended and never past the global one. The returned
+    times are informational review hints: elapsed time never rejects a
+    publication, only source bytes, policy and receipt binding do.
     """
     governance = report.get('source_governance', {})
     require(governance.get('status') == 'passed' and governance.get('sources'), 'Source maintenance is not passed')
@@ -109,7 +111,6 @@ def source_expiry(report, now):
                     for provider in scoped:
                         scoped_due.setdefault(provider, []).append(value)
                 else:
-                    require(value > now, 'Source authorization expired')
                     due.append(value)
     require(due, 'No global source authorization')
     expiry = min(due)
@@ -206,7 +207,7 @@ def retained_publication(root, destination, files, now):
         require(canonical(old_current) == canonical(expected), 'Existing publication pointer differs')
         require(source_expiry(old_report, now) == (new_current['source_authorization_expires_at'],
                                                    new_current.get('provider_authorization_expires_at')),
-                'Existing source authorization differs or expired')
+                'Existing source authorization differs')
         require(old_report['runtime_acquisition_sha256'] == sha(previous['runtime-acquisition.json']),
                 'Existing report acquisition binding differs')
 
@@ -252,7 +253,7 @@ def retained_publication(root, destination, files, now):
                 'Existing acquisition semantics differ')
         return old_current
     except (ValueError, KeyError, TypeError, OSError, AttributeError, subprocess.TimeoutExpired):
-        # A damaged/missing/expired old bundle cannot authorize reuse. The caller
+        # A damaged/missing/differing old bundle cannot authorize reuse. The caller
         # may publish the newly validated bundle, never relabel old bytes passed.
         return None
 

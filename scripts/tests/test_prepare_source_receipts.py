@@ -51,7 +51,8 @@ class ReceiptPreparationTests(unittest.TestCase):
     def test_stale_and_wrong_source_receipts_never_become_current(self):
         stale = copy.deepcopy(self.packet)
         stale['receipts'][self.key] = acquisition_receipt(self.source, self.now - timedelta(days=2))
-        self.assertEqual(self.report(merge_evidence(stale))['status'], 'failed')
+        # Age alone is no staleness: only a different source hash is.
+        self.assertEqual(self.report(merge_evidence(stale))['status'], 'passed')
         self.source['content_hash'] = 'sha256:' + 'b' * 64
         self.assertEqual(self.report(merge_evidence(self.packet))['status'], 'not_assessed')
 

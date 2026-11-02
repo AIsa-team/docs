@@ -365,9 +365,10 @@ has 48 manual sources, 18 automatic sources and one pinned source. These policie
 are proposed test inputs until separately reviewed and published. Existing and
 future endpoints using a reviewed source inherit its policy. A new supplier still
 needs one authoritative source. After activation, automatic acquisition runs daily;
-manual and
-pinned reviews expire after at most 30 days. A newer pinned-revision signal blocks
-freshness until reviewed. Missing declarations or receipts cannot pass readiness.
+manual and pinned reviews carry a review hint of at most 30 days. Receipts never
+expire by elapsed time: they stay valid while the source hash and policy revision
+are unchanged, and a changed upstream needs a new review. A newer pinned-revision
+signal blocks freshness until reviewed. Missing declarations or receipts cannot pass readiness.
 
 Receipts live outside published contracts in `.cache/source-reviews.json` and
 dated workflow reports. They are keyed by source hash and policy revision. A

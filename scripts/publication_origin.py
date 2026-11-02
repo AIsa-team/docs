@@ -205,14 +205,9 @@ def verify_consumer_refs(root, expected_ref, refs, budget_start):
                 and candidate['authorization_fingerprint'] == selected['authorization_fingerprint'],
                 'Consumer contract or active source authorization differs')
         proofs[ref] = candidate
-    # Each graph assessment can be slow. Revalidate active authorization after all
-    # inspections, and reject a formal publication advance; code-only main
-    # commits do not change remote_formal_ref. Never advance the recorded clock.
-    for candidate in proofs.values():
-        require(instant(candidate['authorization_expires_at']) > datetime.now(timezone.utc),
-                'Consumer source authorization expired during assessment')
-    require(instant(selected['authorization_expires_at']) > datetime.now(timezone.utc),
-            'Latest source authorization expired during assessment')
+    # Each graph assessment can be slow. Reject a formal publication advance;
+    # code-only main commits do not change remote_formal_ref. Never advance the
+    # recorded clock. authorization_expires_at is informational, never a gate.
     require(remote_formal_ref() == latest_ref, 'Official formal publication changed during assessment')
     return {'status': 'passed', 'expected_docs_ref': expected_ref, 'latest_docs_ref': latest_ref,
             'contract_release': selected['contract_release'], 'budget_start': selected['budget_start'],

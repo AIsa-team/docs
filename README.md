@@ -351,15 +351,17 @@ file to the providers whose operations in `openapi/<provider>.json` cite its
 operation, by a document that is not a `coverage.json` provider, or whose
 documents cannot be read maps to `[]` and is **global**. Policy errors, and any
 source without a valid review receipt, stay global. Governance `failed` means a
-global source is `overdue`/`fetch_failed` or any policy error exists; overdue or
-failed attributed sources are listed in `scoped_failures` per provider instead.
+global source is `fetch_failed`, has a pending pinned update, or any policy
+error exists; such attributed sources are listed in `scoped_failures` per
+provider instead. Elapsed time never fails a source: a valid receipt stays fresh
+for as long as its source hash and policy revision are unchanged.
 `source_authorization_expires_at` is the earliest `review_due_at` or
-`next_acquisition_due_at` over global sources only, never an invented publication
-TTL; export refuses when it is already due. `provider_authorization_expires_at`
-holds one entry per readiness provider: the minimum of that global time and the
-due times of the provider's attributed sources, which are never extended and may
-already be past. Consumers recompute both fields from the hash-bound report and
-stop presenting a provider once its own time passes. A report without
+`next_acquisition_due_at` over global sources only, and
+`provider_authorization_expires_at` holds one entry per readiness provider (the
+minimum of that global time and the due times of the provider's attributed
+sources). Both are informational review/refresh hints that may already be past;
+consumers recompute them from the hash-bound report for equality but never
+reject or withhold a publication or provider because a time passed. A report without
 `source_scope` (and a pointer without the provider map) keeps the old meaning:
 every source is global.
 
