@@ -119,7 +119,10 @@ class OxylabsWebResponseTests(unittest.TestCase):
                 self.assertTrue(validator.is_valid(body), body)
         for body in [{'results': [{'html': 'x'}]}, {'status': 200, 'state': 'faulted', 'results': [{}]},
                      {'state': 'done', 'status': 500, 'results': [{}]}, {'status': 200, 'results': []},
-                     {'status': 200, 'results': [None]}, {'status': 200, 'results': [{'html': False}]}]:
+                     {'status': 200, 'results': [None]}, {'status': 200, 'results': [{'html': False}]},
+                     {'state': 'done', 'results': [{}]},
+                     {'state': 'done', 'results': [{'html': None, 'markdown': None}]},
+                     {'state': 'done', 'results': [{}, {'html': 'later output'}]}]:
             self.assertFalse(validator.is_valid(body), body)
 
     def test_original_review_receipts_bind_both_export_and_publisher_packets(self):
