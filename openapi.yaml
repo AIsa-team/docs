@@ -134966,7 +134966,7 @@
                 "header": "X-AISA-Cost-Mode"
                 "value": "quote"
             "x-aisa-document":
-              "facts_hash": "825a2bcc4f802ef9c547fb102e44df243113f7eca00b3f135b29c729b16cf19b"
+              "facts_hash": "91bf641454e0de177731cf163176d280d129e69966cbcc50fec1085b586240bc"
               "generator_version": "3"
               "protocol_version": "1"
               "schema_version": "1"
@@ -134980,8 +134980,8 @@
         "description": "Image and video generation on AIsa models. The model field selects the model; GET /v1/models lists\
           \ the enabled image and video models and the routes each one serves."
         "display_name": "Media Generation"
-        "document_hash": "sha256:993cf7ef4ec706681d069b3eacd1bb9a69adf51cdd148ce78a9f6ca34b8ebffd"
-        "facts_hash": "825a2bcc4f802ef9c547fb102e44df243113f7eca00b3f135b29c729b16cf19b"
+        "document_hash": "sha256:d416f1261f857192081b8528f5b59209eede827a0dcc0b58f5a0e65360d9a8ac"
+        "facts_hash": "91bf641454e0de177731cf163176d280d129e69966cbcc50fec1085b586240bc"
         "registry_provider": "media-generation"
         "source": "runtime"
         "x-aisa-capabilities":
@@ -626098,6 +626098,252 @@
         "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/openai-images-generations.json"
       "x-aisa-status": "enabled"
       "x-aisa-validation": "mixed"
+  "/v1/models":
+    "get":
+      "description": |-
+        Lists the models this API key can call, with each model's type and the routes it serves. Use the id as the model field of the route a model lists, for example an image model with POST /v1/images/generations. Filter by model_type to list only image or video models.
+
+        <!-- aisa-pricing:start -->
+        A request reference price is not currently available; use a request quote where supported. Account-specific pricing and final settlement may differ.
+        <!-- aisa-pricing:end -->
+      "operationId": "listModels"
+      "parameters":
+      - "description": "Comma-separated model types to include: text, image, video, embedding. Omitted lists every model."
+        "example": "image,video"
+        "in": "query"
+        "name": "model_type"
+        "required": false
+        "schema":
+          "type": "string"
+      "responses":
+        "200":
+          "content":
+            "application/json":
+              "schema":
+                "properties":
+                  "data":
+                    "items":
+                      "properties":
+                        "aisa":
+                          "properties":
+                            "capabilities":
+                              "items":
+                                "type": "string"
+                              "type": "array"
+                            "display_name":
+                              "type": "string"
+                            "model_type":
+                              "description": "text, image, video or embedding."
+                              "type": "string"
+                            "preferred_route":
+                              "description": "The key of the route to use by default."
+                              "type": "string"
+                            "routes":
+                              "items":
+                                "properties":
+                                  "key":
+                                    "description": "Route key, for example image-generation or video-generation."
+                                    "type": "string"
+                                  "method":
+                                    "type": "string"
+                                  "path":
+                                    "description": "The public path to call with this model."
+                                    "type": "string"
+                                  "preferred":
+                                    "type": "boolean"
+                                "required":
+                                - "key"
+                                - "path"
+                                - "method"
+                                "type": "object"
+                              "type": "array"
+                          "required":
+                          - "display_name"
+                          - "capabilities"
+                          - "model_type"
+                          - "routes"
+                          "type": "object"
+                        "created":
+                          "description": "Unix seconds."
+                          "type": "integer"
+                        "id":
+                          "description": "The model name to send as model."
+                          "type": "string"
+                        "object":
+                          "const": "model"
+                          "type": "string"
+                        "owned_by":
+                          "type": "string"
+                        "recharge_required":
+                          "description": "Whether calling it requires a paid balance."
+                          "type": "boolean"
+                      "required":
+                      - "id"
+                      - "object"
+                      - "created"
+                      - "owned_by"
+                      - "recharge_required"
+                      - "aisa"
+                      "type": "object"
+                    "type": "array"
+                  "object":
+                    "const": "list"
+                    "type": "string"
+                "required":
+                - "object"
+                - "data"
+                "type": "object"
+          "description": "The models."
+        "default":
+          "description": "Validation, authentication, balance or provider error. Provider refusals, such as content checks,\
+            \ keep their 4xx status."
+      "security":
+      - "bearerAuth": []
+      "servers":
+      - "url": "https://api.aisa.one"
+      "summary": "List models"
+      "x-aisa-capabilities":
+        "idempotency": "Idempotency-Key"
+        "max_price": "X-AISA-Max-Price-USD"
+        "mpp": false
+        "quote":
+          "reason": "cost_quote_unsupported"
+          "supported": false
+        "x402": false
+      "x-aisa-catalog-id": "media-generation"
+      "x-aisa-contract-source": "handler"
+      "x-aisa-docs-url": "https://aisa.one/docs/api-reference/media-generation/listModels"
+      "x-aisa-pricing":
+        "description": "Reading the model catalog is free."
+        "kind": "no_customer_charge"
+      "x-aisa-provider": "media-generation"
+      "x-aisa-registry-provider": "media-generation"
+      "x-aisa-revision":
+        "handler_contract_hash": "0ec38296791a41ddf53a4e52e06fa30a7fce2dde8cd6651354102ae62d05e30f"
+      "x-aisa-runtime-operation":
+        "method": "GET"
+        "operation_id": "listModels"
+        "path": "/v1/models"
+      "x-aisa-status": "enabled"
+      "x-aisa-validation": "runtime"
+  "/v1/models/{model}":
+    "get":
+      "description": |-
+        Returns one model this API key can call, by id or alias, with its type and the routes it serves.
+
+        <!-- aisa-pricing:start -->
+        A request reference price is not currently available; use a request quote where supported. Account-specific pricing and final settlement may differ.
+        <!-- aisa-pricing:end -->
+      "operationId": "retrieveModel"
+      "parameters":
+      - "description": "A model id or alias."
+        "in": "path"
+        "name": "model"
+        "required": true
+        "schema":
+          "type": "string"
+      "responses":
+        "200":
+          "content":
+            "application/json":
+              "schema":
+                "properties":
+                  "aisa":
+                    "properties":
+                      "capabilities":
+                        "items":
+                          "type": "string"
+                        "type": "array"
+                      "display_name":
+                        "type": "string"
+                      "model_type":
+                        "description": "text, image, video or embedding."
+                        "type": "string"
+                      "preferred_route":
+                        "description": "The key of the route to use by default."
+                        "type": "string"
+                      "routes":
+                        "items":
+                          "properties":
+                            "key":
+                              "description": "Route key, for example image-generation or video-generation."
+                              "type": "string"
+                            "method":
+                              "type": "string"
+                            "path":
+                              "description": "The public path to call with this model."
+                              "type": "string"
+                            "preferred":
+                              "type": "boolean"
+                          "required":
+                          - "key"
+                          - "path"
+                          - "method"
+                          "type": "object"
+                        "type": "array"
+                    "required":
+                    - "display_name"
+                    - "capabilities"
+                    - "model_type"
+                    - "routes"
+                    "type": "object"
+                  "created":
+                    "description": "Unix seconds."
+                    "type": "integer"
+                  "id":
+                    "description": "The model name to send as model."
+                    "type": "string"
+                  "object":
+                    "const": "model"
+                    "type": "string"
+                  "owned_by":
+                    "type": "string"
+                  "recharge_required":
+                    "description": "Whether calling it requires a paid balance."
+                    "type": "boolean"
+                "required":
+                - "id"
+                - "object"
+                - "created"
+                - "owned_by"
+                - "recharge_required"
+                - "aisa"
+                "type": "object"
+          "description": "The model."
+        "404":
+          "description": "No such model, or it has no route this API key can use."
+        "default":
+          "description": "Validation, authentication, balance or provider error. Provider refusals, such as content checks,\
+            \ keep their 4xx status."
+      "security":
+      - "bearerAuth": []
+      "servers":
+      - "url": "https://api.aisa.one"
+      "summary": "Retrieve a model"
+      "x-aisa-capabilities":
+        "idempotency": "Idempotency-Key"
+        "max_price": "X-AISA-Max-Price-USD"
+        "mpp": false
+        "quote":
+          "reason": "cost_quote_unsupported"
+          "supported": false
+        "x402": false
+      "x-aisa-catalog-id": "media-generation"
+      "x-aisa-contract-source": "handler"
+      "x-aisa-docs-url": "https://aisa.one/docs/api-reference/media-generation/retrieveModel"
+      "x-aisa-pricing":
+        "description": "Reading the model catalog is free."
+        "kind": "no_customer_charge"
+      "x-aisa-provider": "media-generation"
+      "x-aisa-registry-provider": "media-generation"
+      "x-aisa-revision":
+        "handler_contract_hash": "104c37fc3880cd4a91d6676e9ac7970632530261f43f7492cff5eb591d82f8f1"
+      "x-aisa-runtime-operation":
+        "method": "GET"
+        "operation_id": "retrieveModel"
+        "path": "/v1/models/{model}"
+      "x-aisa-status": "enabled"
+      "x-aisa-validation": "runtime"
   "/v1/video/generations":
     "post":
       "description": |-
