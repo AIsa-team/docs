@@ -172,7 +172,8 @@ class MetadataTests(unittest.TestCase):
         self.native['one']['paths']['/request']['get']['x-aisa-source'] = sources['scoped']
         (self.root / 'openapi/one.json').write_bytes(canonical(self.native['one']))
         (self.root / 'openapi/coverage.json').write_bytes(canonical({'providers': {'old': []}}))
-        self.assertEqual(source_report(self.root, observed, checked_at=now)['status'], 'failed')
+        # Before projection the stale coverage leaves the scoped source global.
+        self.assertEqual(source_report(self.root, observed, checked_at=now)['source_scope']['sources']['scoped.json'], [])
         projected = self.project()
         (self.root / 'openapi/coverage.json').write_bytes(canonical(projected['coverage']))
         governance = source_report(self.root, observed, checked_at=now)

@@ -36,14 +36,14 @@ class GovernanceTests(unittest.TestCase):
         fake = acquisition_receipt(source, self.now)
         self.assertEqual('unknown', observation(source, {receipt_key(source): fake}, self.now)['freshness'])
 
-    def test_manual_expiry_and_attributable_recovery(self):
+    def test_old_manual_review_never_expires_while_source_bytes_are_unchanged(self):
         source = self.source()
         before = copy.deepcopy(source)
-        receipts = {receipt_key(source): self.manual_receipt(source, self.now - timedelta(days=31))}
-        overdue = observation(source, receipts, self.now)
-        self.assertEqual(('manual_overdue', 'overdue'), (overdue['status'], overdue['freshness']))
-        receipts[receipt_key(source)] = self.manual_receipt(source)
-        self.assertEqual('fresh', observation(source, receipts, self.now)['freshness'])
+        receipts = {receipt_key(source): self.manual_receipt(source, self.now - timedelta(days=400))}
+        old = observation(source, receipts, self.now)
+        self.assertEqual(('manual_due', 'fresh'), (old['status'], old['freshness']))
+        # The due time stays as an informational review hint.
+        self.assertLess(old['review_due_at'], self.now.isoformat())
         self.assertEqual(before, source)
 
     def test_mismatched_hash_policy_future_or_missing_review_attribution_invalid(self):
@@ -115,10 +115,12 @@ class GovernanceTests(unittest.TestCase):
             self.assertEqual('failed', later['status'])
             self.assertEqual('fetch_failed', later['sources']['p.json']['freshness'])
 
-    def test_automatic_receipt_expires_at_daily_acquisition_limit(self):
+    def test_automatic_receipt_does_not_expire_after_acquisition_interval(self):
         source = self.source('automatic')
-        receipt = acquisition_receipt(source, self.now - timedelta(hours=24))
-        self.assertEqual('overdue', observation(source, {receipt_key(source): receipt}, self.now)['freshness'])
+        receipt = acquisition_receipt(source, self.now - timedelta(days=60))
+        result = observation(source, {receipt_key(source): receipt}, self.now)
+        self.assertEqual(('unchanged', 'fresh'), (result['status'], result['freshness']))
+        self.assertLess(result['next_acquisition_due_at'], self.now.isoformat())
 
     def test_inventory_policy_migration_needs_no_deployment_or_fabricated_review(self):
         from catalog_fixture import catalog_root
@@ -158,7 +160,10 @@ class GovernanceTests(unittest.TestCase):
             root = self.scoped_root(temp, source, operation)
             self.assertEqual({'p.json': ['prov']}, source_scope(root, {'p.json': source['content_hash']})['sources'])
             overdue = {receipt_key(source): self.manual_receipt(source, self.now - timedelta(days=31))}
-            report = source_report(root, overdue, self.now)
+            # Elapsed time alone is no failure.
+            self.assertEqual(('passed', {}), (lambda r: (r['status'], r['scoped_failures']))(source_report(root, overdue, self.now)))
+            failed = {receipt_key(source): {'status': 'fetch_failed', 'checked_at': (self.now - timedelta(hours=1)).isoformat()}}
+            report = source_report(root, overdue, self.now, failed)
             self.assertEqual(('passed', {'prov': ['p.json']}), (report['status'], report['scoped_failures']))
             # No valid receipt means no due time to bound the provider: global.
             report = source_report(root, {}, self.now)
@@ -176,7 +181,8 @@ class GovernanceTests(unittest.TestCase):
             root = self.scoped_root(temp, source, operation)
             self.assertEqual({'p.json': []}, source_scope(root, {'p.json': source['content_hash']})['sources'])
             overdue = {receipt_key(source): self.manual_receipt(source, self.now - timedelta(days=31))}
-            self.assertEqual('failed', source_report(root, overdue, self.now)['status'])
+            failed = {receipt_key(source): {'status': 'fetch_failed', 'checked_at': (self.now - timedelta(hours=1)).isoformat()}}
+            self.assertEqual('failed', source_report(root, overdue, self.now, failed)['status'])
 
     def test_new_source_without_owner_policy_fails_governance(self):
         errors = policy_errors({'kind': 'manual', 'url': 'https://official.example.invalid'})

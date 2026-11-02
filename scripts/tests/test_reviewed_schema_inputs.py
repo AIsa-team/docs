@@ -178,7 +178,7 @@ class ReviewedInputTests(unittest.TestCase):
         self.write('.cache/source-reviews.json', bundle.canonical(current))
         observed = assessment.assess_canonical_inputs(self.root, facts, checked_at=self.now)
         self.assertEqual(observed['source_observations']['one.json']['last_successful_review_at'], old.isoformat())
-        self.assertEqual(observed['source_observations']['one.json']['freshness'], 'overdue')
+        self.assertEqual(observed['source_observations']['one.json']['freshness'], 'fresh')
         self.assertNotEqual(observed['source_receipts_sha256'],
                             observed['source_input_provenance']['input_source_receipts_sha256'])
         self.write(bundle.INPUT_CONTEXT_PATH, bundle.canonical(self.context) + b' ')
@@ -258,9 +258,10 @@ class ReviewedInputTests(unittest.TestCase):
     def test_input_gate_checks_current_authorization_and_reuses_unchanged_real_receipt(self):
         facts = self.facts_fixture()
         with patch.object(gate, 'inspect_publication', return_value={'expected_docs_ref': self.formal}):
-            with self.assertRaisesRegex(ValueError, 'Current input source authorization'):
-                gate.assess_reviewed_input(self.root, facts, self.formal,
-                    Path(self.temp.name) / 'expired', checked_at=self.now + timedelta(days=2))
+            # Elapsed time alone never fails the hash-bound input authorization.
+            later = gate.assess_reviewed_input(self.root, facts, self.formal,
+                Path(self.temp.name) / 'later', checked_at=self.now + timedelta(days=2))
+            self.assertEqual(later['source_governance']['status'], 'passed')
             previous = self.ref
             receipt = (self.root / bundle.INPUT_RECEIPTS_PATH).read_bytes()
             self.write('openapi/registry.yaml', self.registry.replace(b'display_name: One', b'display_name: Reviewed'))
@@ -297,9 +298,9 @@ class ReviewedInputTests(unittest.TestCase):
             members = bundle.strict_json((Path(self.temp.name) / 'with-attachments/bundle/manifest.json').read_bytes())['files']
             self.assertFalse(any(row['path'].removeprefix('input/') in attachments for row in members))
             self.assertEqual((self.root / bundle.INPUT_RECEIPTS_PATH).read_bytes(), original_receipt)
-            with self.assertRaisesRegex(ValueError, 'Current input source authorization'):
-                gate.assess_reviewed_input(self.root, facts, self.formal,
-                    Path(self.temp.name) / 'expired-attachments', checked_at=self.now + timedelta(days=2))
+            later = gate.assess_reviewed_input(self.root, facts, self.formal,
+                Path(self.temp.name) / 'later-attachments', checked_at=self.now + timedelta(days=2))
+            self.assertEqual(later['source_governance']['status'], 'passed')
             self.write('scripts/compose_openapi.py', b'raise AssertionError("mixed compiler edit")\n')
             self.commit('Disallowed compiler mixed with reviewed source')
             with self.assertRaisesRegex(ValueError, 'closed source-only'):

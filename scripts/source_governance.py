@@ -102,12 +102,10 @@ def observation(source, receipts, checked_at, status=None):
     due = last + timedelta(days=source["review_period_days"]) if last else None
     mode = source.get("refresh_policy")
     errors = policy_errors(source)
-    if errors or not valid:
-        freshness = "unknown"
-    elif due <= checked_at or (mode == "automatic" and last + timedelta(hours=source["refresh_interval_hours"]) <= checked_at):
-        freshness = "overdue"
-    else:
-        freshness = "fresh"
+    # A valid receipt is bound to the committed source hash and policy revision,
+    # so it stays fresh until those bytes change. Elapsed time never expires it:
+    # review_due_at / next_acquisition_due_at are scheduling hints only.
+    freshness = "unknown" if errors or not valid else "fresh"
     if status == "fetch_failed":
         freshness = "fetch_failed"
     signal = receipt.get('latest_revision') if isinstance(receipt, dict) else None
@@ -118,7 +116,7 @@ def observation(source, receipts, checked_at, status=None):
         if errors or not valid:
             outcome = "unknown"
         elif mode == "manual":
-            outcome = "manual_overdue" if freshness == "overdue" else "manual_due"
+            outcome = "manual_due"
         elif mode == "pinned":
             outcome = "pinned"
         else:

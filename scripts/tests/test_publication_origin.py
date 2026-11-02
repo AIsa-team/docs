@@ -141,7 +141,7 @@ class OriginTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'Code-only ref'):
                     origin.verify_consumer_refs(self.root, self.base, [self.ref], selected['budget_start'])
 
-    def test_formal_advance_and_expiry_during_assessment_fail_closed(self):
+    def test_formal_advance_fails_closed_and_past_expiry_hint_does_not(self):
         selected = {'expected_docs_ref': self.ref, 'contract_release': 'c' * 64,
                     'budget_start': self.receipt['budget_start'], 'clock_docs_ref': self.ref,
                     'authorization_fingerprint': {}, 'authorization_expires_at': '2099-01-01T00:00:00Z'}
@@ -152,8 +152,7 @@ class OriginTests(unittest.TestCase):
         selected['authorization_expires_at'] = '2000-01-01T00:00:00Z'
         with patch.object(origin, 'select', return_value=selected), \
              patch.object(origin, 'remote_formal_ref', return_value=self.ref):
-            with self.assertRaisesRegex(ValueError, 'expired during assessment'):
-                origin.verify_consumer_refs(self.root, self.ref, [self.ref], selected['budget_start'])
+            self.assertEqual('passed', origin.verify_consumer_refs(self.root, self.ref, [self.ref], selected['budget_start'])['status'])
 
     def test_consumer_failed_full_inspection_is_not_equivalence(self):
         selected = {'expected_docs_ref': self.ref, 'contract_release': 'c' * 64,
@@ -277,11 +276,10 @@ class OriginTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'not an ancestor'):
                 origin.inspect_publication(self.root, self.ref, historical=True)
 
-    def test_graph_artifact_or_current_drift_and_source_expiry_rejected(self):
+    def test_graph_artifact_or_current_drift_rejected_but_elapsed_time_is_not(self):
         with self.assertRaises(ValueError):
             origin.verify_graph(self.root, self.receipt, b'{}', self.end)
-        with self.assertRaises(ValueError):
-            origin.verify_graph(self.root, self.receipt, self.artifact, self.end + timedelta(days=3))
+        origin.verify_graph(self.root, self.receipt, self.artifact, self.end + timedelta(days=3))
         path = self.root/'openapi.yaml'; path.write_text(path.read_text()+'# unassessed\n')
         with self.assertRaises(ValueError):
             origin.verify_graph(self.root, self.receipt, self.artifact, self.end)

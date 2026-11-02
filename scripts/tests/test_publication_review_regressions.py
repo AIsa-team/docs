@@ -269,23 +269,11 @@ class SourceReviewWorkflowTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(calls[-1], failure)
 
-    def test_acquisition_window_step_runs_before_candidate_composition(self):
-        workflow = yaml.safe_load((REPO / '.github/workflows/refresh-upstream.yml').read_text())
-        names = [step.get('name') for step in workflow['jobs']['refresh']['steps']]
-        window = names.index('Fail when an automatic source acquisition lapses within 6 hours')
-        self.assertLess(names.index('Retain successful observations without refreshing failed reviews'), window)
-        self.assertLess(window, names.index('Compose and assess the complete source review candidate'))
-        step = workflow['jobs']['refresh']['steps'][window]
-        self.assertIn('--audit-only', step['run'])
-        self.assertIn('--due-within-hours 6', step['run'])
-        self.assertNotIn('if', step)
-        # A lapse must not suppress the review PR; it is reported at the end.
-        self.assertTrue(step['continue-on-error'])
-        self.assertEqual(step['id'], 'acquisition-window')
-        final = workflow['jobs']['refresh']['steps'][-1]
-        self.assertEqual(final['if'], "steps.acquisition-window.outcome == 'failure'")
-        self.assertIn('exit 1', final['run'])
-        self.assertGreater(names.index(final['name']), names.index('Report acquisition, policy or missing/overdue review failures'))
+    def test_refresh_has_no_time_based_acquisition_window(self):
+        # Receipts are bound to source bytes, not to elapsed time.
+        text = (REPO / '.github/workflows/refresh-upstream.yml').read_text()
+        self.assertNotIn('--due-within-hours', text)
+        self.assertNotIn('acquisition-window', text)
 
     def test_candidate_cannot_replace_formal_publication_pointer(self):
         result, _ = self.run_candidate_step(change_pointer=True)

@@ -131,7 +131,8 @@ class CanonicalInputTests(unittest.TestCase):
         self.saved['receipts'][receipt_key(self.source)] = acquisition_receipt(self.source, old)
         self.write_receipts()
         result = self.assess()
-        self.assertEqual(result['source_observations']['example.json']['freshness'], 'overdue')
+        # Age alone never expires a hash-bound receipt, but it is never renewed either.
+        self.assertEqual(result['source_observations']['example.json']['freshness'], 'fresh')
         self.assertEqual(result['source_observations']['example.json']['last_successful_review_at'], old.isoformat())
         self.saved['attempts'][receipt_key(self.source)] = {'status': 'fetch_failed', 'checked_at': self.now.isoformat()}
         self.write_receipts()
