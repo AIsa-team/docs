@@ -1,0 +1,1037 @@
+---
+title: "Send message"
+openapi: "openapi/aisa-social.json POST /apis/v1/social/inbox/conversations/{conversationId}/messages"
+x-aisa-operation-id: "post_aisa_social_apis_v1_social_inbox_conversatio_3ceefe"
+---
+
+
+{/* aisa-contract-details:start */}
+
+## Request contract
+
+- **Method and path:** POST /apis/v1/social/inbox/conversations/&#123;conversationId&#125;/messages
+- **Availability:** enabled
+- **Request URL template:** `https://dev-api.aisa.one/apis/v1/social/inbox/conversations/{conversationId}/messages`
+- **conversationId:** path; required
+- **Idempotency-Key:** header; optional
+- **Runtime facts:** 3b079542717865bb181780f4e8f478e85df8818d7d6e2169cae8faaf316fb147
+
+[Complete OpenAPI definition](https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev/openapi/aisa-social.json)
+
+Effective request and pricing declaration (including authentication and referenced schemas):
+
+```json
+{
+  "operationId": "post_aisa_social_apis_v1_social_inbox_conversatio_3ceefe",
+  "method": "POST",
+  "path": "/apis/v1/social/inbox/conversations/{conversationId}/messages",
+  "servers": [
+    {
+      "url": "https://dev-api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "description": "Opaque conversation identifier, accepted verbatim from the list endpoint or from the conversationId on inbox webhooks. Format not to be assumed.",
+      "in": "path",
+      "name": "conversationId",
+      "required": true,
+      "schema": {
+        "type": "string"
+      }
+    },
+    {
+      "description": "Passed to the channel: a retry with the same key within 24 hours returns the first result instead of acting twice. AIsa never retries a write for you.",
+      "in": "header",
+      "name": "Idempotency-Key",
+      "required": false,
+      "schema": {
+        "maxLength": 191,
+        "minLength": 1,
+        "type": "string"
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "example": {
+          "accountId": "acc_7Hq2Lm9Xc4Rt8Vw1Nb6Ks3",
+          "attachmentType": "image",
+          "attachmentUrl": "https://cdn.example.com/property.jpg",
+          "buttons": [
+            {
+              "payload": "btn_0",
+              "title": "Yes",
+              "type": "postback"
+            },
+            {
+              "payload": "btn_1",
+              "title": "No",
+              "type": "postback"
+            }
+          ],
+          "message": "Reply yes to continue."
+        },
+        "schema": {
+          "properties": {
+            "accountId": {
+              "description": "One of your social accounts (acc_...).",
+              "pattern": "^acc_[0-9A-Za-z]{22}$",
+              "type": "string"
+            },
+            "attachmentName": {
+              "description": "WhatsApp only. Display name for a document sent via attachmentUrl with attachmentType: file (e.g. \"Report.pdf\"). Maps to the recipient's file name; without it WhatsApp derives the name from the URL and shows \"Untitled\". Ignored for image/video/audio and for binary uploads (which use the uploaded file's name).",
+              "type": "string"
+            },
+            "attachmentType": {
+              "description": "Type of attachment. Defaults to file if not specified.",
+              "enum": [
+                "image",
+                "video",
+                "audio",
+                "file"
+              ],
+              "type": "string"
+            },
+            "attachmentUrl": {
+              "description": "URL of the attachment to send (image, video, audio, or file). Must be publicly accessible. For binary file uploads, use multipart/form-data instead.\n\nOn WhatsApp, an image, video, or file combined with `buttons` renders as the header of one interactive reply-button message. Audio cannot be combined with buttons.",
+              "type": "string"
+            },
+            "buttons": {
+              "description": "Action buttons. Max 3 items. Mutually exclusive with quickReplies.\n\n**Instagram / Facebook.** Also mutually exclusive with `template`: a Meta message carries one body shape, so sending both is a 400 rather than a silent drop of the buttons.\n\nThe buttons and `message` render as Meta's button_template (one bubble with the text and the buttons below it), so `message` must be 640 characters or less when buttons are attached (400 otherwise).\n\n**WhatsApp.** Buttons always render as interactive reply buttons. Only `title` and `payload` are used; `type`, `url`, and `phone` are ignored. WhatsApp has no URL/phone button in this field: use the `interactive` field with `type: cta_url` for a link button.\n\n`payload` becomes the button reply ID delivered on the `message.received` webhook when the user taps. For a simple reply-button message, provide `title` + `payload` and set `type: postback`, e.g. `{ \"type\": \"postback\", \"title\": \"Yes\", \"payload\": \"yes\" }`.\n\nCombine `buttons` with `attachmentUrl` and `attachmentType` `image`, `video`, or `file` to render one WhatsApp message with a media header, body text and reply buttons. Audio is not a supported interactive header and returns 400 when combined with buttons.",
+              "items": {
+                "properties": {
+                  "payload": {
+                    "description": "Payload for postback-type buttons. On WhatsApp, this is the reply ID returned on the message.received webhook when the button is tapped.",
+                    "type": "string"
+                  },
+                  "phone": {
+                    "description": "Phone number for phone-type buttons (Facebook only)",
+                    "type": "string"
+                  },
+                  "title": {
+                    "description": "Button label (max 20 chars)",
+                    "maxLength": 20,
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "Button type. phone is Facebook only. Ignored on WhatsApp (buttons always render as reply buttons).",
+                    "enum": [
+                      "url",
+                      "postback",
+                      "phone"
+                    ],
+                    "type": "string"
+                  },
+                  "url": {
+                    "description": "URL for url-type buttons (Facebook/Instagram only)",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title",
+                  "type"
+                ],
+                "type": "object"
+              },
+              "maxItems": 3,
+              "type": "array"
+            },
+            "category": {
+              "description": "WhatsApp only (Meta Direct Send). Sends a business-initiated UTILITY message without an approved template, e.g. outside the 24-hour customer service window. Meta matches or auto-creates a template asynchronously.\n\n- The WhatsApp Business Account must be eligible for Direct Send; otherwise the send fails, telling you to use an approved message template.\n- Supported only for text messages (link preview ok) and interactive messages (reply buttons, CTA URL buttons, voice-call button, header of text/image/video/document).\n- Cannot be combined with template, attachments, location, or contacts.\n- Utility messages only; marketing content is not allowed.\n- Accepted on the JSON body only, not on multipart requests.",
+              "enum": [
+                "utility"
+              ],
+              "type": "string"
+            },
+            "cc": {
+              "description": "Email threads only (Google / Microsoft accounts, JSON body only). Extra recipients copied on the reply.",
+              "items": {
+                "format": "email",
+                "type": "string"
+              },
+              "maxItems": 50,
+              "type": "array"
+            },
+            "channel": {
+              "description": "iMessage only (JSON body only). Overrides the delivery channel for this one send; the provider otherwise picks it automatically. The sender must carry the matching add-on (SMS, RCS or WhatsApp), or the send fails. Not a default to set on every request. Rejected with 400 on other platforms.",
+              "enum": [
+                "imessage",
+                "sms",
+                "rcs",
+                "whatsapp"
+              ],
+              "type": "string"
+            },
+            "contactCard": {
+              "description": "iMessage only (JSON body only). When `true`, attaches the sender's contact card (vCard) so the recipient can save the sender. Counts as message content on its own, so `message` becomes optional.",
+              "type": "boolean"
+            },
+            "contacts": {
+              "description": "WhatsApp-only. Send one or more contact cards.",
+              "items": {
+                "properties": {
+                  "emails": {
+                    "items": {
+                      "properties": {
+                        "email": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "name": {
+                    "properties": {
+                      "first_name": {
+                        "type": "string"
+                      },
+                      "formatted_name": {
+                        "description": "Full display name.",
+                        "type": "string"
+                      },
+                      "last_name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "formatted_name"
+                    ],
+                    "type": "object"
+                  },
+                  "phones": {
+                    "items": {
+                      "properties": {
+                        "phone": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "description": "e.g. CELL, WORK, HOME.",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "effect": {
+              "description": "iMessage only (JSON body only). Apple screen/bubble animation played when the message arrives. Rejected with 400 on other platforms.",
+              "enum": [
+                "slam",
+                "loud",
+                "gentle",
+                "invisibleInk",
+                "echo",
+                "spotlight",
+                "balloons",
+                "confetti",
+                "love",
+                "lasers",
+                "fireworks",
+                "shootingStar",
+                "celebration"
+              ],
+              "type": "string"
+            },
+            "interactive": {
+              "description": "WhatsApp only. Rich interactive payload for list messages, CTA URL buttons, Flow prompts, location requests, voice-call buttons and commerce messages (single product, product list, catalog, carousel). The shape mirrors Meta's Cloud API `interactive` object for the types in the enum below.\n\nWhen set, it takes priority over `buttons` and `quickReplies`. For simple button replies (WhatsApp's `interactive.type: \"button\"`) use `buttons` / `quickReplies` instead: that abstraction caps at 3 buttons and handles the auto-conversion for you. Use this field only for the enum types.\n\nAll interactive messages are session messages: they can only be sent inside the 24-hour customer service window opened by the user's last inbound message.\n\nCommerce types (`product`, `product_list`, `catalog_message`, and product carousels) require a Meta catalog connected to the WhatsApp Business Account in Commerce Manager. Media carousels (image/video cards) do not need a catalog.\n\nRules per type:\n\n- `product`: `body` is optional (WhatsApp renders the product card itself) and `header` is not allowed (the product image is the header).\n- `product_list`: a `header` with `type: \"text\"` is required.\n- `carousel`: top-level `header`/`footer` are not supported; media goes on each card instead.\n- `voice_call`: renders WhatsApp's native call button; tapping it starts a voice call to your business number. Requires WhatsApp Business Calling on the sending number. The optional `parameters.payload` string is echoed back on the `calls` webhook (as `cta_payload`) for attribution.\n- `location_request_message`: `action` may be omitted (we default it to `{ \"name\": \"send_location\" }`). WhatsApp renders a localized \"Send location\" button; the reply arrives as a regular location message in the conversation.\n- `request_contact_info`: `action` may be omitted (we default it to `{ \"name\": \"request_contact_info\" }`). The localized share button cannot be relabelled, so put the reason for asking in `body.text`: this is a consent prompt, and a bare request converts badly.\n- `request_contact_info` reply: arrives as an inbound `contacts` message with `metadata.contactsOrigin` set to `contact_request`, and we fold the shared number back into the contact automatically. A `contacts` message with origin `other` is a card picked from the address book, NOT proof of the user's own number.\n- `catalog_message`: `action` may also be omitted (we default it to `{ \"name\": \"catalog_message\" }`).\n- `address_message`: `parameters.country` is required (Meta rejects the whole send without it); everything else in `parameters` (`values`, `saved_addresses`, `validation_errors`) is forwarded to Meta as-is.\n- `address_message` availability: Meta's native structured shipping-address capture, generally available in India as of 2026-08. Check Meta's documentation for current country availability before relying on it elsewhere.\n- `address_message` reply: the submitted address arrives as an `nfm_reply` on the `message.received` webhook, like a Flow submission, but with `metadata.nfmReplyName` set to `address_message` so you can tell the two apart.\n\nTap events come back via the `message.received` webhook with `metadata.interactiveType` set to `list_reply` or `nfm_reply`. Carts submitted from commerce messages arrive as `metadata.order`; product inquiries arrive as `metadata.referredProduct`.",
+              "properties": {
+                "action": {
+                  "oneOf": [
+                    {
+                      "description": "List action. `type` on the parent must be `list`.",
+                      "properties": {
+                        "button": {
+                          "description": "CTA label that opens the list (max ~20 chars).",
+                          "type": "string"
+                        },
+                        "sections": {
+                          "description": "1-10 sections. Total rows across all sections cannot exceed 10.",
+                          "items": {
+                            "properties": {
+                              "rows": {
+                                "items": {
+                                  "properties": {
+                                    "description": {
+                                      "type": "string"
+                                    },
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "title": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "title"
+                                  ],
+                                  "type": "object"
+                                },
+                                "maxItems": 10,
+                                "minItems": 1,
+                                "type": "array"
+                              },
+                              "title": {
+                                "description": "Optional section header (max 24 chars).",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "rows"
+                            ],
+                            "type": "object"
+                          },
+                          "maxItems": 10,
+                          "minItems": 1,
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "button",
+                        "sections"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "description": "CTA URL action. `type` on the parent must be `cta_url`.",
+                      "properties": {
+                        "name": {
+                          "enum": [
+                            "cta_url"
+                          ],
+                          "type": "string"
+                        },
+                        "parameters": {
+                          "properties": {
+                            "display_text": {
+                              "description": "Button label (max 20 chars).",
+                              "type": "string"
+                            },
+                            "url": {
+                              "description": "Target URL opened when the user taps the button.",
+                              "format": "uri",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "display_text",
+                            "url"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "parameters"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "description": "Voice-call action. `type` on the parent must be `voice_call`. Renders WhatsApp's native call button (requires Calling enabled on the sending number).",
+                      "properties": {
+                        "name": {
+                          "enum": [
+                            "voice_call"
+                          ],
+                          "type": "string"
+                        },
+                        "parameters": {
+                          "description": "All optional.",
+                          "properties": {
+                            "display_text": {
+                              "description": "Button label. Defaults to \"Call Now\".",
+                              "maxLength": 20,
+                              "type": "string"
+                            },
+                            "payload": {
+                              "description": "Arbitrary string echoed back as `cta_payload` on the `calls` webhook (connect/terminate) for attribution.",
+                              "maxLength": 512,
+                              "type": "string"
+                            },
+                            "ttl_minutes": {
+                              "description": "How long the button stays tappable. Defaults to 10080 (7 days).",
+                              "maximum": 43200,
+                              "minimum": 1,
+                              "type": "integer"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "description": "Flow action. `type` on the parent must be `flow`.",
+                      "properties": {
+                        "name": {
+                          "enum": [
+                            "flow"
+                          ],
+                          "type": "string"
+                        },
+                        "parameters": {
+                          "properties": {
+                            "flow_action": {
+                              "description": "`navigate` sends the user to `flow_action_payload.screen`; `data_exchange` posts data to your Flow endpoint.",
+                              "enum": [
+                                "navigate",
+                                "data_exchange"
+                              ],
+                              "type": "string"
+                            },
+                            "flow_action_payload": {
+                              "description": "Required when flow_action is `navigate`.",
+                              "properties": {
+                                "data": {
+                                  "additionalProperties": true,
+                                  "description": "Optional pre-filled data passed to the screen.",
+                                  "type": "object"
+                                },
+                                "screen": {
+                                  "description": "First screen to show.",
+                                  "type": "string"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "flow_cta": {
+                              "description": "Button label that opens the Flow (max 20 chars).",
+                              "type": "string"
+                            },
+                            "flow_id": {
+                              "description": "Published Flow ID from Meta Business Manager.",
+                              "type": "string"
+                            },
+                            "flow_message_version": {
+                              "description": "Defaults to \"3\" when omitted.",
+                              "enum": [
+                                "3"
+                              ],
+                              "type": "string"
+                            },
+                            "flow_token": {
+                              "description": "Opaque token you choose to correlate Flow responses with your own state (max 200 chars).",
+                              "type": "string"
+                            },
+                            "mode": {
+                              "description": "Set to `draft` to test an unpublished Flow.",
+                              "enum": [
+                                "draft"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "flow_action",
+                            "flow_cta",
+                            "flow_id",
+                            "flow_token"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "parameters"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "description": "Location request action. `type` on the parent must be `location_request_message`. May be omitted entirely; it is defaulted.",
+                      "properties": {
+                        "name": {
+                          "enum": [
+                            "send_location"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "description": "Contact-info request action. `type` on the parent must be `request_contact_info`. May be omitted entirely; it is defaulted.",
+                      "properties": {
+                        "name": {
+                          "enum": [
+                            "request_contact_info"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "description": "Single-product action. `type` on the parent must be\n`product`. Requires a Meta catalog connected to the\nWhatsApp Business Account in Commerce Manager.",
+                      "properties": {
+                        "catalog_id": {
+                          "description": "Meta catalog ID connected to the WhatsApp Business Account.",
+                          "type": "string"
+                        },
+                        "product_retailer_id": {
+                          "description": "Retailer ID (SKU) of the product inside the catalog.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "catalog_id",
+                        "product_retailer_id"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "description": "Multi-product action. `type` on the parent must be\n`product_list`. Requires a Meta catalog connected to the\nWhatsApp Business Account in Commerce Manager.",
+                      "properties": {
+                        "catalog_id": {
+                          "description": "Meta catalog ID connected to the WhatsApp Business Account.",
+                          "type": "string"
+                        },
+                        "sections": {
+                          "description": "1-10 sections. Total products across all sections cannot exceed 30.",
+                          "items": {
+                            "properties": {
+                              "product_items": {
+                                "items": {
+                                  "properties": {
+                                    "product_retailer_id": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "product_retailer_id"
+                                  ],
+                                  "type": "object"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              },
+                              "title": {
+                                "description": "Optional section header.",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "product_items"
+                            ],
+                            "type": "object"
+                          },
+                          "maxItems": 10,
+                          "minItems": 1,
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "catalog_id",
+                        "sections"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "description": "Catalog-message action. `type` on the parent must be\n`catalog_message`. May be omitted entirely; it is defaulted\nto `{ \"name\": \"catalog_message\" }`. Requires a Meta catalog\nconnected to the WhatsApp Business Account in Commerce\nManager.",
+                      "properties": {
+                        "name": {
+                          "enum": [
+                            "catalog_message"
+                          ],
+                          "type": "string"
+                        },
+                        "parameters": {
+                          "properties": {
+                            "thumbnail_product_retailer_id": {
+                              "description": "Optional product whose image is used as the message thumbnail. Falls back to the first catalog item when omitted.",
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "description": "Carousel action. `type` on the parent must be `carousel`. Carries 2-10 cards, either:\n\n- all product cards (`type: \"product\"`, all referencing the same `catalog_id`); or\n- media cards (any other `type`, e.g. `cta_url`), each with a required image/video `header`.\n\n`card_index` (0-9, non-repeating) is auto-filled sequentially when omitted.\n\nProduct carousels require a Meta catalog connected to the WhatsApp Business Account in Commerce Manager; media carousels do not.",
+                      "properties": {
+                        "cards": {
+                          "items": {
+                            "additionalProperties": true,
+                            "properties": {
+                              "action": {
+                                "description": "Product cards: `{ catalog_id, product_retailer_id }` (required). Media cards: the card's button action (e.g. `cta_url` with `parameters.display_text` and `parameters.url`).",
+                                "type": "object"
+                              },
+                              "body": {
+                                "description": "Optional card body text.",
+                                "type": "object"
+                              },
+                              "card_index": {
+                                "description": "Card position. Auto-filled sequentially when omitted.",
+                                "maximum": 9,
+                                "minimum": 0,
+                                "type": "integer"
+                              },
+                              "header": {
+                                "description": "Media cards only, required. Carries the card's image or video.",
+                                "type": "object"
+                              },
+                              "type": {
+                                "description": "`product` for a product card; media cards use `cta_url` or a quick-reply type.",
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "maxItems": 10,
+                          "minItems": 2,
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "cards"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "description": "Address-request action. `type` on the parent must be\n`address_message`. Renders Meta's native structured\naddress form in-chat (generally available in India as\nof 2026-08; check Meta's documentation for current\ncountry availability).",
+                      "properties": {
+                        "name": {
+                          "enum": [
+                            "address_message"
+                          ],
+                          "type": "string"
+                        },
+                        "parameters": {
+                          "properties": {
+                            "country": {
+                              "description": "ISO 3166-1 alpha-2 country code Meta should localize the address form for (e.g. IN). Required: Meta rejects the send without it.",
+                              "type": "string"
+                            },
+                            "saved_addresses": {
+                              "description": "Optional list of the recipient's previously saved addresses to offer as quick picks.",
+                              "items": {
+                                "additionalProperties": true,
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "validation_errors": {
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "Optional per-field error messages to show when re-prompting after a failed validation.",
+                              "type": "object"
+                            },
+                            "values": {
+                              "additionalProperties": true,
+                              "description": "Optional pre-filled address field values.",
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "country"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "parameters"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                },
+                "body": {
+                  "description": "Required for every type except `product`, where it is optional.",
+                  "properties": {
+                    "text": {
+                      "description": "Main body text.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ],
+                  "type": "object"
+                },
+                "footer": {
+                  "description": "Optional footer shown below the action.",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "header": {
+                  "description": "Optional header shown above the body. Required with\n`type: \"text\"` for `product_list`; not allowed for `product`\nor `carousel`.",
+                  "properties": {
+                    "document": {
+                      "properties": {
+                        "link": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "image": {
+                      "properties": {
+                        "link": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "text": {
+                      "description": "Required when header type is text.",
+                      "type": "string"
+                    },
+                    "type": {
+                      "enum": [
+                        "text",
+                        "image",
+                        "video",
+                        "document"
+                      ],
+                      "type": "string"
+                    },
+                    "video": {
+                      "properties": {
+                        "link": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": {
+                  "description": "Which interactive layout to render.",
+                  "enum": [
+                    "list",
+                    "cta_url",
+                    "flow",
+                    "location_request_message",
+                    "request_contact_info",
+                    "voice_call",
+                    "product",
+                    "product_list",
+                    "catalog_message",
+                    "carousel",
+                    "address_message"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            },
+            "linkPreview": {
+              "default": true,
+              "description": "WhatsApp and iMessage. Set false to send the message without a link-preview thumbnail. Ignored on other platforms.\n\n- WhatsApp: affects the first URL.\n- iMessage: every link renders as plain text.\n\nDefaults to true, which is how every WhatsApp text has been sent to date. Accepted on the JSON body only, not on multipart requests.",
+              "type": "boolean"
+            },
+            "location": {
+              "description": "WhatsApp and iMessage. Send a location pin (on iMessage it renders as a native map bubble).",
+              "properties": {
+                "address": {
+                  "description": "Optional street address.",
+                  "type": "string"
+                },
+                "latitude": {
+                  "description": "Latitude in decimal degrees.",
+                  "type": "number"
+                },
+                "longitude": {
+                  "description": "Longitude in decimal degrees.",
+                  "type": "number"
+                },
+                "name": {
+                  "description": "Optional location name.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "latitude",
+                "longitude"
+              ],
+              "type": "object"
+            },
+            "message": {
+              "description": "Message text",
+              "type": "string"
+            },
+            "messageTag": {
+              "description": "Facebook and Instagram. To reply after the 24h window, send HUMAN_AGENT with messagingType MESSAGE_TAG: it works up to 7 days after the person's last message, for replies typed by a person only (Meta does not allow it on automated messages). Meta retired the other tags, so they fail.",
+              "enum": [
+                "CONFIRMED_EVENT_UPDATE",
+                "POST_PURCHASE_UPDATE",
+                "ACCOUNT_UPDATE",
+                "HUMAN_AGENT"
+              ],
+              "type": "string"
+            },
+            "messagingType": {
+              "description": "Facebook messaging type. Required when using messageTag.",
+              "enum": [
+                "RESPONSE",
+                "UPDATE",
+                "MESSAGE_TAG"
+              ],
+              "type": "string"
+            },
+            "quickReplies": {
+              "description": "Quick reply buttons. Mutually exclusive with buttons. Max 13 items.",
+              "items": {
+                "properties": {
+                  "imageUrl": {
+                    "description": "Optional icon URL (Meta only)",
+                    "type": "string"
+                  },
+                  "payload": {
+                    "description": "Payload sent back on tap",
+                    "type": "string"
+                  },
+                  "title": {
+                    "description": "Button label (max 20 chars)",
+                    "maxLength": 20,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "payload",
+                  "title"
+                ],
+                "type": "object"
+              },
+              "maxItems": 13,
+              "type": "array"
+            },
+            "replyMarkup": {
+              "description": "Telegram-native keyboard markup. Ignored on other platforms.",
+              "properties": {
+                "keyboard": {
+                  "description": "Array of rows, each row is an array of buttons",
+                  "items": {
+                    "items": {
+                      "properties": {
+                        "callbackData": {
+                          "description": "Callback data (inline_keyboard only, max 64 bytes)",
+                          "maxLength": 64,
+                          "type": "string"
+                        },
+                        "text": {
+                          "description": "Button text",
+                          "type": "string"
+                        },
+                        "url": {
+                          "description": "URL to open (inline_keyboard only)",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "type": "array"
+                },
+                "oneTime": {
+                  "default": true,
+                  "description": "Hide keyboard after use (reply_keyboard only)",
+                  "type": "boolean"
+                },
+                "type": {
+                  "description": "Keyboard type",
+                  "enum": [
+                    "inline_keyboard",
+                    "reply_keyboard"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "replyTo": {
+              "description": "Platform message ID to quote-reply to.\n\n- WhatsApp: the wamid.\n- Telegram: the Telegram message ID (message.platformMessageId on webhooks, and `id` on each entry of the list-messages endpoint).\n- Slack: threads the reply (thread_ts) instead of quoting.\n- Instagram and Facebook Messenger: no send-side quote replies. The message is sent without a quote and the successful response includes a warnings entry with code ignored_field and param replyTo.\n- Other platforms without send-side reply support ignore this field.",
+              "type": "string"
+            },
+            "sharedMediaId": {
+              "description": "Instagram only (JSON body only; 400 on other platforms). Shares one of the account's own published posts in the DM, by its Instagram media id (the `id` returned by the media endpoints, not a permalink). Meta only accepts media the account owns.\n\nSent on its own: cannot be combined with `message`, attachments, `quickReplies`, `buttons`, `template` or `sticker` (400). `messageTag: HUMAN_AGENT` is allowed. Works on accounts connected with Instagram Login and with Facebook Login.",
+              "pattern": "^\\d+$",
+              "type": "string"
+            },
+            "sticker": {
+              "description": "Instagram only (JSON body only). Sends a sticker instead of text; `like_heart` is the heart sticker. Sent on its own: cannot be combined with `message`, attachments, `quickReplies`, `buttons`, `template` or `sharedMediaId` (400). `messageTag: HUMAN_AGENT` is allowed. Rejected with 400 on other platforms.",
+              "enum": [
+                "like_heart"
+              ],
+              "type": "string"
+            },
+            "subject": {
+              "description": "iMessage only (JSON body only). Bold title line rendered above the message text. Rejected with 400 on other platforms; ignored on voice-message sends.",
+              "maxLength": 1000,
+              "type": "string"
+            },
+            "template": {
+              "description": "Platform-dependent template payload. Ignored on Telegram.\n\n**Instagram / Facebook:** a generic template (carousel). Set `type: generic` and provide up to 10 `elements`, each with a `title` (required) and optional `subtitle`, `imageUrl`, and `buttons`.\n\n- Mutually exclusive with the top-level `buttons` field (sending both is a 400); put card buttons on its `elements`.\n- On Facebook, `imageAspectRatio` (`horizontal`, the default, or `square`) sets how Messenger renders element images. Instagram has no such setting and rejects it.\n\n**WhatsApp:** sends an approved template message, the only type WhatsApp accepts when the 24-hour customer-service window is closed. Provide exactly one element with the template reference (`type` is ignored):\n\n`{ \"elements\": [{ \"name\": \"order_update\", \"language\": \"en_US\", \"components\": [...] }] }`\n\n`components` is optional and forwarded unchanged as the `template.components` array of Meta's Cloud API send payload. Use it to fill body/header variables and button parameters, e.g. `[{ \"type\": \"body\", \"parameters\": [{ \"type\": \"text\", \"text\": \"John\" }] }]`.\n\nTemplates with media headers (image, video, document) must include the header component with its media link at send time. To message a phone number with no conversation, or have media headers filled automatically, use the create-conversation endpoint (POST /apis/v1/social/inbox/conversations).",
+              "properties": {
+                "elements": {
+                  "items": {
+                    "properties": {
+                      "buttons": {
+                        "description": "Element buttons (Instagram/Facebook only)",
+                        "items": {
+                          "properties": {
+                            "payload": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "maxLength": 20,
+                              "type": "string"
+                            },
+                            "type": {
+                              "enum": [
+                                "url",
+                                "postback"
+                              ],
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "maxItems": 3,
+                        "type": "array"
+                      },
+                      "components": {
+                        "description": "WhatsApp only. Meta Cloud API send-shape components array, forwarded to Meta verbatim.",
+                        "items": {
+                          "additionalProperties": true,
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "imageUrl": {
+                        "description": "Element image URL (Instagram/Facebook only)",
+                        "type": "string"
+                      },
+                      "language": {
+                        "description": "WhatsApp only. Template language code (e.g. en_US).",
+                        "type": "string"
+                      },
+                      "name": {
+                        "description": "WhatsApp only. Name of the approved template to send.",
+                        "type": "string"
+                      },
+                      "subtitle": {
+                        "description": "Element subtitle (Instagram/Facebook only)",
+                        "type": "string"
+                      },
+                      "title": {
+                        "description": "Element title (max 80 chars). Required for Instagram/Facebook generic templates.",
+                        "maxLength": 80,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "maxItems": 10,
+                  "type": "array"
+                },
+                "imageAspectRatio": {
+                  "description": "Facebook only. Aspect ratio Messenger renders element images at: horizontal (1.91:1, default) or square (1:1). A 400 on Instagram.",
+                  "enum": [
+                    "horizontal",
+                    "square"
+                  ],
+                  "type": "string"
+                },
+                "type": {
+                  "description": "Template type. Required for Instagram/Facebook generic templates; ignored on WhatsApp.",
+                  "enum": [
+                    "generic"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "voiceNote": {
+              "description": "WhatsApp only. When `true` on an audio attachment, the message is sent as a voice message (PTT): the recipient sees the waveform + voice-note UI instead of a basic audio attachment. Ignored for non-audio attachments.\n\nThe audio file MUST be `.ogg` encoded with the OPUS codec (mono), per Meta's voice-message contract; other formats are rejected by WhatsApp.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "accountId"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "customer_micros_usd": 100,
+    "customer_pricing_ref": "social.inbox.send_inbox_message.v1.pricing@1",
+    "description": "Charged once per successful call. The base price is AIsa's own cost for the call: $0.015 on X accounts (one X direct message sent, at X's API rate), $0.0001 on every other platform (one message delivered to a recipient). This is the price on every plan; no plan multiplier applies. A refused or failed call, or one whose outcome is unknown, is not charged.",
+    "kind": "fixed_request",
+    "variants": {
+      "twitter": {
+        "customer_micros_usd": 15000,
+        "kind": "fixed_request"
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
+## Cost and request rules
+
+A request reference price is not currently available; use a request quote where supported. Account-specific pricing and final settlement may differ.
+
+Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
+
+
+{/* aisa-contract-details:end */}

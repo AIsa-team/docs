@@ -1,0 +1,368 @@
+---
+title: "Send conversion events"
+openapi: "openapi/aisa-ads.json POST /apis/v1/ads/conversions"
+x-aisa-operation-id: "post_aisa_ads_apis_v1_ads_conversions"
+---
+
+
+{/* aisa-contract-details:start */}
+
+## Request contract
+
+- **Method and path:** POST /apis/v1/ads/conversions
+- **Availability:** enabled
+- **Request URL template:** `https://dev-api.aisa.one/apis/v1/ads/conversions`
+- **connectionId:** query; required
+- **Runtime facts:** fe60122939c67dc98a3a6ac6b97bd5c326b526105150c8959304dd2160d4dd09
+
+[Complete OpenAPI definition](https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev/openapi/aisa-ads.json)
+
+Effective request and pricing declaration (including authentication and referenced schemas):
+
+```json
+{
+  "operationId": "post_aisa_ads_apis_v1_ads_conversions",
+  "method": "POST",
+  "path": "/apis/v1/ads/conversions",
+  "servers": [
+    {
+      "url": "https://dev-api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "description": "The ads connection (adc_...) the request runs on: one of yours, from GET /apis/v1/ads/connections. On a request with a JSON body it may be sent as a top-level body member instead.",
+      "in": "query",
+      "name": "connectionId",
+      "required": true,
+      "schema": {
+        "pattern": "^adc_[0-9A-Za-z]+$",
+        "type": "string"
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "example": {
+          "connectionId": "adc_7f3k2m9q",
+          "destinationId": "1234567890",
+          "events": [
+            {
+              "eventId": "1234567890",
+              "eventName": "example",
+              "eventTime": 10,
+              "user": {
+                "city": "example",
+                "clickIds": {
+                  "epik": "example",
+                  "fbc": "example"
+                }
+              }
+            }
+          ]
+        },
+        "schema": {
+          "additionalProperties": true,
+          "properties": {
+            "connectionId": {
+              "description": "The ads connection (adc_...), when not sent as the connectionId query parameter.",
+              "pattern": "^adc_[0-9A-Za-z]+$",
+              "type": "string"
+            },
+            "consent": {
+              "description": "Batch-level user consent. Required by Google for EEA/UK events under the Feb 2026 restrictions.",
+              "properties": {
+                "adPersonalization": {
+                  "enum": [
+                    "GRANTED",
+                    "DENIED"
+                  ],
+                  "type": "string"
+                },
+                "adUserData": {
+                  "enum": [
+                    "GRANTED",
+                    "DENIED"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "destinationId": {
+              "description": "Platform destination identifier. For Meta, the pixel/dataset ID. For Google, the conversion action resource name. For LinkedIn, the conversion rule ID or full `urn:lla:llaPartnerConversion:{id}` URN. For OpenAI Ads, the pixel wire id.",
+              "type": "string"
+            },
+            "events": {
+              "items": {
+                "description": "A single conversion event to relay to the ad platform. Callers send plaintext.",
+                "properties": {
+                  "actionSource": {
+                    "description": "Where the conversion happened. Used by Meta. Google also requires an event source internally; omitting this field sends OTHER to Google. Send an explicit value for accurate origin reporting.",
+                    "enum": [
+                      "web",
+                      "app",
+                      "offline",
+                      "crm",
+                      "phone_call",
+                      "system_generated",
+                      "business_messaging"
+                    ],
+                    "type": "string"
+                  },
+                  "currency": {
+                    "description": "ISO 4217 currency code.",
+                    "type": "string"
+                  },
+                  "eventId": {
+                    "description": "Unique dedup key. Use the same eventId on pixel + CAPI to prevent double-counting. Mapped to: Meta: event_id. Google: transactionId. LinkedIn: eventId.",
+                    "type": "string"
+                  },
+                  "eventName": {
+                    "description": "Standard event name (Purchase, Lead, CompleteRegistration, AddToCart, InitiateCheckout, AddPaymentInfo, Subscribe, StartTrial, ViewContent, Search, Contact, SubmitApplication, Schedule) or a custom string.",
+                    "type": "string"
+                  },
+                  "eventTime": {
+                    "description": "When the conversion happened, in unix seconds.",
+                    "type": "integer"
+                  },
+                  "items": {
+                    "description": "Item-level detail for ecommerce events.",
+                    "items": {
+                      "properties": {
+                        "category": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "price": {
+                          "type": "number"
+                        },
+                        "quantity": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "messaging": {
+                    "description": "Meta only, read when `actionSource` is `business_messaging` (Conversions API for Business Messaging). `channel` is sent as the event's `messaging_channel` (`instagram_direct` goes out as `instagram`).",
+                    "properties": {
+                      "channel": {
+                        "enum": [
+                          "whatsapp",
+                          "messenger",
+                          "instagram_direct"
+                        ],
+                        "type": "string"
+                      },
+                      "ctwaClid": {
+                        "description": "WhatsApp only. Click-to-WhatsApp click id from the first inbound message referral, sent as `ctwa_clid`.",
+                        "type": "string"
+                      },
+                      "instagramBusinessAccountId": {
+                        "description": "Instagram Direct only. Instagram professional account id (`instagram_business_account` on the Page), sent as `ig_account_id` next to `ig_sid`.",
+                        "type": "string"
+                      },
+                      "instagramScopedUserId": {
+                        "description": "Instagram Direct only.",
+                        "type": "string"
+                      },
+                      "pageId": {
+                        "description": "Messenger: Facebook Page id, sent as `page_id`.",
+                        "type": "string"
+                      },
+                      "pageScopedUserId": {
+                        "description": "Messenger only.",
+                        "type": "string"
+                      },
+                      "wabaId": {
+                        "description": "WhatsApp only. WhatsApp Business Account id, sent as `whatsapp_business_account_id`.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "channel"
+                    ],
+                    "type": "object"
+                  },
+                  "platformData": {
+                    "additionalProperties": true,
+                    "description": "Escape hatch for platform-specific fields we haven't normalized. Use first-class fields (e.g. `user.leadId`) for anything that must reach `user_data`.",
+                    "type": "object"
+                  },
+                  "sourceUrl": {
+                    "description": "URL where the conversion originated (used by Meta).",
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "user": {
+                    "description": "User identity fields. More signals mean higher match rates.",
+                    "properties": {
+                      "city": {
+                        "description": "Meta advanced matching (ct). Plaintext city; normalized + SHA-256 hashed server-side. Meta only.",
+                        "type": "string"
+                      },
+                      "clickIds": {
+                        "description": "Platform click identifiers captured from the originating ad click.",
+                        "properties": {
+                          "epik": {
+                            "description": "Pinterest click ID (the `epik` URL param or `_epik` cookie). Sent to Pinterest as `click_id`, not hashed.",
+                            "type": "string"
+                          },
+                          "fbc": {
+                            "description": "Meta click ID (from fbclid URL param).",
+                            "type": "string"
+                          },
+                          "fbp": {
+                            "description": "Meta browser ID (_fbp cookie).",
+                            "type": "string"
+                          },
+                          "gbraid": {
+                            "description": "Google iOS 14.5+ app attribution ID.",
+                            "type": "string"
+                          },
+                          "gclid": {
+                            "description": "Google click ID (from gclid URL param).",
+                            "type": "string"
+                          },
+                          "li_fat_id": {
+                            "description": "LinkedIn first-party ad tracking click ID. Captured by parsing `li_fat_id` from landing-page URLs after the advertiser enables enhanced conversion tracking on the LinkedIn Insight Tag.",
+                            "type": "string"
+                          },
+                          "rdt_cid": {
+                            "description": "Reddit click ID (the `rdt_cid` URL param Reddit adds to ad clicks). Sent to Reddit as `click_id`, not hashed.",
+                            "type": "string"
+                          },
+                          "rdt_uuid": {
+                            "description": "Reddit Pixel browser id (the `_rdt_uuid` first-party cookie). Sent to Reddit as `user.uuid`, not hashed.",
+                            "type": "string"
+                          },
+                          "wbraid": {
+                            "description": "Google iOS 14.5+ web-to-app attribution ID.",
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "country": {
+                        "description": "ISO 3166-1 alpha-2 country code, e.g. 'us'.",
+                        "type": "string"
+                      },
+                      "dob": {
+                        "description": "Meta advanced matching (db). YYYYMMDD; hashed server-side. Meta only.",
+                        "type": "string"
+                      },
+                      "email": {
+                        "description": "Plaintext email. Hashed server-side.",
+                        "type": "string"
+                      },
+                      "externalId": {
+                        "description": "Stable customer identifier (e.g. CRM user ID). Hashed server-side for Meta and Google. Sent as plaintext to LinkedIn (LinkedIn's Conversions API spec requires the raw value). Maximum effective list size on LinkedIn is 1.",
+                        "type": "string"
+                      },
+                      "firstName": {
+                        "description": "Plaintext first name. Hashed server-side.",
+                        "type": "string"
+                      },
+                      "gender": {
+                        "description": "Meta advanced matching (ge). 'f' or 'm'; hashed server-side. Meta only.",
+                        "type": "string"
+                      },
+                      "ipAddress": {
+                        "description": "Client IP address. Sent plaintext.",
+                        "type": "string"
+                      },
+                      "lastName": {
+                        "description": "Plaintext last name. Hashed server-side.",
+                        "type": "string"
+                      },
+                      "leadId": {
+                        "description": "Meta lead ID from a Lead Ad submission, as a string. Required for Conversion Leads CRM events: send it with `actionSource: 'crm'` and `platformData: { event_source: 'crm', lead_event_source: '' }`.",
+                        "type": "string"
+                      },
+                      "phone": {
+                        "description": "Phone number, ideally E.164. Hashed server-side.",
+                        "type": "string"
+                      },
+                      "state": {
+                        "description": "Meta advanced matching (st). 2-letter ANSI for US; hashed server-side. Meta only.",
+                        "type": "string"
+                      },
+                      "userAgent": {
+                        "description": "Client user-agent string. Sent plaintext.",
+                        "type": "string"
+                      },
+                      "zip": {
+                        "description": "Meta advanced matching (zp). US uses first 5 digits; hashed server-side. Meta only.",
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "value": {
+                    "description": "Conversion value in the specified currency.",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "eventId",
+                  "eventName",
+                  "eventTime",
+                  "user"
+                ],
+                "type": "object"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "testCode": {
+              "description": "Test event code. Send it at the request root, never inside an event. A root-level `test_event_code` (Meta's own name) is accepted as an alias and must be a non-empty string; sending both with different values is a 400.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "destinationId",
+            "events"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "description": "Ads operations are free. Ad spend is billed by the ad platform to the connected ad account, never by AIsa.",
+    "kind": "no_customer_charge"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
+## Cost and request rules
+
+A request reference price is not currently available; use a request quote where supported. Account-specific pricing and final settlement may differ.
+
+Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
+
+
+{/* aisa-contract-details:end */}

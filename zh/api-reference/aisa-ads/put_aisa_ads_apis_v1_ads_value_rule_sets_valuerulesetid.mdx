@@ -1,0 +1,239 @@
+---
+title: "Replace a value rule set"
+openapi: "openapi/zh/aisa-ads.json PUT /apis/v1/ads/value-rule-sets/{valueRuleSetId}"
+x-aisa-operation-id: "put_aisa_ads_apis_v1_ads_value_rule_sets_valuerulesetid"
+---
+
+
+{/* aisa-contract-details:start */}
+
+## 请求规范
+
+- **方法与路径:** PUT /apis/v1/ads/value-rule-sets/&#123;valueRuleSetId&#125;
+- **可用状态:** enabled
+- **请求 URL 模板:** `https://dev-api.aisa.one/apis/v1/ads/value-rule-sets/{valueRuleSetId}`
+- **valueRuleSetId:** path; 必填
+- **connectionId:** query; 必填
+- **Runtime 事实版本:** fe60122939c67dc98a3a6ac6b97bd5c326b526105150c8959304dd2160d4dd09
+
+[完整 OpenAPI 定义](https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev/openapi/zh/aisa-ads.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "put_aisa_ads_apis_v1_ads_value_rule_sets_valuerulesetid",
+  "method": "PUT",
+  "path": "/apis/v1/ads/value-rule-sets/{valueRuleSetId}",
+  "servers": [
+    {
+      "url": "https://dev-api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "description": "Platform value rule set id.",
+      "in": "path",
+      "name": "valueRuleSetId",
+      "required": true,
+      "schema": {
+        "type": "string"
+      }
+    },
+    {
+      "description": "The ads connection (adc_...) the request runs on: one of yours, from GET /apis/v1/ads/connections. On a request with a JSON body it may be sent as a top-level body member instead.",
+      "in": "query",
+      "name": "connectionId",
+      "required": true,
+      "schema": {
+        "pattern": "^adc_[0-9A-Za-z]+$",
+        "type": "string"
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "example": {
+          "connectionId": "adc_7f3k2m9q",
+          "name": "Winter launch",
+          "rules": [
+            {
+              "adjustSign": "INCREASE",
+              "adjustValue": 10,
+              "criteria": [
+                {
+                  "criteriaType": "AGE",
+                  "criteriaValueTypes": [
+                    "example"
+                  ],
+                  "criteriaValues": [
+                    "example"
+                  ],
+                  "operator": "CONTAINS"
+                }
+              ],
+              "name": "Winter launch"
+            }
+          ]
+        },
+        "schema": {
+          "additionalProperties": true,
+          "properties": {
+            "connectionId": {
+              "description": "The ads connection (adc_...), when not sent as the connectionId query parameter.",
+              "pattern": "^adc_[0-9A-Za-z]+$",
+              "type": "string"
+            },
+            "name": {
+              "description": "Required: the update replaces the whole set.",
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            "rules": {
+              "description": "The COMPLETE rule list. Omitting a rule deletes it on Meta.",
+              "items": {
+                "additionalProperties": false,
+                "description": "One bid-adjustment rule. Rules are evaluated in ARRAY ORDER and only the first matching rule adjusts the bid for an overlapping audience, so the order is semantic.",
+                "properties": {
+                  "adjustSign": {
+                    "description": "Direction of the adjustment. There is no signed value field.",
+                    "enum": [
+                      "INCREASE",
+                      "DECREASE"
+                    ],
+                    "type": "string"
+                  },
+                  "adjustValue": {
+                    "description": "Unsigned percentage magnitude. `INCREASE` accepts 1-1000, `DECREASE` accepts 1-90. 0 is out of range on both.",
+                    "maximum": 1000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "criteria": {
+                    "description": "All criteria on a rule must match for the rule to fire.",
+                    "items": {
+                      "additionalProperties": false,
+                      "description": "One matching condition inside a value rule. `criteriaValues` and `criteriaValueTypes` are POSITIONALLY paired: same length, same order.",
+                      "properties": {
+                        "criteriaType": {
+                          "description": "The dimension being matched. `OMNI_CHANNEL` (conversion location: APP, INSTANT_FORM, PHONE_CALL, WEBSITE) is accepted even though Meta's own enum table omits it.",
+                          "enum": [
+                            "AGE",
+                            "GENDER",
+                            "OS_TYPE",
+                            "DEVICE_PLATFORM",
+                            "LOCATION",
+                            "PLACEMENT",
+                            "OMNI_CHANNEL",
+                            "AUDIENCE_LABEL"
+                          ],
+                          "type": "string"
+                        },
+                        "criteriaValueTypes": {
+                          "description": "One entry per `criteriaValues` entry, in the same order.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "criteriaValues": {
+                          "description": "The values to match. `AGE`: ranges such as `18-24`, `18+` or a custom `18-26`. A range whose upper bound is 65 is NOT allowed (use `18+` instead of `18-65`). `LOCATION`: Targeting-Search keys.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "id": {
+                          "description": "Platform criterion id. Echo it on `PUT` to KEEP this criterion, omit it to CREATE a new one. A criterion left out of the array entirely is DELETED.",
+                          "type": "string"
+                        },
+                        "operator": {
+                          "description": "Required on every criterion. `CONTAINS` is currently the only value Meta supports.",
+                          "enum": [
+                            "CONTAINS"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "criteriaType",
+                        "criteriaValueTypes",
+                        "criteriaValues",
+                        "operator"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 4,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "id": {
+                    "description": "Platform rule id. Echo it on `PUT` to KEEP this rule, omit it to CREATE a new one. A rule left out of the array entirely is DELETED.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "maxLength": 255,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "Meta returns `ACTIVE` here but documents no enum for the field. Treat it as a passthrough: echo whatever the `GET` returned, and do not synthesize values.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "adjustSign",
+                  "adjustValue",
+                  "criteria",
+                  "name"
+                ],
+                "type": "object"
+              },
+              "maxItems": 10,
+              "minItems": 1,
+              "type": "array"
+            }
+          },
+          "required": [
+            "name",
+            "rules"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "description": "Ads operations are free. Ad spend is billed by the ad platform to the connected ad account, never by AIsa.",
+    "kind": "no_customer_charge"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
+## 费用与请求规则
+
+当前未提供请求参考价格；请使用接口支持的报价功能确认费用。 最终费用以账户适用价格及实际结算为准。
+
+公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
+
+
+{/* aisa-contract-details:end */}
