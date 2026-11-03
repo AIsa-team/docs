@@ -36,9 +36,16 @@ def validate_payment_capabilities(operation: dict) -> None:
     if "x-aisa-capabilities" not in operation:
         return
     capabilities = operation["x-aisa-capabilities"]
-    allowed = {"mpp", "mpp_methods", "x402", "x402_methods", "quote", "max_price", "idempotency"}
+    # The access fields are declared by Services' publication contract
+    # (validatePublicationCapabilities): the catalogue capability an operation
+    # serves, the API-key scope it needs and its resource shape. They are text,
+    # never payment switches.
+    access = {"capability", "required_scope", "publish_scope", "scope_rule", "shape"}
+    allowed = {"mpp", "mpp_methods", "x402", "x402_methods", "quote", "max_price", "idempotency"} | access
     if not isinstance(capabilities, dict) or set(capabilities) - allowed:
         raise ValueError("invalid runtime payment capabilities")
+    if any(name in capabilities and not isinstance(capabilities[name], str) for name in access):
+        raise ValueError("invalid runtime capability access text")
     for name in ("mpp", "x402"):
         if name in capabilities and type(capabilities[name]) is not bool:
             raise ValueError("runtime payment capability must be boolean")
