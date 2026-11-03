@@ -22,6 +22,7 @@ from fetch_runtime_release import PublicReader, decode, require, sha, category_c
 from pull_openapi import stage, update_disabled_indexing
 from check_nav_integrity import nav_pages
 from identity_compatibility import published_history
+from regroup_api_reference import write_index_pages
 from runtime_consolidate_openapi import (build_unified_spec, publication_yaml,
                                         inject_x402_annotations, remove_v2_path_mirrors)
 
@@ -238,6 +239,8 @@ def generate(root, files):
         config = json.loads(config_path.read_text())
         config['navigation'] = preserve_navigation(previous_navigation, config.get('navigation', {}))
         config_path.write_text(json.dumps(config, indent=2, ensure_ascii=False) + '\n')
+        # The platform index lists every platform group, including new ones.
+        write_index_pages(candidate)
         aggregate = build_unified_spec(root=candidate)
         presentation = scope_presentation(candidate, aggregate, summary)
         inject_x402_annotations(aggregate)

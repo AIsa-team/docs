@@ -10,12 +10,31 @@ import copy
 import re
 from decimal import Decimal, InvalidOperation
 
+# Legacy markers. Mintlify shows an HTML comment in an OpenAPI description as
+# literal text, so new summaries carry no marker; these are only stripped.
 PRICE_BEGIN = '<!-- aisa-pricing:start -->'
 PRICE_END = '<!-- aisa-pricing:end -->'
+# A generated summary is the description's last paragraph. It always opens with
+# one of these leads and closes with the settlement sentence of its language.
+SUMMARY_LEADS = (
+    'Published reference price: ', 'Default request estimate: ',
+    'Usage-based billing; Default request estimate: ',
+    'A request reference price is not currently available; ',
+    '公开参考价格：', '默认请求预估费用：', '按用量计费；默认请求预估费用：', '当前未提供请求参考价格；',
+)
+SUMMARY_ENDS = ('Account-specific pricing and final settlement may differ.', '最终费用以账户适用价格及实际结算为准。')
+SUMMARY = re.compile(
+    r'(?:\A|\n[ \t]*\n)[ \t]*(?:' + '|'.join(map(re.escape, SUMMARY_LEADS)) + r')[^\n]*?(?:'
+    + '|'.join(map(re.escape, SUMMARY_ENDS)) + r')\s*\Z')
 
 
 def strip_price_summary(text):
-    return re.sub(r'\s*' + re.escape(PRICE_BEGIN) + r'.*?' + re.escape(PRICE_END), '', text, flags=re.S).strip()
+    text = re.sub(r'\s*' + re.escape(PRICE_BEGIN) + r'.*?' + re.escape(PRICE_END), '', text, flags=re.S)
+    while True:
+        stripped = SUMMARY.sub('', text)
+        if stripped == text:
+            return text.strip()
+        text = stripped
 
 
 def usd(value):
@@ -61,7 +80,7 @@ def add_price_summary(operation, language='en'):
     summary = pricing_summary(operation.get('x-aisa-pricing'), language)
     if summary:
         description = description.replace(NOTICE, '').replace(NOTICE_ZH, '').strip()
-        operation['description'] = (description + '\n\n' + PRICE_BEGIN + '\n' + summary + '\n' + PRICE_END).strip()
+        operation['description'] = (description + '\n\n' + summary).strip()
     elif 'description' in operation:
         operation['description'] = description
     return operation

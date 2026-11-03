@@ -5,7 +5,8 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from pricing_prose import clean_text, clean_document, clean_page, pricing_summary, PRICE_BEGIN, NOTICE
+from pricing_prose import (clean_text, clean_document, clean_page, pricing_summary, add_price_summary,
+                           strip_price_summary, PRICE_BEGIN, PRICE_END, NOTICE)
 from compose_openapi import compose
 from test_runtime_contracts import facts, operation, mirror
 
@@ -36,9 +37,30 @@ class PricingProseTests(unittest.TestCase):
         description = operation(updated)['description']
         self.assertIn('$0.12 USD', description)
         self.assertNotIn('$0.08', description)
-        self.assertEqual(description.count(PRICE_BEGIN), 1)
+        self.assertNotIn(PRICE_BEGIN, description)
+        self.assertEqual(description.count('Published reference price:'), 1)
         operation(updated).pop('x-aisa-pricing')
         self.assertNotIn('$0.12', operation(clean_document(updated))['description'])
+
+    def test_summary_is_a_plain_paragraph_that_replaces_legacy_markers(self):
+        # Mintlify renders an HTML comment in an OpenAPI description as text.
+        pricing = {'cost_contract': 'fixed_success', 'default_request_estimate_usd': .08}
+        legacy = ('Agoda Hotel Rates\n\n' + PRICE_BEGIN + '\nPublished reference price: $0.05 USD per successful request.'
+                  ' Account-specific pricing and final settlement may differ.\n' + PRICE_END)
+        operation = add_price_summary({'description': legacy, 'x-aisa-pricing': pricing})
+        self.assertEqual(operation['description'], 'Agoda Hotel Rates\n\nPublished reference price: $0.08 USD per '
+                         'successful request. Account-specific pricing and final settlement may differ.')
+        self.assertNotIn('<!--', operation['description'])
+        self.assertEqual(add_price_summary(copy.deepcopy(operation)), operation)
+        zh = add_price_summary({'description': '酒店价格', 'x-aisa-pricing': {}}, 'zh')
+        self.assertEqual(zh['description'], '酒店价格')
+        zh = add_price_summary({'description': '酒店价格', 'x-aisa-pricing': {'default_request_estimate_usd': .02}}, 'zh')
+        self.assertTrue(zh['description'].startswith('酒店价格\n\n默认请求预估费用：$0.02 USD'))
+        self.assertEqual(strip_price_summary(zh['description']), '酒店价格')
+        # Only a trailing generated paragraph is a summary; hand-written prose stays.
+        prose = 'Default request estimate: see the quote endpoint.\n\nReturns rates.'
+        self.assertEqual(strip_price_summary(prose), prose)
+        self.assertEqual(strip_price_summary(pricing_summary(pricing)), '')
 
     def test_fixed_zero_usage_units_and_missing_prices_have_distinct_labels(self):
         fixed = pricing_summary({'cost_contract': 'fixed_success', 'default_request_estimate_usd': .08, 'customer_multiplier': 2})

@@ -391,12 +391,17 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
             if additions:
                 group_name = document["info"].get("title", provider)
                 groups = tab.setdefault("groups", [])
-                # Mapped providers land in their category -> vendor group; only
-                # unmapped titles fall back to a top-level group of their own.
-                target = api_nav_groups.target_for(nav_config, group_name)
+                # Mapped providers land in their category -> platform group (a
+                # page rule can pick another platform); unmapped titles go to the
+                # fallback category, or without one to a top-level group.
+                target = (api_nav_groups.target_for(nav_config, group_name)
+                          or api_nav_groups.fallback_target(nav_config, group_name))
                 if target:
                     label = (lambda name: nav_labels.get(name) or name) if prefix else (lambda name: name)
-                    api_nav_groups.locate(groups, nav_config, target, label).extend(additions)
+                    for page in additions:
+                        placement = api_nav_groups.page_target(nav_config, page) or target
+                        api_nav_groups.locate(groups, nav_config, placement, label).append(page)
+                    api_nav_groups.order_vendors(groups, nav_config, label)
                     continue
                 group = next((g for g in groups if g.get("group") == group_name), None)
                 if group is None:
