@@ -332,11 +332,15 @@ def previous_for_facts(facts, documents, provider):
     fact_prefix = urlsplit((facts.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
     routes = {fact_prefix + p for p in facts.get('paths', {})}
     for name, original in documents.items():
-        document = copy.deepcopy(original)
-        prefix = urlsplit((document.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
-        document['paths'] = {prefix + p: item for p, item in document.get('paths', {}).items() if name == provider or prefix + p in routes}
-        if not document['paths']:
+        prefix = urlsplit((original.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
+        paths = {prefix + p: item for p, item in original.get('paths', {}).items() if name == provider or prefix + p in routes}
+        if not paths:
             continue
+        # Copy only a document that contributes paths, and only those paths:
+        # copying every published document for every provider dominated runs.
+        memo = {}
+        document = {key: copy.deepcopy(paths if key == 'paths' else value, memo)
+                    for key, value in original.items()}
         # Retained operations move under a different document root. Bind their
         # inherited authentication before merging sources and scheme namespaces;
         # otherwise retain_unregistered_history can no longer recover it.
