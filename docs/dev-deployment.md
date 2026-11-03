@@ -41,9 +41,9 @@ publication regression tests and frozen acceptance fixtures offline on dev
 pushes and PRs targeting dev. That test job has read-only repository permissions,
 no App credentials, no production Runtime acquisition, no shared source-review
 cache, and no downstream notifications. `generate-dev-docs.yml` on dev owns
-Runtime acquisition, generation and the review PR. It uses this repository's
-`GITHUB_TOKEN`; AIsaServices does not generate or write documentation. Review
-and merge into dev are required before Mintlify publishes the result.
+Runtime acquisition, generation and direct publication to dev after validation.
+It uses this repository's `GITHUB_TOKEN`; AIsaServices does not generate or
+write documentation. Mintlify publishes the generated dev commit.
 
 These production workflows require `refs/heads/main`, including manual runs:
 
@@ -129,8 +129,8 @@ enabled:
 AIsaServices/dev -> deploy dev Runtime
   -> Docs timer dispatches generate-dev-docs.yml at ref dev
   -> Docs/dev pulls current dev contracts -> generate and validate
-  -> open/update automation/dev-runtime-docs PR with base dev
-  -> reviewer merges -> Mintlify publishes aisa-docs-dev.mintlify.site
+  -> commit validated generated files and push directly to dev
+  -> Mintlify publishes aisa-docs-dev.mintlify.site
 ```
 
 GitHub schedules execute only from the default branch. The main version of
@@ -148,16 +148,18 @@ public contracts are picked up on a later timer run. Missing, stale or changing
 responses fail acquisition and preserve published files. This remains a dev
 preview, separate from formal production publication and consumer notification.
 
-The generation job requests Contents and Pull requests write permissions for
-the Docs repository's `GITHUB_TOKEN`. In repository Actions settings, allow
-GitHub Actions to create pull requests. No Services-side App credentials are
-required. The token writes only the generated PR branch; the PR targets dev
-and is never automatically merged. GitHub may require a reviewer to select
-**Approve workflows to run** on a bot-created PR before its normal checks run.
+The generation job requests only Contents write permission for the Docs
+repository's `GITHUB_TOKEN`. No PR creation permission or App credentials are
+required; dev branch rules must permit this token to push. Only the generated
+file allowlist is committed after validation. If remote dev changed during
+generation, publication fails and a later run must regenerate from the latest
+dev. The push never forces or rebases the validated candidate. Unchanged output
+creates no commit. Pushes made with `GITHUB_TOKEN` do not trigger additional
+GitHub Actions push workflows; the generation job performs its own validation.
 
 A fresh stable snapshot is acquired even when generation is skipped. Category
 cache timestamps are excluded from both fingerprints and snapshot hashes, so
-unchanged data cannot add timestamp-only commits to the pending PR. Pushes that
+unchanged data cannot add timestamp-only commits to dev. Pushes that
 change generator inputs force generation; manual runs can select `force`.
 New or changed contracts use the existing Composer; blocked providers remain
 explicit in `docs/dev-runtime.json` and the Actions generation report. No

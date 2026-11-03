@@ -29,13 +29,11 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
           ref: dev
           fetch-depth: 0
-          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -57,29 +55,23 @@ jobs:
           name: dev-runtime-docs-report
           path: ${{ runner.temp }}/dev-runtime-report.json
           if-no-files-found: ignore
-      - name: Open or update the generated documentation PR
-        id: propose
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
-        with:
-          token: ${{ github.token }}
-          base: dev
-          branch: automation/dev-runtime-docs
-          commit-message: 'docs(dev): refresh dev Runtime contracts'
-          title: 'docs(dev): refresh dev Runtime contracts'
-          body: |
-            Generated in the Docs repository from https://dev-api.aisa.one.
-            Includes validated OpenAPI, English/Chinese endpoint pages and navigation.
-            Read docs/dev-runtime.json and the dev-runtime-docs-report artifact for blocked providers.
-            Review and merge into dev to publish https://aisa-docs-dev.mintlify.site.
-          add-paths: |
-            docs.json
-            openapi.yaml
-            openapi
-            api-reference
-            zh/api-reference
-            docs/dev-runtime.json
-      - name: Record the review PR
-        if: steps.propose.outputs.pull-request-number != ''
-        env:
-          PR_URL: ${{ steps.propose.outputs.pull-request-url }}
-        run: echo "Generated documentation is awaiting review at $PR_URL" >> "$GITHUB_STEP_SUMMARY"
+      - name: Commit and push validated documentation to dev
+        run: |
+          assessed_base=$(git rev-parse HEAD)
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add -- docs.json openapi.yaml openapi api-reference zh/api-reference docs/dev-runtime.json
+          if git diff --cached --quiet; then
+            echo 'Dev documentation is already up to date.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git diff --cached --check
+          git commit -m 'docs(dev): refresh dev Runtime contracts'
+          # Publish only the validated candidate. Retry next run if dev moved.
+          git fetch origin dev
+          if [ "$(git rev-parse origin/dev)" != "$assessed_base" ]; then
+            echo 'Dev changed during generation; retry from the latest dev.' >&2
+            exit 1
+          fi
+          git push origin HEAD:dev
+          echo "Published dev documentation commit $(git rev-parse HEAD)." >> "$GITHUB_STEP_SUMMARY"
