@@ -78,6 +78,10 @@ def add_price_summary(operation, language='en'):
     """Replace a generated paragraph on each run so price changes cannot stick."""
     description = strip_price_summary(operation.get('description', ''))
     summary = pricing_summary(operation.get('x-aisa-pricing'), language)
+    # Paired currency signs would become inline math in Mintlify, as in
+    # readable_contract_notes.readable_block.
+    if summary.count('$') >= 2:
+        summary = summary.replace('$', r'\$')
     if summary:
         description = description.replace(NOTICE, '').replace(NOTICE_ZH, '').strip()
         operation['description'] = (description + '\n\n' + summary).strip()

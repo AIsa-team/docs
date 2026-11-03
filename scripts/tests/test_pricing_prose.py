@@ -61,6 +61,13 @@ class PricingProseTests(unittest.TestCase):
         prose = 'Default request estimate: see the quote endpoint.\n\nReturns rates.'
         self.assertEqual(strip_price_summary(prose), prose)
         self.assertEqual(strip_price_summary(pricing_summary(pricing)), '')
+        # Two amounts are escaped so Mintlify does not render them as math.
+        usage = {'cost_contract': 'response_units', 'default_request_estimate_usd': .154,
+                 'unit_rate_usd': .014, 'unit': 'provider_credit'}
+        operation = add_price_summary({'description': 'Get a video', 'x-aisa-pricing': usage})
+        self.assertIn(r'estimate: \$0.154 USD (not a fixed price). Declared unit rate: \$0.014 USD', operation['description'])
+        self.assertEqual(add_price_summary(copy.deepcopy(operation)), operation)
+        self.assertEqual(strip_price_summary(operation['description']), 'Get a video')
 
     def test_fixed_zero_usage_units_and_missing_prices_have_distinct_labels(self):
         fixed = pricing_summary({'cost_contract': 'fixed_success', 'default_request_estimate_usd': .08, 'customer_multiplier': 2})
