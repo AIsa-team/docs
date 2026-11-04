@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -72,11 +73,26 @@ def localize(node, labels: dict[str, str]):
     return node
 
 
-def regroup_docs(docs: dict, config: dict, labels: dict[str, str]) -> tuple[dict, list[str]]:
+OPENAPI_LINE = re.compile(r"^openapi:\s*['\"]?openapi/([^\s'\"]+)\.json\s+\w+\s+([^\s'\"]+)", re.M)
+
+
+def page_operations(root: Path | None, pages) -> dict[str, tuple[str, str]]:
+    """Each page's (OpenAPI document name, path), read from its frontmatter."""
+    found = {}
+    for page in pages if root else []:
+        path = Path(root) / (page + ".mdx")
+        match = OPENAPI_LINE.search(path.read_text()) if path.exists() else None
+        if match:
+            found[page] = (match[1], match[2])
+    return found
+
+
+def regroup_docs(docs: dict, config: dict, labels: dict[str, str], root: Path | None = None) -> tuple[dict, list[str]]:
     docs = copy.deepcopy(docs)
     en = api_tab(docs, "en")
     before = api_nav_groups.nav_pages(en)
-    en["groups"], unmapped = api_nav_groups.regroup(en["groups"], config)
+    operations = page_operations(root, before)
+    en["groups"], unmapped = api_nav_groups.regroup(en["groups"], config, operations)
     after = api_nav_groups.nav_pages(en)
     if set(before) != set(after) or len(after) != len(set(after)):
         raise AssertionError("regrouping changed the English API page set")
@@ -173,7 +189,7 @@ def main() -> int:
     if config is None:
         raise SystemExit(f"missing {api_nav_groups.CONFIG_PATH}")
     labels = json.loads((args.root / LABELS_PATH).read_text())
-    docs, unmapped = regroup_docs(json.loads(current), config, labels)
+    docs, unmapped = regroup_docs(json.loads(current), config, labels, args.root)
     for name in unmapped:
         print(f"warning: unmapped API group: {name}", file=sys.stderr)
     output = json.dumps(docs, indent=2, ensure_ascii=False) + "\n"

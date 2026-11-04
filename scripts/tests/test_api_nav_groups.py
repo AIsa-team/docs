@@ -108,8 +108,10 @@ class RegroupTests(unittest.TestCase):
         config = api_nav_groups.load(ROOT)
         labels = json.loads((ROOT / 'translations/openapi-nav-zh.json').read_text())
         names = {name for c in config['categories'] for name in [c['name'], *c['groups']]}
-        targets = list(config['groups'].values()) + list(config.get('paths', {}).values()) + config.get('pages', [])
+        targets = (list(config['groups'].values()) + list(config.get('paths', {}).values())
+                   + config.get('pages', []) + config.get('operations', []))
         names |= {t['subgroup'] for t in targets if 'subgroup' in t}
+        names |= set(config.get('vendors', [])) | set(config.get('first_party', []))
         names |= {config['section']['name']} if config.get('section') else set()
         self.assertEqual(sorted(name for name in names if not labels.get(name)), [])
 
@@ -263,6 +265,97 @@ class PlatformNavigationTests(unittest.TestCase):
                          [INDEX_PAGE + '.mdx', 'zh/' + INDEX_PAGE + '.mdx'])
 
 
+# `operations` rules split one provider's endpoints across platforms by path.
+OPERATION_CONFIG = copy.deepcopy(PLATFORM_CONFIG)
+OPERATION_CONFIG['first_party'] = ['AIsa Social']
+OPERATION_CONFIG['categories'][1]['groups'] += ['1688', 'AIsa commerce']
+OPERATION_CONFIG['categories'][2]['groups'] += ['AIsa Social']
+OPERATION_CONFIG['operations'] = [
+    {'spec': 'aisa-commerce', 'pattern': '^/commerce/amazon/', 'category': 'Commerce', 'group': 'Amazon'},
+    {'spec': 'aisa-commerce', 'pattern': '^/commerce/1688/', 'category': 'Commerce', 'group': '1688'},
+    {'spec': 'aisa-social', 'pattern': '^/social/tiktok/', 'category': 'Social', 'group': 'TikTok', 'subgroup': 'AIsa Social'},
+    {'spec': 'aisa-social', 'pattern': '^/social/posts', 'category': 'Social', 'group': 'AIsa Social', 'subgroup': 'Posts'},
+    {'spec': 'aisa-social', 'pattern': '^/social/accounts', 'category': 'Social', 'group': 'AIsa Social', 'subgroup': 'Accounts'},
+]
+
+OPERATION_LABELS = {**PLATFORM_LABELS, '1688': '1688', 'AIsa commerce': 'AIsa 电商', 'AIsa Social': 'AIsa Social',
+                    'Posts': '帖子', 'Accounts': '账户', 'Misc': '其他接口'}
+
+OPERATION_LEGACY = PLATFORM_LEGACY[:4] + [
+    {'group': 'AIsa commerce', 'pages': [
+        'api-reference/aisa-commerce/get_amazon-search', 'api-reference/aisa-commerce/get_1688-search',
+        'api-reference/aisa-commerce/get_status']},
+    {'group': 'AIsa Social', 'pages': [
+        {'group': 'Misc', 'pages': ['api-reference/aisa-social/get_tiktok-insights']},
+        'api-reference/aisa-social/get_accounts', 'api-reference/aisa-social/post_posts']},
+]
+
+OPERATIONS = {
+    'api-reference/aisa-commerce/get_amazon-search': ('aisa-commerce', '/commerce/amazon/search'),
+    'api-reference/aisa-commerce/get_1688-search': ('aisa-commerce', '/commerce/1688/search'),
+    'api-reference/aisa-commerce/get_status': ('aisa-commerce', '/status'),
+    'api-reference/aisa-social/get_tiktok-insights': ('aisa-social', '/social/tiktok/insights'),
+    'api-reference/aisa-social/get_accounts': ('aisa-social', '/social/accounts'),
+    'api-reference/aisa-social/post_posts': ('aisa-social', '/social/posts'),
+    # The same path in another document does not match a rule for this one.
+    'api-reference/amazon/product': ('amazon', '/commerce/1688/product'),
+}
+
+
+class OperationRuleTests(unittest.TestCase):
+    def regrouped(self):
+        groups, unmapped = regroup(copy.deepcopy(OPERATION_LEGACY), OPERATION_CONFIG, OPERATIONS)
+        self.assertEqual(unmapped, [])
+        return {c['group']: c for c in groups[1]['pages']}
+
+    def test_operation_rules_move_a_providers_pages_to_their_platforms(self):
+        commerce = self.regrouped()['Commerce']
+        self.assertEqual(commerce['pages'], [
+            {'group': 'Amazon', 'pages': ['api-reference/amazon/product', 'api-reference/aisa-commerce/get_amazon-search']},
+            {'group': '1688', 'pages': ['api-reference/aisa-commerce/get_1688-search']},
+            {'group': 'AIsa commerce', 'pages': ['api-reference/aisa-commerce/get_status']},
+        ])
+
+    def test_a_page_leaves_its_kept_subgroup_and_an_empty_subgroup_is_dropped(self):
+        social = self.regrouped()['Social']
+        aisa = next(g for g in social['pages'] if g['group'] == 'AIsa Social')
+        self.assertEqual([g['group'] for g in aisa['pages']], ['Posts', 'Accounts'])
+        self.assertNotIn('Misc', json.dumps(social))
+
+    def test_first_party_subgroups_sit_between_own_pages_and_vendors(self):
+        social = self.regrouped()['Social']
+        self.assertEqual([g['group'] for g in social['pages']], ['TikTok', 'Douyin', 'AIsa Social'])
+        tiktok = social['pages'][0]['pages']
+        self.assertEqual(tiktok[0], 'api-reference/tiktok/videos')
+        self.assertEqual([g['group'] for g in tiktok[1:]], ['AIsa Social', 'TikHub'])
+        self.assertEqual(tiktok[1]['pages'], ['api-reference/aisa-social/get_tiktok-insights'])
+
+    def test_operation_regroup_keeps_pages_and_is_a_fixed_point(self):
+        groups, _ = regroup(copy.deepcopy(OPERATION_LEGACY), OPERATION_CONFIG, OPERATIONS)
+        self.assertEqual(sorted(nav_pages(groups)), sorted(nav_pages(OPERATION_LEGACY)))
+        again, unmapped = regroup(copy.deepcopy(groups), OPERATION_CONFIG, OPERATIONS)
+        self.assertEqual((again, unmapped), (groups, []))
+
+    def test_regroup_docs_reads_operations_from_page_frontmatter(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for page, (spec, path) in OPERATIONS.items():
+                (root / page).parent.mkdir(parents=True, exist_ok=True)
+                (root / (page + '.mdx')).write_text(f'---\nopenapi: "openapi/{spec}.json GET {path}"\n---\n')
+            docs, _ = regroup_docs(docs_for(copy.deepcopy(OPERATION_LEGACY)), OPERATION_CONFIG, OPERATION_LABELS, root)
+        expected, _ = regroup(copy.deepcopy(OPERATION_LEGACY), OPERATION_CONFIG, OPERATIONS)
+        self.assertEqual(api_groups(docs, 'en'), expected)
+        zh_social = api_groups(docs, 'zh')[1]['pages'][1]
+        self.assertEqual([g['group'] for g in zh_social['pages'][-1]['pages']], ['帖子', '账户'])
+
+    def test_config_rejects_an_operation_rule_without_a_spec_or_pattern(self):
+        for broken in ({'pattern': '^/x', 'category': 'Commerce'}, {'spec': 'x', 'category': 'Commerce'}):
+            config = copy.deepcopy(OPERATION_CONFIG)
+            config['operations'].append(broken)
+            with self.assertRaisesRegex(ValueError, 'spec and a pattern'):
+                api_nav_groups.validate(config)
+
+
 class PlatformPlacementTests(GeneratePagesPlacementTests):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -302,6 +395,22 @@ class PlatformPlacementTests(GeneratePagesPlacementTests):
         self.assertEqual(tiktok['pages'][0], 'api-reference/tiktok/videos')
         self.assertEqual(tiktok['pages'][1]['group'], 'TikHub')
         self.assertEqual(tiktok['pages'][1]['pages'][-1], 'api-reference/tikhub/get_tikhub-tiktok-two')
+
+    def test_operation_rule_places_a_new_page_by_its_path(self):
+        (self.root / 'openapi/nav-groups.json').write_text(json.dumps(OPERATION_CONFIG))
+        (self.root / 'translations/openapi-nav-zh.json').write_text(json.dumps(OPERATION_LABELS, ensure_ascii=False))
+        (self.root / 'api-reference/aisa-commerce').mkdir(parents=True)
+        (self.root / 'api-reference/aisa-commerce/get_amazon-two.mdx').write_text(
+            '---\ntitle: Two\nopenapi: "openapi/aisa-commerce.json GET /commerce/amazon/two"\nx-aisa-operation-id: "one"\n---\n')
+        changes = {}
+        generate_pages(self.root, 'aisa-commerce', self.page_document('AIsa commerce', '/commerce/amazon/two'), changes)
+        docs = json.loads(changes[self.root / 'docs.json'])
+        amazon = api_groups(docs, 'en')[1]['pages'][0]['pages'][0]
+        self.assertEqual(amazon, {'group': 'Amazon', 'pages': [
+            'api-reference/amazon/product', 'api-reference/aisa-commerce/get_amazon-two']})
+        zh_amazon = api_groups(docs, 'zh')[1]['pages'][0]['pages'][0]
+        self.assertEqual(zh_amazon['pages'][-1], 'zh/api-reference/aisa-commerce/get_amazon-two')
+        self.assertNotIn('AIsa commerce', [g['group'] for g in api_groups(docs, 'en')[1]['pages'][0]['pages']])
 
     # The inherited tests assume the flat fixture configuration.
     test_mapped_provider_creates_vendor_subgroup_in_category_order = None

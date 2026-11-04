@@ -14,10 +14,18 @@ Optional keys:
   with `/`. They move a vendor's per-platform groups to that platform.
 - `vendors`: subgroup names of third-party vendors. In a platform group they
   sort after the platform's own pages.
+- `first_party`: subgroup names of AIsa's own products inside a platform group.
+  They sort after the platform's own pages and before third-party vendors.
+- `operations`: rules for single endpoints, matched by the OpenAPI document
+  name (`spec`, e.g. `aisa-commerce`) and a regular expression on the path
+  (`pattern`). They place one provider's endpoints under several platforms,
+  which a page filename cannot always tell. They win over `pages` rules.
+  Subgroups that these rules create in one group follow the rules' order.
 """
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 CONFIG_PATH = Path("openapi/nav-groups.json")
@@ -53,6 +61,11 @@ def validate(config: dict) -> None:
     if section is not None and section.get("name") in categories:
         raise ValueError("the API navigation section must not share a category name")
     targets = list(mappings(config).items()) + [(rule["prefix"], rule) for rule in config.get("pages", [])]
+    for rule in config.get("operations", []):
+        if not isinstance(rule.get("spec"), str) or not isinstance(rule.get("pattern"), str):
+            raise ValueError(f"operation rule needs a spec and a pattern: {rule!r}")
+        re.compile(rule["pattern"])
+        targets.append((f"{rule['spec']} {rule['pattern']}", rule))
     targets += list(config.get("paths", {}).items())
     for source, target in targets:
         category = categories.get(target.get("category"))
@@ -75,7 +88,21 @@ def fallback_target(config: dict | None, name: str) -> dict | None:
     return None
 
 
-def page_target(config: dict, page: str) -> dict | None:
+def operation_target(config: dict, operation: tuple[str, str] | None) -> dict | None:
+    """The first `operations` rule for a (document name, path) pair."""
+    if operation:
+        spec, path = operation
+        for rule in config.get("operations", []):
+            if rule["spec"] == spec and re.search(rule["pattern"], path):
+                return rule
+    return None
+
+
+def page_target(config: dict, page: str, operation: tuple[str, str] | None = None) -> dict | None:
+    """Where a page goes by its own rule: its operation first, then its filename."""
+    found = operation_target(config, operation)
+    if found:
+        return found
     page = page.removeprefix("zh/")
     for rule in config.get("pages", []):
         if page.startswith(rule["prefix"]):
@@ -123,8 +150,18 @@ def locate(groups: list, config: dict, target: dict, label=lambda name: name) ->
     if target.get("group"):
         node = _child(node["pages"], label(target["group"]), [label(g) for g in category["groups"]])
     if target.get("subgroup"):
-        node = _child(node["pages"], label(target["subgroup"]))
+        node = _child(node["pages"], label(target["subgroup"]), _subgroup_order(config, target, label))
     return node["pages"]
+
+
+def _subgroup_order(config: dict, target: dict, label) -> list[str]:
+    """Subgroups that `operations` rules create in the target's group, in rule order."""
+    order: list[str] = []
+    for rule in config.get("operations", []):
+        if rule.get("group") == target.get("group") and rule.get("subgroup"):
+            if label(rule["subgroup"]) not in order:
+                order.append(label(rule["subgroup"]))
+    return order
 
 
 def nav_pages(node) -> list[str]:
@@ -138,30 +175,43 @@ def nav_pages(node) -> list[str]:
 
 
 def order_vendors(groups: list, config: dict, label=lambda name: name) -> None:
-    """Put third-party vendor subgroups after a platform's own pages, in place."""
-    vendors = {label(name) for name in config.get("vendors", [])}
-    if not vendors:
+    """In a platform group, put AIsa's own product subgroups after the platform's
+    own pages, then third-party vendor subgroups. In place; otherwise stable."""
+    tiers = {label(name): 1 for name in config.get("first_party", [])}
+    tiers.update({label(name): 2 for name in config.get("vendors", [])})
+    if not tiers:
         return
+    # A category may hold a platform group that shares a first-party name.
+    section = (config.get("section") or {}).get("name")
+    containers = {label(c["name"]) for c in config["categories"]} | ({label(section)} if section else set())
+
+    def tier(item) -> int:
+        return tiers.get(item.get("group"), 0) if isinstance(item, dict) else 0
 
     def visit(items: list) -> None:
         for item in items:
             if isinstance(item, dict):
                 pages = item.get("pages", [])
-                if any(isinstance(p, dict) and p.get("group") in vendors for p in pages):
-                    pages.sort(key=lambda p: isinstance(p, dict) and p.get("group") in vendors)
+                if item.get("group") not in containers and any(tier(p) for p in pages):
+                    pages.sort(key=tier)
                 visit(pages)
 
     visit(groups)
 
 
-def regroup(groups: list, config: dict) -> tuple[list, list[str]]:
+def regroup(groups: list, config: dict, operations: dict | None = None) -> tuple[list, list[str]]:
     """Rebuild English API groups as [section ->] category -> platform groups.
 
     Returns the new groups and the names of top-level groups without a mapping.
     With a fallback category they become groups in it; without one they are kept
     unchanged after the categories. Duplicate pages keep their first position.
+    `operations` maps a page to its (document name, path) for `operations` rules.
     """
     maps = mappings(config)
+    operations = operations or {}
+
+    def explicit(page: str) -> dict | None:
+        return page_target(config, page, operations.get(page))
     paths = config.get("paths", {})
     section = (config.get("section") or {}).get("name")
     result: list = []
@@ -186,17 +236,41 @@ def regroup(groups: list, config: dict) -> tuple[list, list[str]]:
             return maps.get(path[-1])
         return None
 
+    later: list[tuple[str, dict]] = []
+
+    def keep(node: dict, group: str | None) -> dict | None:
+        """Copy a kept subgroup, moving out pages whose rule names another group."""
+        pages = []
+        for child in node.get("pages", []):
+            if isinstance(child, dict):
+                child = keep(child, group)
+                if child is not None:
+                    pages.append(child)
+                continue
+            moved = explicit(child)
+            if moved and moved.get("group") != group:
+                later.append((child, moved))
+            else:
+                pages.append(child)
+        return {**node, "pages": pages} if pages else None
+
     def route(items: list, target: dict, path: list[str]) -> None:
         for item in items:
             if isinstance(item, str):
-                merge(locate(result, config, page_target(config, item) or target), [item])
+                moved = explicit(item)
+                if moved and moved.get("group") != target.get("group"):
+                    later.append((item, moved))
+                else:
+                    merge(locate(result, config, moved or target), [item])
                 continue
             child = path + [item["group"]]
             found = rule(child, target)
             if found is not None:
                 route(item.get("pages", []), found, child)
             else:
-                merge(locate(result, config, target), [item])
+                kept = keep(item, target.get("group"))
+                if kept is not None:
+                    merge(locate(result, config, target), [kept])
 
     top: list = []
     for group in groups:
@@ -212,6 +286,8 @@ def regroup(groups: list, config: dict) -> tuple[list, list[str]]:
             unmapped.append(group)
         else:
             route(group.get("pages", []), target, [group["group"]])
+    for page, moved in later:
+        merge(locate(result, config, moved), [page])
     leftovers: list = []
     for group in unmapped:
         fallback = fallback_target(config, group["group"]) if isinstance(group, dict) else None

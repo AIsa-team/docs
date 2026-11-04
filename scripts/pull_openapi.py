@@ -322,11 +322,12 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
         for _, _, operation in operations(document):
             if operation.get('x-aisa-docs-url') != DOCS_PREFIX + selected_pages[operation['operationId']][-1]:
                 raise ValueError('Canonical page binding differs from existing presentation selection')
-    paths, disabled_pages = [], set()
+    paths, disabled_pages, page_operations = [], set(), {}
     for path, method, operation in operations(document):
         page_names = selected_pages[operation['operationId']]
         disabled = operation.get('x-aisa-status') == 'disabled'
         for page in page_names:
+            page_operations[page] = (provider, path)
             if disabled:
                 disabled_pages.add(page)
             else:
@@ -415,7 +416,8 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                 if target:
                     label = (lambda name: nav_labels.get(name) or name) if prefix else (lambda name: name)
                     for page in additions:
-                        placement = api_nav_groups.page_target(nav_config, page) or target
+                        operation = page_operations.get(page.removeprefix(prefix))
+                        placement = api_nav_groups.page_target(nav_config, page, operation) or target
                         api_nav_groups.locate(groups, nav_config, placement, label).append(page)
                     api_nav_groups.order_vendors(groups, nav_config, label)
                     continue
