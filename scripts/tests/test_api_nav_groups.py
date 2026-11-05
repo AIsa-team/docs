@@ -9,7 +9,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import api_nav_groups
 from api_nav_groups import nav_pages, regroup
 from pull_openapi import generate_pages
-from regroup_api_reference import regroup_docs, platform_rows, platform_index, index_pages, INDEX_PAGE
+from regroup_api_reference import (regroup_docs, platform_rows, platform_index, index_pages, INDEX_PAGE,
+                                   category_rows, category_cards, card_body, CARDS_START, CARDS_END)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -263,6 +264,51 @@ class PlatformNavigationTests(unittest.TestCase):
         self.assertIn('| [抖音（Douyin）](/zh/api-reference/tikhub/get_tikhub-douyin-one) | 社媒 | 1 |', zh)
         self.assertEqual(sorted(index_pages(docs, PLATFORM_CONFIG, PLATFORM_LABELS)),
                          [INDEX_PAGE + '.mdx', 'zh/' + INDEX_PAGE + '.mdx'])
+
+    def test_category_cards_follow_the_sidebar_with_platforms_and_counts(self):
+        docs, _ = regroup_docs(docs_for(copy.deepcopy(PLATFORM_LEGACY)), PLATFORM_CONFIG, PLATFORM_LABELS)
+        self.assertEqual([(r['name'], r['icon'], r['first'], r['platforms'], r['count'])
+                          for r in category_rows(docs, PLATFORM_CONFIG)], [
+            ('Commerce', 'cart-shopping', 'api-reference/amazon/product', ['Amazon'], 1),
+            ('Social', 'hashtag', 'api-reference/tiktok/videos', ['TikTok', 'Douyin'], 3),
+            ('Other', 'ellipsis', 'api-reference/brand-new/one', ['Brand New'], 1),
+        ])
+        en = category_cards(docs, PLATFORM_CONFIG, PLATFORM_LABELS, 'en')
+        self.assertTrue(en.startswith(CARDS_START + '\n<CardGroup cols={2}>') and en.endswith('</CardGroup>\n' + CARDS_END))
+        self.assertIn('  <Card title="Social" icon="hashtag" href="/api-reference/tiktok/videos">\n'
+                      '    TikTok and Douyin. 3 endpoints.\n  </Card>', en)
+        self.assertIn('    Amazon. 1 endpoint.', en)
+        zh = category_cards(docs, PLATFORM_CONFIG, PLATFORM_LABELS, 'zh')
+        self.assertIn('  <Card title="社媒" icon="hashtag" href="/zh/api-reference/tiktok/videos">\n'
+                      '    TikTok 和抖音，共 3 个端点。', zh)
+
+    def test_card_body_names_six_platforms_then_counts_the_rest(self):
+        row = {'platforms': ['Douyin', 'A', 'B', 'C', 'D', 'E', 'F', 'G'], 'count': 1234}
+        self.assertEqual(card_body(row, PLATFORM_LABELS, 'en'),
+                         'Douyin, A, B, C, D, E, and 2 more platforms. 1,234 endpoints.')
+        self.assertEqual(card_body(row, PLATFORM_LABELS, 'zh'), '抖音、A、B、C、D、E 等 8 个平台，共 1,234 个端点。')
+        # One name left over is shown rather than counted.
+        row['platforms'] = row['platforms'][:7]
+        self.assertEqual(card_body(row, PLATFORM_LABELS, 'en'),
+                         'Douyin, A, B, C, D, E, and F. 1,234 endpoints.')
+        row['platforms'] = ['Amazon', 'Douyin']
+        self.assertEqual(card_body(row, PLATFORM_LABELS, 'zh'), 'Amazon 和抖音，共 1,234 个端点。')
+
+    def test_index_pages_refresh_only_the_card_block_of_pages_that_have_one(self):
+        docs, _ = regroup_docs(docs_for(copy.deepcopy(PLATFORM_LEGACY)), PLATFORM_CONFIG, PLATFORM_LABELS)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'resources').mkdir()
+            (root / 'resources/data-apis.mdx').write_text(f'Intro.\n\n{CARDS_START}\nstale\n{CARDS_END}\n\nOutro.\n')
+            (root / 'zh/resources').mkdir(parents=True)
+            (root / 'zh/resources/data-apis.mdx').write_text('No card block.\n')
+            pages = index_pages(docs, PLATFORM_CONFIG, PLATFORM_LABELS, root)
+        self.assertNotIn('zh/resources/data-apis.mdx', pages)
+        text = pages['resources/data-apis.mdx']
+        self.assertTrue(text.startswith('Intro.\n\n' + CARDS_START + '\n<CardGroup'))
+        self.assertTrue(text.endswith(CARDS_END + '\n\nOutro.\n'))
+        self.assertNotIn('stale', text)
+        self.assertIn('TikTok and Douyin. 3 endpoints.', text)
 
 
 # `operations` rules split one provider's endpoints across platforms by path.
