@@ -16,6 +16,8 @@ on:
       - openapi/upstream/**
       # Translation memory feeds the generated Chinese pages and contracts.
       - translations/openapi-zh.json
+      # The model families config feeds the generated model tables.
+      - catalog/model-families.json
 
 permissions:
   contents: read
@@ -50,6 +52,11 @@ jobs:
           python scripts/sync_dev_runtime.py --write "${options[@]}" \
             --report "$RUNNER_TEMP/dev-runtime-report.json"
           git diff --check
+      - name: Refresh the model pages from the live model price list
+        # A failed read keeps the saved snapshot; the next run retries.
+        run: |
+          python scripts/model_pages.py --refresh
+          git diff --check
       - name: Retain the acquisition and generation report
         if: always()
         uses: actions/upload-artifact@v4
@@ -62,13 +69,15 @@ jobs:
           assessed_base=$(git rev-parse HEAD)
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add -- docs.json openapi.yaml openapi api-reference zh/api-reference docs/dev-runtime.json
+          git add -- docs.json openapi.yaml openapi api-reference zh/api-reference docs/dev-runtime.json \
+            resources/data-apis.mdx zh/resources/data-apis.mdx \
+            catalog/models.json models zh/models guides/models.mdx zh/guides/models.mdx
           if git diff --cached --quiet; then
             echo 'Dev documentation is already up to date.' >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           git diff --cached --check
-          git commit -m 'docs(dev): refresh dev Runtime contracts'
+          git commit -m 'docs(dev): refresh dev Runtime contracts and model pages'
           # Publish only the validated candidate. Retry next run if dev moved.
           git fetch origin dev
           if [ "$(git rev-parse origin/dev)" != "$assessed_base" ]; then
