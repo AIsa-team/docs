@@ -46,8 +46,8 @@ class ReadableNotesTests(unittest.TestCase):
         for language in ("en", "zh"):
             context = dict(document=document, method="get", path="/price", spec_path="openapi/p.json")
             block = readable_block(operation, language, **context)
-            self.assertIn(r"\$0.3 USD", block)
-            self.assertIn(r"\$0.075 USD", block)
+            self.assertIn(r"\$0.3", block)
+            self.assertIn(r"\$0.075", block)
             canonical = pricing_summary(operation["x-aisa-pricing"], language)
             self.assertNotIn(r"\$", canonical)
             parsed = request_blocks(block)
@@ -133,7 +133,7 @@ class ReadableNotesTests(unittest.TestCase):
         self.assertIn('1000000', rendered)
         self.assertIn('Declared rounding', rendered)
         self.assertNotIn('ceil((', rendered)
-        self.assertIn('supporting X-AISA-Cost-Mode: quote', rendered)
+        self.assertIn('supports `X-AISA-Cost-Mode: quote`', rendered)
         self.assertEqual(formula_text(dict(plan, fixed_units=1)), '1 + (ceil((limit) / 1000000)) × 100000')
 
     def test_same_facts_new_composer_regenerates_and_then_is_idempotent(self):

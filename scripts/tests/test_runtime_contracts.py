@@ -89,8 +89,8 @@ class CompositionTests(unittest.TestCase):
         self.assertEqual(op["x-aisa-runtime-operation"], {"operation_id": "published_identity",
             "method": "POST", "path": "/apis/v1/similarweb/test"})
         self.assertEqual(op["summary"], "Runtime title")
-        self.assertTrue(op["description"].startswith("Editorial\n\n"))
-        self.assertIn('$0.09 USD', op['description'])
+        # The price shows in the page cost section, not the description.
+        self.assertEqual(op["description"], "Editorial")
         self.assertEqual(op["x-aisa-pricing"]["default_request_estimate_usd"], 0.09)
         self.assertEqual(op["x-aisa-status"], "disabled")
         self.assertEqual(op["x-aisa-constraints"]["notes"], ["Latest completed month only"])
@@ -477,7 +477,7 @@ class PullTests(unittest.TestCase):
             changes, _ = stage(self.root, None, "http://localhost", False)
         self.assertIn('"sha256:facts"', fetch.call_args.args)
         document = json.loads(changes[self.root / "openapi/similarweb.json"])
-        self.assertTrue(operation(document)["description"].startswith("Changed editorial\n\n"))
+        self.assertEqual(operation(document)["description"], "Changed editorial")
 
 
 class ConsolidationTests(unittest.TestCase):

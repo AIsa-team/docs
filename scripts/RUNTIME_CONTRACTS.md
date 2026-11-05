@@ -28,12 +28,14 @@ Runtime `x-aisa-pricing` owns published reference prices. The composer removes
 obsolete monetary rate clauses from upstream/runtime descriptions, summaries,
 and nested request/response documentation before localization, consolidation,
 and the sales projection. It does not turn estimates into fixed charges.
-It then generates a visible price paragraph in each operation description and
-the English/Chinese page cost block from that same metadata. Fixed-success
-pricing shows a reference price per successful request; usage-based pricing
-shows a default request estimate, plus the declared unit rate when available.
-Unknown prices are labeled unavailable, never zero. The paragraph is replaced
-on every generation, so a later Runtime price update also updates the prose.
+It then generates a price paragraph in the English/Chinese page cost block
+from that same metadata. Operation descriptions carry no price: Mintlify shows
+the description under the page title, so a price there would lead the page.
+Fixed-success pricing shows "Fixed per call" with a price per successful
+request; usage-based pricing shows "Metered" with the declared unit price when
+available and the reference request estimate. Unknown prices are labeled
+unavailable, never zero. The paragraph is replaced on every generation, so a
+later Runtime price update also updates the prose.
 Provider sources and source review receipts remain unchanged. JSON examples,
 defaults, enums, extension metadata, monetary units, product-price filters, and
 financial transaction amounts are not rate claims and remain intact.

@@ -50,8 +50,35 @@ def usd(value):
     return '$' + (format(amount, 'f').rstrip('0').rstrip('.') if amount % 1 else format(amount, '.0f'))
 
 
+# Contracts whose charge follows what the response consumes.
+METERED = {'response_usd', 'response_count', 'response_sku', 'response_units', 'request_formula',
+           'response_components', 'plan_units'}
+# Readable names for declared billing units; other units show their words.
+UNIT_NAMES = {
+    'provider_credit': ('provider credit', '提供商额度'),
+    'similarweb_credit': ('SimilarWeb credit', 'SimilarWeb 额度'),
+    'firecrawl_credit': ('Firecrawl credit', 'Firecrawl 额度'),
+    'tavily_credit': ('Tavily credit', 'Tavily 额度'),
+    'akta_credit': ('Akta credit', 'Akta 额度'),
+    'similar_creator_point': ('similar-creator point', '相似达人点数'),
+    'email_lookup_point': ('email lookup point', '邮箱查询点数'),
+}
+
+
+def unit_name(unit, language='en'):
+    if not isinstance(unit, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', unit):
+        return None
+    names = UNIT_NAMES.get(unit)
+    if names:
+        return names[1] if language == 'zh' else names[0]
+    return unit.replace('_', ' ')
+
+
 def pricing_summary(pricing, language='en'):
-    """Render only declared prices; an estimate is never a unit or fixed price."""
+    """Render only declared prices; an estimate is never a unit or fixed price.
+
+    The words follow the pricing guide: "Fixed per call" and "Metered".
+    """
     if not isinstance(pricing, dict) or not pricing:
         return ''
     zh = language == 'zh'
@@ -59,34 +86,47 @@ def pricing_summary(pricing, language='en'):
     estimate = None if unavailable else usd(pricing.get('default_request_estimate_usd'))
     fixed = pricing.get('customer_pricing') == 'fixed_success' or pricing.get('cost_contract') == 'fixed_success'
     if estimate is not None and fixed:
-        summary = f'公开参考价格：每次成功请求 {estimate} USD。' if zh else f'Published reference price: {estimate} USD per successful request.'
-    elif estimate is not None:
-        summary = f'默认请求预估费用：{estimate} USD（不是固定价格）。' if zh else f'Default request estimate: {estimate} USD (not a fixed price).'
-        if pricing.get('cost_contract') in {'response_usd', 'response_count', 'response_sku', 'response_units', 'request_formula', 'response_components', 'plan_units'}:
-            summary = ('按用量计费；' if zh else 'Usage-based billing; ') + summary
-    else:
-        summary = '当前未提供请求参考价格；请使用接口支持的报价功能确认费用。' if zh else 'A request reference price is not currently available; use a request quote where supported.'
+        return f'按次固定：每次成功请求 {estimate}。' if zh else f'Fixed per call: {estimate} per successful request.'
     rate = usd(pricing.get('unit_rate_usd'))
-    unit = pricing.get('unit')
-    if rate is not None and isinstance(unit, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,80}', unit):
-        summary += f' 声明的单位费率：每 {unit} {rate} USD。' if zh else f' Declared unit rate: {rate} USD per {unit}.'
-    summary += ' 最终费用以账户适用价格及实际结算为准。' if zh else ' Account-specific pricing and final settlement may differ.'
+    unit = unit_name(pricing.get('unit'), language)
+    metered = pricing.get('cost_contract') in METERED or (rate is not None and unit)
+    if zh:
+        per = ('每个' + (' ' if unit and unit[0].isascii() else '') + f'{unit} {rate}') if rate is not None and unit else ''
+        about = f'参考请求约 {estimate}' if estimate is not None else ''
+        if metered:
+            detail = '，'.join(part for part in (per, about) if part)
+            summary = '按量计费：' + detail + '。' if detail else '按量计费。'
+        else:
+            summary = about + '。' if about else ''
+        if estimate is None:
+            summary += '暂无参考价格，接口支持报价时请先获取报价。'
+        return summary
+    per = f'{rate} per {unit}' if rate is not None and unit else ''
+    if metered:
+        summary = f'Metered: {per}.' if per else 'Metered.'
+        if estimate is not None:
+            summary = (summary + f' A reference request costs about {estimate}.') if per else f'Metered: a reference request costs about {estimate}.'
+    else:
+        summary = f'A reference request costs about {estimate}.' if estimate is not None else ''
+    if estimate is None:
+        summary = (summary + ' ' if summary else '') + 'No reference price yet; get a quote first where the endpoint supports quotes.'
     return summary
 
 
-def add_price_summary(operation, language='en'):
-    """Replace a generated paragraph on each run so price changes cannot stick."""
+def remove_price_summary(operation):
+    """Keep prices out of the operation description.
+
+    Mintlify shows the description under the page title, so a price there
+    leads the page. The page's cost section shows the price instead
+    (readable_contract_notes.readable_block).
+    """
     description = strip_price_summary(operation.get('description', ''))
-    summary = pricing_summary(operation.get('x-aisa-pricing'), language)
-    # Paired currency signs would become inline math in Mintlify, as in
-    # readable_contract_notes.readable_block.
-    if summary.count('$') >= 2:
-        summary = summary.replace('$', r'\$')
-    if summary:
+    if pricing_summary(operation.get('x-aisa-pricing')):
         description = description.replace(NOTICE, '').replace(NOTICE_ZH, '').strip()
-        operation['description'] = (description + '\n\n' + summary).strip()
-    elif 'description' in operation:
+    if description:
         operation['description'] = description
+    else:
+        operation.pop('description', None)
     return operation
 
 MONEY = re.compile(r'(?:US)?\$\s*\d[\d,]*(?:\.\d+)?(?:\s*USD)?|\b\d[\d,]*(?:\.\d+)?\s*\$|\b\d+(?:\.\d+)?\s*(?:USD|美元|cents?)\b', re.I)
@@ -212,7 +252,7 @@ def clean_document(document: dict) -> dict:
             if isinstance(result.get(field), str):
                 result[field] = clean_text(result[field])
         if is_operation:
-            add_price_summary(result)
+            remove_price_summary(result)
         return result
 
     # Paths and reusable declaration names are user-controlled map keys.

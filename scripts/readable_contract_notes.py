@@ -125,18 +125,18 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
         if summary.count("$") >= 2:
             summary = summary.replace("$", r"\$")
         lines += [summary, ""]
-        lines += [t("Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.", "公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。"), ""]
+        lines += [t("These are reference values, not your account's quote or final charge. If the endpoint supports `X-AISA-Cost-Mode: quote`, get a free quote for the exact request first. After the call, check the settled cost in the response cost metadata and in Usage Logs. Cost fields use micro-USD: 1 USD = 1,000,000 micro-USD.", "以上是参考值，不是你的账户报价或最终扣费。如果接口支持 `X-AISA-Cost-Mode: quote`，请先为完整请求免费获取报价。调用后，在响应的费用元数据和 Usage Logs 中核对实际费用。费用字段以 micro-USD 为单位：1 USD = 1,000,000 micro-USD。"), ""]
         labels = {
-            "default_request_estimate_usd": t("Default request reference estimate (USD)", "默认请求参考估价（USD）"),
-            "unit_rate_usd": t("Declared unit rate (USD)", "声明的单位费率（USD）"),
+            "default_request_estimate_usd": t("Reference request estimate (USD)", "参考请求预估（USD）"),
+            "unit_rate_usd": t("Unit price (USD)", "单价（USD）"),
             "unit": t("Billing unit", "计费单位"),
-            "cost_contract": t("Cost contract", "计费依据"),
-            "customer_multiplier": t("Published reference multiplier", "公开参考倍率"),
+            "cost_contract": t("Billing basis", "计费依据"),
+            "customer_multiplier": t("Reference multiplier", "参考倍率"),
             "units_per_count": t("Count multiplier before declared scaling", "缩放前的计数倍率"),
-            "maximum_units": t("Declared maximum count/units", "声明的最大计数或单位数"),
+            "maximum_units": t("Maximum count or units", "最大计数或单位数"),
             "unit_rounding": t("Unit rounding", "单位取整"),
             "unit_scale": t("Unit scaling divisor", "单位缩放除数"),
-            "evidence_source": t("Settlement evidence source", "结算证据来源"),
+            "evidence_source": t("Settlement evidence source", "结算依据来源"),
         }
         lines += [line(label, pricing[key]) for key, label in labels.items() if key in pricing]
         if "units_per_count" in pricing:
