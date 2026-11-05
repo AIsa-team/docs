@@ -112,6 +112,7 @@ class RegroupTests(unittest.TestCase):
         targets = (list(config['groups'].values()) + list(config.get('paths', {}).values())
                    + config.get('pages', []) + config.get('operations', []))
         names |= {t['subgroup'] for t in targets if 'subgroup' in t}
+        names |= {t['subsection'] for t in targets if 'subsection' in t}
         names |= set(config.get('vendors', [])) | set(config.get('first_party', []))
         names |= {config['section']['name']} if config.get('section') else set()
         self.assertEqual(sorted(name for name in names if not labels.get(name)), [])
@@ -393,6 +394,36 @@ class OperationRuleTests(unittest.TestCase):
         self.assertEqual(api_groups(docs, 'en'), expected)
         zh_social = api_groups(docs, 'zh')[1]['pages'][1]
         self.assertEqual([g['group'] for g in zh_social['pages'][-1]['pages']], ['帖子', '账户'])
+
+    def test_subsections_nest_inside_a_subgroup_in_rule_order_and_are_a_fixed_point(self):
+        config = copy.deepcopy(OPERATION_CONFIG)
+        config['operations'][2:2] = [
+            {'spec': 'aisa-social', 'pattern': '^/social/tiktok/ads/', 'category': 'Social', 'group': 'TikTok',
+             'subgroup': 'AIsa Social', 'subsection': 'Ads'},
+            {'spec': 'aisa-social', 'pattern': '^/social/tiktok/shop/', 'category': 'Social', 'group': 'TikTok',
+             'subgroup': 'AIsa Social', 'subsection': 'Shop'},
+        ]
+        operations = {**OPERATIONS,
+                      'api-reference/aisa-social/get_tiktok-shop': ('aisa-social', '/social/tiktok/shop/items'),
+                      'api-reference/aisa-social/get_tiktok-ads': ('aisa-social', '/social/tiktok/ads/list')}
+        legacy = copy.deepcopy(OPERATION_LEGACY)
+        legacy[-1]['pages'] += ['api-reference/aisa-social/get_tiktok-shop', 'api-reference/aisa-social/get_tiktok-ads']
+        groups, _ = regroup(copy.deepcopy(legacy), config, operations)
+        social = next(c for c in groups[1]['pages'] if c['group'] == 'Social')
+        aisa = social['pages'][0]['pages'][1]
+        self.assertEqual(aisa, {'group': 'AIsa Social', 'pages': [
+            'api-reference/aisa-social/get_tiktok-insights',
+            {'group': 'Ads', 'pages': ['api-reference/aisa-social/get_tiktok-ads']},
+            {'group': 'Shop', 'pages': ['api-reference/aisa-social/get_tiktok-shop']}]})
+        again, unmapped = regroup(copy.deepcopy(groups), config, operations)
+        self.assertEqual((again, unmapped), (groups, []))
+
+    def test_config_rejects_a_subsection_without_a_subgroup(self):
+        config = copy.deepcopy(OPERATION_CONFIG)
+        config['operations'].append({'spec': 'x', 'pattern': '^/x', 'category': 'Social', 'group': 'TikTok',
+                                     'subsection': 'Ads'})
+        with self.assertRaisesRegex(ValueError, 'subsection requires a subgroup'):
+            api_nav_groups.validate(config)
 
     def test_config_rejects_an_operation_rule_without_a_spec_or_pattern(self):
         for broken in ({'pattern': '^/x', 'category': 'Commerce'}, {'spec': 'x', 'category': 'Commerce'}):
