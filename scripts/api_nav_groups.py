@@ -21,8 +21,6 @@ Optional keys:
   (`pattern`). They place one provider's endpoints under several platforms,
   which a page filename cannot always tell. They win over `pages` rules.
   Subgroups that these rules create in one group follow the rules' order.
-  An optional `subsection` adds one more level inside the subgroup, for a
-  large subgroup; subsections follow the rules' order too.
 """
 from __future__ import annotations
 
@@ -77,8 +75,6 @@ def validate(config: dict) -> None:
             raise ValueError(f"{source}: group {target['group']!r} is not listed under {category['name']!r}")
         if "subgroup" in target and "group" not in target:
             raise ValueError(f"{source}: subgroup requires a group")
-        if "subsection" in target and "subgroup" not in target:
-            raise ValueError(f"{source}: subsection requires a subgroup")
 
 
 def target_for(config: dict | None, name: str) -> dict | None:
@@ -155,8 +151,6 @@ def locate(groups: list, config: dict, target: dict, label=lambda name: name) ->
         node = _child(node["pages"], label(target["group"]), [label(g) for g in category["groups"]])
     if target.get("subgroup"):
         node = _child(node["pages"], label(target["subgroup"]), _subgroup_order(config, target, label))
-    if target.get("subsection"):
-        node = _child(node["pages"], label(target["subsection"]), _subsection_order(config, target, label))
     return node["pages"]
 
 
@@ -167,16 +161,6 @@ def _subgroup_order(config: dict, target: dict, label) -> list[str]:
         if rule.get("group") == target.get("group") and rule.get("subgroup"):
             if label(rule["subgroup"]) not in order:
                 order.append(label(rule["subgroup"]))
-    return order
-
-
-def _subsection_order(config: dict, target: dict, label) -> list[str]:
-    """Subsections that `operations` rules create in the target's subgroup, in rule order."""
-    order: list[str] = []
-    for rule in config.get("operations", []):
-        same = rule.get("group") == target.get("group") and rule.get("subgroup") == target.get("subgroup")
-        if same and rule.get("subsection") and label(rule["subsection"]) not in order:
-            order.append(label(rule["subsection"]))
     return order
 
 
