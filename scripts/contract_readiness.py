@@ -273,7 +273,21 @@ def _runtime_accounting(index, facts, errors, missing, retained_providers, cover
     pending_paths = {row.get('path') for row in pending_rows}
     if None in excluded_paths | pending_paths or len(excluded_paths) != len(excluded) or len(pending_paths) != len(pending_rows):
         errors.append(_error('duplicate_or_missing_endpoint_path'))
-    if inventory != selected + len(excluded) or selected != projected + pending or pending != len(pending_rows):
+    # Unpublished gateway rows have no customer route. Runtime deliberately
+    # exposes only their count, never the private gateway/provider identity.
+    excluded_counts = cov.get('excluded_counts', {})
+    if not isinstance(excluded_counts, dict):
+        errors.append(_error('invalid_endpoint_counts'))
+        return
+    unpublished_reason = 'unpublished_duplicate_route'
+    unpublished = excluded_counts.get(unpublished_reason, 0)
+    if (type(unpublished) is not int or unpublished < 0 or unpublished > inventory or
+            (unpublished_reason in excluded_counts and unpublished == 0)):
+        errors.append(_error('invalid_endpoint_counts'))
+        return
+    if any(row.get('reason') == unpublished_reason for row in excluded):
+        errors.append(_error('unpublished_endpoint_identity_exposed'))
+    if inventory != selected + len(excluded) + unpublished or selected != projected + pending or pending != len(pending_rows):
         errors.append(_error('endpoint_accounting_mismatch'))
     if excluded_paths & pending_paths:
         errors.append(_error('endpoint_outcome_overlap'))
