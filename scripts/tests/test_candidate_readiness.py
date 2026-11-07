@@ -14,6 +14,38 @@ import pull_openapi
 
 
 class CandidateReadinessTests(unittest.TestCase):
+    def test_closed_inventory_retains_empty_unindexed_placeholder_without_fresh_claim(self):
+        (self.root / 'openapi/registry.yaml').write_text('auto_register: true\nproviders:\n  alpha: {}\n  composio: {}\n')
+        empty = {'openapi':'3.1.0','info':{'title':'Historic placeholder','version':'1'},'paths':{}}
+        target = self.root / 'openapi/composio.json'
+        original = json.dumps(empty)
+        target.write_text(original)
+        self.index['schema_version'] = '1'
+        self.index['coverage']['scope'] = 'integration'
+        self.write_facts()
+        context = {'baseline_coverage':{'providers':{}}}
+        changes, summary = stage(self.root, self.facts, 'https://api.aisa.one', with_pages=False,
+                                 readiness_context=context, identity_history=None)
+        self.assertEqual(context['retained_empty_placeholders'], ['composio'])
+        self.assertNotIn('composio', summary)
+        self.assertNotIn('composio', context['coverage']['providers'])
+        self.assertEqual(context['documents']['composio'], empty)
+        self.assertEqual(target.read_text(), original)
+        self.assertNotIn(target, changes)
+        self.assertEqual(context['report']['status'], 'passed', context['report'])
+        for scenario in ('missing_inventory','advertised','pending','excluded','marketing','nonempty','missing_document'):
+            with self.subTest(scenario=scenario):
+                previous, index = copy.deepcopy(empty), copy.deepcopy(self.index)
+                category = {'apis':[]}
+                if scenario == 'missing_inventory': index['coverage'].pop('projected_endpoints')
+                elif scenario == 'advertised': index['providers'].append({'id':'composio'})
+                elif scenario == 'pending': index['pending_providers'].append({'id':'composio'})
+                elif scenario == 'excluded': index['coverage']['excluded_endpoints'].append({'provider':'composio'})
+                elif scenario == 'marketing': category['apis'].append({'id':'composio'})
+                elif scenario == 'nonempty': previous['paths']['/historic'] = {'get':{'operationId':'historic'}}
+                else: previous = {}
+                self.assertFalse(pull_openapi.unindexed_empty_placeholder(previous, ['composio'], index, category))
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)

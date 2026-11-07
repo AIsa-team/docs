@@ -16,7 +16,7 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 from runtime_contract_artifact import member_name, file_limit, validate_canonical_files
 
 MAX_FILE = 8 << 20
-MAX_TOTAL = 64 << 20
+MAX_TOTAL = 128 << 20
 HEX64 = re.compile(r'[0-9a-f]{64}')
 HEX40 = re.compile(r'[0-9a-f]{40}')
 PROVIDER = re.compile(r'[a-z0-9][a-z0-9_.-]*')
@@ -97,7 +97,9 @@ def validate_current(current, revision, compiler):
             type(current.get('published_generation')) is int and
             generation == current['published_generation'], 'Current generation is not published')
     files = current.get('files')
-    require(isinstance(files, list) and 1 <= len(files) <= 512, 'Invalid file manifest')
+    # The release includes both Runtime facts and the composed native graph.
+    # Byte, identity, hash and complete-graph limits remain independent.
+    require(isinstance(files, list) and 1 <= len(files) <= 2048, 'Invalid file manifest')
     names = []
     for row in files:
         require(isinstance(row, dict) and set(row) == {'name', 'media_type', 'sha256'}, 'Unsupported manifest entry')

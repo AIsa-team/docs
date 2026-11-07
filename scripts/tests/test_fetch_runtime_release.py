@@ -20,6 +20,22 @@ def encoded(value):
 
 
 class PublicReleaseTests(unittest.TestCase):
+    def test_combined_release_count_above_old_limit_still_has_a_hard_ceiling(self):
+        from fetch_runtime_release import validate_current
+        _, compiler, _, current, _, _ = self.fixture()
+        for count in (534, 1070, 2048, 2049):
+            with self.subTest(count=count):
+                files = [{'name': 'index.json', 'media_type': 'application/json', 'sha256': 'c' * 64}]
+                files += [{'name': f'providers/p{i:04}.json', 'media_type': 'application/json', 'sha256': 'd' * 64} for i in range(count - 1)]
+                manifest = {'schema_version': 1, 'source_digest': current['source_digest'], 'compiler_revision': compiler, 'files': files}
+                revision = sha(encoded(manifest))
+                value = {**current, 'files': files, 'artifact_revision': revision}
+                if count <= 2048:
+                    validate_current(value, revision, compiler)
+                else:
+                    with self.assertRaisesRegex(AcquisitionRejected, 'Invalid file manifest'):
+                        validate_current(value, revision, compiler)
+
     def test_pending_count_boolean_is_not_an_integer_zero(self):
         revision, compiler, reader, *_ = self.fixture(
             mutate_index=lambda index: index['coverage'].update(pending_endpoint_count=False))

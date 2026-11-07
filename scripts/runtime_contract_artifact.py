@@ -10,7 +10,7 @@ MANIFEST = 'contracts/manifest.json'
 AGGREGATE = 'contracts/openapi.json'
 READINESS = 'contracts/readiness.json'
 MAX_METADATA = 1 << 20
-MAX_AGGREGATE = 32 << 20
+MAX_AGGREGATE = 64 << 20
 FACT = re.compile(r'(?:index\.json|providers/[a-z0-9][a-z0-9_.-]*\.json)')
 NATIVE = re.compile(r'contracts/native/[a-z0-9][a-z0-9_.-]*\.json')
 HEX64 = re.compile(r'[0-9a-f]{64}')
@@ -109,7 +109,7 @@ def validate_canonical_files(contents, current):
     require(all(manifest[key] == current[key] for key in ('source_digest', 'compiler_revision')),
             'Canonical source or compiler differs from Runtime')
     rows = manifest['files']
-    require(isinstance(rows, list) and 3 <= len(rows) <= 511, 'Invalid canonical member count')
+    require(isinstance(rows, list) and 3 <= len(rows) <= 1023, 'Invalid canonical member count')
     seen = []
     for row in rows:
         require(isinstance(row, dict) and set(row) == {'path', 'bytes', 'sha256'}, 'Invalid canonical file entry')
