@@ -125,6 +125,29 @@ class PaymentMethodCapabilitiesTests(unittest.TestCase):
         self.assertFalse(pending)
         self.assertEqual(operation(document)["x-aisa-capabilities"]["x402_methods"], ["POST", "GET"])
 
+    def test_code_owned_capabilities_preserve_identity_without_enabling_payment(self):
+        metadata = {"capability": "social.account_groups.list_account_groups@1",
+                    "required_scope": "social:read", "publish_scope": "social:publish",
+                    "scope_rule": "account", "shape": "collection",
+                    "quote": {"reason": "not_quoted", "supported": False}}
+        runtime = facts("runtime", "post")
+        operation(runtime)["x-aisa-capabilities"] = copy.deepcopy(metadata)
+        before = copy.deepcopy(runtime)
+        document, pending = compose(runtime)
+        self.assertFalse(pending)
+        self.assertEqual(runtime, before)
+        actual = operation(document)["x-aisa-capabilities"]
+        for field, value in metadata.items():
+            self.assertEqual(actual[field], value)
+        self.assertFalse(actual.get("mpp", False))
+        self.assertFalse(actual.get("x402", False))
+        for field in ("capability", "required_scope", "publish_scope", "scope_rule", "shape"):
+            for invalid in (None, True, 1, [], {}):
+                with self.subTest(field=field, invalid=invalid):
+                    operation(runtime)["x-aisa-capabilities"] = {**metadata, field: invalid}
+                    with self.assertRaises(ValueError):
+                        compose(runtime)
+
     def test_payment_metadata_cannot_close_unforwarded_supplier_auth_headers(self):
         runtime, upstream = self.fixture({"mpp": True, "mpp_methods": ["GET"],
                                          "x402": True, "x402_methods": ["POST"]})

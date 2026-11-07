@@ -396,6 +396,32 @@ class ReadinessTests(unittest.TestCase):
         value['providers'][0]['endpoint_count'] = 2
         self.assertIn('projected_provider_endpoint_counts_mismatch', self.errors(check_readiness(*fixture(), runtime_index=value)))
 
+    def test_code_owned_derived_operations_allow_zero_database_endpoints(self):
+        f, d, c = fixture('/social/accounts', 'social_accounts', 'get')
+        for document in (f['p'], d['p']):
+            document['paths']['/social/accounts']['get']['x-aisa-identity-source'] = 'derived'
+        runtime = index([], operations=1)
+        before = copy.deepcopy(runtime)
+        report = check_readiness(f, d, c, runtime_index=runtime)
+        self.assertEqual('passed', report['status'], report)
+        self.assertEqual(before, runtime)
+        for count in (1, -1, True, '0'):
+            with self.subTest(count=count):
+                bad = copy.deepcopy(runtime)
+                bad['providers'][0]['endpoint_count'] = count
+                self.assertEqual('failed', check_readiness(f, d, c, runtime_index=bad)['status'])
+
+    def test_endpoint_provider_inventory_rejects_unknown_and_duplicate_providers(self):
+        for change in ('unknown', 'duplicate'):
+            with self.subTest(change=change):
+                runtime = index(['/search'])
+                if change == 'unknown':
+                    runtime['coverage']['projected_endpoints'][0]['provider'] = 'unknown'
+                else:
+                    runtime['providers'].append(copy.deepcopy(runtime['providers'][0]))
+                report = check_readiness(*fixture(), runtime_index=runtime)
+                self.assertEqual('failed', report['status'], report)
+
     def test_retained_any_pending_accounts_for_history_without_fresh_claim(self):
         f, d, c = fixture(method='x-aisa-any')
         op = d['p']['paths']['/search'].pop('x-aisa-any')

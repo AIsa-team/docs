@@ -319,7 +319,9 @@ def _runtime_accounting(index, facts, errors, missing, retained_providers, cover
             errors.append(_error('fact_endpoint_not_in_inventory'))
         providers = index.get('providers')
         if isinstance(providers, list):
-            actual_counts = {}
+            # Code-owned lifecycle providers may publish derived operations
+            # without any DB-owned endpoints. Their explicit zero is valid.
+            actual_counts = {row.get('id'): 0 for row in providers}
             for row in explicit:
                 actual_counts[row.get('provider')] = actual_counts.get(row.get('provider'), 0) + 1
             expected_counts = {row.get('id'): row.get('endpoint_count') for row in providers}

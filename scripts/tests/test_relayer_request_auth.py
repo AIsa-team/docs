@@ -43,7 +43,7 @@ class RelayerRequestAuthTests(unittest.TestCase):
         self.assertEqual(s,original)
         rows=audit_provider('polymarket-relayer',f,s,{}, {},True)
         self.assertEqual([(v['status'],v['missing_header_inputs']) for v in rows],[('passed',[])])
-        self.assertEqual(VERSION,'26')
+        self.assertEqual(VERSION,'27')
 
     def test_closed_descriptor_and_complete_required_pair_mutations_fail(self):
         changes={
