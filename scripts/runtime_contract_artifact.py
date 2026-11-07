@@ -109,7 +109,7 @@ def validate_canonical_files(contents, current):
     require(all(manifest[key] == current[key] for key in ('source_digest', 'compiler_revision')),
             'Canonical source or compiler differs from Runtime')
     rows = manifest['files']
-    require(isinstance(rows, list) and 3 <= len(rows) <= 511, 'Invalid canonical member count')
+    require(isinstance(rows, list) and 3 <= len(rows) <= 1023, 'Invalid canonical member count')
     seen = []
     for row in rows:
         require(isinstance(row, dict) and set(row) == {'path', 'bytes', 'sha256'}, 'Invalid canonical file entry')

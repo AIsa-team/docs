@@ -21,6 +21,25 @@ def native():
 
 
 class CanonicalArtifactTests(unittest.TestCase):
+    def test_large_native_graph_round_trips_and_rejects_count_overflow(self):
+        aggregate = native()
+        for number in range(1020):
+            path, identity = f'/operation/{number}', f'operation_{number}'
+            document = native()
+            operation = document['paths'].pop('/request')
+            operation['get']['operationId'] = identity
+            document['paths'][path] = operation
+            aggregate['paths'][path] = copy.deepcopy(operation)
+            self.contents[f'contracts/native/p{number:04}.json'] = encoded(document)
+        self.contents[contract.AGGREGATE] = encoded(aggregate)
+        self.seal()
+        self.assertEqual(len(self.manifest['files']), 1023)
+        self.acquire()
+        self.contents['contracts/native/overflow.json'] = encoded({'openapi': '3.1.0', 'info': {'title': 'Overflow', 'version': '1'}, 'paths': {}})
+        self.seal()
+        with self.assertRaisesRegex(ValueError, 'Invalid canonical member count'):
+            self.acquire()
+
     def setUp(self):
         _, self.compiler, _, self.current, self.contents, _ = public_tests.PublicReleaseTests().fixture()
         self.contents.update({'contracts/native/example.json': encoded(native()),
