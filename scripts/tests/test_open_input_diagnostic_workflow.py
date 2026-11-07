@@ -227,6 +227,8 @@ class OpenInputWorkflowTests(unittest.TestCase):
         for row in rows:
             if 'GH_TOKEN' in row.get('env',{}):
                 self.assertIn(row['name'],('Check exact authenticated source-only input qualification',
+                    'Select exact EKS source input diagnostic',
+                    'Check authenticated EKS source input diagnostic compatibility',
                     'Check exact authenticated open-input diagnostic qualification',
                     'Check explicit reviewed source-only input without claiming formal output'))
             if row.get('uses','').startswith('actions/upload-artifact'):
@@ -242,16 +244,26 @@ class OpenInputWorkflowTests(unittest.TestCase):
         added=('Select exact open-input diagnostic consumer','Checkout immutable clean Docs base for open-input reader',
             'Checkout independently fixed Services open-input reader','Use pinned reader dependency interpreter',
             'Use exact Services Go toolchain for original snapshot verification','Install independently pinned reader dependencies',
-            'Check exact authenticated open-input diagnostic qualification','Retain input-only diagnostic consumer receipt')
+            'Check exact authenticated open-input diagnostic qualification','Retain input-only diagnostic consumer receipt',
+            'Checkout exact trusted base for EKS source input reader','Select exact EKS source input diagnostic',
+            'Generate existing read App token for EKS source evidence','Checkout pinned original Go snapshot validator',
+            'Use original EKS snapshot Go validator toolchain','Check authenticated EKS source input diagnostic compatibility',
+            'Retain EKS source input compatibility receipt')
         original=[]
         for row in rows:
             if row.get('name') in added: continue
             row=copy.deepcopy(row)
             if 'if' in row:
+                row['if']=row['if'].replace(" && steps.eks_input.outputs.selected != 'true'",'')
                 row['if']=row['if'].replace(" && steps.open_input_diagnostic.outputs.selected != 'true'",'').replace(" || steps.open_input_diagnostic.outputs.selected == 'true'",'')
                 if row['if']=="steps.open_input_diagnostic.outputs.selected != 'true'": del row['if']
             original.append(row)
         workflow['jobs']['artifact-contracts']['steps']=original
+        # Only an independently bound exact EKS source head receives the 20m
+        # diagnostic budget; every unselected ordinary assessment keeps 10m.
+        self.assertEqual(workflow['jobs']['artifact-contracts']['timeout-minutes'],
+            "${{ github.event_name == 'pull_request' && vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING != '' && fromJSON(vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING).head_revision == github.event.pull_request.head.sha && 20 || 10 }}")
+        workflow['jobs']['artifact-contracts']['timeout-minutes']=10
         # Assert the reviewed PR-scope correction, then normalize only those
         # three fields so the independent original workflow digest still guards
         # every formal/input job, permission, trigger and required aggregate.
