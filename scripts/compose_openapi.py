@@ -14,7 +14,7 @@ from typing import Any
 from upstream_auth_transports import server_auth_headers, request_auth_headers
 from urllib.parse import urlsplit, unquote
 
-VERSION = "26"
+VERSION = "27"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -36,7 +36,11 @@ def validate_payment_capabilities(operation: dict) -> None:
     if "x-aisa-capabilities" not in operation:
         return
     capabilities = operation["x-aisa-capabilities"]
-    allowed = {"mpp", "mpp_methods", "x402", "x402_methods", "quote", "max_price", "idempotency"}
+    # Code-owned handlers publish scope/shape identity in this same Runtime
+    # envelope. Preserve it without interpreting it as payment enablement.
+    text_fields = {"max_price", "idempotency", "capability", "required_scope",
+                   "publish_scope", "scope_rule", "shape"}
+    allowed = {"mpp", "mpp_methods", "x402", "x402_methods", "quote"} | text_fields
     if not isinstance(capabilities, dict) or set(capabilities) - allowed:
         raise ValueError("invalid runtime payment capabilities")
     for name in ("mpp", "x402"):
@@ -50,7 +54,7 @@ def validate_payment_capabilities(operation: dict) -> None:
                            or method != method.upper() for method in methods)
                     or len(set(methods)) != len(methods)):
                 raise ValueError("invalid runtime payment method declaration")
-    for name in ("max_price", "idempotency"):
+    for name in text_fields:
         if name in capabilities and not isinstance(capabilities[name], str):
             raise ValueError("invalid runtime payment capability text")
     if "quote" in capabilities:
