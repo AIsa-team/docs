@@ -2,7 +2,7 @@
 x-aisa-operation-id: "authTwitterUser"
 title: "OAuth_Twitter"
 description: "启动 OAuth 流程，将 X/Twitter 账号关联到您的 AIsa API 密钥。在使用任何 Twitter 写入端点（关注、点赞、发帖、私信）之前，请为每个来源用户调用一次。"
-openapi: "openapi/zh/aisa-twitter.json POST /apis/v1/twitter/auth_twitter"
+openapi: "reference-contracts/zh/aisa-twitter.json POST /apis/v1/twitter/auth_twitter"
 ---
 
 `POST /apis/v1/twitter/auth_twitter` 是通过 AIsa 执行任何 X/Twitter **写入**操作的第一步。它会返回一个短期有效的 X OAuth 授权 URL——源用户在浏览器中打开该 URL，批准所请求的权限范围，然后 X 会重定向至 AIsa 的固定回调地址。AIsa 会将生成的会话与您的 API 密钥关联存储，后续每次写入调用（例如 [`POST /twitter/follow_twitter`](/zh/api-reference/twitter/post_twitter-follow-twitter)）都会自动使用该会话。
@@ -86,7 +86,7 @@ openapi: "openapi/zh/aisa-twitter.json POST /apis/v1/twitter/auth_twitter"
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/twitter/auth_twitter`
 - **Runtime 事实版本:** 4629b96294875c448210d32f1a74b44ad7bab9721bd58b505e76c72a31741c73
 
-[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/aisa-twitter.json)
+[完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/aisa-twitter.json)
 
 有效请求与价格声明（包括认证和引用的 schema）：
 
@@ -107,8 +107,33 @@ openapi: "openapi/zh/aisa-twitter.json POST /apis/v1/twitter/auth_twitter"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "aisa_api_key": {
+              "type": "string",
+              "description": "Your AIsa API key (the `sk-aisa-...` value). REQUIRED in the JSON body in addition to the `Authorization: Bearer` header — the OAuth session is bound to this key. Sending only the header returns HTTP 422; sending only the body returns 404."
+            },
+            "scopes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Optional list of X OAuth 2.0 scopes to request. Defaults to the set required by AIsa's Twitter write endpoints: `follows.write`, `tweet.read`, `users.read`, `tweet.write`, `like.write`, `dm.read`, `dm.write`.",
+              "example": [
+                "follows.write",
+                "tweet.read",
+                "users.read"
+              ]
+            }
+          },
+          "required": [
+            "aisa_api_key"
+          ]
+        },
         "example": {
           "aisa_api_key": "sk-aisa-...",
           "scopes": [
@@ -116,34 +141,9 @@ openapi: "openapi/zh/aisa-twitter.json POST /apis/v1/twitter/auth_twitter"
             "tweet.read",
             "users.read"
           ]
-        },
-        "schema": {
-          "properties": {
-            "aisa_api_key": {
-              "description": "Your AIsa API key (the `sk-aisa-...` value). REQUIRED in the JSON body in addition to the `Authorization: Bearer` header — the OAuth session is bound to this key. Sending only the header returns HTTP 422; sending only the body returns 404.",
-              "type": "string"
-            },
-            "scopes": {
-              "description": "Optional list of X OAuth 2.0 scopes to request. Defaults to the set required by AIsa's Twitter write endpoints: `follows.write`, `tweet.read`, `users.read`, `tweet.write`, `like.write`, `dm.read`, `dm.write`.",
-              "example": [
-                "follows.write",
-                "tweet.read",
-                "users.read"
-              ],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "aisa_api_key"
-          ],
-          "type": "object"
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
