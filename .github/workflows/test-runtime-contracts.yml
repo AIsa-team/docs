@@ -112,7 +112,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.artifacts == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: ${{ github.event_name == 'pull_request' && vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING != '' && fromJSON(vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING).head_revision == github.event.pull_request.head.sha && 20 || 10 }}
     permissions:
       contents: read
       actions: read
@@ -130,11 +130,36 @@ jobs:
           python-version: '3.12'
       - name: Install assessment dependencies
         run: pip install 'PyYAML>=6,<7' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
+      # This reader is code-reviewed and merged before any source R selects it.
+      # Repository variables are operator authority, never files supplied by R.
+      - name: Checkout exact trusted base for EKS source input reader
+        if: github.event_name == 'pull_request' && needs.changes.outputs.input_candidate == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: docs-eks-input-anchor
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select exact EKS source input diagnostic
+        id: eks_input
+        if: github.event_name == 'pull_request' && needs.changes.outputs.input_candidate == 'true'
+        env:
+          CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING: ${{ vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -B - <<'PY_EKS'
+          import os, pathlib, runpy, sys
+          root=pathlib.Path(os.environ['GITHUB_WORKSPACE'])
+          reader=root/'docs-eks-input-anchor/scripts/read_eks_source_input.py'
+          sys.path.insert(0,str(reader.parent))
+          sys.argv=[str(reader),'--select','--repo',str(root)]
+          runpy.run_path(str(reader),run_name='__main__')
+          PY_EKS
       # Independent public envelope selects only this exact open source PR.
       # Fixed to the independently reviewed Services producer/reader combination.
       - name: Select exact open-input diagnostic consumer
         id: open_input_diagnostic
-        if: needs.changes.outputs.input_candidate == 'true'
+        if: needs.changes.outputs.input_candidate == 'true' && steps.eks_input.outputs.selected != 'true'
         env:
           OPERATOR_OPEN_INPUT_DIAGNOSTIC_BINDING: ${{ vars.CONTRACT_OPEN_INPUT_DIAGNOSTIC_BINDING }}
           OPERATOR_INPUT_RECOVERY_BINDING: ${{ vars.CONTRACT_INPUT_RECOVERY_BINDING }}
@@ -258,7 +283,7 @@ jobs:
           PY
       - name: Select explicit source-only recovery authorization
         id: input_recovery
-        if: needs.changes.outputs.input_candidate == 'true' && steps.open_input_diagnostic.outputs.selected != 'true'
+        if: needs.changes.outputs.input_candidate == 'true' && steps.open_input_diagnostic.outputs.selected != 'true' && steps.eks_input.outputs.selected != 'true'
         env:
           OPERATOR_INPUT_RECOVERY_BINDING: ${{ vars.CONTRACT_INPUT_RECOVERY_BINDING }}
         run: python scripts/read_recovery_input_qualification.py --select
@@ -275,6 +300,58 @@ jobs:
             docs
           permission-actions: read
           permission-contents: read
+      - name: Generate existing read App token for EKS source evidence
+        if: steps.eks_input.outputs.selected == 'true'
+        id: eks_read
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.AISA_CI_READ_APP_ID }}
+          private-key: ${{ secrets.AISA_CI_READ_APP_PRIVATE_KEY }}
+          owner: AIsa-team
+          repositories: |
+            AIsaServices
+            docs
+            aisa-infra
+          permission-actions: read
+          permission-contents: read
+      - name: Checkout pinned original Go snapshot validator
+        if: steps.eks_input.outputs.selected == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: AIsa-team/AIsaServices
+          ref: ${{ steps.eks_input.outputs.compiler_revision }}
+          token: ${{ steps.eks_read.outputs.token }}
+          path: services-eks-input-validator
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Use original EKS snapshot Go validator toolchain
+        if: steps.eks_input.outputs.selected == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: services-eks-input-validator/go.mod
+          cache: false
+      - name: Check authenticated EKS source input diagnostic compatibility
+        if: steps.eks_input.outputs.selected == 'true'
+        env:
+          CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING: ${{ vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING }}
+          GH_TOKEN: ${{ steps.eks_read.outputs.token }}
+        run: |
+          python3 -I -B - <<'PY_EKS'
+          import os, pathlib, runpy, sys
+          root=pathlib.Path(os.environ['GITHUB_WORKSPACE'])
+          reader=root/'docs-eks-input-anchor/scripts/read_eks_source_input.py'
+          sys.path.insert(0,str(reader.parent))
+          sys.argv=[str(reader),'--repo',str(root),'--services',str(root/'services-eks-input-validator'),
+              '--output',str(pathlib.Path(os.environ['RUNNER_TEMP'])/'eks-source-input-assessment')]
+          runpy.run_path(str(reader),run_name='__main__')
+          PY_EKS
+      - name: Retain EKS source input compatibility receipt
+        if: steps.eks_input.outputs.selected == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-eks-source-input-diagnostic
+          path: ${{ runner.temp }}/eks-source-input-assessment/receipt.json
+          if-no-files-found: error
       - name: Check exact authenticated source-only input qualification
         if: steps.input_recovery.outputs.selected == 'true' && steps.open_input_diagnostic.outputs.selected != 'true'
         env:
@@ -341,19 +418,19 @@ jobs:
           path: ${{ runner.temp }}/open-input-diagnostic-assessment/receipt.json
           if-no-files-found: error
       - name: Acquire one complete fresh immutable Runtime release
-        if: steps.input_recovery.outputs.selected != 'true' && steps.open_input_diagnostic.outputs.selected != 'true'
+        if: steps.input_recovery.outputs.selected != 'true' && steps.open_input_diagnostic.outputs.selected != 'true' && steps.eks_input.outputs.selected != 'true'
         run: |
           python scripts/fetch_runtime_release.py --current \
             --output /tmp/runtime-contract-evidence
       - name: Restore attributed source-maintenance receipts
-        if: steps.open_input_diagnostic.outputs.selected != 'true'
+        if: steps.open_input_diagnostic.outputs.selected != 'true' && steps.eks_input.outputs.selected != 'true'
         uses: actions/cache/restore@v4
         with:
           path: .cache/source-reviews.json
           key: source-reviews-assess-${{ github.run_id }}
           restore-keys: source-reviews-
       - name: Combine reviewed source evidence with newer observations
-        if: steps.open_input_diagnostic.outputs.selected != 'true'
+        if: steps.open_input_diagnostic.outputs.selected != 'true' && steps.eks_input.outputs.selected != 'true'
         run: >-
           python scripts/prepare_source_receipts.py
           --reviewed docs/current-source-review-20261009/merged-source-reviews.json
@@ -370,7 +447,7 @@ jobs:
             --published-ref "$PUBLISHED_REF" \
             --report /tmp/contract-readiness.json
       - name: Check explicit reviewed source-only input without claiming formal output
-        if: needs.changes.outputs.input_candidate == 'true' && steps.input_recovery.outputs.selected != 'true' && steps.open_input_diagnostic.outputs.selected != 'true'
+        if: needs.changes.outputs.input_candidate == 'true' && steps.input_recovery.outputs.selected != 'true' && steps.open_input_diagnostic.outputs.selected != 'true' && steps.eks_input.outputs.selected != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
