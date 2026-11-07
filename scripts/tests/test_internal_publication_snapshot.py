@@ -72,6 +72,24 @@ class InternalSnapshotTests(unittest.TestCase):
         self.save()
         self.assertEqual(self.load()[1]['generation'], 2 ** 64 - 1)
 
+    def test_large_closed_catalog_and_snapshot_count_ceiling(self):
+        index = json.loads(self.payload['index.json'])
+        raw = self.payload['providers/example.json']
+        for number in range(1022):
+            key = f'provider{number:04}'
+            name = 'providers/' + key + '.json'
+            (self.root / name).write_bytes(raw)
+            self.metadata['files'].append({'name': name, 'media_type': 'application/json', 'sha256': sha(raw)})
+            index['providers'].append({'id': key, 'facts_hash': 'c' * 64})
+        self.metadata['files'].sort(key=lambda row: row['name'])
+        self.replace('index.json', canonical(index))
+        facts, _ = self.load()
+        self.assertEqual(len(json.loads(facts['category.json'])['apis']), 1023)
+        self.metadata['files'].append(copy.deepcopy(self.metadata['files'][-1]))
+        self.save()
+        with self.assertRaisesRegex(ValueError, 'Invalid snapshot member count'):
+            self.load()
+
     def test_all_caller_pins_are_independent(self):
         for field, bad in [('snapshot_sha256', '0' * 64), ('generation', 7),
                            ('source_digest', '0' * 64), ('compiler_revision', '0' * 40)]:

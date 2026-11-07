@@ -20,7 +20,7 @@ from readiness_rejection import (EXIT_READINESS_REJECTED, ReadinessRejected,
                                  SnapshotReadinessRejected, snapshot_proof)
 
 MAX_METADATA = 1 << 20
-MAX_FILES = 512
+MAX_FILES = 1024
 FIELDS = {'schema_version', 'generation', 'source_digest', 'compiler_revision', 'files'}
 MEMBER = re.compile(r'(?:index\.json|providers/[a-z0-9][a-z0-9_.-]{0,119}\.json)')
 
