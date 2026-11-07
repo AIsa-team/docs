@@ -14,7 +14,7 @@ from typing import Any
 from upstream_auth_transports import server_auth_headers, request_auth_headers
 from urllib.parse import urlsplit, unquote
 
-VERSION = "27"
+VERSION = "28"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -616,6 +616,21 @@ def provider_required(source_required: bool, declared: dict, schema: dict, name:
             and name not in constrained)
 
 
+def forwards_undeclared_query(runtime: dict) -> bool:
+    """Read the Runtime forwarding fact independently of target-value precedence.
+
+    OpenQuery preserves fixed target values while forwarding undeclared caller
+    parameters. It is distinct from TargetQueryRequestWins; the owning Runtime
+    compiler prohibits combining it with request-wins or ignore-undeclared.
+    """
+    policy = runtime.get('x-aisa-query-policy', {})
+    if not isinstance(policy, dict) or any(type(value) is not bool for value in policy.values()):
+        raise ValueError('invalid runtime query forwarding policy')
+    if policy.get('open_query') is True and (policy.get('request_wins') is True or policy.get('ignore_undeclared') is True):
+        raise ValueError('conflicting runtime open-query forwarding policy')
+    return policy.get('open_query') is True or policy.get('request_wins') is True
+
+
 def constrained_names(runtime: dict) -> set:
     """Field names the Runtime's cross-field constraints refer to."""
     names = set()
@@ -959,7 +974,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             operation["operationId"] = candidate if len(candidate) <= 56 else candidate[:49] + "_" + hashlib.sha256(f"{actual_method} {public_path}".encode()).hexdigest()[:6]
                     if validation != "runtime":
                         runtime_fields = {(p["in"], p["name"]) for p in runtime.get("parameters", [])}
-                        query_passthrough = runtime.get("x-aisa-query-policy", {}).get("request_wins", False)
+                        query_passthrough = forwards_undeclared_query(runtime)
                         if bound_source and not runtime.get("x-aisa-upstream-selector"):
                             for parameter in mirror.get("parameters", []):
                                 if parameter.get("in") == "query" and parameter.get("required") and isinstance(parameter.get("schema"), dict) and "default" in parameter["schema"]:
