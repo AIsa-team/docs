@@ -1,0 +1,188 @@
+---
+title: "Duplicate a campaign"
+openapi: "reference-contracts/zh/aisa-ads.json POST /apis/v1/ads/campaigns/{campaignId}/duplicate"
+x-aisa-operation-id: "post_aisa_ads_apis_v1_ads_campaigns_campaignid_duplicate"
+---
+
+
+{/* aisa-contract-details:start */}
+
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/ads/campaigns/&#123;campaignId&#125;/duplicate
+- **可用状态:** enabled
+- **请求 URL 模板:** `https://api.aisa.one/apis/v1/ads/campaigns/{campaignId}/duplicate`
+- **campaignId:** path; 必填
+- **connectionId:** query; 必填
+- **X-Aisa-Confirm:** header; 可选
+- **Idempotency-Key:** header; 可选
+- **Runtime 事实版本:** fe60122939c67dc98a3a6ac6b97bd5c326b526105150c8959304dd2160d4dd09
+
+[完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/aisa-ads.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_aisa_ads_apis_v1_ads_campaigns_campaignid_duplicate",
+  "method": "POST",
+  "path": "/apis/v1/ads/campaigns/{campaignId}/duplicate",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "description": "Source platform campaign ID",
+      "in": "path",
+      "name": "campaignId",
+      "required": true,
+      "schema": {
+        "type": "string"
+      }
+    },
+    {
+      "description": "The ads connection (adc_...) the request runs on: one of yours, from GET /apis/v1/ads/connections. On a request with a JSON body it may be sent as a top-level body member instead.",
+      "in": "query",
+      "name": "connectionId",
+      "required": true,
+      "schema": {
+        "pattern": "^adc_[0-9A-Za-z]+$",
+        "type": "string"
+      }
+    },
+    {
+      "description": "Required with the value \"spend\" when the request can spend money or change spend. Without it the request is refused with 409 confirmation_required, which describes what would happen; nothing is sent to the ad platform.",
+      "in": "header",
+      "name": "X-Aisa-Confirm",
+      "required": false,
+      "schema": {
+        "enum": [
+          "spend"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "description": "Passed to the ad platform integration: a retry with the same key returns the first result instead of acting twice. AIsa never retries a write for you.",
+      "in": "header",
+      "name": "Idempotency-Key",
+      "required": false,
+      "schema": {
+        "maxLength": 191,
+        "minLength": 1,
+        "type": "string"
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "example": {
+          "connectionId": "adc_7f3k2m9q",
+          "deepCopy": true,
+          "endTime": "2026-12-01T09:00:00Z"
+        },
+        "schema": {
+          "additionalProperties": true,
+          "properties": {
+            "connectionId": {
+              "description": "The ads connection (adc_...), when not sent as the connectionId query parameter.",
+              "pattern": "^adc_[0-9A-Za-z]+$",
+              "type": "string"
+            },
+            "deepCopy": {
+              "default": true,
+              "description": "Copy child ad sets + ads + creatives + targeting",
+              "type": "boolean"
+            },
+            "endTime": {
+              "description": "Reschedule the copied hierarchy's end, read like `startTime`; a date-only end runs to 23:59:59 local. Defaults to the source's end.",
+              "format": "date-time",
+              "type": "string"
+            },
+            "platform": {
+              "description": "Filled from the connection when omitted.",
+              "enum": [
+                "facebook",
+                "instagram",
+                "tiktok",
+                "linkedin",
+                "meta"
+              ],
+              "type": "string"
+            },
+            "renamePrefix": {
+              "description": "Text prepended to each renamed object's name.",
+              "type": "string"
+            },
+            "renameStrategy": {
+              "description": "Meta's native `rename_strategy` values: `DEEP_RENAME`: renames the copied campaign and every copied child (ad sets, ads) with `renamePrefix` / `renameSuffix`.",
+              "enum": [
+                "DEEP_RENAME",
+                "ONLY_TOP_LEVEL_RENAME",
+                "NO_RENAME"
+              ],
+              "type": "string"
+            },
+            "renameSuffix": {
+              "description": "Text appended to each renamed object's name. On LinkedIn an omitted suffix defaults to ` (Copy)`.",
+              "type": "string"
+            },
+            "startTime": {
+              "description": "Reschedule the copied hierarchy's start (ISO 8601). TikTok defaults to a start a few minutes after the copy.",
+              "format": "date-time",
+              "type": "string"
+            },
+            "statusOption": {
+              "default": "PAUSED",
+              "description": "ACTIVE = launch the clone immediately (spends the moment LinkedIn approves it). PAUSED = clone stays DRAFT, safe default. INHERITED_FROM_SOURCE = mirror each entity's source status per-entity.",
+              "enum": [
+                "ACTIVE",
+                "PAUSED",
+                "INHERITED_FROM_SOURCE"
+              ],
+              "type": "string"
+            },
+            "syncAfter": {
+              "default": true,
+              "description": "Trigger ads discovery on the owning account after the copy succeeds",
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "description": "Ads operations are free. Ad spend is billed by the ad platform to the connected ad account, never by AIsa.",
+    "kind": "no_customer_charge"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
+## 费用与请求规则
+
+当前未提供请求参考价格；请使用接口支持的报价功能确认费用。 最终费用以账户适用价格及实际结算为准。
+
+公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
+
+
+{/* aisa-contract-details:end */}

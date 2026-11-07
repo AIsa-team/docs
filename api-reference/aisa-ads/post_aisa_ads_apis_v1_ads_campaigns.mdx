@@ -1,0 +1,363 @@
+---
+title: "Create a standalone campaign"
+openapi: "reference-contracts/aisa-ads.json POST /apis/v1/ads/campaigns"
+x-aisa-operation-id: "post_aisa_ads_apis_v1_ads_campaigns"
+---
+
+
+{/* aisa-contract-details:start */}
+
+## Request contract
+
+- **Method and path:** POST /apis/v1/ads/campaigns
+- **Availability:** enabled
+- **Request URL template:** `https://api.aisa.one/apis/v1/ads/campaigns`
+- **connectionId:** query; required
+- **X-Aisa-Confirm:** header; optional
+- **Idempotency-Key:** header; optional
+- **Runtime facts:** fe60122939c67dc98a3a6ac6b97bd5c326b526105150c8959304dd2160d4dd09
+
+[Complete OpenAPI definition](https://aisa.one/docs/reference-contracts/aisa-ads.json)
+
+Effective request and pricing declaration (including authentication and referenced schemas):
+
+```json
+{
+  "operationId": "post_aisa_ads_apis_v1_ads_campaigns",
+  "method": "POST",
+  "path": "/apis/v1/ads/campaigns",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "description": "The ads connection (adc_...) the request runs on: one of yours, from GET /apis/v1/ads/connections. On a request with a JSON body it may be sent as a top-level body member instead.",
+      "in": "query",
+      "name": "connectionId",
+      "required": true,
+      "schema": {
+        "pattern": "^adc_[0-9A-Za-z]+$",
+        "type": "string"
+      }
+    },
+    {
+      "description": "Required with the value \"spend\" when the request can spend money or change spend. Without it the request is refused with 409 confirmation_required, which describes what would happen; nothing is sent to the ad platform.",
+      "in": "header",
+      "name": "X-Aisa-Confirm",
+      "required": false,
+      "schema": {
+        "enum": [
+          "spend"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "description": "Passed to the ad platform integration: a retry with the same key returns the first result instead of acting twice. AIsa never retries a write for you.",
+      "in": "header",
+      "name": "Idempotency-Key",
+      "required": false,
+      "schema": {
+        "maxLength": 191,
+        "minLength": 1,
+        "type": "string"
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "example": {
+          "adAccountId": "act_757082720485182",
+          "buyingType": "AUCTION",
+          "connectionId": "adc_7f3k2m9q",
+          "goal": "app_promotion",
+          "isSkadnetworkAttribution": true,
+          "name": "iOS app campaign",
+          "promotedObject": {
+            "applicationId": "123456789",
+            "objectStoreUrl": "https://apps.apple.com/us/app/id123456789"
+          },
+          "status": "PAUSED",
+          "validateOnly": true
+        },
+        "schema": {
+          "additionalProperties": true,
+          "properties": {
+            "adAccountId": {
+              "description": "Platform ad account id (Meta act_, Google customer id, LinkedIn account id, ...).",
+              "type": "string"
+            },
+            "bidAmount": {
+              "description": "Whole currency units (USD: 5 = $5.00). Required for LOWEST_COST_WITH_BID_CAP and COST_CAP; ignored otherwise. Meta: validated here but NOT stored, since the campaign object only has bid_strategy.",
+              "type": "number"
+            },
+            "bidStrategy": {
+              "description": "Campaign bid strategy. Meta stores `bid_strategy` alongside the budget, so this REQUIRES `budgetAmount` + `budgetType` on the same request (400 without a campaign budget).",
+              "enum": [
+                "LOWEST_COST_WITHOUT_CAP",
+                "LOWEST_COST_WITH_BID_CAP",
+                "COST_CAP",
+                "LOWEST_COST_WITH_MIN_ROAS"
+              ],
+              "type": "string"
+            },
+            "budgetAmount": {
+              "description": "Campaign-level (CBO) budget in WHOLE currency units (USD: 50 = $50.00), NOT cents. Meta's own Marketing API takes this same number in minor units, so it is an easy and expensive mix-up. Requires budgetType.",
+              "type": "number"
+            },
+            "budgetType": {
+              "enum": [
+                "daily",
+                "lifetime"
+              ],
+              "type": "string"
+            },
+            "buyingType": {
+              "description": "Every platform buys at auction by default, so this only needs sending on Meta, and only to choose RESERVED. `AUCTION` is accepted on every platform and changes nothing.",
+              "enum": [
+                "AUCTION",
+                "RESERVED"
+              ],
+              "type": "string"
+            },
+            "connectionId": {
+              "description": "The ads connection (adc_...), when not sent as the connectionId query parameter.",
+              "pattern": "^adc_[0-9A-Za-z]+$",
+              "type": "string"
+            },
+            "endDate": {
+              "description": "Reddit only (400 elsewhere). Campaign end (ISO 8601); a value without an offset is read in the ad account time zone. Requires a campaign budget (400 otherwise), and is required for `budgetType: lifetime`.",
+              "format": "date-time",
+              "type": "string"
+            },
+            "goal": {
+              "description": "Mapped to the ODAX objective (same mapping as POST /apis/v1/ads/create).",
+              "enum": [
+                "engagement",
+                "traffic",
+                "awareness",
+                "video_views",
+                "lead_generation",
+                "lead_conversion",
+                "job_applicants",
+                "conversions",
+                "app_promotion",
+                "catalog_sales",
+                "page_likes",
+                "page_visits"
+              ],
+              "type": "string"
+            },
+            "isSkadnetworkAttribution": {
+              "description": "Meta app promotion only. Immutable campaign flag. Set true for iOS 14+ SKAdNetwork campaigns and supply promotedObject.applicationId plus promotedObject.objectStoreUrl. The campaign receives promotedObject only when this flag is true.",
+              "type": "boolean"
+            },
+            "locationTargetingType": {
+              "description": "Google only (400 elsewhere). Written on the new campaign.",
+              "enum": [
+                "presence",
+                "presence_or_interest"
+              ],
+              "type": "string"
+            },
+            "manualCpc": {
+              "additionalProperties": false,
+              "description": "Google Search and Display only. Manual CPC bidding. Enhanced CPC is not offered: Google no longer lets Search and Display campaigns enable it. Exclusive with every other strategy field.",
+              "properties": {
+                "maxCpc": {
+                  "description": "Max CPC of the ad groups, in the account's currency units: set on the ad group created with the campaign, and on every ad group of the campaign when an update switches it to Manual CPC. Google gives an ad group without one a 0.01 bid.",
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "maxCpc"
+              ],
+              "type": "object"
+            },
+            "name": {
+              "maxLength": 255,
+              "type": "string"
+            },
+            "networkSettings": {
+              "additionalProperties": false,
+              "description": "Google Search campaigns only. Which networks the campaign serves on besides Google Search.",
+              "properties": {
+                "displayNetwork": {
+                  "description": "campaign.network_settings.target_content_network (Search with Display expansion)",
+                  "type": "boolean"
+                },
+                "searchPartners": {
+                  "description": "campaign.network_settings.target_search_network",
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            },
+            "portfolioBidStrategyId": {
+              "description": "Google only. Attach an existing portfolio bid strategy (numeric id from GET /apis/v1/ads/bid-strategies) to the new campaign instead of a standard one. Exclusive with bidStrategy.",
+              "pattern": "^\\d+$",
+              "type": "string"
+            },
+            "promotedObject": {
+              "additionalProperties": false,
+              "description": "What the ad optimises against. Behaviour depends on the platform. Platforms other than Meta, TikTok, OpenAI and Reddit ignore `promotedObject` entirely. Meta: forwarded to the ad set's `promoted_object` (snake-cased).",
+              "properties": {
+                "applicationId": {
+                  "description": "App ID. Required for `goal: app_promotion`.",
+                  "type": "string"
+                },
+                "customConversionId": {
+                  "description": "Custom Conversion ID, when optimising against one instead of a standard event. Accepted alone by this API, without `pixelId` or `customEventType`.",
+                  "type": "string"
+                },
+                "customEventStr": {
+                  "description": "Meta only. Pixel custom-event name to optimise against (Meta's `custom_event_str`), exactly as it appears in Events Manager and your CAPI payloads (case-sensitive, not uppercased).",
+                  "type": "string"
+                },
+                "customEventType": {
+                  "description": "The event the campaign/ad group optimises against. Meta: a standard event like `PURCHASE`, `LEAD`, `COMPLETE_REGISTRATION`, `ADD_TO_CART`. Uppercased internally, so any case works. Required for `goal: conversions`.",
+                  "type": "string"
+                },
+                "objectStoreUrl": {
+                  "description": "App Store / Play Store listing URL. Required for `goal: app_promotion`.",
+                  "format": "uri",
+                  "type": "string"
+                },
+                "offlineConversionDataSetId": {
+                  "description": "Meta only. Offline event set (dataset) to optimise toward. Post-merger these are datasets: the id is the dataset id (for pixel-backed datasets, the pixel id).",
+                  "type": "string"
+                },
+                "pageId": {
+                  "description": "Facebook Page ID. Used by `goal: lead_generation`. Auto-filled from the connected Page when omitted.",
+                  "type": "string"
+                },
+                "pixelId": {
+                  "description": "Pixel ID. Meta: Facebook Pixel ID, required for `goal: conversions`.",
+                  "type": "string"
+                },
+                "productCatalogId": {
+                  "description": "Optional catalog ID. A catalog ID cannot replace productSetId.",
+                  "type": "string"
+                },
+                "productSetId": {
+                  "description": "Meta product SET ID, for example from GET /apis/v1/ads/catalogs/{catalogId}/product-sets. Creating catalog ads needs only ads_management on the Meta login, not catalog_management. Where it goes.",
+                  "type": "string"
+                },
+                "whatsappPhoneNumber": {
+                  "description": "Meta only. WhatsApp number on messaging-destination ad sets.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "roasAverageFloor": {
+              "description": "Decimal ROAS multiplier (2.0 = 2.0x). Required for LOWEST_COST_WITH_MIN_ROAS.",
+              "type": "number"
+            },
+            "specialAdCategories": {
+              "items": {
+                "enum": [
+                  "HOUSING",
+                  "EMPLOYMENT",
+                  "CREDIT",
+                  "ISSUES_ELECTIONS_POLITICS",
+                  "FINANCIAL_PRODUCTS_SERVICES",
+                  "ONLINE_GAMBLING_AND_GAMING"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "startDate": {
+              "description": "Reddit only (400 elsewhere). Campaign start (ISO 8601); a value without an offset is read in the ad account time zone. Requires a campaign budget (`budgetAmount` + `budgetType`, 400 otherwise). Defaults to now.",
+              "format": "date-time",
+              "type": "string"
+            },
+            "status": {
+              "default": "PAUSED",
+              "enum": [
+                "ACTIVE",
+                "PAUSED"
+              ],
+              "type": "string"
+            },
+            "targetImpressionShare": {
+              "additionalProperties": false,
+              "description": "Google Search only. Target impression share bidding. Exclusive with bidStrategy, portfolioBidStrategyId and manualCpc; bidAmount is refused alongside it (the ceiling is maxCpc).",
+              "properties": {
+                "location": {
+                  "enum": [
+                    "ANYWHERE_ON_PAGE",
+                    "TOP_OF_PAGE",
+                    "ABSOLUTE_TOP_OF_PAGE"
+                  ],
+                  "type": "string"
+                },
+                "maxCpc": {
+                  "description": "Max CPC bid limit, in the account's currency units. Google requires it.",
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                "percent": {
+                  "description": "Target share of impressions, in percent (65 = 65%). Sent to Google as location_fraction_micros (1% = 10,000).",
+                  "exclusiveMinimum": 0,
+                  "maximum": 100,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "location",
+                "maxCpc",
+                "percent"
+              ],
+              "type": "object"
+            },
+            "validateOnly": {
+              "description": "Meta and ChatGPT (OpenAI). Runs campaign validation without creating or persisting a campaign; Idempotency-Key storage is bypassed. Returns HTTP 200 with validateOnly true and status VALIDATED.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "adAccountId",
+            "goal",
+            "name"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "description": "Ads operations are free. Ad spend is billed by the ad platform to the connected ad account, never by AIsa.",
+    "kind": "no_customer_charge"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
+## Cost and request rules
+
+A request reference price is not currently available; use a request quote where supported. Account-specific pricing and final settlement may differ.
+
+Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
+
+
+{/* aisa-contract-details:end */}
