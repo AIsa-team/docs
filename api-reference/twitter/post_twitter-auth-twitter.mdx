@@ -2,7 +2,7 @@
 x-aisa-operation-id: "authTwitterUser"
 title: "OAuth_Twitter"
 description: "Start the OAuth flow that links an X/Twitter account to your AIsa API key. Call once per source user before using any Twitter write endpoint (follow, like, post, DM)."
-openapi: "openapi/aisa-twitter.json POST /apis/v1/twitter/auth_twitter"
+openapi: "reference-contracts/aisa-twitter.json POST /apis/v1/twitter/auth_twitter"
 ---
 
 `POST /apis/v1/twitter/auth_twitter` is the first step for any X/Twitter **write** action routed through AIsa. It returns a short-lived X OAuth authorization URL — the source user opens it in a browser, approves the requested scopes, and X redirects back to AIsa's fixed callback. AIsa stores the resulting session against your API key, and every subsequent write call (e.g., [`POST /twitter/follow_twitter`](/api-reference/twitter/post_twitter-follow-twitter)) uses that session automatically.
@@ -86,7 +86,7 @@ The stored OAuth **session** itself lives longer (subject to X's token rotation 
 - **Request URL template:** `https://api.aisa.one/apis/v1/twitter/auth_twitter`
 - **Runtime facts:** 4629b96294875c448210d32f1a74b44ad7bab9721bd58b505e76c72a31741c73
 
-[Complete OpenAPI definition](https://aisa.one/docs/openapi/aisa-twitter.json)
+[Complete OpenAPI definition](https://aisa.one/docs/reference-contracts/aisa-twitter.json)
 
 Effective request and pricing declaration (including authentication and referenced schemas):
 
@@ -107,8 +107,33 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "aisa_api_key": {
+              "type": "string",
+              "description": "Your AIsa API key (the `sk-aisa-...` value). REQUIRED in the JSON body in addition to the `Authorization: Bearer` header — the OAuth session is bound to this key. Sending only the header returns HTTP 422; sending only the body returns 404."
+            },
+            "scopes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Optional list of X OAuth 2.0 scopes to request. Defaults to the set required by AIsa's Twitter write endpoints: `follows.write`, `tweet.read`, `users.read`, `tweet.write`, `like.write`, `dm.read`, `dm.write`.",
+              "example": [
+                "follows.write",
+                "tweet.read",
+                "users.read"
+              ]
+            }
+          },
+          "required": [
+            "aisa_api_key"
+          ]
+        },
         "example": {
           "aisa_api_key": "sk-aisa-...",
           "scopes": [
@@ -116,34 +141,9 @@ Effective request and pricing declaration (including authentication and referenc
             "tweet.read",
             "users.read"
           ]
-        },
-        "schema": {
-          "properties": {
-            "aisa_api_key": {
-              "description": "Your AIsa API key (the `sk-aisa-...` value). REQUIRED in the JSON body in addition to the `Authorization: Bearer` header — the OAuth session is bound to this key. Sending only the header returns HTTP 422; sending only the body returns 404.",
-              "type": "string"
-            },
-            "scopes": {
-              "description": "Optional list of X OAuth 2.0 scopes to request. Defaults to the set required by AIsa's Twitter write endpoints: `follows.write`, `tweet.read`, `users.read`, `tweet.write`, `like.write`, `dm.read`, `dm.write`.",
-              "example": [
-                "follows.write",
-                "tweet.read",
-                "users.read"
-              ],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "aisa_api_key"
-          ],
-          "type": "object"
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
