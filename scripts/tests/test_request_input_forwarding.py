@@ -3,9 +3,29 @@ import unittest
 
 from audit_request_input_forwarding import audit_provider, missing_header_inputs, missing_query_inputs, missing_body_inputs
 from test_runtime_contracts import facts, mirror, operation
+from compose_openapi import compose, forwards_undeclared_query
 
 
 class RequestInputForwardingTests(unittest.TestCase):
+    def test_open_query_forwards_without_granting_target_override(self):
+        runtime, source = facts('mixed'), mirror()
+        operation(runtime)['x-aisa-query-policy'] = {'open_query':True,'request_wins':False,'ignore_undeclared':False}
+        operation(source)['parameters'].append({'in':'query','name':'cursor','required':False,'schema':{'type':'string'}})
+        self.assertEqual(missing_query_inputs(operation(runtime),operation(source),source), [])
+        document,pending=compose(runtime,source)
+        self.assertFalse(pending)
+        self.assertIn('cursor',[p['name']for p in operation(document)['parameters']])
+        self.assertFalse(operation(document)['x-aisa-query-policy']['request_wins'])
+        operation(runtime)['x-aisa-query-policy']['open_query']=False
+        self.assertEqual(missing_query_inputs(operation(runtime),operation(source),source,['provider_token']),['cursor'])
+        self.assertTrue(compose(runtime,source)[1])
+
+    def test_invalid_or_conflicting_open_query_is_not_forwarding_evidence(self):
+        for policy in ({'open_query':'true'}, {'open_query':1}, {'open_query':True,'ignore_undeclared':True},
+                       {'open_query':True,'request_wins':True}, []):
+            with self.subTest(policy=policy), self.assertRaises(ValueError):
+                forwards_undeclared_query({'x-aisa-query-policy':policy})
+
     def test_closed_body_optional_fields_are_rejected_at_any_depth(self):
         def body(schema):
             return {'requestBody': {'content': {'application/json': {'schema': schema}}}}

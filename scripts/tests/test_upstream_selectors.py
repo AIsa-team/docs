@@ -57,6 +57,17 @@ class UpstreamSelectorTests(unittest.TestCase):
         self.assertEqual(pending,[])
         self.assertNotIn('engine',[p['name'] for p in operation(doc).get('parameters',[])])
 
+    def test_open_query_keeps_fixed_selector_server_owned(self):
+        runtime=selected_facts(mode='fixed')
+        operation(runtime)['x-aisa-query-policy']['open_query']=True
+        document,pending=compose(runtime,upstreams())
+        self.assertFalse(pending)
+        names={p['name']for p in operation(document).get('parameters',[])}
+        self.assertIn('check_in_date',names)
+        self.assertNotIn('engine',names)
+        self.assertNotIn('api_key',names)
+        self.assertEqual(operation(document)['x-aisa-upstream-selector']['mode'],'fixed')
+
     def test_missing_invalid_and_ambiguous_selectors_fail_closed(self):
         for engine in ['absent_engine','secret value']:
             doc,pending=compose(selected_facts(engine),upstreams())

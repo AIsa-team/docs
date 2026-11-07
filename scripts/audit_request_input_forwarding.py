@@ -19,13 +19,13 @@ from upstream_auth_transports import server_auth_headers, request_auth_headers
 from canonical_import import configured_inputs
 from compose_openapi import (METHODS, apply_upstream_selector,
                              effective_object, effective_public_operation, resolve,
-                             select_upstream_operations, flatten_object)
+                             select_upstream_operations, flatten_object, forwards_undeclared_query)
 from runtime_registry import combine_facts, public_mirror_index, runtime_metadata_mirrors
 
 
 def missing_query_inputs(runtime, source, document, auth_names=()):
     """Optional and required caller inputs both need an explicit forwarding path."""
-    if runtime.get('x-aisa-query-policy', {}).get('request_wins') is True:
+    if forwards_undeclared_query(runtime):
         return []
     declared = {p['name'] for p in runtime.get('parameters', []) if p.get('in') == 'query'}
     auth = {'authorization', 'x-api-key', 'api-key', *(name.lower() for name in auth_names)}
