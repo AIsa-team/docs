@@ -329,7 +329,7 @@ class CanonicalArtifactTests(unittest.TestCase):
         reader = fetch.PublicReader('https://api.aisa.one', float('inf'))
         reader.opener = MagicMock()
         reader.opener.open.return_value.__enter__.return_value = response
-        for path, limit in [(f'/public/api-contract/releases/{self.revision}/contracts/openapi.json', 32 << 20),
+        for path, limit in [(f'/public/api-contract/releases/{self.revision}/contracts/openapi.json', 64 << 20),
                             (f'/public/api-contract/releases/{self.revision}/contracts/readiness.json', 1 << 20),
                             (f'/public/api-contract/releases/{self.revision}/providers/openapi.json', 8 << 20),
                             ('/unknown/contracts/openapi.json', 8 << 20)]:

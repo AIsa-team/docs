@@ -13,13 +13,15 @@ from pathlib import Path
 import re
 import stat
 
-from fetch_runtime_release import MAX_FILE, MAX_TOTAL, validate_release_files
+from fetch_runtime_release import MAX_FILE, validate_release_files
 from schema_input_bundle import HEX40, HEX64, canonical, load_bundle, require, sha, strict_json
 from shadow_compile_bundle import compile_verified_inputs
 from readiness_rejection import (EXIT_READINESS_REJECTED, ReadinessRejected,
                                  SnapshotReadinessRejected, snapshot_proof)
 
 MAX_METADATA = 1 << 20
+# The private facts input retains its original byte ceiling.
+MAX_TOTAL = 64 << 20
 MAX_FILES = 1024
 FIELDS = {'schema_version', 'generation', 'source_digest', 'compiler_revision', 'files'}
 MEMBER = re.compile(r'(?:index\.json|providers/[a-z0-9][a-z0-9_.-]{0,119}\.json)')
