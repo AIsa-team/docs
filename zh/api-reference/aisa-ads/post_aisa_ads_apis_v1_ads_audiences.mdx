@@ -1,0 +1,1131 @@
+---
+title: "Create custom audience"
+openapi: "reference-contracts/zh/aisa-ads.json POST /apis/v1/ads/audiences"
+x-aisa-operation-id: "post_aisa_ads_apis_v1_ads_audiences"
+---
+
+
+{/* aisa-contract-details:start */}
+
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/ads/audiences
+- **可用状态:** enabled
+- **请求 URL 模板:** `https://api.aisa.one/apis/v1/ads/audiences`
+- **connectionId:** query; 必填
+- **Runtime 事实版本:** fe60122939c67dc98a3a6ac6b97bd5c326b526105150c8959304dd2160d4dd09
+
+[完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/aisa-ads.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_aisa_ads_apis_v1_ads_audiences",
+  "method": "POST",
+  "path": "/apis/v1/ads/audiences",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "description": "The ads connection (adc_...) the request runs on: one of yours, from GET /apis/v1/ads/connections. On a request with a JSON body it may be sent as a top-level body member instead.",
+      "in": "query",
+      "name": "connectionId",
+      "required": true,
+      "schema": {
+        "pattern": "^adc_[0-9A-Za-z]+$",
+        "type": "string"
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "example": {
+          "adAccountId": "act_1234567890",
+          "connectionId": "adc_7f3k2m9q",
+          "name": "Winter launch",
+          "type": "customer_list"
+        },
+        "schema": {
+          "additionalProperties": true,
+          "oneOf": [
+            {
+              "description": "customer_list, website, lookalike or engagement audience (uploaded or derived from a source).",
+              "properties": {
+                "adAccountId": {
+                  "description": "Platform ad account ID. Must start with act_ for Meta; bare platform id for others (Google customer id, X/TikTok/LinkedIn/Pinterest account id).",
+                  "type": "string"
+                },
+                "adIds": {
+                  "description": "pinterest_engagement: people who engaged with these ads. Must be yours: it is checked through the connection before the request is sent, and an id that is not yours answers not_found.",
+                  "items": {
+                    "pattern": "^\\d+$",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "campaignIds": {
+                  "description": "pinterest_engagement: people who engaged with these campaigns' ads. Must be yours: it is checked through the connection before the request is sent, and an id that is not yours answers not_found.",
+                  "items": {
+                    "pattern": "^\\d+$",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "companies": {
+                  "description": "Required for company_list audiences (LinkedIn only). Plain-text company rows for account targeting; each row needs at least one identifier. Not hashed: LinkedIn matches these against its own company graph.",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "domain": {
+                        "maxLength": 100,
+                        "type": "string"
+                      },
+                      "linkedinPageUrl": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "maxLength": 255,
+                        "type": "string"
+                      },
+                      "website": {
+                        "maxLength": 100,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "maxItems": 300000,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "country": {
+                  "description": "2-letter code, required for lookalike audiences",
+                  "type": "string"
+                },
+                "customerFileSource": {
+                  "description": "Data source declaration for GDPR compliance (customer_list only)",
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "engagementDomains": {
+                  "description": "pinterest_engagement: people who engaged with Pins from these domains. The domain must be claimed on the Pinterest account or Pinterest rejects it.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "engagementSource": {
+                  "description": "Required for meta_engagement audiences (Meta only): what people engaged with. `page` = a Facebook Page, `instagram` = an IG professional account, `video` = a video.",
+                  "enum": [
+                    "page",
+                    "instagram",
+                    "video"
+                  ],
+                  "type": "string"
+                },
+                "engagementSources": {
+                  "description": "Required for engagement audiences. Campaign URNs for the ad source types, organization URNs for pages and events. LinkedIn creates one rule per source, all sharing the same trigger and lookbackDays.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 50,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "engagementType": {
+                  "description": "pinterest_engagement: limit to one engagement action.",
+                  "enum": [
+                    "click",
+                    "save",
+                    "closeup",
+                    "comment",
+                    "like"
+                  ],
+                  "type": "string"
+                },
+                "engagerType": {
+                  "description": "pinterest_engagement: Pinterest's `engager_type`, passed through when set.",
+                  "enum": [
+                    1,
+                    2
+                  ],
+                  "type": "integer"
+                },
+                "event": {
+                  "description": "The event to match. Its meaning depends on the type: meta_engagement: the engagement event. Defaults per source (page → page_engaged, instagram → ig_business_profile_all, video → video_watched). Ignored when `rule` is provided.",
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                "identityAuthorizedBcId": {
+                  "description": "tiktok_engagement: required when identityType is BC_AUTH_TT.",
+                  "type": "string"
+                },
+                "identityId": {
+                  "description": "tiktok_engagement: the TikTok identity that owns the videos or business account. Required for organic_video, live_video and business_account.",
+                  "type": "string"
+                },
+                "identityType": {
+                  "description": "tiktok_engagement: type of `identityId`.",
+                  "enum": [
+                    "TT_USER",
+                    "BC_AUTH_TT"
+                  ],
+                  "type": "string"
+                },
+                "lookbackDays": {
+                  "description": "Required for engagement audiences. Rolling window.",
+                  "enum": [
+                    30,
+                    60,
+                    90,
+                    180,
+                    365
+                  ],
+                  "type": "integer"
+                },
+                "matchRules": {
+                  "description": "Required for website_retargeting audiences (LinkedIn only). Each rule is a URL pattern; a member who visits any matching page enters the segment.",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "matchType": {
+                        "enum": [
+                          "EXACT",
+                          "STARTS_WITH",
+                          "CONTAINS",
+                          "ENDS_WITH"
+                        ],
+                        "type": "string"
+                      },
+                      "matchValue": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "matchType",
+                      "matchValue"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 50,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "name": {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                "pinIds": {
+                  "description": "pinterest_engagement: people who engaged with these Pins. At least one of engagementDomains, campaignIds, adIds or pinIds is required.",
+                  "items": {
+                    "pattern": "^\\d+$",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "pixelId": {
+                  "description": "website: the Meta pixel, TikTok pixel, Pinterest tag or Reddit pixel id. Required on those four, rejected on Google.",
+                  "type": "string"
+                },
+                "ratio": {
+                  "description": "lookalike on Meta (0.01-0.20) and Pinterest (0.01-0.10, whole percents). Rejected on TikTok and Google.",
+                  "maximum": 0.2,
+                  "minimum": 0.01,
+                  "type": "number"
+                },
+                "retentionDays": {
+                  "description": "Required for website (Meta max 180, TikTok 7/14/30/60/90/180, Reddit max 90, Pinterest and Google max 540), meta_engagement (max 365) and tiktok_engagement (7/14/30/60/90/180; organic and live video and most business-account events only…",
+                  "maximum": 540,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "rule": {
+                  "description": "Meta only (a 400 elsewhere). Optional raw Meta rule, replacing the one we build. Omit it for all visitors of `pixelId`, or use `urlContains` for the common page-match case.",
+                  "type": "object"
+                },
+                "size": {
+                  "description": "lookalike on TikTok and Google: audience breadth. Rejected on Meta and Pinterest.",
+                  "enum": [
+                    "narrow",
+                    "balanced",
+                    "broad"
+                  ],
+                  "type": "string"
+                },
+                "source": {
+                  "description": "Required for tiktok_engagement: what people engaged with.",
+                  "enum": [
+                    "ads",
+                    "organic_video",
+                    "live_video",
+                    "business_account"
+                  ],
+                  "type": "string"
+                },
+                "sourceAudienceId": {
+                  "description": "Required for lookalike audiences Must be yours: it is checked through the connection before the request is sent, and an id that is not yours answers not_found.",
+                  "type": "string"
+                },
+                "sourceId": {
+                  "description": "Required for meta_engagement: the Page / IG account / video id.",
+                  "type": "string"
+                },
+                "sourceIds": {
+                  "description": "tiktok_engagement: ad group / campaign ids for `ads`, video ids for `organic_video` and `live_video` (max 10). Required except for `business_account`.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 50,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "sourceType": {
+                  "description": "Required for engagement audiences (LinkedIn only): what members engaged with: a video/leadgen/single-image ad campaign, a Company Page or an Event page.",
+                  "enum": [
+                    "VIDEO_ADS",
+                    "LEAD_GEN_FORMS",
+                    "ORGANIZATION_PAGES",
+                    "EVENT_PAGES",
+                    "SINGLE_IMAGE_ADS"
+                  ],
+                  "type": "string"
+                },
+                "trigger": {
+                  "description": "Required for engagement audiences. The action, validated by LinkedIn against `sourceType`.",
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "customer_list",
+                    "company_list",
+                    "engagement",
+                    "meta_engagement",
+                    "tiktok_engagement",
+                    "pinterest_engagement",
+                    "website",
+                    "website_retargeting",
+                    "lookalike"
+                  ],
+                  "type": "string"
+                },
+                "urlContains": {
+                  "description": "website on Meta, TikTok and Google. Narrows the audience from all visitors to visitors of URLs containing this substring. Ignored when `rule` is supplied. A 400 on Pinterest, which only matches exact URLs.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "adAccountId",
+                "name",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "description": "A reusable, stored TargetingSpec. No member upload step, no adAccountId, the spec is the audience. Reference it later via `savedTargetingId` on POST /apis/v1/ads/create.",
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "name": {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                "spec": {
+                  "description": "The targeting spec to store.",
+                  "properties": {
+                    "ageMax": {
+                      "description": "Maximum age. Same per-platform application and clamping as ageMin.",
+                      "maximum": 100,
+                      "minimum": 13,
+                      "type": "integer"
+                    },
+                    "ageMin": {
+                      "description": "Minimum age. Applied on Meta, TikTok, Pinterest, LinkedIn, X and Google Search/Display (Google excludes the age ranges outside the request). Rejected with 400 on OpenAI, Reddit and Google Performance Max / Demand Gen.",
+                      "maximum": 100,
+                      "minimum": 13,
+                      "type": "integer"
+                    },
+                    "audienceExclude": {
+                      "description": "Platform audience IDs to exclude; same ID formats as audienceInclude. Not supported on OpenAI (400). Must be yours: it is checked through the connection before the request is sent, and an id that is not yours answers not_found.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "audienceInclude": {
+                      "description": "Platform audience IDs to include, as returned by GET /apis/v1/ads/audiences: Meta: custom audience ids. TikTok: audience ids. Pinterest: customer list ids. LinkedIn: segment ids (the platformAudienceId from GET /apis/v1/ads/audiences). Must be yours: it is checked through the connection before the request is sent, and an id that is not yours answers not_found.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "behaviors": {
+                      "description": "Behaviour entities from /apis/v1/ads/targeting/search?dimension=behavior (Meta, TikTok and LinkedIn). On TikTok they target people who, in the picked categories:",
+                      "items": {
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "cities": {
+                      "description": "City targeting. Optional `radius` + `distanceUnit` extend beyond the city limits; both must be set together or both omitted. `radius` is only honoured on platforms whose capability map allows city radius (Meta).",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "properties": {
+                              "distanceUnit": {
+                                "description": "Required if radius is set.",
+                                "enum": [
+                                  "mile",
+                                  "kilometer"
+                                ],
+                                "type": "string"
+                              },
+                              "key": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "radius": {
+                                "description": "Radius around the city. Requires distanceUnit. Meta enforces a minimum city radius (~17 km / 10 mi); smaller values resolve to a 0-size audience and the ad fails at launch.",
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "key"
+                            ],
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "type": "array"
+                    },
+                    "communities": {
+                      "description": "Reddit only (400 elsewhere). Subreddits to target, by name, with or without the `r/` prefix (e.g. `['marketing', 'r/startups']`), as returned by /apis/v1/ads/targeting/search?dimension=community.",
+                      "items": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "companySizes": {
+                      "description": "LinkedIn B2B only. Single-letter size codes (A to I), or the full urn:li:staffCountRange:* URN from /apis/v1/ads/targeting/search?dimension=companySize.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "conversationKeywords": {
+                      "description": "Reddit only (400 elsewhere). Keywords that place the ad in Reddit conversations about them, as returned by /apis/v1/ads/targeting/search?dimension=conversationKeyword.",
+                      "items": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "countries": {
+                      "description": "ISO 3166-1 alpha-2 country codes (e.g. ['US']).",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "countryGroups": {
+                      "description": "Meta only. Continents and trade blocs (`geo_locations.country_groups`), for targeting a whole region without listing its countries. Combines with `countries` rather than replacing it, and is also accepted under `excludedLocations`.",
+                      "items": {
+                        "enum": [
+                          "africa",
+                          "asia",
+                          "europe",
+                          "north_america",
+                          "south_america",
+                          "oceania",
+                          "central_america",
+                          "caribbean",
+                          "eea",
+                          "euro_area",
+                          "nafta",
+                          "mercosur",
+                          "afta",
+                          "apec",
+                          "gcc",
+                          "cisfta",
+                          "emerging_markets",
+                          "itunes_app_store",
+                          "android_free_store",
+                          "android_paid_store"
+                        ],
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "customLocations": {
+                      "description": "Point-radius (lat/lng) targeting (Meta custom_locations / Google proximity). Honoured on Meta and Google; ignored on platforms without radius support.",
+                      "items": {
+                        "properties": {
+                          "address": {
+                            "description": "Optional label, sent to Meta as `address_string`. latitude/longitude take precedence for the pin location.",
+                            "type": "string"
+                          },
+                          "distanceUnit": {
+                            "enum": [
+                              "mile",
+                              "kilometer"
+                            ],
+                            "type": "string"
+                          },
+                          "latitude": {
+                            "maximum": 90,
+                            "minimum": -90,
+                            "type": "number"
+                          },
+                          "longitude": {
+                            "maximum": 180,
+                            "minimum": -180,
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "radius": {
+                            "description": "Positive radius around the point.",
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "distanceUnit",
+                          "latitude",
+                          "longitude",
+                          "radius"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "excludedCommunities": {
+                      "description": "Reddit only (400 elsewhere). Subreddits to exclude, named like `communities`.",
+                      "items": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "excludedConversationKeywords": {
+                      "description": "Reddit only (400 elsewhere). Conversation keywords to keep the ad away from.",
+                      "items": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "excludedLocations": {
+                      "description": "Geo to exclude from the audience. Mirrors the inclusion geo shape. Meta (excluded_geo_locations): excluded cities can carry a radius catchment, and excluded custom (lat/lng) pins are supported.",
+                      "properties": {
+                        "cities": {
+                          "description": "Cities to exclude. Optional `radius` + `distanceUnit` exclude a catchment around the city (both must be set together or both omitted); Meta honours the radius on excluded cities.",
+                          "items": {
+                            "properties": {
+                              "distanceUnit": {
+                                "description": "Required if radius is set.",
+                                "enum": [
+                                  "mile",
+                                  "kilometer"
+                                ],
+                                "type": "string"
+                              },
+                              "key": {
+                                "type": "string"
+                              },
+                              "radius": {
+                                "description": "Radius around the excluded city. Requires distanceUnit.",
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "key"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "countries": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "countryGroups": {
+                          "description": "Meta only. Continents and trade blocs to exclude (`excluded_geo_locations.country_groups`).",
+                          "items": {
+                            "enum": [
+                              "africa",
+                              "asia",
+                              "europe",
+                              "north_america",
+                              "south_america",
+                              "oceania",
+                              "central_america",
+                              "caribbean",
+                              "eea",
+                              "euro_area",
+                              "nafta",
+                              "mercosur",
+                              "afta",
+                              "apec",
+                              "gcc",
+                              "cisfta",
+                              "emerging_markets",
+                              "itunes_app_store",
+                              "android_free_store",
+                              "android_paid_store"
+                            ],
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "customLocations": {
+                          "description": "Point-radius (lat/lng) pins to exclude (Meta excluded_geo_locations.custom_locations). Mirrors the inclusion customLocations shape.",
+                          "items": {
+                            "properties": {
+                              "address": {
+                                "description": "Optional label, sent to Meta as `address_string`. latitude/longitude take precedence for the pin location.",
+                                "type": "string"
+                              },
+                              "distanceUnit": {
+                                "enum": [
+                                  "mile",
+                                  "kilometer"
+                                ],
+                                "type": "string"
+                              },
+                              "latitude": {
+                                "maximum": 90,
+                                "minimum": -90,
+                                "type": "number"
+                              },
+                              "longitude": {
+                                "maximum": 180,
+                                "minimum": -180,
+                                "type": "number"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "radius": {
+                                "description": "Positive radius around the point.",
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "distanceUnit",
+                              "latitude",
+                              "longitude",
+                              "radius"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "neighborhoods": {
+                          "description": "Named neighbourhood areas to exclude. `key` from /apis/v1/ads/targeting/search.",
+                          "items": {
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "key"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "places": {
+                          "description": "Named points of interest to exclude. `key` from /apis/v1/ads/targeting/search.",
+                          "items": {
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "key"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "regions": {
+                          "items": {
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "key"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "zips": {
+                          "items": {
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "key"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "gender": {
+                      "description": "Restrict by gender. 'all' (default) targets everyone.",
+                      "enum": [
+                        "all",
+                        "male",
+                        "female"
+                      ],
+                      "type": "string"
+                    },
+                    "incomeTier": {
+                      "description": "Normalized household-income tier (ZIP/percentile based). Meta and TikTok express all four. Google maps only `top_10` (its INCOME_RANGE_90_UP); other tiers on Google, and any income tier on LinkedIn / X / Pinterest, are rejected.",
+                      "enum": [
+                        "top_5",
+                        "top_10",
+                        "top_10_25",
+                        "top_25_50"
+                      ],
+                      "type": "string"
+                    },
+                    "industries": {
+                      "description": "LinkedIn B2B only. Industry URN id fragments, or the full urn:li:industry:* URN from /apis/v1/ads/targeting/search?dimension=industry.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "interests": {
+                      "description": "Interest entities from /apis/v1/ads/targeting/search?dimension=interest. Each carries the platform's opaque id.",
+                      "items": {
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "jobFunctions": {
+                      "description": "LinkedIn B2B only. Function URN id fragments, or the full urn:li:function:* URN from /apis/v1/ads/targeting/search?dimension=jobFunction.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "languages": {
+                      "description": "Language codes restricting the audience by language. Applied on Meta, Google, TikTok, LinkedIn, X, Pinterest and Reddit; rejected with 400 on OpenAI. A code the platform cannot target returns 400 listing the ones it can.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "metros": {
+                      "description": "DMA / metro-area targeting. `key` is the platform's metro ID (e.g. Meta `DMA:807`).",
+                      "items": {
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "regions": {
+                      "description": "Region/state targeting. `key` is the platform location ID from /apis/v1/ads/targeting/search?dimension=geo&geoType=region. An entry may also be that id as a plain string (`\"20321\"` is `{ key: \"20321\" }`).",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "key"
+                            ],
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "type": "array"
+                    },
+                    "seniorities": {
+                      "description": "LinkedIn B2B only. Seniority URN id fragments, or the full urn:li:seniority:* URN from /apis/v1/ads/targeting/search?dimension=seniority.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "skills": {
+                      "description": "LinkedIn B2B only. Member skills (e.g. Python, Recruiting): skill URN id fragments, or the full urn:li:skill:* URN from /apis/v1/ads/targeting/search?dimension=skill. Values are ORed; the facet is ANDed with the other facets.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "userDevice": {
+                      "description": "Meta only. Device models such as iPhone. Emitted as user_device. May also be supplied inside targeting.",
+                      "items": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "userOs": {
+                      "description": "Meta only. Operating systems and version ranges, such as iOS_ver_14.0_and_above or Android. Emitted as user_os. May also be supplied inside targeting.",
+                      "items": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "workEmployers": {
+                      "description": "Meta only. Employer entities from /apis/v1/ads/targeting/search?dimension=workEmployer.",
+                      "items": {
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "workIndustries": {
+                      "description": "Meta only. Work-industry entities from /apis/v1/ads/targeting/search?dimension=workIndustry. Not interchangeable with the LinkedIn `industries` URN fragments.",
+                      "items": {
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "workPositions": {
+                      "description": "Meta only. Job title entities from /apis/v1/ads/targeting/search?dimension=workPosition. Not interchangeable with the LinkedIn `jobTitles` URN fragments.",
+                      "items": {
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "zips": {
+                      "description": "Postal/ZIP targeting. `key` is the platform's postal location ID (e.g. Meta `US:94304`). Supported on Meta, Google, TikTok, Pinterest, X.",
+                      "items": {
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": {
+                  "enum": [
+                    "saved_targeting"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "spec",
+                "type"
+              ],
+              "type": "object"
+            }
+          ],
+          "properties": {
+            "adAccountId": {
+              "description": "Platform ad account ID. Must start with act_ for Meta; bare platform id for others (Google customer id, X/TikTok/LinkedIn/Pinterest account id).",
+              "type": "string"
+            },
+            "adIds": {
+              "description": "pinterest_engagement: people who engaged with these ads. Must be yours: it is checked through the connection before the request is sent, and an id that is not yours answers not_found.",
+              "type": "array"
+            },
+            "campaignIds": {
+              "description": "pinterest_engagement: people who engaged with these campaigns' ads. Must be yours: it is checked through the connection before the request is sent, and an id that is not yours answers not_found.",
+              "type": "array"
+            },
+            "companies": {
+              "description": "Required for company_list audiences (LinkedIn only). Plain-text company rows for account targeting; each row needs at least one identifier. Not hashed: LinkedIn matches these against its own company graph.",
+              "type": "array"
+            },
+            "connectionId": {
+              "description": "The ads connection (adc_...), when not sent as the connectionId query parameter.",
+              "pattern": "^adc_[0-9A-Za-z]+$",
+              "type": "string"
+            },
+            "country": {
+              "description": "2-letter code, required for lookalike audiences",
+              "type": "string"
+            },
+            "customerFileSource": {
+              "description": "Data source declaration for GDPR compliance (customer_list only)",
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "engagementDomains": {
+              "description": "pinterest_engagement: people who engaged with Pins from these domains. The domain must be claimed on the Pinterest account or Pinterest rejects it.",
+              "type": "array"
+            },
+            "engagementSource": {
+              "description": "Required for meta_engagement audiences (Meta only): what people engaged with. `page` = a Facebook Page, `instagram` = an IG professional account, `video` = a video.",
+              "type": "string"
+            },
+            "engagementSources": {
+              "description": "Required for engagement audiences. Campaign URNs for the ad source types, organization URNs for pages and events. LinkedIn creates one rule per source, all sharing the same trigger and lookbackDays.",
+              "type": "array"
+            },
+            "engagementType": {
+              "description": "pinterest_engagement: limit to one engagement action.",
+              "type": "string"
+            },
+            "engagerType": {
+              "description": "pinterest_engagement: Pinterest's `engager_type`, passed through when set.",
+              "type": "integer"
+            },
+            "event": {
+              "description": "The event to match. Its meaning depends on the type: meta_engagement: the engagement event. Defaults per source (page → page_engaged, instagram → ig_business_profile_all, video → video_watched). Ignored when `rule` is provided.",
+              "type": "string"
+            },
+            "identityAuthorizedBcId": {
+              "description": "tiktok_engagement: required when identityType is BC_AUTH_TT.",
+              "type": "string"
+            },
+            "identityId": {
+              "description": "tiktok_engagement: the TikTok identity that owns the videos or business account. Required for organic_video, live_video and business_account.",
+              "type": "string"
+            },
+            "identityType": {
+              "description": "tiktok_engagement: type of `identityId`.",
+              "type": "string"
+            },
+            "lookbackDays": {
+              "description": "Required for engagement audiences. Rolling window.",
+              "type": "integer"
+            },
+            "matchRules": {
+              "description": "Required for website_retargeting audiences (LinkedIn only). Each rule is a URL pattern; a member who visits any matching page enters the segment.",
+              "type": "array"
+            },
+            "name": {
+              "maxLength": 255,
+              "type": "string"
+            },
+            "pinIds": {
+              "description": "pinterest_engagement: people who engaged with these Pins. At least one of engagementDomains, campaignIds, adIds or pinIds is required.",
+              "type": "array"
+            },
+            "pixelId": {
+              "description": "website: the Meta pixel, TikTok pixel, Pinterest tag or Reddit pixel id. Required on those four, rejected on Google.",
+              "type": "string"
+            },
+            "ratio": {
+              "description": "lookalike on Meta (0.01-0.20) and Pinterest (0.01-0.10, whole percents). Rejected on TikTok and Google.",
+              "type": "number"
+            },
+            "retentionDays": {
+              "description": "Required for website (Meta max 180, TikTok 7/14/30/60/90/180, Reddit max 90, Pinterest and Google max 540), meta_engagement (max 365) and tiktok_engagement (7/14/30/60/90/180; organic and live video and most business-account events only…",
+              "type": "integer"
+            },
+            "rule": {
+              "description": "Meta only (a 400 elsewhere). Optional raw Meta rule, replacing the one we build. Omit it for all visitors of `pixelId`, or use `urlContains` for the common page-match case.",
+              "type": "object"
+            },
+            "size": {
+              "description": "lookalike on TikTok and Google: audience breadth. Rejected on Meta and Pinterest.",
+              "type": "string"
+            },
+            "source": {
+              "description": "Required for tiktok_engagement: what people engaged with.",
+              "type": "string"
+            },
+            "sourceAudienceId": {
+              "description": "Required for lookalike audiences Must be yours: it is checked through the connection before the request is sent, and an id that is not yours answers not_found.",
+              "type": "string"
+            },
+            "sourceId": {
+              "description": "Required for meta_engagement: the Page / IG account / video id.",
+              "type": "string"
+            },
+            "sourceIds": {
+              "description": "tiktok_engagement: ad group / campaign ids for `ads`, video ids for `organic_video` and `live_video` (max 10). Required except for `business_account`.",
+              "type": "array"
+            },
+            "sourceType": {
+              "description": "Required for engagement audiences (LinkedIn only): what members engaged with: a video/leadgen/single-image ad campaign, a Company Page or an Event page.",
+              "type": "string"
+            },
+            "spec": {
+              "description": "The targeting spec to store.",
+              "type": "object"
+            },
+            "trigger": {
+              "description": "Required for engagement audiences. The action, validated by LinkedIn against `sourceType`.",
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "customer_list",
+                "company_list",
+                "engagement",
+                "meta_engagement",
+                "tiktok_engagement",
+                "pinterest_engagement",
+                "website",
+                "website_retargeting",
+                "lookalike",
+                "saved_targeting"
+              ],
+              "type": "string"
+            },
+            "urlContains": {
+              "description": "website on Meta, TikTok and Google. Narrows the audience from all visitors to visitors of URLs containing this substring. Ignored when `rule` is supplied. A 400 on Pinterest, which only matches exact URLs.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "type"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "description": "Ads operations are free. Ad spend is billed by the ad platform to the connected ad account, never by AIsa.",
+    "kind": "no_customer_charge"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
+## 费用与请求规则
+
+当前未提供请求参考价格；请使用接口支持的报价功能确认费用。 最终费用以账户适用价格及实际结算为准。
+
+公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
+
+
+{/* aisa-contract-details:end */}

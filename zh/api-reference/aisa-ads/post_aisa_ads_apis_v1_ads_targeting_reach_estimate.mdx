@@ -1,0 +1,695 @@
+---
+title: "Estimate audience reach"
+openapi: "reference-contracts/zh/aisa-ads.json POST /apis/v1/ads/targeting/reach-estimate"
+x-aisa-operation-id: "post_aisa_ads_apis_v1_ads_targeting_reach_estimate"
+---
+
+
+{/* aisa-contract-details:start */}
+
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/ads/targeting/reach-estimate
+- **可用状态:** enabled
+- **请求 URL 模板:** `https://api.aisa.one/apis/v1/ads/targeting/reach-estimate`
+- **connectionId:** query; 必填
+- **Runtime 事实版本:** fe60122939c67dc98a3a6ac6b97bd5c326b526105150c8959304dd2160d4dd09
+
+[完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/aisa-ads.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "post_aisa_ads_apis_v1_ads_targeting_reach_estimate",
+  "method": "POST",
+  "path": "/apis/v1/ads/targeting/reach-estimate",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [
+    {
+      "description": "The ads connection (adc_...) the request runs on: one of yours, from GET /apis/v1/ads/connections. On a request with a JSON body it may be sent as a top-level body member instead.",
+      "in": "query",
+      "name": "connectionId",
+      "required": true,
+      "schema": {
+        "pattern": "^adc_[0-9A-Za-z]+$",
+        "type": "string"
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "example": {
+          "adAccountId": "act_1234567890",
+          "connectionId": "adc_7f3k2m9q"
+        },
+        "schema": {
+          "additionalProperties": true,
+          "properties": {
+            "adAccountId": {
+              "description": "Required. The platform ad-account ID the reach call runs against (Meta act_..., LinkedIn numeric sponsoredAccount ID, Pinterest ad-account ID, X account ID) - every backing reach API is scoped to one ad account.",
+              "type": "string"
+            },
+            "connectionId": {
+              "description": "The ads connection (adc_...), when not sent as the connectionId query parameter.",
+              "pattern": "^adc_[0-9A-Za-z]+$",
+              "type": "string"
+            },
+            "optimizationGoal": {
+              "description": "Optional. The optimization goal the estimate should assume (platform's own vocabulary, e.g. Meta `REACH`, `LINK_CLICKS`, `OFFSITE_CONVERSIONS`). Some platforms vary the estimate by goal; omit to use the platform default.",
+              "type": "string"
+            },
+            "rawTargeting": {
+              "additionalProperties": true,
+              "description": "Meta only.",
+              "type": "object"
+            },
+            "spec": {
+              "description": "The targeting spec to estimate. Same shape used by POST /apis/v1/ads/create. Required unless `rawTargeting` is sent; with `rawTargeting` it can be omitted or minimal.",
+              "properties": {
+                "ageMax": {
+                  "description": "Maximum age. Same per-platform application and clamping as ageMin.",
+                  "maximum": 100,
+                  "minimum": 13,
+                  "type": "integer"
+                },
+                "ageMin": {
+                  "description": "Minimum age. Applied on Meta, TikTok, Pinterest, LinkedIn, X and Google Search/Display (Google excludes the age ranges outside the request). Rejected with 400 on OpenAI, Reddit and Google Performance Max / Demand Gen.",
+                  "maximum": 100,
+                  "minimum": 13,
+                  "type": "integer"
+                },
+                "audienceExclude": {
+                  "description": "Platform audience IDs to exclude; same ID formats as audienceInclude. Not supported on OpenAI (400). Must be yours: it is checked through the connection before the request is sent, and an id that is not yours answers not_found.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "audienceInclude": {
+                  "description": "Platform audience IDs to include, as returned by GET /apis/v1/ads/audiences: Meta: custom audience ids. TikTok: audience ids. Pinterest: customer list ids. LinkedIn: segment ids (the platformAudienceId from GET /apis/v1/ads/audiences). Must be yours: it is checked through the connection before the request is sent, and an id that is not yours answers not_found.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "behaviors": {
+                  "description": "Behaviour entities from /apis/v1/ads/targeting/search?dimension=behavior (Meta, TikTok and LinkedIn). On TikTok they target people who, in the picked categories:",
+                  "items": {
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "cities": {
+                  "description": "City targeting. Optional `radius` + `distanceUnit` extend beyond the city limits; both must be set together or both omitted. `radius` is only honoured on platforms whose capability map allows city radius (Meta).",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "properties": {
+                          "distanceUnit": {
+                            "description": "Required if radius is set.",
+                            "enum": [
+                              "mile",
+                              "kilometer"
+                            ],
+                            "type": "string"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "radius": {
+                            "description": "Radius around the city. Requires distanceUnit. Meta enforces a minimum city radius (~17 km / 10 mi); smaller values resolve to a 0-size audience and the ad fails at launch.",
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "key"
+                        ],
+                        "type": "object"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                "communities": {
+                  "description": "Reddit only (400 elsewhere). Subreddits to target, by name, with or without the `r/` prefix (e.g. `['marketing', 'r/startups']`), as returned by /apis/v1/ads/targeting/search?dimension=community.",
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "companySizes": {
+                  "description": "LinkedIn B2B only. Single-letter size codes (A to I), or the full urn:li:staffCountRange:* URN from /apis/v1/ads/targeting/search?dimension=companySize.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "conversationKeywords": {
+                  "description": "Reddit only (400 elsewhere). Keywords that place the ad in Reddit conversations about them, as returned by /apis/v1/ads/targeting/search?dimension=conversationKeyword.",
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "countries": {
+                  "description": "ISO 3166-1 alpha-2 country codes (e.g. ['US']).",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "countryGroups": {
+                  "description": "Meta only. Continents and trade blocs (`geo_locations.country_groups`), for targeting a whole region without listing its countries. Combines with `countries` rather than replacing it, and is also accepted under `excludedLocations`.",
+                  "items": {
+                    "enum": [
+                      "africa",
+                      "asia",
+                      "europe",
+                      "north_america",
+                      "south_america",
+                      "oceania",
+                      "central_america",
+                      "caribbean",
+                      "eea",
+                      "euro_area",
+                      "nafta",
+                      "mercosur",
+                      "afta",
+                      "apec",
+                      "gcc",
+                      "cisfta",
+                      "emerging_markets",
+                      "itunes_app_store",
+                      "android_free_store",
+                      "android_paid_store"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "customLocations": {
+                  "description": "Point-radius (lat/lng) targeting (Meta custom_locations / Google proximity). Honoured on Meta and Google; ignored on platforms without radius support.",
+                  "items": {
+                    "properties": {
+                      "address": {
+                        "description": "Optional label, sent to Meta as `address_string`. latitude/longitude take precedence for the pin location.",
+                        "type": "string"
+                      },
+                      "distanceUnit": {
+                        "enum": [
+                          "mile",
+                          "kilometer"
+                        ],
+                        "type": "string"
+                      },
+                      "latitude": {
+                        "maximum": 90,
+                        "minimum": -90,
+                        "type": "number"
+                      },
+                      "longitude": {
+                        "maximum": 180,
+                        "minimum": -180,
+                        "type": "number"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "radius": {
+                        "description": "Positive radius around the point.",
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "distanceUnit",
+                      "latitude",
+                      "longitude",
+                      "radius"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "excludedCommunities": {
+                  "description": "Reddit only (400 elsewhere). Subreddits to exclude, named like `communities`.",
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "excludedConversationKeywords": {
+                  "description": "Reddit only (400 elsewhere). Conversation keywords to keep the ad away from.",
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "excludedLocations": {
+                  "description": "Geo to exclude from the audience. Mirrors the inclusion geo shape. Meta (excluded_geo_locations): excluded cities can carry a radius catchment, and excluded custom (lat/lng) pins are supported.",
+                  "properties": {
+                    "cities": {
+                      "description": "Cities to exclude. Optional `radius` + `distanceUnit` exclude a catchment around the city (both must be set together or both omitted); Meta honours the radius on excluded cities.",
+                      "items": {
+                        "properties": {
+                          "distanceUnit": {
+                            "description": "Required if radius is set.",
+                            "enum": [
+                              "mile",
+                              "kilometer"
+                            ],
+                            "type": "string"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "radius": {
+                            "description": "Radius around the excluded city. Requires distanceUnit.",
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "key"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "countries": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "countryGroups": {
+                      "description": "Meta only. Continents and trade blocs to exclude (`excluded_geo_locations.country_groups`).",
+                      "items": {
+                        "enum": [
+                          "africa",
+                          "asia",
+                          "europe",
+                          "north_america",
+                          "south_america",
+                          "oceania",
+                          "central_america",
+                          "caribbean",
+                          "eea",
+                          "euro_area",
+                          "nafta",
+                          "mercosur",
+                          "afta",
+                          "apec",
+                          "gcc",
+                          "cisfta",
+                          "emerging_markets",
+                          "itunes_app_store",
+                          "android_free_store",
+                          "android_paid_store"
+                        ],
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "customLocations": {
+                      "description": "Point-radius (lat/lng) pins to exclude (Meta excluded_geo_locations.custom_locations). Mirrors the inclusion customLocations shape.",
+                      "items": {
+                        "properties": {
+                          "address": {
+                            "description": "Optional label, sent to Meta as `address_string`. latitude/longitude take precedence for the pin location.",
+                            "type": "string"
+                          },
+                          "distanceUnit": {
+                            "enum": [
+                              "mile",
+                              "kilometer"
+                            ],
+                            "type": "string"
+                          },
+                          "latitude": {
+                            "maximum": 90,
+                            "minimum": -90,
+                            "type": "number"
+                          },
+                          "longitude": {
+                            "maximum": 180,
+                            "minimum": -180,
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "radius": {
+                            "description": "Positive radius around the point.",
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "distanceUnit",
+                          "latitude",
+                          "longitude",
+                          "radius"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "neighborhoods": {
+                      "description": "Named neighbourhood areas to exclude. `key` from /apis/v1/ads/targeting/search.",
+                      "items": {
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "places": {
+                      "description": "Named points of interest to exclude. `key` from /apis/v1/ads/targeting/search.",
+                      "items": {
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "regions": {
+                      "items": {
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "zips": {
+                      "items": {
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
+                "gender": {
+                  "description": "Restrict by gender. 'all' (default) targets everyone.",
+                  "enum": [
+                    "all",
+                    "male",
+                    "female"
+                  ],
+                  "type": "string"
+                },
+                "incomeTier": {
+                  "description": "Normalized household-income tier (ZIP/percentile based). Meta and TikTok express all four. Google maps only `top_10` (its INCOME_RANGE_90_UP); other tiers on Google, and any income tier on LinkedIn / X / Pinterest, are rejected.",
+                  "enum": [
+                    "top_5",
+                    "top_10",
+                    "top_10_25",
+                    "top_25_50"
+                  ],
+                  "type": "string"
+                },
+                "industries": {
+                  "description": "LinkedIn B2B only. Industry URN id fragments, or the full urn:li:industry:* URN from /apis/v1/ads/targeting/search?dimension=industry.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "interests": {
+                  "description": "Interest entities from /apis/v1/ads/targeting/search?dimension=interest. Each carries the platform's opaque id.",
+                  "items": {
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "jobFunctions": {
+                  "description": "LinkedIn B2B only. Function URN id fragments, or the full urn:li:function:* URN from /apis/v1/ads/targeting/search?dimension=jobFunction.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "languages": {
+                  "description": "Language codes restricting the audience by language. Applied on Meta, Google, TikTok, LinkedIn, X, Pinterest and Reddit; rejected with 400 on OpenAI. A code the platform cannot target returns 400 listing the ones it can.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "metros": {
+                  "description": "DMA / metro-area targeting. `key` is the platform's metro ID (e.g. Meta `DMA:807`).",
+                  "items": {
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "key"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "regions": {
+                  "description": "Region/state targeting. `key` is the platform location ID from /apis/v1/ads/targeting/search?dimension=geo&geoType=region. An entry may also be that id as a plain string (`\"20321\"` is `{ key: \"20321\" }`).",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key"
+                        ],
+                        "type": "object"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                "seniorities": {
+                  "description": "LinkedIn B2B only. Seniority URN id fragments, or the full urn:li:seniority:* URN from /apis/v1/ads/targeting/search?dimension=seniority.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "skills": {
+                  "description": "LinkedIn B2B only. Member skills (e.g. Python, Recruiting): skill URN id fragments, or the full urn:li:skill:* URN from /apis/v1/ads/targeting/search?dimension=skill. Values are ORed; the facet is ANDed with the other facets.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "userDevice": {
+                  "description": "Meta only. Device models such as iPhone. Emitted as user_device. May also be supplied inside targeting.",
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "userOs": {
+                  "description": "Meta only. Operating systems and version ranges, such as iOS_ver_14.0_and_above or Android. Emitted as user_os. May also be supplied inside targeting.",
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "workEmployers": {
+                  "description": "Meta only. Employer entities from /apis/v1/ads/targeting/search?dimension=workEmployer.",
+                  "items": {
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "workIndustries": {
+                  "description": "Meta only. Work-industry entities from /apis/v1/ads/targeting/search?dimension=workIndustry. Not interchangeable with the LinkedIn `industries` URN fragments.",
+                  "items": {
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "workPositions": {
+                  "description": "Meta only. Job title entities from /apis/v1/ads/targeting/search?dimension=workPosition. Not interchangeable with the LinkedIn `jobTitles` URN fragments.",
+                  "items": {
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "zips": {
+                  "description": "Postal/ZIP targeting. `key` is the platform's postal location ID (e.g. Meta `US:94304`). Supported on Meta, Google, TikTok, Pinterest, X.",
+                  "items": {
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "key"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "adAccountId"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    "required": true
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "description": "Ads operations are free. Ad spend is billed by the ad platform to the connected ad account, never by AIsa.",
+    "kind": "no_customer_charge"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
+## 费用与请求规则
+
+当前未提供请求参考价格；请使用接口支持的报价功能确认费用。 最终费用以账户适用价格及实际结算为准。
+
+公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
+
+
+{/* aisa-contract-details:end */}

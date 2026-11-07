@@ -1,0 +1,345 @@
+{
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "bearerFormat": "AISA API Key or OAuth access token",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Programmatic account endpoints for balance and usage monitoring. Both accept an AIsa API key (Bearer) or an OAuth access token, so unattended production callers can read balance and usage for cost monitoring and alerting.\n\nAll monetary values are integer micro-USD (1 USD = 1,000,000 micros).",
+    "title": "AIsa Account & Usage API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/credits/balance": {
+      "get": {
+        "description": "Return the current account credit balance. Accepts either an API key or an OAuth access token. No parameters.",
+        "operationId": "accountCreditsBalance",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "account_balance_micros_usd": 3250000,
+                  "api_key": {
+                    "remaining_micros_usd": 1000000,
+                    "unlimited": false,
+                    "used_micros_usd": 300000
+                  },
+                  "as_of": "2026-08-27T10:36:29Z",
+                  "available_balance_micros_usd": 1750000,
+                  "currency": "USD",
+                  "go_to_market_balance_micros_usd": 750000,
+                  "gtm": {
+                    "active": true,
+                    "balance_micros_usd": 750000,
+                    "expires_at": "2026-10-31T12:00:00Z",
+                    "subscription_balance_micros_usd": 500000,
+                    "trial_balance_micros_usd": 250000,
+                    "trial_expires_at": "2026-09-30T12:00:00Z"
+                  }
+                },
+                "schema": {
+                  "properties": {
+                    "account_balance_micros_usd": {
+                      "description": "Effective PAYG balance plus the GTM balance, in micro-USD.",
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "api_key": {
+                      "description": "Per-key limit view for the calling API key (absent for OAuth callers).",
+                      "properties": {
+                        "remaining_micros_usd": {
+                          "description": "Remaining per-key allowance in micro-USD (0 when unlimited).",
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "unlimited": {
+                          "description": "True when the key has no per-key spend cap.",
+                          "type": "boolean"
+                        },
+                        "used_micros_usd": {
+                          "description": "Amount spent by this key in micro-USD.",
+                          "format": "int64",
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "as_of": {
+                      "description": "Snapshot timestamp (RFC 3339, UTC).",
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "available_balance_micros_usd": {
+                      "description": "PAYG balance available to the authenticated API key plus the GTM balance, in micro-USD. For a limited key this is min(PAYG balance, key remaining balance) + GTM balance.",
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "currency": {
+                      "description": "ISO currency code (always USD).",
+                      "type": "string"
+                    },
+                    "go_to_market_balance_micros_usd": {
+                      "description": "Total GTM balance in micro-USD. Equal to gtm.balance_micros_usd.",
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "gtm": {
+                      "description": "GTM balance details. The total includes GTM trial and subscription balances.",
+                      "properties": {
+                        "active": {
+                          "description": "True when GTM funds are available or a GTM subscription period exists.",
+                          "type": "boolean"
+                        },
+                        "balance_micros_usd": {
+                          "description": "Total GTM balance in micro-USD.",
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "expires_at": {
+                          "description": "Current GTM subscription period expiry (RFC 3339, UTC). Omitted when no period applies.",
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "subscription_balance_micros_usd": {
+                          "description": "GTM subscription balance in micro-USD.",
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "trial_balance_micros_usd": {
+                          "description": "Unexpired GTM trial balance in micro-USD.",
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "trial_expires_at": {
+                          "description": "GTM trial balance expiry (RFC 3339, UTC). Omitted when no trial expiry applies.",
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Current balance snapshot."
+          }
+        },
+        "summary": "Account Balance"
+      }
+    },
+    "/usage": {
+      "get": {
+        "description": "Return request and spend usage over a time window, split into daily buckets. Accepts either an API key or an OAuth access token. The scope reflects the credential used (e.g. a single key vs the whole account).",
+        "operationId": "accountUsage",
+        "parameters": [
+          {
+            "description": "Window start as a Unix timestamp in seconds.",
+            "in": "query",
+            "name": "start_time",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Window end as a Unix timestamp in seconds. Defaults to the current time.",
+            "in": "query",
+            "name": "end_time",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "bucket_width": "1d",
+                  "buckets": [
+                    {
+                      "cache_read_tokens": 0,
+                      "cache_write_tokens": 0,
+                      "charged_micros_usd": 5123400,
+                      "end_time": 1785600000,
+                      "failed_requests": 3,
+                      "input_tokens": 8123,
+                      "output_tokens": 210,
+                      "requests": 42,
+                      "start_time": 1785513600,
+                      "usage_value_micros_usd": 5123400
+                    }
+                  ],
+                  "currency": "USD",
+                  "end_time": 1787760000,
+                  "scope": "key",
+                  "start_time": 1785513600,
+                  "totals": {
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0,
+                    "charged_micros_usd": 128398109,
+                    "failed_requests": 401,
+                    "input_tokens": 206393,
+                    "output_tokens": 5031,
+                    "requests": 1162,
+                    "usage_value_micros_usd": 128398109
+                  }
+                },
+                "schema": {
+                  "properties": {
+                    "bucket_width": {
+                      "description": "Bucket granularity (e.g. 1d).",
+                      "type": "string"
+                    },
+                    "buckets": {
+                      "description": "Per-bucket usage, ordered by time.",
+                      "items": {
+                        "properties": {
+                          "cache_read_tokens": {
+                            "format": "int64",
+                            "type": "integer"
+                          },
+                          "cache_write_tokens": {
+                            "format": "int64",
+                            "type": "integer"
+                          },
+                          "charged_micros_usd": {
+                            "format": "int64",
+                            "type": "integer"
+                          },
+                          "end_time": {
+                            "format": "int64",
+                            "type": "integer"
+                          },
+                          "failed_requests": {
+                            "format": "int64",
+                            "type": "integer"
+                          },
+                          "input_tokens": {
+                            "format": "int64",
+                            "type": "integer"
+                          },
+                          "output_tokens": {
+                            "format": "int64",
+                            "type": "integer"
+                          },
+                          "requests": {
+                            "format": "int64",
+                            "type": "integer"
+                          },
+                          "start_time": {
+                            "format": "int64",
+                            "type": "integer"
+                          },
+                          "usage_value_micros_usd": {
+                            "format": "int64",
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "currency": {
+                      "description": "ISO currency code (always USD).",
+                      "type": "string"
+                    },
+                    "end_time": {
+                      "description": "Echoed window end (Unix seconds).",
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "scope": {
+                      "description": "Aggregation scope implied by the credential (e.g. key or account).",
+                      "type": "string"
+                    },
+                    "start_time": {
+                      "description": "Echoed window start (Unix seconds).",
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "totals": {
+                      "description": "Aggregate totals across the whole window.",
+                      "properties": {
+                        "cache_read_tokens": {
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "cache_write_tokens": {
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "charged_micros_usd": {
+                          "description": "Amount actually charged in micro-USD.",
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "failed_requests": {
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "input_tokens": {
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "output_tokens": {
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "requests": {
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "usage_value_micros_usd": {
+                          "description": "Metered value of usage in micro-USD.",
+                          "format": "int64",
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Usage totals and per-day buckets over the window."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "start_time must be a positive Unix timestamp"
+                }
+              }
+            },
+            "description": "Invalid or missing time window (e.g. start_time not a positive Unix timestamp)."
+          }
+        },
+        "summary": "Account Usage"
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://api.aisa.one/v1"
+    }
+  ]
+}
