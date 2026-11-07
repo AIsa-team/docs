@@ -265,7 +265,7 @@ def update_disabled_indexing(text, disabled):
     return '---\n' + header + '\n---\n' + prose
 
 
-def generate_pages(root: Path, provider: str, document: dict, changes: dict, previous: dict | None = None, decorate_links: bool = True, page_references=None, require_existing_links: bool = False) -> None:
+def generate_pages(root: Path, provider: str, document: dict, changes: dict, previous: dict | None = None, decorate_links: bool = True, page_references=None, require_existing_links: bool = False, page_identity_cache=None) -> None:
     """Refresh stable pages and expose only available operations in navigation."""
     docs_path = root / "docs.json"
     if not docs_path.exists():
@@ -287,9 +287,14 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                     for path, method, op in operations(previous or {})}
     known_ids = {}
     page_documents = {}
+    # Stage never writes MDX until composition has finished. Cache only the
+    # explicit immutable header identity, not provider-specific fallback IDs.
+    identities = {} if page_identity_cache is None else page_identity_cache
     for spec, old_prefix, path, method, page in references:
-        header, _ = localization.split_frontmatter((root / (page + '.mdx')).read_text())
-        identity = (yaml.safe_load(header) or {}).get('x-aisa-operation-id')
+        if page not in identities:
+            header, _ = localization.split_frontmatter((root / (page + '.mdx')).read_text())
+            identities[page] = (yaml.safe_load(header) or {}).get('x-aisa-operation-id')
+        identity = identities[page]
         if not identity and spec == f'openapi/{provider}.json':
             identity = previous_ids.get((old_prefix + path, method))
         if not identity:
@@ -552,6 +557,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         discover(registry, {"apis": []})
     original_documents = published_documents(root)
     page_references = existing_page_references(root) if with_pages else []
+    page_identity_cache = {}  # This stage only; a later run must read fresh page bytes.
     public_source_overrides = {}
     public_mirrors = public_mirror_index(root)
     coverage = {"schema_version": 2, "providers": {}, "response_gaps": {}, "legacy_operations": []}
@@ -726,7 +732,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             continue
         attach_history(document, identity_history)
         if with_pages:
-            generate_pages(root, provider, document, changes, previous, decorate_links=not entry.get("pin"), page_references=page_references)
+            generate_pages(root, provider, document, changes, previous, decorate_links=not entry.get("pin"), page_references=page_references, page_identity_cache=page_identity_cache)
         elif page_link_index is not None:
             project_links(document, select_pages(provider, document, *page_link_index))
         old_hash = previous.get("info", {}).get("x-aisa-document", {}).get("document_hash")
@@ -747,7 +753,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                 # generated_at is observational, and cannot create commit churn.
                 document = previous
                 if with_pages:
-                    generate_pages(root, provider, document, changes, previous, decorate_links=False, page_references=page_references)
+                    generate_pages(root, provider, document, changes, previous, decorate_links=False, page_references=page_references, page_identity_cache=page_identity_cache)
         pending["providers"][provider] = unresolved
         summary[provider] = {"changed": changed, "operations": sum(1 for _ in operations(document)), "pending": len(unresolved), "document_hash": new_hash}
     # Resolve ownership across all successfully composed providers before
@@ -768,7 +774,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         if provider in recomposed_documents:
             attach_history(recomposed_documents[provider], identity_history)
         if with_pages:
-            generate_pages(root, provider, document, changes, previous, page_references=page_references)
+            generate_pages(root, provider, document, changes, previous, page_references=page_references, page_identity_cache=page_identity_cache)
         elif page_link_index is not None:
             project_links(document, select_pages(provider, document, *page_link_index))
         old_hash = previous.get("info", {}).get("x-aisa-document", {}).get("document_hash")
@@ -779,7 +785,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         if changed or not reuse_unchanged_documents:
             changes[root / f"openapi/{provider}.json"] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
         elif with_pages:
-            generate_pages(root, provider, previous, changes, previous, decorate_links=False, page_references=page_references)
+            generate_pages(root, provider, previous, changes, previous, decorate_links=False, page_references=page_references, page_identity_cache=page_identity_cache)
         pending["providers"][provider] = unresolved
         summary[provider] = {"changed": changed, "operations": sum(1 for _ in operations(document)), "pending": len(unresolved), "document_hash": new_hash}
     # Retire only operations successfully moved to another output. Keeping
@@ -831,7 +837,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             retained = documents.get(provider, {})
             if result.get('blocked') and retained.get('info', {}).get('x-aisa-document', {}).get('document_hash'):
                 generate_pages(root, provider, retained, changes, retained,
-                               decorate_links=False, page_references=page_references)
+                               decorate_links=False, page_references=page_references, page_identity_cache=page_identity_cache)
         refresh_localized_documents(root, documents, changes, catalog, identity_history)
     if with_pages:
         refresh_legacy_page_blocks(root, documents, changes, catalog)
