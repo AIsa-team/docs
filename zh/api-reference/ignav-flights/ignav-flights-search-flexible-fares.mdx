@@ -1,0 +1,260 @@
+---
+title: "Search Flexible Fares"
+openapi: "reference-contracts/zh/ignav-flights.json POST /apis/v1/ignav-flights/search-flexible-fares"
+x-aisa-operation-id: "ignav-flights.search-flexible-fares"
+---
+
+
+{/* aisa-contract-details:start */}
+
+## 请求规范
+
+- **方法与路径:** POST /apis/v1/ignav-flights/search-flexible-fares
+- **可用状态:** enabled
+- **请求 URL 模板:** `https://api.aisa.one/apis/v1/ignav-flights/search-flexible-fares`
+- **Runtime 事实版本:** 409a5cc699368723aa03cc1aa98096f9361fe3f453fa90923b5d89360b65123a
+
+[完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/ignav-flights.json)
+
+有效请求与价格声明（包括认证和引用的 schema）：
+
+```json
+{
+  "operationId": "ignav-flights.search-flexible-fares",
+  "method": "POST",
+  "path": "/apis/v1/ignav-flights/search-flexible-fares",
+  "servers": [
+    {
+      "url": "https://api.aisa.one"
+    }
+  ],
+  "parameters": [],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "requestBody": {
+    "required": true,
+    "content": {
+      "application/json": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "legs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "origin",
+                  "destination",
+                  "departure_date"
+                ],
+                "properties": {
+                  "origin": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$",
+                    "examples": [
+                      "SFO"
+                    ],
+                    "maxLength": 3,
+                    "minLength": 3,
+                    "description": "Supported 3-letter departure airport or metro IATA code, such as SFO or LON."
+                  },
+                  "max_stops": {
+                    "type": "integer",
+                    "maximum": 2,
+                    "minimum": 0,
+                    "description": "Maximum stops for this leg (0-2); omit to allow any number."
+                  },
+                  "destination": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$",
+                    "examples": [
+                      "JFK"
+                    ],
+                    "maxLength": 3,
+                    "minLength": 3,
+                    "description": "Supported 3-letter arrival airport or metro IATA code, different from origin."
+                  },
+                  "departure_date": {
+                    "type": "string",
+                    "format": "date",
+                    "examples": [
+                      "2026-11-09"
+                    ],
+                    "description": "Departure date in YYYY-MM-DD format; cannot be in the past."
+                  },
+                  "departure_time_range": {
+                    "type": "object",
+                    "properties": {
+                      "latest_hour": {
+                        "type": "integer",
+                        "maximum": 23,
+                        "minimum": 0,
+                        "description": "Latest local departure hour, from 0 through 23."
+                      },
+                      "earliest_hour": {
+                        "type": "integer",
+                        "maximum": 23,
+                        "minimum": 0,
+                        "description": "Earliest local departure hour, from 0 through 23."
+                      },
+                      "arrival_latest_hour": {
+                        "type": "integer",
+                        "maximum": 23,
+                        "minimum": 0,
+                        "description": "Latest local arrival hour, from 0 through 23."
+                      },
+                      "arrival_earliest_hour": {
+                        "type": "integer",
+                        "maximum": 23,
+                        "minimum": 0,
+                        "description": "Earliest local arrival hour, from 0 through 23."
+                      }
+                    },
+                    "description": "Optional local-hour bounds for this leg. Departure hours use the origin's local time and arrival hours use the destination's local time.",
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "maxItems": 2,
+              "minItems": 1,
+              "description": "One or two ordered trip legs in chronological date order. Use airport or supported metro IATA codes. Itinerary segments identify concrete airports."
+            },
+            "adults": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1,
+              "description": "Number of adult passengers; total passengers across all categories cannot exceed 9."
+            },
+            "market": {
+              "enum": [
+                "US"
+              ],
+              "type": "string",
+              "description": "Provider-supported ISO 3166-1 alpha-2 market controlling availability and currency."
+            },
+            "children": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0,
+              "description": "Number of child passengers."
+            },
+            "max_price": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Strict maximum total price in the selected market's currency."
+            },
+            "cabin_class": {
+              "enum": [
+                "economy",
+                "premium_economy",
+                "business",
+                "first"
+              ],
+              "type": "string",
+              "default": "economy",
+              "description": "Requested cabin class."
+            },
+            "infants_on_lap": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0,
+              "description": "Number of lap infants; cannot exceed the adult count."
+            },
+            "infants_in_seat": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0,
+              "description": "Number of infants occupying seats."
+            },
+            "airlines_exclude": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "examples": [
+                [
+                  "NK"
+                ]
+              ],
+              "minItems": 1,
+              "description": "Non-empty list of 2-character uppercase airline codes to exclude; cannot overlap airlines_include."
+            },
+            "airlines_include": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "examples": [
+                [
+                  "UA",
+                  "F9"
+                ]
+              ],
+              "minItems": 1,
+              "description": "Non-empty list of 2-character uppercase airline codes to include exclusively; cannot overlap airlines_exclude."
+            },
+            "min_checked_bags": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Minimum number of included checked bags."
+            },
+            "min_carry_on_bags": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Minimum number of included carry-on bags."
+            },
+            "allow_self_transfer": {
+              "type": "boolean",
+              "default": true,
+              "description": "Allow identifiable self-transfers. False is a best-effort filter, not a guarantee of a protected through-ticket."
+            }
+          },
+          "required": [
+            "legs",
+            "market"
+          ]
+        }
+      }
+    }
+  },
+  "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "response_units",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.0023,
+    "estimate_source": "profile_seed",
+    "evidence_source": "response_body",
+    "maximum_units": 10000000,
+    "unit": "provider_credit",
+    "unit_rate_usd": 1e-06
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
+```
+
+## 费用与请求规则
+
+按用量计费；默认请求预估费用：\$0.0023 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.000001 USD。 最终费用以账户适用价格及实际结算为准。
+
+公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
+
+- **默认请求参考估价（USD）:** 0.0023
+- **声明的单位费率（USD）:** 1e-06
+- **计费单位:** provider&#95;credit
+- **计费依据:** response&#95;units
+- **公开参考倍率:** 1.0
+- **声明的最大计数或单位数:** 10000000
+- **结算证据来源:** response&#95;body
+
+{/* aisa-contract-details:end */}
