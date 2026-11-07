@@ -172,7 +172,11 @@ def import_source(provider, url):
         document, metadata = import_unipile_reference(fetch(url), url)
     else:
         raw = fetch(url)
-        document = source_json_loads(raw) if raw.lstrip().startswith((b'{', b'[')) else yaml.load(raw, Loader=OfficialSourceLoader)
+        from import_twitter_endpoint import accepts as twitter_endpoint, extract as extract_twitter_endpoint
+        if twitter_endpoint(url):
+            document, metadata = extract_twitter_endpoint(raw, url, OfficialSourceLoader)
+        else:
+            document = source_json_loads(raw) if raw.lstrip().startswith((b'{', b'[')) else yaml.load(raw, Loader=OfficialSourceLoader)
         if url == DATAFORSEO_URL:
             original_hash = digest(document)
             document, changed = normalize_filters(document)
