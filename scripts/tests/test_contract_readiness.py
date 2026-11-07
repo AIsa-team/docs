@@ -35,6 +35,39 @@ def index(paths, operations=None, pending=None, excluded=None):
 
 
 class ReadinessTests(unittest.TestCase):
+    def test_unpublished_gateway_rows_are_counted_without_private_paths(self):
+        facts, documents, coverage = fixture()
+        runtime = index(['/search'])
+        runtime['coverage']['inventory_endpoint_count'] = 75
+        runtime['coverage']['excluded_counts'] = {'unpublished_duplicate_route': 74}
+        before = copy.deepcopy(runtime)
+        report = check_readiness(facts, documents, coverage, runtime_index=runtime)
+        self.assertEqual('passed', report['status'], report)
+        self.assertEqual(before, runtime)
+        for count in (-1, 0, True, 74.5, '74', 76):
+            with self.subTest(count=count):
+                bad = copy.deepcopy(runtime)
+                bad['coverage']['excluded_counts']['unpublished_duplicate_route'] = count
+                report = check_readiness(facts, documents, coverage, runtime_index=bad)
+                self.assertIn('invalid_endpoint_counts', self.errors(report))
+        for change in ('missing_count', 'unknown_reason', 'exposed_identity', 'missing_public_endpoint'):
+            with self.subTest(change=change):
+                bad = copy.deepcopy(runtime)
+                cov = bad['coverage']
+                if change == 'missing_count':
+                    cov.pop('excluded_counts')
+                elif change == 'unknown_reason':
+                    cov['excluded_counts'] = {'arbitrary_hidden_reason': 74}
+                elif change == 'exposed_identity':
+                    cov['excluded_endpoints'] = [{'provider': 'private', 'path': '/private/gateway', 'reason': 'unpublished_duplicate_route'}]
+                    cov['inventory_endpoint_count'] += 1
+                else:
+                    cov['projected_endpoints'] = []
+                    cov['projected_endpoint_count'] = cov['selected_endpoint_count'] = 0
+                    cov['excluded_counts']['unpublished_duplicate_route'] = 75
+                report = check_readiness(facts, documents, coverage, runtime_index=bad)
+                self.assertEqual('failed', report['status'], report)
+
     def errors(self, report):
         return {e['code'] for e in report['global_errors']} | {e['code'] for p in report['providers'].values() for e in p['errors']}
 
