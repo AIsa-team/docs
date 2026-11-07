@@ -52,6 +52,9 @@ def extract_openapi_ref(text: str) -> tuple[str, str] | None:
 def validate(root: Path, generated_only: bool = False) -> list[str]:
     errors: list[str] = []
     canonical_to_files: dict[str, list[str]] = {}
+    # Every page still checks its own route and operation ID. Provider specs are
+    # immutable during this validation call, so parse their bytes only once.
+    documents = {}
     for mdx in sorted((root / "api-reference").rglob("*.mdx")):
         text = mdx.read_text(encoding="utf-8")
         if generated_only and "x-aisa-operation-id:" not in text:
@@ -65,7 +68,9 @@ def validate(root: Path, generated_only: bool = False) -> list[str]:
             try:
                 operation_id = json.loads(identity[1])
                 spec_name = OPENAPI_RE.search(text)[1].split()[0]
-                document = json.loads((root / spec_name).read_text())
+                if spec_name not in documents:
+                    documents[spec_name] = json.loads((root / spec_name).read_text())
+                document = documents[spec_name]
                 if document["paths"][path][method]["operationId"] != operation_id:
                     errors.append(f"{mdx}: generated page operation identity differs from its contract")
             except (KeyError, ValueError, OSError) as exc:
