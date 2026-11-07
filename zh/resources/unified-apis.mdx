@@ -1,0 +1,158 @@
+---
+title: "Unified API"
+sidebarTitle: "Unified API"
+icon: "layer-group"
+description: "AIsa Social、AIsa Ads 和 AIsa commerce：一种请求格式覆盖多个平台，可读写已连接的账户。"
+---
+
+AIsa 的 Unified API 用一种请求格式覆盖多个平台。你调用 AIsa 的一个端点，由 AIsa 去对接 Instagram、Meta Ads、Amazon 等平台。同一个 API Key 可以调用 Unified API、[API 参考](/zh/api-reference)中的供应商 API 和模型。
+
+Unified API 共有三个：
+
+| API | 权限 | 基础路径 | 端点数 | 平台 | 是否需要连接账户 |
+| --- | --- | --- | ---: | --- | --- |
+| **AIsa Social** | 读写 | `/apis/v1/social` | 274 | TikTok、Instagram、X、YouTube、Facebook、LinkedIn、Pinterest、Threads、Reddit、Bluesky、Google 商家资料、Google Analytics | 需要 |
+| **AIsa Ads** | 读写 | `/apis/v1/ads` | 245 | Meta Ads、Google Ads、TikTok Ads、LinkedIn Ads、Reddit Ads | 需要 |
+| **AIsa commerce** | 只读 | `/apis/v1/commerce` | 51 | Amazon、TikTok Shop、Walmart、Temu、1688、Google 关键词数据 | 不需要 |
+
+端点数取自 2026 年 11 月 7 日的线上 API 清单。
+
+## 能做什么
+
+- **一种请求格式。** 帖子、广告系列、商品在每个平台上字段相同。要同时发到 LinkedIn 和 X，一个请求带上两个账户即可。
+- **托管授权。** 各平台的授权页面由 AIsa 托管。你的应用不保存平台密码或 token。
+- **可读可写。** AIsa Social 可以发布、排期、编辑和删除帖子，回复评论和私信。AIsa Ads 可以创建和修改广告系列、广告组、广告、素材、受众和线索表单。
+- **Webhook 推送事件。** AIsa 把帖子和账户事件推送到你的 HTTPS 地址，不用轮询。
+- **每个值都带来源。** AIsa commerce 的每个值都标明来源。采集时间、许可、出处和值类型放在 `meta.sources` 里。
+
+## AIsa 在你的应用和平台之间
+
+AIsa 代表用户已连接的平台账户执行操作。一次调用要成功，两件事都要正常：
+
+1. **AIsa API 有响应。** 请求到达 AIsa，并通过鉴权。
+2. **平台连接可用。** 已连接的账户仍有授权，平台也接受这个操作。
+
+请求可能已到达 AIsa，但它需要的平台连接已经断开。连接成功只说明账户在当时可用，不保证一直保持连接。
+
+### 平台连接为什么会失效
+
+- 用户撤销了授权、改了密码，或授权已过期。
+- 平台改了鉴权方式、接口或规则。
+- 平台故障，或对账户限流、限制功能。
+- 该账户不允许这个操作，例如 TikTok 帖子缺少必填的隐私设置。
+
+### AIsa 提供什么
+
+- 账户事件：`account.connected`、`account.disconnected` 和 `account.needs_reconnect`。
+- 健康检查：社媒账户用 `GET /apis/v1/social/accounts/health`。Meta 广告账户用 `GET /apis/v1/ads/accounts/health`，它检查账户状态、付款方式、花费上限、主页、Instagram 账户、线索广告条款、最新的像素事件和关联的 WhatsApp 号码，每个问题都附修复链接。
+- 按平台给出结果：发到多个平台的帖子可能以 `partial` 结束。`post.platform.published` 和 `post.platform.failed` 事件告诉你每个平台的结果。
+- 重连不丢历史：带上 `reconnectAccountId` 再走一次连接流程，账户保留原 ID 和历史。
+
+### 你的应用要做什么
+
+- 订阅 `account.*` 事件，把账户状态展示给用户。
+- 账户需要重连时，暂停它的任务。只在平台要求重新登录时才提示用户重连。
+- 处理 `partial` 帖子：只重试或上报失败的平台。
+- 投放 Meta 广告前，先检查广告账户健康状态。
+- 账户重连后，补读断开期间可能漏掉的数据。
+
+<Note>
+平台边界上的错误是常态。设计应用时，一个账户断开不应影响其他账户的工作。
+</Note>
+
+## 核心概念
+
+| 概念 | 含义 |
+| --- | --- |
+| **平台** | 你使用其数据或账户的网站，例如 Instagram、Meta Ads 或 Amazon。 |
+| **Profile**（`prf_…`） | 存放已连接账户和广告连接的容器。一个 Profile 可以有同一平台的多个账户。连接广告平台时不传 `profileId`，AIsa 使用你的默认 Profile。 |
+| **已连接账户**（`acc_…`） | 关联到 Profile 的一个平台账户，例如一个 Instagram 商业账户。AIsa Social 通过它读写。 |
+| **广告连接** | 在 Profile 下授权的一个广告平台。AIsa Ads 通过它读写。 |
+| **连接会话** | 一次托管授权流程。其中的 `authUrl` 有效期 30 分钟。 |
+| **Webhook 地址** | 接收事件的 HTTPS 地址。签名密钥只在创建时返回一次。调用 `rotateSecret` 后，旧密钥继续有效 24 小时。 |
+
+AIsa commerce 不用 Profile，也不用连接账户，只凭 API Key 读取公开的电商数据。
+
+## 接入流程
+
+<Steps>
+  <Step title="获取 API Key">
+    在 [Console → API Keys](https://console.aisa.one/api-keys) 创建 key。详见 [API Key 与第一次调用](/zh/guides/getting-started-with-aisa)。
+  </Step>
+  <Step title="连接平台账户">
+    为平台发起托管授权流程。响应包含 `authUrl`、`connectSessionId` 和 `expiresAt`。
+
+    ```bash
+    curl "https://api.aisa.one/apis/v1/social/connect/linkedin" \
+      -H "Authorization: Bearer $AISA_API_KEY"
+    ```
+
+    在浏览器打开 `authUrl`，登录平台。要让浏览器回到你的应用，传 `redirectUrl`：它必须是你白名单里的 HTTPS 地址。浏览器回到该地址时带上 `connectSessionId` 和 `accountId`，失败时带上错误。广告平台用 `GET /apis/v1/ads/connect/{platform}`。
+  </Step>
+  <Step title="等待连接完成">
+    轮询 `GET /apis/v1/social/connect/sessions/{sessionId}`，或等待 `connect_session.completed` 或 `connect_session.failed` 事件。完成的会话里有新账户的 `accountId`。
+  </Step>
+  <Step title="读写数据">
+    用这个账户调用端点。下面的请求把一条文字帖子同时发到两个账户：
+
+    ```bash
+    curl -X POST "https://api.aisa.one/apis/v1/social/posts" \
+      -H "Authorization: Bearer $AISA_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "content": "Our spring collection is live.",
+        "platforms": [
+          {"platform": "linkedin", "accountId": "acc_7Hq2Lm9Xc4Rt8Vw1Nb6Ks3"},
+          {"platform": "twitter", "accountId": "acc_2Bn8Wq5Td1Yh7Kc3Mz9Lp4"}
+        ],
+        "publishNow": true
+      }'
+    ```
+
+    要排期发布，用 `scheduledFor` 和 `timezone` 代替 `publishNow`。
+  </Step>
+  <Step title="接收事件">
+    用 `POST /apis/v1/social/webhooks/settings` 创建 Webhook 地址，并选择 `eventTypes`。用 `POST /apis/v1/social/webhooks/test` 发送测试事件。
+  </Step>
+</Steps>
+
+AIsa commerce 只需要第一步：
+
+```bash
+curl "https://api.aisa.one/apis/v1/commerce/amazon/listings?country=US&q=standing%20desk" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+## Webhook 事件
+
+| 类别 | 事件 |
+| --- | --- |
+| 帖子 | `post.scheduled`、`post.published`、`post.partial`、`post.failed`、`post.cancelled`、`post.deleted` |
+| 单个平台上的帖子 | `post.platform.published`、`post.platform.failed`、`post.platform.deleted`、`post.tiktok.url_resolved` |
+| 账户 | `account.connected`、`account.disconnected`、`account.needs_reconnect` |
+| 连接会话 | `connect_session.completed`、`connect_session.failed` |
+
+## AIsa commerce 的数据来源
+
+- 默认（`provenance=compact`）每个值包含 `value` 和 `source`。采集时间、许可、出处和值类型统一放在 `meta.sources`。
+- `provenance=full` 返回每个值的完整来源信息，包括精度和置信度。
+- 请求了但没有来源提供的字段列在 `missing` 里，并附原因。
+- `fields` 只裁剪输出，不减少上游调用，也不减少费用。
+
+## 计费
+
+Unified API 与其他 AIsa 调用共用同一笔余额。本文档不列价格。智能体可以在 [AIsa MCP 服务](/zh/agent-quickstart)里用 `batch_quote` 先为具体调用报价，再执行。详见[计费与额度](/zh/guides/pricing)。
+
+## 下一步
+
+<CardGroup cols={3}>
+  <Card title="AIsa Social" icon="hashtag" href="/zh/api-reference/aisa-social/get_aisa_social_apis_v1_social_account_groups">
+    账户、发布与排期、收件箱、数据分析和 Webhook。
+  </Card>
+  <Card title="AIsa Ads" icon="bullhorn" href="/zh/api-reference/aisa-ads/get_aisa_ads_apis_v1_ads_accounts">
+    适用于所有广告平台的端点，以及 Meta Ads、Google Ads、TikTok Ads、LinkedIn Ads 和 Reddit Ads。
+  </Card>
+  <Card title="AIsa commerce" icon="cart-shopping" href="/zh/api-reference/aisa-commerce/get_aisa_commerce_apis_v1_commerce_amazon_categories">
+    Amazon、TikTok Shop、Walmart、Temu 和 1688 的商品、店铺、关键词和评论。
+  </Card>
+</CardGroup>
