@@ -486,6 +486,33 @@ def refresh_localized_documents(root, documents, changes, catalog, identity_hist
             changes[target] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
 
 
+def unindexed_empty_placeholder(previous, catalogs, index, category):
+    """Retain an empty historic file without claiming any fresh operations.
+
+    A closed Runtime inventory may no longer expose a gateway's placeholder
+    catalog after its actual tools move under business brands. Missing facts for
+    any advertised catalog or any nonempty historical document still block.
+    """
+    if (not isinstance(previous, dict) or previous.get('paths') != {}
+            or not previous.get('openapi') or previous.get('webhooks')
+            or not isinstance(index, dict) or index.get('schema_version') != '1'):
+        return False
+    coverage = index.get('coverage', {})
+    if not isinstance(coverage, dict) or coverage.get('scope') != 'integration':
+        return False
+    groups = [(index.get('providers'), 'id'), (index.get('pending_providers'), 'id'),
+              (index.get('pending_endpoints'), 'provider'),
+              (coverage.get('projected_endpoints'), 'provider'),
+              (coverage.get('excluded_endpoints'), 'provider'),
+              ((category or {}).get('apis'), 'id')]
+    advertised = set()
+    for rows, field in groups:
+        if not isinstance(rows, list) or any(not isinstance(row, dict) or not isinstance(row.get(field), str) for row in rows):
+            return False
+        advertised.update(row[field] for row in rows)
+    return bool(catalogs) and not set(catalogs).intersection(advertised)
+
+
 def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = True,
           readiness_context: dict | None = None, *, identity_history=_AUTO_HISTORY,
           page_link_index=None, reuse_unchanged_documents=True) -> tuple[dict, dict]:
@@ -542,6 +569,12 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         entry = entry or {}
         output_path = root / f"openapi/{provider}.json"
         previous = read_json(output_path, {})
+        if (registry.get('auto_register') and not entry.get('pin') and
+                unindexed_empty_placeholder(previous, entry.get('group', [provider]), index, category)):
+            pending['providers'].pop(provider, None)
+            if readiness_context is not None:
+                readiness_context.setdefault('retained_empty_placeholders', []).append(provider)
+            continue
         if entry.get("pin"):
             pin = str(entry["pin"])
             if not re.fullmatch(r"[a-fA-F0-9]{7,40}", pin):
