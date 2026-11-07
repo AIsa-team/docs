@@ -53,10 +53,10 @@ def assert_identities(previous: dict, current: dict, pending: set = frozenset())
         # generate_pages rebinds its existing page URLs to the current route.
         if route not in new and operation_id in current_ids:
             continue
-        # An exactly approved deferred route is reported as its pending row with
-        # the composer's real reason (retain_pending_history keeps the published
-        # copy). That is not an identity change; a different ID on the route, or
-        # an unapproved pending route, still is. Method 'any' covers the path.
+        # A retained pending route is reported as its pending row with the
+        # composer's real reason (retain_pending_history keeps the published
+        # copy). That is not an identity change; a different ID on the route
+        # still is. Method 'any' covers the path.
         if route not in new and (route in pending or (route[0], "any") in pending):
             continue
         if new.get(route) != operation_id:
@@ -175,26 +175,21 @@ def retain_pending_history(document: dict, facts: dict, history: dict, unresolve
     return retained
 
 
-def deferred_pending_routes(provider: str, facts: dict, document: dict, history: dict, unresolved: list,
-                            deferred, rows_for) -> set:
-    """Pending routes whose retained published copy is an exactly approved deferral.
+def deferred_pending_routes(facts: dict, document: dict, history: dict, unresolved: list, rows_for) -> set:
+    """Pending routes whose previously published copy is retained, disabled.
 
-    Without an exact approval the provider keeps today's behavior: a published
-    identity the composer could not produce blocks the provider and leaves its
-    published files untouched. ``rows_for(document)`` returns the provider's
-    enriched coverage rows; readiness recomputes and checks the same key.
+    A published identity the composer can no longer produce is visible pending
+    debt: its copy stays as a disabled retained_pending operation and the
+    provider's other operations still publish. ``rows_for(document)`` returns
+    the provider's enriched coverage rows.
     """
-    if deferred is None:
-        return set()
     trial = copy.deepcopy(document)
     retained = retain_pending_history(trial, facts, history, unresolved)
     if not retained:
         return set()
-    from contract_readiness import _pending_key
     candidates = {(row["path"], row["method"].lower()) for row in retained}
     return {(row["path"], row["method"].lower()) for row in rows_for(trial)
-            if row.get("status") == "pending" and (row["path"], row["method"].lower()) in candidates
-            and deferred.matches(provider, "request", _pending_key(row))}
+            if row.get("status") == "pending" and (row["path"], row["method"].lower()) in candidates}
 
 
 def fetch_json(url: str, etag: str | None = None):
@@ -660,7 +655,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                 def rows_for(candidate):
                     return enrich_coverage(coverage_rows(facts, candidate, unresolved, catalogs), facts, upstream,
                                            public_mirrors, source_bindings, response_identity_v2=response_identity_v2)
-                deferred_routes = deferred_pending_routes(provider, facts, document, history, unresolved, deferred, rows_for)
+                deferred_routes = deferred_pending_routes(facts, document, history, unresolved, rows_for)
                 if deferred_routes:
                     retain_pending_history(document, facts, history, unresolved, deferred_routes)
                 coverage["providers"][provider] = rows_for(document)

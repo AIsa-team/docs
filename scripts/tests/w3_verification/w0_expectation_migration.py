@@ -2,6 +2,9 @@
 
 This is test-only expected behavior for old facts without forwarding hints.
 It cannot approve current source debt, waive production gates, or rewrite W0.
+Since pending is visible debt rather than a blocker (2026-11-01), only the
+operations with forwarding root failures become pending; no provider is
+retained wholesale, so provider_pending is empty.
 """
 import hashlib
 import gzip
@@ -9,7 +12,7 @@ import json
 from pathlib import Path
 
 ARCHIVE_SHA256 = 'f2b35c81df49b3a31053f3b4e8978778e52556d2d36536c23f4d7f28f8e0f02f'
-FIXTURE_SHA256 = '93e414582b7f99df0997e6a72b64c4ca6b27c3076c55b3e746a509b640e56b2e'
+FIXTURE_SHA256 = 'd28be013edb4c1365e5702f7aafd7b1fee22999ceed73039c93a6246e865646d'
 FIXTURE = Path(__file__).with_name('strict-forwarding-expectation-migration.json')
 SCOPE = 'closed_frozen_W0_stricter_forwarding_diagnostic_expectation_migration_only_not_production_debt_approval'
 

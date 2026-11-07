@@ -1,4 +1,4 @@
-"""Exactly approved deferred pending routes keep their published identity, never as active."""
+"""Pending routes keep their published identity as retained copies, never as active."""
 import copy
 import json
 from pathlib import Path
@@ -107,16 +107,19 @@ class StageDeferredPendingTests(unittest.TestCase):
 
     def key(self):
         _, summary, context = self.run_stage(None)
-        self.assertIn('changed or disappeared', summary['alpha']['blocked'])
+        self.assertNotIn('blocked', summary['alpha'])
         row = next(row for row in context['coverage']['providers']['alpha'] if row['path'] == '/apis/v1/alpha/test')
         return _pending_key({**row, 'runtime_status': 'enabled'})
 
-    def test_unapproved_pending_route_keeps_blocking_and_files_untouched(self):
+    def test_unapproved_pending_route_is_retained_disabled_without_blocking(self):
         key = self.key()
         changes, summary, context = self.run_stage(approval('alpha', [[*key[:-1], 'disabled']]))
-        self.assertIn('blocked', summary['alpha'])
-        self.assertNotIn(self.root / 'openapi/alpha.json', changes)
-        self.assertIn('alpha', context['report']['blocked_providers'])
+        self.assertNotIn('blocked', summary['alpha'])
+        op = json.loads(changes[self.root / 'openapi/alpha.json'])['paths']['/apis/v1/alpha/test']['get']
+        self.assertEqual((op['x-aisa-status'], op['x-aisa-contract-state']), ('disabled', 'retained_pending'))
+        result = context['report']['providers']['alpha']
+        self.assertEqual((result['status'], [row['operation_id'] for row in result['new_pending']]), ('passed', ['alpha_test']))
+        self.assertNotIn('alpha', context['report']['blocked_providers'])
 
     def test_approved_pending_route_is_retained_disabled_and_deferred(self):
         key = self.key()

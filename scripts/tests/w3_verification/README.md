@@ -11,15 +11,18 @@ Independent inspection of the original facts and sources confirms 59 concrete
 method failures across 55 runtime identities: Apollo 2, Brave 15, Financial 8,
 Parallel 7, Polymarket Bridge 2, Relayer 3, Scrape Creators 15, Search 1 and
 Twitter 6. Four Brave methods collapse to their original Runtime ANY rows.
-Identity preservation then retains each of these nine providers' old documents,
-conservatively marking another 119 otherwise composable coverage rows pending.
+Since 2026-11-01 pending is visible debt rather than a blocker, so only these
+59 operations become pending: each is retained as a disabled `retained_pending`
+copy and its provider's other operations still compose. (Before, identity
+preservation retained the nine providers' old documents wholesale and marked
+another 119 composable rows pending.)
 
 The separate reviewed `strict-forwarding-expectation-migration.json` records this
 one exact diagnostic expectation change. Its own SHA is fixed in code. It binds
 the original archive/coverage, all 123 JSON facts/source inputs, the proposed
-offline policy fixture, all nine providers' exact pending/root-failure reasons,
-and every full row in the 178 removals and 174 additions. It additionally pins
-the complete resulting 2024-row coverage graph and entire pending graph,
+offline policy fixture, and every full row in the 59 removals and 59 additions.
+No provider is retained wholesale, so `provider_pending` is empty. It
+additionally pins the complete resulting coverage graph and entire pending graph,
 including every reason, source binding and previously pending operation.
 The compressed diagnostic evidence is independently hash bound and supplies
 fixed positive test input; the running Composer never generates its own oracle.
@@ -27,7 +30,8 @@ fixed positive test input; the running Composer never generates its own oracle.
 Reconciliation requires exactly this closed migration even if code regresses to
 the original optimistic composed statuses. Unknown additions, omissions, changed
 reasons, binding drift, extra retained providers or pending-to-composed changes
-fail. The complete 1930-operation identity comparison, execution/pricing metadata,
+fail. The complete 1930-operation identity comparison, execution/pricing metadata
+(except the reviewed `disabled` status of exactly the 59 retained pending copies),
 global errors, missing inputs, source-policy checks and zero-change repeat run
 remain mandatory. The receipt honestly reports that the historical coverage
 tuple sets differ and separately identifies the reviewed diagnostic migration.

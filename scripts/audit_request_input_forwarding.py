@@ -25,7 +25,8 @@ from runtime_registry import combine_facts, public_mirror_index, runtime_metadat
 
 def missing_query_inputs(runtime, source, document, auth_names=()):
     """Optional and required caller inputs both need an explicit forwarding path."""
-    if runtime.get('x-aisa-query-policy', {}).get('request_wins') is True:
+    policy = runtime.get('x-aisa-query-policy', {})
+    if policy.get('request_wins') is True or policy.get('open_query') is True:
         return []
     declared = {p['name'] for p in runtime.get('parameters', []) if p.get('in') == 'query'}
     auth = {'authorization', 'x-api-key', 'api-key', *(name.lower() for name in auth_names)}

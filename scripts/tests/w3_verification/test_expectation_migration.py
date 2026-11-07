@@ -36,9 +36,10 @@ class ExpectationMigrationTests(unittest.TestCase):
             (root / 'expected/openapi/coverage.json').write_bytes(self.previous_raw)
             (root / 'candidate/openapi/pending.json').write_text(json.dumps(pending))
             result = migration.verify_migration(root / 'expected', root / 'candidate', current, catalog_root())
-            self.assertEqual((result['removed_rows'], result['added_rows']), (178, 174))
+            self.assertEqual((result['removed_rows'], result['added_rows']), (59, 59))
             self.assertEqual(result['status'], 'passed')
-            self.assertEqual(len(result['retained_providers']), 9)
+            # Pending is visible debt, so no provider is retained wholesale.
+            self.assertEqual(result['retained_providers'], [])
             (root / 'expected/openapi/coverage.json').write_bytes(self.previous_raw + b' ')
             with self.assertRaisesRegex(ValueError, 'immutable W0 oracle'):
                 migration.verify_migration(root / 'expected', root / 'candidate', current, catalog_root())

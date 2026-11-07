@@ -91,10 +91,11 @@ class GapEvidenceTests(unittest.TestCase):
             report = {'status': 'passed', 'blocked_providers': [], 'providers': {'p': {'errors': [], 'status': 'passed'}}}
             assess_response_gaps(report, {'p': self.facts}, {'p': doc}, coverage, baseline)
             return report
-        self.assertEqual(run({'response_gaps': {'p': gaps}})['status'], 'passed')
+        self.assertEqual(run({'response_gaps': {'p': gaps}})['providers']['p']['existing_response_pending'], gaps)
         changed = copy.deepcopy(gaps); changed[0]['operation_id'] = 'other'
-        self.assertEqual(run({'response_gaps': {'p': changed}})['status'], 'failed')
-        self.assertEqual(run({'response_gaps': {}})['status'], 'failed')
+        for baseline in ({'response_gaps': {'p': changed}}, {'response_gaps': {}}):
+            report = run(baseline)
+            self.assertEqual((report['status'], report['providers']['p']['new_response_pending']), ('passed', gaps))
 
     def test_runtime_disabled_response_debt_is_visible_but_not_blocking(self):
         disabled = dict(self.fact, **{'x-aisa-status': 'disabled'})
@@ -110,13 +111,14 @@ class GapEvidenceTests(unittest.TestCase):
         self.assertEqual(report['status'], 'passed'); self.assertEqual(report['blocked_providers'], [])
         self.assertEqual(report['providers']['p']['new_response_pending'], [])
         self.assertEqual(report['providers']['p']['disabled_response_pending'], gaps)
-        # The same debt blocks again once the runtime enables the operation.
+        # Once the runtime enables the operation the same debt is new, still not blocking.
         enabled_doc = {'paths': {'/read': {'get': dict(self.fact, responses={'200': {'description': 'unknown'}})}}}
         enabled_gaps = response_gap_rows(enabled_doc, self.facts, rows)
         coverage = {'schema_version': 2, 'providers': {'p': rows}, 'response_gaps': {'p': enabled_gaps}}
         report = {'status': 'passed', 'blocked_providers': [], 'providers': {'p': {'errors': [], 'status': 'passed'}}}
         assess_response_gaps(report, {'p': self.facts}, {'p': enabled_doc}, coverage, {'response_gaps': {}})
-        self.assertEqual(report['status'], 'failed'); self.assertEqual(report['providers']['p']['disabled_response_pending'], [])
+        self.assertEqual(report['status'], 'passed'); self.assertEqual(report['providers']['p']['disabled_response_pending'], [])
+        self.assertEqual(report['providers']['p']['new_response_pending'], enabled_gaps)
         self.assertNotEqual(gap_key(gaps[0]), gap_key(enabled_gaps[0]))
 
 

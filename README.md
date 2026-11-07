@@ -250,6 +250,14 @@ consumer adoption. New authority evidence, expiry or graph changes still publish
 a freshly verified bundle. This does not create another baseline, approval path,
 or fallback publication.
 
+Pending definitions never block publication (user decision, 2026-11-01). A
+missing request source or success payload is visible debt in the readiness
+report (`new_pending`, `new_response_pending`); the operation is not published
+as complete, and a previously published copy is retained as a disabled
+`retained_pending` operation. Only structural errors and global errors block.
+The CR records below predate this rule; they now only label matching rows as
+`deferred_*` and no longer gate anything, so new gaps need no approval record.
+
 CR003 records the user's decision to defer exactly 60 known enabled definition
 gaps (10 request, 50 response) in
 [`openapi/policies/deferred-enabled-20261010.json`](openapi/policies/deferred-enabled-20261010.json).
@@ -288,9 +296,9 @@ from the independently reviewed 93 disabled baseline items in `existing_pending`
 and `existing_response_pending`. Exact identity, binding, source, reason, status,
 and response declaration fingerprints must match; changed or additional gaps
 still fail. A response gap on an operation the Runtime reports as `disabled` is
-listed in `disabled_response_pending`: it is visible debt that does not block
-publication, and because the Runtime status is part of the gap identity it
-blocks again as `new_response_pending` the moment the operation is enabled. Each reported gap also carries `runtime_binding` copied from the same
+listed in `disabled_response_pending`; because the Runtime status is part of
+the gap identity it moves to `new_response_pending` the moment the operation is
+enabled. Neither list blocks publication. Each reported gap also carries `runtime_binding` copied from the same
 Runtime input (native identity, method, path, status, revision, and public pricing)
 for consumer reconciliation; it is evidence, not method or schema authority.
 The exporter checks the fixed policy and both report scopes before publishing.

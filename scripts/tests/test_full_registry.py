@@ -278,16 +278,18 @@ class FullRegistryTests(unittest.TestCase):
         self.assertEqual(yaml.safe_load((self.root / 'openapi/registry.yaml').read_text())['providers']['alpha']['legacy_sources'], ['old-split'])
         self.assertEqual(self.pull()[0], {})
 
-    def test_missing_mirror_keeps_old_docs_and_does_not_block_other_catalog(self):
+    def test_missing_mirror_retains_old_operation_and_does_not_block_other_catalog(self):
         legacy = contract('alpha')
         (self.root / 'openapi/alpha.json').write_text(json.dumps(legacy))
         original = (self.root / 'openapi/alpha.json').read_text()
         self.sources({'alpha': contract('alpha', validation='provider'), 'beta': contract('beta')})
         changes, summary = self.pull()
-        self.assertIn('blocked', summary['alpha'])
+        self.assertNotIn('blocked', summary['alpha'])
         self.assertEqual(summary['beta']['operations'], 1)
         self.publish(changes)
-        self.assertEqual((self.root / 'openapi/alpha.json').read_text(), original)
+        retained = operation(json.loads((self.root / 'openapi/alpha.json').read_text()))
+        self.assertEqual((retained['operationId'], retained['x-aisa-status'], retained['x-aisa-contract-state']),
+                         (operation(json.loads(original))['operationId'], 'disabled', 'retained_pending'))
         report = json.loads((self.root / 'openapi/coverage.json').read_text())
         self.assertEqual(report['providers']['alpha'][0]['reason'], 'upstream operation missing')
 
@@ -360,17 +362,19 @@ class FullRegistryTests(unittest.TestCase):
         self.assertIn('Keep this prose.', page.read_text())
         self.assertEqual(self.pull()[0], {})
 
-    def test_failed_new_owner_keeps_historical_operation_with_old_owner(self):
+    def test_failed_new_owner_retains_historical_operation_disabled(self):
         previous = contract('alpha')
         previous['paths'].update(copy.deepcopy(contract('beta')['paths']))
         (self.root / 'openapi/alpha.json').write_text(json.dumps(previous))
         self.sources({'alpha': contract('alpha'), 'beta': contract('beta', validation='provider')})
         changes, summary = self.pull()
-        self.assertEqual(summary['alpha']['operations'], 2)
-        self.assertIn('blocked', summary['beta'])
+        self.assertEqual(summary['alpha']['operations'], 1)
+        self.assertNotIn('blocked', summary['beta'])
         self.publish(changes)
-        old = json.loads((self.root / 'openapi/alpha.json').read_text())
-        self.assertEqual(old['paths']['/apis/v1/beta/test']['get']['x-aisa-status'], 'disabled')
+        # The historical operation moves to its new owner, retained but not active.
+        new = json.loads((self.root / 'openapi/beta.json').read_text())['paths']['/apis/v1/beta/test']['get']
+        self.assertEqual((new['x-aisa-status'], new['x-aisa-contract-state']), ('disabled', 'retained_pending'))
+        self.assertNotIn('/apis/v1/beta/test', json.loads((self.root / 'openapi/alpha.json').read_text())['paths'])
 
     def test_explicit_disabled_runtime_row_updates_unmatched_legacy_and_replays(self):
         fixture = json.loads((Path(__file__).parent / 'fixtures/disabled-twitter-spaces.json').read_text())
@@ -463,7 +467,7 @@ class FullRegistryTests(unittest.TestCase):
         self.assertEqual(context['documents']['alpha'], json.loads(published))
         row = context['coverage']['providers']['alpha'][0]
         self.assertEqual((row['status'], row['publication_state']), ('pending', 'retained'))
-        self.assertEqual(context['report']['status'], 'failed')
+        self.assertEqual(context['report']['status'], 'not_assessed')
         for prefix in ('', 'zh/'):
             page = self.root / (prefix + 'api-reference/alpha/alpha_test.mdx')
             self.assertIn('openapi/' + prefix + 'alpha.json GET', changes[page])

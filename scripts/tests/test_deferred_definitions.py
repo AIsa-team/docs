@@ -145,7 +145,7 @@ class DeferredDefinitionTests(unittest.TestCase):
 
     def test_exact_request_deferral_preserves_pending_and_no_operation(self):
         f, d, c, policy = self.request_fixture(); before = copy.deepcopy((f, d, c))
-        self.assertEqual(check_readiness(f, d, c)['status'], 'failed')
+        self.assertEqual(len(check_readiness(f, d, c)['providers']['p']['new_pending']), 1)
         report = check_readiness(f, d, c, deferred_definitions=policy)
         result = report['providers']['p']
         self.assertEqual(report['status'], 'passed')
@@ -158,7 +158,7 @@ class DeferredDefinitionTests(unittest.TestCase):
         self.assertEqual(binding['revision'], {'profile_ref': 'v1'})
         self.assertEqual(binding['pricing'], f['p']['paths']['/search']['get']['x-aisa-pricing'])
 
-    def test_request_source_binding_status_or_new_request_remains_blocked(self):
+    def test_request_source_binding_status_or_new_request_is_not_deferred(self):
         for change in ('source', 'binding', 'status', 'false_status', 'new'):
             with self.subTest(change=change):
                 f, d, c, policy = self.request_fixture()
@@ -171,7 +171,7 @@ class DeferredDefinitionTests(unittest.TestCase):
                 if change == 'new':
                     f['q'] = copy.deepcopy(f['p']); d['q'] = copy.deepcopy(d['p']); c['providers']['q'] = copy.deepcopy(c['providers']['p'])
                 report = check_readiness(f, d, c, deferred_definitions=policy)
-                self.assertEqual(report['status'], 'failed')
+                self.assertEqual(report['providers']['q' if change == 'new' else 'p']['deferred_pending'], [])
 
     def test_original_baseline_stays_separate_and_errors_not_deferred(self):
         f, d, c, policy = self.request_fixture()
@@ -183,7 +183,7 @@ class DeferredDefinitionTests(unittest.TestCase):
         self.assertEqual(report['status'], 'failed')
         self.assertIn('pending_published_as_complete', {e['code'] for e in report['providers']['p']['errors']})
 
-    def test_response_deferral_keeps_exact_pending_schema_and_changes_block(self):
+    def test_response_deferral_keeps_exact_pending_schema_and_changes_are_new(self):
         fact = {'operationId': 'get_read', 'x-aisa-status': 'enabled', 'x-aisa-validation': 'runtime',
                 'responses': {'200': {'description': 'Unknown response definition'}}}
         facts = {'p': {'paths': {'/read': {'get': fact}}}}; docs = copy.deepcopy(facts)
@@ -198,7 +198,8 @@ class DeferredDefinitionTests(unittest.TestCase):
         self.assertEqual(docs, before)
         row['response_source_binding_hash'] = 'changed'
         cov['response_gaps']['p'] = response_gap_rows(docs['p'], facts['p'], [row])
-        self.assertEqual(check_readiness(facts, docs, cov, deferred_definitions=policy)['status'], 'failed')
+        result = check_readiness(facts, docs, cov, deferred_definitions=policy)['providers']['p']
+        self.assertEqual((result['deferred_response_pending'], len(result['new_response_pending'])), ([], 1))
 
     def test_export_rejects_unbound_policy_or_unapproved_duplicate_deferral(self):
         policy = load_deferred_definitions(ROOT)

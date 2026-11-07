@@ -351,10 +351,11 @@ def check_readiness(facts_by_provider, documents_by_provider, coverage,
                     baseline_coverage=None, runtime_index=None, deferred_definitions=None):
     """Assess actual candidates. Provider failures do not imply global abort.
 
-    status=failed means structural errors or new/changed pending items. Existing
-    reviewed pending remains visible. Missing/retained inputs yield not_assessed;
-    only global_errors require globally stopping publication. The caller supplies
-    the independently reviewed baseline and optional code-pinned exact deferrals.
+    status=failed means structural errors only. Pending items, new or existing,
+    are visible debt: they stay unpublished (or retained) and never block other
+    operations. Missing/retained inputs yield not_assessed; only global_errors
+    require globally stopping publication. The baseline and code-pinned
+    deferrals only label pending rows; they grant nothing and gate nothing.
     """
     baseline_ok = isinstance(baseline_coverage, dict) and isinstance(baseline_coverage.get('providers'), dict)
     report = dict(schema_version=1, status='passed', global_errors=[], blocked_providers=[],
@@ -537,7 +538,7 @@ def check_readiness(facts_by_provider, documents_by_provider, coverage,
                 if not any(row.get('publication_state') == 'retained' and row.get('path') == path and str(row.get('method', '')).lower() in (method, 'any') for row in rows if isinstance(row, dict)):
                     result['errors'].append(_error('published_operation_without_fact', provider, path, method, op.get('operationId')))
         result['missing_inputs'] = sorted(set(result['missing_inputs']))
-        if result['errors'] or result['new_pending']:
+        if result['errors']:
             result['status'] = 'failed'
             report['blocked_providers'].append(provider)
         elif result['missing_inputs']:

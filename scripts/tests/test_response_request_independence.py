@@ -45,6 +45,11 @@ class ResponseRequestIndependenceTests(unittest.TestCase):
         rows = enrich_coverage([row], self.facts, self.upstream, {}, response_identity_v2=independent)
         return rows, response_gap_rows(self.facts, self.facts, rows, response_identity_v2=independent)
 
+    def assert_new_debt(self, report):
+        # Unmatched debt is reported as new; it never blocks publication.
+        self.assertEqual(report['status'], 'passed')
+        self.assertEqual(len(report['providers']['p']['new_response_pending']), 1)
+
     def assessment(self, baseline):
         rows, gaps = self.evidence()
         report = {'status': 'passed', 'blocked_providers': [],
@@ -112,7 +117,7 @@ class ResponseRequestIndependenceTests(unittest.TestCase):
                 change()
                 _, after = self.evidence()
                 self.assertNotEqual(gap_key(before[0]), gap_key(after[0]))
-                self.assertEqual(self.assessment(before)['status'], 'failed')
+                self.assert_new_debt(self.assessment(before))
 
     def test_runtime_disabled_status_is_new_debt_that_does_not_block(self):
         _, before = self.evidence()
@@ -161,11 +166,11 @@ class ResponseRequestIndependenceTests(unittest.TestCase):
         self.fact['parameters'][0]['required'] = True
         _, after = self.evidence()
         self.assertNotEqual(gap_key(before[0]), gap_key(after[0]))
-        self.assertEqual(self.assessment(before)['status'], 'failed')
+        self.assert_new_debt(self.assessment(before))
 
     def test_new_identity_version_never_automatically_inherits_old_debt(self):
         _, before = self.evidence(False)
-        self.assertEqual(self.assessment(before)['status'], 'failed')
+        self.assert_new_debt(self.assessment(before))
 
     def test_unresolved_auth_fail_closed(self):
         self.facts['security'] = [{'missingAuth': []}]
