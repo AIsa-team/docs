@@ -1,0 +1,48 @@
+---
+title: "Move legacy X actions to AIsa Social"
+sidebarTitle: "Legacy X migration"
+description: "Reauthorize with Social Connect and replace the retired aisa-twitter write endpoints."
+---
+
+<Warning>
+The eight legacy `aisa-twitter` endpoints under `/apis/v1/twitter` are retired. Stop selecting them in agents and integrations. Twitter read APIs are separate and are not affected by this retirement.
+</Warning>
+
+Use the existing [AIsa Social API](/resources/unified-apis), with X authorization through AIsa Social Connect. An old OAuth session or token cannot be transferred. Each user must authorize again; do not copy credentials, reuse an old token, or silently associate a different X user.
+
+## Connect the account again
+
+1. Start `GET /apis/v1/social/connect/twitter` with your AIsa bearer key and an owned `profileId`. This starts a connection session; it is not a passive read.
+2. Open the returned private `authUrl` in the user's browser. Use an allowlisted `redirectUrl` if needed; do not log or publish the authorization URL or session secret.
+3. Poll `GET /apis/v1/social/connect/sessions/{sessionId}` until completion. Use the returned **owned `acc_…` account ID** for subsequent actions. Check the platform identity before reconnecting an existing binding. A different X subject needs an explicit account replacement flow.
+
+The bearer key belongs in the Authorization header. Do not carry the legacy `aisa_api_key` body field or legacy OAuth tokens into Social requests.
+
+## Replace the old calls
+
+All replacement paths below begin with `/apis/v1/social`.
+
+| Retired legacy path under `/apis/v1/twitter` | Replacement |
+| --- | --- |
+| `/auth_twitter` | `GET /connect/twitter`, then verify the connect session |
+| `/post_twitter` | `POST /posts`, with one `platform: "twitter"` target and its owned `accountId` |
+| `/upload_media` | `POST /media/presign`, upload to the returned URL, then attach the owned `mediaId` to the post |
+| `/delete_twitter` | `POST /twitter/posts/{postId}/unpublish`; body `accountId` and `platform: "twitter"` |
+| `/like_twitter` | `POST /twitter/posts/{postId}/like`; body `accountId` |
+| `/unlike_twitter` | `DELETE /twitter/posts/{postId}/unlike`; query `accountId` |
+| `/follow_twitter` | `POST /twitter/follow`; body `accountId` and numeric `targetUserId` |
+| `/unfollow_twitter` | `DELETE /twitter/unfollow`; query `accountId` and numeric `targetUserId` |
+
+<Note>
+This migration guide describes the reviewed replacement routes. Use them after the corresponding Social service release and catalog activation. A route in this guide is not evidence that an immutable formal OpenAPI publication or ToolRouter index already contains it. If current discovery omits an action, do not fall back to the retired endpoint.
+</Note>
+
+## Publishing and compatibility limits
+
+The supported paid X publishing scope is **one account, one native post**, with plain text, text containing a URL, up to four images, or one video. Per-target `customMedia` replaces the post-level media. An image/video object's URL does not count as a URL in the tweet text for pricing.
+
+Use `platformSpecificData.quoteTweetId` or `replyToTweetId` for quote/reply targets. Quote and reply are mutually exclusive; quotes cannot include media or polls. Legacy `card_uri`, multi-item threads, multiple X targets, and arbitrary historical native-ID deletion are not equivalent replacements.
+
+Unpublish requires an owned, managed **`pst_…`** post with a published X target; it cannot delete an arbitrary old tweet merely by its native ID. Like/unlike can use a numeric native post ID or a managed post ID accepted by the current operation. An old upload ID is not a new Social `mediaId`.
+
+Use an `Idempotency-Key` for post creation. **HTTP 202 means accepted/pending, not published.** Follow the managed post with GET or verified events. A timeout or unknown result is not permission to resubmit. The publish charge remains pending until matched native-published confirmation; do not treat an accepted response as completed publication.
