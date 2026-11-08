@@ -42,7 +42,9 @@ def load_runtime(root, *, artifact_revision, compiler_revision, receipt_sha256):
             'Runtime receipt manifest differs')
     contents, total = {}, 0
     for row in before['files']:
-        raw = regular_read(root, row['name'])
+        # Read with the Runtime artifact's per-role bound (the complete-catalog
+        # aggregate exceeds the bundle member bound), exactly as acquisition did.
+        raw = regular_read(root, row['name'], limit=file_limit(row['name'], MAX_FILE))
         total += len(raw)
         require(len(raw) <= file_limit(row['name'], MAX_FILE) and total <= MAX_TOTAL, 'Runtime byte limit exceeded')
         require(sha(raw) == row['sha256'], 'Runtime member differs from immutable manifest')

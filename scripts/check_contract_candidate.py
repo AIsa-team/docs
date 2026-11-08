@@ -173,7 +173,10 @@ def assess_candidate(root: Path, facts_dir: Path, baseline_ref: str | None = Non
                 'missing_inputs': ['locked public runtime index/facts'],
                 'message': 'Restore runtime-contract evidence before assessing this candidate.'}
     from pull_openapi import stage
-    context = {'baseline_coverage': baseline, 'offline': True, 'published_ref': published_ref}
+    # Mirror the publication compiler: enabled Runtime operations without reviewed
+    # inputs are composed and marked x-aisa-review instead of blocking the graph.
+    context = {'baseline_coverage': baseline, 'offline': True, 'published_ref': published_ref,
+               'unreviewed_runtime': True}
     # stage only prepares an in-memory candidate. It does not write files.
     stage(root, facts_dir, 'https://unused.invalid', with_pages=False, readiness_context=context)
     coverage_path = root / 'openapi/coverage.json'
