@@ -1164,7 +1164,15 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             generic = operation["responses"][status]
                             if not isinstance(generic, dict) or "$ref" in generic:
                                 continue
-                            generic["content"] = {"application/json": {"schema": copy.deepcopy(UNREVIEWED_SUCCESS_SCHEMA)}}
+                            # Keep reviewed media types and their official examples; only
+                            # the missing payload schema becomes explicitly generic.
+                            content = generic.get("content") if isinstance(generic.get("content"), dict) else {}
+                            kept = {}
+                            for media, item in content.items():
+                                item = copy.deepcopy(item) if isinstance(item, dict) else {}
+                                item.setdefault("schema", copy.deepcopy(UNREVIEWED_SUCCESS_SCHEMA))
+                                kept[media] = item
+                            generic["content"] = kept or {"application/json": {"schema": copy.deepcopy(UNREVIEWED_SUCCESS_SCHEMA)}}
                             generic["description"] = UNREVIEWED_SUCCESS_DESCRIPTION
                             unreviewed_response.append(status)
                         unknown = [status for status in unknown if status not in unreviewed_response]
