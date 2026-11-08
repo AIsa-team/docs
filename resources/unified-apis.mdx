@@ -1,0 +1,158 @@
+---
+title: "Unified APIs"
+sidebarTitle: "Unified APIs"
+icon: "layer-group"
+description: "AIsa Social, AIsa Ads and AIsa commerce: one request shape across platforms, with read and write access to connected accounts."
+---
+
+AIsa's Unified APIs give you one request shape for many platforms. You call one AIsa endpoint, and AIsa talks to Instagram, Meta Ads, Amazon or another platform for you. The same API key works for the Unified APIs, the vendor APIs in the [API Reference](/api-reference), and the models.
+
+There are three Unified APIs:
+
+| API | Access | Base path | Endpoints | Platforms | Account connection |
+| --- | --- | --- | ---: | --- | --- |
+| **AIsa Social** | Read and write | `/apis/v1/social` | 274 | TikTok, Instagram, X, YouTube, Facebook, LinkedIn, Pinterest, Threads, Reddit, Bluesky, Google Business Profile, Google Analytics | Required |
+| **AIsa Ads** | Read and write | `/apis/v1/ads` | 245 | Meta Ads, Google Ads, TikTok Ads, LinkedIn Ads, Pinterest Ads, X Ads, Reddit Ads, OpenAI Ads (ChatGPT) | Required |
+| **AIsa commerce** | Read | `/apis/v1/commerce` | 51 | Amazon, TikTok Shop, Walmart, Temu, 1688, Google keyword data | Not needed |
+
+Endpoint counts are from the live API listing on November 7, 2026.
+
+## What you get
+
+- **One request shape.** A post, a campaign or a listing has the same fields on every platform. To post to LinkedIn and X at once, send one request with both accounts.
+- **Hosted sign-in.** AIsa hosts the authorization page for each platform. Your app does not store platform passwords or tokens.
+- **Read and write.** AIsa Social publishes, schedules, edits and deletes posts on TikTok, Instagram, X, YouTube, Facebook, LinkedIn, Pinterest, Threads and Reddit, and answers comments and messages. AIsa Ads creates and changes campaigns, ad sets, ads, creatives, audiences and lead forms.
+- **Events by webhook.** AIsa sends post and account events to your HTTPS endpoint, so you do not need to poll.
+- **Values with their source.** Each AIsa commerce value comes with its source. Collection time, license, origin and value type are in `meta.sources`.
+
+## How AIsa sits between your app and the platforms
+
+AIsa acts on platform accounts that a user connected. Two things must work for a call to succeed:
+
+1. **The AIsa API answers.** Your request reaches AIsa and passes authentication.
+2. **The platform connection works.** The connected account is still authorized, and the platform accepts the action.
+
+A request can reach AIsa while the platform connection it needs is down. A successful connection shows that the account worked at that time. It does not promise that the account stays connected.
+
+### Why a platform connection can stop working
+
+- The user revoked access, changed a password, or the authorization expired.
+- The platform changed its authentication, endpoints or rules.
+- The platform has an outage, or it limits or restricts the account.
+- The action is not allowed for that account, such as a TikTok post without the required privacy settings.
+
+### What AIsa gives you
+
+- Account events: `account.connected`, `account.disconnected` and `account.needs_reconnect`.
+- Health checks: `GET /apis/v1/social/accounts/health` for social accounts. For Meta ad accounts, `GET /apis/v1/ads/accounts/health` checks the account status, payment method, spending limit, Page, Instagram account, Lead Ads terms, newest pixel event and linked WhatsApp number, with a fix link for each problem.
+- Per-platform results: a post to several platforms can end as `partial`. The `post.platform.published` and `post.platform.failed` events tell you the result on each platform.
+- Reconnect without losing history: start the connect flow again with `reconnectAccountId`. The account keeps its ID and history.
+
+### What your app should do
+
+- Subscribe to the `account.*` events and show the account status to the user.
+- Pause the jobs of an account that needs reconnecting. Ask the user to reconnect only when the platform needs a new sign-in.
+- Handle a `partial` post: retry or report only the platforms that failed.
+- For Meta ads, check the ad account health before you create ads.
+- After an account reconnects, read the data you may have missed while it was disconnected.
+
+<Note>
+Errors at the platform boundary are expected. Build your app so that one disconnected account does not stop work for other accounts.
+</Note>
+
+## Core concepts
+
+| Concept | Meaning |
+| --- | --- |
+| **Platform** | The site whose data or account you use, such as Instagram, Meta Ads or Amazon. |
+| **Profile** (`prf_…`) | A container for connected accounts and ads connections. A profile can hold several accounts of the same platform. When you connect an ad platform without `profileId`, AIsa uses your default profile. |
+| **Connected account** (`acc_…`) | One platform account linked to a profile, such as one Instagram business account. AIsa Social reads and writes through it. |
+| **Ads connection** | An ad platform authorized under a profile. AIsa Ads reads and writes through it. |
+| **Connect session** | One run of the hosted sign-in flow. Its `authUrl` is valid for 30 minutes. |
+| **Webhook endpoint** | An HTTPS URL that receives events. AIsa returns its signing secret only once, when you create it. After `rotateSecret`, the old secret stays valid for 24 hours. |
+
+AIsa commerce does not use profiles or connected accounts. It reads public marketplace data with your API key only.
+
+## Workflow
+
+<Steps>
+  <Step title="Get an API key">
+    Create a key in [Console → API Keys](https://console.aisa.one/api-keys). See [API Key & First Call](/guides/getting-started-with-aisa).
+  </Step>
+  <Step title="Connect a platform account">
+    Start the hosted sign-in flow for the platform. The answer has `authUrl`, `connectSessionId` and `expiresAt`.
+
+    ```bash
+    curl "https://api.aisa.one/apis/v1/social/connect/linkedin" \
+      -H "Authorization: Bearer $AISA_API_KEY"
+    ```
+
+    Open `authUrl` in a browser and sign in on the platform. To send the browser back to your app, pass `redirectUrl`: an HTTPS URL on your allowlist. The browser returns there with `connectSessionId` and `accountId`, or with an error. For an ad platform, use `GET /apis/v1/ads/connect/{platform}`.
+  </Step>
+  <Step title="Wait for the connection">
+    Poll `GET /apis/v1/social/connect/sessions/{sessionId}`, or wait for the `connect_session.completed` or `connect_session.failed` event. A completed session has the new `accountId`.
+  </Step>
+  <Step title="Read and write">
+    Call the endpoints with the account. This request publishes one text post to two accounts:
+
+    ```bash
+    curl -X POST "https://api.aisa.one/apis/v1/social/posts" \
+      -H "Authorization: Bearer $AISA_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "content": "Our spring collection is live.",
+        "platforms": [
+          {"platform": "linkedin", "accountId": "acc_7Hq2Lm9Xc4Rt8Vw1Nb6Ks3"},
+          {"platform": "twitter", "accountId": "acc_2Bn8Wq5Td1Yh7Kc3Mz9Lp4"}
+        ],
+        "publishNow": true
+      }'
+    ```
+
+    To schedule the post, send `scheduledFor` and `timezone` instead of `publishNow`.
+  </Step>
+  <Step title="Receive events">
+    Create a webhook endpoint with `POST /apis/v1/social/webhooks/settings` and choose its `eventTypes`. Send a test event with `POST /apis/v1/social/webhooks/test`.
+  </Step>
+</Steps>
+
+AIsa commerce needs only the first step:
+
+```bash
+curl "https://api.aisa.one/apis/v1/commerce/amazon/listings?country=US&q=standing%20desk" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+## Webhook events
+
+| Group | Events |
+| --- | --- |
+| Posts | `post.scheduled`, `post.published`, `post.partial`, `post.failed`, `post.cancelled`, `post.deleted` |
+| Posts on one platform | `post.platform.published`, `post.platform.failed`, `post.platform.deleted`, `post.tiktok.url_resolved` |
+| Accounts | `account.connected`, `account.disconnected`, `account.needs_reconnect` |
+| Connect sessions | `connect_session.completed`, `connect_session.failed` |
+
+## Data and provenance in AIsa commerce
+
+- By default (`provenance=compact`), each value has `value` and `source`. Collection time, license, origin and value type are grouped in `meta.sources`.
+- `provenance=full` returns the full provenance of each value, with precision and confidence.
+- A requested field that no source delivered is listed in `missing`, with a reason.
+- `fields` trims the output only. It does not reduce source calls or charges.
+
+## Billing
+
+Unified API calls draw on the same balance as every other AIsa call. Prices are not listed in these docs. Agents can price an exact call with `batch_quote` in the [AIsa MCP server](/agent-quickstart) before they run it. See [Billing & Credits](/guides/pricing).
+
+## Next steps
+
+<CardGroup cols={3}>
+  <Card title="AIsa Social" icon="hashtag" href="/api-reference/aisa-social/get_aisa_social_apis_v1_social_account_groups">
+    Accounts, posts and scheduling, inbox, analytics and webhooks.
+  </Card>
+  <Card title="AIsa Ads" icon="bullhorn" href="/api-reference/aisa-ads/get_aisa_ads_apis_v1_ads_accounts">
+    Campaigns, ad sets, ads and audiences on eight ad platforms, plus the endpoints only Meta Ads, Google Ads, TikTok Ads, LinkedIn Ads or Reddit Ads have.
+  </Card>
+  <Card title="AIsa commerce" icon="cart-shopping" href="/api-reference/aisa-commerce/get_aisa_commerce_apis_v1_commerce_amazon_categories">
+    Listings, shops, keywords and reviews on Amazon, TikTok Shop, Walmart, Temu and 1688.
+  </Card>
+</CardGroup>
