@@ -18,9 +18,9 @@ METHODS = frozenset(('get', 'post', 'put', 'patch', 'delete', 'head', 'options',
 # helpers perform no fetching. Parameter requiredness follows the same Runtime
 # ownership boundary as composition; independent recomposition proves its source.
 try:
-    from .compose_openapi import merge_body, parameter_wire_default, referenced_components, resolve, effective_public_operation, provider_required, constrained_names
+    from .compose_openapi import merge_body, parameter_wire_default, referenced_components, resolve, effective_public_operation, provider_required, constrained_names, is_unreviewed_request
 except ImportError:  # CLI imports scripts directly on sys.path.
-    from compose_openapi import merge_body, parameter_wire_default, referenced_components, resolve, effective_public_operation, provider_required, constrained_names
+    from compose_openapi import merge_body, parameter_wire_default, referenced_components, resolve, effective_public_operation, provider_required, constrained_names, is_unreviewed_request
 
 
 def _schema_contract(value, link=False):
@@ -148,7 +148,8 @@ def _runtime_body_errors(fact, facts_document, operation, document):
         runtime = resolve(runtime_body, facts_document, preserve_recursive=True)
         actual = resolve(operation['requestBody'], document, preserve_recursive=True)
         actual_contract = _body_contract(actual)
-        if fact.get('x-aisa-validation') == 'runtime':
+        if fact.get('x-aisa-validation') == 'runtime' or is_unreviewed_request(operation):
+            # An unreviewed operation publishes exactly the Runtime declaration.
             expected = _body_contract(runtime)
         else:
             # The composer defines which mixed fields runtime owns. Applying
@@ -511,7 +512,8 @@ def check_readiness(facts_by_provider, documents_by_provider, coverage,
                     if op.get('x-aisa-contract-pending'):
                         result['errors'].append(_error('composed_operation_marked_pending', provider, path, method))
                     validation = fact.get('x-aisa-validation')
-                    if validation != 'runtime' and not op.get('x-aisa-source', {}).get('kind'):
+                    # An explicitly unreviewed operation is bound to Runtime alone.
+                    if validation != 'runtime' and not op.get('x-aisa-source', {}).get('kind') and not is_unreviewed_request(op):
                         result['errors'].append(_error('missing_request_source', provider, path, method))
                     for code, parameter in _runtime_parameter_errors(fact, fact_document, op, document):
                         result['errors'].append(_error(code, provider, path, method, parameter=parameter))
