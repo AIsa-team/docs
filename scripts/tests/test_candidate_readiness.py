@@ -155,6 +155,18 @@ class CandidateReadinessTests(unittest.TestCase):
             result = assess_candidate(self.root, cached)
         self.assertEqual(result['status'], 'passed', result)
 
+    def test_candidate_composes_like_the_publication_compiler(self):
+        import pull_openapi
+        seen = {}
+        original = pull_openapi.stage
+        def capture(*args, readiness_context=None, **kwargs):
+            seen.update(readiness_context)
+            return original(*args, readiness_context=readiness_context, **kwargs)
+        with patch('pull_openapi.stage', side_effect=capture):
+            assess_candidate(self.root, self.facts)
+        self.assertIs(seen.get('unreviewed_runtime'), True)
+        self.assertIs(seen.get('offline'), True)
+
     def test_missing_cache_is_not_assessed(self):
         result = assess_candidate(self.root, self.root / 'missing')
         self.assertEqual(result['status'], 'not_assessed')
