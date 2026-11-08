@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from compose_openapi import compose, digest, upstream_path_item
-from import_unipile_reference import V1_URL, JOB_SLOTS_URL, JOB_SLOTS_PATH, convert_reference
+from import_unipile_reference import (V1_URL, JOB_SLOTS_URL, JOB_SLOTS_PATH, JSON_BODY_FIELDS, VERSION,
+                                     convert_reference)
 from import_upstream import import_source
 from source_governance import policy_errors
 
@@ -26,9 +27,11 @@ class UnipileReferenceTests(unittest.TestCase):
         with patch('import_upstream.urlopen', return_value=io.BytesIO(raw)):
             return import_source('unipile', url)
 
-    def test_v1_parameter_rename_preserves_all_other_official_bytes(self):
+    def test_v1_parameter_rename_and_json_bodies_preserve_all_other_official_bytes(self):
         document, metadata = convert_reference(self.v1, V1_URL)
         restored = copy.deepcopy(document)
+        for path in JSON_BODY_FIELDS:
+            restored['paths'][path]['post']['requestBody']['content'].pop('application/json')
         item = restored['paths'].pop('/api/v1/users/{user_id}/posts')
         for container in (item, item.get('get', {})):
             for parameter in container.get('parameters', []):
@@ -37,6 +40,48 @@ class UnipileReferenceTests(unittest.TestCase):
         restored['paths']['/api/v1/users/{identifier}/posts'] = item
         self.assertEqual(restored, json.loads(self.v1))
         self.assertEqual(metadata['upstream_content_hash'], digest(restored))
+
+    def test_multipart_text_writes_also_declare_json_text_and_id_fields(self):
+        document, metadata = convert_reference(self.v1, V1_URL)
+        self.assertEqual(VERSION, 'scripts/import_unipile_reference.py@2')
+        self.assertEqual(metadata['converter'], VERSION)
+        self.assertEqual(metadata['json_request_bodies'], {path: list(fields) for path, fields in JSON_BODY_FIELDS.items()})
+        official = json.loads(self.v1)['paths']
+        expected = {'/api/v1/chats': ({'account_id', 'attendees_ids', 'subject', 'text'}, {'account_id', 'attendees_ids'}),
+                    '/api/v1/chats/{chat_id}/messages': ({'account_id', 'quote_id', 'text'}, set()),
+                    '/api/v1/posts/{post_id}/comments': ({'account_id', 'as_organization', 'comment_id',
+                                                          'external_link', 'text'}, {'account_id', 'text'})}
+        for path, (fields, required) in expected.items():
+            with self.subTest(path=path):
+                content = document['paths'][path]['post']['requestBody']['content']
+                self.assertEqual(list(content), ['application/json', 'multipart/form-data'])
+                self.assertEqual(content['multipart/form-data'], official[path]['post']['requestBody']['content']['multipart/form-data'])
+                schema = content['application/json']['schema']
+                self.assertEqual(schema['type'], 'object')
+                self.assertEqual(set(schema['properties']), fields)
+                self.assertEqual(set(schema.get('required', [])), required)
+                multipart = content['multipart/form-data']['schema']['properties']
+                for name, value in schema['properties'].items():
+                    self.assertEqual(value, multipart[name])
+                    self.assertNotIn('binary', json.dumps(value))
+        # Media writes and every other operation keep their official bodies.
+        self.assertEqual(document['paths']['/api/v1/posts']['post']['requestBody'],
+                         official['/api/v1/posts']['post']['requestBody'])
+
+    def test_json_body_binding_fails_closed_when_official_body_changes(self):
+        path = '/api/v1/chats/{chat_id}/messages'
+
+        def mutate(change):
+            document = json.loads(self.v1)
+            change(document['paths'][path]['post']['requestBody']['content'])
+            return json.dumps(document).encode()
+
+        for change in (lambda content: content.__setitem__('application/json', {'schema': {'type': 'object'}}),
+                       lambda content: content['multipart/form-data']['schema']['properties']['text'].__setitem__('format', 'binary'),
+                       lambda content: content['multipart/form-data']['schema']['properties'].pop('quote_id'),
+                       lambda content: content['multipart/form-data']['schema'].__setitem__('required', ['voice_message'])):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                convert_reference(mutate(change), V1_URL)
 
     def test_official_job_slot_fragment_preserves_typed_request_and_response(self):
         document = self.imported(self.slots, JOB_SLOTS_URL)
