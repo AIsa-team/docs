@@ -332,11 +332,15 @@ def previous_for_facts(facts, documents, provider):
     fact_prefix = urlsplit((facts.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
     routes = {fact_prefix + p for p in facts.get('paths', {})}
     for name, original in documents.items():
-        document = copy.deepcopy(original)
-        prefix = urlsplit((document.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
-        document['paths'] = {prefix + p: item for p, item in document.get('paths', {}).items() if name == provider or prefix + p in routes}
-        if not document['paths']:
+        prefix = urlsplit((original.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
+        # Select matching routes before copying: most historic documents share no
+        # route with this provider, and copying each one per provider dominated
+        # complete-catalog composition time. Only selected bytes are copied.
+        selected = {prefix + p: item for p, item in original.get('paths', {}).items() if name == provider or prefix + p in routes}
+        if not selected:
             continue
+        document = {key: copy.deepcopy(value) for key, value in original.items() if key != 'paths'}
+        document['paths'] = copy.deepcopy(selected)
         # Retained operations move under a different document root. Bind their
         # inherited authentication before merging sources and scheme namespaces;
         # otherwise retain_unregistered_history can no longer recover it.
