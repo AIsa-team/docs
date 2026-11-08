@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read a pinned, fresh public Runtime release; never synthesize facts or approval."""
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -20,6 +21,11 @@ MAX_TOTAL = 128 << 20
 HEX64 = re.compile(r'[0-9a-f]{64}')
 HEX40 = re.compile(r'[0-9a-f]{40}')
 PROVIDER = re.compile(r'[a-z0-9][a-z0-9_.-]*')
+# A complete release is about 1,100 immutable files. Each request is bounded by
+# PublicReader; this only overlaps network latency. Every byte check below is
+# applied per file in manifest order exactly as for a sequential fetch.
+FETCH_WORKERS = 16
+ACQUISITION_SECONDS = 600
 
 
 class AcquisitionRejected(ValueError):
@@ -169,6 +175,27 @@ def validate_artifact_files(contents, current, *, canonical_result=None):
     return validate_release_files(facts_members(contents))
 
 
+def fetch_release_files(revision, rows, reader, workers=FETCH_WORKERS):
+    """Yield (raw, headers) for each manifest row, in manifest order.
+
+    Requests overlap in a bounded pool; results are consumed in order, so the
+    first failing file (in manifest order) raises and later requests are
+    cancelled. Each response is still bounded and verified by the caller.
+    """
+    paths = ['/public/api-contract/releases/' + revision + '/' + row['name'] for row in rows]
+    if workers <= 1 or len(paths) <= 1:
+        for path in paths:
+            yield reader(path)
+        return
+    executor = ThreadPoolExecutor(max_workers=min(workers, len(paths)), thread_name_prefix='runtime-release')
+    try:
+        futures = [executor.submit(reader, path) for path in paths]
+        for future in futures:
+            yield future.result()
+    finally:
+        executor.shutdown(wait=True, cancel_futures=True)
+
+
 def acquire(revision, compiler, reader):
     require(HEX64.fullmatch(revision) and HEX40.fullmatch(compiler), 'Full artifact and compiler revisions required')
     started = datetime.now(timezone.utc).isoformat()
@@ -176,17 +203,20 @@ def acquire(revision, compiler, reader):
     before = decode(before_raw)
     validate_current(before, revision, compiler)
     contents, total = {}, 0
-    for row in before['files']:
-        raw, headers = reader('/public/api-contract/releases/' + revision + '/' + row['name'])
-        total += len(raw)
-        require(len(raw) <= file_limit(row['name'], MAX_FILE) and total <= MAX_TOTAL, 'Release byte limit exceeded')
-        tag = '"' + row['sha256'] + '"'
-        # Public intermediaries may weaken the validator without changing bytes.
-        # Accept only this exact manifest SHA; body hashing remains mandatory.
-        require(sha(raw) == row['sha256'] and headers.get('etag') in (tag, 'W/' + tag),
-                'Immutable file hash or ETag mismatch')
-        decode(raw)
-        contents[row['name']] = raw
+    fetched = fetch_release_files(revision, before['files'], reader)
+    try:
+        for row, (raw, headers) in zip(before['files'], fetched):
+            total += len(raw)
+            require(len(raw) <= file_limit(row['name'], MAX_FILE) and total <= MAX_TOTAL, 'Release byte limit exceeded')
+            tag = '"' + row['sha256'] + '"'
+            # Public intermediaries may weaken the validator without changing bytes.
+            # Accept only this exact manifest SHA; body hashing remains mandatory.
+            require(sha(raw) == row['sha256'] and headers.get('etag') in (tag, 'W/' + tag),
+                    'Immutable file hash or ETag mismatch')
+            decode(raw)
+            contents[row['name']] = raw
+    finally:
+        fetched.close()  # Cancel queued requests after the first rejection.
     canonical_validation = {}
     index, providers, selected = validate_artifact_files(contents, before, canonical_result=canonical_validation)
     coverage = index['coverage']
@@ -251,7 +281,7 @@ def main(argv=None):
         require((args.current and not args.artifact_revision and not args.compiler_revision) or
                 (not args.current and args.artifact_revision and args.compiler_revision),
                 'Choose current discovery or both explicit revision pins')
-        reader = PublicReader(args.base_url, time.monotonic() + 180)
+        reader = PublicReader(args.base_url, time.monotonic() + ACQUISITION_SECONDS)
         revision, compiler = args.artifact_revision, args.compiler_revision
         discovered = None
         if args.current:

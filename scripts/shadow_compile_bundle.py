@@ -104,7 +104,10 @@ def compile_verified_inputs(bundle, facts, runtime, *, output, input_kind='publi
         presentation = (strict_json(bundle.contents[PRESENTATION_MEMBER])
                         if PRESENTATION_MEMBER in bundle.contents else None)
         links = link_index(presentation, original) if presentation else historical_link_index(original)
-        context = {'offline': True,
+        # The publication compiler publishes enabled Runtime operations that
+        # have no reviewed source or success payload, explicitly marked
+        # x-aisa-review, instead of withholding the complete artifact.
+        context = {'offline': True, 'unreviewed_runtime': True,
                    'baseline_coverage': strict_json(bundle.contents['baseline/openapi/coverage.json'])}
         changes, summary = stage(inputs, facts_dir, 'https://api.aisa.one', with_pages=False,
             readiness_context=context, identity_history=bundle.history, page_link_index=links,

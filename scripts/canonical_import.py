@@ -13,7 +13,8 @@ from gap_evidence import enrich_coverage, response_gap_rows
 from pull_openapi import operations
 from runtime_registry import (combine_facts, coverage_rows, discover, disabled_legacy_paths,
     legacy_coverage_row, public_mirror_index, published_documents, source_configurations)
-from schema_input_bundle import UniqueLoader, canonical, regular_read, require, strict_json
+from runtime_contract_artifact import MAX_AGGREGATE
+from schema_input_bundle import MAX_FILE, UniqueLoader, canonical, regular_read, require, strict_json
 
 
 def configured_inputs(root, provider, entry):
@@ -100,13 +101,16 @@ def project_metadata(input_view, catalog_facts, index, category, native, produce
     require(producer_readiness.get('status') == 'passed' and
             not any(producer_readiness.get(key) for key in ('global_errors', 'blocked_providers', 'missing_inputs')),
             'Canonical producer readiness did not pass')
-    require(set(registry['providers']) == set(producer_readiness.get('providers', {})),
-            'Canonical readiness provider scope differs from derived registry')
     original = published_documents(root)
+    placeholders = retained_empty_placeholders(registry, original, native, index, category)
+    require(set(registry['providers']) - placeholders == set(producer_readiness.get('providers', {})),
+            'Canonical readiness provider scope differs from derived registry')
     mirrors = public_mirror_index(root)
     coverage = {'schema_version': 2, 'providers': {}, 'response_gaps': {}, 'legacy_operations': []}
     pending, facts_by_provider, moved = {'providers': {}}, {}, set()
     for provider, config in sorted(registry['providers'].items()):
+        if provider in placeholders:
+            continue  # Unchanged empty historic file; the producer staged no facts for it.
         entry = copy.deepcopy(config or {})
         catalogs = entry.get('group', [provider])
         require(provider in native and all(name in catalog_facts for name in catalogs),
@@ -143,7 +147,42 @@ def project_metadata(input_view, catalog_facts, index, category, native, produce
                 coverage['legacy_operations'].append(legacy_coverage_row(name, prefix + path, method,
                     operation.get('operationId'), prefix + path in disabled.get(name, set())))
     return {'registry': registry, 'coverage': coverage, 'pending': pending,
-            'facts_by_provider': facts_by_provider, 'runtime_index': copy.deepcopy(index)}
+            'facts_by_provider': facts_by_provider, 'runtime_index': copy.deepcopy(index),
+            'retained_empty_placeholders': sorted(placeholders)}
+
+
+def retained_empty_placeholders(registry, original, native, index, category):
+    """Providers the producer retained as unchanged empty historic files.
+
+    Mirrors pull_openapi.stage: an auto-registered, unpinned provider whose
+    published document is empty and whose catalogs the closed Runtime inventory
+    no longer advertises has no facts or readiness row. The verified producer
+    must have kept exactly that empty document; anything else still blocks.
+    """
+    from pull_openapi import unindexed_empty_placeholder
+    if not registry.get('auto_register'):
+        return set()
+    result = set()
+    for provider, entry in registry['providers'].items():
+        entry = entry or {}
+        if entry.get('pin') or not unindexed_empty_placeholder(
+                original.get(provider), entry.get('group', [provider]), index, category):
+            continue
+        require(canonical(native.get(provider)) == canonical(original[provider]),
+                'Retained empty placeholder differs from its published document')
+        result.add(provider)
+    return result
+
+
+def retired_page_references(root):
+    """Archived pages of editorially retired routes, as page references.
+
+    An archive page no longer carries OpenAPI frontmatter, but it remains the
+    stable page of its route; apply_retirements re-archives it after projection.
+    """
+    from retirement_pages import retirement_rows
+    return [('docs/human-api-retirements.json', '', path, method.lower(), page)
+            for (method, path), page in sorted(retirement_rows(root).items())]
 
 
 def project_surfaces(input_view, native_raw, aggregate_raw, metadata):
@@ -156,15 +195,22 @@ def project_surfaces(input_view, native_raw, aggregate_raw, metadata):
     native = {name: strict_json(raw) for name, raw in native_raw.items()}
     original = published_documents(root)
     changes = {}
-    references = existing_page_references(root)
+    references = existing_page_references(root) + retired_page_references(root)
+    identities = {}  # Page headers are read once for every provider in this projection.
     for provider in sorted(metadata['registry']['providers']):
         require(provider in native, 'Missing canonical provider for page projection')
+        if provider in metadata.get('retained_empty_placeholders', ()):
+            continue
         generate_pages(root, provider, native[provider], changes, original.get(provider),
-                       decorate_links=False, page_references=references, require_existing_links=True)
+                       decorate_links=False, page_references=references, require_existing_links=True,
+                       page_identity_cache=identities)
     translation_path = root / 'translations/openapi-zh.json'
     catalog = strict_json(translation_path.read_bytes()) if translation_path.exists() else {'entries': {}}
     refresh_localized_documents(root, native, changes, catalog)
     refresh_legacy_page_blocks(root, native, changes, catalog)
+    # Editorially retired routes keep their archived pages, exactly as in stage().
+    from human_api_retirements import apply_retirements
+    apply_retirements(root, changes)
     require(all(canonical(native[name]) == canonical(strict_json(raw)) for name, raw in native_raw.items()),
             'Projection changed canonical native declarations')
     byte_changes = {path.relative_to(root).as_posix(): text.encode() for path, text in changes.items()}
@@ -252,7 +298,7 @@ def assess_projected_candidate(input_view, projected_view, native_raw, aggregate
     for provider, raw in native_raw.items():
         require(regular_read(projected, 'openapi/' + provider + '.json') == raw,
                 'Projected native bytes differ from Runtime: ' + provider)
-    require(regular_read(projected, 'openapi/openapi.json') == aggregate_raw,
+    require(regular_read(projected, 'openapi/openapi.json', limit=MAX_AGGREGATE) == aggregate_raw,
             'Projected aggregate bytes differ from Runtime')
     native = {name: strict_json(raw) for name, raw in native_raw.items()}
     aggregate = strict_json(aggregate_raw)
@@ -264,7 +310,7 @@ def assess_projected_candidate(input_view, projected_view, native_raw, aggregate
     report = check_readiness(metadata['facts_by_provider'], native, metadata['coverage'],
         baseline_coverage=baseline_coverage, runtime_index=metadata['runtime_index'],
         deferred_definitions=load_deferred_definitions(root))
-    yaml_raw = regular_read(projected, 'openapi.yaml')
+    yaml_raw = regular_read(projected, 'openapi.yaml', limit=MAX_AGGREGATE)
     require(canonical(yaml.safe_load(yaml_raw)) == canonical(aggregate), 'Projected YAML differs')
     require(discovery_index_block(yaml_raw) in regular_read(projected, 'llms.txt').decode(),
             'Projected llms discovery binding differs')
@@ -392,8 +438,11 @@ def acquired_members(acquired, assessment):
             'Acquisition current bytes changed after input assessment')
     before = strict_json(before_raw)
     contents = {}
+    from runtime_contract_artifact import file_limit
     for row in before['files']:
-        raw = regular_read(acquired, row['name'])
+        # The complete-catalog aggregate exceeds the bundle member bound; use the
+        # Runtime artifact's own per-role bound, as acquisition already did.
+        raw = regular_read(acquired, row['name'], limit=max(MAX_FILE, file_limit(row['name'])))
         require(sha(raw) == row['sha256'], 'Acquired immutable member changed after input assessment')
         contents[row['name']] = raw
     receipt_raw = regular_read(acquired, 'acquisition-receipt.json')
