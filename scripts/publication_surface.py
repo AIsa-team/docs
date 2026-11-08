@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+from urllib.parse import urlsplit
 import sys
 import yaml
 
@@ -45,6 +46,18 @@ def navigation_pages(node):
     elif isinstance(node, list):
         for value in node:
             yield from navigation_pages(value)
+
+
+def retired_archive(path):
+    """A non-indexed human retirement page without an operation binding."""
+    if not path.is_file():
+        return False
+    parts = path.read_text().split('---', 2)
+    if len(parts) != 3 or parts[0]:
+        return False
+    header = yaml.safe_load(parts[1]) or {}
+    return (header.get('x-aisa-human-retirement') is True and header.get('noindex') in (True, 'true')
+            and 'openapi' not in header)
 
 
 def validate_surfaces(root, published_ref=None):
@@ -157,9 +170,12 @@ def validate_surfaces(root, published_ref=None):
                     raise ValueError('disabled runtime page is indexable: ' + page)
             canonical = operation.get('x-aisa-identity', {}).get('canonical_operation_id', identity)
             found[language].setdefault((provider, route, method, canonical), set()).add(page)
+    from retirement_pages import retirement_rows
+    retired = retirement_rows(root)
     count = 0
     for provider, document in documents.items():
         localized = localized_document(provider)
+        prefix = urlsplit((document.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
         if strip_translatable(document) != strip_translatable(canonicalize_localized(localized, history)):
             raise ValueError('localized runtime protocol changed: ' + provider)
         for route, item in document.get('paths', {}).items():
@@ -171,6 +187,14 @@ def validate_surfaces(root, published_ref=None):
                 if operation.get('x-aisa-status') == 'disabled':
                     english = found['en'].get(key, set())
                     chinese = found['zh'].get(key, set())
+                    archive = retired.get((method.upper(), prefix + route))
+                    if not english and not chinese and archive:
+                        # An editorially retired route keeps its bilingual archive page
+                        # instead of a contract page; it stays out of navigation.
+                        for page in (archive, 'zh/' + archive):
+                            if not retired_archive(root / (page + '.mdx')) or page in nav['zh' if page.startswith('zh/') else 'en']:
+                                raise ValueError('retired runtime operation lacks a bilingual archive page: ' + repr(key))
+                        continue
                     if not english or {'zh/' + page for page in english} != chinese:
                         raise ValueError('disabled runtime operation missing matching bilingual archive pages: ' + repr(key))
                     continue

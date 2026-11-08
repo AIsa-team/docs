@@ -102,6 +102,24 @@ class UnreviewedRuntimePublicationTests(unittest.TestCase):
         self.assertEqual(after['parameters'], before['parameters'])
         self.assertFalse(is_unreviewed_request(after))
 
+    def test_official_examples_are_kept_when_the_payload_schema_is_generic(self):
+        example = {'official_1': {'description': 'Official response example only.', 'value': {'id': 1}}}
+        source = upstream({'/v1/search': {'get': {'operationId': 'search', 'responses': {'200': {
+            'description': 'OK', 'content': {'application/json': {'examples': example},
+                                             'text/xml': {'examples': example}}}}}}})
+        runtime = facts({'/apis/v1/x/search': {'get': operation('x.search')}})
+        plain, _ = compose(runtime, source)
+        document, pending = compose(runtime, source, unreviewed_runtime=True)
+        self.assertEqual(pending, [])
+        before = ops(plain)[('/apis/v1/x/search', 'get')]['responses']['200']['content']
+        after = ops(document)[('/apis/v1/x/search', 'get')]
+        self.assertEqual(after['x-aisa-review']['response'], 'generic')
+        self.assertEqual(after['responses']['200']['description'], UNREVIEWED_SUCCESS_DESCRIPTION)
+        self.assertEqual(set(after['responses']['200']['content']), set(before))
+        for media, item in after['responses']['200']['content'].items():
+            self.assertEqual(item['examples'], before[media]['examples'])
+            self.assertEqual(item['schema'], UNREVIEWED_SUCCESS_SCHEMA)
+
     def test_reviewed_operations_are_unchanged_except_document_identity(self):
         response = {'200': {'description': 'OK', 'content': {'application/json': {'schema': {'type': 'object'}}}}}
         source = upstream({'/v1/search': {'get': {'operationId': 'search', 'responses': response}}})

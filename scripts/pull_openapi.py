@@ -224,10 +224,12 @@ def existing_page_references(root: Path):
     from urllib.parse import urlsplit
     prefixes, references = {}, []
     for mdx in (root / 'api-reference').rglob('*.mdx'):
-        match = re.search(r"^openapi:\s*['\"]?(openapi/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", mdx.read_text(), re.M)
+        match = re.search(r"^openapi:\s*['\"]?((?:openapi|reference-contracts)/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", mdx.read_text(), re.M)
         if not match:
             continue
-        spec = match[1]
+        # Production reference pages bind the same provider document under
+        # reference-contracts/; the managed page is still this provider's page.
+        spec = 'openapi/' + match[1].split('/', 1)[1]
         if spec not in prefixes:
             document = read_json(root / spec, {})
             prefixes[spec] = urlsplit((document.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')

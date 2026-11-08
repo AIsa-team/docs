@@ -105,6 +105,29 @@ class MetadataTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'provider scope differs'):
             self.project()
 
+    def test_unadvertised_empty_placeholder_is_retained_like_the_producer(self):
+        empty = {'openapi': '3.1.0', 'info': {'title': 'Gone', 'x-aisa-provider': 'gone'}, 'paths': {}}
+        self.registry['providers']['gone'] = {'display_name': 'Gone', 'description': ''}
+        self.write_registry()
+        (self.root / 'openapi/gone.json').write_bytes(canonical(empty))
+        self.native['gone'] = copy.deepcopy(empty)
+        self.index = {'schema_version': '1', 'providers': [{'id': 'one'}], 'pending_providers': [],
+                      'pending_endpoints': [], 'coverage': {'scope': 'integration', 'projected_endpoints': [],
+                                                            'excluded_endpoints': []}}
+        result = self.project()
+        self.assertEqual(result['retained_empty_placeholders'], ['gone'])
+        self.assertNotIn('gone', result['coverage']['providers'])
+        self.assertEqual(result['registry']['providers']['gone'], {'display_name': 'Gone', 'description': ''})
+        # The producer must have kept exactly the published empty document.
+        self.native['gone']['info']['title'] = 'Changed'
+        with self.assertRaisesRegex(ValueError, 'placeholder differs'):
+            self.project()
+        # Still advertised by the Runtime inventory: no facts is a failure, not a placeholder.
+        self.native['gone'] = copy.deepcopy(empty)
+        self.category = {'apis': [{'id': 'one'}, {'id': 'gone'}]}
+        with self.assertRaisesRegex(ValueError, 'provider scope differs'):
+            self.project()
+
     def test_retained_pending_comes_from_new_native_and_ordinary_pending_fails(self):
         operation = self.native['one']['paths']['/request']['get']
         operation.update({'x-aisa-status': 'disabled', 'x-aisa-contract-state': 'retained_legacy',
@@ -300,6 +323,28 @@ class RegistryReplayTests(unittest.TestCase):
 
 
 class AcquiredBytesTests(unittest.TestCase):
+    def test_complete_catalog_aggregate_uses_the_runtime_artifact_bound(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            aggregate, category = b'{"paths":{}}' + b' ' * 400, b'{"apis":[]}'
+            before = canonical({'files': [{'name': 'contracts/openapi.json', 'sha256': sha(aggregate)}]})
+            receipt = canonical({'category_sha256': sha(category)})
+            for name, raw in {'current-before.json': before, 'current-after.json': before,
+                    'acquisition-receipt.json': receipt, 'contracts/openapi.json': aggregate,
+                    'category.json': category}.items():
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_bytes(raw)
+            assessment = {'current_before_sha256': sha(before), 'current_after_sha256': sha(before),
+                          'runtime_acquisition_sha256': sha(receipt)}
+            # Model a release whose aggregate exceeds the bundle member bound.
+            with patch('schema_input_bundle.MAX_FILE', 300), patch.object(importer, 'MAX_FILE', 300):
+                self.assertEqual(importer.acquired_members(root, assessment)['contracts/openapi.json'], aggregate)
+                with self.assertRaisesRegex(ValueError, 'size limit'):
+                    importer.regular_read(root, 'contracts/openapi.json')
+            with patch('runtime_contract_artifact.MAX_AGGREGATE', 300), patch('schema_input_bundle.MAX_FILE', 300), \
+                    patch.object(importer, 'MAX_FILE', 300), self.assertRaisesRegex(ValueError, 'size limit'):
+                importer.acquired_members(root, assessment)
+
     def test_post_assessment_current_member_receipt_and_category_changes_fail(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -378,6 +423,47 @@ class SurfaceProjectionTests(unittest.TestCase):
                 with self.subTest(name=name), self.assertRaisesRegex(ValueError, error):
                     check()
                 path.write_bytes(previous)
+
+    def test_production_reference_pages_remain_the_bound_pages(self):
+        for page in ('api-reference/fixture/one.mdx', 'zh/api-reference/fixture/one.mdx'):
+            path = self.root / page
+            path.write_text(path.read_text().replace('openapi/', 'reference-contracts/'))
+        value = json.loads(self.raw['fixture'])
+        value['paths']['/one']['get']['x-aisa-docs-url'] = 'https://aisa.one/docs/api-reference/fixture/one'
+        self.raw['fixture'] = canonical(value)
+        changes = importer.project_surfaces(self.root, self.raw, self.raw['fixture'], self.metadata)
+        self.assertIn('openapi: "openapi/fixture.json GET /one"', changes['api-reference/fixture/one.mdx'].decode())
+        self.assertIn('openapi: "openapi/zh/fixture.json GET /one"', changes['zh/api-reference/fixture/one.mdx'].decode())
+
+    def test_retired_route_keeps_its_bilingual_archive_page(self):
+        from publication_surface import navigation_pages
+        retired = 'api-reference/fixture/one'  # The existing page became its archive.
+        (self.root / 'docs').mkdir(exist_ok=True)
+        (self.root / 'docs/human-api-retirements.json').write_text(json.dumps({
+            'schema_version': 1, 'scope': 'human_presentation_only', 'formal_publication': False,
+            'provider': 'fixture', 'guide': 'resources/guide',
+            'operations': [{'method': 'GET', 'path': '/one', 'page': retired, 'title': 'One'}]}))
+        for prefix in ('', 'zh/'):
+            page = self.root / (prefix + retired + '.mdx')
+            page.parent.mkdir(parents=True, exist_ok=True)
+            page.write_text('---\ntitle: "Retired: One"\nnoindex: true\nx-aisa-human-retirement: true\n---\n\nRetired.\n')
+        value = json.loads(self.raw['fixture'])
+        operation = value['paths']['/one']['get']
+        operation.update({'x-aisa-status': 'disabled', 'x-aisa-docs-url': 'https://aisa.one/docs/' + retired})
+        self.raw['fixture'] = canonical(value)
+        changes = importer.project_surfaces(self.root, self.raw, self.raw['fixture'], self.metadata)
+        for prefix in ('', 'zh/'):
+            text = changes[prefix + retired + '.mdx'].decode()
+            self.assertIn('x-aisa-human-retirement: true', text)
+            self.assertNotIn('openapi:', text)
+        self.assertEqual(list(navigation_pages(json.loads(changes['docs.json']))), [])
+        for name, raw in changes.items():
+            path = self.root / name;path.parent.mkdir(parents=True, exist_ok=True);path.write_bytes(raw)
+        self.assertEqual(surfaces.validate_surfaces(self.root)['operations'], 1)
+        # Without the archive page the disabled operation has no public page at all.
+        (self.root / ('zh/' + retired + '.mdx')).unlink()
+        with self.assertRaisesRegex(ValueError, 'archive page'):
+            surfaces.validate_surfaces(self.root)
 
     def test_mismatched_canonical_page_url_rejected_without_rewriting_producer(self):
         value = json.loads(self.raw['fixture'])

@@ -161,17 +161,19 @@ def reject_unimplemented_inputs(registry, *, pointer_paths):
                     for name in pointer_paths), 'Overlay inputs are not supported by bundle v1')
 
 
-def regular_read(root, name):
+def regular_read(root, name, limit=None):
+    """Read one regular file; limit defaults to the bundle member bound."""
+    limit = MAX_FILE if limit is None else limit
     safe_name(name)
     current = root
     for part in PurePosixPath(name).parts:
         current = current / part
         require(not current.is_symlink(), 'Bundle symlink is forbidden')
     require(current.is_file(), 'Missing bundle member: ' + name)
-    require(current.stat().st_size <= MAX_FILE, 'Bundle member exceeds size limit')
+    require(current.stat().st_size <= limit, 'Bundle member exceeds size limit')
     with current.open('rb') as handle:
-        raw = handle.read(MAX_FILE + 1)
-    require(len(raw) <= MAX_FILE, 'Bundle member exceeds size limit')
+        raw = handle.read(limit + 1)
+    require(len(raw) <= limit, 'Bundle member exceeds size limit')
     return raw
 
 
