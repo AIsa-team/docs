@@ -11,8 +11,12 @@ from unittest.mock import Mock, patch
 from urllib.error import HTTPError, URLError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import fetch_runtime_release
 from fetch_runtime_release import (acquire, save, sha, PublicReader, NoRedirect,
-                                   AcquisitionRejected, failure_diagnostic, main)
+                                   AcquisitionRejected, failure_diagnostic, main,
+                                   fetch_release_files, FETCH_WORKERS, ACQUISITION_SECONDS)
+import threading
+import time
 
 
 def encoded(value):
@@ -274,6 +278,113 @@ class PublicReleaseTests(unittest.TestCase):
             reader('/public/api-contract/current')
         with self.assertRaises(ValueError):
             NoRedirect().redirect_request(None)
+
+
+class ConcurrentReleaseFetchTests(unittest.TestCase):
+    """A ~1,100-file release must fit the deadline; overlap must not weaken any check."""
+
+    def rows(self, count):
+        return [{'name': 'providers/p%04d.json' % i} for i in range(count)]
+
+    def test_requests_overlap_in_a_bounded_pool_and_results_keep_manifest_order(self):
+        lock, active, peak, calls = threading.Lock(), [0], [0], []
+        def reader(path):
+            with lock:
+                calls.append(path)
+                active[0] += 1
+                peak[0] = max(peak[0], active[0])
+            # Later files finish first; order must still follow the manifest.
+            time.sleep(0.02 if path.endswith('0.json') else 0.005)
+            with lock:
+                active[0] -= 1
+            return path.encode(), {}
+        rows = self.rows(64)
+        results = list(fetch_release_files('a' * 64, rows, reader))
+        expected = ['/public/api-contract/releases/' + 'a' * 64 + '/' + row['name'] for row in rows]
+        self.assertEqual([raw.decode() for raw, _ in results], expected)
+        self.assertEqual(sorted(calls), sorted(expected))  # each file read exactly once
+        self.assertGreater(peak[0], 1)
+        self.assertLessEqual(peak[0], FETCH_WORKERS)
+        self.assertEqual(FETCH_WORKERS, 16)
+
+    def test_first_failure_in_manifest_order_raises_and_cancels_queued_requests(self):
+        calls, lock = [], threading.Lock()
+        def reader(path):
+            with lock:
+                calls.append(path)
+            if path.endswith('p0001.json'):
+                time.sleep(0.05)
+                raise AcquisitionRejected('Public metadata request failed: TimeoutError')
+            if path.endswith('p0003.json'):
+                raise AcquisitionRejected('Public metadata request failed: HTTP 500')
+            time.sleep(0.01)
+            return b'{}', {}
+        with self.assertRaises(AcquisitionRejected) as raised:
+            list(fetch_release_files('a' * 64, self.rows(2000), reader))
+        # The earliest manifest failure is reported, not whichever finished first.
+        self.assertIn('TimeoutError', str(raised.exception))
+        self.assertLess(len(calls), 2000)
+
+    def test_consumer_rejection_cancels_queued_requests(self):
+        calls, lock = [], threading.Lock()
+        def reader(path):
+            with lock:
+                calls.append(path)
+            time.sleep(0.01)
+            return b'{}', {}
+        fetched = fetch_release_files('a' * 64, self.rows(2000), reader)
+        next(fetched)
+        fetched.close()
+        settled = len(calls)
+        time.sleep(0.05)
+        self.assertEqual(len(calls), settled)  # nothing runs after close
+        self.assertLess(settled, 2000)
+
+    def test_single_worker_stays_sequential(self):
+        calls = []
+        def reader(path):
+            calls.append((path, threading.current_thread() is threading.main_thread()))
+            return b'{}', {}
+        list(fetch_release_files('a' * 64, self.rows(3), reader, workers=1))
+        self.assertEqual(len(calls), 3)
+        self.assertTrue(all(main_thread for _, main_thread in calls))
+
+    def test_concurrent_acquire_still_rejects_any_bad_file_among_many(self):
+        payload = {'index.json': encoded({}), **{'providers/p%04d.json' % i: encoded({'i': i}) for i in range(100)}}
+        files = [{'name': name, 'media_type': 'application/json', 'sha256': sha(raw)} for name, raw in sorted(payload.items())]
+        manifest = {'schema_version': 1, 'source_digest': 'a' * 64, 'compiler_revision': 'b' * 40, 'files': files}
+        revision = sha(encoded(manifest))
+        current = {**manifest, 'artifact_revision': revision, 'fresh': True, 'generation': 3, 'published_generation': 3}
+        for corruption in ('body', 'etag', 'size'):
+            def reader(path, corruption=corruption):
+                if path == '/public/api-contract/current':
+                    return encoded(current), {}
+                if path == '/info/apis/category':
+                    return encoded({'apis': []}), {}
+                name = path.rsplit('/' + revision + '/', 1)[1]
+                raw = payload[name]
+                tag = '"' + sha(raw) + '"'
+                if name == 'providers/p0077.json':
+                    if corruption == 'body':
+                        raw = raw + b' '
+                    elif corruption == 'etag':
+                        tag = '"' + 'f' * 64 + '"'
+                    else:
+                        raw = b' ' * (fetch_runtime_release.MAX_FILE + 1)
+                return raw, {'etag': tag}
+            with self.subTest(corruption=corruption), self.assertRaises(AcquisitionRejected) as raised:
+                acquire(revision, 'b' * 40, reader)
+            expected = 'Release byte limit exceeded' if corruption == 'size' else 'Immutable file hash or ETag mismatch'
+            self.assertIn(expected, str(raised.exception))
+
+    def test_cli_acquisition_deadline_is_600_seconds(self):
+        self.assertEqual(ACQUISITION_SECONDS, 600)
+        with tempfile.TemporaryDirectory() as temp, \
+                patch('fetch_runtime_release.time.monotonic', return_value=1000.0), \
+                patch('fetch_runtime_release.PublicReader', side_effect=AcquisitionRejected('stop')) as reader:
+            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                main(['--current', '--output', str(Path(temp) / 'facts')])
+        reader.assert_called_once_with('https://api.aisa.one', 1600.0)
 
 
 if __name__ == '__main__':
