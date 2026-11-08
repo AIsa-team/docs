@@ -875,6 +875,9 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             runtime_index=index, deferred_definitions=deferred)
         from check_contract_candidate import assess_fresh_contracts
         assess_fresh_contracts(readiness_context['report'], documents, recomposed_documents, coverage)
+    if with_pages:
+        from human_api_retirements import apply_retirements
+        apply_retirements(root, changes)
     return {p: content for p, content in changes.items() if not p.exists() or p.read_text() != content}, summary
 
 

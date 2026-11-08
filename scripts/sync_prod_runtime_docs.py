@@ -215,6 +215,13 @@ def generate(root, files):
         config['navigation'] = preserve_navigation(previous_navigation, config.get('navigation', {}))
         config_path.write_text(json.dumps(config, indent=2, ensure_ascii=False) + '\n')
         presentation = scope_presentation(candidate, summary)
+        # Navigation preservation must not restore editorially retired routes.
+        from human_api_retirements import apply_retirements
+        retirement_changes = {}
+        apply_retirements(candidate, retirement_changes)
+        for path, text in retirement_changes.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
         outputs = {}
         paths = [candidate / 'docs.json']
         paths += list((candidate / 'openapi').glob('*.json'))

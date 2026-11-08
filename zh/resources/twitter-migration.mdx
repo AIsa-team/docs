@@ -1,0 +1,48 @@
+---
+title: "将旧 X 操作迁移到 AIsa Social"
+sidebarTitle: "旧 X 接口迁移"
+description: "通过 Social Connect 重新授权，替换已退役的 aisa-twitter 写接口。"
+---
+
+<Warning>
+`/apis/v1/twitter` 下的八个旧 `aisa-twitter` 接口已退役。请停止在应用和智能体中选择这些接口。其他 Twitter 数据供应商是独立服务，其只读接口不在本次退役范围。
+</Warning>
+
+使用现有的 [AIsa Social API](/zh/resources/unified-apis)，通过 **Zernio** 授权 X 账户。旧 OAuth 会话或 token 不能迁移到新供应商；用户必须重新授权。不要复制凭据、复用旧 token，或静默绑定另一个 X 用户。
+
+## 重新授权
+
+1. 使用 AIsa bearer key 和当前用户拥有的 `profileId` 调用 `GET /apis/v1/social/connect/twitter`。此操作创建连接会话，并非无副作用的只读查询。
+2. 在用户浏览器打开返回的私有 `authUrl`。需要跳回应用时使用允许名单内的 `redirectUrl`；不要记录或公开授权 URL、会话密钥。
+3. 查询 `GET /apis/v1/social/connect/sessions/{sessionId}`，确认完成后使用返回的、当前用户拥有的 **`acc_…` 账户 ID**。重连已有绑定前核对平台用户身份；不同 X 用户必须经过明确的账户替换流程。
+
+AIsa key 放在 Authorization header。不要把旧 `aisa_api_key` body 字段或旧 OAuth token 放入 Social 请求。
+
+## 替换调用
+
+以下新路径统一加 `/apis/v1/social` 前缀。
+
+| `/apis/v1/twitter` 下已退役的 POST 路径 | 替代操作 |
+| --- | --- |
+| `/auth_twitter` | `GET /connect/twitter`，随后确认连接会话完成 |
+| `/post_twitter` | `POST /posts`，单个 `platform: "twitter"` target 与自有 `accountId` |
+| `/upload_media` | `POST /media/presign`，上传到返回 URL，再用自有 `mediaId` 附加到帖子 |
+| `/delete_twitter` | `POST /twitter/posts/{postId}/unpublish`；body 为 `accountId`、`platform: "twitter"` |
+| `/like_twitter` | `POST /twitter/posts/{postId}/like`；body 为 `accountId` |
+| `/unlike_twitter` | `DELETE /twitter/posts/{postId}/unlike`；query 为 `accountId` |
+| `/follow_twitter` | `POST /twitter/follow`；body 为 `accountId` 和数字 `targetUserId` |
+| `/unfollow_twitter` | `DELETE /twitter/unfollow`；query 为 `accountId` 和数字 `targetUserId` |
+
+<Note>
+本指南说明已审核的替代路径，应在对应 Social 服务版本及目录激活后使用。这里列出路径不代表正式不可变 OpenAPI publication 或 ToolRouter 索引已经收录。如果当前发现接口未列出某操作，不要回退到旧接口。
+</Note>
+
+## 发布与兼容限制
+
+当前付费 X 发布范围是**一个账户、一个原生帖子**：纯文本、正文带 URL、最多四张图片或一个视频。target 的 `customMedia` 覆盖帖子级媒体。图片或视频资源的 URL 不会被当作正文 URL 加价。
+
+引用和回复分别使用 `platformSpecificData.quoteTweetId`、`replyToTweetId`，两者互斥；引用不能同时带媒体或投票。旧 `card_uri`、多帖线程、多个 X target、任意历史原生 ID 删帖不具有等价替代能力。
+
+Unpublish 只适用于当前用户拥有的、由 Social 管理的 **`pst_…`** 帖子，且其 X target 已发布；仅提供旧 tweet 原生 ID 不能删除任意历史帖。点赞/取消点赞可使用当前操作支持的数字原生帖子 ID 或 managed post ID。旧上传 ID 不是新的 Social `mediaId`。
+
+创建帖子使用 `Idempotency-Key`。**HTTP 202 只表示已接受、待处理，不表示已发布。** 应通过 GET 查询 managed post 或等待经过验证的事件。超时或结果未知不能作为再次提交的理由；只有匹配的原生发布确认才能结束发布计费，不能把 accepted 当成发布成功。
