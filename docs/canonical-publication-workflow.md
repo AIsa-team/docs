@@ -58,7 +58,7 @@ already exist.
 ```sh
 PYTHONPATH=scripts/tests python -m unittest \
   scripts.tests.test_runtime_publication \
-  scripts.tests.test_contract_activation \
+  scripts.tests.test_live_contract_plan \
   scripts.tests.test_schema_bundle_supply \
   scripts.tests.test_canonical_formal \
   scripts.tests.test_canonical_import

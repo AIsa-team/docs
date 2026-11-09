@@ -128,64 +128,6 @@ class WebsiteSurfaceChecks(unittest.TestCase):
         self.assertNotIn('https://aisa.one/api/unknown-card', [url for _, url in reads])
         self.assertEqual(observations[UNKNOWN_PROVIDER_SLUG]['status'], 307)
 
-    def test_live_page_reader_returns_redirects_unfollowed_and_closes_the_response(self):
-        import gc
-        import http.server
-        import threading
-        import warnings
-        from check_contract_revisions import read_public_page
-        class Handler(http.server.BaseHTTPRequestHandler):
-            def do_GET(self):
-                if self.path == '/api/twitter':
-                    self.send_response(307)
-                    self.send_header('Location', 'http://%s:%d/api/twitter-api' % self.server.server_address)
-                    self.send_header('Content-Length', '0')
-                    self.end_headers()
-                elif self.path == '/api/financial':
-                    self.send_response(307)
-                    self.send_header('Location', '/api/twitter-api')  # path-only, as Next.js emits
-                    self.send_header('Content-Length', '0')
-                    self.end_headers()
-                elif self.path == '/api/twitter-api':
-                    body = page('Twitter API - AIsa')
-                    self.send_response(200); self.send_header('Content-Length', str(len(body))); self.end_headers()
-                    self.wfile.write(body)
-                else:
-                    body = page('API Not Found - AIsa')
-                    self.send_response(404); self.send_header('Content-Length', str(len(body))); self.end_headers()
-                    self.wfile.write(body)
-            def log_message(self, *args):
-                pass
-        server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        try:
-            origin = 'http://%s:%d' % server.server_address
-            with warnings.catch_warnings():
-                warnings.simplefilter('error', ResourceWarning)
-                redirect = read_public_page(origin + '/api/twitter')
-                relative = read_public_page(origin + '/api/financial')
-                target = read_public_page(origin + '/api/twitter-api')
-                missing = read_public_page(origin + '/api/nothing')
-                gc.collect()
-            self.assertEqual(redirect, (307, b'', origin + '/api/twitter-api'))
-            self.assertEqual(relative, (307, b'', '/api/twitter-api'))
-            self.assertEqual((target[0], target[2]), (200, None))
-            self.assertIn(b'Twitter API - AIsa', target[1])
-            self.assertEqual(missing[0], 404)
-            self.assertIn(b'API Not Found', missing[1])
-            with __import__('unittest.mock').mock.patch('public_surface_checks.PROVIDER_PAGE_ORIGIN', origin), \
-                    __import__('unittest.mock').mock.patch('public_surface_checks.PROVIDER_PAGE', origin + '/api/{}'):
-                mismatches, missing_inputs, observations = check_provider_pages(
-                    {'twitter', 'financial'}, lambda name, url: read_public_page(url))
-            self.assertEqual((mismatches, missing_inputs), ([], []))
-            self.assertEqual(observations['twitter']['target']['status'], 200)
-            self.assertEqual(observations['financial']['resolved_location'], origin + '/api/twitter-api')
-            self.assertEqual(observations['financial']['target']['title'], 'Twitter API - AIsa')
-        finally:
-            server.shutdown()
-            server.server_close()
-
     def test_provider_ids_come_from_publication_and_sales_union_and_unreadable_pages_are_missing(self):
         self.sales['providers'].append({'id': 'sales-only', 'endpoint_count': 1})
         self.payloads['website-sales-catalog'] = json.dumps(self.sales).encode()

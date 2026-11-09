@@ -222,13 +222,8 @@ revision and consolidated hash to consumers after publication. Application
 installation permissions and production endpoint deployment are operational
 prerequisites, not inferred from local test success.
 
-The hourly `check-contract-revisions.yml` compares runtime per-catalog facts hashes
-and provider document hashes reported by docs, the website agent card, MCP manifest
-and Tool Router catalog metadata. Missing runtime catalogs, pending projections,
-missing publication evidence and hash mismatches all enter the existing consecutive
-check state; the same issue on two consecutive checks fails the workflow. A healthy
-check clears it. Legacy sources without runtime hashes are counted separately;
-they are never reported as successfully compared runtime contracts.
+The former hourly `check-contract-revisions.yml` convergence monitor has been
+removed; the publisher follows the live contract directly.
 
 
 Handler-owned and historical operations
@@ -334,35 +329,6 @@ Readiness reports are workflow artifacts. `passed` describes declarations and
 accounting; it is not execution capability or upstream uptime evidence. Existing
 LLM-only legacy source overlaps are listed separately, while conflicts involving
 managed integration outputs and all identity collisions block publication.
-
-## Publication convergence acceptance
-
-`check_contract_revisions.py` compares public runtime facts, docs, website, MCP
-and Router metadata. Scheduled monitoring uses the same mismatches and missing
-inputs as the convergence assessment, with its existing two-consecutive-failure
-escalation. Missing catalogs cannot stay green indefinitely; recovery clears their
-state. A separate strict mode fails on the first
-missing input or mismatch and never updates that monitor state:
-
-```sh
-python scripts/check_contract_revisions.py --acceptance \
-  --expected-docs-ref "$PUBLISHED_DOCS_SHA" \
-  --report /tmp/public-contract-convergence.json
-```
-
-The expected revision must be an independently selected full immutable docs SHA.
-Empty or entirely legacy docs metadata cannot pass acceptance. Every runtime
-catalog must have docs metadata; runtime projections still pending are unassessed.
-MCP and Router must report the exact selected docs revision as well as matching
-provider hashes. Unavailable surfaces produce a dated `not_assessed` report and a
-nonzero exit, even if another surface is healthy.
-
-For offline verification, add `--evidence-dir DIR` containing public metadata in
-`runtime.json`, `website.json`, `mcp.json` and `router.json`. The manual existing
-workflow exposes the same acceptance mode and retains the report as an artifact.
-This verifies public contract convergence. It does not invoke upstream provider
-operations, prove execution support or establish provider availability, and it
-cannot change production configuration.
 
 ## Source ownership and exact debt
 
@@ -507,9 +473,9 @@ temporary test candidate; they do not alter W0 or become production authority.
 The generated `diagnostic-docs.lock.json` binds actual aggregate bytes and marks
 the result unapproved and non-activatable. Its code SHA is not a publication SHA.
 
-The 10-minute pull and hourly monitor remain gated by both the tracked
-`contract_activation.json` plan and `RUNTIME_CONTRACT_ACTIVATION_ENABLED=true`.
-Manual dry runs remain available. For each actual formal publication, the sole
+The 10-minute pull runs ungated and rebuilds only when the live contract,
+the live category or Docs' generator inputs changed since the last completed
+run. Manual dry runs remain available. For each actual formal publication, the sole
 publisher records `docs/publication/release-origin.json` in the same guarded
 commit, after detecting real staged changes. It binds C, pointer bytes, the
 assessed parent, the producer run/attempt and its original publish-step UTC T0.
