@@ -34,6 +34,14 @@ pricing shows a reference price per successful request; usage-based pricing
 shows a default request estimate, plus the declared unit rate when available.
 Unknown prices are labeled unavailable, never zero. The paragraph is replaced
 on every generation, so a later Runtime price update also updates the prose.
+It is the last paragraph of the description and carries no delimiter:
+`strip_price_summary` recognizes it by the exact sentences `pricing_summary`
+writes (`PRICE_SUMMARY`), so a wording change must update both. Do not wrap it
+in HTML comments. Mintlify shows the operation description as the page subtitle
+when a page has no frontmatter `description`, and prints the comments there as
+text. Earlier `<!-- aisa-pricing:start -->` blocks are still stripped once.
+Paired `$` signs are escaped as `\$` (`markdown_safe`), because Mintlify renders
+`$…$` as inline math in both the subtitle and the page cost block.
 Provider sources and source review receipts remain unchanged. JSON examples,
 defaults, enums, extension metadata, monetary units, product-price filters, and
 financial transaction amounts are not rate claims and remain intact.

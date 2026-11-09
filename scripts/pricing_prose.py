@@ -10,12 +10,40 @@ import copy
 import re
 from decimal import Decimal, InvalidOperation
 
-PRICE_BEGIN = '<!-- aisa-pricing:start -->'
-PRICE_END = '<!-- aisa-pricing:end -->'
+# Earlier composers wrapped the generated paragraph in these HTML comments.
+# Mintlify prints an operation description as a page subtitle when the page has
+# no frontmatter description, and shows the comments as text there. Only
+# strip_price_summary still reads them, to remove previously published blocks.
+LEGACY_PRICE_BEGIN = '<!-- aisa-pricing:start -->'
+LEGACY_PRICE_END = '<!-- aisa-pricing:end -->'
+LEGACY_PRICE_BLOCK = re.compile(r'\s*' + re.escape(LEGACY_PRICE_BEGIN) + r'.*?' + re.escape(LEGACY_PRICE_END), re.S)
+
+# The generated paragraph is identified by the exact sentences pricing_summary
+# writes, so it needs no visible delimiter. Keep these in step with it.
+_AMOUNT = r'\\?\$\d+(?:\.\d+)?'
+_UNIT = r'[A-Za-z0-9_-]{1,80}'
+PRICE_SUMMARY = re.compile(
+    r'(?:'
+    r'(?:Published reference price: ' + _AMOUNT + r' USD per successful request\.'
+    r'|(?:Usage-based billing; )?Default request estimate: ' + _AMOUNT + r' USD \(not a fixed price\)\.'
+    r'|A request reference price is not currently available; use a request quote where supported\.)'
+    r'(?: Declared unit rate: ' + _AMOUNT + r' USD per ' + _UNIT + r'\.)?'
+    r' Account-specific pricing and final settlement may differ\.'
+    r'|'
+    r'(?:公开参考价格：每次成功请求 ' + _AMOUNT + r' USD。'
+    r'|(?:按用量计费；)?默认请求预估费用：' + _AMOUNT + r' USD（不是固定价格）。'
+    r'|当前未提供请求参考价格；请使用接口支持的报价功能确认费用。)'
+    r'(?: 声明的单位费率：每 ' + _UNIT + r' ' + _AMOUNT + r' USD。)?'
+    r' 最终费用以账户适用价格及实际结算为准。'
+    r')')
+GENERATED_TAIL = re.compile(r'(?:\A|\n\n)[ \t]*' + PRICE_SUMMARY.pattern + r'\s*\Z')
 
 
 def strip_price_summary(text):
-    return re.sub(r'\s*' + re.escape(PRICE_BEGIN) + r'.*?' + re.escape(PRICE_END), '', text, flags=re.S).strip()
+    """Remove the generated paragraph (and any legacy marked block) so the
+    next run writes exactly one paragraph from the current metadata."""
+    text = LEGACY_PRICE_BLOCK.sub('', text)
+    return GENERATED_TAIL.sub('', text.strip()).strip()
 
 
 def usd(value):
@@ -55,13 +83,19 @@ def pricing_summary(pricing, language='en'):
     return summary
 
 
+def markdown_safe(summary):
+    """Escape paired currency signs, which Mintlify renders as inline math in
+    both page bodies and description subtitles. CommonMark renders \\$ as $."""
+    return summary.replace('$', r'\$') if summary.count('$') >= 2 else summary
+
+
 def add_price_summary(operation, language='en'):
     """Replace a generated paragraph on each run so price changes cannot stick."""
     description = strip_price_summary(operation.get('description', ''))
-    summary = pricing_summary(operation.get('x-aisa-pricing'), language)
+    summary = markdown_safe(pricing_summary(operation.get('x-aisa-pricing'), language))
     if summary:
         description = description.replace(NOTICE, '').replace(NOTICE_ZH, '').strip()
-        operation['description'] = (description + '\n\n' + PRICE_BEGIN + '\n' + summary + '\n' + PRICE_END).strip()
+        operation['description'] = (description + '\n\n' + summary).strip()
     elif 'description' in operation:
         operation['description'] = description
     return operation

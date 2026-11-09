@@ -1,11 +1,13 @@
 import copy
 import json
+import re
 from pathlib import Path
 import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from pricing_prose import clean_text, clean_document, clean_page, pricing_summary, PRICE_BEGIN, NOTICE
+from pricing_prose import (clean_text, clean_document, clean_page, pricing_summary, strip_price_summary,
+                           add_price_summary, markdown_safe, PRICE_SUMMARY, LEGACY_PRICE_BEGIN, LEGACY_PRICE_END, NOTICE)
 from compose_openapi import compose
 from test_runtime_contracts import facts, operation, mirror
 
@@ -25,8 +27,11 @@ class PricingProseTests(unittest.TestCase):
         self.assertIn('Published reference price: $0.08 USD per successful request.', public['description'])
         self.assertNotIn('$0.02', public['description'])
         self.assertIn('$0.08 USD', readable_block(public))
+        self.assertNotIn('<!--', public['description'])
         localized = localize_tree(document, {'entries': {}}, allow_untranslated=True)
         self.assertIn('每次成功请求 $0.08 USD', operation(localized)['description'])
+        self.assertNotIn('<!--', operation(localized)['description'])
+        self.assertEqual(len(PRICE_SUMMARY.findall(operation(localized)['description'])), 1)
         self.assertIn('每次成功请求 $0.08 USD', readable_block(public, 'zh'))
         sales = project_sales_catalog(document, 'a' * 64)['document']
         self.assertEqual(operation(sales)['description'], public['description'])
@@ -36,7 +41,8 @@ class PricingProseTests(unittest.TestCase):
         description = operation(updated)['description']
         self.assertIn('$0.12 USD', description)
         self.assertNotIn('$0.08', description)
-        self.assertEqual(description.count(PRICE_BEGIN), 1)
+        self.assertEqual(len(PRICE_SUMMARY.findall(description)), 1)
+        self.assertNotIn('<!--', description)
         operation(updated).pop('x-aisa-pricing')
         self.assertNotIn('$0.12', operation(clean_document(updated))['description'])
 
@@ -202,6 +208,64 @@ class PricingProseTests(unittest.TestCase):
                 self.assertEqual('Free, suitable' not in description, replace)
                 self.assertEqual(clean_document(result), result)
 
+
+    def test_generated_paragraph_has_no_markup_and_is_replaced_by_its_own_wording(self):
+        # Mintlify shows an operation description as the page subtitle when the
+        # page has no frontmatter description; HTML comments appear there as text.
+        variants = [
+            {'cost_contract': 'fixed_success', 'default_request_estimate_usd': .001},
+            {'cost_contract': 'explicit_zero', 'customer_pricing': 'fixed_success', 'default_request_estimate_usd': 0},
+            {'cost_contract': 'response_count', 'default_request_estimate_usd': .014, 'unit_rate_usd': .014, 'unit': 'provider_credit'},
+            {'cost_contract': 'request_formula', 'default_request_estimate_usd': 1.275},
+            {'default_request_estimate_usd': .08},
+            {'default_request_estimate_usd': .08, 'reference_unavailable': True},
+            {'estimate_source': 'unavailable', 'unit_rate_usd': .5, 'unit': 'row'},
+        ]
+        for language in ('en', 'zh'):
+            for pricing in variants:
+                with self.subTest(language=language, pricing=pricing):
+                    summary = pricing_summary(pricing, language)
+                    self.assertRegex(summary, PRICE_SUMMARY)
+                    self.assertIsNotNone(PRICE_SUMMARY.fullmatch(summary))
+                    self.assertNotIn('<', summary)
+                    shown = markdown_safe(summary)
+                    self.assertIsNotNone(PRICE_SUMMARY.fullmatch(shown))
+                    # Two unescaped currency signs would render as inline math.
+                    self.assertLessEqual(len(re.findall(r'(?<!\\)\$', shown)), 1)
+                    for lead in ('', 'Lead.\n\n### Return:\n- Data'):
+                        op = add_price_summary({'operationId': 'x', 'description': lead, 'x-aisa-pricing': pricing}, language)
+                        self.assertEqual(op['description'], (lead + '\n\n' + shown).strip())
+                        self.assertEqual(strip_price_summary(op['description']), lead)
+                        self.assertEqual(add_price_summary(dict(op), language), op)
+
+    def test_handwritten_price_prose_is_not_mistaken_for_the_generated_paragraph(self):
+        for text in ('Prices vary by plan. Account-specific pricing and final settlement may differ.',
+                     'Lead.\n\nPublished reference price: $0.08 USD per successful request.',
+                     'Published reference price: $0.08 USD per successful request. Account-specific pricing and final settlement may differ.\n\nTrailing note.'):
+            with self.subTest(text=text):
+                self.assertEqual(strip_price_summary(text), text)
+
+    def test_legacy_marked_blocks_are_rewritten_once_without_markers(self):
+        from runtime_localize_openapi_zh import localize_tree
+        def legacy(body):
+            return LEGACY_PRICE_BEGIN + '\n' + body + '\n' + LEGACY_PRICE_END
+        old = pricing_summary({'cost_contract': 'fixed_success', 'default_request_estimate_usd': .08})
+        pricing = {'cost_contract': 'fixed_success', 'default_request_estimate_usd': .12}
+        for lead in ('', 'Douyin (app/v3).\n\n### Purpose:\n- Get data'):
+            with self.subTest(lead=lead):
+                description = (lead + '\n\n' + legacy(old)).strip()
+                document = {'paths': {'/p': {'get': {'operationId': 'p', 'description': description, 'x-aisa-pricing': pricing}}}}
+                result = clean_document(document)
+                text = result['paths']['/p']['get']['description']
+                self.assertEqual(text, (lead + '\n\n' + pricing_summary(pricing)).strip())
+                self.assertNotIn('aisa-pricing:', text)
+                self.assertEqual(clean_document(result), result)
+                localized = localize_tree(document, {'entries': {}}, allow_untranslated=True)
+                zh = localized['paths']['/p']['get']['description']
+                self.assertEqual(zh, (lead + '\n\n' + pricing_summary(pricing, 'zh')).strip())
+                self.assertNotIn('aisa-pricing:', zh)
+        zh_legacy = legacy(pricing_summary({'default_request_estimate_usd': .08}, 'zh'))
+        self.assertEqual(strip_price_summary('导语。\n\n' + zh_legacy), '导语。')
 
 if __name__ == '__main__':
     unittest.main()
