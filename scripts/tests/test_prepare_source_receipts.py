@@ -87,6 +87,19 @@ class ReceiptPreparationTests(unittest.TestCase):
             self.assertEqual(prepare(reviewed, cache), expected)
             self.assertEqual(cache.read_bytes(), first)
 
+    def test_publication_evidence_covers_every_reviewed_schema_input_receipt(self):
+        # Formal assessment checks current sources against the packet built from
+        # merged-source-reviews.json. A source reviewed into schema inputs but
+        # missing here leaves source maintenance not_assessed at publication.
+        root = Path(__file__).resolve().parents[2]
+        merged = json.loads((root / 'docs/current-source-review-20261009/merged-source-reviews.json').read_text())
+        inputs = json.loads((root / 'docs/schema-inputs/source-receipts.json').read_text())
+        for section in ('receipts', 'attempts'):
+            missing = sorted(set(inputs[section]) - set(merged[section]))
+            self.assertEqual(missing, [], section)
+            for key in inputs[section]:
+                self.assertEqual(merged[section][key], inputs[section][key], key)
+
     def test_all_workflows_prepare_receipts_before_consuming_and_receipt_changes_require_gate(self):
         root = Path(__file__).resolve().parents[2]
         for name, job, consumer in [('test-runtime-contracts.yml', 'artifact-contracts', 'Check actual candidate readiness'),

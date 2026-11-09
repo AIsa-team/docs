@@ -345,6 +345,23 @@ class AcquiredBytesTests(unittest.TestCase):
                     patch.object(importer, 'MAX_FILE', 300), self.assertRaisesRegex(ValueError, 'size limit'):
                 importer.acquired_members(root, assessment)
 
+    def test_projected_yaml_has_its_own_bound_above_the_aggregate(self):
+        # Block YAML indents the same document, so it is larger than the JSON
+        # aggregate; the full catalog's YAML already exceeds MAX_AGGREGATE.
+        self.assertGreater(importer.MAX_PROJECTED_YAML, importer.MAX_AGGREGATE)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            aggregate = b'{"paths":{}}' + b' ' * 300
+            text = b'paths: {}\n' + b'#' * 500 + b'\n'
+            (root / 'openapi.yaml').write_bytes(text)
+            with patch.object(importer, 'MAX_AGGREGATE', len(aggregate)), \
+                    patch.object(importer, 'MAX_PROJECTED_YAML', 3 * len(aggregate)):
+                self.assertGreater(len(text), importer.MAX_AGGREGATE)
+                self.assertEqual(importer.projected_yaml(root), text)
+            with patch.object(importer, 'MAX_PROJECTED_YAML', len(text) - 1), \
+                    self.assertRaisesRegex(ValueError, 'size limit'):
+                importer.projected_yaml(root)
+
     def test_post_assessment_current_member_receipt_and_category_changes_fail(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
