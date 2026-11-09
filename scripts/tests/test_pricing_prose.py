@@ -1,5 +1,6 @@
 import copy
 import json
+import re
 from pathlib import Path
 import sys
 import unittest
@@ -242,22 +243,35 @@ class PricingProseTests(unittest.TestCase):
                 self.assertEqual(result['paths']['/social']['get']['x-aisa-pricing'], pricing)
                 self.assertEqual(clean_document(result), result)
 
-    def test_price_parenthetical_leaves_no_empty_billing_sentence_or_dangling_space(self):
-        text = ('Unlike search this works for any tweet\nvisible to the connected account.\n\n'
-                'Billed as an X posts read ($0.005). Repeat lookups of the same tweet within the same UTC day\nare charged once.')
+    def test_price_parenthetical_and_upstream_billing_sentences_leave_no_stub(self):
+        lead = 'Unlike search this works for any tweet\nvisible to the connected account.'
+        text = (lead + '\n\nBilled as an X posts read ($0.005). Repeat lookups of the same tweet within the same UTC day\n'
+                'are charged once.\n\nNext paragraph.')
         result = clean_text(text, add_notice=False)
-        self.assertEqual(result, 'Unlike search this works for any tweet\nvisible to the connected account.\n\n'
-                                 'Repeat lookups of the same tweet within the same UTC day\nare charged once.')
-        self.assertNotIn('()', result)
-        self.assertNotIn('Billed as', result)
+        self.assertEqual(result, lead + '\n\nNext paragraph.')
         self.assertEqual(clean_text(result, add_notice=False), result)
         self.assertEqual(clean_text('Lead. Charged per lookup ($0.005).\nNext.', add_notice=False), 'Lead.\nNext.')
+        self.assertEqual(clean_text('Lead ($0.01/call). Repeat calls are billed once. Then this.', add_notice=False), 'Lead. Then this.')
         # A parenthetical inside a sentence with other content keeps the sentence.
         self.assertEqual(clean_text('Returns a JSON error body and is still billed 1 credit ($0.00528).', add_notice=False),
                          'Returns a JSON error body and is still billed 1 credit.')
         self.assertEqual(clean_text('Gift ID list, recommend 50/call for best value ($0.025), auto-process first 50', add_notice=False),
                          'Gift ID list, recommend 50/call for best value, auto-process first 50')
+        # Without a price claim the text is not touched; other charge rules stay.
+        self.assertEqual(clean_text('If the connection fails, the request is billed once.'), 'If the connection fails, the request is billed once.')
+        self.assertEqual(clean_text('Billed $0.02 per call. Failed calls are not charged. Each target is charged separately, only once it is published.', add_notice=False),
+                         'Failed calls are not charged. Each target is charged separately, only once it is published.')
 
+    def test_event_price_placeholders_are_inline_code_for_mdx(self):
+        from readable_contract_notes import readable_block
+        pricing = {'kind': 'metered_event', 'meter': 'social.post.published',
+                   'description': 'Publication is metered under social.post.published:<platform>. An X post costs $0.015 (<platform> x).'}
+        summary = pricing_summary(pricing)
+        self.assertTrue(summary.startswith('Publication is metered under `social.post.published:<platform>`. '
+                                           'An X post costs $0.015 (`<platform>` x).'))
+        self.assertIsNone(re.search(r'<platform>(?!`)', summary))
+        block = readable_block({'x-aisa-pricing': pricing})
+        self.assertIn('`social.post.published:<platform>`', block)
 
 if __name__ == '__main__':
     unittest.main()

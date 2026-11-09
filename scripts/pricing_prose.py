@@ -31,6 +31,10 @@ def usd(value):
     return '$' + (format(amount, 'f').rstrip('0').rstrip('.') if amount % 1 else format(amount, '.0f'))
 
 
+# A word containing an angle-bracket placeholder, without trailing punctuation.
+PLACEHOLDER_TOKEN = re.compile(r'(?<![`\w])([^\s`<>(]*<[A-Za-z_][\w-]*>(?:[^\s`<>.,;:)]|[.:](?=[^\s`<>]))*)')
+
+
 def pricing_summary(pricing, language='en'):
     """Render only declared prices; an estimate is never a unit or fixed price."""
     if not isinstance(pricing, dict) or not pricing:
@@ -44,8 +48,10 @@ def pricing_summary(pricing, language='en'):
     event = pricing.get('description')
     if kind == 'metered_event' and isinstance(event, str) and event.strip():
         # Charged per declared event, not per request. Runtime's published
-        # description is the only place that states the per-event prices.
-        return event.strip() + settlement
+        # description is the only place that states the per-event prices. A
+        # placeholder such as social.post.published:<platform> becomes inline
+        # code: bare, MDX reads it as a tag and the page subtitle drops it.
+        return PLACEHOLDER_TOKEN.sub(r'`\1`', event.strip()) + settlement
     unavailable = pricing.get('reference_unavailable') or pricing.get('estimate_unavailable_reason') or pricing.get('estimate_source') == 'unavailable'
     estimate = None if unavailable else usd(pricing.get('default_request_estimate_usd'))
     fixed = pricing.get('customer_pricing') == 'fixed_success' or pricing.get('cost_contract') == 'fixed_success'
@@ -99,6 +105,26 @@ NON_RATE = re.compile(r'products that cost|sort by|(?:minimum|maximum) price of|
 # The space before the parenthetical goes with it, so no "item ." remains.
 PRICE_PARENTHETICAL = re.compile(
     r'[ \t]*\(\s*(?:US)?\$\s*\d+(?:\.\d+)?(?:\s*/\s*(?:request|call)(?:[^()\n]*))?\s*\)', re.I)
+# A sentence (single line breaks allowed) saying a request is charged or billed once.
+UPSTREAM_ONCE_SENTENCE = re.compile(
+    r'(?<![^\s])(?=[^\s.!?])(?:[^.!?\n]|\n(?!\n))*?\b(?:charged|billed)\s+(?:only\s+)?once\b[^.!?\n]*[.!?]', re.I)
+
+
+def drop_upstream_once(chunk):
+    """Drop each such sentence with the spacing on one side of it."""
+    count = 0
+    while match := UPSTREAM_ONCE_SENTENCE.search(chunk):
+        begin, end = match.span()
+        after = re.match(r'[ \t]+(?=\S)', chunk[end:])
+        if after:
+            end += after.end()
+        else:
+            begin = len(chunk[:begin].rstrip(' \t'))
+        chunk = chunk[:begin] + chunk[end:]
+        count += 1
+    return chunk, count
+
+
 # A sentence that is only a billing statement once its amount is removed.
 BILLING_ONLY = re.compile(r'\W*(?:billed|charged|priced)\b', re.I)
 CONDITIONAL_SURCHARGE = re.compile(
@@ -128,6 +154,11 @@ def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
         chunk = chunks[index]
         # Keep the model choice while removing its obsolete rate assertion.
         chunk, count = re.subn(r'(`[^`]+`) is billed at \$\d+(?:\.\d+)? per request\.', r'\1 is supported.', chunk)
+        changed |= bool(count)
+        # Upstream request de-duplication ("Repeat lookups of the same tweet
+        # within the same UTC day are charged once") is not AIsa's charge rule;
+        # x-aisa-pricing is. Single line breaks stay inside a sentence.
+        chunk, count = drop_upstream_once(chunk)
         changed |= bool(count)
         # Preserve the condition that changes provider usage while removing its
         # stale monetary amount. This does not assert a customer surcharge.
