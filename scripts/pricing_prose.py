@@ -31,14 +31,38 @@ def usd(value):
     return '$' + (format(amount, 'f').rstrip('0').rstrip('.') if amount % 1 else format(amount, '.0f'))
 
 
+# A word containing an angle-bracket placeholder, without trailing punctuation.
+PLACEHOLDER_TOKEN = re.compile(r'(?<![`\w])([^\s`<>(]*<[A-Za-z_][\w-]*>(?:[^\s`<>.,;:)]|[.:](?=[^\s`<>]))*)')
+
+
 def pricing_summary(pricing, language='en'):
     """Render only declared prices; an estimate is never a unit or fixed price."""
     if not isinstance(pricing, dict) or not pricing:
         return ''
     zh = language == 'zh'
+    settlement = ' 最终费用以账户适用价格及实际结算为准。' if zh else ' Account-specific pricing and final settlement may differ.'
+    kind = pricing.get('kind')
+    if kind == 'no_customer_charge':
+        # Runtime declares that the operation settles no customer charge.
+        return '不收费。' if zh else 'No charge.'
+    event = pricing.get('description')
+    if kind == 'metered_event' and isinstance(event, str) and event.strip():
+        # Charged per declared event, not per request. Runtime's published
+        # description is the only place that states the per-event prices. A
+        # placeholder such as social.post.published:<platform> becomes inline
+        # code: bare, MDX reads it as a tag and the page subtitle drops it.
+        return PLACEHOLDER_TOKEN.sub(r'`\1`', event.strip()) + settlement
     unavailable = pricing.get('reference_unavailable') or pricing.get('estimate_unavailable_reason') or pricing.get('estimate_source') == 'unavailable'
     estimate = None if unavailable else usd(pricing.get('default_request_estimate_usd'))
     fixed = pricing.get('customer_pricing') == 'fixed_success' or pricing.get('cost_contract') == 'fixed_success'
+    # A fixed_request with an integer customer price is one price per successful
+    # request. Resource reads (cache_hit_share_bps, charged per delivered read)
+    # and variant-priced operations do not have one request price.
+    micros = pricing.get('customer_micros_usd')
+    if (estimate is None and not unavailable and kind == 'fixed_request' and isinstance(micros, int)
+            and not isinstance(micros, bool) and 'variants' not in pricing and 'cache_hit_share_bps' not in pricing):
+        estimate = usd(Decimal(micros) / 1_000_000)
+        fixed = estimate is not None
     if estimate is not None and fixed:
         summary = f'公开参考价格：每次成功请求 {estimate} USD。' if zh else f'Published reference price: {estimate} USD per successful request.'
     elif estimate is not None:
@@ -51,7 +75,7 @@ def pricing_summary(pricing, language='en'):
     unit = pricing.get('unit')
     if rate is not None and isinstance(unit, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,80}', unit):
         summary += f' 声明的单位费率：每 {unit} {rate} USD。' if zh else f' Declared unit rate: {rate} USD per {unit}.'
-    summary += ' 最终费用以账户适用价格及实际结算为准。' if zh else ' Account-specific pricing and final settlement may differ.'
+    summary += settlement
     return summary
 
 
@@ -78,8 +102,31 @@ NOTICE_ZH = '当前 API 价格请查看公开的 x-aisa-pricing 信息；接口�
 FENCES = re.compile(r'(```[^\n]*\n.*?```|~~~[^\n]*\n.*?~~~|<pre\b[^>]*>.*?</pre>)', re.S | re.I)
 PARTS = re.compile(r'(\n+|[;；](?![^()]*\))|(?<=[.!?。！？])\s+(?!\d)|<br\s*/?>|</?p\b[^>]*>|(?=\bNote:?)|(?<=false)(?=Note))', re.I)
 NON_RATE = re.compile(r'products that cost|sort by|(?:minimum|maximum) price of|price per contract|price_centicents|YES at|NO at|shares redeem', re.I)
+# The space before the parenthetical goes with it, so no "item ." remains.
 PRICE_PARENTHETICAL = re.compile(
-    r'\(\s*(?:US)?\$\s*\d+(?:\.\d+)?(?:\s*/\s*(?:request|call)(?:[^()\n]*))?\s*\)', re.I)
+    r'[ \t]*\(\s*(?:US)?\$\s*\d+(?:\.\d+)?(?:\s*/\s*(?:request|call)(?:[^()\n]*))?\s*\)', re.I)
+# A sentence (single line breaks allowed) saying a request is charged or billed once.
+UPSTREAM_ONCE_SENTENCE = re.compile(
+    r'(?<![^\s])(?=[^\s.!?])(?:[^.!?\n]|\n(?!\n))*?\b(?:charged|billed)\s+(?:only\s+)?once\b[^.!?\n]*[.!?]', re.I)
+
+
+def drop_upstream_once(chunk):
+    """Drop each such sentence with the spacing on one side of it."""
+    count = 0
+    while match := UPSTREAM_ONCE_SENTENCE.search(chunk):
+        begin, end = match.span()
+        after = re.match(r'[ \t]+(?=\S)', chunk[end:])
+        if after:
+            end += after.end()
+        else:
+            begin = len(chunk[:begin].rstrip(' \t'))
+        chunk = chunk[:begin] + chunk[end:]
+        count += 1
+    return chunk, count
+
+
+# A sentence that is only a billing statement once its amount is removed.
+BILLING_ONLY = re.compile(r'\W*(?:billed|charged|priced)\b', re.I)
 CONDITIONAL_SURCHARGE = re.compile(
     r'\byou will be (?:charged|billed) (?:extra\s+)?(?:' + MONEY.pattern + r')(?:\s+extra)?', re.I)
 
@@ -108,6 +155,11 @@ def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
         # Keep the model choice while removing its obsolete rate assertion.
         chunk, count = re.subn(r'(`[^`]+`) is billed at \$\d+(?:\.\d+)? per request\.', r'\1 is supported.', chunk)
         changed |= bool(count)
+        # Upstream request de-duplication ("Repeat lookups of the same tweet
+        # within the same UTC day are charged once") is not AIsa's charge rule;
+        # x-aisa-pricing is. Single line breaks stay inside a sentence.
+        chunk, count = drop_upstream_once(chunk)
+        changed |= bool(count)
         # Preserve the condition that changes provider usage while removing its
         # stale monetary amount. This does not assert a customer surcharge.
         chunk, count = CONDITIONAL_SURCHARGE.subn('provider usage may increase', chunk)
@@ -132,7 +184,16 @@ def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
                 # limits or other caller instructions with it.
                 without_rate, count = PRICE_PARENTHETICAL.subn('', part)
                 if count and not MONEY.search(without_rate):
-                    parts[j] = without_rate.rstrip()
+                    if BILLING_ONLY.match(without_rate):
+                        # "Billed as a posts read ($0.005)." says nothing once
+                        # its amount is gone: drop the sentence and its spacing.
+                        parts[j] = ''
+                        if j + 1 < len(parts) and parts[j + 1].strip(' \t') == '':
+                            parts[j + 1] = ''
+                        elif j > 0 and parts[j - 1].strip(' \t') == '':
+                            parts[j - 1] = ''
+                    else:
+                        parts[j] = without_rate.rstrip()
                     changed = True
                     continue
                 # A price-only bullet under a Price heading has its unit in the
