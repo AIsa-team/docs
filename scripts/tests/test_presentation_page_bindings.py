@@ -85,6 +85,23 @@ class PresentationTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 self.validate(value)
 
+    def test_recomposition_links_production_reference_pages(self):
+        # Pages kept on reference-contracts/ still describe the same provider
+        # document; the Runtime aggregate links them and so must recomposition.
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            pages = {'api-reference/chat/post_chat.mdx': 'reference-contracts/chat.json POST /chat',
+                     'api-reference/old/get_old.mdx': 'openapi/old.json GET /old',
+                     'zh/api-reference/old/get_old.mdx': 'openapi/zh/old.json GET /old',
+                     'api-reference/other/notes.mdx': None}
+            for name, binding in pages.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('---\n' + (f'openapi: "{binding}"\n' if binding else 'title: Notes\n') + '---\n')
+            self.assertEqual(consolidate.endpoint_page_links(root), {
+                ('chat.json', 'post', '/chat'): 'https://aisa.one/docs/api-reference/chat/post_chat',
+                ('old.json', 'get', '/old'): 'https://aisa.one/docs/api-reference/old/get_old'})
+
     def test_explicit_aggregator_root_and_map_never_scan_pages_or_change_global_root(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
