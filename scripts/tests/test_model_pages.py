@@ -7,7 +7,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import model_pages
 from model_pages import (FAMILIES_END, FAMILIES_START, TABLE_END, TABLE_START, expected_pages, families_table,
-                         model_table, replace_block, snapshot_from)
+                         family_models, model_table, replace_block, snapshot_from)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -74,6 +74,57 @@ class TableTests(unittest.TestCase):
                          f'a\n{TABLE_START}\nnew\n{TABLE_END}\nb')
         with self.assertRaises(ValueError):
             replace_block('no block', TABLE_START, TABLE_END, 'new')
+
+
+SPLIT_CONFIG = {
+    'families': [
+        {'vendor': 'Acme', 'page': 'models/acme', 'name': 'Acme'},
+        {'vendor': 'Acme', 'page': 'models/acme-media', 'name': 'Acme Media', 'prefixes': ['ACME-CLIP', 'acme-draw']},
+    ],
+    'notes': {},
+}
+
+
+class SplitTests(unittest.TestCase):
+    def setUp(self):
+        self.snapshot = snapshot_from(PRICE_LIST)
+
+    def test_prefixed_family_takes_its_models_and_the_other_family_the_rest(self):
+        shares = {family['page']: [m['id'] for m in models] for family, models in family_models(self.snapshot, SPLIT_CONFIG)}
+        self.assertEqual(shares, {'models/acme': ['acme-9', 'acme-10', 'acme-rank'],
+                                  'models/acme-media': ['acme-clip', 'acme-draw']})
+
+    def test_families_table_counts_each_family(self):
+        en = families_table(self.snapshot, SPLIT_CONFIG, 'en').split('\n')
+        self.assertEqual(en[2:], ['| [Acme](/models/acme) | Acme | 3 | Text, rerank |',
+                                  '| [Acme Media](/models/acme-media) | Acme | 2 | Image, video |',
+                                  '| Zeta | Zeta | 1 | Text |'])
+
+    def test_split_problems_block_the_check(self):
+        lost = {'families': [{'vendor': 'Acme', 'page': 'models/acme', 'name': 'Acme', 'prefixes': ['acme-clip']}],
+                'notes': {}}
+        repeated = {'families': [dict(family, prefixes=['acme-']) for family in SPLIT_CONFIG['families']], 'notes': {}}
+        empty = {'families': SPLIT_CONFIG['families'] + [
+            {'vendor': 'Acme', 'page': 'models/none', 'name': 'None', 'prefixes': ['nothing']}], 'notes': {}}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in ('models/acme.mdx', 'zh/models/acme.mdx', 'models/acme-media.mdx', 'zh/models/acme-media.mdx',
+                         'models/none.mdx', 'zh/models/none.mdx'):
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_text(f'{TABLE_START}\n{TABLE_END}\n')
+            for name in ('guides/models.mdx', 'zh/guides/models.mdx'):
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_text(f'{FAMILIES_START}\n{FAMILIES_END}\n')
+            _, ok = expected_pages(root, self.snapshot, SPLIT_CONFIG)
+            _, lost_problems = expected_pages(root, self.snapshot, lost)
+            _, repeated_problems = expected_pages(root, self.snapshot, repeated)
+            _, empty_problems = expected_pages(root, self.snapshot, empty)
+        self.assertFalse([p for p in ok if model_pages.blocking(p)])
+        self.assertIn('acme-9: on no family page of Acme; check the families\' prefixes', lost_problems)
+        self.assertIn('acme-9: on more than one family page of Acme; check the families\' prefixes', repeated_problems)
+        self.assertIn('models/none: no Acme model matches the page; check its prefixes', empty_problems)
+        self.assertTrue(all(model_pages.blocking(p) for p in lost_problems + repeated_problems + empty_problems
+                            if 'prefixes' in p))
 
 
 class PageTests(unittest.TestCase):

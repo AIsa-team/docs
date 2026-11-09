@@ -4,7 +4,9 @@
 `catalog/models.json` is a snapshot of every callable model on the public price
 list (https://api.aisa.one/pricing/models), by vendor and model ID.
 `catalog/model-families.json` gives each vendor its family page, display names
-and optional per-model notes.
+and optional per-model notes. A vendor can be split into several family pages:
+a family with `prefixes` takes the vendor's models whose ID starts with one of
+them, and the vendor's family without `prefixes` takes the rest.
 
 From the two, this script writes the generated blocks of:
 - each family page (`models/<slug>.mdx` and its Chinese page): the model table;
@@ -132,21 +134,45 @@ def localized(value, language: str) -> str:
     return value.get(language) or value["en"] if isinstance(value, dict) else value
 
 
+def claims(family: dict, model_id: str) -> bool:
+    """Whether the family's `prefixes` take the model ID."""
+    return any(model_id.casefold().startswith(prefix.casefold()) for prefix in family.get("prefixes", ()))
+
+
+def family_models(snapshot: dict, config: dict) -> list[tuple[dict, list[dict] | None]]:
+    """Each configured family with its share of its vendor's models, in config order; None when the vendor
+    is not on the price list. A family with `prefixes` takes the IDs one of them starts; a family without takes
+    the vendor's models no sibling family takes."""
+    vendors = {vendor["vendor"]: vendor["models"] for vendor in snapshot["vendors"]}
+    shares = []
+    for family in config["families"]:
+        models = vendors.get(family["vendor"])
+        if models is not None:
+            if family.get("prefixes"):
+                models = [model for model in models if claims(family, model["id"])]
+            else:
+                siblings = [other for other in config["families"] if other["vendor"] == family["vendor"]]
+                models = [model for model in models if not any(claims(other, model["id"]) for other in siblings)]
+        shares.append((family, models))
+    return shares
+
+
 def families_table(snapshot: dict, config: dict, language: str) -> str:
-    """Every vendor of the snapshot: configured families first, in config order, then the rest A to Z."""
+    """Every family with models, in config order, then the vendors without a family page A to Z."""
     copy = COPY[language]
     prefix = "/zh/" if language == "zh" else "/"
-    vendors = {vendor["vendor"]: vendor["models"] for vendor in snapshot["vendors"]}
-    order = [family["vendor"] for family in config["families"] if family["vendor"] in vendors]
-    order += sorted((name for name in vendors if name not in order), key=str.casefold)
-    families = {family["vendor"]: family for family in config["families"]}
+    configured = {family["vendor"] for family in config["families"]}
     lines = ["| " + " | ".join(copy["families"]) + " |", "| --- | --- | ---: | --- |"]
-    for name in order:
-        family = families.get(name)
-        title = localized(family["name"], language) if family else name
-        link = f"[{cell(title)}]({prefix}{family['page']})" if family else cell(title)
-        provider = localized(family.get("provider", name), language) if family else name
-        lines.append(f"| {link} | {cell(provider)} | {len(vendors[name])} | {kinds_text(vendors[name], language)} |")
+    for family, models in family_models(snapshot, config):
+        if models:
+            title = localized(family["name"], language)
+            provider = localized(family.get("provider", family["vendor"]), language)
+            lines.append(f"| [{cell(title)}]({prefix}{family['page']}) | {cell(provider)} | {len(models)} | "
+                         f"{kinds_text(models, language)} |")
+    for vendor in sorted((v for v in snapshot["vendors"] if v["vendor"] not in configured),
+                         key=lambda v: v["vendor"].casefold()):
+        name, models = vendor["vendor"], vendor["models"]
+        lines.append(f"| {cell(name)} | {cell(name)} | {len(models)} | {kinds_text(models, language)} |")
     return "\n".join(lines)
 
 
@@ -162,17 +188,28 @@ def expected_pages(root: Path, snapshot: dict, config: dict) -> tuple[dict[str, 
     pages, problems = {}, []
     vendors = {vendor["vendor"]: vendor["models"] for vendor in snapshot["vendors"]}
     notes = config.get("notes", {})
-    for family in config["families"]:
-        models = vendors.get(family["vendor"])
+    shares = family_models(snapshot, config)
+    for family, models in shares:
         if models is None:
             problems.append(f"{family['vendor']}: no callable models on the price list; remove its family page")
             models = []
+        elif not models:
+            problems.append(f"{family['page']}: no {family['vendor']} model matches the page; check its prefixes")
         for language, name in (("en", f"{family['page']}.mdx"), ("zh", f"zh/{family['page']}.mdx")):
             path = root / name
             if not path.exists():
                 problems.append(f"{name}: missing family page")
                 continue
             pages[name] = replace_block(path.read_text(), TABLE_START, TABLE_END, model_table(models, notes, language))
+    placed: dict[str, int] = {}
+    for _, models in shares:
+        for model in models or ():
+            placed[model["id"]] = placed.get(model["id"], 0) + 1
+    for name, models in vendors.items():
+        for model in models:
+            if name in {family["vendor"] for family in config["families"]} and placed.get(model["id"]) != 1:
+                where = "no family page" if not placed.get(model["id"]) else "more than one family page"
+                problems.append(f"{model['id']}: on {where} of {name}; check the families' prefixes")
     configured = {family["vendor"] for family in config["families"]}
     for name in sorted(set(vendors) - configured, key=str.casefold):
         problems.append(f"{name}: on the price list without a family page; it is listed in the Model Catalog only")
@@ -181,6 +218,11 @@ def expected_pages(root: Path, snapshot: dict, config: dict) -> tuple[dict[str, 
         pages[name] = replace_block(path.read_text(), FAMILIES_START, FAMILIES_END,
                                     families_table(snapshot, config, language))
     return pages, problems
+
+
+def blocking(problem: str) -> bool:
+    """Whether a problem fails --check: a missing page, or a family split that loses or repeats models."""
+    return "missing family page" in problem or problem.endswith("prefixes")
 
 
 def load(root: Path) -> tuple[dict, dict]:
@@ -208,7 +250,7 @@ def main() -> int:
         print(f"warning: {problem}", file=sys.stderr)
     stale = [name for name, text in pages.items() if (args.root / name).read_text() != text]
     if args.check:
-        if stale or any("missing family page" in problem for problem in problems):
+        if stale or any(blocking(problem) for problem in problems):
             print("model pages are stale; run scripts/model_pages.py: " + ", ".join(stale), file=sys.stderr)
             return 1
         print(f"model pages match the snapshot; families={len(config['families'])}")
