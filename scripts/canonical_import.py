@@ -16,6 +16,16 @@ from runtime_registry import (combine_facts, coverage_rows, discover, disabled_l
 from runtime_contract_artifact import MAX_AGGREGATE
 from schema_input_bundle import MAX_FILE, UniqueLoader, canonical, regular_read, require, strict_json
 
+# openapi.yaml is a block-style projection of the Runtime aggregate, which the
+# artifact itself bounds at MAX_AGGREGATE. Indentation makes the YAML about 1.6x
+# the compact JSON, so it needs its own read bound. The bytes stay bound to the
+# aggregate: they must parse to exactly the verified aggregate document.
+MAX_PROJECTED_YAML = 3 * MAX_AGGREGATE
+
+
+def projected_yaml(projected):
+    return regular_read(projected, 'openapi.yaml', limit=MAX_PROJECTED_YAML)
+
 
 def configured_inputs(root, provider, entry):
     configurations, bindings = source_configurations(provider, entry)
@@ -310,7 +320,7 @@ def assess_projected_candidate(input_view, projected_view, native_raw, aggregate
     report = check_readiness(metadata['facts_by_provider'], native, metadata['coverage'],
         baseline_coverage=baseline_coverage, runtime_index=metadata['runtime_index'],
         deferred_definitions=load_deferred_definitions(root))
-    yaml_raw = regular_read(projected, 'openapi.yaml', limit=MAX_AGGREGATE)
+    yaml_raw = projected_yaml(projected)
     require(canonical(yaml.safe_load(yaml_raw)) == canonical(aggregate), 'Projected YAML differs')
     require(discovery_index_block(yaml_raw) in regular_read(projected, 'llms.txt').decode(),
             'Projected llms discovery binding differs')
