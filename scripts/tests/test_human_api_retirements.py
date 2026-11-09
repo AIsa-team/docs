@@ -47,5 +47,51 @@ class RetirementTests(unittest.TestCase):
             (root/'docs/human-api-retirements.json').write_text('{"scope":"human_presentation_only","formal_publication":true}')
             with self.assertRaises(ValueError):apply_retirements(root,{})
 
+    def test_policy_with_per_row_replacement_links_each_language(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);(root/'docs').mkdir()
+            twitter={'scope':'human_presentation_only','formal_publication':False,'guide':'resources/twitter-migration','operations':[
+                {'method':'POST','path':'/apis/v1/twitter/like_twitter','page':'api-reference/twitter/post_twitter-like-twitter','title':'Like Tweet'}]}
+            row={'method':'GET','path':'/apis/v1/old/fetch_post','page':'api-reference/old/fetch_post','title':'old fetch_post',
+                 'replacement':{'method':'GET','path':'/apis/v1/new/posts/{id}','page':'api-reference/new/posts-id'}}
+            other={'scope':'human_presentation_only','formal_publication':False,'notice':{'en':'Gone.','zh':'已退役。'},
+                   'replacement_label':{'en':'Use instead: ','zh':'请改用：'},'operations':[row]}
+            (root/'docs/human-api-retirements.json').write_text(json.dumps(twitter))
+            (root/'docs/human-api-retirements-other.json').write_text(json.dumps(other))
+            nav={'languages':[{'language':'en','tabs':[{'tab':'API','groups':[{'group':'Old','pages':[row['page']]},{'group':'New','pages':[row['replacement']['page']]}]}]}]}
+            (root/'docs.json').write_text(json.dumps({'navigation':nav}))
+            changes={};apply_retirements(root,changes)
+            en=changes[root/(row['page']+'.mdx')];zh=changes[root/('zh/'+row['page']+'.mdx')]
+            self.assertIn('Use instead: [`GET /apis/v1/new/posts/{id}`](/api-reference/new/posts-id)',en)
+            self.assertIn('请改用：[`GET /apis/v1/new/posts/{id}`](/zh/api-reference/new/posts-id)',zh)
+            self.assertIn('`GET /apis/v1/old/fetch_post`',en);self.assertNotIn('openapi:',en)
+            self.assertIn('Reauthorize the X account',changes[root/'api-reference/twitter/post_twitter-like-twitter.mdx'])
+            groups=json.loads(changes[root/'docs.json'])['navigation']['languages'][0]['tabs'][0]['groups']
+            self.assertEqual(groups,[{'group':'New','pages':[row['replacement']['page']]}])
+            (root/'docs/human-api-retirements-dup.json').write_text(json.dumps(other))
+            with self.assertRaises(ValueError):apply_retirements(root,{})
+
+    def test_repository_retirements_are_already_applied(self):
+        # Committed archives (including the eight legacy X pages) are a fixed point of the policies.
+        root=Path(__file__).resolve().parents[2]
+        changes={};apply_retirements(root,changes)
+        stale=[p.relative_to(root).as_posix() for p,t in changes.items() if not p.exists() or p.read_text()!=t]
+        self.assertEqual(stale,[])
+
+    def test_overseas_social_policy_points_to_live_reference_pages(self):
+        root=Path(__file__).resolve().parents[2]
+        policy=json.loads((root/'docs/human-api-retirements-social-overseas.json').read_text())
+        rows=policy['operations'];retired={row['page'] for row in rows}
+        self.assertEqual(len(rows),147);self.assertEqual(len({(r['method'],r['path']) for r in rows}),147)
+        overseas=('instagram','tiktok','twitter','youtube','linkedin','reddit','threads','telegram')
+        nav=(root/'docs.json').read_text()
+        for row in rows:
+            self.assertEqual(row['path'].split('/')[3],'tikhub');self.assertIn(row['path'].split('/')[4],overseas)
+            new=row['replacement'];self.assertNotIn(new['page'],retired);self.assertNotIn('tikhub',new['path'])
+            for prefix in ('','zh/'):
+                page=root/(prefix+new['page']+'.mdx')
+                self.assertIn(' '+new['method']+' '+new['path'].split('?')[0],page.read_text().split('---')[1])
+                self.assertIn('"'+prefix+new['page']+'"',nav)
+
 
 if __name__=='__main__':unittest.main()
