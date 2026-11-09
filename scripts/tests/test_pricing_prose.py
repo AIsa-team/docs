@@ -208,6 +208,75 @@ class PricingProseTests(unittest.TestCase):
                 self.assertEqual('Free, suitable' not in description, replace)
                 self.assertEqual(clean_document(result), result)
 
+    def test_native_operation_kinds_publish_no_charge_fixed_and_event_prices(self):
+        free = {'kind': 'no_customer_charge', 'description': 'Included with your connected social accounts: AIsa does not charge per call.'}
+        self.assertEqual(pricing_summary(free), 'No charge.')
+        self.assertEqual(pricing_summary(free, 'zh'), '不收费。')
+        for micros, amount in ((1000, '$0.001'), (5000, '$0.005'), (15000, '$0.015'), (0, '$0')):
+            fixed = {'kind': 'fixed_request', 'customer_micros_usd': micros, 'customer_pricing_ref': 'social.x.v1.pricing@1',
+                     'description': 'Charged once on success at the bound customer pricing revision.'}
+            self.assertEqual(pricing_summary(fixed), f'Published reference price: {amount} USD per successful request. '
+                                                     'Account-specific pricing and final settlement may differ.')
+            self.assertIn(f'每次成功请求 {amount} USD', pricing_summary(fixed, 'zh'))
+        event = {'kind': 'metered_event', 'meter': 'social.post.published',
+                 'description': 'Each platform target is charged separately, only once it is published: an X post costs $0.015; a post on any other platform costs $0.01.'}
+        self.assertEqual(pricing_summary(event), event['description'] + ' Account-specific pricing and final settlement may differ.')
+        unavailable = 'A request reference price is not currently available'
+        # A resource read is charged per delivered read; a variant has its own price.
+        for pricing in ({'kind': 'fixed_request', 'customer_micros_usd': 50000, 'cache_hit_share_bps': 10000},
+                        {'kind': 'fixed_request', 'customer_micros_usd': 1000, 'variants': {'twitter': {'kind': 'fixed_request', 'customer_micros_usd': 15000}}},
+                        {'kind': 'fixed_request', 'customer_micros_usd': True},
+                        {'kind': 'fixed_request', 'customer_micros_usd': '1000'},
+                        {'kind': 'fixed_request', 'customer_micros_usd': -1},
+                        {'kind': 'metered_event', 'meter': 'social.post.published'},
+                        {'kind': 'unpriced', 'description': 'No price is published for this operation yet.'}):
+            with self.subTest(pricing=pricing):
+                self.assertIn(unavailable, pricing_summary(pricing))
+        # An explicit Runtime estimate keeps its existing label.
+        self.assertIn('Default request estimate: $0.1 USD (not a fixed price)', pricing_summary(
+            {'kind': 'fixed_request', 'default_request_estimate_usd': .1, 'estimate_source': 'configured_fixed_price'}))
+        stale = PRICE_BEGIN + '\n' + unavailable + '; use a request quote where supported. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->'
+        paid = {'kind': 'fixed_request', 'customer_micros_usd': 15000, 'customer_pricing_ref': 'social.x.v1.pricing@1'}
+        for pricing, expected in ((free, 'No charge.'), (paid, 'Published reference price: $0.015 USD per successful request.')):
+            with self.subTest(pricing=pricing):
+                document = {'paths': {'/social': {'get': {'operationId': 'social', 'description': 'Lead.\n\n' + stale, 'x-aisa-pricing': pricing}}}}
+                result = clean_document(document)
+                description = result['paths']['/social']['get']['description']
+                self.assertIn(expected, description)
+                self.assertNotIn(unavailable, description)
+                self.assertEqual(description.count(PRICE_BEGIN), 1)
+                self.assertEqual(result['paths']['/social']['get']['x-aisa-pricing'], pricing)
+                self.assertEqual(clean_document(result), result)
+
+    def test_price_parenthetical_and_upstream_billing_sentences_leave_no_stub(self):
+        lead = 'Unlike search this works for any tweet\nvisible to the connected account.'
+        text = (lead + '\n\nBilled as an X posts read ($0.005). Repeat lookups of the same tweet within the same UTC day\n'
+                'are charged once.\n\nNext paragraph.')
+        result = clean_text(text, add_notice=False)
+        self.assertEqual(result, lead + '\n\nNext paragraph.')
+        self.assertEqual(clean_text(result, add_notice=False), result)
+        self.assertEqual(clean_text('Lead. Charged per lookup ($0.005).\nNext.', add_notice=False), 'Lead.\nNext.')
+        self.assertEqual(clean_text('Lead ($0.01/call). Repeat calls are billed once. Then this.', add_notice=False), 'Lead. Then this.')
+        # A parenthetical inside a sentence with other content keeps the sentence.
+        self.assertEqual(clean_text('Returns a JSON error body and is still billed 1 credit ($0.00528).', add_notice=False),
+                         'Returns a JSON error body and is still billed 1 credit.')
+        self.assertEqual(clean_text('Gift ID list, recommend 50/call for best value ($0.025), auto-process first 50', add_notice=False),
+                         'Gift ID list, recommend 50/call for best value, auto-process first 50')
+        # Without a price claim the text is not touched; other charge rules stay.
+        self.assertEqual(clean_text('If the connection fails, the request is billed once.'), 'If the connection fails, the request is billed once.')
+        self.assertEqual(clean_text('Billed $0.02 per call. Failed calls are not charged. Each target is charged separately, only once it is published.', add_notice=False),
+                         'Failed calls are not charged. Each target is charged separately, only once it is published.')
+
+    def test_event_price_placeholders_are_inline_code_for_mdx(self):
+        from readable_contract_notes import readable_block
+        pricing = {'kind': 'metered_event', 'meter': 'social.post.published',
+                   'description': 'Publication is metered under social.post.published:<platform>. An X post costs $0.015 (<platform> x).'}
+        summary = pricing_summary(pricing)
+        self.assertTrue(summary.startswith('Publication is metered under `social.post.published:<platform>`. '
+                                           'An X post costs $0.015 (`<platform>` x).'))
+        self.assertIsNone(re.search(r'<platform>(?!`)', summary))
+        block = readable_block({'x-aisa-pricing': pricing})
+        self.assertIn('`social.post.published:<platform>`', block)
 
     def test_generated_paragraph_has_no_markup_and_is_replaced_by_its_own_wording(self):
         # Mintlify shows an operation description as the page subtitle when the
