@@ -36,9 +36,27 @@ def pricing_summary(pricing, language='en'):
     if not isinstance(pricing, dict) or not pricing:
         return ''
     zh = language == 'zh'
+    settlement = ' 最终费用以账户适用价格及实际结算为准。' if zh else ' Account-specific pricing and final settlement may differ.'
+    kind = pricing.get('kind')
+    if kind == 'no_customer_charge':
+        # Runtime declares that the operation settles no customer charge.
+        return '不收费。' if zh else 'No charge.'
+    event = pricing.get('description')
+    if kind == 'metered_event' and isinstance(event, str) and event.strip():
+        # Charged per declared event, not per request. Runtime's published
+        # description is the only place that states the per-event prices.
+        return event.strip() + settlement
     unavailable = pricing.get('reference_unavailable') or pricing.get('estimate_unavailable_reason') or pricing.get('estimate_source') == 'unavailable'
     estimate = None if unavailable else usd(pricing.get('default_request_estimate_usd'))
     fixed = pricing.get('customer_pricing') == 'fixed_success' or pricing.get('cost_contract') == 'fixed_success'
+    # A fixed_request with an integer customer price is one price per successful
+    # request. Resource reads (cache_hit_share_bps, charged per delivered read)
+    # and variant-priced operations do not have one request price.
+    micros = pricing.get('customer_micros_usd')
+    if (estimate is None and not unavailable and kind == 'fixed_request' and isinstance(micros, int)
+            and not isinstance(micros, bool) and 'variants' not in pricing and 'cache_hit_share_bps' not in pricing):
+        estimate = usd(Decimal(micros) / 1_000_000)
+        fixed = estimate is not None
     if estimate is not None and fixed:
         summary = f'公开参考价格：每次成功请求 {estimate} USD。' if zh else f'Published reference price: {estimate} USD per successful request.'
     elif estimate is not None:
@@ -51,7 +69,7 @@ def pricing_summary(pricing, language='en'):
     unit = pricing.get('unit')
     if rate is not None and isinstance(unit, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,80}', unit):
         summary += f' 声明的单位费率：每 {unit} {rate} USD。' if zh else f' Declared unit rate: {rate} USD per {unit}.'
-    summary += ' 最终费用以账户适用价格及实际结算为准。' if zh else ' Account-specific pricing and final settlement may differ.'
+    summary += settlement
     return summary
 
 
@@ -78,8 +96,11 @@ NOTICE_ZH = '当前 API 价格请查看公开的 x-aisa-pricing 信息；接口�
 FENCES = re.compile(r'(```[^\n]*\n.*?```|~~~[^\n]*\n.*?~~~|<pre\b[^>]*>.*?</pre>)', re.S | re.I)
 PARTS = re.compile(r'(\n+|[;；](?![^()]*\))|(?<=[.!?。！？])\s+(?!\d)|<br\s*/?>|</?p\b[^>]*>|(?=\bNote:?)|(?<=false)(?=Note))', re.I)
 NON_RATE = re.compile(r'products that cost|sort by|(?:minimum|maximum) price of|price per contract|price_centicents|YES at|NO at|shares redeem', re.I)
+# The space before the parenthetical goes with it, so no "item ." remains.
 PRICE_PARENTHETICAL = re.compile(
-    r'\(\s*(?:US)?\$\s*\d+(?:\.\d+)?(?:\s*/\s*(?:request|call)(?:[^()\n]*))?\s*\)', re.I)
+    r'[ \t]*\(\s*(?:US)?\$\s*\d+(?:\.\d+)?(?:\s*/\s*(?:request|call)(?:[^()\n]*))?\s*\)', re.I)
+# A sentence that is only a billing statement once its amount is removed.
+BILLING_ONLY = re.compile(r'\W*(?:billed|charged|priced)\b', re.I)
 CONDITIONAL_SURCHARGE = re.compile(
     r'\byou will be (?:charged|billed) (?:extra\s+)?(?:' + MONEY.pattern + r')(?:\s+extra)?', re.I)
 
@@ -132,7 +153,16 @@ def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
                 # limits or other caller instructions with it.
                 without_rate, count = PRICE_PARENTHETICAL.subn('', part)
                 if count and not MONEY.search(without_rate):
-                    parts[j] = without_rate.rstrip()
+                    if BILLING_ONLY.match(without_rate):
+                        # "Billed as a posts read ($0.005)." says nothing once
+                        # its amount is gone: drop the sentence and its spacing.
+                        parts[j] = ''
+                        if j + 1 < len(parts) and parts[j + 1].strip(' \t') == '':
+                            parts[j + 1] = ''
+                        elif j > 0 and parts[j - 1].strip(' \t') == '':
+                            parts[j - 1] = ''
+                    else:
+                        parts[j] = without_rate.rstrip()
                     changed = True
                     continue
                 # A price-only bullet under a Price heading has its unit in the

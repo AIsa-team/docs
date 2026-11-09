@@ -32,6 +32,10 @@ It then generates a visible price paragraph in each operation description and
 the English/Chinese page cost block from that same metadata. Fixed-success
 pricing shows a reference price per successful request; usage-based pricing
 shows a default request estimate, plus the declared unit rate when available.
+Native operation kinds: `no_customer_charge` shows "No charge."; a
+`fixed_request` with an integer `customer_micros_usd` (no `variants`, no
+resource-read `cache_hit_share_bps`) shows that reference price per successful
+request; a `metered_event` shows Runtime's own per-event pricing description.
 Unknown prices are labeled unavailable, never zero. The paragraph is replaced
 on every generation, so a later Runtime price update also updates the prose.
 Provider sources and source review receipts remain unchanged. JSON examples,
