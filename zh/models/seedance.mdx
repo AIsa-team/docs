@@ -2,15 +2,12 @@
 title: "Seedance API - 通过 AIsa 访问即梦 Seedance 视频模型"
 sidebarTitle: "Seedance"
 description: >-
-  字节跳动即梦 Seedance 视频模型 ID 和端点指南；支持 OpenAI 风格接口，以及兼容官方 Ark SDK 的 ModelArk（Ark）原生协议。
+  字节跳动即梦 Seedance 视频模型 ID 指南；接口兼容 BytePlus ModelArk（Ark）官方视频生成 API。
 ---
 
-AIsa 通过字节跳动官方的国际企业平台 BytePlus 路由即梦 Seedance 视频模型。你可以使用一个 AIsa API Key，和其他模型一起调用 Seedance。
+AIsa 通过字节跳动官方的国际企业平台 BytePlus 路由即梦 Seedance 视频模型。
 
-Seedance 是异步视频生成模型。有两种调用方式：
-
-- **AIsa 视频接口**：`POST /v1/video/generations`，再轮询 `GET /v1/video/generations/{task_id}`。AIsa 上所有视频模型都用这套接口。
-- **Ark 协议**：与 BytePlus ModelArk（Ark）官方一致的请求和返回格式，官方 Ark SDK 和已有的 Ark 代码只需改 base URL 和 API Key 即可使用。见 [Ark 协议](#ark-协议)。
+AIsa 兼容 BytePlus ModelArk（Ark）官方视频生成 API：官方 Ark SDK 和已有的 Ark 代码只需改 base URL 和 API Key 即可使用。Seedance 也可以通过 AIsa 视频接口 `POST /v1/video/generations` 调用。
 
 ## 支持的 Seedance 模型
 
@@ -24,41 +21,17 @@ Seedance 是异步视频生成模型。有两种调用方式：
 
 这些模型的当前价格见 [aisa.one/models](https://aisa.one/models)。
 
-模型 ID 中的日期后缀是 `YYMMDD` 格式的版本标记，适合在生产环境中固定版本。
-
-## AIsa 视频接口
-
-```bash
-curl https://api.aisa.one/v1/video/generations \
-  -H "Authorization: Bearer $AISA_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "dreamina-seedance-2-0-fast-260128",
-    "prompt": "日出时分，一只纸船漂过平静的湖面",
-    "duration": 5
-  }'
-```
-
-返回中包含任务 `id`。轮询 `GET /v1/video/generations/{task_id}`，直到 `status` 为 `completed` 或 `failed`。见[创建视频生成任务](/zh/api-reference/media-generation/createVideoGeneration)和[查询视频生成任务](/zh/api-reference/media-generation/retrieveVideoGeneration)。
-
-## Ark 协议
-
-AIsa 以 BytePlus ModelArk（Ark）内容生成任务协议提供 Seedance 模型。路径、请求体和返回体都与官方一致，AIsa 只在路径前加了前缀。
+## 兼容官方 Ark API
 
 | | 官方 ModelArk | AIsa |
 | --- | --- | --- |
 | Base URL | `https://ark.ap-southeast.bytepluses.com/api/v3` | `https://api.aisa.one/v1/ark/api/v3` |
-| 创建任务 | `POST /contents/generations/tasks` | AIsa base URL 下的相同路径 |
-| 查询任务 | `GET /contents/generations/tasks/{id}` | AIsa base URL 下的相同路径 |
-| API Key | ModelArk API Key | AIsa API Key，放在 `Authorization: Bearer` 中 |
+| API Key | ModelArk API Key | AIsa API Key |
 
-请使用上表中的 BytePlus 模型 ID。不接受推理接入点 ID（`ep-...`）和火山方舟模型名（`doubao-seedance-...`）。
-
-### 官方 Ark SDK
+路径、请求体和返回体都与官方一致，见 [ModelArk 视频生成 API](https://docs.byteplus.com/zh-CN/docs/ModelArk/Video_Generation_API)。请使用上表中的 BytePlus 模型 ID。
 
 ```python
 import os
-import time
 
 from byteplussdkarkruntime import Ark
 
@@ -67,70 +40,12 @@ client = Ark(base_url="https://api.aisa.one/v1/ark/api/v3", api_key=os.environ["
 task = client.content_generation.tasks.create(
     model="dreamina-seedance-2-0-fast-260128",
     content=[{"type": "text", "text": "日出时分，一只纸船漂过平静的湖面"}],
-    resolution="720p",
-    ratio="16:9",
-    duration=5,
 )
-
-while True:
-    result = client.content_generation.tasks.get(task_id=task.id)
-    if result.status in ("succeeded", "failed", "cancelled"):
-        break
-    time.sleep(10)
-
-print(result.status, result.content.video_url if result.status == "succeeded" else result.error)
+result = client.content_generation.tasks.get(task_id=task.id)
+print(result.status)
 ```
 
-火山引擎 SDK（`volcenginesdkarkruntime.Ark`）用法相同，把 base URL 换成 AIsa 的即可。
-
-### HTTP
-
-```bash
-curl https://api.aisa.one/v1/ark/api/v3/contents/generations/tasks \
-  -H "Authorization: Bearer $AISA_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "dreamina-seedance-2-0-fast-260128",
-    "content": [{"type": "text", "text": "日出时分，一只纸船漂过平静的湖面"}],
-    "resolution": "720p",
-    "ratio": "16:9",
-    "duration": 5
-  }'
-```
-
-```json
-{"id": "video_task_..."}
-```
-
-```bash
-curl https://api.aisa.one/v1/ark/api/v3/contents/generations/tasks/video_task_... \
-  -H "Authorization: Bearer $AISA_API_KEY"
-```
-
-查询返回 ModelArk 任务对象：`status` 为 `queued`、`running`、`succeeded` 或 `failed`；成功的任务带 `content.video_url` 和 `usage`。费用确定后，返回还会带 `X-AISA-Customer-Cost-Micros-USD` header。
-
-### 草稿视频
-
-先用 `"draft": true` 生成草稿，再在正式视频的 `content[].draft_task.id` 中引用它，填写草稿的 AIsa 任务 ID。只能引用你自己已成功的草稿。正式视频会在生成草稿的同一上游账号上生成，并沿用你未填写的草稿参数和输入素材，计费也按沿用后的参数计算。
-
-### 与官方 API 的差异
-
-- **任务 ID** 是 AIsa 的任务 ID（`video_task_...`），SDK 把它当作不透明字符串处理。两种调用方式创建的任务，在两边都能查询。
-- **回调**：不支持 `callback_url`，会返回 `400`（`unsupported_parameter`），请改为轮询任务。
-- **素材** 必须是公网 URL 或 Base64。你自己 ModelArk 账号下的素材（`asset://...`）无法通过 AIsa 读取。
-- **不支持**：任务列表（`GET /contents/generations/tasks`）、取消或删除任务（`DELETE /contents/generations/tasks/{id}`），这些返回 `501`。
-
-### 错误
-
-错误使用 ModelArk 格式 `{"error": {"code", "message", "type"}}`。上游模型返回了自己的错误码时（例如 `permission_denied`）使用上游的错误码，否则为 AIsa 的错误码，例如 `insufficient_wallet_balance`、`model_not_found`。余额不足返回 `402`。任务创建之后发生的失败还会带任务 `id`；出现时请查询该任务，不要重新提交。
-
-## 常用选择
-
-| 需求 | 使用 |
-| --- | --- |
-| 视频生成 | `dreamina-seedance-2-0-260128` |
-| 更快、更低成本的视频生成 | `dreamina-seedance-2-0-fast-260128` |
-| 最新一代 Seedance | `dreamina-seedance-2-5` |
+暂不支持：`callback_url`（请改为轮询任务），以及任务列表和删除任务。
 
 ## 数据隐私
 

@@ -2,17 +2,12 @@
 title: "Wan API - 通过 AIsa 访问阿里巴巴 Wan 视频和图像模型"
 sidebarTitle: "Wan"
 description: >-
-  阿里巴巴 Wan 模型 ID 和端点指南：wan3.0-video、Wan 2.7 文生、图生和参考生视频，以及 Wan 2.7 图像模型；支持 OpenAI 风格接口，以及兼容官方 DashScope SDK 的 DashScope 原生协议。
+  阿里巴巴 Wan 模型 ID 指南，包括 wan3.0-video 和 Wan 2.7；视频接口兼容 DashScope（阿里云百炼）官方视频生成 API。
 ---
 
-AIsa 是 Alibaba Cloud Key Account Partner。你可以使用一个 AIsa API Key，通过与其他模型相同的网关访问阿里巴巴 Wan 视频和图像模型。
+AIsa 是 Alibaba Cloud Key Account Partner。你可以使用一个 AIsa API Key 访问阿里巴巴 Wan 视频和图像模型。
 
-Wan 视频模型是异步任务，按输出秒数计费。有两种调用方式：
-
-- **AIsa 视频接口**：`POST /v1/video/generations`，再轮询 `GET /v1/video/generations/{task_id}`。AIsa 上所有视频模型都用这套接口。
-- **DashScope 协议**：与阿里云百炼（DashScope）官方一致的请求和返回格式，官方 DashScope SDK 和已有的 DashScope 代码只需改 base URL 和 API Key 即可使用。见 [DashScope 协议](#dashscope-协议)。
-
-Wan 图像模型使用 `POST /v1/images/generations` 和 `POST /v1/images/edits`，按请求计费。
+Wan 视频兼容 DashScope（阿里云百炼）官方 API：官方 DashScope SDK 和已有的 DashScope 代码只需改 base URL 和 API Key 即可使用。Wan 视频也可以通过 AIsa 视频接口 `POST /v1/video/generations` 调用。Wan 图像模型使用 `POST /v1/images/generations` 和 `POST /v1/images/edits`。
 
 ## 支持的 Wan 模型
 
@@ -29,49 +24,16 @@ Wan 图像模型使用 `POST /v1/images/generations` 和 `POST /v1/images/edits`
 
 这些模型的当前价格见 [aisa.one/models](https://aisa.one/models)。
 
-`wan3.0-video` 是一个统一的视频模型，支持文生视频、首帧和首尾帧图生视频、参考生视频（图片、视频片段和音频）、视频编辑和视频续写，最长输出 30 秒。Wan 2.7 视频模型按输入拆分：`t2v` 是文生视频，`i2v` 是图生视频（包括首尾帧），`r2v` 是参考生视频。
+`wan3.0-video` 是一个统一的视频模型，支持文生视频、首帧和首尾帧图生视频、参考生视频、视频编辑和视频续写，最长输出 30 秒。Wan 2.7 视频模型按输入拆分：`t2v` 文生视频，`i2v` 图生视频，`r2v` 参考生视频。
 
-## 分辨率和 size
-
-`wan3.0-video` 和 Wan 2.7 视频模型（`wan2.7-t2v`、`wan2.7-i2v`、`wan2.7-r2v`）用 `resolution`（`wan3.0-video` 支持 `480P`，以及 `720P`、`1080P`）和 `ratio` 控制输出尺寸。默认分辨率取决于调用方式，并按默认分辨率计费：
-
-| 调用方式 | 默认 `resolution` |
-| --- | --- |
-| AIsa 视频接口（`/v1/video/generations`） | `720P` |
-| DashScope 协议 | `1080P`，与官方默认一致 |
-
-如果希望两种方式输出相同，请显式传 `resolution`。对这些模型的请求如果带 `size`，会在扣费之前返回 `400`：这些模型不按 `size` 决定输出分辨率，计费无法和生成结果对应。
-
-## AIsa 视频接口
-
-```bash
-curl https://api.aisa.one/v1/video/generations \
-  -H "Authorization: Bearer $AISA_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "wan3.0-video",
-    "prompt": "日出时分，一只纸船漂过平静的湖面",
-    "resolution": "720P",
-    "duration": 5
-  }'
-```
-
-返回中包含任务 `id`。轮询 `GET /v1/video/generations/{task_id}`，直到 `status` 为 `completed` 或 `failed`；完成的任务包含视频地址。见[创建视频生成任务](/zh/api-reference/media-generation/createVideoGeneration)和[查询视频生成任务](/zh/api-reference/media-generation/retrieveVideoGeneration)。
-
-## DashScope 协议
-
-AIsa 以 DashScope（阿里云百炼）异步任务协议提供 Wan 视频模型。路径、请求体、返回体和错误码都与官方一致，AIsa 只在路径前加了前缀。
+## 兼容官方 DashScope API
 
 | | 官方 DashScope | AIsa |
 | --- | --- | --- |
-| Base URL | `https://dashscope-intl.aliyuncs.com/api/v1` 或 `https://dashscope.aliyuncs.com/api/v1` | `https://api.aisa.one/v1/dashscope/api/v1` |
-| 创建任务 | `POST /services/aigc/video-generation/video-synthesis` | AIsa base URL 下的相同路径 |
-| 查询任务 | `GET /tasks/{task_id}` | AIsa base URL 下的相同路径 |
-| API Key | 百炼 API Key | AIsa API Key，放在 `Authorization: Bearer` 中 |
+| Base URL | `https://dashscope.aliyuncs.com/api/v1` 或 `https://dashscope-intl.aliyuncs.com/api/v1` | `https://api.aisa.one/v1/dashscope/api/v1` |
+| API Key | 百炼 API Key | AIsa API Key |
 
-DashScope 协议支持上表中的 Wan 视频模型（`wan3.0-video`、`wan2.7-t2v`、`wan2.7-i2v`、`wan2.7-r2v`）。Wan 图像模型通过 `/v1/images/generations` 和 `/v1/images/edits` 调用。
-
-### 官方 DashScope SDK
+路径、请求体、返回体和错误码都与官方一致，见 [Wan 视频生成 API](https://help.aliyun.com/zh/model-studio/video-generate-edit-model/)。适用于 Wan 视频模型：`wan3.0-video`、`wan2.7-t2v`、`wan2.7-i2v` 和 `wan2.7-r2v`。
 
 ```python
 import os
@@ -85,84 +47,23 @@ dashscope.api_key = os.environ["AISA_API_KEY"]
 task = VideoSynthesis.async_call(
     model="wan3.0-video",
     prompt="日出时分，一只纸船漂过平静的湖面",
-    resolution="720P",
-    duration=5,
 )
 result = VideoSynthesis.wait(task)
 print(result.output.task_status, result.output.video_url)
 ```
 
-用 `wan2.7-i2v` 或 `wan3.0-video` 做首尾帧：
+暂不支持：任务列表、取消任务和临时文件上传。图片、视频和音频请使用公网 URL（图片也可以用 Base64）；`oss://` 临时文件和本地文件（`file://`）不可用。
 
-```python
-task = VideoSynthesis.async_call(
-    model="wan2.7-i2v",
-    prompt="小猫慢慢转头看向镜头",
-    media=[
-        {"type": "first_frame", "url": "https://example.com/first.png"},
-        {"type": "last_frame", "url": "https://example.com/last.png"},
-    ],
-    resolution="720P",
-    duration=5,
-)
-```
+## 分辨率
 
-### HTTP
-
-```bash
-curl https://api.aisa.one/v1/dashscope/api/v1/services/aigc/video-generation/video-synthesis \
-  -H "Authorization: Bearer $AISA_API_KEY" \
-  -H "Content-Type: application/json" \
-  -H "X-DashScope-Async: enable" \
-  -d '{
-    "model": "wan3.0-video",
-    "input": {"prompt": "日出时分，一只纸船漂过平静的湖面"},
-    "parameters": {"resolution": "720P", "ratio": "16:9", "duration": 5}
-  }'
-```
-
-```json
-{"request_id": "...", "output": {"task_id": "video_task_...", "task_status": "PENDING"}}
-```
-
-```bash
-curl https://api.aisa.one/v1/dashscope/api/v1/tasks/video_task_... \
-  -H "Authorization: Bearer $AISA_API_KEY"
-```
-
-查询返回 DashScope 任务对象：`output.task_status` 依次为 `PENDING`、`RUNNING`，最后是 `SUCCEEDED` 或 `FAILED`；成功的任务带 `output.video_url` 和 `usage`。费用确定后，返回还会带 `X-AISA-Customer-Cost-Micros-USD` header。
-
-### 与官方 API 的差异
-
-- **任务 ID** 是 AIsa 的任务 ID（`video_task_...`），SDK 把它当作不透明字符串处理。两种调用方式创建的任务，在两边都能查询。
-- **查不到的任务 ID** 返回 `200`，`task_status` 为 `UNKNOWN`，与官方一致。其他账号创建的任务也是如此。
-- **素材** 必须是公网 URL（图片也可以用 Base64）。百炼临时文件（`oss://` 地址）只属于上传它的账号，无法通过 AIsa 读取；因此给 SDK 传本地文件（`file://`，SDK 会先把它上传为临时文件）不可用。
-- **不支持**：任务列表（`GET /tasks`）、取消任务（`POST /tasks/{task_id}/cancel`）和临时文件上传（`GET /uploads`），这些返回 `400`，错误码为 `UnsupportedOperation`。
-- **默认分辨率** 为官方默认的 `1080P`，并按此计费。见[分辨率和 size](#分辨率和-size)。
-
-### 错误
-
-错误使用官方格式 `{"request_id", "code", "message"}`，错误码和 HTTP 状态码与官方一致。模型自身返回的错误（例如 `DataInspectionFailed`）原样返回。任务创建之后发生的失败还会带 `output.task_id`；出现时请查询该任务，不要重新提交。
-
-| 状态码 | 错误码 | 含义 |
-| --- | --- | --- |
-| 400 | `InvalidParameter` | 请求无效，包括对 Wan 2.7 或 Wan 3.0 传 `size`，或使用该协议不支持的模型 |
-| 400 | `UnsupportedOperation` | 任务列表、取消或临时文件上传 |
-| 401 | `InvalidApiKey` | 缺少 AIsa API Key 或 Key 无效 |
-| 403 | `Arrearage` | 余额不足 |
-| 403 | `AccessDenied` | 该 API Key 无权使用此模型 |
-| 404 | `ModelNotFound` | 模型不存在 |
-| 429 | `Throttling.RateQuota` | 触发限流 |
-| 5xx | `InternalError` | 临时故障；请重试，或在带 `output.task_id` 时查询该任务 |
+默认分辨率取决于调用方式，并按默认分辨率计费：DashScope API 为 `1080P`，与官方一致；AIsa 视频接口为 `720P`。可通过 `resolution` 指定。对 Wan 3.0 和 Wan 2.7 的请求如果带 `size`，会在扣费之前被拒绝，因为这些模型不按 `size` 决定输出分辨率。
 
 ## 常用选择
 
 | 需求 | 使用 |
 | --- | --- |
 | 一个模型覆盖所有视频输入，最长 30 秒 | `wan3.0-video` |
-| 文生视频 | `wan3.0-video` 或 `wan2.7-t2v` |
-| 图生视频，包括首尾帧 | `wan3.0-video` 或 `wan2.7-i2v` |
-| 参考生视频 | `wan3.0-video` 或 `wan2.7-r2v` |
+| 文生、图生或参考生视频 | `wan2.7-t2v`、`wan2.7-i2v` 或 `wan2.7-r2v` |
 | 图像生成/编辑 | `wan2.7-image-pro` 或 `wan2.7-image` |
 
 ## 数据隐私

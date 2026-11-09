@@ -1,18 +1,13 @@
 ---
 title: Wan API - Access Alibaba Wan Video and Image Models via AIsa
 description: >-
-  AIsa guide to Alibaba Wan model IDs and endpoints: wan3.0-video, Wan 2.7 text-, image- and reference-to-video, and Wan
-  2.7 image models, with the OpenAI-style API and the native DashScope protocol for the official DashScope SDK.
+  AIsa guide to Alibaba Wan model IDs, including wan3.0-video and Wan 2.7, with an API compatible with the official
+  DashScope (Alibaba Cloud Model Studio) video generation API.
 sidebarTitle: Wan
 ---
-AIsa is an Alibaba Cloud Key Account Partner. Use one AIsa API key to access Alibaba Wan video and image models through the same gateway as your other models.
+AIsa is an Alibaba Cloud Key Account Partner. Use one AIsa API key to access Alibaba Wan video and image models.
 
-Wan video models are asynchronous and billed per output second. You can call them two ways:
-
-- **AIsa video API**: `POST /v1/video/generations`, then poll `GET /v1/video/generations/{task_id}`. The same API serves every video model on AIsa.
-- **DashScope protocol**: the request and response formats of Alibaba Cloud Model Studio (DashScope), so the official DashScope SDK and existing DashScope code work after changing only the base URL and API key. See [DashScope protocol](#dashscope-protocol).
-
-Wan image models use `POST /v1/images/generations` and `POST /v1/images/edits` and are billed per request.
+For Wan video, AIsa is compatible with the official DashScope (Alibaba Cloud Model Studio) API: the official DashScope SDK and existing DashScope code work after changing only the base URL and API key. Wan video is also available through the AIsa video API, `POST /v1/video/generations`. Wan image models use `POST /v1/images/generations` and `POST /v1/images/edits`.
 
 ## Supported Wan models
 
@@ -29,49 +24,16 @@ Wan image models use `POST /v1/images/generations` and `POST /v1/images/edits` a
 
 Current prices for these models are on [aisa.one/models](https://aisa.one/models).
 
-`wan3.0-video` is a single model for text-to-video, first-frame and first-and-last-frame image-to-video, reference-to-video (images, video clips and audio), video editing and video extension, with output up to 30 seconds. The Wan 2.7 video models are split by input: `t2v` is text-to-video, `i2v` is image-to-video (including first and last frame), and `r2v` is reference-to-video.
+`wan3.0-video` is a single model for text-to-video, first-frame and first-and-last-frame image-to-video, reference-to-video, video editing and video extension, with output up to 30 seconds. The Wan 2.7 video models are split by input: `t2v` text-to-video, `i2v` image-to-video, `r2v` reference-to-video.
 
-## Resolution and size
-
-`wan3.0-video` and the Wan 2.7 video models (`wan2.7-t2v`, `wan2.7-i2v`, `wan2.7-r2v`) set the output size with `resolution` (`480P` for `wan3.0-video`, `720P`, `1080P`) and `ratio`. The default resolution depends on the API, and the default is what you are billed for:
-
-| API | Default `resolution` |
-| --- | --- |
-| AIsa video API (`/v1/video/generations`) | `720P` |
-| DashScope protocol | `1080P`, the official default |
-
-Set `resolution` explicitly to get the same output on both. Requests to these models that include `size` are rejected with `400` before anything is charged: the models do not use `size` to choose the output resolution, so the charge could not match the video.
-
-## AIsa video API
-
-```bash
-curl https://api.aisa.one/v1/video/generations \
-  -H "Authorization: Bearer $AISA_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "wan3.0-video",
-    "prompt": "A paper boat drifting across a calm lake at sunrise",
-    "resolution": "720P",
-    "duration": 5
-  }'
-```
-
-The response contains the task `id`. Poll `GET /v1/video/generations/{task_id}` until `status` is `completed` or `failed`; a completed task includes the video URL. See [Create a video generation task](/api-reference/media-generation/createVideoGeneration) and [Retrieve a video generation task](/api-reference/media-generation/retrieveVideoGeneration).
-
-## DashScope protocol
-
-AIsa serves the Wan video models in the DashScope (Alibaba Cloud Model Studio) asynchronous task protocol. Paths, request bodies, responses and error codes follow the official API; AIsa adds a path prefix.
+## Official DashScope API compatibility
 
 | | Official DashScope | AIsa |
 | --- | --- | --- |
-| Base URL | `https://dashscope-intl.aliyuncs.com/api/v1` or `https://dashscope.aliyuncs.com/api/v1` | `https://api.aisa.one/v1/dashscope/api/v1` |
-| Create task | `POST /services/aigc/video-generation/video-synthesis` | Same path under the AIsa base URL |
-| Query task | `GET /tasks/{task_id}` | Same path under the AIsa base URL |
-| API key | Model Studio API key | AIsa API key, as `Authorization: Bearer` |
+| Base URL | `https://dashscope-intl.aliyuncs.com/api/v1` | `https://api.aisa.one/v1/dashscope/api/v1` |
+| API key | Model Studio API key | AIsa API key |
 
-The DashScope protocol serves the Wan video models in the table above (`wan3.0-video`, `wan2.7-t2v`, `wan2.7-i2v`, `wan2.7-r2v`). Wan image models are called through `/v1/images/generations` and `/v1/images/edits`.
-
-### Official DashScope SDK
+Paths, request bodies, responses and error codes are the official ones; see the [Wan video generation API](https://www.alibabacloud.com/help/en/model-studio/video-generate-edit-model/). This covers the Wan video models: `wan3.0-video`, `wan2.7-t2v`, `wan2.7-i2v` and `wan2.7-r2v`.
 
 ```python
 import os
@@ -85,84 +47,23 @@ dashscope.api_key = os.environ["AISA_API_KEY"]
 task = VideoSynthesis.async_call(
     model="wan3.0-video",
     prompt="A paper boat drifting across a calm lake at sunrise",
-    resolution="720P",
-    duration=5,
 )
 result = VideoSynthesis.wait(task)
 print(result.output.task_status, result.output.video_url)
 ```
 
-First and last frame with `wan2.7-i2v` or `wan3.0-video`:
+Not supported: listing and cancelling tasks, and temporary file uploads. Pass images, video and audio as public URLs (images can also be Base64); `oss://` temporary files and local files (`file://`) do not work.
 
-```python
-task = VideoSynthesis.async_call(
-    model="wan2.7-i2v",
-    prompt="The cat slowly turns to look at the camera",
-    media=[
-        {"type": "first_frame", "url": "https://example.com/first.png"},
-        {"type": "last_frame", "url": "https://example.com/last.png"},
-    ],
-    resolution="720P",
-    duration=5,
-)
-```
+## Resolution
 
-### HTTP
-
-```bash
-curl https://api.aisa.one/v1/dashscope/api/v1/services/aigc/video-generation/video-synthesis \
-  -H "Authorization: Bearer $AISA_API_KEY" \
-  -H "Content-Type: application/json" \
-  -H "X-DashScope-Async: enable" \
-  -d '{
-    "model": "wan3.0-video",
-    "input": {"prompt": "A paper boat drifting across a calm lake at sunrise"},
-    "parameters": {"resolution": "720P", "ratio": "16:9", "duration": 5}
-  }'
-```
-
-```json
-{"request_id": "...", "output": {"task_id": "video_task_...", "task_status": "PENDING"}}
-```
-
-```bash
-curl https://api.aisa.one/v1/dashscope/api/v1/tasks/video_task_... \
-  -H "Authorization: Bearer $AISA_API_KEY"
-```
-
-The query returns the DashScope task object: `output.task_status` moves through `PENDING` and `RUNNING` to `SUCCEEDED` or `FAILED`, and a succeeded task has `output.video_url` and `usage`. Once the charge is final, the response also carries the `X-AISA-Customer-Cost-Micros-USD` header.
-
-### Differences from the official API
-
-- **Task IDs** are AIsa task IDs (`video_task_...`). The SDK treats them as opaque strings. A task created on either API can be queried on both.
-- **Unknown task IDs** return `200` with `task_status` `UNKNOWN`, as the official API does. This includes tasks created by another account.
-- **Resources** must be public URLs (images can also be Base64). Model Studio temporary files (`oss://` URLs) belong to the account that uploaded them and cannot be read through AIsa, so passing a local file to the SDK (`file://`), which uploads it as a temporary file first, does not work.
-- **Not supported**: listing tasks (`GET /tasks`), cancelling tasks (`POST /tasks/{task_id}/cancel`) and temporary file uploads (`GET /uploads`). These return `400` with code `UnsupportedOperation`.
-- **Default resolution** is the official default, `1080P`, and is billed as such. See [Resolution and size](#resolution-and-size).
-
-### Errors
-
-Errors use the official body, `{"request_id", "code", "message"}`, with official codes and HTTP statuses. A model's own error, such as `DataInspectionFailed`, is returned as the model reported it. A failure after the task was created also carries `output.task_id`; when it does, query that task instead of submitting the request again.
-
-| Status | Code | Meaning |
-| --- | --- | --- |
-| 400 | `InvalidParameter` | Invalid request, including `size` on Wan 2.7 or Wan 3.0, or a model this protocol does not serve |
-| 400 | `UnsupportedOperation` | Task listing, cancellation or temporary upload |
-| 401 | `InvalidApiKey` | Missing or invalid AIsa API key |
-| 403 | `Arrearage` | Insufficient balance |
-| 403 | `AccessDenied` | The API key cannot use this model |
-| 404 | `ModelNotFound` | Unknown model |
-| 429 | `Throttling.RateQuota` | Rate limited |
-| 5xx | `InternalError` | Temporary failure; retry, or query `output.task_id` when present |
+The default resolution follows the API you call and is what you are billed for: `1080P` on the DashScope API, as on the official API, and `720P` on the AIsa video API. Set `resolution` to choose it. Wan 3.0 and Wan 2.7 requests that include `size` are rejected before anything is charged, because these models do not use `size` to choose the output resolution.
 
 ## Common choices
 
 | Need | Use |
 | --- | --- |
 | One model for every video input, up to 30 seconds | `wan3.0-video` |
-| Text-to-video | `wan3.0-video` or `wan2.7-t2v` |
-| Image-to-video, including first and last frame | `wan3.0-video` or `wan2.7-i2v` |
-| Reference-to-video | `wan3.0-video` or `wan2.7-r2v` |
+| Text-, image- or reference-to-video | `wan2.7-t2v`, `wan2.7-i2v`, or `wan2.7-r2v` |
 | Image generation/editing | `wan2.7-image-pro` or `wan2.7-image` |
 
 ## Data privacy
