@@ -411,14 +411,20 @@ def load_spec(filepath):
         return source_json_load(f)
 
 
+# Production reference pages bind the same provider document under
+# reference-contracts/; like pull_openapi.existing_page_references, they are
+# still that operation's page, and the Runtime aggregate links to them.
+PAGE_BINDING = re.compile(
+    r"^openapi:\s*['\"]?((?:openapi|reference-contracts)/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", re.M)
+
+
 def endpoint_page_links(root=None):
-    from contract_page_links import page_reference
     root = Path(root) if root is not None else Path(OPENAPI_DIR).parent
     links = {}
     for page in sorted((root / "api-reference").rglob("*.mdx")):
-        reference = page_reference(page.read_text())
-        if reference:
-            spec, method, path = reference
+        match = PAGE_BINDING.search(page.read_text())
+        if match:
+            spec, method, path = match[1], match[2].lower(), match[3]
             key = (Path(spec).name, method, path)
             links.setdefault(key, "https://aisa.one/docs/" + page.relative_to(root).with_suffix("").as_posix())
     return links
