@@ -7,7 +7,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from pricing_prose import (clean_text, clean_document, clean_page, pricing_summary, strip_price_summary,
-                           add_price_summary, markdown_safe, PRICE_SUMMARY, LEGACY_PRICE_BEGIN, LEGACY_PRICE_END, NOTICE)
+                           add_price_summary, markdown_safe, SETTLEMENT, NO_CHARGE, LEGACY_PRICE_BEGIN,
+                           LEGACY_PRICE_END, NOTICE)
 from compose_openapi import compose
 from test_runtime_contracts import facts, operation, mirror
 
@@ -31,7 +32,7 @@ class PricingProseTests(unittest.TestCase):
         localized = localize_tree(document, {'entries': {}}, allow_untranslated=True)
         self.assertIn('每次成功请求 $0.08 USD', operation(localized)['description'])
         self.assertNotIn('<!--', operation(localized)['description'])
-        self.assertEqual(len(PRICE_SUMMARY.findall(operation(localized)['description'])), 1)
+        self.assertEqual(operation(localized)['description'].count(SETTLEMENT['zh']), 1)
         self.assertIn('每次成功请求 $0.08 USD', readable_block(public, 'zh'))
         sales = project_sales_catalog(document, 'a' * 64)['document']
         self.assertEqual(operation(sales)['description'], public['description'])
@@ -41,7 +42,7 @@ class PricingProseTests(unittest.TestCase):
         description = operation(updated)['description']
         self.assertIn('$0.12 USD', description)
         self.assertNotIn('$0.08', description)
-        self.assertEqual(len(PRICE_SUMMARY.findall(description)), 1)
+        self.assertEqual(description.count(SETTLEMENT['en']), 1)
         self.assertNotIn('<!--', description)
         operation(updated).pop('x-aisa-pricing')
         self.assertNotIn('$0.12', operation(clean_document(updated))['description'])
@@ -235,7 +236,7 @@ class PricingProseTests(unittest.TestCase):
         # An explicit Runtime estimate keeps its existing label.
         self.assertIn('Default request estimate: $0.1 USD (not a fixed price)', pricing_summary(
             {'kind': 'fixed_request', 'default_request_estimate_usd': .1, 'estimate_source': 'configured_fixed_price'}))
-        stale = PRICE_BEGIN + '\n' + unavailable + '; use a request quote where supported. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->'
+        stale = LEGACY_PRICE_BEGIN + '\n' + unavailable + '; use a request quote where supported. Account-specific pricing and final settlement may differ.\n' + LEGACY_PRICE_END
         paid = {'kind': 'fixed_request', 'customer_micros_usd': 15000, 'customer_pricing_ref': 'social.x.v1.pricing@1'}
         for pricing, expected in ((free, 'No charge.'), (paid, 'Published reference price: $0.015 USD per successful request.')):
             with self.subTest(pricing=pricing):
@@ -244,7 +245,8 @@ class PricingProseTests(unittest.TestCase):
                 description = result['paths']['/social']['get']['description']
                 self.assertIn(expected, description)
                 self.assertNotIn(unavailable, description)
-                self.assertEqual(description.count(PRICE_BEGIN), 1)
+                self.assertEqual(description, 'Lead.\n\n' + pricing_summary(pricing))
+                self.assertNotIn('aisa-pricing:', description)
                 self.assertEqual(result['paths']['/social']['get']['x-aisa-pricing'], pricing)
                 self.assertEqual(clean_document(result), result)
 
@@ -278,7 +280,7 @@ class PricingProseTests(unittest.TestCase):
         block = readable_block({'x-aisa-pricing': pricing})
         self.assertIn('`social.post.published:<platform>`', block)
 
-    def test_generated_paragraph_has_no_markup_and_is_replaced_by_its_own_wording(self):
+    def test_generated_paragraph_has_no_markup_and_is_replaced_on_every_run(self):
         # Mintlify shows an operation description as the page subtitle when the
         # page has no frontmatter description; HTML comments appear there as text.
         variants = [
@@ -289,28 +291,51 @@ class PricingProseTests(unittest.TestCase):
             {'default_request_estimate_usd': .08},
             {'default_request_estimate_usd': .08, 'reference_unavailable': True},
             {'estimate_source': 'unavailable', 'unit_rate_usd': .5, 'unit': 'row'},
+            {'kind': 'no_customer_charge', 'description': 'Included with your connected social accounts.'},
+            {'kind': 'fixed_request', 'customer_micros_usd': 15000},
+            {'kind': 'unpriced', 'description': 'No price is published for this operation yet.'},
+            {'kind': 'metered_event', 'meter': 'social.post.published',
+             'description': 'Publication is metered under social.post.published:<platform>.\n\nAn X post costs $0.015; any other platform costs $0.01.'},
         ]
         for language in ('en', 'zh'):
             for pricing in variants:
                 with self.subTest(language=language, pricing=pricing):
                     summary = pricing_summary(pricing, language)
-                    self.assertRegex(summary, PRICE_SUMMARY)
-                    self.assertIsNotNone(PRICE_SUMMARY.fullmatch(summary))
-                    self.assertNotIn('<', summary)
+                    self.assertTrue(summary == NO_CHARGE[language] or summary.endswith(SETTLEMENT[language]))
+                    self.assertNotIn('\n', summary)
+                    prose = re.sub(r'`[^`]*`', '', summary)
+                    self.assertNotIn('<', prose)
                     shown = markdown_safe(summary)
-                    self.assertIsNotNone(PRICE_SUMMARY.fullmatch(shown))
-                    # Two unescaped currency signs would render as inline math.
-                    self.assertLessEqual(len(re.findall(r'(?<!\\)\$', shown)), 1)
+                    # Two unescaped currency signs outside inline code would render as inline math.
+                    self.assertLessEqual(len(re.findall(r'(?<!\\)\$', re.sub(r'`[^`]*`', '', shown))), 1)
+                    self.assertEqual(re.findall(r'`[^`]*`', shown), re.findall(r'`[^`]*`', summary))
                     for lead in ('', 'Lead.\n\n### Return:\n- Data'):
                         op = add_price_summary({'operationId': 'x', 'description': lead, 'x-aisa-pricing': pricing}, language)
                         self.assertEqual(op['description'], (lead + '\n\n' + shown).strip())
                         self.assertEqual(strip_price_summary(op['description']), lead)
                         self.assertEqual(add_price_summary(dict(op), language), op)
 
-    def test_handwritten_price_prose_is_not_mistaken_for_the_generated_paragraph(self):
-        for text in ('Prices vary by plan. Account-specific pricing and final settlement may differ.',
-                     'Lead.\n\nPublished reference price: $0.08 USD per successful request.',
-                     'Published reference price: $0.08 USD per successful request. Account-specific pricing and final settlement may differ.\n\nTrailing note.'):
+    def test_changed_runtime_pricing_replaces_the_previous_paragraph(self):
+        # A metered event paragraph is Runtime's own text, so the previous one is
+        # recognized by its ending even after Runtime rewords it.
+        steps = [{'kind': 'metered_event', 'description': 'An X post costs $0.015.'},
+                 {'kind': 'metered_event', 'description': 'Each target is charged once it is published: $0.02 for X.'},
+                 {'kind': 'no_customer_charge'},
+                 {'cost_contract': 'fixed_success', 'default_request_estimate_usd': .005}]
+        for language in ('en', 'zh'):
+            op = {'operationId': 'x', 'description': 'Lead.'}
+            for pricing in steps:
+                with self.subTest(language=language, pricing=pricing):
+                    op['x-aisa-pricing'] = pricing
+                    add_price_summary(op, language)
+                    self.assertEqual(op['description'], 'Lead.\n\n' + markdown_safe(pricing_summary(pricing, language)))
+
+    def test_only_a_final_generated_paragraph_is_removed(self):
+        for text in ('Lead.\n\nPublished reference price: $0.08 USD per successful request.',
+                     'Published reference price: $0.08 USD per successful request. Account-specific pricing and final settlement may differ.\n\nTrailing note.',
+                     'Lead. No charge.',
+                     'Lead.\n\nNo charge applies to retries.',
+                     'Lead.\n\nNo charge.\n\nTrailing note.'):
             with self.subTest(text=text):
                 self.assertEqual(strip_price_summary(text), text)
 

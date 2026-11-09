@@ -18,25 +18,17 @@ LEGACY_PRICE_BEGIN = '<!-- aisa-pricing:start -->'
 LEGACY_PRICE_END = '<!-- aisa-pricing:end -->'
 LEGACY_PRICE_BLOCK = re.compile(r'\s*' + re.escape(LEGACY_PRICE_BEGIN) + r'.*?' + re.escape(LEGACY_PRICE_END), re.S)
 
-# The generated paragraph is identified by the exact sentences pricing_summary
-# writes, so it needs no visible delimiter. Keep these in step with it.
-_AMOUNT = r'\\?\$\d+(?:\.\d+)?'
-_UNIT = r'[A-Za-z0-9_-]{1,80}'
-PRICE_SUMMARY = re.compile(
-    r'(?:'
-    r'(?:Published reference price: ' + _AMOUNT + r' USD per successful request\.'
-    r'|(?:Usage-based billing; )?Default request estimate: ' + _AMOUNT + r' USD \(not a fixed price\)\.'
-    r'|A request reference price is not currently available; use a request quote where supported\.)'
-    r'(?: Declared unit rate: ' + _AMOUNT + r' USD per ' + _UNIT + r'\.)?'
-    r' Account-specific pricing and final settlement may differ\.'
-    r'|'
-    r'(?:公开参考价格：每次成功请求 ' + _AMOUNT + r' USD。'
-    r'|(?:按用量计费；)?默认请求预估费用：' + _AMOUNT + r' USD（不是固定价格）。'
-    r'|当前未提供请求参考价格；请使用接口支持的报价功能确认费用。)'
-    r'(?: 声明的单位费率：每 ' + _UNIT + r' ' + _AMOUNT + r' USD。)?'
-    r' 最终费用以账户适用价格及实际结算为准。'
-    r')')
-GENERATED_TAIL = re.compile(r'(?:\A|\n\n)[ \t]*' + PRICE_SUMMARY.pattern + r'\s*\Z')
+# pricing_summary ends every paragraph it writes with the settlement sentence,
+# except "No charge.". A metered_event paragraph is Runtime's own wording, so the
+# generated paragraph is recognized by that ending, not by fixed sentences. Only
+# this generator writes these strings, so the description's last paragraph is
+# generated exactly when it is NO_CHARGE or ends with SETTLEMENT.
+SETTLEMENT = {'en': ' Account-specific pricing and final settlement may differ.',
+              'zh': ' 最终费用以账户适用价格及实际结算为准。'}
+NO_CHARGE = {'en': 'No charge.', 'zh': '不收费。'}
+GENERATED_TAIL = re.compile(
+    r'(?:\A|\n\n)[ \t]*(?:' + '|'.join(re.escape(text) for text in NO_CHARGE.values())
+    + r'|[^\n](?:[^\n]|\n(?!\n))*?(?:' + '|'.join(re.escape(text) for text in SETTLEMENT.values()) + r'))\s*\Z')
 
 
 def strip_price_summary(text):
@@ -68,18 +60,20 @@ def pricing_summary(pricing, language='en'):
     if not isinstance(pricing, dict) or not pricing:
         return ''
     zh = language == 'zh'
-    settlement = ' 最终费用以账户适用价格及实际结算为准。' if zh else ' Account-specific pricing and final settlement may differ.'
+    settlement = SETTLEMENT['zh' if zh else 'en']
     kind = pricing.get('kind')
     if kind == 'no_customer_charge':
         # Runtime declares that the operation settles no customer charge.
-        return '不收费。' if zh else 'No charge.'
+        return NO_CHARGE['zh' if zh else 'en']
     event = pricing.get('description')
     if kind == 'metered_event' and isinstance(event, str) and event.strip():
         # Charged per declared event, not per request. Runtime's published
         # description is the only place that states the per-event prices. A
         # placeholder such as social.post.published:<platform> becomes inline
         # code: bare, MDX reads it as a tag and the page subtitle drops it.
-        return PLACEHOLDER_TOKEN.sub(r'`\1`', event.strip()) + settlement
+        # One paragraph, so strip_price_summary can remove all of it next run.
+        event = re.sub(r'\s*\n\s*', ' ', event.strip())
+        return PLACEHOLDER_TOKEN.sub(r'`\1`', event) + settlement
     unavailable = pricing.get('reference_unavailable') or pricing.get('estimate_unavailable_reason') or pricing.get('estimate_source') == 'unavailable'
     estimate = None if unavailable else usd(pricing.get('default_request_estimate_usd'))
     fixed = pricing.get('customer_pricing') == 'fixed_success' or pricing.get('cost_contract') == 'fixed_success'
@@ -107,10 +101,16 @@ def pricing_summary(pricing, language='en'):
     return summary
 
 
+CODE_SPAN_OR_DOLLAR = re.compile(r'(`[^`]*`)|\$')
+
+
 def markdown_safe(summary):
     """Escape paired currency signs, which Mintlify renders as inline math in
-    both page bodies and description subtitles. CommonMark renders \\$ as $."""
-    return summary.replace('$', r'\$') if summary.count('$') >= 2 else summary
+    both page bodies and description subtitles. CommonMark renders \\$ as $.
+    Inline code (event placeholders) is literal, so its contents stay as is."""
+    if sum(1 for match in CODE_SPAN_OR_DOLLAR.finditer(summary) if not match.group(1)) < 2:
+        return summary
+    return CODE_SPAN_OR_DOLLAR.sub(lambda match: match.group(1) or r'\$', summary)
 
 
 def add_price_summary(operation, language='en'):

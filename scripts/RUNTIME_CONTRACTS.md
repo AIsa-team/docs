@@ -41,14 +41,17 @@ In prose that carries a price claim, an upstream "charged/billed once" sentence
 is removed with the price; x-aisa-pricing states AIsa's charge rule.
 Unknown prices are labeled unavailable, never zero. The paragraph is replaced
 on every generation, so a later Runtime price update also updates the prose.
-It is the last paragraph of the description and carries no delimiter:
-`strip_price_summary` recognizes it by the exact sentences `pricing_summary`
-writes (`PRICE_SUMMARY`), so a wording change must update both. Do not wrap it
-in HTML comments. Mintlify shows the operation description as the page subtitle
-when a page has no frontmatter `description`, and prints the comments there as
-text. Earlier `<!-- aisa-pricing:start -->` blocks are still stripped once.
-Paired `$` signs are escaped as `\$` (`markdown_safe`), because Mintlify renders
-`$…$` as inline math in both the subtitle and the page cost block.
+It is one paragraph, the last of the description, and carries no delimiter.
+`strip_price_summary` treats the last paragraph as generated when it is exactly
+`NO_CHARGE` or ends with the `SETTLEMENT` sentence; every other output of
+`pricing_summary` ends with that sentence, including a `metered_event`'s
+Runtime-worded text. A new output must keep one of these two shapes. Do not wrap
+the paragraph in HTML comments. Mintlify shows the operation description as the
+page subtitle when a page has no frontmatter `description`, and prints the
+comments there as text. Earlier `<!-- aisa-pricing:start -->` blocks are still
+stripped once. Paired `$` signs outside inline code are escaped as `\$`
+(`markdown_safe`), because Mintlify renders `$…$` as inline math in both the
+subtitle and the page cost block.
 Provider sources and source review receipts remain unchanged. JSON examples,
 defaults, enums, extension metadata, monetary units, product-price filters, and
 financial transaction amounts are not rate claims and remain intact.
