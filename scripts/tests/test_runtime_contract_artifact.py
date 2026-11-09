@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from unittest.mock import Mock, MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -100,6 +101,30 @@ class CanonicalArtifactTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Canonical acquisition validation differs'):
                 load_runtime(root, artifact_revision=self.revision, compiler_revision=self.compiler,
                              receipt_sha256=fetch.sha(receipt_path.read_bytes()))
+
+    def test_aggregate_above_bundle_member_bound_uses_runtime_role_bound(self):
+        document = native()
+        document['info']['description'] = 'x' * 60000
+        self.contents[contract.AGGREGATE] = encoded(document)
+        self.seal()
+        result = self.acquire()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'acquired'
+            fetch.save(root, result)
+            aggregate = (root / 'contracts/openapi.json').stat().st_size
+            receipt = fetch.sha((root / 'acquisition-receipt.json').read_bytes())
+            self.assertLess(max(path.stat().st_size for path in root.rglob('*.json')
+                                if path.name != 'openapi.json'), 30000)
+            # The complete catalog's aggregate exceeds the 32 MB bundle member
+            # bound; reading the acquired release must use the artifact bound.
+            with patch('schema_input_bundle.MAX_FILE', 30000):
+                facts, _ = load_runtime(root, artifact_revision=self.revision,
+                                        compiler_revision=self.compiler, receipt_sha256=receipt)
+            self.assertIn('index.json', facts)
+            with patch('runtime_contract_artifact.MAX_AGGREGATE', aggregate - 1), \
+                    self.assertRaisesRegex(ValueError, 'size limit|byte limit'):
+                load_runtime(root, artifact_revision=self.revision,
+                             compiler_revision=self.compiler, receipt_sha256=receipt)
 
     def test_fact_only_receipt_has_no_canonical_claim(self):
         revision, compiler, reader, *_ = public_tests.PublicReleaseTests().fixture()
