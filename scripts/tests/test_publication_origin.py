@@ -8,8 +8,6 @@ import unittest
 from unittest.mock import patch
 sys.path[:0] = [str(Path(__file__).resolve().parents[1]), str(Path(__file__).parent)]
 import publication_origin as origin
-from check_contract_revisions import retain_assessment_history, monitor_timing
-from contract_activation import deadline
 import test_contract_publication as fixtures
 
 
@@ -303,21 +301,3 @@ class OriginTests(unittest.TestCase):
         self.assertEqual(selected['expected_docs_ref'], self.ref)
         self.assertEqual(selected['budget_start'], self.receipt['budget_start'])
 
-    def test_legacy_failure_cache_is_retained_without_reclassifying_success(self):
-        legacy = {'checked_at': 1, 'consecutive': {'router:mismatch': 4}}
-        state = retain_assessment_history({}, legacy, {'status':'passed'}, {'docs_ref':'a'*40})
-        self.assertEqual(state['publication_history'][0]['legacy_monitor_state'], legacy)
-        self.assertEqual(state['publication_history'][0]['status'], 'historical_not_reclassified')
-
-    def test_new_publication_retains_prior_failure_and_same_sha_never_resets_budget(self):
-        old_identity = {'docs_ref':'a'*40,'budget_start':self.now.isoformat()}
-        old = {'identity':old_identity,'assessment':{'status':'failed','timing':{'deadline_breached':True}}}
-        previous = {'latest_publication_assessment':old}
-        state = retain_assessment_history({}, previous, {'status':'passed'}, {'docs_ref':'b'*40,'budget_start':self.end.isoformat()})
-        self.assertEqual(state['publication_history'], [old])
-        again = retain_assessment_history({}, state, {'status':'passed'}, state['latest_publication_assessment']['identity'])
-        self.assertEqual(again['publication_history'], [old])
-        # No success cache can extend an already expired unchanged identity.
-        timing = deadline(self.now.isoformat(), 'convergence', self.now+timedelta(hours=5))
-        got, observed = monitor_timing({'status':'passed','checked_at':int((self.now+timedelta(hours=5)).timestamp())}, timing, {}, 'a'*40, 'c'*64)
-        self.assertTrue(got['deadline_breached']); self.assertIsNone(observed)

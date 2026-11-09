@@ -1,7 +1,10 @@
 name: Pull runtime API contracts
 
+# Every 10 minutes: read the live Services contract, and rebuild the Docs
+# mirrors only when its content (or Docs' own generator inputs) changed since
+# the last completed run. A refusal or transient error is reported as a
+# warning and retried on the next tick; runs queue instead of cancelling.
 on:
-  # Dormant until BOTH the tracked plan and operator variable are enabled.
   schedule:
     - cron: '*/10 * * * *'
   workflow_dispatch:
@@ -20,27 +23,62 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  activation-plan:
+  plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 5
     outputs:
-      enabled: ${{ steps.plan.outputs.enabled }}
+      changed: ${{ steps.decide.outputs.changed }}
+      input_key: ${{ steps.live.outputs.input_key }}
     steps:
       - uses: actions/checkout@v4
-      - id: plan
+      - name: Hash the live contract and Docs generator inputs
+        id: live
         run: |
-          python scripts/contract_activation.py > /tmp/activation-plan.json
-          echo "enabled=$(python -c 'import json; print(str(json.load(open("/tmp/activation-plan.json"))["activation_enabled"]).lower())')" >> "$GITHUB_OUTPUT"
+          set +e
+          python scripts/live_contract_plan.py --github-output "$GITHUB_OUTPUT"
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::Live contract unavailable or invalid (exit $status); retrying next tick."
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Look up the last completed run for these inputs
+        id: done
+        if: steps.live.outputs.available == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/pull-openapi-done
+          key: pull-openapi-done-${{ steps.live.outputs.input_key }}
+          lookup-only: true
+      - name: Decide
+        id: decide
+        env:
+          AVAILABLE: ${{ steps.live.outputs.available }}
+          DONE: ${{ steps.done.outputs.cache-hit }}
+          GENERATION: ${{ steps.live.outputs.generation }}
+        run: |
+          if [ "$AVAILABLE" = true ] && [ "$DONE" != true ]; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+            echo "Contract generation $GENERATION or Docs inputs changed; rebuilding mirrors." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo 'No change since the last completed run.' >> "$GITHUB_STEP_SUMMARY"
+          fi
   compose:
-    needs: activation-plan
-    if: github.event_name == 'workflow_dispatch' || (needs.activation-plan.outputs.enabled == 'true' && vars.RUNTIME_CONTRACT_ACTIVATION_ENABLED == 'true')
+    needs: plan
+    if: github.event_name == 'workflow_dispatch' || needs.plan.outputs.changed == 'true'
     runs-on: ubuntu-latest
+    # A scheduled refusal stays a warning (see record); the next tick retries.
+    continue-on-error: ${{ github.event_name == 'schedule' }}
     # Runner headroom for the complete strict graph checks; acceptance remains 1h/4h.
     # The complete catalog (550 providers, ~14,000 projected files) takes about
     # 14 minutes locally across stage, assess and export.
     timeout-minutes: 45
     outputs:
       docs_commit: ${{ steps.publish.outputs.docs_commit }}
+      completed: ${{ steps.completed.outputs.completed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,7 +90,16 @@ jobs:
       - name: Test composition and preservation rules
         run: python -m unittest discover -s scripts/tests -v
       - name: Acquire one complete fresh immutable Runtime release
-        run: python scripts/fetch_runtime_release.py --current --output /tmp/formal-runtime-facts
+        # Transient network errors and a release published mid-read are retried.
+        run: |
+          for attempt in 1 2 3; do
+            rm -rf /tmp/formal-runtime-facts
+            if python scripts/fetch_runtime_release.py --current --output /tmp/formal-runtime-facts; then
+              exit 0
+            fi
+            sleep $((attempt * 20))
+          done
+          exit 1
       - name: Select the verified Runtime publication mode
         id: runtime_mode
         run: |
@@ -239,6 +286,33 @@ jobs:
           fi
           git push origin HEAD:main
           echo "docs_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Mark this input set completed
+        id: completed
+        # Only a run that could publish counts; dry runs and an unavailable
+        # Runtime leave the inputs to be retried.
+        if: github.ref == 'refs/heads/main' && steps.pull.outputs.available == 'true' && (inputs.publish == true || (github.event_name != 'workflow_dispatch' && vars.RUNTIME_CONTRACT_PUBLISH != 'false'))
+        run: echo 'completed=true' >> "$GITHUB_OUTPUT"
+
+  record:
+    needs: [plan, compose]
+    if: always() && needs.plan.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Warn and retry next tick
+        if: needs.compose.outputs.completed != 'true'
+        run: echo "::warning::Contract mirror rebuild did not complete (${{ needs.compose.result }}); the next tick retries."
+      - name: Prepare completion record
+        if: needs.compose.outputs.completed == 'true'
+        env:
+          INPUT_KEY: ${{ needs.plan.outputs.input_key }}
+        run: mkdir -p .cache && echo "$INPUT_KEY" > .cache/pull-openapi-done
+      - name: Remember these inputs as completed
+        if: needs.compose.outputs.completed == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/pull-openapi-done
+          key: pull-openapi-done-${{ needs.plan.outputs.input_key }}
 
   notify-consumers:
     needs: compose

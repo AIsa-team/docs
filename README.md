@@ -377,9 +377,8 @@ and lets consumers bind public aliases without guessing native identities.
 
 ### Website, MCP page, sales catalog and Agent Discovery checks
 
-`check_contract_revisions.py --all-surfaces` also reads the website surfaces
-that consumers reach from the publication, with independent codes
-(`scripts/public_surface_checks.py`, `check_website_surfaces`). Every read is
+`scripts/public_surface_checks.py` (`check_website_surfaces`) reads the website
+surfaces that consumers reach from the publication, with independent codes. Every read is
 bounded and a surface that cannot be read is a `missing_inputs` entry, never a
 pass:
 
@@ -457,9 +456,11 @@ PR run the existing contract checks.
 
 A successful acquisition alone does not renew published consumer evidence.
 The sole `pull-openapi.yml` publisher must assess and export the fresh receipts.
-Its scheduled path requires both tracked activation and the operator variable
-`RUNTIME_CONTRACT_ACTIVATION_ENABLED=true`; a manual `publish=true` dispatch
-uses the same assessment and publication gates. Failed or changed acquisitions
+It runs every 10 minutes and rebuilds only when the live contract content, the
+live category or Docs' generator inputs changed since the last completed run
+(`scripts/live_contract_plan.py`); a refusal or transient error is a warning and
+is retried on the next tick. A manual `publish=true` dispatch uses the same
+assessment and publication gates. Failed or changed acquisitions
 must not be relabeled as an unchanged-source review.
 
 Source maintenance stages the complete proposed graph with the same existing
