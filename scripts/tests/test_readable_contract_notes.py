@@ -7,7 +7,7 @@ import unittest
 import tempfile
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from readable_contract_notes import readable_block, update_readable_block, strip_generated_block, formula_text
+from readable_contract_notes import readable_block, update_readable_block, strip_generated_block
 import runtime_consolidate_openapi as consolidate
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -39,8 +39,8 @@ class ReadableNotesTests(unittest.TestCase):
         from pricing_prose import pricing_summary
         from public_surface_checks import request_blocks, compare_llms
         operation = {"operationId": "price", "x-aisa-pricing": {
-            "default_request_estimate_usd": 0.3, "unit_rate_usd": 0.075,
-            "unit": "similarweb_credit"}}
+            "default_request_estimate_usd": 0.3, "customer_unit_price_usd": 0.075,
+            "kind": "metered_result"}}
         document = {"paths": {"/price": {"get": operation}}}
         before = copy.deepcopy(document)
         for language in ("en", "zh"):
@@ -53,7 +53,7 @@ class ReadableNotesTests(unittest.TestCase):
             parsed = request_blocks(block)
             record = next(iter(parsed.values()))[0]
             self.assertEqual(record["price_summary"], canonical)
-            self.assertEqual(record["request"]["x-aisa-pricing"], before["paths"]["/price"]["get"]["x-aisa-pricing"])
+            self.assertNotIn("x-aisa-pricing", record["request"])
             # Mintlify exports either literal or escaped dollars to Markdown.
             self.assertEqual(compare_llms(parsed, request_blocks(block.replace(r"\$", "$"))), [])
             self.assertEqual(update_readable_block(block, operation, language, **context), block)
@@ -81,12 +81,7 @@ class ReadableNotesTests(unittest.TestCase):
         self.assertEqual(code("`a"), "`` `a ``")
         self.assertEqual(code("a\nb"), "`a b`")
 
-    def test_exact_large_numbers_and_unknown_formula(self):
-        self.assertIn('9007199254740993', readable_block({'x-aisa-pricing': {'maximum_units': 9007199254740993}}))
-        self.assertIsNone(formula_text({'input': 'q', 'unknown_operator': 2}))
-        self.assertEqual(formula_text({'inputs':['a','b'], 'unit_scale': 3, 'input_multiplier': 2, 'fixed_units': 1}), '1 + (ceil((a × b) / 3)) × 2')
-
-    def test_managed_notes_and_internal_reserve_not_public(self):
+    def test_internal_estimator_details_are_absent_but_request_notes_remain(self):
         spec = json.loads((ROOT/'openapi/similarweb.json').read_text())
         for route in ['website-traffic-trend', 'website-traffic-snapshot', 'website-top-geographies']:
             op = spec['paths']['/apis/v1/similarweb/'+route]['get']
@@ -95,25 +90,14 @@ class ReadableNotesTests(unittest.TestCase):
                 for note in op['x-aisa-constraints']['notes']:
                     self.assertIn(note, block)
                 self.assertIn('0.', block)
-            if route == 'website-top-geographies':
-                block = readable_block(op)
-                self.assertIn('Reservation input (public mapping not declared)', block)
-                self.assertNotIn('Public request parameter', block)
-
-    def test_public_reservation_and_bilingual_projection(self):
-        op = {'parameters':[{'name':'limit','in':'query'}], 'x-aisa-pricing':{'reserve_plan_units':{'input':'limit','input_multiplier':3}}, 'x-aisa-constraints':{'notes':['Source note']}}
-        self.assertIn('Public request parameter', readable_block(op))
+                for internal in ('Reservation input', 'metrics × periods', 'Count multiplier', 'unit_scale'):
+                    self.assertNotIn(internal, block)
+        op = {'x-aisa-pricing': {'maximum_units': 9007199254740993, 'reserve_plan_units': {'input': 'limit'}},
+              'x-aisa-constraints': {'notes': ['Source note']}}
         zh = readable_block(op, 'zh', lambda _: '来源说明')
-        self.assertIn('公开请求参数', zh)
         self.assertIn('来源说明', zh)
-        self.assertNotIn('Source note', zh)
-
-    def test_real_generic_drivers_show_dates_defaults_and_counting(self):
-        spec = json.loads((ROOT/'openapi/similarweb.json').read_text())
-        op = spec['paths']['/apis/v1/similarweb/website/traffic-engagement']['get']
-        block = readable_block(op)
-        for text in ['metrics × periods', 'including repeated entries', 'query.start', 'Estimator fallback periods (does not make required dates optional)', 'monthly']:
-            self.assertIn(text, block)
+        self.assertNotIn('9007199254740993', zh)
+        self.assertNotIn('limit', zh)
 
     def test_root_server_has_no_universal_mirror_promise(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(consolidate, 'OPENAPI_DIR', directory):
@@ -122,19 +106,6 @@ class ReadableNotesTests(unittest.TestCase):
         self.assertNotIn('same surface as', description)
         self.assertIn('explicitly supported operations only', description)
         self.assertIn('servers and x402 capability declaration', description)
-
-    def test_scaled_reservation_does_not_invent_evaluation_order(self):
-        plan = {'input':'limit', 'input_multiplier':100000, 'unit_scale':1000000, 'unit_rounding':'ceil'}
-        op = {'x-aisa-pricing':{'units_per_count':100000, 'reserve_plan_units':plan}}
-        rendered = readable_block(op)
-        self.assertNotIn('Units per returned count', rendered)
-        self.assertIn('Count multiplier before declared scaling', rendered)
-        self.assertIn('Declared scaling divisor', rendered)
-        self.assertIn('1000000', rendered)
-        self.assertIn('Declared rounding', rendered)
-        self.assertNotIn('ceil((', rendered)
-        self.assertIn('supporting X-AISA-Cost-Mode: quote', rendered)
-        self.assertEqual(formula_text(dict(plan, fixed_units=1)), '1 + (ceil((limit) / 1000000)) × 100000')
 
     def test_same_facts_new_composer_regenerates_and_then_is_idempotent(self):
         from test_runtime_contracts import PullTests
@@ -182,17 +153,16 @@ class ReadableNotesTests(unittest.TestCase):
         self.assertIn('age_bucket must be provided exactly once', html.unescape(readable_block(published)))
         self.assertNotIn('content', published['responses']['200'])
 
-    def test_real_firecrawl_json_body_limit_is_public(self):
+    def test_real_firecrawl_keeps_request_schema_without_reservation_math(self):
         spec = json.loads((ROOT/'openapi/firecrawl.json').read_text())
-        for operation_id in ['post_firecrawl_search', 'post_firecrawl_map']:
-            op = next(op for item in spec['paths'].values() for op in item.values()
-                      if isinstance(op, dict) and op.get('operationId') == operation_id)
-            rendered = readable_block(op)
-            self.assertIn('Public request parameter', rendered)
-            self.assertNotIn('public mapping not declared', rendered)
-        unknown = {'requestBody': {'$ref':'#/components/requestBodies/Request'},
-                   'x-aisa-pricing': {'reserve_plan_units': {'input':'limit','input_multiplier':2}}}
-        self.assertIn('public mapping not declared', readable_block(unknown))
+        for path, item in spec['paths'].items():
+            for method, op in item.items():
+                if not isinstance(op, dict) or op.get('operationId') not in ['post_firecrawl_search', 'post_firecrawl_map']:
+                    continue
+                rendered = readable_block(op, document=spec, method=method, path=path, spec_path='openapi/firecrawl.json')
+                self.assertIn('"limit"', rendered)
+                self.assertNotIn('reserve_plan_units', rendered)
+                self.assertNotIn('input_multiplier', rendered)
 
     def test_guides_distinguish_reference_quote_settlement(self):
         for prefix in ['', 'zh/']:

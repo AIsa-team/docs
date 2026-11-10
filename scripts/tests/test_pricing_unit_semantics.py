@@ -32,8 +32,8 @@ class PricingUnitSemanticsTests(unittest.TestCase):
     def test_amazon_estimate_is_prominent_without_a_micro_unit_sale_price(self):
         before = copy.deepcopy(self.pricing)
         for language, label, explanation in (
-                ('en', 'Default request estimate: $0.01476 USD', 'provider cost'),
-                ('zh', '默认请求预估费用：$0.01476 USD', '上游成本')):
+                ('en', 'Default request estimate: $0.01476 USD', 'actual usage'),
+                ('zh', '默认请求预估费用：$0.01476 USD', '实际用量')):
             with self.subTest(language=language):
                 summary = pricing_summary(self.pricing, language)
                 self.assertIn(label, summary)
@@ -57,35 +57,25 @@ class PricingUnitSemanticsTests(unittest.TestCase):
                                         'per result', 'per item', 'micro-USD', 'provider_credit'):
                         self.assertNotIn(unsupported, text)
 
-    def test_named_credit_rates_remain_visible_as_provider_costs(self):
-        for unit, rate in (('similarweb_credit', .075), ('tavily_credit', .008),
-                           ('firecrawl_credit', .001071), ('business_credit', .000001)):
-            pricing = dict(self.pricing, unit=unit, unit_rate_usd=rate)
-            for language, label in (('en', 'Provider cost rate:'), ('zh', '上游成本费率：')):
+    def test_supplier_rates_are_not_customer_unit_prices(self):
+        for unit in ('tavily_credit', 'similarweb_credit', 'firecrawl_credit'):
+            pricing = dict(self.pricing, unit=unit, unit_rate_usd=.075)
+            for language in ('en', 'zh'):
                 text = pricing_summary(pricing, language)
-                self.assertIn(label, text)
-                self.assertIn(unit, text)
-                self.assertIn('$' + format(rate, 'f').rstrip('0'), text)
-        # Fixed customer prices retain their stronger declared meaning even
-        # when the cost contract uses units, or the upstream rate is zero.
-        pricing = dict(self.pricing, customer_pricing='fixed_success', unit_rate_usd=0)
-        text = pricing_summary(pricing)
-        self.assertIn('$0.01476 USD per successful request', text)
-        self.assertNotIn('provider cost', text)
-        self.assertNotIn('provider_credit', text)
+                self.assertIn('$0.01476', text)
+                self.assertNotIn('$0.075', text)
+                self.assertNotIn(unit, text)
 
-    def test_readable_details_preserve_raw_rates_and_explain_their_scope(self):
+    def test_page_shows_customer_price_and_request_without_supplier_fields(self):
         before = copy.deepcopy(self.operation)
-        for language, rate_label, explanation in (
-                ('en', 'Cost conversion rate (USD/unit)', 'not a customer price per request or result'),
-                ('zh', '成本换算费率（USD/单位）', '不是每次请求或每条结果的用户单价')):
+        for language in ('en', 'zh'):
             context = dict(document=self.source, path=self.path, method='get', spec_path='openapi/amazon.json')
             text = readable_block(self.operation, language, **context)
-            self.assertIn(rate_label, text)
-            self.assertIn(explanation, text)
-            self.assertNotIn('Declared unit rate', text)
+            for internal in ('unit_rate_usd', 'customer_multiplier', 'provider_credit', 'cost_contract',
+                             'micro-USD', 'Cost conversion', '成本换算', '公开参考倍率'):
+                self.assertNotIn(internal, text)
             record = next(iter(request_blocks(text).values()))[0]
-            self.assertEqual(record['request']['x-aisa-pricing'], self.pricing)
+            self.assertNotIn('x-aisa-pricing', record['request'])
             self.assertEqual(record['price_summary'], pricing_summary(self.pricing, language))
             self.assertEqual(update_readable_block(text, self.operation, language, **context), text)
         self.assertEqual(self.operation, before)
@@ -110,27 +100,27 @@ class PricingUnitSemanticsTests(unittest.TestCase):
                     full = readable_block(operation, language, document=document, method='get',
                                           path=self.path, spec_path='openapi/amazon.json')
                     record = next(iter(request_blocks(full).values()))[0]
-                    self.assertEqual(record['request']['x-aisa-pricing'], pricing)
+                    self.assertNotIn('x-aisa-pricing', record['request'])
 
-    def test_fixed_supplier_tariff_retains_its_existing_price_summary(self):
+    def test_supplier_fixed_label_does_not_prove_a_fixed_customer_price(self):
         pricing = dict(self.pricing, cost_contract='fixed_success')
-        for language, label in (('en', '$0.01476 USD per successful request'), ('zh', '每次成功请求 $0.01476 USD')):
+        for language in ('en', 'zh'):
             text = pricing_summary(pricing, language)
-            self.assertIn(label, text)
-            self.assertNotIn('not a fixed price', text)
-            self.assertNotIn('不是固定价格', text)
+            self.assertIn('$0.01476', text)
+            self.assertNotIn('per successful request', text)
+            self.assertNotIn('每次成功请求', text)
 
     def test_openapi_localization_and_sales_replace_old_summary_without_metadata_drift(self):
         original = copy.deepcopy(self.source)
         document = clean_document(self.source)
         operation = document['paths'][self.path]['get']
         self.assertNotIn('Declared unit rate:', operation['description'])
-        self.assertIn('provider cost', operation['description'])
+        self.assertNotIn('provider cost', operation['description'])
         self.assertEqual(operation['x-aisa-pricing'], self.pricing)
         self.assertEqual(clean_document(document), document)
         localized = localize_tree(document, {'entries': {}}, allow_untranslated=True)
         translated = localized['paths'][self.path]['get']
-        self.assertIn('上游成本', translated['description'])
+        self.assertNotIn('上游成本', translated['description'])
         self.assertNotIn('声明的单位费率', translated['description'])
         self.assertEqual(translated['x-aisa-pricing'], self.pricing)
         sales = project_sales_catalog(document, 'a' * 64)['document']
