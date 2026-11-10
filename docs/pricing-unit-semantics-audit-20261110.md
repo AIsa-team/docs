@@ -16,7 +16,7 @@ therefore receive the same price meaning.
 | --- | --- |
 | Explicit customer fixed-success | Published amount per successful request |
 | Fixed-request customer micro-USD | Converted customer amount per success |
-| Resource delivered read | Normal-tier amount per delivered read; no-delivery rule; computed stored-result amount |
+| Resource delivered read | Normal-tier amount per delivered read; entity/page unit definition; no-delivery rule; computed stored-result amount |
 | Price variants | Each option's price; disabled options unavailable |
 | Configured fixed async job | Published amount per completed job |
 | Request formula/plan units/supplier fixed snapshot | Request-dependent reference estimate; no claim that an estimator is a fixed tariff |
@@ -24,10 +24,11 @@ therefore receive the same price meaning.
 | Response components/SKUs | Combined measured usage and reference request estimate |
 | Response money/units | Reference request estimate and actual-usage settlement |
 | Async metered result | Explicit customer unit price even when the total depends on the request |
-| Successful event | Published per-target amounts and known draft/failure conditions |
+| Successful event | Published per-target amounts, draft/failure and charge-refusal conditions |
 | Model catalog | Model/options and request/token/second semantics; no invented model price |
 | No customer charge | No additional charge for this operation |
 | Missing/unpriced | Unavailable, never an inferred zero |
+| Unknown pricing kind/cost rule | Billing method unavailable; any published request estimate stays an estimate without an inferred settlement rule |
 
 Existing customer reference estimates and unit amounts are never multiplied a
 second time. Supplier `unit_rate_usd`, including named credits, is not a customer
@@ -42,7 +43,12 @@ all account plans. Social's declared 15-minute/6-hour free cache windows and
 failure/unknown waivers remain visible; those conditions are not invented for
 other operations. Social event amounts come from the current declaration, not
 hard-coded constants. Changed or unrecognized event descriptions are preserved
-as escaped text rather than silently reusing stale prices.
+as escaped text rather than silently reusing stale prices. Recognizing an event
+price clause does not discard the rest of the declaration. If a publication
+target's charge is refused for insufficient balance or the request's maximum
+price, only that target fails while other targets continue publishing. Resource
+prices retain their unit definition: an entity with at least one requested field,
+or one page of a result set.
 
 ## Amazon example
 

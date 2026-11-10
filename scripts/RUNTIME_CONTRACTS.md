@@ -38,6 +38,9 @@ reservation formulas and multipliers are not customer tariffs and are not
 rendered as prices. Dynamic rules keep an estimate label unless a customer
 unit tariff is explicitly published; missing business-unit semantics must not
 be guessed from response arrays. Missing prices are never shown as free.
+Unknown pricing kinds or cost contracts do not imply usage billing. They show
+an unavailable billing method; a published request estimate may still be shown
+as an estimate without asserting how the final charge is calculated.
 
 Integer `customer_micros_usd` is converted exactly to USD. Resource reads show
 normal-tier reference prices, delivered-read conditions and computed cache
@@ -45,8 +48,12 @@ prices, with Runtime's upward micro-USD rounding. A zero share does not publish
 a cache-hit price, so no stored-result offer is shown. Variant prices are listed separately and disabled variants are
 unavailable. Async `configured_fixed_price` is per completed job; metered jobs
 show their customer unit price even when the request total is not yet known.
+One delivered read means an entity with at least one requested field, or one
+page of a result set; this unit definition stays visible beside the price.
 Social prices are sourced from the published event declaration, not hard-coded;
-known success, failure and cache conditions remain visible. Model rules retain
+success, failure, per-target charge refusals and cache conditions remain visible.
+Social event localization replaces known clauses while preserving unmatched
+customer conditions as escaped text. Model rules retain
 request/token/second and `n` semantics without inventing a model price.
 
 The page's embedded Request contract contains authentication, parameters and

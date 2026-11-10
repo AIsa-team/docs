@@ -37,6 +37,8 @@ def price_family(pricing):
     kind = pricing.get('kind')
     if kind in {'no_customer_charge', 'fixed_request', 'metered_event', 'metered_result', 'model_catalog', 'unpriced'}:
         return kind
+    if kind:
+        return 'unknown'
     if pricing.get('customer_pricing') == 'fixed_success':
         return 'fixed_success'
     cost = pricing.get('cost_contract')
@@ -47,7 +49,9 @@ def price_family(pricing):
         return 'result_dependent'
     if cost in {'response_components', 'response_sku'}:
         return 'components'
-    return 'usage'
+    if cost in {'response_usd', 'response_units'}:
+        return 'usage'
+    return 'unknown'
 
 
 def literal(text):
@@ -64,22 +68,27 @@ def event_description(pricing, zh):
     if isinstance(meter, str) and meter:
         description = re.sub(r'^Publication is metered under ' + re.escape(meter)
                              + r'(?::<[^>]+>)?\.\s*', '', description)
-    # Translate the current typed Social tariff without hard-coding any prices.
-    social = re.search(r'an X post costs (\$[\d.]+), or (\$[\d.]+) when its effective text contains a URL '
-                       r'\(media URLs do not select the text-URL price\); a post on any other platform costs (\$[\d.]+)\.', description)
-    if pricing.get('meter') == 'social.post.published' and social:
-        x, link, other = social.groups()
-        text = (f'每个成功发布的目标单独收费：X 普通帖子 {x} USD；正文含链接 {link} USD（媒体链接不影响价格）；'
-                f'其他平台 {other} USD。草稿和发布失败的目标不收费。' if zh else
-                f'Per successfully published target: X {x} USD; X with a link in the post text {link} USD '
-                f'(media links do not change the price); other platforms {other} USD. '
-                'Drafts and failed targets are not charged.')
-        # Do not invent a waiver if an older/newer declaration lacks it.
-        if 'Draft creation is free.' not in description or 'A failed target is not charged' not in description:
-            return literal(description)
-        if 'Accepted or unknown responses remain pending' in description:
-            text += ' 待确认目标在确认发布后结算。' if zh else ' Pending targets settle after publication is confirmed.'
-        return text
+    # Replace only recognized clauses, keeping all other customer conditions.
+    # In particular, recognizing the rates must not discard a new fee or waiver.
+    if zh and meter == 'social.post.published':
+        description = re.sub(
+            r'Each platform target is charged separately, only once it is published: '
+            r'an X post costs (\$[\d.]+), or (\$[\d.]+) when its effective text contains a URL '
+            r'\(media URLs do not select the text-URL price\); a post on any other platform costs (\$[\d.]+)\.',
+            lambda m: f'每个成功发布的目标单独收费：X 普通帖子 {m[1]} USD；正文含链接 {m[2]} USD'
+                      f'（媒体链接不影响价格）；其他平台 {m[3]} USD。', description)
+        translations = {
+            'One post may target X together with other platforms.': '同一帖子可以同时发布到 X 和其他平台。',
+            "A failed target is not charged, and a target whose own charge is refused (insufficient balance or the request's maximum price) fails alone while the other targets publish.":
+                '发布失败的目标不收费；某个目标因余额不足或超过请求最高限价被拒付时，仅该目标失败，其他目标继续发布。',
+            'A failed target is not charged.': '发布失败的目标不收费。',
+            'Draft creation is free.': '创建草稿免费。',
+            "Accepted or unknown responses remain pending; only verified native publication settles each target's charge once.":
+                '已受理或结果未知的目标保持待确认状态；确认发布后，每个目标仅结算一次费用。',
+            'Send X-AISA-Cost-Mode: quote to get the total before publishing.': '发布前可通过报价功能获取总费用。',
+        }
+        for source, translated in translations.items():
+            description = description.replace(source, translated)
     return literal(description.strip())
 
 
@@ -115,6 +124,8 @@ def fixed_request_summary(pricing, zh):
     if amount:
         if resource:
             parts.append(t(f'Normal-tier reference price: {amount} USD per delivered read.', f'普通用户参考价格：每次成功交付查询 {amount} USD。'))
+            parts.append(t('A delivered read is an entity with at least one requested field, or one page of a result set.',
+                           '一次交付指返回至少一个请求字段的实体，或一页结果集。'))
             parts.append(t('A read that delivers nothing is not charged.', '未交付查询结果时不收费。'))
             share = pricing['cache_hit_share_bps']
             if micros is not None and type(share) is int and 0 < share <= 10000:
@@ -189,6 +200,7 @@ def pricing_summary(pricing, language='en'):
                 'components': ('Charged for the combined usage of the billable components.', '按各计费项目的实际用量合计收费。'),
                 'metered_result': ('Charged for actual usage when the job completes.', '任务完成后按实际用量收费。'),
                 'usage': ('Usage-based pricing.', '按实际用量收费。'),
+                'unknown': ('Billing method unavailable.', '计费方式暂不可用。'),
             }
             summary = t(*leads.get(family, ('Price unavailable.', '价格暂不可用。')))
             # Only an explicitly CUSTOMER-priced unit can be shown as a tariff.
@@ -199,8 +211,9 @@ def pricing_summary(pricing, language='en'):
             if unit_price is not None:
                 summary += ' ' + t(f'Published reference price: {unit_price} USD per billable unit.', f'公开参考价格：每计费单位 {unit_price} USD。')
             if total is not None:
-                summary += ' ' + t(f'Default request estimate: {total} USD. The final charge depends on actual usage.',
-                                   f'默认请求预估费用：{total} USD。最终费用以实际用量为准。')
+                summary += ' ' + t(f'Default request estimate: {total} USD.', f'默认请求预估费用：{total} USD。')
+                if family != 'unknown':
+                    summary += ' ' + t('The final charge depends on actual usage.', '最终费用以实际用量为准。')
             elif unit_price is None and family != 'fixed_success':
                 summary += ' ' + t('A price estimate is not currently available.', '当前暂无预估金额。')
     return summary + ' ' + t('Your account price may differ; use a request quote where supported.',

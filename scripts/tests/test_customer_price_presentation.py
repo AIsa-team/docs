@@ -8,6 +8,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from customer_price_presentation import price_family, pricing_summary
 
 
+# Runtime declarations from Social publication and Commerce resource reads.
+SOCIAL_PRICING = {
+    'kind': 'metered_event', 'meter': 'social.post.published',
+    'description': (
+        'Publication is metered under social.post.published:<platform>. '
+        'Each platform target is charged separately, only once it is published: '
+        'an X post costs $0.015, or $0.200 when its effective text contains a URL '
+        '(media URLs do not select the text-URL price); a post on any other platform costs $0.01. '
+        'One post may target X together with other platforms. '
+        "A failed target is not charged, and a target whose own charge is refused (insufficient balance or the request's maximum price) fails alone while the other targets publish. "
+        'Draft creation is free. '
+        "Accepted or unknown responses remain pending; only verified native publication settles each target's charge once. "
+        'Send X-AISA-Cost-Mode: quote to get the total before publishing.'),
+}
+RESOURCE_PRICING = {
+    'kind': 'fixed_request', 'customer_micros_usd': 50000, 'cache_hit_share_bps': 10000,
+    'description': (
+        'Charged once per delivered read: an entity with at least one requested field, or one page of a result set. '
+        'A read that delivers nothing is not charged. '
+        'A read answered from stored values is charged the cache-hit share of the price. '
+        'Variants are priced by the route parameters they fix.'),
+}
+
+
 class CustomerPricePresentationTests(unittest.TestCase):
     def test_customer_price_overrides_supplier_kind_and_is_not_multiplied_again(self):
         for cost in ('explicit_zero', 'fixed_success', 'response_units', 'response_usd',
@@ -41,6 +65,22 @@ class CustomerPricePresentationTests(unittest.TestCase):
                     self.assertNotIn(forbidden, text)
             self.assertIn('estimate', pricing_summary(p))
         self.assertNotIn('$0', pricing_summary({'cost_contract': 'plan_units', 'unit_rate_usd': 0}))
+
+    def test_unknown_rules_do_not_claim_usage_billing_or_disable_the_operation(self):
+        for declaration in ({'kind': 'future_tariff'}, {'cost_contract': 'future_cost'},
+                            {'kind': 'future_tariff', 'cost_contract': 'response_units'},
+                            {'customer_pricing': 'provider_cost_multiplier'}):
+            for amount in (None, 0, .1):
+                pricing = dict(declaration, default_request_estimate_usd=amount)
+                self.assertEqual(price_family(pricing), 'unknown')
+                for language in ('en', 'zh'):
+                    text = pricing_summary(pricing, language)
+                    self.assertIn('计费方式暂不可用' if language == 'zh' else 'Billing method unavailable', text)
+                    for forbidden in ('actual usage', 'Usage-based', '实际用量', 'operation is unavailable', '此操作暂不可用'):
+                        self.assertNotIn(forbidden, text)
+                    if amount is not None:
+                        self.assertIn('默认请求预估费用' if language == 'zh' else 'Default request estimate', text)
+                        self.assertIn('$0 USD' if amount == 0 else '$0.1 USD', text)
 
     def test_resource_cache_rounding_variants_and_zero_share(self):
         p = {'kind': 'fixed_request', 'customer_micros_usd': 101, 'cache_hit_share_bps': 2500}
@@ -100,8 +140,53 @@ class CustomerPricePresentationTests(unittest.TestCase):
             self.assertNotIn('social.post.published', text)
             self.assertNotIn('$0.015', text)
             self.assertNotIn('No additional charge', text)
-        self.assertIn('Drafts and failed targets are not charged', pricing_summary(p))
-        self.assertIn('草稿和发布失败的目标不收费', pricing_summary(p, 'zh'))
+        self.assertIn('A failed target is not charged. Draft creation is free.', pricing_summary(p))
+        self.assertIn('发布失败的目标不收费。 创建草稿免费。', pricing_summary(p, 'zh'))
+
+    def test_social_preserves_new_conditions_and_does_not_invent_waivers(self):
+        extra = ' Additional condition: <plan> customers pay $0.003 per scheduled target.'
+        pricing = dict(SOCIAL_PRICING, description=SOCIAL_PRICING['description'] + extra)
+        for language in ('en', 'zh'):
+            text = pricing_summary(pricing, language)
+            self.assertIn('Additional condition: &#60;plan&#62; customers pay $0.003 per scheduled target.', text)
+            self.assertNotIn('<plan>', text)
+            self.assertNotIn('social.post.published', text)
+        pricing['description'] = pricing['description'].replace('Draft creation is free.', '')
+        self.assertNotIn('Draft creation is free', pricing_summary(pricing))
+        self.assertNotIn('草稿', pricing_summary(pricing, 'zh'))
+
+    def test_customer_conditions_survive_document_and_page_generation(self):
+        from pricing_prose import clean_document
+        from readable_contract_notes import readable_block
+        cases = [
+            (SOCIAL_PRICING,
+             ('insufficient balance', 'maximum price', 'fails alone while the other targets publish', 'charge once'),
+             ('余额不足', '请求最高限价', '仅该目标失败，其他目标继续发布', '每个目标仅结算一次')),
+            (RESOURCE_PRICING,
+             ('at least one requested field', 'one page of a result set', '$0.05'),
+             ('至少一个请求字段', '一页结果集', '$0.05')),
+            ({'kind': 'future_tariff', 'default_request_estimate_usd': .1},
+             ('Billing method unavailable', 'Default request estimate: $0.1'),
+             ('计费方式暂不可用', '默认请求预估费用：$0.1')),
+        ]
+        for pricing, english, chinese in cases:
+            with self.subTest(kind=pricing['kind']):
+                source = {'paths': {'/example': {'post': {
+                    'operationId': 'example', 'description': 'Example request.', 'x-aisa-pricing': pricing}}}}
+                document = clean_document(source)
+                operation = document['paths']['/example']['post']
+                self.assertEqual(operation['x-aisa-pricing'], pricing)
+                self.assertEqual(clean_document(document), document)
+                for text in english:
+                    self.assertIn(text, operation['description'])
+                for language, expected in [('en', english), ('zh', chinese)]:
+                    page = readable_block(operation, language, document=document, method='post',
+                                          path='/example', spec_path='openapi/example.json')
+                    for text in expected:
+                        self.assertIn(text, page.replace(r'\$', '$'))
+                    self.assertNotIn('x-aisa-pricing', page)
+                if pricing['kind'] == 'future_tariff':
+                    self.assertNotIn('actual usage', operation['description'])
 
     def test_cache_conditions_and_model_units_remain_customer_visible(self):
         p = {'kind': 'fixed_request', 'customer_micros_usd': 1000,
