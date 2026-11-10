@@ -1,5 +1,7 @@
 # Facebook response review: code and actual requests
 
+Current result: [AIsa customer response verification](aisa-customer-response-check.md) supersedes the historical status below. All 59 final response schemas are populated; all eight historical Facebook routes now have nonempty success samples.
+
 Five POST routes now have exact Composio-declared response envelope candidates.
 They are not JustOneAPI native response copies. The complete nested business
 contracts for the eight routes are still not verified, and this PR is not ready

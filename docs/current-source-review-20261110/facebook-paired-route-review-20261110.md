@@ -1,5 +1,7 @@
 # Facebook paired route and response review
 
+Current result: [AIsa customer response verification](aisa-customer-response-check.md) supersedes the historical status below. All 59 final response schemas are populated; all eight historical Facebook routes now have nonempty success samples.
+
 The six public routes map to two different gateway integrations for the same
 three JustOneAPI capabilities. They are not interchangeable version aliases.
 The runtime facts used here pin compiler revision

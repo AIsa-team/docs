@@ -1,5 +1,7 @@
 # Facebook and TikTok full response check
 
+Current result: [AIsa customer response verification](aisa-customer-response-check.md) supersedes the historical status below. All 59 final response schemas are populated; all eight historical Facebook routes now have nonempty success samples.
+
 Follow-up: [the eight-route code/request review](facebook-eight-response-review.md) brings the cumulative check to 100 calls and records five Composio envelope sources. The 93-call table below is the original historical run.
 
 > Follow-up correction: `get-profile-id` succeeds with `{"url":"/NASA"}`. The original full-URL fixture was invalid for the upstream. The two follow-up calls bring the recorded total to 95, with a successful sample now available for every one of the 59 operations. The table below retains the initial 93-call results. See [the diagnosis](facebook-profile-id-diagnosis-20261110.json); the eight complete-schema gaps remain open.

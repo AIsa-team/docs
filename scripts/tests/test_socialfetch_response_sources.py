@@ -30,8 +30,19 @@ class SocialFetchResponseSourceTests(unittest.TestCase):
         for row in self.review['sources']:
             with self.subTest(path=row['path']):
                 doc = self.sources[row['file']]
-                operation = doc['paths'][row['path']][row['method']]
+                operation = copy.deepcopy(doc['paths'][row['path']][row['method']])
                 self.assertEqual(set(operation), {'responses'})
+                # Preserve the original declarations while separately testing
+                # the four fields verified on AIsa's customer-facing API.
+                supplements = json.loads((ROOT / 'docs/current-source-review-20261110/aisa-customer-response-check.json').read_text())['supplements']
+                for extra in supplements:
+                    if extra['file'] != row['file']:
+                        continue
+                    node = operation['responses']['200']['content']['application/json']['schema']
+                    parts = extra['field'].split('.')
+                    for part in parts[:-1]:
+                        node = node['items'] if part == '[]' else node['properties'][part]
+                    self.assertEqual(node['properties'].pop(parts[-1])['type'], 'integer')
                 self.assertEqual(digest(operation['responses']), row['upstream_success_responses_sha256'])
                 self.assertEqual(digest({'operation': operation, 'components': doc.get('components', {})}),
                                  row['source_content_hash'])
