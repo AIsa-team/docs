@@ -35,6 +35,19 @@ def usd(value):
 PLACEHOLDER_TOKEN = re.compile(r'(?<![`\w])([^\s`<>(]*<[A-Za-z_][\w-]*>(?:[^\s`<>.,;:)]|[.:](?=[^\s`<>]))*)')
 
 
+def has_fixed_customer_price(pricing):
+    """Customer pricing takes precedence over the supplier's cost contract."""
+    if 'customer_pricing' in pricing:
+        return pricing['customer_pricing'] == 'fixed_success'
+    # Legacy declarations may expose only a fixed cost contract. A resource
+    # read or variant price is not a single fixed price per successful request.
+    return pricing.get('cost_contract') == 'fixed_success' or (
+        pricing.get('kind') == 'fixed_request' and 'variants' not in pricing
+        and 'cache_hit_share_bps' not in pricing
+        and type(pricing.get('customer_micros_usd')) is int
+        and pricing['customer_micros_usd'] >= 0)
+
+
 def pricing_summary(pricing, language='en'):
     """Render only declared prices; an estimate is never a unit or fixed price."""
     if not isinstance(pricing, dict) or not pricing:
@@ -54,12 +67,12 @@ def pricing_summary(pricing, language='en'):
         return PLACEHOLDER_TOKEN.sub(r'`\1`', event.strip()) + settlement
     unavailable = pricing.get('reference_unavailable') or pricing.get('estimate_unavailable_reason') or pricing.get('estimate_source') == 'unavailable'
     estimate = None if unavailable else usd(pricing.get('default_request_estimate_usd'))
-    fixed = pricing.get('customer_pricing') == 'fixed_success' or pricing.get('cost_contract') == 'fixed_success'
+    fixed = has_fixed_customer_price(pricing)
     # A fixed_request with an integer customer price is one price per successful
     # request. Resource reads (cache_hit_share_bps, charged per delivered read)
     # and variant-priced operations do not have one request price.
     micros = pricing.get('customer_micros_usd')
-    if (estimate is None and not unavailable and kind == 'fixed_request' and isinstance(micros, int)
+    if (estimate is None and not unavailable and fixed and kind == 'fixed_request' and isinstance(micros, int)
             and not isinstance(micros, bool) and 'variants' not in pricing and 'cache_hit_share_bps' not in pricing):
         estimate = usd(Decimal(micros) / 1_000_000)
         fixed = estimate is not None
@@ -81,7 +94,7 @@ def pricing_summary(pricing, language='en'):
     # money or real credits. Neither its name, rate nor evidence location
     # establishes a customer-facing unit. Keep it in the detailed declaration;
     # never infer micro-USD, returned items, or a per-success charge here.
-    if rate is not None and isinstance(unit, str) and unit != 'provider_credit' and re.fullmatch(r'[A-Za-z0-9_-]{1,80}', unit):
+    if not fixed and rate is not None and isinstance(unit, str) and unit != 'provider_credit' and re.fullmatch(r'[A-Za-z0-9_-]{1,80}', unit):
         if provider_priced:
             summary += f' 上游成本费率：每 {unit} {rate} USD。' if zh else f' Provider cost rate: {rate} USD per {unit}.'
         else:

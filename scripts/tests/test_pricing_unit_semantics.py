@@ -90,6 +90,36 @@ class PricingUnitSemanticsTests(unittest.TestCase):
             self.assertEqual(update_readable_block(text, self.operation, language, **context), text)
         self.assertEqual(self.operation, before)
 
+    def test_fixed_customer_price_hides_supplier_math_from_customer_prose(self):
+        for unit in ('provider_credit', 'firecrawl_credit'):
+            pricing = dict(self.pricing, customer_pricing='fixed_success', unit=unit)
+            operation = dict(self.operation, **{'x-aisa-pricing': pricing})
+            for language, label in (('en', '$0.01476 USD per successful request'),
+                                    ('zh', '每次成功请求 $0.01476 USD')):
+                with self.subTest(unit=unit, language=language):
+                    summary = pricing_summary(pricing, language)
+                    text = readable_block(operation, language)
+                    self.assertIn(label, summary)
+                    self.assertIn(label, text)
+                    for internal in ('0.000001', unit, 'response_units', 'multiplier', '倍率',
+                                     'micro-USD', 'Cost conversion', '成本换算', 'not a fixed price',
+                                     '不是固定价格', 'Default request reference estimate', '默认请求参考估价'):
+                        self.assertNotIn(internal, text)
+                        self.assertNotIn(internal, summary)
+                    document = dict(self.source, paths={self.path: {'get': operation}})
+                    full = readable_block(operation, language, document=document, method='get',
+                                          path=self.path, spec_path='openapi/amazon.json')
+                    record = next(iter(request_blocks(full).values()))[0]
+                    self.assertEqual(record['request']['x-aisa-pricing'], pricing)
+
+    def test_fixed_supplier_cost_does_not_override_explicit_customer_pricing(self):
+        pricing = dict(self.pricing, cost_contract='fixed_success')
+        for language, estimate in (('en', 'Default request estimate'), ('zh', '默认请求预估费用')):
+            text = pricing_summary(pricing, language)
+            self.assertIn(estimate, text)
+            self.assertNotIn('per successful request', text)
+            self.assertNotIn('每次成功请求', text)
+
     def test_openapi_localization_and_sales_replace_old_summary_without_metadata_drift(self):
         original = copy.deepcopy(self.source)
         document = clean_document(self.source)

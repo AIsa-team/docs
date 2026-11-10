@@ -119,13 +119,21 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
     if pricing or notes:
         lines += ["## " + t("Cost and request rules", "费用与请求规则"), ""]
     if pricing:
-        from pricing_prose import pricing_summary
+        from pricing_prose import has_fixed_customer_price, pricing_summary
         summary = pricing_summary(pricing, language)
         # Paired currency signs would become inline math in Mintlify MDX.
         if summary.count("$") >= 2:
             summary = summary.replace("$", r"\$")
         lines += [summary, ""]
-        lines += [t("Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.", "公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。"), ""]
+        fixed = has_fixed_customer_price(pricing)
+        if fixed:
+            lines += [t("Where X-AISA-Cost-Mode: quote is supported, a free quote confirms the fixed price for your account before execution.",
+                        "对于支持 X-AISA-Cost-Mode: quote 的接口，可在执行前免费获取适用于你账户的固定价格。"), ""]
+        else:
+            lines += [t("Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.", "公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。"), ""]
+        # Supplier accounting does not determine a declared fixed customer
+        # price. The complete machine-readable declaration remains unchanged.
+        cost_details = {} if fixed else pricing
         labels = {
             "default_request_estimate_usd": t("Default request reference estimate (USD)", "默认请求参考估价（USD）"),
             "cost_contract": t("Cost contract", "计费依据"),
@@ -136,8 +144,8 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
             "unit_scale": t("Unit scaling divisor", "单位缩放除数"),
             "evidence_source": t("Settlement evidence source", "结算证据来源"),
         }
-        lines += [line(label, pricing[key]) for key, label in labels.items() if key in pricing]
-        if "unit_rate_usd" in pricing or "unit" in pricing:
+        lines += [line(label, cost_details[key]) for key, label in labels.items() if key in cost_details]
+        if "unit_rate_usd" in cost_details or "unit" in cost_details:
             lines += ["", "### " + t("Cost conversion details", "成本换算说明"), "",
                       t("These parameters describe conversion to provider cost. Customer pricing is declared separately; the conversion rate alone is not a customer price per request or result.",
                         "以下参数用于换算上游成本，用户计价规则另行声明；换算费率本身不是每次请求或每条结果的用户单价。"), ""]
@@ -148,10 +156,10 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
                                ("unit", t("Declared cost unit", "声明的成本单位"))):
                 if key in pricing:
                     lines.append(line(label, pricing[key]))
-        if "units_per_count" in pricing:
+        if "units_per_count" in cost_details:
             lines += [t("The count multiplier is not a standalone credit or USD price. Apply only the scaling and rounding explicitly declared by this contract; use a supported quote for the complete request.", "计数倍率本身不是 credit 单价或 USD 价格。只采用本定义明确声明的缩放和取整规则；完整请求的费用请使用接口支持的报价功能确认。"), ""]
         for key, heading in [("request_cost_drivers", t("Declared request billing units", "声明的请求计费单位")), ("reserve_plan_units", t("Reservation units (not settled usage)", "预留单位（不是结算用量）"))]:
-            declaration = pricing.get(key)
+            declaration = cost_details.get(key)
             if not isinstance(declaration, dict):
                 continue
             formula = declaration.get("formula") if key == "request_cost_drivers" else declaration

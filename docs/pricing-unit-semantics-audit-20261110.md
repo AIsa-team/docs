@@ -3,8 +3,10 @@
 The shared pricing renderer presented an internal cost conversion rate as
 `Declared unit rate: $0.000001 USD per provider_credit`. For Amazon category
 products this is a micro-USD conversion, not a product count or a request price.
-The correction keeps the customer estimate prominent and explains provider-cost
-pricing separately from cost conversion parameters.
+The correction separates a declared fixed customer price from supplier cost
+accounting. Generic supplier units are never advertised as a customer unit price.
+The matching runtime tariff proposal is tracked in AIS-484; this renderer does
+not change pricing configuration or turn an estimate into a fixed tariff.
 
 ## Inventory and scope
 
@@ -42,7 +44,8 @@ The wider 3,707-operation generic-unit population has these declared rates:
 Those other rates are not classified as erroneous. In particular, zero upstream
 cost does not imply a zero customer price. The public reference contains real
 named units such as `similarweb_credit`, `tavily_credit` and `firecrawl_credit`.
-Their rates remain visible.
+Their rates remain visible for variable pricing; a declared fixed customer price
+does not show supplier rate arithmetic in its public price prose.
 
 Reproduce the inventory without network or database access:
 
@@ -59,14 +62,26 @@ database query or paid API execution was performed.
 
 ## Rendering change
 
-For [Amazon category products](https://aisa.one/docs/api-reference/amazon/amazon-get-category-products-v1),
-the summary becomes:
+For a declared fixed customer tariff, the customer-facing summary is:
+
+> Published reference price: $0.01476 USD per successful request. Account-specific pricing and final settlement may differ.
+
+> 公开参考价格：每次成功请求 $0.01476 USD。 最终费用以账户适用价格及实际结算为准。
+
+Its readable price block omits the internal multiplier, supplier unit/rate,
+cost contract, receipt source and supplier request-estimation formulas. The
+complete machine-readable declaration remains unchanged. Request constraints
+and a supported account quote remain available.
+
+The inspected [Amazon category products](https://aisa.one/docs/api-reference/amazon/amazon-get-category-products-v1)
+declaration still says `provider_cost_multiplier`. Until its runtime price
+binding is promoted and republished, this renderer must accurately show:
 
 > Default request estimate: $0.01476 USD (not a fixed price). Billed from provider cost multiplied by the applicable customer multiplier. Account-specific pricing and final settlement may differ.
 
 > 默认请求预估费用：$0.01476 USD（不是固定价格）。 按上游成本乘以适用的用户倍率计费。 最终费用以账户适用价格及实际结算为准。
 
-The body retains `unit_rate_usd=0.000001` and `unit=provider_credit` under
+For variable-price declarations, the body retains `unit_rate_usd=0.000001` and `unit=provider_credit` under
 **Cost conversion details**, explaining that these parameters alone do not
 state a customer price per request or result. The complete JSON declaration is
 unchanged. Generic units move out of the short price summary at every numeric
@@ -76,8 +91,11 @@ The `provider_cost_multiplier` customer pricing declaration now controls the
 customer-facing explanation instead of the technical `response_units` cost
 contract implying a business usage meter. Named credit rates remain in the
 summary, explicitly labelled **Provider cost rate** when this pricing mode is
-declared. Existing fixed-success, free, unavailable and event branches retain
-their meaning. Estimates are not multiplied a second time.
+declared. An explicit customer-pricing mode takes precedence over the supplier
+cost contract; a fixed supplier cost alone cannot override an explicit
+`provider_cost_multiplier` customer declaration. Legacy declarations without a
+customer mode retain their fixed-cost fallback. Free, unavailable and event
+branches retain their meaning. Estimates are not multiplied a second time.
 
 For this particular Treg route, the upstream
 [cost-header contract](https://treg.to/integrate.md) explains the micro-USD
@@ -88,21 +106,28 @@ to a generic summary requires an explicit declaration from the source contract.
 
 ## Validation and publication
 
-Five new regression tests reproduced the old behavior before the renderer fix.
+Seven regression tests cover the reported wording and the fixed-price behavior.
 They cover English/Chinese summaries, readable MDX, OpenAPI descriptions and
 the sales projection; generic units at several rates; actual named credits,
 including one priced at 0.000001; a non-1 customer multiplier; fixed customer
 prices with zero cost; metadata preservation and idempotent regeneration.
+The additional fixed-price cases first failed against the original renderer:
+fixed tariffs leaked supplier arithmetic, and a fixed supplier cost overrode an
+explicit multiplier customer mode.
 
-An offline projection of all 6,446 operations changes 4,377 summaries, including
-the clearer explanation of provider-cost pricing. It removes all 3,707 ambiguous
+An offline projection of all 6,446 operations changes 5,414 summaries, including
+the clearer explanation of provider-cost pricing. Of these, 1,037 declarations
+explicitly use multiplier customer pricing despite a fixed supplier cost and
+now follow their customer mode. It removes all 3,707 ambiguous
 generic-unit price summaries and preserves every non-description operation
 field. English/Chinese Amazon pages were regenerated in scratch files and
-verified idempotent. This is a renderer check, not publication acceptance.
+verified idempotent. A separate scratch preview uses the proposed fixed tariff;
+it is not evidence of a live price change. This is a renderer check, not
+publication acceptance.
 
 Validation completed with Python 3.12:
 
-- Full `scripts/tests` suite: 1,178 tests, passed, 3 skipped. The initial shallow
+- Full `scripts/tests` suite: 1,180 tests, passed, 3 skipped. The initial shallow
   clone lacked historical objects used by 14 existing tests; fetching repository
   history resolved those errors without changing tests or acceptance inputs.
 - Pricing regression tests and 14 readable-contract tests: passed.
