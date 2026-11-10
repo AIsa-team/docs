@@ -2,12 +2,12 @@
 title: "Seedance API - 通过 AIsa 访问即梦 Seedance 视频模型"
 sidebarTitle: "Seedance"
 description: >-
-  字节跳动即梦 Seedance 视频模型 ID 指南；接口兼容 BytePlus ModelArk（Ark）官方视频生成 API。
+  字节跳动即梦 Seedance 视频模型 ID 指南；接口兼容 BytePlus ModelArk（Ark）官方视频生成 API 和私有素材库 API。
 ---
 
 AIsa 通过字节跳动官方的国际企业平台 BytePlus 路由即梦 Seedance 视频模型。
 
-AIsa 兼容 BytePlus ModelArk（Ark）官方视频生成 API：官方 Ark SDK 和已有的 Ark 代码只需改 base URL 和 API Key 即可使用。Seedance 也可以通过 AIsa 视频接口 `POST /v1/video/generations` 调用。
+AIsa 兼容 BytePlus ModelArk（Ark）官方视频生成 API：官方 Ark SDK 和已有的 Ark 代码只需改 base URL 和 API Key 即可使用。同时支持 ModelArk 私有素材库 API，见[素材库](#素材库)。Seedance 也可以通过 AIsa 视频接口 `POST /v1/video/generations` 调用。
 
 ## 支持的 Seedance 模型
 
@@ -26,12 +26,15 @@ AIsa 兼容 BytePlus ModelArk（Ark）官方视频生成 API：官方 Ark SDK �
 | | 官方 ModelArk | AIsa |
 | --- | --- | --- |
 | Base URL | `https://ark.ap-southeast.bytepluses.com/api/v3` | `https://api.aisa.one/v1/ark/api/v3` |
+| 创建任务 | `POST /contents/generations/tasks` | AIsa base URL 下的相同路径 |
+| 查询任务 | `GET /contents/generations/tasks/{id}` | AIsa base URL 下的相同路径 |
 | API Key | ModelArk API Key | AIsa API Key |
 
 路径、请求体和返回体都与官方一致，见 [ModelArk 视频生成 API](https://docs.byteplus.com/zh-CN/docs/ModelArk/Video_Generation_API)。请使用上表中的 BytePlus 模型 ID。
 
 ```python
 import os
+import time
 
 from byteplussdkarkruntime import Ark
 
@@ -41,11 +44,79 @@ task = client.content_generation.tasks.create(
     model="dreamina-seedance-2-0-fast-260128",
     content=[{"type": "text", "text": "日出时分，一只纸船漂过平静的湖面"}],
 )
-result = client.content_generation.tasks.get(task_id=task.id)
-print(result.status)
+
+# 轮询任务，直到结束
+while True:
+    result = client.content_generation.tasks.get(task_id=task.id)
+    if result.status in ("succeeded", "failed", "cancelled"):
+        break
+    time.sleep(10)
+
+print(result.status, result.content.video_url if result.status == "succeeded" else result.error)
 ```
 
 暂不支持：`callback_url`（请改为轮询任务），以及任务列表和删除任务。
+
+## 素材库
+
+AIsa 兼容 ModelArk 官方私有素材库 API：图片、视频和音频上传一次，之后在 Seedance 请求中用 `asset://<Id>` 引用。
+
+| | 官方 ModelArk | AIsa |
+| --- | --- | --- |
+| 接口地址 | `POST https://ark.ap-southeast-1.byteplusapi.com/?Action=<Action>&Version=2024-01-01` | `POST https://api.aisa.one/?Action=<Action>&Version=2024-01-01` |
+| 鉴权 | AK/SK 请求签名 | AIsa API Key，放在 `Authorization: Bearer` 中 |
+
+请求体为 JSON，返回体是官方的 `ResponseMetadata` 和 `Result`，见 [ModelArk 素材库 API](https://docs.byteplus.com/en/docs/modelark/create-asset-api)。支持官方全部 12 个 Action：
+
+| Action | 必填字段 | 返回 |
+| --- | --- | --- |
+| `CreateAssetGroup` | `Name`（`GroupType` 默认为 `AIGC`） | `Id` |
+| `GetAssetGroup` | `Id` | 素材组详情 |
+| `ListAssetGroups` | `Filter.GroupType`（`AIGC` 或 `LivenessFace`） | `Items` 和分页信息 |
+| `UpdateAssetGroup` | `Id`，以及 `Name` 或 `Description` | `Id` |
+| `DeleteAssetGroup` | `Id` | |
+| `CreateAsset` | `GroupId`、`AssetType`（`Image`、`Video` 或 `Audio`）、`URL` | `Id`；之后轮询 `GetAsset` |
+| `GetAsset` | `Id` | 素材详情，含 `Status`；为 `Active` 才能使用 |
+| `ListAssets` | `Filter.GroupType` | `Items` 和分页信息 |
+| `UpdateAsset` | `Id`、`Name` | `Id` |
+| `DeleteAsset` | `Id` | |
+| `CreateVisualValidateSession` | `CallbackURL` | `BytedToken`、`H5Link` |
+| `GetVisualValidateResult` | `BytedToken` | 认证成功后返回 `GroupId` |
+
+```bash
+# 1. 创建素材组
+curl "https://api.aisa.one/?Action=CreateAssetGroup&Version=2024-01-01" \
+  -H "Authorization: Bearer $AISA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"Name": "product-shots"}'
+
+# 2. 用公网 URL 添加素材（AssetType：Image、Video 或 Audio）
+curl "https://api.aisa.one/?Action=CreateAsset&Version=2024-01-01" \
+  -H "Authorization: Bearer $AISA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"GroupId": "<素材组 Id>", "AssetType": "Image", "URL": "https://example.com/product.png"}'
+
+# 3. 轮询，直到 Result.Status 为 Active
+curl "https://api.aisa.one/?Action=GetAsset&Version=2024-01-01" \
+  -H "Authorization: Bearer $AISA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"Id": "<素材 Id>"}'
+```
+
+然后在视频请求中引用素材，Ark API 和 AIsa 视频接口都可以：
+
+```json
+{"type": "image_url", "image_url": {"url": "asset://<素材 Id>"}}
+```
+
+**列表。** `Filter` 还支持 `GroupIds`（数组）、`Name`（子串匹配），`ListAssets` 另支持 `Statuses`。分页可用 `MaxResults`（1-100，默认 10）加 `NextToken`，或同时传 `PageNumber` 和 `PageSize`（1-100），两种方式不能混用。`SortBy` 为 `CreateTime`（默认）或 `UpdateTime`，`ListAssets` 还支持 `GroupId`；`SortOrder` 为 `Desc`（默认）或 `Asc`。列表结果可能比最新改动稍有延迟。
+
+**真人认证。** 真人素材（`LivenessFace` 素材组，BytePlus 邀请制功能）：`CreateVisualValidateSession` 返回 `H5Link`，由本人在该页面完成人脸认证；之后用 `BytedToken` 调 `GetVisualValidateResult`，获得认证通过的 `GroupId`。
+
+**错误** 使用官方的 `ResponseMetadata.Error`（`Code`、`Message`）。`400 InvalidParameter`：请求无效；`401 Unauthorized`：缺少 AIsa API Key 或 Key 无效；`404 NotFound`：资源不存在或不属于你；`429 Throttling`：触发限流。其他上游错误原样返回。
+
+**与官方 API 的差异**
+
+- 素材组和素材属于你的 AIsa 账号，账号下所有 API Key 共用；只能引用自己的、状态为 Active 的素材。你自己 ModelArk 账号下的素材不可用。
+- 不接受 AK/SK 请求签名，请用 AIsa API Key 直接发 HTTP 请求。`ProjectName` 可不传。
+- 素材请求按账号限流，每秒 1 次（允许突发 2 次）。素材请求不收费，视频生成照常计费。
 
 ## 数据隐私
 

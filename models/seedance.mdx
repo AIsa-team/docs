@@ -1,13 +1,13 @@
 ---
 title: Seedance API - Access Dreamina Seedance Video Models via AIsa
 description: >-
-  AIsa guide to ByteDance Dreamina Seedance video model IDs, with an API compatible with the official BytePlus ModelArk
-  (Ark) video generation API.
+  AIsa guide to ByteDance Dreamina Seedance video model IDs, with APIs compatible with the official BytePlus ModelArk
+  (Ark) video generation and private asset library APIs.
 sidebarTitle: Seedance
 ---
 AIsa routes ByteDance Dreamina Seedance video models through BytePlus, ByteDance's official international enterprise platform.
 
-AIsa is compatible with the official BytePlus ModelArk (Ark) video generation API: the official Ark SDK and existing Ark code work after changing only the base URL and API key. Seedance is also available through the AIsa video API, `POST /v1/video/generations`.
+AIsa is compatible with the official BytePlus ModelArk (Ark) video generation API: the official Ark SDK and existing Ark code work after changing only the base URL and API key. The ModelArk private asset library API is supported too; see [Asset library](#asset-library). Seedance is also available through the AIsa video API, `POST /v1/video/generations`.
 
 ## Supported Seedance models
 
@@ -26,12 +26,15 @@ Current prices for these models are on [aisa.one/models](https://aisa.one/models
 | | Official ModelArk | AIsa |
 | --- | --- | --- |
 | Base URL | `https://ark.ap-southeast.bytepluses.com/api/v3` | `https://api.aisa.one/v1/ark/api/v3` |
+| Create task | `POST /contents/generations/tasks` | Same path under the AIsa base URL |
+| Query task | `GET /contents/generations/tasks/{id}` | Same path under the AIsa base URL |
 | API key | ModelArk API key | AIsa API key |
 
 Paths, request bodies and responses are the official ones; see the [ModelArk Video Generation API](https://docs.byteplus.com/en/docs/ModelArk/Video_Generation_API). Use the BytePlus model IDs in the table above.
 
 ```python
 import os
+import time
 
 from byteplussdkarkruntime import Ark
 
@@ -41,11 +44,79 @@ task = client.content_generation.tasks.create(
     model="dreamina-seedance-2-0-fast-260128",
     content=[{"type": "text", "text": "A paper boat drifting across a calm lake at sunrise"}],
 )
-result = client.content_generation.tasks.get(task_id=task.id)
-print(result.status)
+
+# Poll the task until it finishes
+while True:
+    result = client.content_generation.tasks.get(task_id=task.id)
+    if result.status in ("succeeded", "failed", "cancelled"):
+        break
+    time.sleep(10)
+
+print(result.status, result.content.video_url if result.status == "succeeded" else result.error)
 ```
 
 Not supported: `callback_url` (poll the task instead), and listing or deleting tasks.
+
+## Asset library
+
+AIsa is compatible with the official ModelArk private asset library API: upload images, video and audio once, then reference them in Seedance requests as `asset://<Id>`.
+
+| | Official ModelArk | AIsa |
+| --- | --- | --- |
+| Endpoint | `POST https://ark.ap-southeast-1.byteplusapi.com/?Action=<Action>&Version=2024-01-01` | `POST https://api.aisa.one/?Action=<Action>&Version=2024-01-01` |
+| Authentication | AK/SK request signing | AIsa API key, as `Authorization: Bearer` |
+
+Request bodies are JSON, and responses have the official `ResponseMetadata` and `Result`; see the [ModelArk asset library API](https://docs.byteplus.com/en/docs/modelark/create-asset-api). All 12 official Actions are supported:
+
+| Action | Required fields | Result |
+| --- | --- | --- |
+| `CreateAssetGroup` | `Name` (`GroupType` defaults to `AIGC`) | `Id` |
+| `GetAssetGroup` | `Id` | The group |
+| `ListAssetGroups` | `Filter.GroupType` (`AIGC` or `LivenessFace`) | `Items` and pagination |
+| `UpdateAssetGroup` | `Id`, plus `Name` or `Description` | `Id` |
+| `DeleteAssetGroup` | `Id` | |
+| `CreateAsset` | `GroupId`, `AssetType` (`Image`, `Video` or `Audio`), `URL` | `Id`; poll `GetAsset` |
+| `GetAsset` | `Id` | The asset, with `Status`; it must be `Active` to be used |
+| `ListAssets` | `Filter.GroupType` | `Items` and pagination |
+| `UpdateAsset` | `Id`, `Name` | `Id` |
+| `DeleteAsset` | `Id` | |
+| `CreateVisualValidateSession` | `CallbackURL` | `BytedToken`, `H5Link` |
+| `GetVisualValidateResult` | `BytedToken` | `GroupId` once verification succeeds |
+
+```bash
+# 1. Create a group
+curl "https://api.aisa.one/?Action=CreateAssetGroup&Version=2024-01-01" \
+  -H "Authorization: Bearer $AISA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"Name": "product-shots"}'
+
+# 2. Add an asset from a public URL (AssetType: Image, Video or Audio)
+curl "https://api.aisa.one/?Action=CreateAsset&Version=2024-01-01" \
+  -H "Authorization: Bearer $AISA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"GroupId": "<group Id>", "AssetType": "Image", "URL": "https://example.com/product.png"}'
+
+# 3. Poll until Result.Status is Active
+curl "https://api.aisa.one/?Action=GetAsset&Version=2024-01-01" \
+  -H "Authorization: Bearer $AISA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"Id": "<asset Id>"}'
+```
+
+Then reference the asset in a video request, on the Ark API or the AIsa video API:
+
+```json
+{"type": "image_url", "image_url": {"url": "asset://<asset Id>"}}
+```
+
+**Lists.** `Filter` also takes `GroupIds` (an array), `Name` (substring) and, for `ListAssets`, `Statuses`. Page with `MaxResults` (1-100, default 10) and `NextToken`, or with `PageNumber` and `PageSize` (1-100) together; do not mix the two. `SortBy` is `CreateTime` (default) or `UpdateTime`, plus `GroupId` for `ListAssets`; `SortOrder` is `Desc` (default) or `Asc`. Lists can trail recent changes by a short time.
+
+**Real-person verification.** For real-person assets (`LivenessFace` groups, a BytePlus invited feature), `CreateVisualValidateSession` returns an `H5Link` where the person completes face verification; `GetVisualValidateResult` with the `BytedToken` then returns the verified `GroupId`.
+
+**Errors** use the official `ResponseMetadata.Error` (`Code`, `Message`). `400 InvalidParameter`: invalid request. `401 Unauthorized`: missing or invalid AIsa API key. `404 NotFound`: the resource does not exist or is not yours. `429 Throttling`: rate limited. Other provider errors are returned as the provider sent them.
+
+**Differences from the official API**
+
+- Groups and assets belong to your AIsa account and are shared by all its API keys; only your own Active assets can be referenced. Assets in your own ModelArk account are not available.
+- Request signing with AK/SK is not accepted, so send the requests over HTTP with your AIsa API key. `ProjectName` is optional.
+- Asset requests are limited to 1 per second per account (bursts of 2). They are not charged; video generation is billed as usual.
 
 ## Data privacy
 
