@@ -140,6 +140,12 @@ its historical acceptance. Canonical mode always requires the payment subgate.
     require(same(native, expected_native) and digest(imported.get('aggregate_sha256')) and
             files.get('openapi/openapi.json') == imported['aggregate_sha256'],
             'Canonical publication native or aggregate hashes differ')
+    if 'reviewed_native_sha256' in lineage:
+        reviewed_native = lineage['reviewed_native_sha256']
+        require(inputs['schema_version'] == 2 and isinstance(reviewed_native, dict) and reviewed_native and
+                all(name in native and digest(value) and native[name] == value
+                    for name, value in reviewed_native.items()),
+                'Canonical reviewed native adoption differs')
     if receipt is not None:
         require(same(inputs['runtime'], {key: receipt.get(key) for key in
             ('artifact_revision', 'source_digest', 'compiler_revision', 'generation')}),

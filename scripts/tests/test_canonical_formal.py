@@ -132,6 +132,20 @@ class CanonicalShapeTests(unittest.TestCase):
             for field in ('frozen_input_files_sha256', 'current_input_files_sha256'):
                 inputs[field][path] = provenance[key]
         self.assertEqual(shape.validate_formal_assessment(report, self.receipt), shape.CANONICAL)
+        imported = report['canonical_runtime_import']
+        lineage = imported['registry_lineage']
+        lineage['reviewed_native_sha256'] = copy.deepcopy(imported['native_sha256'])
+        self.assertEqual(shape.validate_formal_assessment(report, self.receipt), shape.CANONICAL)
+        for adopted in ({}, {'missing': 'a' * 64},
+                        {next(iter(imported['native_sha256'])): '0' * 64}):
+            bad = copy.deepcopy(report)
+            bad['canonical_runtime_import']['registry_lineage']['reviewed_native_sha256'] = adopted
+            with self.subTest(adopted=adopted), self.assertRaisesRegex(ValueError, 'reviewed native adoption differs'):
+                shape.validate_formal_assessment(bad, self.receipt)
+        legacy_adoption = copy.deepcopy(self.report)
+        legacy_adoption['canonical_runtime_import']['registry_lineage']['reviewed_native_sha256'] = lineage['reviewed_native_sha256']
+        with self.assertRaisesRegex(ValueError, 'reviewed native adoption differs'):
+            shape.validate_formal_assessment(legacy_adoption, self.receipt)
         mutations = [lambda i: i.update(schema_version=1),
             lambda i: i.update(source_formal_provenance={'expected_docs_ref': 'd' * 40}),
             lambda i: i.update(source_pointer_sha256='1' * 64),

@@ -8,10 +8,11 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 from canonical_import import (schema_input_view_files, acquired_members,
-                              project_metadata, project_surfaces)
+                              project_metadata, project_surfaces, validate_reviewed_native)
 from canonical_input_assessment import assess_canonical_inputs
 from canonical_formal import assess_formal_canonical
 from check_contract_candidate import load_baseline
@@ -64,6 +65,7 @@ def stage_canonical(root, facts, *, baseline, source_receipts=None, checked_at=N
         require(canonical(strict_json(members[MANIFEST])) == canonical(manifest),
                 'Canonical manifest changed during staging')
         native_raw = {Path(name).stem: raw for name, raw in members.items() if NATIVE.fullmatch(name)}
+        validate_reviewed_native(lineage, native_raw)
         native = {name: strict_json(raw) for name, raw in native_raw.items()}
         catalogs = {Path(name).stem: strict_json(raw) for name, raw in members.items() if name.startswith('providers/')}
         metadata = project_metadata(view, catalogs, strict_json(members['index.json']),
@@ -127,6 +129,8 @@ def main(argv=None):
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_bytes(canonical(report) + b'\n')
+    if report.get('error'):
+        print(report['error'], file=sys.stderr)
     print(json.dumps({'status': report['status'], 'evaluation': report['evaluation']}))
     return status
 
