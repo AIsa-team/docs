@@ -5,19 +5,30 @@ x-aisa-operation-id: "facebook.get-profile-id"
 ---
 
 
+## URL input
+
+Pass only the Facebook profile path in `url`, including its leading slash. The upstream documents a path rather than a full URL.
+
+```json
+{"url": "/NASA"}
+```
+
+A full URL such as `https://www.facebook.com/NASA` returned HTTP 502 in three checks. Changing only that value to `/NASA` returned HTTP 200 with business `code: 0` on 2026-11-10.
+
 ## Response review
 
-The success response is not verified. Two AIsa requests on 2026-11-10 returned HTTP 502 (`origin_bad_gateway`); neither produced a successful payload.
+The successful sample contained `code`, `data`, `message`, `recordTime`, and `requestId`. Its `data` was an object containing `profile_id` as a string. This corrects the earlier no-success finding, which used the wrong URL form.
 
-The [upstream reference](https://docs.justoneapi.com/en/api/facebook/get-profile-id-v1) declares this outer envelope. Its OpenAPI leaves `data` unconstrained (`{}`), so the complete business payload schema remains unreviewed.
+The [upstream reference](https://docs.justoneapi.com/en/api/facebook/get-profile-id-v1) declares the outer envelope below, but leaves `data` unconstrained (`{}`). One successful sample does not establish a complete payload schema or every field's requiredness and nullability.
 
-| Field | Upstream declaration |
+| Field | Upstream declaration / observed behavior |
 | --- | --- |
-| `code` | Required integer; no successful AIsa sample obtained. |
-| `data` | Required; internal structure is not declared. |
-| `message` | Required string or null. |
-| `recordTime` | Required string or null. |
-| `requestId` | Optional string. |
+| `code` | Required integer; `0` in the successful sample. |
+| `data` | Required; an object in the successful sample. |
+| `data.profile_id` | Observed string; its complete constraints are not declared upstream. |
+| `message` | Required string or null; null in the sample. |
+| `recordTime` | Required string or null; string in the sample. |
+| `requestId` | Optional string; present in the sample. |
 
 {/* aisa-contract-details:start */}
 

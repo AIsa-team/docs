@@ -1,5 +1,7 @@
 # Facebook and TikTok full response check
 
+> Follow-up correction: `get-profile-id` succeeds with `{"url":"/NASA"}`. The original full-URL fixture was invalid for the upstream. The two follow-up calls bring the recorded total to 95, with a successful sample now available for every one of the 59 operations. The table below retains the initial 93-call results. See [the diagnosis](facebook-profile-id-diagnosis-20261110.json); the eight complete-schema gaps remain open.
+
 All **59 catalog operations** were called through AIsa: **29 Facebook** and **30 TikTok**. The earlier three calls plus this expanded run total **93 business/validation calls**. This is representative response verification, not exhaustive acceptance.
 
 | Result | Operations |

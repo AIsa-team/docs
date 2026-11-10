@@ -43,7 +43,8 @@ requests. No production database rows were read or changed.
 ## Response evidence and remaining eight-page debt
 
 See [the full live check](facebook-tiktok-full-response-check-20261110.md).
-Seven of the eight existing Facebook routes have successful samples; all share
+Following the path-only `get-profile-id` correction, all eight existing Facebook
+routes have successful samples; all share
 `code`, `data`, `message`, `recordTime`, and `requestId`. The three GET routes
 add `requestParams`, with string query values and a null body, contradicting the
 objects declared by the official schema. Profile-post and search pairs share
@@ -53,8 +54,10 @@ requiredness, nullability, error, or pagination equivalence.
 For the same alternate post input, POST comments returned zero items while GET
 comments returned ten. Calls were not simultaneous; the cause is not established.
 The POST comments and comment-replies samples were all empty, so their result-item
-schemas cannot be derived from those executions. `get-profile-id` returned 502
-twice and has no successful AIsa sample.
+schemas cannot be derived from those executions. The initial `get-profile-id` full-URL fixture returned 502 twice. A follow-up
+confirmed that the upstream requires a path only: `{"url":"/NASA"}` succeeded
+with HTTP 200, `code: 0`, and a string `data.profile_id`. See
+[the follow-up diagnosis](facebook-profile-id-diagnosis-20261110.json).
 
 The CR still lacks complete machine-readable success schemas for all eight
 routes. This change adds explicit response notes to their eight English and
@@ -66,6 +69,5 @@ placeholder, requests, prices, publication receipts, or runtime.
 
 Completion requires a provider-authored business schema or another reviewed
 contract with adequate evidence for the nested data, resolution of the GET
-`requestParams` conflict, nonempty comment/reply coverage, and a successful
-`get-profile-id` response. A source file or a passing unconstrained `data: {}`
+`requestParams` conflict, nonempty comment/reply coverage, and review of the observed `get-profile-id` business structure. A source file or a passing unconstrained `data: {}`
 validator alone is not evidence of that completion.
