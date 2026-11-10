@@ -21,7 +21,8 @@ class SocialFetchResponseSourceTests(unittest.TestCase):
         cls.review = json.loads(REVIEW.read_text())
         cls.sources = {row['file']: json.loads((ROOT / row['file']).read_text())
                        for row in cls.review['sources']}
-        cls.mirrors = public_mirror_index(ROOT)
+        reviewed = {(row['path'], row['method']) for row in cls.review['sources']}
+        cls.mirrors = {key: value for key, value in public_mirror_index(ROOT).items() if key in reviewed}
 
     def test_exact_reviewed_operations_keep_original_provider_declarations(self):
         self.assertEqual(len(self.sources), 51)
