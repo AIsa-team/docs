@@ -261,6 +261,47 @@ class RegistryReplayTests(unittest.TestCase):
         self.assertNotIn('openapi/new.json', files)
         self.assertEqual(files['openapi/one.json'], bundle.contents['input/openapi/one.json'])
 
+    def reviewed_native_update(self):
+        self.git('init', '-q')
+        previous = self.seal_publication('a' * 64)
+        prior_native = (self.root / 'openapi/one.json').read_bytes()
+        for name in ('context.json', 'source-receipts.json'):
+            path = self.root / 'docs/schema-inputs' / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'{}\n')
+        updated = document()
+        updated['paths']['/request']['get']['responses']['200']['content']['application/json']['schema'] = {
+            'type': 'object', 'properties': {'id': {'type': 'string'}}}
+        (self.root / 'openapi/one.json').write_bytes(canonical(updated))
+        self.git('add', '.')
+        self.git('-c', 'user.name=Ken', '-c', 'user.email=ken@aisa.one',
+                 'commit', '-qm', 'Reviewed schema and generated native update')
+        revision = self.git('rev-parse', 'HEAD').decode().strip()
+        bundle = SimpleNamespace(contents={
+            'input/openapi/registry.yaml': (self.root / 'openapi/registry.yaml').read_bytes(),
+            'input/openapi/one.json': prior_native,
+        })
+        return previous, revision, bundle
+
+    def test_reviewed_native_update_preserves_historical_input(self):
+        previous, revision, bundle = self.reviewed_native_update()
+        files, lineage = self.reviewed_input_view(previous, revision, bundle)
+        self.assertEqual(files['openapi/one.json'], bundle.contents['input/openapi/one.json'])
+        self.assertEqual(lineage['reviewed_native_sha256'], {
+            'one': sha((self.root / 'openapi/one.json').read_bytes())})
+        importer.validate_reviewed_native(lineage,
+            {'one': (self.root / 'openapi/one.json').read_bytes()})
+        for native in ({}, {'one': bundle.contents['input/openapi/one.json']}):
+            with self.subTest(native=bool(native)), self.assertRaisesRegex(
+                    ValueError, 'Canonical Runtime differs from reviewed native document: one'):
+                importer.validate_reviewed_native(lineage, native)
+
+    def test_native_update_after_locked_review_is_rejected(self):
+        previous, revision, bundle = self.reviewed_native_update()
+        (self.root / 'openapi/one.json').write_bytes(canonical(document(title='Unreviewed')))
+        with self.assertRaisesRegex(ValueError, 'Prior native publication differs'):
+            self.reviewed_input_view(previous, revision, bundle)
+
     def test_reviewed_registration_still_rejects_unregistered_extra_native(self):
         previous, revision, bundle = self.reviewed_provider_registration()
         (self.root / 'openapi/rogue.json').write_bytes(canonical(document('rogue')))

@@ -390,13 +390,21 @@ def schema_input_view_files(repository, current_view, docs_ref, previous_ref, *,
     previous_pointer = strict_json(git.read(previous_ref, 'docs/publication/current.json'))
     require(previous_pointer.get('contract_release') == previous.get('contract_release'),
             'Prior formal pointer differs')
-    previous_native = {}
+    previous_native, reviewed_native = {}, {}
     for name, digest in previous_pointer['files_sha256'].items():
         if name.startswith('openapi/') and name.count('/') == 1 and name.endswith('.json') and Path(name).name not in SKIP_FILES:
             raw = git.read(previous_ref, name)
-            require(sha(raw) == digest and regular_read(current, name) == raw,
-                    'Prior native publication differs from current input view')
-            previous_native[Path(name).stem] = strict_json(raw)
+            require(sha(raw) == digest, 'Prior native publication hash differs')
+            current_raw = regular_read(current, name)
+            provider = Path(name).stem
+            if current_raw != raw:
+                # A reviewed input can carry a generated draft alongside its
+                # schemas. Authenticate that exact draft from the independently
+                # deployed input ref; it never replaces historical input bytes.
+                require(reviewed and current_raw == git.read(docs_ref, name),
+                        'Prior native publication differs from current input view: ' + name)
+                reviewed_native[provider] = sha(canonical(strict_json(current_raw)))
+            previous_native[provider] = strict_json(raw)
     previous_registry = git.read(previous_ref, 'openapi/registry.yaml')
     current_registry = regular_read(current, 'openapi/registry.yaml')
     require(sha(previous_registry) == previous_pointer['files_sha256'].get('openapi/registry.yaml') and
@@ -413,7 +421,8 @@ def schema_input_view_files(repository, current_view, docs_ref, previous_ref, *,
     # A reviewed registration may already have a draft native file before its
     # first formal promotion. Those draft bytes never enter frozen_files: the
     # verified Runtime supplies the new output. Every prior native above still
-    # requires exact original bytes; unrelated additions remain rejected.
+    # requires original bytes or an exact reviewed draft whose canonical Runtime
+    # equality is checked before projection; unrelated additions remain rejected.
     require(previous_native_names <= current_native_names and
             current_native_names - previous_native_names <= reviewed_additions,
             'Current native graph differs from prior formal graph')
@@ -434,9 +443,20 @@ def schema_input_view_files(repository, current_view, docs_ref, previous_ref, *,
     if not reviewed or current_registry != files['openapi/registry.yaml']:
         validate_derived_registry(yaml.load(files['openapi/registry.yaml'], Loader=UniqueLoader),
             yaml.load(current_registry, Loader=UniqueLoader), frozen_native, previous_native)
-    return files, {'previous_formal_provenance': previous,
-                   'previous_registry_sha256': sha(previous_registry),
-                   'fixed_registry_sha256': sha(files['openapi/registry.yaml'])}
+    lineage = {'previous_formal_provenance': previous,
+               'previous_registry_sha256': sha(previous_registry),
+               'fixed_registry_sha256': sha(files['openapi/registry.yaml'])}
+    if reviewed_native:
+        lineage['reviewed_native_sha256'] = reviewed_native
+    return files, lineage
+
+
+def validate_reviewed_native(lineage, native_raw):
+    """A reviewed draft may only be adopted by the identical Runtime contract."""
+    from schema_input_bundle import sha
+    for provider, expected in lineage.get('reviewed_native_sha256', {}).items():
+        require(provider in native_raw and sha(native_raw[provider]) == expected,
+                'Canonical Runtime differs from reviewed native document: ' + provider)
 
 
 def acquired_members(acquired, assessment):
@@ -489,6 +509,7 @@ def assess_canonical_candidate(repository, current_view, projected_view, acquire
         verified_manifest = strict_json(contents[MANIFEST])
         require(canonical(verified_manifest) == canonical(manifest), 'Canonical manifest changed during assessment')
         native_raw = {Path(name).stem: raw for name, raw in contents.items() if NATIVE.fullmatch(name)}
+        validate_reviewed_native(lineage, native_raw)
         native = {name: strict_json(raw) for name, raw in native_raw.items()}
         facts = {Path(name).stem: strict_json(raw) for name, raw in contents.items() if name.startswith('providers/')}
         metadata = project_metadata(view, facts, strict_json(contents['index.json']),

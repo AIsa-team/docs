@@ -21,6 +21,22 @@ schema before the worker can build it. The order is:
    runs actual formal assessment, current source authorization, export/replay,
    origin, previous-publication lineage, main CAS and consumer notices.
 
+When R also contains regenerated native documents, the first canonical
+publication may adopt those reviewed drafts. The publisher authenticates each
+changed native file against its exact bytes at the Runtime-locked R, and requires
+the verified Runtime native document to have the same canonical JSON hash before
+projecting any output. The formal assessment repeats this check and records the
+adopted hashes in `registry_lineage.reviewed_native_sha256`. Historical native
+documents still come from F and retain their original hashes; drafts are never
+used as compatibility inputs. A draft changed after R, a legacy input without
+reviewed provenance, or an older Runtime contract is rejected before writes.
+
+Merge the Docs publisher support before deploying the Services input-lock
+promotion. The API and worker must both carry the new lock before Runtime can
+publish its matching canonical release. Until then, the publisher intentionally
+keeps the last good documentation and reports the input mismatch. Merging a Docs
+schema PR alone does not update Runtime's independently fixed compiler inputs.
+
 No production input context/receipt or worker lock is added by this code change.
 A first real snapshot/promotion is a separate reviewed change.
 

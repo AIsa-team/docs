@@ -1,4 +1,5 @@
 import json
+import io
 import os
 from pathlib import Path
 import subprocess
@@ -11,7 +12,7 @@ import yaml
 sys.path[:0] = [str(Path(__file__).resolve().parents[1]), str(Path(__file__).parent)]
 import runtime_publication as publication
 import fetch_runtime_release as fetch
-from schema_input_bundle import REVIEWED_BASELINE
+from schema_input_bundle import REVIEWED_BASELINE, sha, canonical
 import test_fetch_runtime_release as facts_fixture
 import test_runtime_contract_artifact as canonical_fixture
 
@@ -58,6 +59,29 @@ class RuntimePublicationTests(unittest.TestCase):
         with patch.object(publication.subprocess, 'check_output', side_effect=['a' * 40, '']):
             with self.assertRaisesRegex(ValueError, 'attributed previous'):
                 publication.publication_refs(self.root, REVIEWED_BASELINE)
+
+    def test_stale_runtime_cannot_overwrite_reviewed_native_and_reports_reason(self):
+        acquired = self.acquired(True)
+        marker = self.root / 'openapi.yaml'; marker.write_bytes(b'last good')
+        receipts = self.root / 'receipts.json'; receipts.write_text('{}')
+        members = {path.relative_to(acquired).as_posix(): path.read_bytes()
+                   for path in acquired.rglob('*.json')}
+        provider = next(Path(name).stem for name in members if publication.NATIVE.fullmatch(name))
+        lineage = {'reviewed_native_sha256': {provider: sha(canonical({'new': 'reviewed response'}))}}
+        report = self.root / 'stage-report.json'
+        with patch.object(publication, 'publication_refs', return_value=('a' * 40, 'b' * 40)), \
+             patch.object(publication, 'schema_input_view_files', return_value=({}, lineage)), \
+             patch.object(publication, 'assess_canonical_inputs', return_value={}), \
+             patch.object(publication, 'acquired_members', return_value=members), \
+             patch.object(publication, 'project_surfaces', side_effect=AssertionError('must reject before projection')), \
+             patch('sys.stderr', new_callable=io.StringIO) as errors, patch('sys.stdout', new_callable=io.StringIO):
+            status = publication.main(['stage', '--root', str(self.root), '--facts-dir', str(acquired),
+                '--baseline-ref', REVIEWED_BASELINE, '--source-receipts', str(receipts),
+                '--report', str(report), '--write'])
+        self.assertEqual(status, 3)
+        self.assertIn('Canonical Runtime differs from reviewed native document: ' + provider, errors.getvalue())
+        self.assertEqual(json.loads(report.read_bytes())['status'], 'not_assessed')
+        self.assertEqual(marker.read_bytes(), b'last good')
 
     def test_failed_formal_gate_retains_failure_report_and_does_not_emit_pass(self):
         acquired = self.acquired(True)
