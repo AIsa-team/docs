@@ -36,7 +36,7 @@ PLACEHOLDER_TOKEN = re.compile(r'(?<![`\w])([^\s`<>(]*<[A-Za-z_][\w-]*>(?:[^\s`<
 
 
 def has_fixed_customer_price(pricing):
-    """Customer pricing takes precedence over the supplier's cost contract."""
+    """Identify explicit customer tariffs for the readable price block."""
     if 'customer_pricing' in pricing:
         return pricing['customer_pricing'] == 'fixed_success'
     # Legacy declarations may expose only a fixed cost contract. A resource
@@ -67,7 +67,9 @@ def pricing_summary(pricing, language='en'):
         return PLACEHOLDER_TOKEN.sub(r'`\1`', event.strip()) + settlement
     unavailable = pricing.get('reference_unavailable') or pricing.get('estimate_unavailable_reason') or pricing.get('estimate_source') == 'unavailable'
     estimate = None if unavailable else usd(pricing.get('default_request_estimate_usd'))
-    fixed = has_fixed_customer_price(pricing)
+    # Preserve the existing fixed-supplier summary: a deterministic supplier
+    # tariff times a constant tier multiplier can also be a fixed price.
+    fixed = has_fixed_customer_price(pricing) or pricing.get('cost_contract') == 'fixed_success'
     # A fixed_request with an integer customer price is one price per successful
     # request. Resource reads (cache_hit_share_bps, charged per delivered read)
     # and variant-priced operations do not have one request price.

@@ -91,11 +91,11 @@ The `provider_cost_multiplier` customer pricing declaration now controls the
 customer-facing explanation instead of the technical `response_units` cost
 contract implying a business usage meter. Named credit rates remain in the
 summary, explicitly labelled **Provider cost rate** when this pricing mode is
-declared. An explicit customer-pricing mode takes precedence over the supplier
-cost contract; a fixed supplier cost alone cannot override an explicit
-`provider_cost_multiplier` customer declaration. Legacy declarations without a
-customer mode retain their fixed-cost fallback. Free, unavailable and event
-branches retain their meaning. Estimates are not multiplied a second time.
+declared. Existing fixed-supplier summaries are preserved: a deterministic
+supplier tariff times a constant customer-tier multiplier can also yield a
+fixed price. This change does not reclassify those operations without further
+runtime evidence. Free, unavailable and event branches retain their meaning.
+Estimates are not multiplied a second time.
 
 For this particular Treg route, the upstream
 [cost-header contract](https://treg.to/integrate.md) explains the micro-USD
@@ -111,14 +111,12 @@ They cover English/Chinese summaries, readable MDX, OpenAPI descriptions and
 the sales projection; generic units at several rates; actual named credits,
 including one priced at 0.000001; a non-1 customer multiplier; fixed customer
 prices with zero cost; metadata preservation and idempotent regeneration.
-The additional fixed-price cases first failed against the original renderer:
-fixed tariffs leaked supplier arithmetic, and a fixed supplier cost overrode an
-explicit multiplier customer mode.
+The fixed-price case first failed against the original renderer because fixed
+tariffs leaked supplier arithmetic. A separate regression preserves existing
+fixed-supplier summaries even when the customer tariff uses a constant multiplier.
 
-An offline projection of all 6,446 operations changes 5,414 summaries, including
-the clearer explanation of provider-cost pricing. Of these, 1,037 declarations
-explicitly use multiplier customer pricing despite a fixed supplier cost and
-now follow their customer mode. It removes all 3,707 ambiguous
+An offline projection of all 6,446 operations changes 4,377 summaries, including
+the clearer explanation of provider-cost pricing. It removes all 3,707 ambiguous
 generic-unit price summaries and preserves every non-description operation
 field. English/Chinese Amazon pages were regenerated in scratch files and
 verified idempotent. A separate scratch preview uses the proposed fixed tariff;

@@ -112,13 +112,13 @@ class PricingUnitSemanticsTests(unittest.TestCase):
                     record = next(iter(request_blocks(full).values()))[0]
                     self.assertEqual(record['request']['x-aisa-pricing'], pricing)
 
-    def test_fixed_supplier_cost_does_not_override_explicit_customer_pricing(self):
+    def test_fixed_supplier_tariff_retains_its_existing_price_summary(self):
         pricing = dict(self.pricing, cost_contract='fixed_success')
-        for language, estimate in (('en', 'Default request estimate'), ('zh', '默认请求预估费用')):
+        for language, label in (('en', '$0.01476 USD per successful request'), ('zh', '每次成功请求 $0.01476 USD')):
             text = pricing_summary(pricing, language)
-            self.assertIn(estimate, text)
-            self.assertNotIn('per successful request', text)
-            self.assertNotIn('每次成功请求', text)
+            self.assertIn(label, text)
+            self.assertNotIn('not a fixed price', text)
+            self.assertNotIn('不是固定价格', text)
 
     def test_openapi_localization_and_sales_replace_old_summary_without_metadata_drift(self):
         original = copy.deepcopy(self.source)
