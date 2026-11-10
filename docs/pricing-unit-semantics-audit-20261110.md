@@ -36,8 +36,8 @@ lengths. The generic unit wording on an async tariff remains "billable unit"
 where Runtime does not publish a more specific customer unit.
 
 Resource cache amounts use the integer customer price and declared basis-point
-share, rounded upward to micro-USD as Runtime does. A share of zero means full
-price, not free. These are normal-tier reference amounts, not a guarantee for
+share, rounded upward to micro-USD as Runtime does. A share of zero publishes no cache-hit
+price and disables store reuse, so no stored-result offer is shown. These are normal-tier reference amounts, not a guarantee for
 all account plans. Social's declared 15-minute/6-hour free cache windows and
 failure/unknown waivers remain visible; those conditions are not invented for
 other operations. Social event amounts come from the current declaration, not

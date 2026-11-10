@@ -48,9 +48,8 @@ class CustomerPricePresentationTests(unittest.TestCase):
         self.assertIn('$0.000101 USD per delivered read', text)
         self.assertIn('Stored result: $0.000026 USD', text)
         self.assertIn('delivers nothing is not charged', text)
-        for share in (0, 10000):
-            self.assertIn('Stored result: $0.000101 USD', pricing_summary(dict(p, cache_hit_share_bps=share)))
-        for share in (-1, True, 10001, '2500'):
+        self.assertIn('Stored result: $0.000101 USD', pricing_summary(dict(p, cache_hit_share_bps=10000)))
+        for share in (0, -1, True, 10001, '2500'):
             self.assertNotIn('Stored result:', pricing_summary(dict(p, cache_hit_share_bps=share)))
         variants = {'kind': 'fixed_request', 'variants': {
             'a': {'kind': 'fixed_request', 'customer_micros_usd': 5000, 'status': 'enabled'},

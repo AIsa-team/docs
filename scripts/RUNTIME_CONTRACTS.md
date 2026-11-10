@@ -41,8 +41,8 @@ be guessed from response arrays. Missing prices are never shown as free.
 
 Integer `customer_micros_usd` is converted exactly to USD. Resource reads show
 normal-tier reference prices, delivered-read conditions and computed cache
-prices, with Runtime's upward micro-USD rounding and zero-share-as-full-price
-semantics. Variant prices are listed separately and disabled variants are
+prices, with Runtime's upward micro-USD rounding. A zero share does not publish
+a cache-hit price, so no stored-result offer is shown. Variant prices are listed separately and disabled variants are
 unavailable. Async `configured_fixed_price` is per completed job; metered jobs
 show their customer unit price even when the request total is not yet known.
 Social prices are sourced from the published event declaration, not hard-coded;

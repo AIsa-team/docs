@@ -117,9 +117,10 @@ def fixed_request_summary(pricing, zh):
             parts.append(t(f'Normal-tier reference price: {amount} USD per delivered read.', f'普通用户参考价格：每次成功交付查询 {amount} USD。'))
             parts.append(t('A read that delivers nothing is not charged.', '未交付查询结果时不收费。'))
             share = pricing['cache_hit_share_bps']
-            if micros is not None and type(share) is int and 0 <= share <= 10000:
-                # Zero means no discount in Runtime, not a free cache hit.
-                cached = micros if share == 0 else (micros * share + 9999) // 10000
+            if micros is not None and type(share) is int and 0 < share <= 10000:
+                # Resource execution skips the store when no hit price is
+                # published (share=0); only a positive share offers reuse.
+                cached = (micros * share + 9999) // 10000
                 cached_amount = usd(Decimal(cached) / 1_000_000)
                 parts.append(t(f'Stored result: {cached_amount} USD.', f'使用已存结果：{cached_amount} USD。'))
         elif pricing.get('estimate_source') == 'configured_fixed_price':

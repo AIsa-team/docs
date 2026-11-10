@@ -14,6 +14,18 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class PricingProseTests(unittest.TestCase):
+    def test_old_generated_metadata_notice_refreshes_without_touching_code(self):
+        from pricing_prose import OLD_NOTICE, OLD_NOTICE_ZH, NOTICE_ZH
+        for old, current, language in ((OLD_NOTICE, NOTICE, 'en'), (OLD_NOTICE_ZH, NOTICE_ZH, 'zh')):
+            self.assertEqual(clean_text(old, language), current)
+            example = '```text\n' + old + '\n```'
+            self.assertEqual(clean_text(example, language), example)
+            page = '---\ntitle: Pricing\n---\n\n' + old + '\n'
+            updated = clean_page(page, language)
+            self.assertNotIn(old, updated)
+            self.assertEqual(updated.count(current), 1)
+            self.assertEqual(clean_page(updated, language), updated)
+
     def test_visible_price_tracks_runtime_in_openapi_localization_pages_and_sales(self):
         from readable_contract_notes import readable_block
         from runtime_localize_openapi_zh import localize_tree

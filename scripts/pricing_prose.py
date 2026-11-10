@@ -37,6 +37,8 @@ RATE = re.compile(
     r'/\s*(?:request|call|次)\b|计费|收费|每次|每请求', re.I)
 NOTICE = 'See Pricing for current prices. Where supported, get a quote for your request.'
 NOTICE_ZH = '当前价格请查看费用说明；支持报价的接口可按实际请求获取报价。'
+OLD_NOTICE = 'For current API pricing, see the published x-aisa-pricing metadata. Where supported, obtain a quote for your exact request.'
+OLD_NOTICE_ZH = '当前 API 价格请查看公开的 x-aisa-pricing 信息；接口支持报价时，请针对实际请求获取报价。'
 # Examples and code are data, even when they happen to contain billing words.
 FENCES = re.compile(r'(```[^\n]*\n.*?```|~~~[^\n]*\n.*?~~~|<pre\b[^>]*>.*?</pre>)', re.S | re.I)
 PARTS = re.compile(r'(\n+|[;；](?![^()]*\))|(?<=[.!?。！？])\s+(?!\d)|<br\s*/?>|</?p\b[^>]*>|(?=\bNote:?)|(?<=false)(?=Note))', re.I)
@@ -84,6 +86,13 @@ def reconcile_free_claim(text, pricing):
 
 def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
     """Drop price clauses, retaining separate usage rules and non-price prose."""
+    # Notices from earlier generators must also refresh when they have no
+    # monetary literal. Fenced examples remain data, as with rate cleanup.
+    if OLD_NOTICE in text or OLD_NOTICE_ZH in text:
+        chunks = FENCES.split(text)
+        for index in range(0, len(chunks), 2):
+            chunks[index] = chunks[index].replace(OLD_NOTICE, NOTICE).replace(OLD_NOTICE_ZH, NOTICE_ZH)
+        text = ''.join(chunks)
     if not MONEY.search(text):
         return text
     notice = NOTICE_ZH if language == 'zh' else NOTICE
