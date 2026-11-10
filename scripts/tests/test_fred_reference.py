@@ -152,7 +152,8 @@ class FredReferenceTest(unittest.TestCase):
             for key in ('parameters','security','externalDocs'):
                 self.assertEqual(item['get'][key],self.document()['paths'][path]['get'][key])
             for media in item['get']['responses']['200'].get('content',{}).values():
-                self.assertNotIn('schema',media)
+                self.assertIn('schema',media)
+                self.assertFalse(media['schema'].get('properties'))
         evidence=fresh['info']['x-aisa-source']['operation_identity_evidence']
         self.assertEqual(len(evidence),35)
         self.assertEqual(sum(x['request_status']=='pending' for x in evidence),3)
@@ -166,7 +167,7 @@ class FredReferenceTest(unittest.TestCase):
         public,pending=compose(facts,fresh)
         self.assertEqual(pending,[])
         self.assertEqual(len(public['paths']),35)
-        self.assertEqual(len(public['info']['x-aisa-document']['response_pending']),35)
+        self.assertEqual(len(public['info']['x-aisa-document']['response_pending']),0)
         self.assertTrue(any('examples' in media for item in public['paths'].values()
                             for op in item.values() for response in op.get('responses',{}).values()
                             for media in response.get('content',{}).values()))
@@ -199,7 +200,7 @@ class FredReferenceTest(unittest.TestCase):
             with self.subTest(url=bad),self.assertRaisesRegex(ValueError,'GeoFRED'):
                 reference_identity(raw,bad)
 
-    def test_official_response_examples_keep_strings_and_never_infer_schema(self):
+    def test_official_response_examples_keep_strings_and_publish_open_representation(self):
         raw=b'''<div id="content-container"><h2>Examples</h2><h3>JSON</h3>
         <h4>Request (HTTPS GET)</h4><pre>https://api.stlouisfed.org/fred/example?api_key=demo</pre>
         <h4>Response</h4><pre>{"note":"two  spaces", "count":2, "items":[]}</pre>
@@ -208,9 +209,11 @@ class FredReferenceTest(unittest.TestCase):
         self.assertEqual(set(evidence['content']),{'application/json'})
         media=evidence['content']['application/json']
         self.assertEqual(media['examples']['official_1']['value']['note'],'two  spaces')
-        self.assertNotIn('schema',media)
+        self.assertEqual(media['schema']['type'],'object')
+        self.assertTrue(media['schema']['additionalProperties'])
+        self.assertNotIn('properties',media['schema'])
         self.assertFalse(evidence['schema_inferred'])
-        self.assertEqual(evidence['schema_status'],'not_declared_in_reference')
+        self.assertEqual(evidence['schema_status'],'open_representation_only')
 
     def test_malformed_duplicate_and_nonfinite_response_examples_remain_pending(self):
         for sample in ('{"x":1,"x":2}','{"x":NaN}','{"x": ...}'):
@@ -234,7 +237,8 @@ class FredReferenceTest(unittest.TestCase):
                          [('release','link',False),('release','notes',False)])
         self.assertEqual({row['media_type'] for row in evidence['field_declarations']},{'text/xml'})
         self.assertTrue(all('type' not in row for row in evidence['field_declarations']))
-        self.assertNotIn('schema',evidence['content']['text/xml'])
+        self.assertEqual(evidence['content']['text/xml']['schema']['type'],'string')
+        self.assertEqual(evidence['content']['text/xml']['schema']['contentMediaType'],'application/xml')
         self.assertFalse(evidence['schema_inferred'])
 
     def test_xml_example_dtd_is_never_loaded(self):
@@ -243,7 +247,7 @@ class FredReferenceTest(unittest.TestCase):
         self.assertEqual(evidence['content'],{})
         self.assertEqual(evidence['pending'][0]['reason'],'XML declarations are unsupported')
 
-    def test_examples_do_not_silently_satisfy_composer_payload_schema_gate(self):
+    def test_open_representation_schema_satisfies_composer_payload_schema_gate(self):
         source=self.document()
         source=json.loads(json.dumps(source))
         path=next(iter(source['paths']))
@@ -258,10 +262,30 @@ class FredReferenceTest(unittest.TestCase):
         document,pending=compose(facts,source)
         self.assertEqual(pending,[])
         self.assertEqual(document['paths']['/apis/v1/fred/example']['get']['operationId'],'fixture_preserved')
-        self.assertEqual(len(document['info']['x-aisa-document']['response_pending']),1)
+        self.assertEqual(len(document['info']['x-aisa-document']['response_pending']),0)
         response=document['paths']['/apis/v1/fred/example']['get']['responses']['200']
         self.assertEqual(response['content']['application/json']['examples']['official_1']['value'],{'items':[]})
-        self.assertNotIn('schema',response['content']['application/json'])
+        self.assertEqual(response['content']['application/json']['schema'], {
+            'type': 'object', 'additionalProperties': True,
+            'description': 'The official reference declares a JSON object but does not declare its member set; fields remain open.'})
+
+    def test_published_fred_source_declares_open_wire_types_without_field_inference(self):
+        published = json.loads((Path(__file__).resolve().parents[2] / 'openapi/upstream/fred-official.json').read_text())
+        source = published['info']['x-aisa-source']
+        self.assertEqual(source['response_schema_status'], 'open_representation_only')
+        self.assertTrue(source['response_schema_available'])
+        self.assertIn('do not infer fields', ' '.join(source['limitations']))
+        for item in published['paths'].values():
+            response = item['get']['responses']['200']
+            for media, declaration in response.get('content', {}).items():
+                schema = declaration['schema']
+                if media == 'application/json':
+                    self.assertEqual(schema['type'], 'object')
+                    self.assertTrue(schema['additionalProperties'])
+                    self.assertNotIn('properties', schema)
+                elif media == 'text/xml':
+                    self.assertEqual(schema['type'], 'string')
+                    self.assertEqual(schema['contentMediaType'], 'application/xml')
 
     @staticmethod
     def document():

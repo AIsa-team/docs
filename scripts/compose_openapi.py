@@ -774,6 +774,18 @@ def has_response_contract(response: dict) -> bool:
 
 def has_response_payload(response: dict) -> bool:
     """Keep examples and partial declarations without claiming schema coverage."""
+    # The generated runtime placeholder is an empty schema paired with the
+    # explicit unreviewed description.  It carries no payload authority and
+    # must be replaceable by an independently reviewed response source.
+    if response.get("description") == UNREVIEWED_SUCCESS_DESCRIPTION:
+        content = response.get("content", {})
+        if isinstance(content, dict) and content and all(
+            isinstance(media, dict)
+            and set(media) <= {"schema"}
+            and media.get("schema") == {}
+            for media in content.values()
+        ):
+            return False
     content = response.get("content", {})
     return response.get("x-aisa-no-content") is True or isinstance(content, dict) and any(
         "schema" in media or "example" in media or "examples" in media
@@ -1186,7 +1198,9 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                                 response = resolve_fragment(response, previous, output, "published_responses.json", preserve_refs=True)
                             effective = copy.deepcopy(runtime_response)
                             effective["content"] = copy.deepcopy(response["content"])
-                            if effective.get("description") in (None, "Success", "Successful response"):
+                            if effective.get("description") in (
+                                None, "Success", "Successful response", UNREVIEWED_SUCCESS_DESCRIPTION
+                            ):
                                 effective["description"] = response["description"]
                             operation["responses"][status] = effective
                             if response.get("x-aisa-no-content") is True:
@@ -1199,6 +1213,22 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     if source_payloads:
                         operation["x-aisa-response-source"] = {"kind": "upstream_success_contract", "source": copy.deepcopy(response_source),
                                                                "content_hash": digest(source_payloads)}
+                    if (source_payloads or operation.get("x-aisa-response-source", {}).get("kind") == "upstream_success_contract"):
+                        # A Runtime operation may carry an older generic review
+                        # marker from before an independent success source was
+                        # bound. Once the source supplies the response
+                        # contract, that marker must not continue to publish
+                        # the response as unreviewed. Preserve a request-side
+                        # review marker when request binding is still pending;
+                        # otherwise remove the obsolete review object.
+                        review = operation.get("x-aisa-review")
+                        if isinstance(review, dict) and review.get("response") == "generic":
+                            if review.get("request") == "runtime_binding":
+                                review = copy.deepcopy(review)
+                                review["response"] = "reviewed_source"
+                                operation["x-aisa-review"] = review
+                            else:
+                                operation.pop("x-aisa-review", None)
                     if retained:
                         retained_responses[operation_id] = retained
                         operation.setdefault("x-aisa-response-source", {
@@ -1209,6 +1239,14 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                                if re.fullmatch(r"2(?:[0-9]{2}|XX)", str(status))
                                and not (str(status) in {"204", "205"} and not response.get("content"))
                                and not has_response_contract(response)]
+                    if (not unknown
+                            and operation.get("x-aisa-response-source", {}).get("kind") == "upstream_success_contract"):
+                        # A previous generated snapshot can retain a pending
+                        # marker for the same success status even after its
+                        # independent response source has been bound. The
+                        # typed response is now authoritative, so drop that
+                        # obsolete marker before publishing the operation.
+                        operation.pop("x-aisa-response-pending", None)
                     unreviewed_response = []
                     if (unreviewed_runtime and unknown and not response_error
                             and operation.get("x-aisa-status") == "enabled"):
