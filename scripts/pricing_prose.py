@@ -67,14 +67,25 @@ def pricing_summary(pricing, language='en'):
         summary = f'公开参考价格：每次成功请求 {estimate} USD。' if zh else f'Published reference price: {estimate} USD per successful request.'
     elif estimate is not None:
         summary = f'默认请求预估费用：{estimate} USD（不是固定价格）。' if zh else f'Default request estimate: {estimate} USD (not a fixed price).'
-        if pricing.get('cost_contract') in {'response_usd', 'response_count', 'response_sku', 'response_units', 'request_formula', 'response_components', 'plan_units'}:
+        if pricing.get('customer_pricing') != 'provider_cost_multiplier' and pricing.get('cost_contract') in {'response_usd', 'response_count', 'response_sku', 'response_units', 'request_formula', 'response_components', 'plan_units'}:
             summary = ('按用量计费；' if zh else 'Usage-based billing; ') + summary
     else:
         summary = '当前未提供请求参考价格；请使用接口支持的报价功能确认费用。' if zh else 'A request reference price is not currently available; use a request quote where supported.'
+    provider_priced = pricing.get('customer_pricing') == 'provider_cost_multiplier'
+    if provider_priced and not fixed:
+        summary += (' 按上游成本乘以适用的用户倍率计费。' if zh else
+                    ' Billed from provider cost multiplied by the applicable customer multiplier.')
     rate = usd(pricing.get('unit_rate_usd'))
     unit = pricing.get('unit')
-    if rate is not None and isinstance(unit, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,80}', unit):
-        summary += f' 声明的单位费率：每 {unit} {rate} USD。' if zh else f' Declared unit rate: {rate} USD per {unit}.'
+    # provider_credit is a generic cost-accounting label: it may represent
+    # money or real credits. Neither its name, rate nor evidence location
+    # establishes a customer-facing unit. Keep it in the detailed declaration;
+    # never infer micro-USD, returned items, or a per-success charge here.
+    if rate is not None and isinstance(unit, str) and unit != 'provider_credit' and re.fullmatch(r'[A-Za-z0-9_-]{1,80}', unit):
+        if provider_priced:
+            summary += f' 上游成本费率：每 {unit} {rate} USD。' if zh else f' Provider cost rate: {rate} USD per {unit}.'
+        else:
+            summary += f' 声明的单位费率：每 {unit} {rate} USD。' if zh else f' Declared unit rate: {rate} USD per {unit}.'
     summary += settlement
     return summary
 

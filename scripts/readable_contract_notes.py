@@ -128,8 +128,6 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
         lines += [t("Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.", "公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。"), ""]
         labels = {
             "default_request_estimate_usd": t("Default request reference estimate (USD)", "默认请求参考估价（USD）"),
-            "unit_rate_usd": t("Declared unit rate (USD)", "声明的单位费率（USD）"),
-            "unit": t("Billing unit", "计费单位"),
             "cost_contract": t("Cost contract", "计费依据"),
             "customer_multiplier": t("Published reference multiplier", "公开参考倍率"),
             "units_per_count": t("Count multiplier before declared scaling", "缩放前的计数倍率"),
@@ -139,6 +137,17 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
             "evidence_source": t("Settlement evidence source", "结算证据来源"),
         }
         lines += [line(label, pricing[key]) for key, label in labels.items() if key in pricing]
+        if "unit_rate_usd" in pricing or "unit" in pricing:
+            lines += ["", "### " + t("Cost conversion details", "成本换算说明"), "",
+                      t("These parameters describe conversion to provider cost. Customer pricing is declared separately; the conversion rate alone is not a customer price per request or result.",
+                        "以下参数用于换算上游成本，用户计价规则另行声明；换算费率本身不是每次请求或每条结果的用户单价。"), ""]
+            if pricing.get("unit") == "provider_credit":
+                lines += [t("The generic provider_credit label does not identify what is measured; consult the complete contract for the declared unit semantics.",
+                            "通用 provider_credit 标签不说明具体计量对象；单位含义以完整定义为准。"), ""]
+            for key, label in (("unit_rate_usd", t("Cost conversion rate (USD/unit)", "成本换算费率（USD/单位）")),
+                               ("unit", t("Declared cost unit", "声明的成本单位"))):
+                if key in pricing:
+                    lines.append(line(label, pricing[key]))
         if "units_per_count" in pricing:
             lines += [t("The count multiplier is not a standalone credit or USD price. Apply only the scaling and rounding explicitly declared by this contract; use a supported quote for the complete request.", "计数倍率本身不是 credit 单价或 USD 价格。只采用本定义明确声明的缩放和取整规则；完整请求的费用请使用接口支持的报价功能确认。"), ""]
         for key, heading in [("request_cost_drivers", t("Declared request billing units", "声明的请求计费单位")), ("reserve_plan_units", t("Reservation units (not settled usage)", "预留单位（不是结算用量）"))]:
