@@ -167,10 +167,25 @@ class FredReferenceTest(unittest.TestCase):
         public,pending=compose(facts,fresh)
         self.assertEqual(pending,[])
         self.assertEqual(len(public['paths']),35)
-        self.assertEqual(len(public['info']['x-aisa-document']['response_pending']),0)
+        self.assertEqual({row['path'] for row in public['info']['x-aisa-document']['response_pending']}, {
+            '/apis/v1/fred/series/search', '/apis/v1/geofred/regional/data',
+            '/apis/v1/geofred/shapes/file',
+        })
         self.assertTrue(any('examples' in media for item in public['paths'].values()
                             for op in item.values() for response in op.get('responses',{}).values()
                             for media in response.get('content',{}).values()))
+
+    def test_committed_response_evidence_matches_the_declared_converter_output(self):
+        document = json.loads((Path(__file__).resolve().parents[2] /
+                               'openapi/upstream/fred-official.json').read_text())
+        source = document['info']['x-aisa-source']
+        self.assertEqual(source['converter'], 'scripts/import_fred_reference.py@6')
+        for path, item in document['paths'].items():
+            with self.subTest(path=path):
+                evidence = item['get']['x-aisa-response-evidence']
+                self.assertEqual(evidence['schema_status'], 'open_representation_only')
+                self.assertFalse(evidence['schema_inferred'])
+                self.assertEqual(evidence['content'], item['get']['responses']['200']['content'])
 
 
     def test_redirect_is_rejected_before_following_business_or_other_host(self):

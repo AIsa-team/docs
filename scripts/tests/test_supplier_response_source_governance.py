@@ -16,22 +16,7 @@ SOURCES = (
     'fred-official.json',
     'tikhub.json',
     'response-duffel-flights-get-offer-request-20261110.json',
-    'response-duffel-flights-post-create-20261110.json',
-    'response-duffel-stays-get-search-rates-20261110.json',
-    'response-duffel-stays-get-search-result-20261110.json',
     'response-financial-analyst-estimates.json',
-    'response-pinterest-get-boards-pins.json',
-    'response-pinterest-get-pins.json',
-    'response-pinterest-get-profiles-boards.json',
-    'response-reddit-get-posts-comments.json',
-    'response-reddit-get-subreddits-posts.json',
-    'response-reddit-get-subreddits-search.json',
-    'response-reddit-get-subreddits.json',
-    'response-similarweb-conversion-rates-aggregated.json',
-    'response-similarweb-conversion-rates.json',
-    'response-similarweb-keyword-overview.json',
-    'response-similarweb-segment-traffic-sources.json',
-    'response-similarweb-traffic-demographics-aggregated.json',
 )
 
 

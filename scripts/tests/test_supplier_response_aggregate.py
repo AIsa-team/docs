@@ -51,6 +51,29 @@ class SupplierResponseAggregateTest(unittest.TestCase):
                 self.assertEqual(aggregate.get("x-aisa-registry-provider"), owner)
                 self.assertEqual(aggregate["x-aisa-status"], native["x-aisa-status"])
 
+    def test_inventory_does_not_count_unreviewed_responses_as_completed(self):
+        inventory = json.loads(INVENTORY.read_text())
+        declared = 0
+        identities = set()
+        for row in self.rows:
+            identity = (row["provider"], row["path"], row["method"])
+            self.assertNotIn(identity, identities)
+            identities.add(identity)
+            operation = self.providers[row["provider"]]["paths"][row["path"]][row["method"].lower()]
+            reviewed = bool(operation.get("x-aisa-response-source")) and not (
+                operation.get("x-aisa-response-pending")
+                or operation.get("x-aisa-review", {}).get("response") == "generic"
+            )
+            with self.subTest(identity=identity):
+                self.assertEqual(row["response_status"], "declared" if reviewed else "unreviewed")
+                if not reviewed:
+                    self.assertIsNone(row["source_kind"])
+                    self.assertTrue(row["response_reason"])
+            declared += reviewed
+        self.assertEqual(inventory["counts"]["paths"], len(identities))
+        self.assertEqual(inventory["counts"]["response_declarations"], declared)
+        self.assertEqual(inventory["counts"]["response_pending"], len(identities) - declared)
+
 
 if __name__ == "__main__":
     unittest.main()

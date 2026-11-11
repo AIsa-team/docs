@@ -6,7 +6,7 @@ import unittest
 
 from compose_openapi import compose, digest, resolve
 from runtime_registry import public_mirror_index
-from source_governance import policy_errors
+from source_governance import policy_errors, receipt_key
 from test_runtime_contracts import facts, operation
 
 
@@ -57,6 +57,11 @@ class TikHubResponseAmendmentTests(unittest.TestCase):
         # The predecessor is exactly the separately reviewed nullable amendment.
         self.assertEqual(prior['converter'], 'reviewed-official-tikhub-nullability-amendment@1')
         self.assertEqual(prior['content_hash'], 'sha256:7f2beb52342a3942a5d55021fdf8ae5b8755502561a8fcb706224876460bd4d8')
+        receipts = json.loads((ROOT / 'docs/current-source-review-20261009/merged-source-reviews.json').read_text())['receipts']
+        current_receipt, prior_receipt = receipts[receipt_key(source)], receipts[receipt_key(prior)]
+        self.assertEqual(current_receipt['inherited_review_key'], receipt_key(prior))
+        self.assertEqual(current_receipt['last_successful_review_at'], prior_receipt['last_successful_review_at'])
+        self.assertGreater(current_receipt['amendment_reviewed_at'], current_receipt['last_successful_review_at'])
 
     def test_evidence_does_not_promote_404_to_verified_success(self):
         review = json.loads(REVIEW.read_text())
