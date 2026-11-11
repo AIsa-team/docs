@@ -90,6 +90,11 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
     zh = language == "zh"
     def t(en, cn): return cn if zh else en
     pricing = operation.get("x-aisa-pricing") or {}
+    # Historical disabled operations may legitimately have no runtime tariff.
+    # Keep that absence out of the machine contract while still giving the
+    # archive page an explicit customer-facing unavailable-price explanation.
+    if not pricing and operation.get("x-aisa-status") == "disabled":
+        pricing = {"kind": "unpriced"}
     constraints = operation.get("x-aisa-constraints") or {}
     notes = constraints.get("notes") or []
     if not pricing and not notes and document is None:
