@@ -6,7 +6,7 @@ x-aisa-operation-id: "get_similarweb_apis_v1_similarweb_keyword_analysi_490801"
 
 ## Response
 
-The [official SimilarWeb response definition](https://docs.similarweb.com/api-v5/api-reference/search-analysis-api/keywords-overview) declares **HTTP 200 · `application/json`**. AIsa passes through the provider response for this endpoint.
+The [official SimilarWeb response definition](https://docs.similarweb.com/api-v5/api-reference/search-analysis-api/keywords-overview) declares **HTTP 200 · `application/json`**. AIsa passes through the provider response for this endpoint. A successful AIsa request on November 11, 2026 confirmed the object structure of `data` items shown below.
 
 ### Response envelope
 
@@ -20,13 +20,13 @@ The [official SimilarWeb response definition](https://docs.similarweb.com/api-v5
 | `meta.error_message` | `string or null` | Provider error explanation. |
 | `meta.last_updated` | `string or null` | Provider data update time. |
 | `meta.data_type` | `string` | Declared values: `not_applicable`, `estimated` or `verified`. |
-| `data` | `array or null` | Nullable array; its item structure has the provider-definition conflict described below. |
+| `data` | `array or null` | Result objects; the array and its items retain the provider-declared nullability. |
 
 The provider marks these envelope fields as optional. If `meta.request` is present, `keyword` is marked required within it. A null value and an absent field are distinct.
 
 ### Data fields
 
-The table records names and types from the official response attribute declarations. They are all marked optional. Because the item container is inconsistent, these declarations do not establish a confirmed `data` item shape or a complete payload validator.
+Each `data` item is an object with the following officially declared fields. All fields remain optional, and their declared nullability is preserved; the successful capture does not make fields mandatory.
 
 | Field | Declared type | Meaning |
 | --- | --- | --- |
@@ -39,10 +39,10 @@ The table records names and types from the official response attribute declarati
 | `pla_clicks` | `number or null (double)` | Product listing advertisement clicks. |
 | `total_valid_serp_clicks` | `number or null (double)` | Combined valid organic, SERP-feature, search-ad and product-ad clicks. |
 | `volume` | `integer or null (int64)` | Google searches for the keyword. |
-| `zero_clicks` | `number or null (double)` | Percentage of searches without an external-site click. |
+| `zero_clicks` | `number or null (double)` | Provider zero-click metric for searches without an external-site click. |
 | `difficulty` | `integer or null (int32)` | Difficulty of reaching the top 20 organic results. |
 | `competition` | `integer or null (int32)` | Google Ads competition measure. |
-| `ai_overview` | `array or null` | AI Overview data; element structure is unconfirmed. |
+| `ai_overview` | `array or null` | AI Overview string values; the array and its items may be null. |
 | `cpc_low_bid` | `integer or null (int64)` | Lower cost-per-click bid estimate; the declaration uses an integer. |
 | `cpc_high_bid` | `integer or null (int64)` | Upper cost-per-click bid estimate; the declaration uses an integer. |
 | `transactional_intent_volume` | `number or null (double)` | Searches with transactional intent. |
@@ -51,13 +51,103 @@ The table records names and types from the official response attribute declarati
 | `local_intent_volume` | `number or null (double)` | Searches with local intent. |
 | `job_search_intent_volume` | `number or null (double)` | Searches with job-search intent. |
 
-**Provider-definition conflict:** The official JSON declaration labels the first `data` item prototype as an array while listing named fields beneath it. This does not establish whether an item is an object or another container. The declared field types can be read individually, but the complete item structure awaits provider clarification.
+`ai_overview` contains string items, such as `["example keyword"]` in the synthetic example below. No enum is inferred from the captured values.
 
-`ai_overview` also has an array item prototype without an item definition; its contents cannot be assumed to be booleans, text, objects or a fixed structure.
-
-The provider marks date fields as `date-time`, while its prose allows `YYYY-MM` or `YYYY-MM-DD`; these statements do not establish a stricter, consistent date representation.
+Date values are strings. The provider text allows `YYYY-MM` or `YYYY-MM-DD`; the successful capture used day strings, so a timestamp format is not required for these observed fields.
 
 The reviewed response declaration lists only HTTP 200 `application/json`; it provides no response schema for other statuses or media types.
+
+### Illustrative successful response
+
+The following query and response use synthetic values created for documentation. They demonstrate the confirmed field shapes; they are not the captured production request or response.
+
+Illustrative query parameters:
+
+```json
+{
+  "start_date": "2025-01",
+  "end_date": "2025-01",
+  "granularity": "monthly",
+  "country": "ww",
+  "format": "json",
+  "keywords": "example keyword",
+  "limit": 1
+}
+```
+
+Illustrative response body:
+
+```json
+{
+  "meta": {
+    "query": {
+      "limit": 1,
+      "offset": 0,
+      "asc": null,
+      "sort": null
+    },
+    "request": {
+      "format": "json",
+      "keyword": "example keyword",
+      "granularity": "monthly",
+      "country": "ww",
+      "start_date": "2025-01-01",
+      "end_date": "2025-01-31",
+      "web_source": "total",
+      "metrics": [
+        "clicks",
+        "paid_clicks",
+        "classic_organic_clicks",
+        "organic_serp_features_clicks",
+        "search_ads_clicks",
+        "pla_clicks",
+        "total_valid_serp_clicks",
+        "volume",
+        "zero_clicks",
+        "difficulty",
+        "competition",
+        "ai_overview",
+        "cpc_low_bid",
+        "cpc_high_bid",
+        "transactional_intent_volume",
+        "informational_intent_volume",
+        "navigational_intent_volume",
+        "local_intent_volume",
+        "job_search_intent_volume"
+      ],
+      "is_keyword_group": false
+    },
+    "status": "success",
+    "last_updated": "2025-01-31"
+  },
+  "data": [
+    {
+      "date": "2025-01-01",
+      "clicks": 8000.5,
+      "paid_clicks": 1200.5,
+      "classic_organic_clicks": 6000.5,
+      "organic_serp_features_clicks": 400.5,
+      "search_ads_clicks": 1100.5,
+      "pla_clicks": 100.5,
+      "total_valid_serp_clicks": 7602.0,
+      "volume": 10000,
+      "zero_clicks": 2000.0,
+      "difficulty": 45,
+      "competition": 2,
+      "ai_overview": [
+        "example keyword"
+      ],
+      "cpc_low_bid": 500,
+      "cpc_high_bid": 1500,
+      "transactional_intent_volume": 1000.0,
+      "informational_intent_volume": 3000.0,
+      "navigational_intent_volume": 4000.0,
+      "local_intent_volume": 1500.0,
+      "job_search_intent_volume": 500.0
+    }
+  ]
+}
+```
 
 {/* aisa-contract-details:start */}
 

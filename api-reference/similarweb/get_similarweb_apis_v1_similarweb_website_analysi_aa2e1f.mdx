@@ -6,7 +6,7 @@ x-aisa-operation-id: "get_similarweb_apis_v1_similarweb_website_analysi_aa2e1f"
 
 ## Response
 
-The [official SimilarWeb response definition](https://docs.similarweb.com/api-v5/api-reference/website-analysis-api/website-audience/demographics-specific-groups) declares **HTTP 200 · `application/json`**. AIsa passes through the provider response for this endpoint.
+The [official SimilarWeb response definition](https://docs.similarweb.com/api-v5/api-reference/website-analysis-api/website-audience/demographics-specific-groups) declares **HTTP 200 · `application/json`**. AIsa passes through the provider response for this endpoint. A successful AIsa request on November 11, 2026 confirmed the object structure of `data` items shown below.
 
 ### Response envelope
 
@@ -17,19 +17,22 @@ The [official SimilarWeb response definition](https://docs.similarweb.com/api-v5
 | `meta.status` | `string` | Declared values: `success` or `error`. |
 | `meta.error_code` | `integer or null (int32)` | Provider status or error code; read separately from the HTTP status. |
 | `meta.error_message` | `string or null` | Provider error explanation. |
-| `meta.last_update` | `string or null` | Provider data update time. |
+| `meta.last_update` | `string or null` | Optional update field named in the official declaration; it retains the declared `date-time` format because it was absent from the capture. |
+| `meta.last_updated` | `string` | Update-date field observed as a string in the successful response, without a time component. |
 | `meta.data_type` | `string` | Declared values: `not_applicable`, `estimated` or `verified`. |
-| `data` | `array or null` | Nullable array; its item structure has the provider-definition conflict described below. |
+| `data` | `array or null` | Result objects; the array and its items retain the provider-declared nullability. |
 
 The provider marks these envelope fields as optional. If `meta.request` is present, `domain` is marked required within it. A null value and an absent field are distinct.
 
-`meta.request.age_buckets` is declared as a nullable array, but its item prototype is another array without an item definition. Its element type is therefore unconfirmed.
+`meta.request.age_buckets` is an array of strings, such as `["25"]` in the synthetic example below. The array and its items retain the provider-declared nullability.
 
-`meta.request.metrics` has the same missing element definition. The declaration lists `share`, `pages_per_visit`, `bounce_rate` and `average_visit_duration` alongside it, but those names do not confirm a string element type or a valid item enum.
+`meta.request.metrics` is an array of strings using the officially declared values `share`, `pages_per_visit`, `bounce_rate` and `average_visit_duration`. The array and its items retain the provider-declared nullability.
+
+The observed `meta.request.start_date`, `meta.request.end_date` and `meta.last_updated` values are day strings without a time component. The separate, unobserved `meta.last_update` field keeps its official `date-time` format.
 
 ### Data fields
 
-The table records names and types from the official response attribute declarations. They are all marked optional. Because the item container is inconsistent, these declarations do not establish a confirmed `data` item shape or a complete payload validator.
+Each `data` item is an object with the following officially declared fields. All fields remain optional, and their declared nullability is preserved; the successful capture does not make fields mandatory.
 
 | Field | Declared type | Meaning |
 | --- | --- | --- |
@@ -38,9 +41,63 @@ The table records names and types from the official response attribute declarati
 | `bounce_rate` | `number or null (double)` | Percentage of visits viewing one page. |
 | `average_visit_duration` | `number or null (double)` | Average visit duration, in seconds. |
 
-**Provider-definition conflict:** The official JSON declaration labels the first `data` item prototype as an array while listing named fields beneath it. This does not establish whether an item is an object or another container. The declared field types can be read individually, but the complete item structure awaits provider clarification.
-
 The reviewed response declaration lists only HTTP 200 `application/json`; it provides no response schema for other statuses or media types.
+
+### Illustrative successful response
+
+The following query and response use synthetic values created for documentation. They demonstrate the confirmed field shapes; they are not the captured production request or response.
+
+Illustrative query parameters:
+
+```json
+{
+  "start_date": "2025-01",
+  "end_date": "2025-01",
+  "granularity": "monthly",
+  "country": "ww",
+  "format": "json",
+  "domain": "example.com",
+  "age_bucket": "25",
+  "metrics": "share,pages_per_visit,bounce_rate,average_visit_duration"
+}
+```
+
+Illustrative response body:
+
+```json
+{
+  "meta": {
+    "request": {
+      "gender": "all",
+      "age_buckets": [
+        "25"
+      ],
+      "format": "json",
+      "domain": "example.com",
+      "granularity": "monthly",
+      "country": "ww",
+      "start_date": "2025-01-01",
+      "end_date": "2025-01-31",
+      "metrics": [
+        "share",
+        "pages_per_visit",
+        "bounce_rate",
+        "average_visit_duration"
+      ]
+    },
+    "status": "success",
+    "last_updated": "2025-01-31"
+  },
+  "data": [
+    {
+      "share": 0.25,
+      "pages_per_visit": 2.5,
+      "bounce_rate": 0.4,
+      "average_visit_duration": 120.0
+    }
+  ]
+}
+```
 
 {/* aisa-contract-details:start */}
 

@@ -44,11 +44,14 @@ class ReviewedResponseTests(unittest.TestCase):
                     for body in ({}, {"data": None}, {"data": []}):
                         self.assertEqual(list(validator.iter_errors(body)), [])
                     self.assertTrue(list(validator.iter_errors({"data": "wrong"})))
-                    if "segment-analysis" in path:
+                    if "conversion-rates" not in path:
                         self.assertNotIn("x-aisa-schema-status", data)
                         self.assertEqual(data["items"]["type"], ["object", "null"])
-                        self.assertEqual(list(validator.iter_errors({"data": [{"visits": 1.5}, None]})), [])
-                        self.assertTrue(list(validator.iter_errors({"data": [{"visits": "wrong"}]})))
+                        self.assertEqual(list(validator.iter_errors({"data": [{}, None]})), [])
+                        self.assertTrue(list(validator.iter_errors({"data": [[]]})))
+                        if "segment-analysis" in path:
+                            self.assertEqual(list(validator.iter_errors({"data": [{"visits": 1.5}, None]})), [])
+                            self.assertTrue(list(validator.iter_errors({"data": [{"visits": "wrong"}]})))
                     else:
                         self.assertEqual(data["x-aisa-schema-status"], "item_definition_unconfirmed")
                         self.assertEqual(data["items"], {})
@@ -58,8 +61,8 @@ class ReviewedResponseTests(unittest.TestCase):
                     if "traffic-by-demographics" in path:
                         request = schema["properties"]["meta"]["properties"]["request"]["properties"]
                         for field in ("age_buckets", "metrics"):
-                            self.assertEqual(request[field]["x-aisa-schema-status"], "item_definition_unconfirmed")
-                            self.assertEqual(request[field]["items"], {})
+                            self.assertNotIn("x-aisa-schema-status", request[field])
+                            self.assertIn("string", request[field]["items"]["type"])
             # The disabled legacy route remains intentionally pending.
             folders = operation(document, "/apis/v1/similarweb/website/folders", "get")
             self.assertEqual(folders.get("x-aisa-status"), "disabled")
