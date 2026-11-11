@@ -122,6 +122,12 @@ class CustomerPricePresentationTests(unittest.TestCase):
         for p in ({'kind': 'unpriced', 'default_request_estimate_usd': 0},
                   {'customer_pricing': 'fixed_success', 'default_request_estimate_usd': .3, 'reference_unavailable': True}):
             self.assertNotIn('$', pricing_summary(p))
+        self.assertEqual(
+            pricing_summary({'kind': 'unpriced'}, 'en'),
+            'Historical archive: disabled, cannot be called, and no price is published.')
+        self.assertEqual(
+            pricing_summary({'kind': 'unpriced'}, 'zh'),
+            '历史归档接口：已停用，不可调用，价格未发布。')
         self.assertIn('$0 USD per successful request', pricing_summary({'customer_pricing': 'fixed_success', 'default_request_estimate_usd': 0}))
         self.assertIn('No additional charge', pricing_summary({'kind': 'no_customer_charge'}))
         self.assertIn('$9007199254.740993', pricing_summary({'kind': 'fixed_request', 'customer_micros_usd': 9007199254740993}))
@@ -168,6 +174,9 @@ class CustomerPricePresentationTests(unittest.TestCase):
             ({'kind': 'future_tariff', 'default_request_estimate_usd': .1},
              ('Billing method unavailable', 'Default request estimate: $0.1'),
              ('计费方式暂不可用', '默认请求预估费用：$0.1')),
+            ({'kind': 'unpriced'},
+             ('Historical archive: disabled, cannot be called, and no price is published.',),
+             ('历史归档接口：已停用，不可调用，价格未发布。',)),
         ]
         for pricing, english, chinese in cases:
             with self.subTest(kind=pricing['kind']):

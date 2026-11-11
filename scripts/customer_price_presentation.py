@@ -171,7 +171,8 @@ def pricing_summary(pricing, language='en'):
     if family == 'no_customer_charge':
         return t('No additional charge for this operation.', '此操作不另收费。')
     if family == 'unpriced':
-        return t('Price not yet published; this operation is unavailable.', '价格尚未发布，此操作暂不可用。')
+        return t('Historical archive: disabled, cannot be called, and no price is published.',
+                 '历史归档接口：已停用，不可调用，价格未发布。')
     if family == 'fixed_request':
         summary = fixed_request_summary(pricing, zh)
     elif family == 'metered_event':

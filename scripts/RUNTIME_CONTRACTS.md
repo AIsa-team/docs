@@ -41,6 +41,8 @@ be guessed from response arrays. Missing prices are never shown as free.
 Unknown pricing kinds or cost contracts do not imply usage billing. They show
 an unavailable billing method; a published request estimate may still be shown
 as an estimate without asserting how the final charge is calculated.
+An `unpriced` operation is a disabled historical archive, not an active pricing
+family: its page says it cannot be called and that no price is published.
 
 Integer `customer_micros_usd` is converted exactly to USD. Resource reads show
 normal-tier reference prices, delivered-read conditions and computed cache
