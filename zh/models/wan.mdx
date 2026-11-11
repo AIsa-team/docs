@@ -2,10 +2,10 @@
 title: "Wan API - 通过 AIsa 访问阿里巴巴 Wan 视频和图像模型"
 sidebarTitle: "Wan"
 description: >-
-  阿里巴巴 Wan 模型 ID 指南，包括 wan3.0-video 和 Wan 2.7；视频接口兼容 DashScope（阿里云百炼）官方视频生成 API。
+  阿里巴巴 Wan 模型 ID 指南，包括 wan3.0-video、wan3.0-video-prime 和 Wan 2.7；视频接口兼容 DashScope（阿里云百炼）官方视频生成 API。
 ---
 
-AIsa 是 Alibaba Cloud Key Account Partner。你可以使用一个 AIsa API Key 访问阿里巴巴 Wan 视频和图像模型。
+你可以使用一个 AIsa API Key 访问阿里巴巴 Wan 视频和图像模型。
 
 Wan 视频兼容 DashScope（阿里云百炼）官方 API：官方 DashScope SDK 和已有的 DashScope 代码只需改 base URL 和 API Key 即可使用。Wan 视频也可以通过 AIsa 视频接口 `POST /v1/video/generations` 调用。Wan 图像模型使用 `POST /v1/images/generations` 和 `POST /v1/images/edits`。
 
@@ -20,11 +20,14 @@ Wan 视频兼容 DashScope（阿里云百炼）官方 API：官方 DashScope SDK
 | `wan2.7-r2v` | 视频 | `/v1/video/generations` | 参考图生视频 |
 | `wan2.7-t2v` | 视频 | `/v1/video/generations` | 文生视频 |
 | `wan3.0-video` | 视频 | `/v1/video/generations` | 文生、图生、参考生视频及编辑和续写，最长 30 秒 |
+| `wan3.0-video-prime` | 视频 | `/v1/video/generations` | Wan 3.0 优速版视频生成，最长 30 秒 |
 {/* model-table:end */}
 
 这些模型的当前价格见 [aisa.one/models](https://aisa.one/models)。
 
 `wan3.0-video` 是一个统一的视频模型，支持文生视频、首帧和首尾帧图生视频、参考生视频、视频编辑和视频续写，最长输出 30 秒。Wan 2.7 视频模型按输入拆分：`t2v` 文生视频，`i2v` 图生视频，`r2v` 参考生视频。
+
+`wan3.0-video-prime` 是 Wan 3.0 优速版，使用相同的 API 路径。将 `model` 设为 `wan3.0-video-prime` 即可选择。两个 Wan 3.0 模型均通过 Apilot 提供服务，调用时仍使用 AIsa API Key 和 AIsa base URL。
 
 ## 兼容官方 DashScope API
 
@@ -35,7 +38,7 @@ Wan 视频兼容 DashScope（阿里云百炼）官方 API：官方 DashScope SDK
 | 查询任务 | `GET /tasks/{task_id}` | AIsa base URL 下的相同路径 |
 | API Key | 百炼 API Key | AIsa API Key |
 
-路径、请求体、返回体和错误码都与官方一致，见 [Wan 视频生成 API](https://help.aliyun.com/zh/model-studio/video-generate-edit-model/)。适用于 Wan 视频模型：`wan3.0-video`、`wan2.7-t2v`、`wan2.7-i2v` 和 `wan2.7-r2v`。
+使用 DashScope 的任务创建与查询格式，见 [Wan 视频生成 API](https://help.aliyun.com/zh/model-studio/video-generate-edit-model/)。适用于 Wan 视频模型：`wan3.0-video`、`wan3.0-video-prime`、`wan2.7-t2v`、`wan2.7-i2v` 和 `wan2.7-r2v`。
 
 ```python
 import os
@@ -63,17 +66,24 @@ print(result.output.task_status, result.output.video_url)
 
 默认分辨率取决于调用方式，并按默认分辨率计费：DashScope API 为 `1080P`，与官方一致；AIsa 视频接口为 `720P`。可通过 `resolution` 指定。对 Wan 3.0 和 Wan 2.7 的请求如果带 `size`，会在扣费之前被拒绝，因为这些模型不按 `size` 决定输出分辨率。
 
+## Wan 3.0 计费
+
+两个模型均按 `480P`、`720P`、`1080P` 分档，以美元／秒计价。请在[当前模型价格页](https://aisa.one/models)查看对应模型和分辨率的单价。
+
+最终按 `usage.duration` 返回的总用量时长结算；适用时包含输入视频时长，并非只按请求的输出时长计费。例如，视频编辑输入 4.04 秒、输出 2 秒，计费时长为 6.04 秒。若单价为每秒 p 美元，费用为 `6.04 × p` 美元。计费保留小数秒。
+
 ## 常用选择
 
 | 需求 | 使用 |
 | --- | --- |
 | 一个模型覆盖所有视频输入，最长 30 秒 | `wan3.0-video` |
+| 更快的 Wan 3.0 视频生成 | `wan3.0-video-prime` |
 | 文生、图生或参考生视频 | `wan2.7-t2v`、`wan2.7-i2v` 或 `wan2.7-r2v` |
 | 图像生成/编辑 | `wan2.7-image-pro` 或 `wan2.7-image` |
 
 ## 数据隐私
 
-通过 AIsa 发出的 Wan 请求会在 AIsa 与 Alibaba Cloud 的 Key Account 企业协议下处理。如需合规文档，请[联系我们](mailto:developer@aisa.one)。
+`wan3.0-video` 和 `wan3.0-video-prime` 的请求（包括提示词和所提供的素材）会转发至 Apilot 处理。兼容 DashScope API 不表示请求直连阿里云，也不表示适用 AIsa 与阿里云的企业协议。如需数据处理与合规文档，请[联系我们](mailto:developer@aisa.one)。
 
 ## 下一步
 
