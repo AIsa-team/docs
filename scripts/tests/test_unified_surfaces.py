@@ -69,7 +69,7 @@ class UnifiedSurfacesTests(unittest.TestCase):
                 request = json.loads(re.search(r'```json\n(.*?)\n```', block, re.S)[1])
                 self.assertEqual(request.get("x-aisa-status"), status)
                 self.assertEqual("x-aisa-status" in request, status is not None)
-                self.assertEqual(request["x-aisa-pricing"], operation["x-aisa-pricing"])
+                self.assertNotIn("x-aisa-pricing", request)
                 warning = "This endpoint is disabled and cannot be called" if language == "en" else "此接口已停用，无法调用"
                 self.assertEqual(warning in block, status == "disabled")
                 rendered = update_readable_block("Manual historical prose.\n", operation, language, **context)
@@ -104,10 +104,10 @@ class UnifiedSurfacesTests(unittest.TestCase):
         self.assertEqual(update_readable_block(rendered, operation, **context), rendered)
         self.assertIn('"security": []', rendered)
         request = json.loads(re.search(r'```json\n(.*?)\n```', rendered, re.S)[1])
-        self.assertEqual(request['x-aisa-pricing'], {'default_request_estimate_usd': 0})
+        self.assertNotIn('x-aisa-pricing', request)
         operation['x-aisa-pricing']['request_cost_drivers'] = {'kind': 'plan_units', 'formula': {'input': 'count', 'unit_scale': 10}}
         changed_price = update_readable_block(rendered, operation, **context)
-        self.assertIn('"unit_scale": 10', changed_price)
+        self.assertNotIn('"unit_scale"', changed_price)
         operation['parameters'] = [{'name': 'date', 'in': 'query', 'required': True, 'schema': {'type': 'string', 'format': 'date'}}]
         changed = update_readable_block(rendered, operation, **context)
         self.assertIn('**date:** query; required', changed)
