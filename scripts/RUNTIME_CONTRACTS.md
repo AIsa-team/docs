@@ -24,68 +24,37 @@ root server and full paths. `x-aisa-any` is a path-item extension, not a method.
 
 ### Prices in prose
 
-Runtime `x-aisa-pricing` owns published customer reference prices. The common
-`customer_price_presentation.py` renderer is used by `pricing_prose.py` for
-OpenAPI descriptions and `readable_contract_notes.py` for English/Chinese pages.
-It classifies customer fixed success, fixed request/delivery and variants,
-request-dependent, result-dependent, component usage, receipt usage, successful
-events, model selection, no-new-charge and unavailable declarations.
+Runtime `x-aisa-pricing` owns published reference prices. The composer removes
+obsolete monetary rate clauses from upstream/runtime descriptions, summaries,
+and nested request/response documentation before localization, consolidation,
+and the sales projection. It does not turn estimates into fixed charges.
+It then generates a visible price paragraph in each operation description and
+the English/Chinese page cost block from that same metadata. Fixed-success
+pricing shows a reference price per successful request; usage-based pricing
+shows a default request estimate, plus the declared unit rate when available.
+Native operation kinds: `no_customer_charge` shows "No charge."; a
+`fixed_request` with an integer `customer_micros_usd` (no `variants`, no
+resource-read `cache_hit_share_bps`) shows that reference price per successful
+request; a `metered_event` shows Runtime's own per-event pricing description,
+with angle-bracket placeholders as inline code so MDX does not read them as tags.
+In prose that carries a price claim, an upstream "charged/billed once" sentence
+is removed with the price; x-aisa-pricing states AIsa's charge rule.
+Unknown prices are labeled unavailable, never zero. The paragraph is replaced
+on every generation, so a later Runtime price update also updates the prose.
+Provider sources and source review receipts remain unchanged. JSON examples,
+defaults, enums, extension metadata, monetary units, product-price filters, and
+financial transaction amounts are not rate claims and remain intact.
 
-Use customer amounts already published by Runtime. Never multiply reference
-estimates or `customer_unit_price_usd` again. A supplier `fixed_success` label
-alone does not prove a fixed customer price. Supplier unit rates, credits,
-reservation formulas and multipliers are not customer tariffs and are not
-rendered as prices. Dynamic rules keep an estimate label unless a customer
-unit tariff is explicitly published; missing business-unit semantics must not
-be guessed from response arrays. Missing prices are never shown as free.
-Unknown pricing kinds or cost contracts do not imply usage billing. They show
-an unavailable billing method; a published request estimate may still be shown
-as an estimate without asserting how the final charge is calculated.
-An `unpriced` operation is a disabled historical archive, not an active pricing
-family: its page says it cannot be called and that no price is published.
-Free operations and disabled archives render their status sentence without the
-`aisa-pricing` source markers used for mutable paid-price blocks. Paid summaries
-keep those markers so later Runtime price changes replace the generated block
-without duplicating prose.
+Existing endpoint pages are cleaned before their managed cost block is rendered
+from the same Runtime operation. Handwritten price columns retain their useful
+section/parameter columns and refer readers to the current pricing block.
+Translation memory cannot reintroduce obsolete monetary rates. New composer
+versions regenerate these projections even when Runtime facts have not changed.
 
-Integer `customer_micros_usd` is converted exactly to USD. Resource reads show
-normal-tier reference prices, delivered-read conditions and computed cache
-prices, with Runtime's upward micro-USD rounding. A zero share does not publish
-a cache-hit price, so no stored-result offer is shown. Variant prices are listed separately and disabled variants are
-unavailable. Async `configured_fixed_price` is per completed job; metered jobs
-show their customer unit price even when the request total is not yet known.
-One delivered read means an entity with at least one requested field, or one
-page of a result set; this unit definition stays visible beside the price.
-Social prices are sourced from the published event declaration, not hard-coded;
-success, failure, per-target charge refusals and cache conditions remain visible.
-Social event localization replaces known clauses while preserving unmatched
-customer conditions as escaped text. Model rules retain
-request/token/second and `n` semantics without inventing a model price.
-
-The page's embedded Request contract contains authentication, parameters and
-referenced schemas. Pricing is shown in the customer price paragraph, not by
-copying raw accounting fields into that request example. Original machine-readable
-`x-aisa-pricing` in complete OpenAPI and sales catalog remains unchanged for
-existing consumers. This change does not remove that public machine API.
-
-The composer removes obsolete monetary rate clauses from descriptions before
-localization and sales projection. Source/review bytes, example/default/enum
-values and non-API financial amounts remain intact. Page generation cleans
-handwritten prices and replaces the managed price block. Bumping the Composer
-version regenerates documents even when Runtime facts are unchanged.
-
-Deployment boundary: canonical import preserves native/aggregate Runtime bytes;
-it does not rewrite an old producer's English OpenAPI descriptions. Services
-must later pin the merged Composer commit and source-manifest hash in
-`packages/apicontract/composer-inputs.lock.json` and publish a new artifact.
-Docs code merge alone is not proof of deployment. This generator PR does not
-change that lock, production pricing, source approvals or generated mirrors.
-
-Validate all billing families and both facts/canonical projection paths with
-`python -m unittest discover -s scripts/tests -p test_customer_price_presentation.py -v`,
-then run the full suite below. Same-input regeneration must be idempotent;
-changed customer prices must replace previous amounts. Publication still uses
-the existing formal gates.
+Validate with `python -m unittest discover -s scripts/tests -p test_pricing_prose.py -v`
+and the full test command below. Generated contracts and pages must still pass
+the existing formal publication workflow; a code change is not evidence that
+the website or downstream consumers have adopted the regenerated artifacts.
 
 Each output operation has `x-aisa-catalog-id` identifying its original runtime
 catalog. Grouped policies remain under `info.x-aisa-catalogs[catalog]`; the
@@ -598,11 +567,13 @@ localization command use `readable_contract_notes.py`; translation extraction
 excludes generated blocks so changing reference prices does not create a second
 translation authority. Missing note translations retain the exact source text.
 
-This projection does not calculate a request quote or change request defaults.
-It shows the customer reference price and applicable customer conditions using
-the shared renderer described above. Supplier unit drivers and reservation
-formulas are not displayed. Request constraints remain in their own section.
-Complete request quotes and settled amounts remain separate from the reference.
+This projection does not calculate a quote or change request defaults. It shows
+reference values, declared unit drivers, constraints and reservation inputs;
+reservation inputs without a direct public mapping are labeled as unmapped. Scaled reservation metadata
+is displayed as its declared terms, because the public projection may lack the
+Runtime discriminators required to determine the evaluation order. Unknown
+operators never become an inferred formula. Complete request quotes and settled
+amounts remain separate from these reference declarations.
 
 Validate with `python3 -m unittest discover -s scripts/tests -v`. Publish generated
 MDX and consolidated OpenAPI through the normal producer, not a separate manual
