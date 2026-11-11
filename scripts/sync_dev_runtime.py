@@ -143,11 +143,18 @@ def scope_presentation(candidate, aggregate, summary):
             if unverified:
                 language = 'zh' if base.startswith('zh/') else 'en'
                 text = clean_page(text, language)
+                # A retained operation without a Runtime pricing declaration
+                # is still a historical archive. Give the reader the explicit
+                # archive status instead of silently omitting the cost section;
+                # keep the OpenAPI operation and metadata unchanged.
+                presentation_operation = copy.deepcopy(operation) if operation is not None else {}
+                if not presentation_operation.get('x-aisa-pricing'):
+                    presentation_operation['x-aisa-pricing'] = {'kind': 'unpriced'}
                 if operation is not None:
-                    text = update_readable_block(text, operation, language, translated_note,
+                    text = update_readable_block(text, presentation_operation, language, translated_note,
                         document=documents[name], method=method.lower(), path=path, spec_path=name)
                 else:
-                    text = update_readable_block(text, {})
+                    text = update_readable_block(text, presentation_operation, language)
                 if unlisted:
                     hidden.add(reference)
                     notice = ARCHIVE_NOTE
