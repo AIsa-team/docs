@@ -53,7 +53,7 @@ class SupplierResponseAggregateTest(unittest.TestCase):
 
     def test_inventory_does_not_count_unreviewed_responses_as_completed(self):
         inventory = json.loads(INVENTORY.read_text())
-        declared = 0
+        counts = {"declared": 0, "partial": 0, "unreviewed": 0}
         identities = set()
         for row in self.rows:
             identity = (row["provider"], row["path"], row["method"])
@@ -64,15 +64,26 @@ class SupplierResponseAggregateTest(unittest.TestCase):
                 operation.get("x-aisa-response-pending")
                 or operation.get("x-aisa-review", {}).get("response") == "generic"
             )
+            def has_unconfirmed_items(value):
+                if isinstance(value, dict):
+                    return value.get("x-aisa-schema-status") == "item_definition_unconfirmed" or any(
+                        has_unconfirmed_items(child) for child in value.values()
+                    )
+                return isinstance(value, list) and any(has_unconfirmed_items(child) for child in value)
+
+            status = "partial" if reviewed and has_unconfirmed_items(operation["responses"]) else "declared" if reviewed else "unreviewed"
             with self.subTest(identity=identity):
-                self.assertEqual(row["response_status"], "declared" if reviewed else "unreviewed")
+                self.assertEqual(row["response_status"], status)
                 if not reviewed:
                     self.assertIsNone(row["source_kind"])
                     self.assertTrue(row["response_reason"])
-            declared += reviewed
+                if status == "partial":
+                    self.assertTrue(row["response_reason"])
+            counts[status] += 1
         self.assertEqual(inventory["counts"]["paths"], len(identities))
-        self.assertEqual(inventory["counts"]["response_declarations"], declared)
-        self.assertEqual(inventory["counts"]["response_pending"], len(identities) - declared)
+        self.assertEqual(inventory["counts"]["response_declarations"], counts["declared"])
+        self.assertEqual(inventory["counts"].get("response_partial", 0), counts["partial"])
+        self.assertEqual(inventory["counts"]["response_pending"], counts["unreviewed"])
 
 
 if __name__ == "__main__":

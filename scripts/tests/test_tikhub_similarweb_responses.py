@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import unittest
+from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[2]
 PLACEHOLDER = "Successful response. The payload schema has not been reviewed yet."
@@ -24,18 +25,41 @@ def operation(document, path, method=None):
     return next(value for key, value in item.items() if key in {"get", "post", "put", "patch", "delete"})
 
 class ReviewedResponseTests(unittest.TestCase):
-    def test_similarweb_unverified_success_responses_retain_open_debt(self):
+    def test_similarweb_success_declarations_preserve_known_fields_and_item_debt(self):
         for filename in ("openapi/similarweb.json", "openapi/zh/similarweb.json"):
             document = json.loads((ROOT / filename).read_text())
             for path in SW_TARGETS:
                 with self.subTest(filename=filename, path=path):
                     op = operation(document, path, "get")
                     response = op["responses"]["200"]
-                    self.assertEqual(response.get("description"), PLACEHOLDER)
-                    self.assertEqual(response["content"]["application/json"]["schema"], {})
-                    self.assertNotIn("x-aisa-response-source", op)
-                    self.assertEqual(op["x-aisa-review"]["response"], "generic")
-                    self.assertEqual(op["x-aisa-review"]["status"], "unreviewed")
+                    self.assertNotEqual(response.get("description"), PLACEHOLDER)
+                    schema = response["content"]["application/json"]["schema"]
+                    self.assertEqual(schema["type"], "object")
+                    self.assertNotIn("required", schema)
+                    self.assertEqual(schema["properties"]["meta"]["type"], "object")
+                    data = schema["properties"]["data"]
+                    self.assertEqual(data["type"], ["array", "null"])
+                    self.assertIn("x-aisa-response-source", op)
+                    validator = Draft202012Validator(schema)
+                    for body in ({}, {"data": None}, {"data": []}):
+                        self.assertEqual(list(validator.iter_errors(body)), [])
+                    self.assertTrue(list(validator.iter_errors({"data": "wrong"})))
+                    if "segment-analysis" in path:
+                        self.assertNotIn("x-aisa-schema-status", data)
+                        self.assertEqual(data["items"]["type"], ["object", "null"])
+                        self.assertEqual(list(validator.iter_errors({"data": [{"visits": 1.5}, None]})), [])
+                        self.assertTrue(list(validator.iter_errors({"data": [{"visits": "wrong"}]})))
+                    else:
+                        self.assertEqual(data["x-aisa-schema-status"], "item_definition_unconfirmed")
+                        self.assertEqual(data["items"], {})
+                        # A contradictory provider prototype must not impose
+                        # an invented object or array shape on returned items.
+                        self.assertEqual(list(validator.iter_errors({"data": [{}, []]})), [])
+                    if "traffic-by-demographics" in path:
+                        request = schema["properties"]["meta"]["properties"]["request"]["properties"]
+                        for field in ("age_buckets", "metrics"):
+                            self.assertEqual(request[field]["x-aisa-schema-status"], "item_definition_unconfirmed")
+                            self.assertEqual(request[field]["items"], {})
             # The disabled legacy route remains intentionally pending.
             folders = operation(document, "/apis/v1/similarweb/website/folders", "get")
             self.assertEqual(folders.get("x-aisa-status"), "disabled")
@@ -93,8 +117,10 @@ class ReviewedResponseTests(unittest.TestCase):
         for lang in ("", "zh/"):
             for name in sw_pages:
                 text = (ROOT / f"{lang}api-reference/similarweb" / name).read_text()
-                self.assertIn("成功响应结构尚未核实" if lang else "successful response schema for this endpoint has not been verified", text)
-                self.assertNotIn("meta.status", text)
+                self.assertNotIn("成功响应结构尚未核实", text)
+                self.assertNotIn("successful response schema for this endpoint has not been verified", text)
+                self.assertIn("https://docs.similarweb.com/api-v5/api-reference/", text)
+                self.assertIn("application/json", text)
 
 if __name__ == "__main__":
     unittest.main()
