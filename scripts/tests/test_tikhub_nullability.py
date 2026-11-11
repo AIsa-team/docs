@@ -8,6 +8,7 @@ from compose_openapi import compose, digest, resolve, schema_30_to_31
 from runtime_registry import public_mirror_index
 from source_governance import policy_errors
 from test_runtime_contracts import facts, operation
+from test_tikhub_response_amendment import undo_response_amendment
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -36,6 +37,7 @@ class TikHubNullabilityTests(unittest.TestCase):
     def test_only_exact_reviewed_request_roots_change_and_source_clock_is_preserved(self):
         doc = copy.deepcopy(self.doc)
         source = doc['info'].pop('x-aisa-source')
+        source = undo_response_amendment(self, doc, source)
         self.assertEqual(source['content_hash'], digest(doc))
         self.assertEqual(source['prior_source'], self.review['prior_source'])
         self.assertFalse(policy_errors(source))

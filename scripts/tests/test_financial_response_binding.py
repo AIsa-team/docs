@@ -10,6 +10,19 @@ PLACEHOLDER = "Successful response. The payload schema has not been reviewed yet
 
 
 class FinancialResponseBindingTest(unittest.TestCase):
+    def test_response_binding_preserves_runtime_capabilities_across_surfaces(self):
+        expected = {
+            "idempotency": "Idempotency-Key",
+            "max_price": "X-AISA-Max-Price-USD",
+            "quote": {"header": "X-AISA-Cost-Mode", "value": "quote"},
+        }
+        for filename in ("openapi/financial.json", "openapi/zh/financial.json", "openapi/openapi.json"):
+            with self.subTest(filename=filename):
+                document = json.loads((ROOT / filename).read_text())
+                capabilities = document["paths"][PATH]["get"]["x-aisa-capabilities"]
+                for key, value in expected.items():
+                    self.assertEqual(capabilities.get(key), value)
+
     def test_public_documents_publish_the_reviewed_response(self):
         for filename in ("openapi/financial.json", "openapi/zh/financial.json"):
             with self.subTest(filename=filename):

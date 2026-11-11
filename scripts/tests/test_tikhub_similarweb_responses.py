@@ -58,12 +58,13 @@ class ReviewedResponseTests(unittest.TestCase):
             self.assertEqual(schema["properties"]["data"]["type"], ["array", "null"])
             self.assertEqual(schema["properties"]["meta"]["$ref"], "#/components/schemas/SimilarWebMeta")
 
-    def test_tikhub_success_contracts_are_binary_and_shared_envelope(self):
+    def test_tikhub_export_is_binary_and_trending_response_remains_unknown(self):
         source = json.loads((ROOT / "openapi/upstream/tikhub.json").read_text())
         post_source = source["paths"]["/tikhub/douyin/creator_v2/fetch_item_list_download"]["post"]["responses"]["200"]
         self.assertEqual(post_source["content"]["application/vnd.ms-excel"]["schema"], {"type": "string", "format": "binary"})
         get_source = source["paths"]["/tikhub/youtube/web/get_trending_videos"]["get"]["responses"]["200"]
-        self.assertEqual(get_source["content"]["application/json"]["schema"]["$ref"], "#/components/schemas/ResponseModel")
+        self.assertNotIn("content", get_source)
+        self.assertIn("unverified", get_source["description"])
         for filename in ("openapi/tikhub.json", "openapi/zh/tikhub.json"):
             document = json.loads((ROOT / filename).read_text())
             post = operation(document, "/apis/v1/tikhub/douyin/creator_v2/fetch_item_list_download", "post")
@@ -74,10 +75,18 @@ class ReviewedResponseTests(unittest.TestCase):
                 self.assertIn("x-aisa-response-source", post)
                 self.assertNotIn("x-aisa-response-pending", post)
             with self.subTest(filename=filename, route="get"):
-                self.assertNotEqual(get["responses"]["200"].get("description"), PLACEHOLDER)
-                self.assertEqual(get["responses"]["200"]["content"]["application/json"]["schema"]["$ref"], "#/components/schemas/Response1Fc51B60A782_ResponseModel")
-                self.assertIn("x-aisa-response-source", get)
-                self.assertNotIn("x-aisa-response-pending", get)
+                response = get["responses"]["200"]
+                self.assertNotIn("$ref", response)
+                for media in response.get("content", {}).values():
+                    self.assertEqual(media.get("schema", {}), {})
+                self.assertNotIn("x-aisa-response-source", get)
+                pending = get.get("x-aisa-response-pending", {})
+                review = get.get("x-aisa-review", {})
+                self.assertTrue(
+                    pending.get("statuses") == ["200"]
+                    or (review.get("status") == "unreviewed" and review.get("response") == "generic"),
+                    "Unknown GET success response must retain explicit pending/unreviewed debt",
+                )
 
     def test_pages_explain_reviewed_response_shapes_in_english_and_chinese(self):
         pages = [
