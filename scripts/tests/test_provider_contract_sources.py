@@ -26,7 +26,9 @@ class ProviderContractSourceTests(unittest.TestCase):
             with self.subTest(path=row['path']):
                 self.assertNotIn(row['endpoint_id'], seen)
                 seen.add(row['endpoint_id'])
-                source = documents.setdefault(row['source_file'], json.loads((ROOT / row['source_file']).read_text()))
+                if row['source_file'] not in documents:
+                    documents[row['source_file']] = json.loads((ROOT / row['source_file']).read_text())
+                source = documents[row['source_file']]
                 metadata = source['info']['x-aisa-source']
                 binding = next(e for e in metadata['operation_evidence'] if e['path'] == row['path'])
                 self.assertEqual(binding['descriptor_sha256'], row['source_descriptor_sha256'])
