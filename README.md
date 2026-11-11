@@ -180,7 +180,7 @@ unchanged current pointer before and after downloading the exact immutable
 manifest; validates its revision, every file SHA/ETag and index/provider binding;
 and rejects pending or incomplete selected Runtime coverage. HTTPS verification
 is enabled, redirects and environment proxies are disabled, and acquisition is
-bounded to 180 seconds, 2048 files and 128 MiB per immutable release. Ordinary
+bounded to 180 seconds, 2048 files and 192 MiB per immutable release. Ordinary
 provider/native files retain an 8 MiB limit; the canonical aggregate allows
 64 MiB and metadata allows 1 MiB. Private facts snapshots retain a separate
 64 MiB total limit and allow 1024 files. The current production replay exceeds
@@ -505,3 +505,10 @@ largest generated blocks on the actual candidate. A frozen historical fixture
 with duplicate legacy pages produced 7,282 request blocks (22.43 MB total,
 75.4 KB largest) before the final renderer review; it is a sizing diagnostic,
 not the size or acceptance result of the current live publication.
+
+The reviewed provider catalog adds 2,063 Alexandria response definitions and
+examples plus 143 Monid schemas. Per-operation acquisition bindings remain in
+the reviewed schema inputs, and repeated response descriptions/discovery fields
+are not copied into every public document. The combined release budget is
+192 MiB for the facts, native documents and aggregate together; individual roles
+remain 64 MiB for the aggregate, 8 MiB for ordinary files and 1 MiB for metadata.

@@ -780,6 +780,15 @@ def source_success_responses(operation: dict, document: dict, output: dict, name
                        "content": response.get("content", {})}
             if response.get("x-aisa-no-content") is True:
                 payload["x-aisa-no-content"] = True
+            payload = copy.deepcopy(payload)
+            for media in payload.get("content", {}).values():
+                schema = media.get("schema") if isinstance(media, dict) else None
+                if isinstance(schema, dict) and schema.get("x-aisa-schema-completeness") == "documented-fields-only":
+                    # The full field table remains in the response description.
+                    # Raw discovery metadata stays in the reviewed source input.
+                    schema.pop("x-aisa-provider-response", None)
+                    if schema.get("description") == payload.get("description"):
+                        schema.pop("description", None)
             result[str(status)] = resolve_fragment(payload, document, output, namespace, preserve_refs=True)
     return result
 
