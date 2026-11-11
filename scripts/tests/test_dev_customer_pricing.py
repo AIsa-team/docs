@@ -165,6 +165,41 @@ class DevCustomerPricingTests(unittest.TestCase):
                     self.assertEqual(repeated[name], raw, name)
         self.assertEqual(document, original)
 
+    def test_retained_operation_without_pricing_gets_archive_copy_without_mutating_contract(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'openapi').mkdir()
+            (root / 'openapi/legacy.json').write_text(json.dumps({
+                'info': {'x-aisa-document': {'document_hash': 'legacy'}},
+                'paths': {'/old': {'get': {'operationId': 'old', 'description': 'Old endpoint.'}}},
+            }))
+            config = {'navigation': {'languages': []}}
+            for language, prefix in [('en', ''), ('zh', 'zh/')]:
+                page = root / (prefix + 'api-reference/legacy/old.mdx')
+                page.parent.mkdir(parents=True, exist_ok=True)
+                page.write_text('---\nopenapi: "openapi/legacy.json GET /old"\n---\nOld endpoint.\n')
+                config['navigation']['languages'].append({'language': language, 'tabs': []})
+            (root / 'docs.json').write_text(json.dumps(config))
+            before = json.loads((root / 'openapi/legacy.json').read_text())
+            dev.scope_presentation(root, {'info': {}, 'paths': {}}, {})
+            after = json.loads((root / 'openapi/legacy.json').read_text())
+            self.assertEqual(after, before)
+            self.assertIn('Historical archive: disabled, cannot be called, and no price is published.',
+                          (root / 'api-reference/legacy/old.mdx').read_text())
+            self.assertIn('历史归档接口：已停用，不可调用，价格未发布。',
+                          (root / 'zh/api-reference/legacy/old.mdx').read_text())
+
+    def test_manually_authored_free_helper_has_customer_price_block(self):
+        root = Path(__file__).resolve().parents[2]
+        for prefix, heading, sentence in [('', 'Cost and request rules', 'No additional charge for this operation.'),
+                                          ('zh/', '费用与请求规则', '此操作不另收费。')]:
+            page = (root / prefix / 'api-reference/unipile/get_unipile-me-accounts.mdx') if prefix else (root / 'api-reference/unipile/get_unipile-me-accounts.mdx')
+            text = page.read_text()
+            self.assertEqual(text.count('## ' + heading), 1)
+            self.assertIn(sentence, text)
+            self.assertNotIn('aisa-pricing:start', text)
+
+
 
 if __name__ == '__main__':
     unittest.main()
