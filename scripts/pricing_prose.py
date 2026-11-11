@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import copy
 import re
-from customer_price_presentation import pricing_summary, usd
+from customer_price_presentation import price_family, pricing_summary, usd
 
 PRICE_BEGIN = '<!-- aisa-pricing:start -->'
 PRICE_END = '<!-- aisa-pricing:end -->'
@@ -18,13 +18,39 @@ def strip_price_summary(text):
     return re.sub(r'\s*' + re.escape(PRICE_BEGIN) + r'.*?' + re.escape(PRICE_END), '', text, flags=re.S).strip()
 
 
+def strip_markerless_status_summary(text, pricing):
+    """Remove a previous free/archive status line before regenerating it."""
+    if not isinstance(pricing, dict) or price_family(pricing) not in {'no_customer_charge', 'unpriced'}:
+        return text
+    summaries = {
+        'No charge.',
+        'No additional charge for this operation.',
+        '此操作不收费。',
+        '此操作不另收费。',
+        'Price not yet published; this operation is unavailable.',
+        '价格尚未发布，此操作暂不可用。',
+        'Historical archive: disabled, cannot be called, and no price is published.',
+        '历史归档接口：已停用，不可调用，价格未发布。',
+    }
+    for summary in summaries:
+        text = re.sub(r'(?m)^[ \t]*' + re.escape(summary) + r'[ \t]*(?:\n|$)', '', text)
+    return re.sub(r'\n{3,}', '\n\n', text).strip()
+
+
 def add_price_summary(operation, language='en'):
     """Replace a generated paragraph on each run so price changes cannot stick."""
-    description = strip_price_summary(operation.get('description', ''))
-    summary = pricing_summary(operation.get('x-aisa-pricing'), language)
+    pricing = operation.get('x-aisa-pricing')
+    description = strip_markerless_status_summary(
+        strip_price_summary(operation.get('description', '')), pricing)
+    summary = pricing_summary(pricing, language)
     if summary:
         description = description.replace(NOTICE, '').replace(NOTICE_ZH, '').strip()
-        operation['description'] = (description + '\n\n' + PRICE_BEGIN + '\n' + summary + '\n' + PRICE_END).strip()
+        if price_family(pricing) in {'no_customer_charge', 'unpriced'}:
+            # Free and disabled archive states are status copy, not a mutable
+            # price block. Keep the rendered sentence without source markers.
+            operation['description'] = (description + '\n\n' + summary).strip()
+        else:
+            operation['description'] = (description + '\n\n' + PRICE_BEGIN + '\n' + summary + '\n' + PRICE_END).strip()
     elif 'description' in operation:
         operation['description'] = description
     return operation

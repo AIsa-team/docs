@@ -248,8 +248,25 @@ class PricingProseTests(unittest.TestCase):
                 description = result['paths']['/social']['get']['description']
                 self.assertIn(expected, description)
                 self.assertNotIn(unavailable, description)
-                self.assertEqual(description.count(PRICE_BEGIN), 1)
+                self.assertEqual(description.count(PRICE_BEGIN), 0 if pricing is free else 1)
                 self.assertEqual(result['paths']['/social']['get']['x-aisa-pricing'], pricing)
+                self.assertEqual(clean_document(result), result)
+
+    def test_free_and_disabled_archive_statuses_are_markerless_and_idempotent(self):
+        for pricing, expected in (
+                ({'kind': 'no_customer_charge'}, 'No additional charge for this operation.'),
+                ({'kind': 'unpriced'}, 'Historical archive: disabled, cannot be called, and no price is published.')):
+            with self.subTest(pricing=pricing):
+                document = {'paths': {'/status': {'get': {
+                    'operationId': 'status',
+                    'description': '<!-- aisa-pricing:start -->\nNo charge.\n<!-- aisa-pricing:end -->',
+                    'x-aisa-pricing': pricing}}}}
+                result = clean_document(document)
+                description = result['paths']['/status']['get']['description']
+                self.assertIn(expected, description)
+                self.assertNotIn('aisa-pricing:start', description)
+                self.assertNotIn('aisa-pricing:end', description)
+                self.assertEqual(description.count(expected), 1)
                 self.assertEqual(clean_document(result), result)
 
     def test_price_parenthetical_and_upstream_billing_sentences_leave_no_stub(self):

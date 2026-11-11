@@ -27,7 +27,7 @@ therefore receive the same price meaning.
 | Successful event | Published per-target amounts, draft/failure and charge-refusal conditions |
 | Model catalog | Model/options and request/token/second semantics; no invented model price |
 | No customer charge | No additional charge for this operation |
-| Historical disabled archive | Disabled, cannot be called, and no price is published; retained only for reference |
+| Historical disabled archive | Disabled, cannot be called, and no price is published; retained only for reference, without a mutable pricing marker |
 | Unknown pricing kind/cost rule | Billing method unavailable; any published request estimate stays an estimate without an inferred settlement rule |
 
 Existing customer reference estimates and unit amounts are never multiplied a

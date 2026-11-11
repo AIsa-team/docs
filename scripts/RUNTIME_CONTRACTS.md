@@ -43,6 +43,10 @@ an unavailable billing method; a published request estimate may still be shown
 as an estimate without asserting how the final charge is calculated.
 An `unpriced` operation is a disabled historical archive, not an active pricing
 family: its page says it cannot be called and that no price is published.
+Free operations and disabled archives render their status sentence without the
+`aisa-pricing` source markers used for mutable paid-price blocks. Paid summaries
+keep those markers so later Runtime price changes replace the generated block
+without duplicating prose.
 
 Integer `customer_micros_usd` is converted exactly to USD. Resource reads show
 normal-tier reference prices, delivered-read conditions and computed cache
