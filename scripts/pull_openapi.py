@@ -97,6 +97,10 @@ def _retain_history_operation(document: dict, facts: dict, history: dict, path: 
     operation["x-aisa-status"] = "disabled"
     operation["x-aisa-contract-state"] = state
     operation["x-aisa-contract-pending"] = reason
+    # Retained descriptions must be cleaned before the retention hash is made;
+    # cleaning only the final dev page would feed different history back next run.
+    from pricing_prose import remove_price_summary
+    remove_price_summary(operation)
     document["paths"].setdefault(path, {})[method] = operation
     return operation
 
@@ -475,6 +479,8 @@ def refresh_legacy_page_blocks(root, documents, changes, catalog):
                 if not localized_path.exists() and localized_path not in changes:
                     localized = localize_identities(localization.localize_tree(document, catalog, allow_untranslated=True))
                     changes[localized_path] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
+            from pricing_prose import clean_page
+            text = clean_page(text, language)
             changes[page] = update_readable_block(text, operation, language, translated_note,
                 document=document, method=method, path=path, spec_path=reference.split()[0])
     docs_path = root / 'docs.json'

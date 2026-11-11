@@ -21,6 +21,9 @@ import yaml
 from fetch_runtime_release import PublicReader, decode, require, sha, category_content
 from pull_openapi import stage, update_disabled_indexing
 from check_nav_integrity import nav_pages
+from pricing_prose import clean_page, remove_price_summary
+from readable_contract_notes import update_readable_block
+from runtime_localize_openapi_zh import translation
 from identity_compatibility import published_history
 from regroup_api_reference import write_index_pages
 from runtime_consolidate_openapi import (build_unified_spec, publication_yaml,
@@ -99,6 +102,15 @@ def scope_presentation(candidate, aggregate, summary):
     aggregate['info']['x-aisa-environment'] = 'dev'
     aggregate['info']['x-aisa-publication-kind'] = 'live_facts_preview'
     documents = {}
+    catalog_path = candidate / 'translations/openapi-zh.json'
+    catalog = json.loads(catalog_path.read_text()) if catalog_path.exists() else {'entries': {}}
+
+    def translated_note(note):
+        try:
+            return translation(catalog, note)
+        except KeyError:
+            return note
+
     hidden, preserved = set(), set()
     for base in ('api-reference', 'zh/api-reference'):
         for page in (candidate / base).rglob('*.mdx'):
@@ -108,7 +120,18 @@ def scope_presentation(candidate, aggregate, summary):
                 continue
             name, method, path = match.groups()
             if name not in documents:
-                documents[name] = json.loads((candidate / name).read_text())
+                document = json.loads((candidate / name).read_text())
+                original = copy.deepcopy(document)
+                # Retained/blocked operations bypass composition. Dev is a
+                # presentation preview: clean their displayed descriptions too,
+                # without changing contract prices, status or provenance.
+                for item in document.get('paths', {}).values():
+                    for verb in ('get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'):
+                        if isinstance(item.get(verb), dict):
+                            remove_price_summary(item[verb])
+                documents[name] = document
+                if document != original:
+                    (candidate / name).write_text(json.dumps(document, indent=2, ensure_ascii=False) + '\n')
             provider = Path(name).name.removesuffix('.json').removesuffix('.zh')
             operation = documents[name].get('paths', {}).get(path, {}).get(method.lower())
             unverified = provider not in active or operation is None or operation.get('x-aisa-status') == 'disabled'
@@ -118,6 +141,13 @@ def scope_presentation(candidate, aggregate, summary):
             for note in HISTORIC_NOTES.values():
                 text = text.replace(note, '')
             if unverified:
+                language = 'zh' if base.startswith('zh/') else 'en'
+                text = clean_page(text, language)
+                if operation is not None:
+                    text = update_readable_block(text, operation, language, translated_note,
+                        document=documents[name], method=method.lower(), path=path, spec_path=name)
+                else:
+                    text = update_readable_block(text, {})
                 if unlisted:
                     hidden.add(reference)
                     notice = ARCHIVE_NOTE
