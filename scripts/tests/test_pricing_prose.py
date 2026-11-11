@@ -67,6 +67,16 @@ class PricingProseTests(unittest.TestCase):
         noticed = remove_price_summary({'description': 'Search. ' + NOTICE, 'x-aisa-pricing': pricing})
         self.assertEqual(noticed['description'], 'Search.')
 
+    def test_legacy_notice_migration_preserves_code_examples(self):
+        from pricing_prose import LEGACY_NOTICES
+        for notice in LEGACY_NOTICES:
+            example = '```json\n' + json.dumps({'description': notice}) + '\n```'
+            self.assertEqual(clean_text(example), example)
+            text = notice + '\n\n' + example
+            cleaned = clean_text(text)
+            self.assertIn(example, cleaned)
+            self.assertNotIn('x-aisa-pricing', cleaned.split('```')[0])
+
     def test_frontmatter_legacy_summaries_leave_business_text_and_are_idempotent(self):
         for summary in ('No charge.', 'No additional charge for this operation.',
                         'Price not yet published; this operation is unavailable.',

@@ -101,15 +101,16 @@ def reconcile_free_claim(text, pricing):
 
 def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
     """Drop price clauses, retaining separate usage rules and non-price prose."""
-    for old, current in zip(LEGACY_NOTICES, (NOTICE, NOTICE_ZH)):
-        text = text.replace(old, current)
-    if not MONEY.search(text):
+    if not MONEY.search(text) and not any(notice in text for notice in LEGACY_NOTICES):
         return text
     notice = NOTICE_ZH if language == 'zh' else NOTICE
     chunks = FENCES.split(text)
     changed = False
     for index in range(0, len(chunks), 2):
         chunk = chunks[index]
+        for old, current in zip(LEGACY_NOTICES, (NOTICE, NOTICE_ZH)):
+            chunk = chunk.replace(old, current)
+        changed |= chunk != chunks[index]
         # Keep the model choice while removing its obsolete rate assertion.
         chunk, count = re.subn(r'(`[^`]+`) is billed at \$\d+(?:\.\d+)? per request\.', r'\1 is supported.', chunk)
         changed |= bool(count)

@@ -26,6 +26,55 @@ OLD_SUMMARY = ('<!-- aisa-pricing:start -->\n'
 
 
 class DevCustomerPricingTests(unittest.TestCase):
+    def test_retained_blocked_and_absent_references_clean_both_description_surfaces(self):
+        # Dev retains these pages even when they cannot be freshly composed.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = {'navigation': {'pages': []}}
+            documents = {}
+            for provider, status in [('absent', 'enabled'), ('blocked', 'enabled'), ('current', 'disabled')]:
+                for prefix in ('', 'zh/'):
+                    spec = root / ('openapi/' + prefix + provider + '.json')
+                    spec.parent.mkdir(parents=True, exist_ok=True)
+                    operation = {'operationId': provider, 'description': 'Find ads.\n\n' + OLD_SUMMARY,
+                                 'x-aisa-status': status, 'x-aisa-pricing': copy.deepcopy(ADYNTEL_PRICING),
+                                 'x-aisa-constraints': {'notes': ['Request note']}}
+                    document = {'info': {'x-aisa-document': {'document_hash': 'historical'}},
+                                'paths': {'/ads': {'get': operation}}}
+                    spec.write_text(json.dumps(document))
+                    documents[spec] = copy.deepcopy(document)
+                    page = root / (prefix + 'api-reference/' + provider + '/ads.mdx')
+                    page.parent.mkdir(parents=True, exist_ok=True)
+                    page.write_text('---\ntitle: Ads\ndescription: ' + json.dumps(OLD_SUMMARY)
+                                    + '\nopenapi: "' + spec.relative_to(root).as_posix() + ' GET /ads"\n---\n\nExample.\n'
+                                    + '\n{/* aisa-contract-details:start */}\n\nOld provider_credit rate\n{/* aisa-contract-details:end */}\n')
+                    config['navigation']['pages'].append(page.relative_to(root).with_suffix('').as_posix())
+            (root / 'docs.json').write_text(json.dumps(config))
+            summary = {'current': {}, 'blocked': {'blocked': 'unresolved source'}}
+            for repeat in range(2):
+                aggregate = {'info': {}, 'paths': {}}
+                dev.scope_presentation(root, aggregate, summary)
+                for spec, before in documents.items():
+                    document = json.loads(spec.read_text())
+                    expected = copy.deepcopy(before)
+                    expected['paths']['/ads']['get']['description'] = 'Find ads.'
+                    self.assertEqual(document, expected)
+                for page in root.glob('**/*.mdx'):
+                    text = page.read_text()
+                    self.assertIn('Example.', text)
+                    self.assertIn('Request note', text)
+                    self.assertNotIn('provider_credit', text)
+                    self.assertNotIn('aisa-pricing:', text)
+                    self.assertNotIn('0.000001', text)
+                    language = 'zh' if '/zh/' in str(page) else 'en'
+                    self.assertEqual(text.count(dev.HISTORIC_NOTES[language]), 1)
+                    heading = '## 费用与请求规则' if language == 'zh' else '## Cost and request rules'
+                    self.assertEqual(text.count(heading), 1)
+                snapshot = {p: p.read_bytes() for p in root.rglob('*') if p.is_file()}
+                if repeat:
+                    self.assertEqual(snapshot, previous)
+                previous = snapshot
+
     def test_adyntel_pattern_has_one_price_block_and_no_internal_prices_after_regeneration(self):
         fixture = test_dev_runtime.DevRuntimeTests()
         values, _, reader = fixture.fixture()
