@@ -393,8 +393,12 @@ def referenced_components(value: Any, document: dict) -> dict:
                 if openapi30:
                     definition = schema_30_to_31(definition) if section == "schemas" else fragment_30_to_31(definition)
                 seen.add(ref)
-                components.setdefault(section, {})[name] = copy.deepcopy(original)
-                visit({'links': {'target': definition}} if section == 'links' else definition)
+                # Different pointers into one component's $defs share the same
+                # finite component graph. Validate every pointer above, but walk
+                # the complete component only once, including recursive schemas.
+                if name not in components.get(section, {}):
+                    components.setdefault(section, {})[name] = copy.deepcopy(original)
+                    visit({'links': {'target': definition}} if section == 'links' else definition)
             map_contract_children(node, visit)
     visit(fragment_30_to_31(value) if openapi30 else value)
     return components

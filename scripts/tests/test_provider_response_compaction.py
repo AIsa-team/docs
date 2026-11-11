@@ -3,7 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from scripts.compose_openapi import source_success_responses
+from scripts.compose_openapi import source_success_responses, referenced_components
 from scripts.runtime_registry import public_mirror_index
 
 
@@ -25,6 +25,19 @@ class ProviderResponseCompactionTests(unittest.TestCase):
         schema['description'] = 'Distinct payload guidance'
         result = source_success_responses(operation, {}, {}, 'test', {})['200']
         self.assertEqual(result['content']['application/json']['schema']['description'], 'Distinct payload guidance')
+
+    def test_many_recursive_definitions_share_one_component_walk(self):
+        ref = '#/components/schemas/Owned/$defs/'
+        definitions = {f'N{i}': {'type': 'object', 'properties': {
+            'next': {'$ref': ref + f'N{(i + 1) % 200}'}}} for i in range(200)}
+        component = {'$defs': definitions, '$ref': ref + 'N0'}
+        document = {'openapi': '3.1.0', 'components': {'schemas': {'Owned': component}}}
+        selected = referenced_components({'schema': {'$ref': ref + 'N0'}}, document)
+        self.assertEqual(selected, document['components'])
+        self.assertIsNot(selected['schemas']['Owned'], component)
+        definitions['N199']['properties']['missing'] = {'$ref': ref + 'Missing'}
+        with self.assertRaises(ValueError):
+            referenced_components({'schema': {'$ref': ref + 'N0'}}, document)
 
     def test_public_source_keeps_content_binding_without_repeating_all_operation_audits(self):
         source = {'kind': 'manual', 'path_space': 'public', 'url': 'https://example.com/reference',
