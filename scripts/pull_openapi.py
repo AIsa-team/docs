@@ -475,6 +475,8 @@ def refresh_legacy_page_blocks(root, documents, changes, catalog):
                 if not localized_path.exists() and localized_path not in changes:
                     localized = localize_identities(localization.localize_tree(document, catalog, allow_untranslated=True))
                     changes[localized_path] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
+            from pricing_prose import clean_page
+            text = clean_page(text, language)
             changes[page] = update_readable_block(text, operation, language, translated_note,
                 document=document, method=method, path=path, spec_path=reference.split()[0])
     docs_path = root / 'docs.json'

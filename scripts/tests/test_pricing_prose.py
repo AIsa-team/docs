@@ -22,15 +22,15 @@ class PricingProseTests(unittest.TestCase):
         from sales_catalog_projection import project_sales_catalog
         runtime = facts()
         operation(runtime)['description'] = 'Domain Rating. Billed $0.02 per successful call.'
-        operation(runtime)['x-aisa-pricing'] = {'cost_contract': 'fixed_success', 'default_request_estimate_usd': .08}
+        operation(runtime)['x-aisa-pricing'] = {'cost_contract': 'fixed_success', 'customer_pricing': 'fixed_success', 'default_request_estimate_usd': .08}
         document, _ = compose(runtime)
         public = operation(document)
         self.assertNotIn('$0.02', public['description'])
         self.assertNotIn('$0.08', public['description'])
-        self.assertIn('Fixed per call: $0.08 per successful request.', readable_block(public))
+        self.assertIn('Published reference price: $0.08 USD per successful request.', readable_block(public))
         localized = localize_tree(document, {'entries': {}}, allow_untranslated=True)
         self.assertNotIn('$0.08', operation(localized)['description'])
-        self.assertIn('按次固定：每次成功请求 $0.08。', readable_block(public, 'zh'))
+        self.assertIn('公开参考价格：每次成功请求 $0.08 USD。', readable_block(public, 'zh'))
         sales = project_sales_catalog(document, 'a' * 64)['document']
         self.assertEqual(operation(sales)['description'], public['description'])
         self.assertEqual(operation(sales)['x-aisa-pricing'], public['x-aisa-pricing'])
@@ -38,13 +38,13 @@ class PricingProseTests(unittest.TestCase):
         operation(document)['x-aisa-pricing']['default_request_estimate_usd'] = .12
         updated = clean_document(document)
         self.assertNotIn('$', operation(updated)['description'])
-        self.assertIn('$0.12 per successful request', readable_block(operation(updated)))
+        self.assertIn('$0.12 USD per successful request', readable_block(operation(updated)))
         operation(updated).pop('x-aisa-pricing')
         self.assertNotIn('$0.12', readable_block(operation(updated)))
 
     def test_legacy_description_summaries_and_markers_are_removed(self):
         # Mintlify renders an HTML comment in an OpenAPI description as text.
-        pricing = {'cost_contract': 'fixed_success', 'default_request_estimate_usd': .08}
+        pricing = {'cost_contract': 'fixed_success', 'customer_pricing': 'fixed_success', 'default_request_estimate_usd': .08}
         legacy = ('Agoda Hotel Rates\n\n' + PRICE_BEGIN + '\nPublished reference price: $0.05 USD per successful request.'
                   ' Account-specific pricing and final settlement may differ.\n' + PRICE_END)
         operation = remove_price_summary({'description': legacy, 'x-aisa-pricing': pricing})
@@ -67,24 +67,41 @@ class PricingProseTests(unittest.TestCase):
         noticed = remove_price_summary({'description': 'Search. ' + NOTICE, 'x-aisa-pricing': pricing})
         self.assertEqual(noticed['description'], 'Search.')
 
+    def test_frontmatter_legacy_summaries_leave_business_text_and_are_idempotent(self):
+        for summary in ('No charge.', 'No additional charge for this operation.',
+                        'Price not yet published; this operation is unavailable.',
+                        PRICE_BEGIN + ' No charge. ' + PRICE_END,
+                        'Usage-based pricing. Default request estimate: $0.1 USD. '
+                        'Your account price may differ; use a request quote where supported.'):
+            description = 'Get ads.\n\n' + summary
+            page = '---\ntitle: Ads\ndescription: ' + json.dumps(description) + '\n---\n\nBusiness body.\n'
+            cleaned = clean_page(page)
+            import yaml
+            self.assertEqual(yaml.safe_load(cleaned.split('---')[1])['description'], 'Get ads.')
+            self.assertEqual(clean_page(cleaned), cleaned)
+            self.assertTrue(cleaned.endswith('Business body.\n'))
+
     def test_fixed_zero_usage_units_and_missing_prices_have_distinct_labels(self):
-        fixed = pricing_summary({'cost_contract': 'fixed_success', 'default_request_estimate_usd': .08, 'customer_multiplier': 2})
-        self.assertEqual(fixed, 'Fixed per call: $0.08 per successful request.')
-        free = pricing_summary({'cost_contract': 'explicit_zero', 'customer_pricing': 'fixed_success', 'default_request_estimate_usd': 0})
-        self.assertEqual(free, 'Fixed per call: $0 per successful request.')
+        fixed = pricing_summary({'customer_pricing': 'fixed_success', 'default_request_estimate_usd': .08, 'customer_multiplier': 2})
+        self.assertIn('Published reference price: $0.08 USD per successful request.', fixed)
+        self.assertNotIn('$0.16', fixed)
+        free = pricing_summary({'kind': 'no_customer_charge'})
+        self.assertEqual(free, 'No additional charge for this operation.')
         usage = {'cost_contract': 'response_count', 'default_request_estimate_usd': 1.275, 'unit_rate_usd': .075, 'unit': 'similarweb_credit'}
-        self.assertEqual(pricing_summary(usage), 'Metered: $0.075 per SimilarWeb credit. A reference request costs about $1.275.')
-        self.assertEqual(pricing_summary(usage, 'zh'), '按量计费：每个 SimilarWeb 额度 $0.075，参考请求约 $1.275。')
-        credit = {'cost_contract': 'response_units', 'default_request_estimate_usd': .014, 'unit_rate_usd': .014, 'unit': 'provider_credit'}
-        self.assertEqual(pricing_summary(credit, 'zh'), '按量计费：每个提供商额度 $0.014，参考请求约 $0.014。')
-        self.assertEqual(pricing_summary({'cost_contract': 'response_usd', 'default_request_estimate_usd': .02}),
-                         'Metered: a reference request costs about $0.02.')
-        self.assertIn('new unit', pricing_summary({**credit, 'unit': 'new_unit'}))
+        self.assertIn('Charged for the actual billable results.', pricing_summary(usage))
+        self.assertIn('Default request estimate: $1.275 USD.', pricing_summary(usage))
+        self.assertIn('按实际计费结果数量收费。', pricing_summary(usage, 'zh'))
+        for unit in ('provider_credit', 'similarweb_credit', 'new_unit'):
+            for language in ('en', 'zh'):
+                summary = pricing_summary({**usage, 'unit': unit}, language)
+                self.assertNotIn(unit, summary)
+                self.assertNotIn('$0.075', summary)
+        self.assertIn('Usage-based pricing.', pricing_summary({'cost_contract': 'response_usd', 'default_request_estimate_usd': .02}))
         missing = pricing_summary({'default_request_estimate_usd': .08, 'reference_unavailable': True}, 'zh')
-        self.assertEqual(missing, '暂无参考价格，接口支持报价时请先获取报价。')
+        self.assertIn('计费方式暂不可用。', missing)
+        self.assertNotIn('$', missing)
         for value in (None, True, -1, float('inf'), float('nan'), '0.08'):
             self.assertNotIn('$', pricing_summary({'default_request_estimate_usd': value}))
-        self.assertNotIn('$', pricing_summary({'default_request_estimate_usd': .08, 'reference_unavailable': True}))
 
     def test_page_rate_table_and_translation_cannot_restore_stale_prices(self):
         from readable_contract_notes import update_readable_block

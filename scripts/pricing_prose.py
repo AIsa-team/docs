@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import copy
 import re
-from decimal import Decimal, InvalidOperation
+import yaml
+from customer_price_presentation import pricing_summary, usd
 
 # Legacy markers. Mintlify shows an HTML comment in an OpenAPI description as
 # literal text, so new summaries carry no marker; these are only stripped.
@@ -18,11 +19,17 @@ PRICE_END = '<!-- aisa-pricing:end -->'
 # one of these leads and closes with the settlement sentence of its language.
 SUMMARY_LEADS = (
     'Published reference price: ', 'Default request estimate: ',
+    'Request pricing.', 'Usage-based pricing.', 'Charged for the actual billable results.',
+    'Charged for the combined usage', 'Charged for actual usage', 'Price depends on',
+    'Normal-tier reference price:', '请求费用。', '按实际用量收费。', '按实际计费结果数量收费。',
+    '按各计费项目', '任务完成后', '价格取决于', '普通用户参考价格：',
     'Usage-based billing; Default request estimate: ',
     'A request reference price is not currently available; ',
     '公开参考价格：', '默认请求预估费用：', '按用量计费；默认请求预估费用：', '当前未提供请求参考价格；',
 )
-SUMMARY_ENDS = ('Account-specific pricing and final settlement may differ.', '最终费用以账户适用价格及实际结算为准。')
+SUMMARY_ENDS = ('Account-specific pricing and final settlement may differ.', '最终费用以账户适用价格及实际结算为准。',
+                'Your account price may differ; use a request quote where supported.',
+                '账户适用价格可能不同；支持报价的接口可按实际请求获取报价。')
 SUMMARY = re.compile(
     r'(?:\A|\n[ \t]*\n)[ \t]*(?:' + '|'.join(map(re.escape, SUMMARY_LEADS)) + r')[^\n]*?(?:'
     + '|'.join(map(re.escape, SUMMARY_ENDS)) + r')\s*\Z')
@@ -32,85 +39,13 @@ def strip_price_summary(text):
     text = re.sub(r'\s*' + re.escape(PRICE_BEGIN) + r'.*?' + re.escape(PRICE_END), '', text, flags=re.S)
     while True:
         stripped = SUMMARY.sub('', text)
+        # These complete legacy generated paragraphs have no settlement suffix.
+        stripped = re.sub(r'(?:\A|\n[ \t]*\n)(?:No charge\.|No additional charge for this operation\.|'
+                          r'Price not yet published; this operation is unavailable\.|'
+                          r'不收费。|此操作不另收费。|价格尚未发布；此操作暂不可用。)\s*\Z', '', stripped)
         if stripped == text:
             return text.strip()
         text = stripped
-
-
-def usd(value):
-    """Format a published JSON number without float arithmetic or guessing."""
-    if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
-        return None
-    try:
-        amount = Decimal(str(value))
-    except InvalidOperation:
-        return None
-    if not amount.is_finite() or amount < 0:
-        return None
-    return '$' + (format(amount, 'f').rstrip('0').rstrip('.') if amount % 1 else format(amount, '.0f'))
-
-
-# Contracts whose charge follows what the response consumes.
-METERED = {'response_usd', 'response_count', 'response_sku', 'response_units', 'request_formula',
-           'response_components', 'plan_units'}
-# Readable names for declared billing units; other units show their words.
-UNIT_NAMES = {
-    'provider_credit': ('provider credit', '提供商额度'),
-    'similarweb_credit': ('SimilarWeb credit', 'SimilarWeb 额度'),
-    'firecrawl_credit': ('Firecrawl credit', 'Firecrawl 额度'),
-    'tavily_credit': ('Tavily credit', 'Tavily 额度'),
-    'akta_credit': ('Akta credit', 'Akta 额度'),
-    'similar_creator_point': ('similar-creator point', '相似达人点数'),
-    'email_lookup_point': ('email lookup point', '邮箱查询点数'),
-}
-
-
-def unit_name(unit, language='en'):
-    if not isinstance(unit, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', unit):
-        return None
-    names = UNIT_NAMES.get(unit)
-    if names:
-        return names[1] if language == 'zh' else names[0]
-    return unit.replace('_', ' ')
-
-
-def pricing_summary(pricing, language='en'):
-    """Render only declared prices; an estimate is never a unit or fixed price.
-
-    The words follow the pricing guide: "Fixed per call" and "Metered".
-    """
-    if not isinstance(pricing, dict) or not pricing:
-        return ''
-    zh = language == 'zh'
-    unavailable = pricing.get('reference_unavailable') or pricing.get('estimate_unavailable_reason') or pricing.get('estimate_source') == 'unavailable'
-    estimate = None if unavailable else usd(pricing.get('default_request_estimate_usd'))
-    fixed = pricing.get('customer_pricing') == 'fixed_success' or pricing.get('cost_contract') == 'fixed_success'
-    if estimate is not None and fixed:
-        return f'按次固定：每次成功请求 {estimate}。' if zh else f'Fixed per call: {estimate} per successful request.'
-    rate = usd(pricing.get('unit_rate_usd'))
-    unit = unit_name(pricing.get('unit'), language)
-    metered = pricing.get('cost_contract') in METERED or (rate is not None and unit)
-    if zh:
-        per = ('每个' + (' ' if unit and unit[0].isascii() else '') + f'{unit} {rate}') if rate is not None and unit else ''
-        about = f'参考请求约 {estimate}' if estimate is not None else ''
-        if metered:
-            detail = '，'.join(part for part in (per, about) if part)
-            summary = '按量计费：' + detail + '。' if detail else '按量计费。'
-        else:
-            summary = about + '。' if about else ''
-        if estimate is None:
-            summary += '暂无参考价格，接口支持报价时请先获取报价。'
-        return summary
-    per = f'{rate} per {unit}' if rate is not None and unit else ''
-    if metered:
-        summary = f'Metered: {per}.' if per else 'Metered.'
-        if estimate is not None:
-            summary = (summary + f' A reference request costs about {estimate}.') if per else f'Metered: a reference request costs about {estimate}.'
-    else:
-        summary = f'A reference request costs about {estimate}.' if estimate is not None else ''
-    if estimate is None:
-        summary = (summary + ' ' if summary else '') + 'No reference price yet; get a quote first where the endpoint supports quotes.'
-    return summary
 
 
 def remove_price_summary(operation):
@@ -122,7 +57,8 @@ def remove_price_summary(operation):
     """
     description = strip_price_summary(operation.get('description', ''))
     if pricing_summary(operation.get('x-aisa-pricing')):
-        description = description.replace(NOTICE, '').replace(NOTICE_ZH, '').strip()
+        for notice in (NOTICE, NOTICE_ZH, *LEGACY_NOTICES):
+            description = description.replace(notice, '').strip()
     if description:
         operation['description'] = description
     else:
@@ -135,8 +71,12 @@ RATE = re.compile(
     r'\b(?:flat|rate|surcharge|upstream|per\s+(?:call|request|item|row|job|1M\s+tokens))\b|'
     r'\bat\s+\$|'
     r'/\s*(?:request|call|次)\b|计费|收费|每次|每请求', re.I)
-NOTICE = 'For current API pricing, see the published x-aisa-pricing metadata. Where supported, obtain a quote for your exact request.'
-NOTICE_ZH = '当前 API 价格请查看公开的 x-aisa-pricing 信息；接口支持报价时，请针对实际请求获取报价。'
+LEGACY_NOTICES = (
+    'For current API pricing, see the published x-aisa-pricing metadata. Where supported, obtain a quote for your exact request.',
+    '当前 API 价格请查看公开的 x-aisa-pricing 信息；接口支持报价时，请针对实际请求获取报价。',
+)
+NOTICE = 'See the Cost and request rules section for current pricing. Where supported, obtain a quote for your exact request.'
+NOTICE_ZH = '当前价格请查看费用与请求规则；接口支持报价时，可针对实际请求获取报价。'
 # Examples and code are data, even when they happen to contain billing words.
 FENCES = re.compile(r'(```[^\n]*\n.*?```|~~~[^\n]*\n.*?~~~|<pre\b[^>]*>.*?</pre>)', re.S | re.I)
 PARTS = re.compile(r'(\n+|[;；](?![^()]*\))|(?<=[.!?。！？])\s+(?!\d)|<br\s*/?>|</?p\b[^>]*>|(?=\bNote:?)|(?<=false)(?=Note))', re.I)
@@ -161,6 +101,8 @@ def reconcile_free_claim(text, pricing):
 
 def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
     """Drop price clauses, retaining separate usage rules and non-price prose."""
+    for old, current in zip(LEGACY_NOTICES, (NOTICE, NOTICE_ZH)):
+        text = text.replace(old, current)
     if not MONEY.search(text):
         return text
     notice = NOTICE_ZH if language == 'zh' else NOTICE
@@ -264,14 +206,15 @@ def clean_document(document: dict) -> dict:
 
 def clean_page(text: str, language: str = 'en') -> str:
     """Clean handwritten API-page prose before adding Runtime's managed block."""
-    from runtime_localize_openapi_zh import split_frontmatter, frontmatter_value, replace_frontmatter_value
+    from runtime_localize_openapi_zh import split_frontmatter, replace_frontmatter_value
     from readable_contract_notes import strip_generated_block
     header, body = split_frontmatter(strip_generated_block(text))
     original = (header, body)
+    metadata = yaml.safe_load(header) or {}
     for key in ('description', 'excerpt'):
-        value = frontmatter_value(header, key)
-        if value:
-            updated = clean_text(value, language)
+        value = metadata.get(key)
+        if isinstance(value, str) and value:
+            updated = clean_text(strip_price_summary(value), language, add_notice=False)
             if updated != value:
                 header = replace_frontmatter_value(header, key, updated)
     # Preserve the useful section/parameter columns of handwritten rate tables.
