@@ -61,8 +61,7 @@ class PaymentMethodCapabilitiesTests(unittest.TestCase):
                     for text in matching:
                         self.assertIn(op["operationId"], text)
                         self.assertIn('"method": "' + method.upper() + '"', text)
-                        self.assertIn('$0.09 USD', text)
-                        self.assertNotIn('default_request_estimate_usd', text)
+                        self.assertIn('"default_request_estimate_usd": 0.09', text)
 
     def test_method_lists_never_enable_false_or_missing_capability(self):
         for value in (False, None):

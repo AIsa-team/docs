@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import copy
 import re
-from customer_price_presentation import price_family, pricing_summary, usd
+from decimal import Decimal, InvalidOperation
 
 PRICE_BEGIN = '<!-- aisa-pricing:start -->'
 PRICE_END = '<!-- aisa-pricing:end -->'
@@ -18,39 +18,74 @@ def strip_price_summary(text):
     return re.sub(r'\s*' + re.escape(PRICE_BEGIN) + r'.*?' + re.escape(PRICE_END), '', text, flags=re.S).strip()
 
 
-def strip_markerless_status_summary(text, pricing):
-    """Remove a previous free/archive status line before regenerating it."""
-    if not isinstance(pricing, dict) or price_family(pricing) not in {'no_customer_charge', 'unpriced'}:
-        return text
-    summaries = {
-        'No charge.',
-        'No additional charge for this operation.',
-        '此操作不收费。',
-        '此操作不另收费。',
-        'Price not yet published; this operation is unavailable.',
-        '价格尚未发布，此操作暂不可用。',
-        'Historical archive: disabled, cannot be called, and no price is published.',
-        '历史归档接口：已停用，不可调用，价格未发布。',
-    }
-    for summary in summaries:
-        text = re.sub(r'(?m)^[ \t]*' + re.escape(summary) + r'[ \t]*(?:\n|$)', '', text)
-    return re.sub(r'\n{3,}', '\n\n', text).strip()
+def usd(value):
+    """Format a published JSON number without float arithmetic or guessing."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+        return None
+    try:
+        amount = Decimal(str(value))
+    except InvalidOperation:
+        return None
+    if not amount.is_finite() or amount < 0:
+        return None
+    return '$' + (format(amount, 'f').rstrip('0').rstrip('.') if amount % 1 else format(amount, '.0f'))
+
+
+# A word containing an angle-bracket placeholder, without trailing punctuation.
+PLACEHOLDER_TOKEN = re.compile(r'(?<![`\w])([^\s`<>(]*<[A-Za-z_][\w-]*>(?:[^\s`<>.,;:)]|[.:](?=[^\s`<>]))*)')
+
+
+def pricing_summary(pricing, language='en'):
+    """Render only declared prices; an estimate is never a unit or fixed price."""
+    if not isinstance(pricing, dict) or not pricing:
+        return ''
+    zh = language == 'zh'
+    settlement = ' 最终费用以账户适用价格及实际结算为准。' if zh else ' Account-specific pricing and final settlement may differ.'
+    kind = pricing.get('kind')
+    if kind == 'no_customer_charge':
+        # Runtime declares that the operation settles no customer charge.
+        return '不收费。' if zh else 'No charge.'
+    event = pricing.get('description')
+    if kind == 'metered_event' and isinstance(event, str) and event.strip():
+        # Charged per declared event, not per request. Runtime's published
+        # description is the only place that states the per-event prices. A
+        # placeholder such as social.post.published:<platform> becomes inline
+        # code: bare, MDX reads it as a tag and the page subtitle drops it.
+        return PLACEHOLDER_TOKEN.sub(r'`\1`', event.strip()) + settlement
+    unavailable = pricing.get('reference_unavailable') or pricing.get('estimate_unavailable_reason') or pricing.get('estimate_source') == 'unavailable'
+    estimate = None if unavailable else usd(pricing.get('default_request_estimate_usd'))
+    fixed = pricing.get('customer_pricing') == 'fixed_success' or pricing.get('cost_contract') == 'fixed_success'
+    # A fixed_request with an integer customer price is one price per successful
+    # request. Resource reads (cache_hit_share_bps, charged per delivered read)
+    # and variant-priced operations do not have one request price.
+    micros = pricing.get('customer_micros_usd')
+    if (estimate is None and not unavailable and kind == 'fixed_request' and isinstance(micros, int)
+            and not isinstance(micros, bool) and 'variants' not in pricing and 'cache_hit_share_bps' not in pricing):
+        estimate = usd(Decimal(micros) / 1_000_000)
+        fixed = estimate is not None
+    if estimate is not None and fixed:
+        summary = f'公开参考价格：每次成功请求 {estimate} USD。' if zh else f'Published reference price: {estimate} USD per successful request.'
+    elif estimate is not None:
+        summary = f'默认请求预估费用：{estimate} USD（不是固定价格）。' if zh else f'Default request estimate: {estimate} USD (not a fixed price).'
+        if pricing.get('cost_contract') in {'response_usd', 'response_count', 'response_sku', 'response_units', 'request_formula', 'response_components', 'plan_units'}:
+            summary = ('按用量计费；' if zh else 'Usage-based billing; ') + summary
+    else:
+        summary = '当前未提供请求参考价格；请使用接口支持的报价功能确认费用。' if zh else 'A request reference price is not currently available; use a request quote where supported.'
+    rate = usd(pricing.get('unit_rate_usd'))
+    unit = pricing.get('unit')
+    if rate is not None and isinstance(unit, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,80}', unit):
+        summary += f' 声明的单位费率：每 {unit} {rate} USD。' if zh else f' Declared unit rate: {rate} USD per {unit}.'
+    summary += settlement
+    return summary
 
 
 def add_price_summary(operation, language='en'):
     """Replace a generated paragraph on each run so price changes cannot stick."""
-    pricing = operation.get('x-aisa-pricing')
-    description = strip_markerless_status_summary(
-        strip_price_summary(operation.get('description', '')), pricing)
-    summary = pricing_summary(pricing, language)
+    description = strip_price_summary(operation.get('description', ''))
+    summary = pricing_summary(operation.get('x-aisa-pricing'), language)
     if summary:
         description = description.replace(NOTICE, '').replace(NOTICE_ZH, '').strip()
-        if price_family(pricing) in {'no_customer_charge', 'unpriced'}:
-            # Free and disabled archive states are status copy, not a mutable
-            # price block. Keep the rendered sentence without source markers.
-            operation['description'] = (description + '\n\n' + summary).strip()
-        else:
-            operation['description'] = (description + '\n\n' + PRICE_BEGIN + '\n' + summary + '\n' + PRICE_END).strip()
+        operation['description'] = (description + '\n\n' + PRICE_BEGIN + '\n' + summary + '\n' + PRICE_END).strip()
     elif 'description' in operation:
         operation['description'] = description
     return operation
@@ -61,10 +96,8 @@ RATE = re.compile(
     r'\b(?:flat|rate|surcharge|upstream|per\s+(?:call|request|item|row|job|1M\s+tokens))\b|'
     r'\bat\s+\$|'
     r'/\s*(?:request|call|次)\b|计费|收费|每次|每请求', re.I)
-NOTICE = 'See Pricing for current prices. Where supported, get a quote for your request.'
-NOTICE_ZH = '当前价格请查看费用说明；支持报价的接口可按实际请求获取报价。'
-OLD_NOTICE = 'For current API pricing, see the published x-aisa-pricing metadata. Where supported, obtain a quote for your exact request.'
-OLD_NOTICE_ZH = '当前 API 价格请查看公开的 x-aisa-pricing 信息；接口支持报价时，请针对实际请求获取报价。'
+NOTICE = 'For current API pricing, see the published x-aisa-pricing metadata. Where supported, obtain a quote for your exact request.'
+NOTICE_ZH = '当前 API 价格请查看公开的 x-aisa-pricing 信息；接口支持报价时，请针对实际请求获取报价。'
 # Examples and code are data, even when they happen to contain billing words.
 FENCES = re.compile(r'(```[^\n]*\n.*?```|~~~[^\n]*\n.*?~~~|<pre\b[^>]*>.*?</pre>)', re.S | re.I)
 PARTS = re.compile(r'(\n+|[;；](?![^()]*\))|(?<=[.!?。！？])\s+(?!\d)|<br\s*/?>|</?p\b[^>]*>|(?=\bNote:?)|(?<=false)(?=Note))', re.I)
@@ -112,13 +145,6 @@ def reconcile_free_claim(text, pricing):
 
 def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
     """Drop price clauses, retaining separate usage rules and non-price prose."""
-    # Notices from earlier generators must also refresh when they have no
-    # monetary literal. Fenced examples remain data, as with rate cleanup.
-    if OLD_NOTICE in text or OLD_NOTICE_ZH in text:
-        chunks = FENCES.split(text)
-        for index in range(0, len(chunks), 2):
-            chunks[index] = chunks[index].replace(OLD_NOTICE, NOTICE).replace(OLD_NOTICE_ZH, NOTICE_ZH)
-        text = ''.join(chunks)
     if not MONEY.search(text):
         return text
     notice = NOTICE_ZH if language == 'zh' else NOTICE
