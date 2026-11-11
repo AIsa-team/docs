@@ -26,6 +26,50 @@ OLD_SUMMARY = ('<!-- aisa-pricing:start -->\n'
 
 
 class DevCustomerPricingTests(unittest.TestCase):
+    def test_retained_operation_is_clean_before_hashing_and_full_regeneration_is_stable(self):
+        _, _, reader = test_dev_runtime.DevRuntimeTests().fixture()
+        files = dev.acquire(reader)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'openapi').mkdir()
+            (root / 'openapi/registry.yaml').write_text('auto_register: true\nproviders: {}\n')
+            (root / 'docs.json').write_text('{"navigation":{"languages":[]}}')
+
+            def write(outputs):
+                for name, raw in outputs.items():
+                    path = root / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(raw)
+
+            write(dev.generate(root, files)[0])
+            spec = root / 'openapi/similarweb.json'
+            document = json.loads(spec.read_text())
+            retired = copy.deepcopy(document['paths']['/apis/v1/similarweb/test']['post'])
+            retired.update(operationId='historic_identity', description='Old ads.\n\n' + OLD_SUMMARY)
+            for key in ('x-aisa-identity', 'x-aisa-runtime-operation'):
+                retired.pop(key, None)
+            retired['x-aisa-pricing'] = copy.deepcopy(ADYNTEL_PRICING)
+            document['paths']['/apis/v1/similarweb/retired'] = {'post': retired}
+            spec.write_text(json.dumps(document))
+            page = root / 'api-reference/similarweb/retired.mdx'
+            page.write_text('---\nopenapi: "openapi/similarweb.json POST /apis/v1/similarweb/retired"\n'
+                            'x-aisa-operation-id: "historic_identity"\n---\n')
+            outputs, _ = dev.generate(root, files)
+            write(outputs)
+            repeated, _ = dev.generate(root, files)
+            for prefix in ('', 'zh/'):
+                name = 'openapi/' + prefix + 'similarweb.json'
+                operation = json.loads(outputs[name])['paths']['/apis/v1/similarweb/retired']['post']
+                self.assertEqual(operation['description'], 'Old ads.')
+                self.assertEqual(operation['x-aisa-status'], 'disabled')
+                self.assertEqual(operation['x-aisa-pricing'], ADYNTEL_PRICING)
+                self.assertEqual(outputs[name], repeated[name])
+                name = prefix + 'api-reference/similarweb/retired.mdx'
+                self.assertNotIn('aisa-pricing:', outputs[name].decode())
+                self.assertNotIn('provider_credit', outputs[name].decode())
+                self.assertEqual(outputs[name], repeated[name])
+            self.assertEqual(outputs['docs/dev-runtime.json'], repeated['docs/dev-runtime.json'])
+
     def test_retained_blocked_and_absent_references_clean_both_description_surfaces(self):
         # Dev retains these pages even when they cannot be freshly composed.
         with tempfile.TemporaryDirectory() as directory:

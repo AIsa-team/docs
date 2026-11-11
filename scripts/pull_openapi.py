@@ -97,6 +97,10 @@ def _retain_history_operation(document: dict, facts: dict, history: dict, path: 
     operation["x-aisa-status"] = "disabled"
     operation["x-aisa-contract-state"] = state
     operation["x-aisa-contract-pending"] = reason
+    # Retained descriptions must be cleaned before the retention hash is made;
+    # cleaning only the final dev page would feed different history back next run.
+    from pricing_prose import remove_price_summary
+    remove_price_summary(operation)
     document["paths"].setdefault(path, {})[method] = operation
     return operation
 
