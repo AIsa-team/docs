@@ -30,7 +30,7 @@ import McpSetup from "/snippets/mcp-setup.mdx";
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/similarweb.json)
 
-Effective request declaration (including authentication and referenced schemas):
+Effective request and pricing declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -162,6 +162,49 @@ Effective request declaration (including authentication and referenced schemas):
     }
   ],
   "x-aisa-status": "enabled",
+  "x-aisa-pricing": {
+    "cost_contract": "plan_units",
+    "customer_multiplier": 1.0,
+    "customer_pricing": "provider_cost_multiplier",
+    "default_request_estimate_usd": 0.525,
+    "estimate_source": "profile_seed",
+    "evidence_source": "request_snapshot",
+    "request_cost_drivers": {
+      "formula": {
+        "input": "periods",
+        "input_multiplier": 7
+      },
+      "inputs": [
+        {
+          "allowed_granularities": [
+            "monthly"
+          ],
+          "default_buckets": {
+            "monthly": 12
+          },
+          "end": {
+            "selector": "end_date",
+            "source": "query"
+          },
+          "granularity": {
+            "selector": "granularity",
+            "source": "query"
+          },
+          "kind": "calendar_buckets",
+          "max": 120,
+          "min": 1,
+          "name": "periods",
+          "start": {
+            "selector": "start_date",
+            "source": "query"
+          }
+        }
+      ],
+      "kind": "plan_units"
+    },
+    "unit": "similarweb_credit",
+    "unit_rate_usd": 0.075
+  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -175,8 +218,25 @@ Effective request declaration (including authentication and referenced schemas):
 
 ## Cost and request rules
 
-Request pricing. Default request estimate: $0.525 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
+Usage-based billing; Default request estimate: \$0.525 USD (not a fixed price). Declared unit rate: \$0.075 USD per similarweb_credit. Account-specific pricing and final settlement may differ.
 
+Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
+
+- **Default request reference estimate (USD):** 0.525
+- **Declared unit rate (USD):** 0.075
+- **Billing unit:** similarweb&#95;credit
+- **Cost contract:** plan&#95;units
+- **Published reference multiplier:** 1.0
+- **Settlement evidence source:** request&#95;snapshot
+
+### Declared request billing units
+
+- **Units:** (periods) × 7
+- **periods:** Inclusive periods from query.start&#95;date to query.end&#95;date; granularity: query.granularity. Daily: inclusive days; weekly: inclusive days / 7 rounded up; monthly: inclusive calendar months.
+- **Allowed granularities:** &#91;&quot;monthly&quot;&#93;
+- **Estimator fallback periods (does not make required dates optional):** &#123;&quot;monthly&quot;:12&#125;
+- **Minimum:** 1
+- **Maximum:** 120
 
 ### Request constraints and usage notes
 
