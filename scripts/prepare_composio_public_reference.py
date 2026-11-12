@@ -191,6 +191,13 @@ def prepare(vendors, metadata, facts, *, metadata_sha256, routes_sha256, fetched
                 'requestBody': {'required': not Draft202012Validator(schema).is_valid({}), 'content': {'application/json': {
                     'schema': {'$ref': '#/components/schemas/' + name}}}},
             }}
+            # Preserve captured operation prose independently of input/output schemas.
+            # Runtime summary remains authoritative; do not derive capabilities from a slug.
+            description = source.get('description')
+            require(description is None or isinstance(description, str),
+                    'Captured tool description must be text')
+            if description and description.strip():
+                paths[route]['post']['description'] = description
             if include_responses:
                 try:
                     output = source.get('output_schema')
@@ -218,13 +225,13 @@ def prepare(vendors, metadata, facts, *, metadata_sha256, routes_sha256, fetched
               'version': SERVICES_REVISION}, 'paths': paths, 'components': {'schemas': components}}
     base = 'https://raw.githubusercontent.com/AIsa-team/AIsaServices/' + SERVICES_REVISION + '/'
     source = {'kind': 'manual', 'url': SOURCE_URL, 'fetched_at': fetched_at,
-              'content_hash': digest(result), 'converter': 'scripts/prepare_composio_public_reference.py@1',
+              'content_hash': digest(result), 'converter': 'scripts/prepare_composio_public_reference.py@2',
               'path_space': 'public', 'refresh_policy': 'pinned',
               'refresh_reason': 'Review captured provider argument schemas and the pinned owning HTTP request adapter together before replacement.',
               'source_git_revision': SERVICES_REVISION,
               'raw_content_hash': 'sha256:' + metadata_sha256,
               'routes_content_hash': 'sha256:' + routes_sha256,
-              'source_pages': [{'url': SOURCE_URL, 'scope': 'Captured input schemas only; no current-source review asserted'},
+              'source_pages': [{'url': SOURCE_URL, 'scope': 'Captured input schemas and tool descriptions; no current-source review asserted'},
                                {'url': base + ROUTES_PATH, 'scope': 'Exact provider tool slug to public route mapping'},
                                {'url': base + ENVELOPE_PATH, 'scope': 'wrapGatewayBody: caller root arguments are wrapped internally; the internal envelope is not a public input'}],
               'qualification': 'Historical metadata conversion requiring independent source review. No live acquisition, successful response schema, or formal publication approval is asserted.'}

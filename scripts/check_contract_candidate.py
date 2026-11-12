@@ -16,7 +16,7 @@ import subprocess
 import sys
 
 from contract_readiness import _body_contract, _operations, _parameter_contract, _schema_contract, check_readiness
-from compose_openapi import resolve
+from compose_openapi import map_contract_children, pointer_target, resolve
 from runtime_registry import published_documents
 
 
@@ -49,9 +49,49 @@ def effective_request(operation, document):
     return result
 
 
+def response_contract(response, document):
+    """Compare residual recursive/discriminator references by target, not namespace.
+
+    Resolve ordinary references first with the existing sibling semantics. Retain
+    every remaining reference target in a deterministic graph so namespace-only
+    changes compare equal without discarding discriminator constraints or cycles.
+    """
+    identities, targets = {}, {}
+
+    def reference(ref):
+        if not isinstance(ref, str) or not ref.startswith('#/'):
+            raise ValueError('unsupported response discriminator/reference target')
+        if ref not in identities:
+            name = f'target{len(identities)}'
+            identities[ref] = name
+            targets[name] = None
+            targets[name] = walk(_schema_contract(resolve(
+                pointer_target(document, ref), document, stack=(ref,), preserve_recursive=True)))
+        return identities[ref]
+
+    def walk(value):
+        if isinstance(value, list):
+            return [walk(item) for item in value]
+        if not isinstance(value, dict):
+            return value
+        # Sorting declaration keys makes graph identities independent of JSON
+        # serialization order. map_contract_children keeps instance data literal.
+        result = map_contract_children(dict(sorted(value.items())), walk)
+        if '$ref' in value:
+            result['$ref'] = reference(value['$ref'])
+        discriminator = value.get('discriminator')
+        if isinstance(discriminator, dict) and isinstance(discriminator.get('mapping'), dict):
+            result['discriminator']['mapping'] = {
+                key: reference(ref) for key, ref in sorted(discriminator['mapping'].items())}
+        return result
+
+    contract = walk(_schema_contract(resolve(response, document, preserve_recursive=True)))
+    return {'contract': contract, 'referenceTargets': targets}
+
+
 def effective_responses(operation, document):
     """Payload/protocol declarations and explicit response uncertainty."""
-    responses = {str(status): _schema_contract(resolve(response, document, preserve_recursive=True))
+    responses = {str(status): response_contract(response, document)
                  for status, response in operation.get('responses', {}).items()}
     return {'responses': responses, 'pending': operation.get('x-aisa-response-pending')}
 

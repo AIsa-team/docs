@@ -8,13 +8,31 @@
       "kind": "manual",
       "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/oxylabs.json",
       "fetched_at": "2026-09-29T21:25:55+08:00",
-      "content_hash": "sha256:ae1695c337dc3e2d1617a70a5f88c32efb874b238f009510eb359c5215bbbec4",
-      "converter": "scripts/import_existing_contracts.py@1",
+      "content_hash": "sha256:f694b2f3a4a04277f5248f072296e2a999df24dd35d7d24edb6523323ab23c60",
+      "converter": "scripts/import_existing_contracts.py@1+contract-prose-20261112",
       "path_space": "public",
       "owner": "AIsa-team/docs",
       "refresh_policy": "manual",
       "review_period_days": 30,
-      "policy_revision": "sha256:d98e7453f752be0954aa84294ebc05362a84c197150941f0df6b639b835b0e9a"
+      "policy_revision": "sha256:d98e7453f752be0954aa84294ebc05362a84c197150941f0df6b639b835b0e9a",
+      "prior_source": {
+        "kind": "manual",
+        "url": "https://github.com/AIsa-team/docs/blob/7783840e4710bb00886143feab84606f8aaea67c/openapi/oxylabs.json",
+        "fetched_at": "2026-09-29T21:25:55+08:00",
+        "content_hash": "sha256:ae1695c337dc3e2d1617a70a5f88c32efb874b238f009510eb359c5215bbbec4",
+        "converter": "scripts/import_existing_contracts.py@1",
+        "path_space": "public",
+        "owner": "AIsa-team/docs",
+        "refresh_policy": "manual",
+        "review_period_days": 30,
+        "policy_revision": "sha256:d98e7453f752be0954aa84294ebc05362a84c197150941f0df6b639b835b0e9a"
+      },
+      "editorial_manifest": {
+        "path": "docs/tool-prose-changes-20261112.json",
+        "sha256": "8e7d945de6861145c481043403c543d4cca70f6461cb83347acfcd6a27b7927b",
+        "basis": "existing published contract prose and declared input/output fields; not a new upstream acquisition",
+        "base_document_hash": "sha256:73cf008b611fb4912b902030682febf70e0941f91a7a1e02d509f74a55ccb0b5"
+      }
     }
   },
   "servers": [
@@ -150,7 +168,7 @@
         "tags": [
           "https://developers.oxylabs.io/scraper-apis/web-scraper-api"
         ],
-        "summary": "Query a Google AI answer engine (AI Overviews / AI Mode) for GEO/AEO visibility.",
+        "summary": "Oxylabs AI-search (Realtime, passthrough)",
         "description": "Synchronous passthrough to the upstream Oxylabs Realtime endpoint (POST /v1/queries) for the **Google answer engines** — Google AI Overviews (`source: google_search`) and Google AI Mode (`source: google_ai_mode`). Send `query` with `render: \"html\"`, `parse: true`, and a country-level `geo_location`; the request body is passed through unchanged. The response returns the AI-generated answer text and the cited source URLs. Billed a flat $0.001 per successful result; 400/429/5xx/6xx and upstream 4xx responses are not billed. Google-type sources take ~4–8s, so use a client timeout of at least 30s.\n\n**LLM sources (ChatGPT, Gemini, Perplexity) are no longer served here** — Oxylabs moved them to an asynchronous Push-Pull flow. Use `post_oxylabs_llm` (`POST /oxylabs/llm`) plus `get_oxylabs_llm_job` for those sources; calling this endpoint with `source: chatgpt|gemini|perplexity` returns HTTP 422 \"Realtime integration is not supported for LLM sources. Please use Push-Pull.\"",
         "requestBody": {
           "required": true,
@@ -317,7 +335,7 @@
         "tags": [
           "https://developers.oxylabs.io/scraper-apis/web-scraper-api/ai-sources"
         ],
-        "summary": "Submit an asynchronous LLM answer-engine query (ChatGPT / Gemini / Perplexity).",
+        "summary": "Oxylabs LLM (Push-Pull async) submit",
         "description": "Submit an asynchronous query to a major LLM answer engine — ChatGPT, Gemini, or Perplexity — via Oxylabs Push-Pull. Pick the engine with `source`, send the `prompt` (required), and a unique `Idempotency-Key` header (required). These sources take ~40–90s, so they run as background jobs. Submitting returns HTTP 202 and a job envelope — `id`, `object`, `endpoint`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error` — with `output` still null. Poll `get_oxylabs_llm_job` until terminal; `output` then carries `results[]` with the parsed answer text and cited sources. Billed a flat $0.00145 per successful job — `pricing.billingMode` is `fixed_request`. A queued job can be cancelled with `POST /oxylabs/llm/{jobId}/cancel`, which releases the hold; failed and cancelled jobs are never billed. Google sources (`google_search`, `google_ai_mode`) are synchronous and stay on `post_oxylabs_ai_search`. Send a fresh `Idempotency-Key` per distinct query.",
         "parameters": [
           {
@@ -433,7 +451,7 @@
         "tags": [
           "https://developers.oxylabs.io/scraper-apis/web-scraper-api/ai-sources"
         ],
-        "summary": "Poll an asynchronous Oxylabs LLM job.",
+        "summary": "Oxylabs LLM (Push-Pull async) detail",
         "description": "Fetch an Oxylabs LLM job submitted by `post_oxylabs_llm`, by its `jobId`. Returns the same envelope — `id`, `status`, `createdAt`, `completedAt`, `pricing`, `output`, `error`. Repeat until `status` is `completed`, `failed`, or `cancelled`; on success `output` carries `results[]` with the parsed answer text and cited sources. Reads a job only; it cannot start one.",
         "parameters": [
           {
@@ -466,7 +484,7 @@
         "tags": [
           "https://developers.oxylabs.io/scraper-apis/web-scraper-api/ai-sources"
         ],
-        "summary": "Cancel a queued Oxylabs LLM job.",
+        "summary": "Oxylabs LLM (Push-Pull async) cancel",
         "description": "Cancel an Oxylabs LLM job submitted by `post_oxylabs_llm` while it is still queued, by its `jobId`. Returns the job envelope with `status: cancelled`. Cancelling releases the authorized hold; a cancelled job is never billed. A job that has already reached a terminal state cannot be cancelled.",
         "parameters": [
           {

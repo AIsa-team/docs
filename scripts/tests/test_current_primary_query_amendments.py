@@ -1,3 +1,4 @@
+from tool_prose_history import before_tool_prose_amendment
 """Pin each bounded amendment without approving Runtime forwarding or new debt."""
 import copy
 import json
@@ -15,7 +16,7 @@ class CurrentPrimaryQueryAmendmentTests(unittest.TestCase):
     def test_exact_primary_parameters_and_unchanged_other_declarations(self):
         review = json.loads((ROOT / 'docs/current-source-review-20261017/query-parameter-primary-fragments.json').read_text())
         self.assertEqual(len(review['rows']), 14)
-        documents = {name: json.loads((ROOT / name).read_text()) for name in review['files']}
+        documents = {name: before_tool_prose_amendment(ROOT, name) for name in review['files']}
         for row in review['rows']:
             document = documents[row['source_file']]
             op = document['paths'][row['source_path']][row['method']]

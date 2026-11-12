@@ -1,3 +1,4 @@
+from tool_prose_history import before_tool_prose_amendment
 import copy
 import json
 from pathlib import Path
@@ -15,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 class ApolloBulkUpdateRequestTests(unittest.TestCase):
     def test_exact_supplier_body_and_only_one_operation_changed(self):
         review = json.loads((ROOT / 'docs/current-source-review-20261017/apollo-bulk-update-request-review.json').read_text())
-        doc = json.loads((ROOT / review['source_file']).read_text())
+        doc = before_tool_prose_amendment(ROOT, review['source_file'])
         source = doc['info'].pop('x-aisa-source')
         self.assertEqual(source['content_hash'], digest(doc))
         source = undo_object_body_amendment(self, ROOT, doc, source)

@@ -1,3 +1,4 @@
+from tool_prose_history import before_tool_prose_amendment
 import copy
 import json
 from pathlib import Path
@@ -31,7 +32,7 @@ class TikHubNullabilityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.review = json.loads((ROOT / 'docs/current-source-review-20261017/tikhub-nullability-review.json').read_text())
-        cls.doc = json.loads((ROOT / cls.review['source_file']).read_text())
+        cls.doc = before_tool_prose_amendment(ROOT, cls.review['source_file'])
 
     def test_only_exact_reviewed_request_roots_change_and_source_clock_is_preserved(self):
         doc = copy.deepcopy(self.doc)

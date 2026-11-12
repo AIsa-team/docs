@@ -1,3 +1,4 @@
+from tool_prose_history import before_tool_prose_amendment
 import copy
 import json
 from pathlib import Path
@@ -14,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class ApolloQueryArrayTests(unittest.TestCase):
     def test_three_exact_id_array_edits_and_source_history(self):
-        doc = json.loads((ROOT / 'openapi/upstream/apollo.json').read_text())
+        doc = before_tool_prose_amendment(ROOT, 'openapi/upstream/apollo.json')
         source = doc['info'].pop('x-aisa-source')
         review = json.loads((ROOT / 'docs/current-source-review-20261017/apollo-query-arrays-review.json').read_text())
         self.assertEqual(len(review['edits']), 3)

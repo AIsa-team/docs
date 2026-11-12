@@ -1,3 +1,4 @@
+from tool_prose_history import before_tool_prose_amendment
 import copy
 import json
 from pathlib import Path
@@ -15,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 class ApolloObjectBodyTests(unittest.TestCase):
     def test_exact_fourteen_changes_preserve_source_history_and_clocks(self):
         review = json.loads((ROOT / 'docs/current-source-review-20261017/apollo-object-bodies-review.json').read_text())
-        doc = json.loads((ROOT / review['source_file']).read_text())
+        doc = before_tool_prose_amendment(ROOT, review['source_file'])
         source = doc['info'].pop('x-aisa-source')
         for key in ('kind', 'url', 'fetched_at', 'owner', 'refresh_policy', 'review_period_days', 'policy_revision'):
             self.assertEqual(source[key], review['prior_source'][key])
