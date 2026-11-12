@@ -31,6 +31,22 @@ def fixture():
 
 
 class ProvenanceTests(unittest.TestCase):
+    def test_repeated_small_amendment_history_is_interned_losslessly(self):
+        source = {'kind': 'manual', 'content_hash': 'sha256:current',
+                  'url': 'https://official.example/reference',
+                  'prior_source': {'content_hash': 'sha256:prior', 'evidence': 'x' * 1000}}
+        original = {'info': {}, 'paths': {
+            f'/route/{index}': {'get': {'x-aisa-source': copy.deepcopy(source)}}
+            for index in range(100)}}
+        self.assertLess(len(canonical(source)), MIN_BYTES)
+        compact = compact_document(copy.deepcopy(original))
+        self.assertEqual(len(compact['info'][KEY]), 1)
+        self.assertEqual(expand_document(compact), original)
+        self.assertEqual(compact_document(copy.deepcopy(compact)), compact)
+        self.assertLess(len(canonical(compact)), len(canonical(original)) / 2)
+        single = {'info': {}, 'paths': {'/one': {'get': {'x-aisa-source': source}}}}
+        self.assertEqual(compact_document(copy.deepcopy(single)), single)
+
     def test_lossless_idempotent_and_preserves_instance_data(self):
         original = fixture()
         actual = compact_document(copy.deepcopy(original))

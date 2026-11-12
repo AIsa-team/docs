@@ -1,5 +1,6 @@
 """Lossless interning of large publication provenance, never schema evidence removal."""
 import copy
+from collections import Counter
 import hashlib
 import json
 import re
@@ -78,14 +79,25 @@ def merge_provenance(target, source):
 def compact_document(document):
     """Intern large source records in place; repeat calls are idempotent."""
     validate_document(document)
-    for parent, key in source_slots(document):
+    slots = list(source_slots(document))
+    repetitions = Counter(source_hash(parent[key]) for parent, key in slots
+                          if 'provenance_ref' not in parent[key])
+    for parent, key in slots:
         source = parent[key]
-        if 'provenance_ref' in source or len(canonical(source)) < MIN_BYTES:
+        if 'provenance_ref' in source:
             continue
         digest = source_hash(source)
+        summary = {k: copy.deepcopy(v) for k, v in source.items() if not isinstance(v, (dict, list))}
+        summary.update(provenance_ref=PREFIX + digest, provenance_sha256=digest)
+        size = len(canonical(source))
+        # A short amendment history repeated across hundreds of operations can
+        # exceed the aggregate publication budget too. Keep the full evidence
+        # once, and retain the same scalar identity at every operation.
+        savings = repetitions[digest] * (size - len(canonical(summary))) - size
+        if size < MIN_BYTES and savings < MIN_BYTES:
+            continue
         document.setdefault('info', {}).setdefault(KEY, {})[digest] = copy.deepcopy(source)
-        parent[key] = {k: copy.deepcopy(v) for k, v in source.items() if not isinstance(v, (dict, list))}
-        parent[key].update(provenance_ref=PREFIX + digest, provenance_sha256=digest)
+        parent[key] = summary
     validate_document(document)
     return document
 
