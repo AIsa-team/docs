@@ -25,7 +25,7 @@ class PricingProseTests(unittest.TestCase):
         self.assertEqual(clean_text('Lead ($0.01/call). Repeat calls are billed once. Then this.', add_notice=False), 'Lead. Then this.')
         # A parenthetical inside a sentence with other content keeps the sentence.
         self.assertEqual(clean_text('Returns a JSON error body and is still billed 1 credit ($0.00528).', add_notice=False),
-                         'Returns a JSON error body and is still billed 1 credit.')
+                         'Returns a JSON error body and is still billed.')
         self.assertEqual(clean_text('Gift ID list, recommend 50/call for best value ($0.025), auto-process first 50', add_notice=False),
                          'Gift ID list, recommend 50/call for best value, auto-process first 50')
         # Without a price claim the text is not touched; other charge rules stay.

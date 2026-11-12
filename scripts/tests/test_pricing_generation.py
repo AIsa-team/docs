@@ -160,6 +160,50 @@ class PricingGenerationTests(unittest.TestCase):
                 self.assertEqual(first, page_snapshot(self.root))
             first = page_snapshot(self.root)
 
+    def test_credit_tariffs_disappear_from_real_stage_and_canonical_pages(self):
+        document = pricing_document()
+        op = document['paths']['/apis/v1/prices/response_units']['get']
+        op['parameters'] = [
+            {'in': 'query', 'name': 'pageSize', 'schema': {'type': 'integer', 'minimum': 1, 'maximum': 100},
+             'description': '1-100. THIS IS THE PRICE — 1 credit per company returned'},
+            {'in': 'query', 'name': 'expand', 'schema': {'type': 'string', 'enum': ['workforce']},
+             'description': 'Supported values: workforce (adds the workforce field; costs 5 credits per company).'},
+        ]
+        original = copy.deepcopy(document)
+        for prefix in ('', 'zh/'):
+            page = self.root / (prefix + 'api-reference/prices/response_units.mdx')
+            with page.open('a') as handle:
+                handle.write('\nHTTP 404 still returns a valid JSON body and is billed 1 credit; errors are not billed.\n')
+        self.fixture.sources({'prices': document})
+        for repeat in range(2):
+            self.fixture.publish(self.fixture.pull()[0])
+            for prefix in ('', 'zh/'):
+                text = (self.root / (prefix + 'api-reference/prices/response_units.mdx')).read_text()
+                self.assertNotIn('credit', text.lower())
+                for preserved in ('1-100', 'workforce', 'HTTP 404', 'errors are not billed', '$0.01476'):
+                    self.assertIn(preserved, text)
+            if repeat:
+                self.assertEqual(first, page_snapshot(self.root))
+            first = page_snapshot(self.root)
+        native_path = self.root / 'openapi/prices.json'
+        raw = native_path.read_bytes()
+        native = json.loads(raw)
+        actual = native['paths']['/apis/v1/prices/response_units']['get']
+        self.assertEqual(actual['x-aisa-pricing'], op['x-aisa-pricing'])
+        for before, after in zip(op['parameters'], actual['parameters']):
+            self.assertEqual(before['schema'], after['schema'])
+        self.assertEqual(document, original)
+        (self.root / 'llms.txt').write_text('Discovery\n')
+        metadata = {'registry': {'providers': {'prices': {}}},
+                    'coverage': {'providers': {'prices': []}}, 'pending': {'providers': {'prices': []}}}
+        outputs = canonical_import.project_surfaces(self.root, {'prices': raw}, raw, metadata)
+        self.assertEqual(outputs['openapi/prices.json'], raw)
+        for prefix in ('', 'zh/'):
+            name = prefix + 'api-reference/prices/response_units.mdx'
+            page = outputs.get(name, (self.root / name).read_bytes()).decode()
+            self.assertNotIn('credit', page.lower())
+            self.assertIn('$0.01476', page)
+
 
 if __name__ == '__main__':
     unittest.main()

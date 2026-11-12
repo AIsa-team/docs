@@ -66,6 +66,9 @@ def remove_price_summary(operation):
     return operation
 
 MONEY = re.compile(r'(?:US)?\$\s*\d[\d,]*(?:\.\d+)?(?:\s*USD)?|\b\d[\d,]*(?:\.\d+)?\s*\$|\b\d+(?:\.\d+)?\s*(?:USD|美元|cents?)\b', re.I)
+CREDIT_AMOUNT = r'(?:\d[\d,]*(?:\.\d+)?|ceil\([^()]+\))\s*(?:more\s+)?(?:credits?\b|积分|点数)'
+CREDITS = re.compile(CREDIT_AMOUNT, re.I)
+CREDIT_CONTEXT = re.compile(r'\b(?:cost\w*|pric\w*|bill\w*|charg\w*|pay|adds|capped|cache\w*|per)\b|收费|计费|消耗|扣除', re.I)
 RATE = re.compile(
     r'\bbill(?:ed|ing|s)?\b|\bcharg(?:e|ed|es|ing)\b|\bpric(?:e|ing)\b|'
     r'\b(?:flat|rate|surcharge|upstream|per\s+(?:call|request|item|row|job|1M\s+tokens))\b|'
@@ -110,6 +113,65 @@ CONDITIONAL_SURCHARGE = re.compile(
     r'\byou will be (?:charged|billed) (?:extra\s+)?(?:' + MONEY.pattern + r')(?:\s+extra)?', re.I)
 
 
+def strip_credit_prices(text):
+    """Remove supplier tariff clauses while retaining caller and outcome rules.
+
+    A credit balance or a response value is not a tariff. Only prose with a
+    numeric credit amount and billing context enters this transform; examples
+    and reviewed payload descriptions are excluded by the callers.
+    """
+    if not CREDITS.search(text) or not CREDIT_CONTEXT.search(text):
+        return text
+    unit = r'(?:\s+(?:per\s+(?:(?:returned|found|started)\s+)?[\w-]+(?:\s+returned)?|each))?'
+    # Keep cache metadata and enrichment fields inside mixed parentheses.
+    def parenthetical(match):
+        value = match[1]
+        if not CREDITS.search(value):
+            return match[0]
+        value = re.sub(r'^' + CREDIT_AMOUNT + r'\s*,\s*', '', value, flags=re.I)
+        value = re.sub(r';\s*costs?\s+' + CREDIT_AMOUNT + unit + r'.*$', '', value, flags=re.I)
+        if re.fullmatch(CREDIT_AMOUNT + unit, value, re.I):
+            return ''
+        if CREDITS.search(value) and CREDIT_CONTEXT.search(value):
+            value = strip_credit_prices(value)
+        return '(' + value + ')' if value else ''
+    text = re.sub(r'\(([^()\n]*)\)', parenthetical, text)
+    text = re.sub(r'\bCOST DIAL\s*[—:-]\s*', '', text, flags=re.I)
+    text = re.sub(r'\s*[—–]\s*(?:THIS IS THE PRICE|PRICE DIAL|you pay|and DOUBLES the price)[^\n.]*', '', text, flags=re.I)
+    text = re.sub(r'\bTHIS IS THE PRICE\s*[—:-][^\n.]*', '', text, flags=re.I)
+    # Remove a supplier authorization explanation but retain the actual limit.
+    text = re.sub(r'[^.!?\n;]*\bcapped at\s+' + CREDIT_AMOUNT + r',\s*so\s*', ' ', text, flags=re.I)
+    text = re.sub(r',\s*which\s+bills\b[^;\n)]*' + CREDIT_AMOUNT + r'[^;\n)]*', '', text, flags=re.I)
+    text = re.sub(r'\s+at\s+' + CREDIT_AMOUNT + r'[^\n.;]*', '', text, flags=re.I)
+    text = re.sub(r'\s*[,;]\s*cost(?:ing|s)?\s+' + CREDIT_AMOUNT + unit + r'[^\n.;)]*', '', text, flags=re.I)
+    text = re.sub(r'\s+and\s+(?:may\s+)?costs?\s+' + CREDIT_AMOUNT + unit, '', text, flags=re.I)
+    text = re.sub(r'\s+costs?\s+' + CREDIT_AMOUNT + unit + r'\s+and(?=\s+also\s+includes)', '', text, flags=re.I)
+    text = re.sub(r'\s+adds\s+' + CREDIT_AMOUNT + r'[^\n.;)]*', '', text, flags=re.I)
+    # Retain explicit failure/404 billing conditions without the supplier unit.
+    text = re.sub(r'\b(billed|charged)\s+' + CREDIT_AMOUNT + r'(?:\s*\(\$[\d.]+\))?', r'\1', text, flags=re.I)
+    # A trailing pricing clause must not swallow an opt-in instruction or limit.
+    text = re.sub(r':\s*[^.!?\n;]*\b(?:costs?|bills)\s+(?:a flat\s+)?' + CREDIT_AMOUNT + r'[^.!?\n;]*', '', text, flags=re.I)
+    text = re.sub(r';\s*on [^.;\n]*\b(?:base|tier) price unchanged', '', text, flags=re.I)
+    text = re.sub(r'Response detail and fixed price[^:.]*:[^.\n]*' + CREDIT_AMOUNT + r'[^.\n]*\.',
+                  'Response detail.', text, flags=re.I)
+    # Remaining standalone tariff sentences contain no customer price authority.
+    parts = re.split(r'(\n+|(?<=[.!?])\s+(?!\d)|(?<=[。！？])|[;；][ \t]*)', text)
+    for i in range(0, len(parts), 2):
+        part = parts[i]
+        if not part or not CREDITS.search(part):
+            continue
+        if CREDIT_CONTEXT.search(part):
+            parts[i] = ''
+            if i + 1 < len(parts) and '\n' not in parts[i + 1]:
+                parts[i + 1] = ''
+    result = ''.join(parts)
+    result = re.sub(r'[ \t]+([.;；。)])', r'\1', result)
+    result = re.sub(r'([;；])[ \t]*(?=[.;；。]|$)', '', result)
+    result = re.sub(r'([.!?。！？])[ \t]*[;；][ \t]*', r'\1 ', result)
+    result = re.sub(r'\s*\(\s*\)', '', result)
+    return result.strip()
+
+
 def reconcile_free_claim(text, pricing):
     """A positive customer success price contradicts an unqualified Free claim."""
     if not isinstance(pricing, dict) or pricing.get('customer_pricing') != 'fixed_success':
@@ -124,13 +186,15 @@ def reconcile_free_claim(text, pricing):
 
 def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
     """Drop price clauses, retaining separate usage rules and non-price prose."""
-    if not MONEY.search(text) and not any(notice in text for notice in LEGACY_NOTICES):
+    if not MONEY.search(text) and not CREDITS.search(text) and not any(notice in text for notice in LEGACY_NOTICES):
         return text
     notice = NOTICE_ZH if language == 'zh' else NOTICE
     chunks = FENCES.split(text)
     changed = False
     for index in range(0, len(chunks), 2):
         chunk = chunks[index]
+        chunk = strip_credit_prices(chunk)
+        changed |= chunk != chunks[index]
         for previous, current in zip(LEGACY_NOTICES, (NOTICE, NOTICE_ZH)):
             chunk = chunk.replace(previous, current)
         changed |= chunk != chunks[index]
@@ -286,9 +350,9 @@ def clean_page(text: str, language: str = 'en') -> str:
             columns = [j for j, cell in enumerate(cells) if cell.strip().lower() in ('price', 'pricing', '计费', '价格')]
             if columns:
                 price_columns = columns
-            elif price_columns and MONEY.search(line):
+            elif price_columns and (MONEY.search(line) or CREDITS.search(line)):
                 for j in price_columns:
-                    if j < len(cells) and MONEY.search(cells[j]):
+                    if j < len(cells) and (MONEY.search(cells[j]) or CREDITS.search(cells[j])):
                         cells[j] = ' 见当前定价 ' if language == 'zh' else ' See current pricing '
                 lines[i] = '|'.join(cells)
         prose = ''.join(lines)

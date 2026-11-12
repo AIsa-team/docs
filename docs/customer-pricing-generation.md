@@ -14,6 +14,13 @@ unpublished summaries are removed too, even when they contain no amount.
 Fenced examples are preserved. Composer cleans operation descriptions before
 hashing, while localization uses the same presentation rules.
 
+Credit-only supplier tariffs are cleaned too, including parameter descriptions,
+cache notes and price-table cells. Cleaning removes the supplier amounts and
+arithmetic while retaining parameter bounds, opt-in switches, cache metadata and
+failure/billing conditions. Business credit balances, reviewed payload fields,
+examples and machine pricing metadata remain data. Frozen real descriptions
+and stage/canonical projection regressions cover this distinction.
+
 Both `pull_openapi.stage` and `canonical_import.project_surfaces` use the shared
 page renderer. The canonical consumer preserves verified native JSON bytes;
 the producer must run the updated Composer to remove old native-description
