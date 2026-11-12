@@ -201,8 +201,8 @@ manifest; validates its revision, every file SHA/ETag and index/provider binding
 and rejects pending or incomplete selected Runtime coverage. HTTPS verification
 is enabled, redirects and environment proxies are disabled, and acquisition is
 bounded to 600 seconds, 2,048 files and 128 MiB per immutable release.
-Individual facts files are limited to 8 MiB; canonical graph members use their
-explicit type-specific limits.
+Individual facts files are limited to 8 MiB; the canonical aggregate is limited
+to 64 MiB and its manifest/readiness metadata to 1 MiB each.
 An existing output directory is never reused. Files retain their downloaded
 bytes, with both `providers/*.json` and flat copies for the existing Docs CLI.
 

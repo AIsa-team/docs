@@ -16,7 +16,7 @@ sorted file list binds every original byte. Media types remain
 | --- | --- | --- |
 | `index.json`, `providers/<provider>.json` | 8 MiB each | Original closed Runtime facts graph |
 | `contracts/native/<provider>.json` | 8 MiB each | Complete canonical native documents |
-| `contracts/openapi.json` | 32 MiB | Complete aggregate, the only larger-file exception |
+| `contracts/openapi.json` | 64 MiB | Complete aggregate, the only larger-file exception |
 | `contracts/readiness.json` | 1 MiB | Passed compilation report, not new source authorization |
 | `contracts/manifest.json` | 1 MiB | Exact canonical graph and build/source binding |
 
