@@ -16,9 +16,9 @@ class MintStaticExclusionTests(unittest.TestCase):
         self.assertEqual(patterns, ['/openapi.yaml', '/openapi/openapi.json'])
         config = json.loads((ROOT / 'docs.json').read_text())
         redirects = config['redirects']
-        # Dev downloads must use the dev branch; production retains its
-        # canonical website download URLs.
-        dev = config.get('api', {}).get('mdx', {}).get('server', '').startswith('https://dev-api.aisa.one/')
+        # Dev can preview the production API. Its download destination follows
+        # the Docs environment, independently of the playground API origin.
+        dev = config.get('name') == 'AIsa Dev'
         base = 'https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev' if dev else 'https://aisa.one'
         json_url = base + ('/openapi/openapi.json' if dev else '/openapi.json')
         for source in ('/openapi.json', '/openapi/openapi.json'):

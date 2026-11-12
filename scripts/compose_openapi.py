@@ -665,6 +665,26 @@ def merge_object(upstream: dict, declared: dict, constrained: set = frozenset(),
     if (isinstance(upstream, dict) and "allOf" in declared
             and upstream.get("allOf") == declared["allOf"]):
         source = {key: value for key, value in upstream.items() if key != "allOf"}
+    # A supplier can forbid combining two inputs that the Runtime forwards
+    # without declaring. Preserve that exclusion only when it cannot override
+    # any Runtime-owned field or cross-field rule. Other conditionals still
+    # fail in flatten_object rather than guessing their precedence.
+    exclusion = source.get("not") if isinstance(source, dict) else None
+    excluded = exclusion.get("required") if isinstance(exclusion, dict) else None
+    provider_exclusion = (
+        isinstance(exclusion, dict) and set(exclusion) == {"required"}
+        and isinstance(excluded, list) and len(excluded) == 2
+        and all(isinstance(name, str) for name in excluded)
+        and len(set(excluded)) == 2
+        and set(excluded) <= set(source.get("properties", {}))
+        and not set(excluded).intersection(declared.get("properties", {}))
+        and not {prefix + name for name in excluded}.intersection(constrained)
+        and declared.get("additionalProperties", True) is True
+        and not any(key in declared for key in (
+            "not", "allOf", "anyOf", "oneOf", "if", "then", "else",
+            "dependentSchemas", "dependentRequired", "patternProperties")))
+    if provider_exclusion:
+        source = {key: value for key, value in source.items() if key != "not"}
     merged = flatten_object(source)
     names = set(declared.get("properties", {}))
     source_required = set(merged.get("required", []))
@@ -702,6 +722,8 @@ def merge_object(upstream: dict, declared: dict, constrained: set = frozenset(),
     for key, value in declared.items():
         if key not in {"properties", "required", "additionalProperties", "type"}:
             merged[key] = copy.deepcopy(value)
+    if provider_exclusion:
+        merged["not"] = copy.deepcopy(exclusion)
     return merged
 
 
