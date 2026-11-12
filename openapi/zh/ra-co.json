@@ -5,7 +5,16 @@
         "scheme": "bearer",
         "type": "http"
       }
-    }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
   },
   "info": {
     "description": "",
@@ -34,7 +43,7 @@
       "schema_version": "1",
       "composer_version": "29",
       "response_pending": [],
-      "document_hash": "sha256:ad4bb37c377a3a7afa1b3c286d0a83319e384e0db1f96b2f73bc0e546a50d7d7"
+      "document_hash": "sha256:210fa5dd033ba5fe9a5c9ae59fd4516bddda3d8f10524d4af958c01abcbb9675"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -86,5 +95,2317 @@
       "url": "https://dev-api.aisa.one"
     }
   ],
-  "paths": {}
+  "paths": {
+    "/apis/v1/ra-co/events/areas": {
+      "post": {
+        "description": "First step of event discovery: you need the numeric `area_id` for `events`, or the time zone and currency of a city.",
+        "operationId": "ra-co.events.areas",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "country_code": {
+                    "type": "string",
+                    "description": "RA country url code, e.g. `us`, `de`, `uk`. Pattern: ^[A-Za-z]{2}$."
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "City or region name to search, e.g. `berlin`, `new york`, `london`."
+                  },
+                  "url_name": {
+                    "type": "string",
+                    "description": "RA area url name, e.g. `newyorkcity`, `berlin`. Requires `country_code`. Pattern: ^[a-z0-9-]{1,60}$."
+                  }
+                },
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "country_code": {}
+                        },
+                        "required": [
+                          "country_code"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "query": {}
+                        },
+                        "required": [
+                          "query"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "url_name": {}
+                        },
+                        "required": [
+                          "url_name"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "query": "berlin"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resolve a city or region to Resident Advisor areas: free-text search (`query`) or exact lookup by the area's url name and country code as they appear in `https://ra.co/events/{country}/{area}`. Returns each area's RA id, IANA time zone, country and currency, and the counts of listed events and venues.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `areas` | object[] |  |\n| `count` | number |  |\n| `observed_at_ms` | number |  |\n| `query` | string | The search text, or null for an exact lookup. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-21.",
+                    "value": {
+                      "areas": [
+                        {
+                          "country": {
+                            "code": "DE",
+                            "currency": "EUR",
+                            "name": "Germany"
+                          },
+                          "events_count": 1410,
+                          "id": "34",
+                          "is_country": false,
+                          "latitude": 52.521819,
+                          "longitude": 13.401549,
+                          "name": "Berlin",
+                          "source_url": "https://ra.co/events/de/berlin",
+                          "timezone": "Europe/Berlin",
+                          "url_name": "berlin",
+                          "venues_count": 2037
+                        }
+                      ],
+                      "count": 1,
+                      "observed_at_ms": 1790018789825,
+                      "query": "berlin"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Areas",
+        "tags": [
+          "Resident Advisor"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-constraints": {
+          "required_any_of": [
+            [
+              {
+                "in": "body",
+                "name": "option_country_code",
+                "selector": "/country_code"
+              },
+              {
+                "in": "body",
+                "name": "option_query",
+                "selector": "/query"
+              },
+              {
+                "in": "body",
+                "name": "option_url_name",
+                "selector": "/url_name"
+              }
+            ]
+          ]
+        },
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "d1ba47242f43"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "ra-co",
+        "x-aisa-runtime-operation": {
+          "operation_id": "ra-co.events.areas",
+          "method": "POST",
+          "path": "/apis/v1/ra-co/events/areas"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:f3573950b636edd2734c87fa63b25bbf93e293582c2089c309ff022da20f1e9d"
+        },
+        "x-aisa-docs-url": "/api-reference/ra-co/ra-co-events-areas"
+      }
+    },
+    "/apis/v1/ra-co/events/artist": {
+      "post": {
+        "description": "You have an artist id (from `search` or an event's `artists[].id`), an RA slug, or a pasted `https://ra.co/dj/{slug}` URL and need the profile or upcoming dates.",
+        "operationId": "ra-co.events.artist",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "artist_id": {
+                    "type": "string",
+                    "description": "RA artist id, e.g. `107433`. Pattern: ^[0-9]{1,12}$."
+                  },
+                  "events_limit": {
+                    "type": "number",
+                    "description": "Upcoming events to include, default 20.\n\nProvider reference: minimum 0; maximum 20.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 0,
+                      "max": 20
+                    }
+                  },
+                  "slug": {
+                    "type": "string",
+                    "description": "RA artist url slug, e.g. `jamesaxon` (from `/dj/{slug}`). Pattern: ^[A-Za-z0-9_-]{1,80}$."
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "A pasted `https://ra.co/dj/{slug}` URL. Exactly one of `artist_id`, `slug` or `url`."
+                  }
+                },
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "artist_id": {}
+                        },
+                        "required": [
+                          "artist_id"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "slug": {}
+                        },
+                        "required": [
+                          "slug"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "url": {}
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "events_limit": 5,
+                    "slug": "jamesaxon"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A Resident Advisor artist profile by numeric id or RA slug: name, image, status, follower and upcoming-event counts, links, country and home area, biography, and up to 20 upcoming events with venue and area time zone.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `area` | object |  |\n| `biography` | object |  |\n| `country` | object |  |\n| `follower_count` | number |  |\n| `id` | string |  |\n| `image_url` | string |  |\n| `instagram` | string |  |\n| `name` | string |  |\n| `observed_at_ms` | number |  |\n| `slug` | string |  |\n| `soundcloud` | string |  |\n| `source_url` | string |  |\n| `status` | string | RA artist tier as returned (e.g. `REGIONAL`). |\n| `upcoming_events` | object[] |  |\n| `upcoming_events_count` | number |  |\n| `website` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-21.",
+                    "value": {
+                      "area": {
+                        "id": "23",
+                        "name": "Los Angeles",
+                        "url_name": "losangeles"
+                      },
+                      "biography": {
+                        "blurb": "Based in Los Angeles, James Axon is a musically studied and deep-digging DJ known for introducing dance floors to new sounds and new music, equally often through cutting-edge new releases as through the forgotten and obscure gems of the past.",
+                        "content": "James Axon is a DJ, musician, and creator of the LA-based queer underground party Planet Love, as well as a resident on Dublab with his radio show Hearing Color. A lifelong pianist turned obsessive record collector, James Axon approaches DJing as an extension of musicianship. Before falling into house and techno, he spent years in bands and orchestral ensembles, a background that still shapes the way he thinks about rhythm, harmony, and structuring his sets compositionally. \r\n\r\nAs a keyboardist and musician, he has collaborated with Seven Davis Jr. and Massimiliano Pagliara, and as a DJ has shared lineups with the likes of Octo Octa, Eris Drew,  Avalon Emerson,The Blessed Madonna, Derrick Carter, Paramida, Peach, Moxie, Alex Kassian, Zombies in Miami, Jennifer Loveless, Sally C, Tornado Wallace, Perel, Eli Escobar, Paurro, and more. \r\n\r\nHis sets drift seamlessly between house, techno, italo, electro, disco, and breaks, guided by an expansive taste shaped by pioneering artists like Aphex Twin, Kraftwerk, Giorgio Moroder, Jeff Mills, Laurent Garnier, Andrew Weatherall, and Francois Kevorkian. His sets are always colorful, eclectic, and intuitively reflective of the setting -- whether playing cosmic disco in an intimate loft or hypnotic techno in a dark foggy warehouse, he still finds a sound that is distinctly James Axon: melodic and synth-heavy, driving and dreamy."
+                      },
+                      "country": {
+                        "code": "US",
+                        "name": "United States of America"
+                      },
+                      "follower_count": 114,
+                      "id": "107433",
+                      "image_url": "https://static.ra.co/images/profiles/square/jamesaxon.jpg?dateUpdated=1649162854000",
+                      "instagram": "https://www.instagram.com/james_axon_",
+                      "name": "James Axon",
+                      "observed_at_ms": 1790018820338,
+                      "slug": "jamesaxon",
+                      "soundcloud": "https://www.soundcloud.com/jamesaxon",
+                      "source_url": "https://ra.co/dj/jamesaxon",
+                      "status": "REGIONAL",
+                      "upcoming_events": [
+                        {
+                          "artists": [
+                            {
+                              "id": "107433",
+                              "name": "James Axon"
+                            },
+                            {
+                              "id": "109939",
+                              "name": "Annie Lew"
+                            },
+                            {
+                              "id": "40141",
+                              "name": "Pablo Romero"
+                            },
+                            {
+                              "id": "161509",
+                              "name": "Daniel Dutts"
+                            },
+                            {
+                              "id": "108387",
+                              "name": "Muerte Lenta"
+                            },
+                            {
+                              "id": "119607",
+                              "name": "Telesforo"
+                            },
+                            {
+                              "id": "135797",
+                              "name": "Simge"
+                            },
+                            {
+                              "id": "161752",
+                              "name": "Sophia Riv"
+                            }
+                          ],
+                          "cost_display": "0",
+                          "date": "2026-09-21",
+                          "end_time": "2026-09-22T04:00:00",
+                          "id": "2507323",
+                          "is_ticketed": false,
+                          "source_url": "https://ra.co/events/2507323",
+                          "start_time": "2026-09-21T19:00:00",
+                          "timezone": "America/New_York",
+                          "title": "TELEPORT: 3 YEARS OF TELEMETRY",
+                          "venue": {
+                            "area": {
+                              "country_code": "US",
+                              "currency": "USD",
+                              "id": "8",
+                              "name": "New York City",
+                              "timezone": "America/New_York",
+                              "url_name": "newyorkcity"
+                            },
+                            "id": "71292",
+                            "name": "Bossa Nova Civic Club",
+                            "source_url": "https://ra.co/clubs/71292"
+                          }
+                        },
+                        {
+                          "artists": [
+                            {
+                              "id": "107433",
+                              "name": "James Axon"
+                            },
+                            {
+                              "id": "22814",
+                              "name": "JDH"
+                            },
+                            {
+                              "id": "119131",
+                              "name": "A lana"
+                            }
+                          ],
+                          "cost_display": "$10-20",
+                          "date": "2026-09-25",
+                          "end_time": "2026-09-26T05:00:00",
+                          "id": "2507384",
+                          "is_ticketed": true,
+                          "source_url": "https://ra.co/events/2507384",
+                          "start_time": "2026-09-25T22:00:00",
+                          "timezone": "America/New_York",
+                          "title": "FIXED with James Axon b2b JDH (all night), A lana (all night)",
+                          "venue": {
+                            "area": {
+                              "country_code": "US",
+                              "currency": "USD",
+                              "id": "8",
+                              "name": "New York City",
+                              "timezone": "America/New_York",
+                              "url_name": "newyorkcity"
+                            },
+                            "id": "97606",
+                            "name": "Good Room",
+                            "source_url": "https://ra.co/clubs/97606"
+                          }
+                        }
+                      ],
+                      "upcoming_events_count": 1,
+                      "website": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Artist",
+        "tags": [
+          "Resident Advisor"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-constraints": {
+          "required_any_of": [
+            [
+              {
+                "in": "body",
+                "name": "option_artist_id",
+                "selector": "/artist_id"
+              },
+              {
+                "in": "body",
+                "name": "option_slug",
+                "selector": "/slug"
+              },
+              {
+                "in": "body",
+                "name": "option_url",
+                "selector": "/url"
+              }
+            ]
+          ]
+        },
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "44fb95111d6d"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "ra-co",
+        "x-aisa-runtime-operation": {
+          "operation_id": "ra-co.events.artist",
+          "method": "POST",
+          "path": "/apis/v1/ra-co/events/artist"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:47b019a8f2378f0a4a60f01147245a20e651383761e17845357cf6437c792115"
+        },
+        "x-aisa-docs-url": "/api-reference/ra-co/ra-co-events-artist"
+      }
+    },
+    "/apis/v1/ra-co/events/event": {
+      "post": {
+        "description": "You have an RA event id (from `events`, `search`, `venue`, `artist`) or a pasted `https://ra.co/events/{id}` URL and need details or ticket prices and sale status.",
+        "operationId": "ra-co.events.event",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "event_id": {
+                    "type": "string",
+                    "description": "RA event id, e.g. `2502189`. Pattern: ^[0-9]{1,12}$."
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "A pasted `https://ra.co/events/{id}` URL. Exactly one of `event_id` or `url`."
+                  }
+                },
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "event_id": {}
+                        },
+                        "required": [
+                          "event_id"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "url": {}
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "event_id": "2502189"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One Resident Advisor event: title, local date and times with IANA time zone, status, venue with address and coordinates, lineup, artists, genres, promoters, description, images, promotional links, and the public primary ticket tiers RA lists anonymously: title, retail price, booking fee, currency, sale status (`VALID` on sale, `NOTYETONSALE`, `NOLONGERONSALE`, `SOLDOUT`, ...), on-sale window, add-on flag, plus RA's `any_tier_available` snapshot. Prices are per ticket as RA states them; whether the service fee is included in the retail price is not exposed by the API and is reported as `fees: unknown`. Resale offers, allocation and remaining quantities need an RA login and are not covered. Availability is a snapshot, not a reservation.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `area` | object |  |\n| `artists` | object[] |  |\n| `attending` | number |  |\n| `child_events` | object[] |  |\n| `cost_display` | string | Promoter-entered free-text price; display only. |\n| `date` | string | Local event date YYYY-MM-DD. |\n| `date_posted` | string | UTC ISO 8601. |\n| `date_updated` | string | UTC ISO 8601. |\n| `description` | string |  |\n| `end_time` | string |  |\n| `flyer_url` | string | First FLYERFRONT image or RA's legacy flyer field. |\n| `genres` | object[] |  |\n| `id` | string |  |\n| `images` | object[] |  |\n| `interested_count` | number |  |\n| `is_festival` | boolean |  |\n| `is_multi_day` | boolean |  |\n| `is_ticketed` | boolean |  |\n| `lineup` | string | Lineup text as RA stores it; artist names may be wrapped in `<artist id=\"..\">` tags. |\n| `live` | boolean |  |\n| `minimum_age` | number |  |\n| `observed_at_ms` | number |  |\n| `pick` | object |  |\n| `promoters` | object[] |  |\n| `promotional_links` | object[] |  |\n| `resale_active` | boolean | RA resale queue active for this event (resale offers themselves need a login). |\n| `set_times_status` | string |  |\n| `source_url` | string |  |\n| `start_time` | string | Local start `YYYY-MM-DDTHH:MM:SS`; interpret in `timezone`. |\n| `status` | string | RA event status as returned (`LIVE`, ...). |\n| `ticket_fee_type` | string | RA fee model as returned (`SERVICEFEE`, ...). |\n| `ticket_summary` | object |  |\n| `ticketing` | object |  |\n| `ticketing_system` | string |  |\n| `tickets` | object[] | Public primary ticket tiers RA returns for `tickets(queryType: AVAILABLE, ticketTierType: ALL)`. Empty for non-ticketed events and for events whose tiers RA no longer exposes. |\n| `timezone` | string | IANA time zone of the event's area. |\n| `title` | string |  |\n| `venue` | object |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-21.",
+                    "value": {
+                      "area": {
+                        "country_code": "US",
+                        "country_name": "United States of America",
+                        "currency": "USD",
+                        "id": "8",
+                        "name": "New York City",
+                        "timezone": "America/New_York",
+                        "url_name": "newyorkcity"
+                      },
+                      "artists": [
+                        {
+                          "id": "76619",
+                          "name": "The Illustrious Blacks",
+                          "source_url": "https://ra.co/dj/theillustriousblacks"
+                        }
+                      ],
+                      "attending": 3,
+                      "child_events": [],
+                      "cost_display": "29.50-39.75",
+                      "date": "2026-09-23",
+                      "date_posted": "2026-07-31T07:00:39.167Z",
+                      "date_updated": "2026-09-08T18:35:25.803Z",
+                      "description": "Beyond the Stardust is an immersive club performance and live-album experience conceived by Niegel Smith and The Illustrious Blacks—the afrofuturist DJ duo Monstah and Black!—featuring 12 original songs and a dazzling cast of aerialists, dancers, and club-kids.\n\nDoors open @ 6:30pm. Show starts @ 7:00pm. No late admittance.\n\n----\n\nTickets may be available at the door if you miss the on-sale window.",
+                      "end_time": "2026-09-23T20:00:00",
+                      "flyer_url": "https://images.ra.co/6a74cab62b0fe70e44f60d0a64846dad42c2b01f.jpg",
+                      "genres": [
+                        {
+                          "id": "6",
+                          "name": "House",
+                          "slug": "house"
+                        },
+                        {
+                          "id": "21",
+                          "name": "Disco",
+                          "slug": "disco"
+                        }
+                      ],
+                      "id": "2502189",
+                      "images": [
+                        {
+                          "type": "FLYERFRONT",
+                          "url": "https://images.ra.co/6a74cab62b0fe70e44f60d0a64846dad42c2b01f.jpg"
+                        }
+                      ],
+                      "interested_count": 3,
+                      "is_festival": false,
+                      "is_multi_day": false,
+                      "is_ticketed": true,
+                      "lineup": "<artist id=\"76619\">The Illustrious Blacks</artist>\nNiegel Smith\nAmazonian Rockstar\nCourtney J. Cook\nQueen Ravenden\nDeShawn Marshall\nBlaine Petrovia",
+                      "live": true,
+                      "minimum_age": 18,
+                      "observed_at_ms": 1790018798330,
+                      "pick": null,
+                      "promoters": [
+                        {
+                          "id": "90",
+                          "name": "Manchildblack",
+                          "source_url": "https://ra.co/promoters/90"
+                        },
+                        {
+                          "id": "187828",
+                          "name": "The Flea Theater",
+                          "source_url": "https://ra.co/promoters/187828"
+                        }
+                      ],
+                      "promotional_links": [
+                        {
+                          "title": "The Flea Theater",
+                          "url": "https://theflea.org/stardust"
+                        }
+                      ],
+                      "resale_active": false,
+                      "set_times_status": "NONE",
+                      "source_url": "https://ra.co/events/2502189",
+                      "start_time": "2026-09-23T19:00:00",
+                      "status": "LIVE",
+                      "ticket_fee_type": "SERVICEFEE",
+                      "ticket_summary": {
+                        "currency": "USD",
+                        "fees": "unknown",
+                        "market": "primary",
+                        "max_price": 39.75,
+                        "min_price": 29.5,
+                        "on_sale_count": 2,
+                        "tier_count": 2
+                      },
+                      "ticketing": {
+                        "any_tier_available": false,
+                        "currency": "USD",
+                        "id": "adaf5ef4-18c2-4114-946a-cd656dda1b52",
+                        "legacy_id": "2502189",
+                        "ticket_status": "approved"
+                      },
+                      "ticketing_system": "LEGACY",
+                      "tickets": [
+                        {
+                          "booking_fee": 0,
+                          "currency": "USD",
+                          "currency_symbol": "$",
+                          "id": "1392435",
+                          "is_add_on": false,
+                          "on_sale": true,
+                          "on_sale_from": "2026-07-30T21:00:00.000Z",
+                          "on_sale_until": "2026-09-23T19:00:00.000Z",
+                          "price": 29.5,
+                          "title": "Early bird",
+                          "valid_type": "VALID",
+                          "visible": true
+                        },
+                        {
+                          "booking_fee": 0,
+                          "currency": "USD",
+                          "currency_symbol": "$",
+                          "id": "1392436",
+                          "is_add_on": false,
+                          "on_sale": true,
+                          "on_sale_from": "2026-07-30T21:00:00.000Z",
+                          "on_sale_until": "2026-09-23T19:00:00.000Z",
+                          "price": 39.75,
+                          "title": "General admission",
+                          "valid_type": "VALID",
+                          "visible": true
+                        }
+                      ],
+                      "timezone": "America/New_York",
+                      "title": "BEYOND THE STARDUST",
+                      "venue": {
+                        "address": "20 Thomas St, New York, NY 10007",
+                        "id": "298330",
+                        "latitude": 40.72,
+                        "live": true,
+                        "longitude": -74.01,
+                        "name": "The Flea Theater",
+                        "source_url": "https://ra.co/clubs/298330"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Event",
+        "tags": [
+          "Resident Advisor"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-constraints": {
+          "required_any_of": [
+            [
+              {
+                "in": "body",
+                "name": "option_event_id",
+                "selector": "/event_id"
+              },
+              {
+                "in": "body",
+                "name": "option_url",
+                "selector": "/url"
+              }
+            ]
+          ]
+        },
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "32d2d61caaab"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "ra-co",
+        "x-aisa-runtime-operation": {
+          "operation_id": "ra-co.events.event",
+          "method": "POST",
+          "path": "/apis/v1/ra-co/events/event"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:b8b5b42381f947b0048cc5b306ea024116b6775170df1ff5918d99b9074a8e2f"
+        },
+        "x-aisa-docs-url": "/api-reference/ra-co/ra-co-events-event"
+      }
+    },
+    "/apis/v1/ra-co/events/events": {
+      "post": {
+        "description": "Discover events by city and date; take `area_id` from `areas` and chain each `events[].id` into `event` for tickets.",
+        "operationId": "ra-co.events.events",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "area_id": {
+                    "type": "number",
+                    "description": "RA area id from `areas` (8 New York City, 34 Berlin, 13 London, 1 Sydney). RA stores area ids as 16-bit integers.\n\nProvider reference: minimum 1; maximum 32767."
+                  },
+                  "date_from": {
+                    "type": "string",
+                    "description": "First local listing date, YYYY-MM-DD. Default: today (UTC). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "date_to": {
+                    "type": "string",
+                    "description": "Last local listing date, inclusive. Default: `date_from` + 7 days; at most 366 days after `date_from`. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "genre": {
+                    "type": "string",
+                    "description": "Genre slug from `facets.genres[].slug` (e.g. `techno`, `house`, `disco`). Pattern: ^[a-z0-9-]{1,40}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "page": {
+                    "type": "number",
+                    "description": "1-based page; use `next_page` from the previous response.\n\nProvider reference: minimum 1; maximum 200.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 200
+                    }
+                  },
+                  "page_size": {
+                    "type": "number",
+                    "description": "Rows per page, default 20.\n\nProvider reference: minimum 1; maximum 50.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 50
+                    }
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "Keyword matched against event titles within the area and window.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "sort": {
+                    "type": "string",
+                    "description": "`date`: RA's listing order (listing date, then relevance score, then title). `popularity`: most attending first. Default `date`.\n\nProvider reference: allowed values [\"date\", \"popularity\"].",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "date",
+                        "popularity"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "area_id"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "area_id": 8,
+                    "page_size": 5
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event listings for one RA area and a local date window (default: today and the next 7 days), page by page. Optional genre slug and title keyword filters, sort by date or by attendance. Each row carries the RA event id, local date and start/end times with the area's IANA time zone, venue, artists, genres, promoters, ticketed flag, promoter-entered display price and attendance counts; the response also carries genre and event-type facets for the window. Availability and structured ticket prices are in `event`.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `area` | object |  |\n| `count` | number | Rows on this page. |\n| `date_from` | string |  |\n| `date_to` | string |  |\n| `events` | object[] |  |\n| `facets` | object |  |\n| `genre` | string |  |\n| `next_page` | number | Page number to request next, or null when exhausted. |\n| `observed_at_ms` | number |  |\n| `page` | number |  |\n| `page_size` | number |  |\n| `query` | string |  |\n| `sort` | string |  |\n| `total_results` | number | Total listings RA reports for the filters. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-21.",
+                    "value": {
+                      "area": {
+                        "country_code": "US",
+                        "currency": "USD",
+                        "id": "8",
+                        "name": "New York City",
+                        "timezone": "America/New_York",
+                        "url_name": "newyorkcity"
+                      },
+                      "count": 5,
+                      "date_from": "2026-09-21",
+                      "date_to": "2026-09-28",
+                      "events": [
+                        {
+                          "area": {
+                            "country_code": "US",
+                            "currency": "USD",
+                            "id": "8",
+                            "name": "New York City",
+                            "timezone": "America/New_York",
+                            "url_name": "newyorkcity"
+                          },
+                          "artists": [
+                            {
+                              "id": "107433",
+                              "name": "James Axon",
+                              "source_url": "https://ra.co/dj/jamesaxon"
+                            },
+                            {
+                              "id": "109939",
+                              "name": "Annie Lew",
+                              "source_url": "https://ra.co/dj/annielew"
+                            },
+                            {
+                              "id": "40141",
+                              "name": "Pablo Romero",
+                              "source_url": "https://ra.co/dj/pabloromero"
+                            },
+                            {
+                              "id": "161509",
+                              "name": "Daniel Dutts",
+                              "source_url": "https://ra.co/dj/danieldutts"
+                            },
+                            {
+                              "id": "108387",
+                              "name": "Muerte Lenta",
+                              "source_url": "https://ra.co/dj/muertelenta"
+                            },
+                            {
+                              "id": "119607",
+                              "name": "Telesforo",
+                              "source_url": "https://ra.co/dj/telesforo"
+                            },
+                            {
+                              "id": "135797",
+                              "name": "Simge",
+                              "source_url": "https://ra.co/dj/simge"
+                            },
+                            {
+                              "id": "161752",
+                              "name": "Sophia Riv",
+                              "source_url": "https://ra.co/dj/sophiariv"
+                            }
+                          ],
+                          "attending": 28,
+                          "cost_display": "0",
+                          "date": "2026-09-21",
+                          "end_time": "2026-09-22T04:00:00",
+                          "flyer_url": "https://images.ra.co/30a51a6fe404e533624968fe9b0a4e704205a4ca.jpg",
+                          "genres": [
+                            {
+                              "id": "5",
+                              "name": "Techno",
+                              "slug": "techno"
+                            }
+                          ],
+                          "id": "2507323",
+                          "interested_count": 28,
+                          "is_festival": false,
+                          "is_pick": true,
+                          "is_ticketed": false,
+                          "listing_date": "2026-09-21",
+                          "live": true,
+                          "minimum_age": 21,
+                          "promoters": [
+                            {
+                              "id": "156422",
+                              "name": "TAKE TIME BK"
+                            }
+                          ],
+                          "source_url": "https://ra.co/events/2507323",
+                          "start_time": "2026-09-21T19:00:00",
+                          "status": "LIVE",
+                          "timezone": "America/New_York",
+                          "title": "TELEPORT: 3 YEARS OF TELEMETRY",
+                          "venue": {
+                            "id": "71292",
+                            "live": true,
+                            "name": "Bossa Nova Civic Club",
+                            "source_url": "https://ra.co/clubs/71292"
+                          }
+                        },
+                        {
+                          "area": {
+                            "country_code": "US",
+                            "currency": "USD",
+                            "id": "8",
+                            "name": "New York City",
+                            "timezone": "America/New_York",
+                            "url_name": "newyorkcity"
+                          },
+                          "artists": [
+                            {
+                              "id": "31178",
+                              "name": "Gino Santos",
+                              "source_url": "https://ra.co/dj/ginosantos"
+                            },
+                            {
+                              "id": "28886",
+                              "name": "Jindo",
+                              "source_url": "https://ra.co/dj/jindo"
+                            }
+                          ],
+                          "attending": 3,
+                          "cost_display": "0",
+                          "date": "2026-09-21",
+                          "end_time": "2026-09-21T23:30:00",
+                          "flyer_url": "https://images.ra.co/acc7754c021450bca963d51c54aa171c2261fff5.jpg",
+                          "genres": [
+                            {
+                              "id": "15",
+                              "name": "Tech House",
+                              "slug": "techhouse"
+                            },
+                            {
+                              "id": "20",
+                              "name": "Deep House",
+                              "slug": "deephouse"
+                            }
+                          ],
+                          "id": "2523029",
+                          "interested_count": 3,
+                          "is_festival": false,
+                          "is_pick": false,
+                          "is_ticketed": false,
+                          "listing_date": "2026-09-21",
+                          "live": true,
+                          "minimum_age": 21,
+                          "promoters": [],
+                          "source_url": "https://ra.co/events/2523029",
+                          "start_time": "2026-09-21T17:00:00",
+                          "status": "LIVE",
+                          "timezone": "America/New_York",
+                          "title": "Welcome to New York City with Eugene , Joseph Indelicato & Vicente",
+                          "venue": {
+                            "id": "261688",
+                            "live": true,
+                            "name": "The Rose",
+                            "source_url": "https://ra.co/clubs/261688"
+                          }
+                        },
+                        {
+                          "area": {
+                            "country_code": "US",
+                            "currency": "USD",
+                            "id": "8",
+                            "name": "New York City",
+                            "timezone": "America/New_York",
+                            "url_name": "newyorkcity"
+                          },
+                          "artists": [],
+                          "attending": 0,
+                          "cost_display": "40.00",
+                          "date": "2026-09-21",
+                          "end_time": "2026-09-22T02:00:00",
+                          "flyer_url": "https://images.ra.co/9288eda4a75192bdb22c53f8c1d478241485bfee.png",
+                          "genres": [
+                            {
+                              "id": "72",
+                              "name": "Afro House",
+                              "slug": "afrohouse"
+                            }
+                          ],
+                          "id": "2541620",
+                          "interested_count": 0,
+                          "is_festival": false,
+                          "is_pick": false,
+                          "is_ticketed": true,
+                          "listing_date": "2026-09-21",
+                          "live": true,
+                          "minimum_age": 21,
+                          "promoters": [
+                            {
+                              "id": "100441",
+                              "name": "madory"
+                            }
+                          ],
+                          "source_url": "https://ra.co/events/2541620",
+                          "start_time": "2026-09-21T20:00:00",
+                          "status": "LIVE",
+                          "timezone": "America/New_York",
+                          "title": "Industry Monday",
+                          "venue": {
+                            "id": "218898",
+                            "live": true,
+                            "name": "Althea's Rooftop",
+                            "source_url": "https://ra.co/clubs/218898"
+                          }
+                        },
+                        {
+                          "area": {
+                            "country_code": "US",
+                            "currency": "USD",
+                            "id": "8",
+                            "name": "New York City",
+                            "timezone": "America/New_York",
+                            "url_name": "newyorkcity"
+                          },
+                          "artists": [],
+                          "attending": 390,
+                          "cost_display": "0.00",
+                          "date": "2026-09-22",
+                          "end_time": "2026-09-23T02:00:00",
+                          "flyer_url": "https://images.ra.co/4cb4b174fef46ec5b7b53e93b5c78a187d531e7d.png",
+                          "genres": [],
+                          "id": "2531409",
+                          "interested_count": 390,
+                          "is_festival": false,
+                          "is_pick": false,
+                          "is_ticketed": true,
+                          "listing_date": "2026-09-22",
+                          "live": true,
+                          "minimum_age": 21,
+                          "promoters": [
+                            {
+                              "id": "104455",
+                              "name": "Dirty Magazine"
+                            }
+                          ],
+                          "source_url": "https://ra.co/events/2531409",
+                          "start_time": "2026-09-22T19:00:00",
+                          "status": "LIVE",
+                          "timezone": "America/New_York",
+                          "title": "Dirty & Strap presents FREE NEW YORK PARTY (magazine release)",
+                          "venue": {
+                            "id": "4641",
+                            "live": true,
+                            "name": "Home Sweet Home",
+                            "source_url": "https://ra.co/clubs/4641"
+                          }
+                        },
+                        {
+                          "area": {
+                            "country_code": "US",
+                            "currency": "USD",
+                            "id": "8",
+                            "name": "New York City",
+                            "timezone": "America/New_York",
+                            "url_name": "newyorkcity"
+                          },
+                          "artists": [
+                            {
+                              "id": "97703",
+                              "name": "Kiana",
+                              "source_url": "https://ra.co/dj/nd1k0"
+                            }
+                          ],
+                          "attending": 52,
+                          "cost_display": null,
+                          "date": "2026-09-22",
+                          "end_time": "2026-09-22T22:00:00",
+                          "flyer_url": "https://images.ra.co/0d5709f24a678e8f0f1e28e5dacfd1c5c9585568.png",
+                          "genres": [
+                            {
+                              "id": "29",
+                              "name": "Jazz",
+                              "slug": "jazz"
+                            }
+                          ],
+                          "id": "2524685",
+                          "interested_count": 52,
+                          "is_festival": false,
+                          "is_pick": false,
+                          "is_ticketed": true,
+                          "listing_date": "2026-09-22",
+                          "live": true,
+                          "minimum_age": null,
+                          "promoters": [
+                            {
+                              "id": "179643",
+                              "name": "Silence Please"
+                            }
+                          ],
+                          "source_url": "https://ra.co/events/2524685",
+                          "start_time": "2026-09-22T19:00:00",
+                          "status": "LIVE",
+                          "timezone": "America/New_York",
+                          "title": "Free Spirits: Kiana Mickles presents Mary Lou Williams",
+                          "venue": {
+                            "id": "267250",
+                            "live": true,
+                            "name": "Silence Please",
+                            "source_url": "https://ra.co/clubs/267250"
+                          }
+                        }
+                      ],
+                      "facets": {
+                        "event_types": [
+                          {
+                            "count": 118,
+                            "value": 1
+                          },
+                          {
+                            "count": 17,
+                            "value": 3
+                          }
+                        ],
+                        "genres": [
+                          {
+                            "count": 4,
+                            "label": "Acid",
+                            "slug": "acid"
+                          },
+                          {
+                            "count": 1,
+                            "label": "Afrobeat",
+                            "slug": "afrobeat"
+                          },
+                          {
+                            "count": 4,
+                            "label": "Afrobeats",
+                            "slug": "afrobeats"
+                          },
+                          {
+                            "count": 8,
+                            "label": "Afro House",
+                            "slug": "afrohouse"
+                          },
+                          {
+                            "count": 2,
+                            "label": "Afro Tech",
+                            "slug": "afrotech"
+                          },
+                          {
+                            "count": 2,
+                            "label": "Amapiano",
+                            "slug": "amapiano"
+                          },
+                          {
+                            "count": 13,
+                            "label": "Ambient",
+                            "slug": "ambient"
+                          },
+                          {
+                            "count": 1,
+                            "label": "Balearic",
+                            "slug": "balearic"
+                          },
+                          {
+                            "count": 5,
+                            "label": "Bass",
+                            "slug": "bass"
+                          },
+                          {
+                            "count": 2,
+                            "label": "Breakbeat",
+                            "slug": "breakbeat"
+                          },
+                          {
+                            "count": 1,
+                            "label": "Breakcore",
+                            "slug": "breakcore"
+                          },
+                          {
+                            "count": 1,
+                            "label": "Classical",
+                            "slug": "classical"
+                          },
+                          {
+                            "count": 13,
+                            "label": "Club",
+                            "slug": "club"
+                          },
+                          {
+                            "count": 3,
+                            "label": "Dancehall",
+                            "slug": "dancehall"
+                          },
+                          {
+                            "count": 9,
+                            "label": "Deep House",
+                            "slug": "deephouse"
+                          },
+                          {
+                            "count": 22,
+                            "label": "Disco",
+                            "slug": "disco"
+                          },
+                          {
+                            "count": 1,
+                            "label": "Downtempo",
+                            "slug": "downtempo"
+                          },
+                          {
+                            "count": 1,
+                            "label": "Drum & Bass",
+                            "slug": "drumandbass"
+                          },
+                          {
+                            "count": 3,
+                            "label": "Dub",
+                            "slug": "dub"
+                          },
+                          {
+                            "count": 1,
+                            "label": "Dub Techno",
+                            "slug": "dubtechno"
+                          },
+                          {
+                            "count": 1,
+                            "label": "EBM",
+                            "slug": "ebm"
+                          },
+                          {
+                            "count": 8,
+                            "label": "Electro",
+                            "slug": "electro"
+                          },
+                          {
+                            "count": 4,
+                            "label": "Electronica",
+                            "slug": "electronica"
+                          },
+                          {
+                            "count": 10,
+                            "label": "Experimental",
+                            "slug": "experimental"
+                          },
+                          {
+                            "count": 1,
+                            "label": "Footwork",
+                            "slug": "footwork"
+                          },
+                          {
+                            "count": 7,
+                            "label": "Funk / Soul",
+                            "slug": "funksoul"
+                          },
+                          {
+                            "count": 6,
+                            "label": "Garage",
+                            "slug": "garage"
+                          },
+                          {
+                            "count": 3,
+                            "label": "Ghetto Tech",
+                            "slug": "ghettotech"
+                          },
+                          {
+                            "count": 10,
+                            "label": "Hip-Hop",
+                            "slug": "hiphop"
+                          },
+                          {
+                            "count": 74,
+                            "label": "House",
+                            "slug": "house"
+                          },
+                          {
+                            "count": 2,
+                            "label": "Industrial",
+                            "slug": "industrial"
+                          },
+                          {
+                            "count": 1,
+                            "label": "Italo Disco",
+                            "slug": "italodisco"
+                          },
+                          {
+                            "count": 5,
+                            "label": "Jazz",
+                            "slug": "jazz"
+                          },
+                          {
+                            "count": 1,
+                            "label": "Jungle",
+                            "slug": "jungle"
+                          },
+                          {
+                            "count": 1,
+                            "label": "Krautrock",
+                            "slug": "krautrock"
+                          },
+                          {
+                            "count": 1,
+                            "label": "Latin Bass",
+                            "slug": "latinbass"
+                          },
+                          {
+                            "count": 5,
+                            "label": "Minimal",
+                            "slug": "minimal"
+                          },
+                          {
+                            "count": 1,
+                            "label": "Minimal Techno",
+                            "slug": "minimaltechno"
+                          },
+                          {
+                            "count": 2,
+                            "label": "New Wave",
+                            "slug": "newwave"
+                          },
+                          {
+                            "count": 5,
+                            "label": "Pop",
+                            "slug": "pop"
+                          },
+                          {
+                            "count": 7,
+                            "label": "Post-Punk",
+                            "slug": "postpunk"
+                          },
+                          {
+                            "count": 4,
+                            "label": "Progressive House",
+                            "slug": "progressivehouse"
+                          },
+                          {
+                            "count": 8,
+                            "label": "Reggaeton",
+                            "slug": "reggaeton"
+                          },
+                          {
+                            "count": 2,
+                            "label": "R&B",
+                            "slug": "rnb"
+                          },
+                          {
+                            "count": 6,
+                            "label": "Tech House",
+                            "slug": "techhouse"
+                          },
+                          {
+                            "count": 54,
+                            "label": "Techno",
+                            "slug": "techno"
+                          },
+                          {
+                            "count": 5,
+                            "label": "Trance",
+                            "slug": "trance"
+                          },
+                          {
+                            "count": 2,
+                            "label": "Vaporwave",
+                            "slug": "vaporwave"
+                          }
+                        ]
+                      },
+                      "genre": null,
+                      "next_page": 2,
+                      "observed_at_ms": 1790018862504,
+                      "page": 1,
+                      "page_size": 5,
+                      "query": null,
+                      "sort": "date",
+                      "total_results": 263
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Events",
+        "tags": [
+          "Resident Advisor"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "fe6927f45480"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "ra-co",
+        "x-aisa-runtime-operation": {
+          "operation_id": "ra-co.events.events",
+          "method": "POST",
+          "path": "/apis/v1/ra-co/events/events"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:79109016081b0e39644b9c0eef3e5e68b15ed5f82898ef90f1e53a209fdd71a0"
+        },
+        "x-aisa-docs-url": "/api-reference/ra-co/ra-co-events-events"
+      }
+    },
+    "/apis/v1/ra-co/events/search": {
+      "post": {
+        "description": "You know a name (artist, club, party, promoter, city) and need its RA id to chain into `event`, `venue`, `artist` or `events`.",
+        "operationId": "ra-co.events.search",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "limit": {
+                    "type": "number",
+                    "description": "Maximum hits, default 16.\n\nProvider reference: minimum 1; maximum 50.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 50
+                    }
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "query"
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "RA indices to search. Default: all six.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "query": "Nowadays",
+                    "types": [
+                      "CLUB",
+                      "PROMOTER"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resident Advisor global search across upcoming events, venues (clubs), artists, promoters, labels and areas by name. Each hit carries its RA id and type, the RA page URL, the area and country, and for events the local date and venue.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `observed_at_ms` | number |  |\n| `query` | string |  |\n| `results` | object[] |  |\n| `types` | string[] |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-21.",
+                    "value": {
+                      "count": 4,
+                      "observed_at_ms": 1790018812007,
+                      "query": "Nowadays",
+                      "results": [
+                        {
+                          "area_name": "New York City",
+                          "country_name": "United States of America",
+                          "date": null,
+                          "id": "75430",
+                          "image_url": "https://static.ra.co/images/promoter/us-nowadays-logo.jpg",
+                          "name": "Nowadays",
+                          "score": 3,
+                          "source_url": "https://ra.co/promoters/75430",
+                          "type": "PROMOTER",
+                          "venue_name": null,
+                          "venue_source_url": null
+                        },
+                        {
+                          "area_name": "North",
+                          "country_name": "United Kingdom",
+                          "date": null,
+                          "id": "45171",
+                          "image_url": "https://static.ra.co/images/promoter/uk-kidsnowadays.jpg",
+                          "name": "Kids Nowadays",
+                          "score": 2,
+                          "source_url": "https://ra.co/promoters/45171",
+                          "type": "PROMOTER",
+                          "venue_name": null,
+                          "venue_source_url": null
+                        },
+                        {
+                          "area_name": "New York City",
+                          "country_name": "United States of America",
+                          "date": null,
+                          "id": "105873",
+                          "image_url": "https://static.ra.co/images/clubs/06(1).png",
+                          "name": "Nowadays",
+                          "score": 1,
+                          "source_url": "https://ra.co/clubs/105873",
+                          "type": "VENUE",
+                          "venue_name": null,
+                          "venue_source_url": null
+                        },
+                        {
+                          "area_name": "Paris",
+                          "country_name": "France",
+                          "date": null,
+                          "id": "59716",
+                          "image_url": null,
+                          "name": "Nowadays Records",
+                          "score": 1,
+                          "source_url": "https://ra.co/promoters/59716",
+                          "type": "PROMOTER",
+                          "venue_name": null,
+                          "venue_source_url": null
+                        }
+                      ],
+                      "types": [
+                        "CLUB",
+                        "PROMOTER"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "搜索",
+        "tags": [
+          "Resident Advisor"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "5b6e6d6a07e0"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "ra-co",
+        "x-aisa-runtime-operation": {
+          "operation_id": "ra-co.events.search",
+          "method": "POST",
+          "path": "/apis/v1/ra-co/events/search"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:dff3ee22fdafb993107d973ed7d8f2162e98237d26ad24aba20554865b232bb3"
+        },
+        "x-aisa-docs-url": "/api-reference/ra-co/ra-co-events-search"
+      }
+    },
+    "/apis/v1/ra-co/events/venue": {
+      "post": {
+        "description": "You have a venue id (from `search`, `events[].venue.id`, or a pasted `https://ra.co/clubs/{id}` URL) and need the venue's details or its upcoming events.",
+        "operationId": "ra-co.events.venue",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "events_limit": {
+                    "type": "number",
+                    "description": "Upcoming events to include, default 20.\n\nProvider reference: minimum 0; maximum 20.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 0,
+                      "max": 20
+                    }
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "A pasted `https://ra.co/clubs/{id}` URL. Exactly one of `venue_id` or `url`."
+                  },
+                  "venue_id": {
+                    "type": "string",
+                    "description": "RA venue id, e.g. `71292`. Pattern: ^[0-9]{1,12}$."
+                  }
+                },
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "url": {}
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "venue_id": {}
+                        },
+                        "required": [
+                          "venue_id"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "events_limit": 5,
+                    "venue_id": "71292"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A Resident Advisor venue (club) profile: name, address, coordinates, website, capacity, closed flag, follower and event counts, area with IANA time zone and currency, and up to 20 upcoming events listed at the venue.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `address` | string |  |\n| `area` | object |  |\n| `capacity` | number | null when RA reports 0 or nothing. |\n| `event_count_this_year` | number |  |\n| `follower_count` | number |  |\n| `id` | string |  |\n| `is_closed` | boolean |  |\n| `latitude` | number |  |\n| `live` | boolean |  |\n| `logo_url` | string |  |\n| `longitude` | number |  |\n| `name` | string |  |\n| `observed_at_ms` | number |  |\n| `phone` | string | null when RA has an empty value. |\n| `photo_url` | string |  |\n| `source_url` | string |  |\n| `upcoming_events` | object[] |  |\n| `website` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-21.",
+                    "value": {
+                      "address": "1271 Myrtle Ave; Brooklyn, NY 11221; United States",
+                      "area": {
+                        "country_code": "US",
+                        "currency": "USD",
+                        "id": "8",
+                        "name": "New York City",
+                        "timezone": "America/New_York",
+                        "url_name": "newyorkcity"
+                      },
+                      "capacity": null,
+                      "event_count_this_year": 413,
+                      "follower_count": 6636,
+                      "id": "71292",
+                      "is_closed": false,
+                      "latitude": 40.697974,
+                      "live": true,
+                      "logo_url": "https://static.ra.co/images/clubs/us-bossanovacivicclub.jpg?dateUpdated=1783975242130",
+                      "longitude": -73.927965,
+                      "name": "Bossa Nova Civic Club",
+                      "observed_at_ms": 1790018816151,
+                      "phone": null,
+                      "photo_url": "https://static.ra.co/images/clubs/lg/dscf1612.jpeg?dateUpdated=1783975242130",
+                      "source_url": "https://ra.co/clubs/71292",
+                      "upcoming_events": [
+                        {
+                          "artists": [
+                            {
+                              "id": "107433",
+                              "name": "James Axon"
+                            },
+                            {
+                              "id": "109939",
+                              "name": "Annie Lew"
+                            },
+                            {
+                              "id": "40141",
+                              "name": "Pablo Romero"
+                            },
+                            {
+                              "id": "161509",
+                              "name": "Daniel Dutts"
+                            },
+                            {
+                              "id": "108387",
+                              "name": "Muerte Lenta"
+                            },
+                            {
+                              "id": "119607",
+                              "name": "Telesforo"
+                            },
+                            {
+                              "id": "135797",
+                              "name": "Simge"
+                            },
+                            {
+                              "id": "161752",
+                              "name": "Sophia Riv"
+                            }
+                          ],
+                          "cost_display": "0",
+                          "date": "2026-09-21",
+                          "end_time": "2026-09-22T04:00:00",
+                          "id": "2507323",
+                          "is_ticketed": false,
+                          "source_url": "https://ra.co/events/2507323",
+                          "start_time": "2026-09-21T19:00:00",
+                          "timezone": "America/New_York",
+                          "title": "TELEPORT: 3 YEARS OF TELEMETRY",
+                          "venue": {
+                            "area": {
+                              "country_code": "US",
+                              "currency": "USD",
+                              "id": "8",
+                              "name": "New York City",
+                              "timezone": "America/New_York",
+                              "url_name": "newyorkcity"
+                            },
+                            "id": "71292",
+                            "name": "Bossa Nova Civic Club",
+                            "source_url": "https://ra.co/clubs/71292"
+                          }
+                        },
+                        {
+                          "artists": [
+                            {
+                              "id": "186471",
+                              "name": "Ani Be"
+                            },
+                            {
+                              "id": "167486",
+                              "name": "Nico Noir"
+                            },
+                            {
+                              "id": "159072",
+                              "name": "Secret Grapes"
+                            },
+                            {
+                              "id": "161838",
+                              "name": "Yochanan"
+                            }
+                          ],
+                          "cost_display": "0",
+                          "date": "2026-09-22",
+                          "end_time": "2026-09-23T04:00:00",
+                          "id": "2500409",
+                          "is_ticketed": false,
+                          "source_url": "https://ra.co/events/2500409",
+                          "start_time": "2026-09-22T22:00:00",
+                          "timezone": "America/New_York",
+                          "title": "Nocturna @ Bossa Nova Civic Club",
+                          "venue": {
+                            "area": {
+                              "country_code": "US",
+                              "currency": "USD",
+                              "id": "8",
+                              "name": "New York City",
+                              "timezone": "America/New_York",
+                              "url_name": "newyorkcity"
+                            },
+                            "id": "71292",
+                            "name": "Bossa Nova Civic Club",
+                            "source_url": "https://ra.co/clubs/71292"
+                          }
+                        },
+                        {
+                          "artists": [
+                            {
+                              "id": "173902",
+                              "name": "Constructible"
+                            },
+                            {
+                              "id": "186853",
+                              "name": "Peace Ramen"
+                            },
+                            {
+                              "id": "117943",
+                              "name": "Perrin Grace"
+                            }
+                          ],
+                          "cost_display": null,
+                          "date": "2026-09-23",
+                          "end_time": "2026-09-23T22:00:00",
+                          "id": "2533818",
+                          "is_ticketed": false,
+                          "source_url": "https://ra.co/events/2533818",
+                          "start_time": "2026-09-23T19:00:00",
+                          "timezone": "America/New_York",
+                          "title": ".5ide Quest Happy Hour w/Constructible & Peace Ramen b2b Perrin Grace",
+                          "venue": {
+                            "area": {
+                              "country_code": "US",
+                              "currency": "USD",
+                              "id": "8",
+                              "name": "New York City",
+                              "timezone": "America/New_York",
+                              "url_name": "newyorkcity"
+                            },
+                            "id": "71292",
+                            "name": "Bossa Nova Civic Club",
+                            "source_url": "https://ra.co/clubs/71292"
+                          }
+                        },
+                        {
+                          "artists": [
+                            {
+                              "id": "74067",
+                              "name": "DJ Manny"
+                            },
+                            {
+                              "id": "126780",
+                              "name": "PUFF"
+                            },
+                            {
+                              "id": "148970",
+                              "name": "Fugitive Artifact"
+                            }
+                          ],
+                          "cost_display": null,
+                          "date": "2026-09-23",
+                          "end_time": "2026-09-24T04:00:00",
+                          "id": "2523931",
+                          "is_ticketed": false,
+                          "source_url": "https://ra.co/events/2523931",
+                          "start_time": "2026-09-23T22:00:00",
+                          "timezone": "America/New_York",
+                          "title": "HEADCRACK: DJ Manny (Teklife), PUFF, and Fugitive Artifact",
+                          "venue": {
+                            "area": {
+                              "country_code": "US",
+                              "currency": "USD",
+                              "id": "8",
+                              "name": "New York City",
+                              "timezone": "America/New_York",
+                              "url_name": "newyorkcity"
+                            },
+                            "id": "71292",
+                            "name": "Bossa Nova Civic Club",
+                            "source_url": "https://ra.co/clubs/71292"
+                          }
+                        },
+                        {
+                          "artists": [
+                            {
+                              "id": "87100",
+                              "name": "WTCHCRFT"
+                            },
+                            {
+                              "id": "166056",
+                              "name": "SEXINCHURCH"
+                            }
+                          ],
+                          "cost_display": "$10",
+                          "date": "2026-09-24",
+                          "end_time": "2026-09-25T04:00:00",
+                          "id": "2541048",
+                          "is_ticketed": false,
+                          "source_url": "https://ra.co/events/2541048",
+                          "start_time": "2026-09-24T22:00:00",
+                          "timezone": "America/New_York",
+                          "title": "The Jewelry Box III",
+                          "venue": {
+                            "area": {
+                              "country_code": "US",
+                              "currency": "USD",
+                              "id": "8",
+                              "name": "New York City",
+                              "timezone": "America/New_York",
+                              "url_name": "newyorkcity"
+                            },
+                            "id": "71292",
+                            "name": "Bossa Nova Civic Club",
+                            "source_url": "https://ra.co/clubs/71292"
+                          }
+                        }
+                      ],
+                      "website": "http://bossanovacivicclub.com"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Venue",
+        "tags": [
+          "Resident Advisor"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-constraints": {
+          "required_any_of": [
+            [
+              {
+                "in": "body",
+                "name": "option_url",
+                "selector": "/url"
+              },
+              {
+                "in": "body",
+                "name": "option_venue_id",
+                "selector": "/venue_id"
+              }
+            ]
+          ]
+        },
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "79c5582929f3"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "ra-co",
+        "x-aisa-runtime-operation": {
+          "operation_id": "ra-co.events.venue",
+          "method": "POST",
+          "path": "/apis/v1/ra-co/events/venue"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:b1b59d882d3352a9ba822d659a19b467ec7f635a5a7bf70a3913dd791ba8fb83"
+        },
+        "x-aisa-docs-url": "/api-reference/ra-co/ra-co-events-venue"
+      }
+    }
+  }
 }

@@ -5,7 +5,16 @@
         "scheme": "bearer",
         "type": "http"
       }
-    }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
   },
   "info": {
     "description": "",
@@ -33,7 +42,7 @@
       "schema_version": "1",
       "composer_version": "29",
       "response_pending": [],
-      "document_hash": "sha256:064f12040d2152a31bafb74f3b887b3536f47326121e860b29345a51134f3041"
+      "document_hash": "sha256:36caaf9ea8a3a7fa781995d7d679905ccf64914cb17f253b61c317823be20a70"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -85,5 +94,749 @@
       "url": "https://dev-api.aisa.one"
     }
   ],
-  "paths": {}
+  "paths": {
+    "/apis/v1/wikipedia/articles/lookup": {
+      "post": {
+        "description": "Read the current revision of a Wikipedia (or sister-project) article by exact title: full wikitext (or HTML with body), abstract, categories, redirects, connected Wikidata QID, license, and revision credibility signals. Use structured-contents instead when you want infobox fields, sections or references already parsed. From https://de.wikipedia.org/wiki/Berlin pass name `Berlin` and project `dewiki`. Not a search: titles must match exactly.",
+        "operationId": "wikipedia.articles.lookup",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Exact article title as on the wiki, for example `Marie_Curie` or `Marie Curie`. Case-sensitive: Wikipedia titles start with a capital letter. From a URL such as https://fr.wikipedia.org/wiki/Marie_Curie, use the part after /wiki/."
+                  },
+                  "project": {
+                    "type": "string",
+                    "description": "Wikimedia project identifier: language code plus project code, for example `enwiki` (English Wikipedia), `frwiki`, `dewiki`, `enwiktionary` or `eswikivoyage`. Defaults to `enwiki` when neither project nor language is given. `reference/projects` lists every identifier."
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "Wikimedia language code, for example `en`, `fr` or `zh-yue`. Returns the article from any project in that language; combine with project to pin one wiki."
+                  },
+                  "fields": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Return only these fields, in dot notation, for example `name`, `abstract`, `url`, `version.identifier`. Omit for the full record. Wikimedia returns exactly the fields named.\n\nProvider reference: maximum 50.",
+                    "x-alexandria-option-metadata": {
+                      "max": 50
+                    }
+                  },
+                  "limit": {
+                    "maximum": 10,
+                    "minimum": 1,
+                    "type": "integer",
+                    "description": "Most matching articles to return, 1 to 10. More than one only helps when no project is pinned and the title exists on several wikis.\n\nProvider reference: minimum 1; maximum 10; default 1."
+                  },
+                  "body": {
+                    "type": "string",
+                    "description": "Which article_body format to include when fields is not given: `wikitext` (default, compact), `html` (MediaWiki DOM, often 5-10x larger), `both`, or `none` for metadata and abstract only.\n\nProvider reference: allowed values [\"wikitext\", \"html\", \"both\", \"none\"]; default \"wikitext\".",
+                    "default": "wikitext",
+                    "x-alexandria-option-metadata": {
+                      "oneOf": [
+                        "wikitext",
+                        "html",
+                        "both",
+                        "none"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "limit",
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Articles matching the exact title in the selected project or language, newest revision each. article_body carries the format chosen with body, wikitext by default. Empty when none match. Priced per article returned.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `name` | string | Article title as displayed on the page. |\n| `identifier` | number | MediaWiki page ID; not accepted as lookup input. |\n| `abstract` | string | Short plain-text summary of the article. |\n| `url` | string | Canonical article URL, for citation. |\n| `date_created` | string |  |\n| `date_modified` | string | When the current revision was saved. |\n| `in_language` | object | Language: identifier (for example en), name and direction. |\n| `is_part_of` | object | Project: identifier (for example enwiki), code, name and url. |\n| `namespace` | object | MediaWiki namespace; 0 is the main article namespace. |\n| `main_entity` | object | Connected Wikidata item: identifier (QID such as Q7186) and url. Pass the QID to wikidata/item. |\n| `additional_entities` | object[] | Other Wikidata entities used on the page. |\n| `image` | object | Main image: content_url, width, height and thumbnail. |\n| `license` | object[] | Licenses for the content, normally CC BY-SA 4.0, with name and url. |\n| `version` | object | Current revision: identifier, editor, comment, tags, size, and credibility signals under scores (revertrisk, referencerisk, referenceneed) and maintenance_tags. |\n| `article_body` | object | Full content: wikitext by default, html (MediaWiki DOM) with body html, both with body both, absent with body none. |\n| `categories` | object[] | Categories the article belongs to: name and url. |\n| `templates` | object[] | Templates used on the page. |\n| `redirects` | object[] | Titles that redirect to this article: name and url. |\n| `protection` | object[] | Edit and move protections, absent when unprotected. |\n| `watchers_count` | number |  |\n| `event` | object | The pipeline event behind this revision: type and date_created. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Article",
+        "tags": [
+          "Wikipedia"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "web",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0001,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "05d4527144ef"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "wikipedia",
+        "x-aisa-runtime-operation": {
+          "operation_id": "wikipedia.articles.lookup",
+          "method": "POST",
+          "path": "/apis/v1/wikipedia/articles/lookup"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:ec8f12c79c687e551487b2e3f8e469a46267dcd79d82ebfe94cd4f4879c36b81"
+        },
+        "x-aisa-docs-url": "/api-reference/wikipedia/wikipedia-articles-lookup"
+      }
+    },
+    "/apis/v1/wikipedia/articles/structured-contents": {
+      "post": {
+        "description": "Read a Wikipedia article pre-parsed into JSON: one-line description, abstract, infobox fields, sections as paragraphs and lists with links, references and tables. Best for extracting facts such as a person's birth date or a city's population without parsing HTML. Beta upstream, with the most complete coverage on en, de, fr, es, pt, it, nl, cy and id Wikipedia. Exact title, as for articles/lookup.",
+        "operationId": "wikipedia.articles.structured-contents",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Exact article title as on the wiki, for example `Marie_Curie` or `Marie Curie`. Case-sensitive: Wikipedia titles start with a capital letter. From a URL such as https://fr.wikipedia.org/wiki/Marie_Curie, use the part after /wiki/."
+                  },
+                  "project": {
+                    "type": "string",
+                    "description": "Wikimedia project identifier: language code plus project code, for example `enwiki` (English Wikipedia), `frwiki`, `dewiki`, `enwiktionary` or `eswikivoyage`. Defaults to `enwiki` when neither project nor language is given. `reference/projects` lists every identifier."
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "Wikimedia language code, for example `en`, `fr` or `zh-yue`. Returns the article from any project in that language; combine with project to pin one wiki."
+                  },
+                  "fields": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Return only these fields, in dot notation, for example `name`, `abstract`, `url`, `version.identifier`. Omit for the full record. Wikimedia returns exactly the fields named.\n\nProvider reference: maximum 50.",
+                    "x-alexandria-option-metadata": {
+                      "max": 50
+                    }
+                  },
+                  "limit": {
+                    "maximum": 10,
+                    "minimum": 1,
+                    "type": "integer",
+                    "description": "Most matching articles to return, 1 to 10. More than one only helps when no project is pinned and the title exists on several wikis.\n\nProvider reference: minimum 1; maximum 10; default 1."
+                  }
+                },
+                "required": [
+                  "limit",
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Parsed articles matching the exact title in the selected project or language. Carries no article_body, categories, templates or redirects; use articles/lookup for those. Empty when none match. Priced per article returned.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `name` | string | Article title as displayed on the page. |\n| `identifier` | number | MediaWiki page ID; not accepted as lookup input. |\n| `abstract` | string | Short plain-text summary of the article. |\n| `url` | string | Canonical article URL, for citation. |\n| `date_created` | string |  |\n| `date_modified` | string | When the current revision was saved. |\n| `in_language` | object | Language: identifier (for example en), name and direction. |\n| `is_part_of` | object | Project: identifier (for example enwiki), code, name and url. |\n| `namespace` | object | MediaWiki namespace; 0 is the main article namespace. |\n| `main_entity` | object | Connected Wikidata item: identifier (QID such as Q7186) and url. Pass the QID to wikidata/item. |\n| `additional_entities` | object[] | Other Wikidata entities used on the page. |\n| `image` | object | Main image: content_url, width, height and thumbnail. |\n| `license` | object[] | Licenses for the content, normally CC BY-SA 4.0, with name and url. |\n| `version` | object | Current revision: identifier, editor, comment, tags, size, and credibility signals under scores (revertrisk, referencerisk, referenceneed) and maintenance_tags. |\n| `description` | string | One-line description, shorter than abstract. |\n| `infoboxes` | object[] | Parsed infoboxes as trees of parts; field parts carry name and plain-text value. |\n| `sections` | object[] | Article body as trees of parts: sections, paragraphs (plain-text value with links and citations), lists and table references. The first section is Abstract. |\n| `references` | object[] | References cited in sections, by identifier, with type, template metadata (title, url, author) and rendered text. |\n| `tables` | object[] | Tables referenced from sections: identifier, headers, rows and confidence_score. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Structured article",
+        "tags": [
+          "Wikipedia"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "web",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0001,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "48027034aba4"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "wikipedia",
+        "x-aisa-runtime-operation": {
+          "operation_id": "wikipedia.articles.structured-contents",
+          "method": "POST",
+          "path": "/apis/v1/wikipedia/articles/structured-contents"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:919a764536667dba5d88bd042be4845ae85236f6c4e07c94a7a3a83e7164aea4"
+        },
+        "x-aisa-docs-url": "/api-reference/wikipedia/wikipedia-articles-structured-contents"
+      }
+    },
+    "/apis/v1/wikipedia/wikidata/item": {
+      "post": {
+        "description": "Read a Wikidata item by QID: labels, descriptions and aliases in every language, all statements (property values with qualifiers and references) and links to its article on each wiki. Use for structured facts such as dates, identifiers and relationships, or to find an entity's article title in another language through sitelinks. Beta upstream; a very large item can fail.",
+        "operationId": "wikipedia.wikidata.item",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "identifier": {
+                    "type": "string",
+                    "description": "Wikidata item ID (QID), for example `Q42`. An article's main_entity.identifier is its QID."
+                  },
+                  "fields": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Return only these fields, in dot notation, for example `entity.labels.en` or `entity.statements.P569`. Omit for the full record.\n\nProvider reference: maximum 50.",
+                    "x-alexandria-option-metadata": {
+                      "max": 50
+                    }
+                  }
+                },
+                "required": [
+                  "identifier"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One Wikidata item, latest revision. Entity data is CC0.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `name` | string | The entity identifier, for example Q42. |\n| `url` | string | Entity page on wikidata.org. |\n| `date_modified` | string |  |\n| `entity` | object | The entity: identifier, type (item or property), labels, descriptions and aliases keyed by language code, statements keyed by property ID (values, qualifiers, references) and sitelinks keyed by project, for example sitelinks.enwiki.title. |\n| `version` | object | Revision of the entity page. |\n| `license` | object[] | CC0 for Wikidata entity data. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Wikidata item",
+        "tags": [
+          "Wikipedia"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "web",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0001,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "bb317159b532"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "wikipedia",
+        "x-aisa-runtime-operation": {
+          "operation_id": "wikipedia.wikidata.item",
+          "method": "POST",
+          "path": "/apis/v1/wikipedia/wikidata/item"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:7c1ee2c6206206cab8529cfae1aa41b3400a6731328c2b19d714b6329f6125d1"
+        },
+        "x-aisa-docs-url": "/api-reference/wikipedia/wikipedia-wikidata-item"
+      }
+    },
+    "/apis/v1/wikipedia/wikidata/labels": {
+      "post": {
+        "description": "Get the name of a Wikidata item or property in every language, keyed by language code. Cheaper than wikidata/item when only names are needed, for example to label the property and value IDs in a statement. Beta upstream.",
+        "operationId": "wikipedia.wikidata.labels",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "identifier": {
+                    "type": "string",
+                    "description": "Wikidata item or property ID, for example `Q42` or `P31`."
+                  },
+                  "fields": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Return only these fields, in dot notation, for example `entity.labels.en` or `entity.statements.P569`. Omit for the full record.\n\nProvider reference: maximum 50.",
+                    "x-alexandria-option-metadata": {
+                      "max": 50
+                    }
+                  }
+                },
+                "required": [
+                  "identifier"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One object mapping Wikimedia language code to the label in that language, for example { en: \"Douglas Adams\", fr: \"Douglas Adams\" }.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `en` | string | English label; every other language code is a key the same way. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Wikidata labels",
+        "tags": [
+          "Wikipedia"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "web",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0001,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "bdb31f5855ea"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "wikipedia",
+        "x-aisa-runtime-operation": {
+          "operation_id": "wikipedia.wikidata.labels",
+          "method": "POST",
+          "path": "/apis/v1/wikipedia/wikidata/labels"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:97ef07ca9cdfd18fd51c1d72824c139b3ca641b0aa48b561397ca4f4d26b2fda"
+        },
+        "x-aisa-docs-url": "/api-reference/wikipedia/wikipedia-wikidata-labels"
+      }
+    },
+    "/apis/v1/wikipedia/wikidata/property": {
+      "post": {
+        "description": "Read a Wikidata property by PID: its labels, descriptions, datatype and statements. Use to learn what a statement key in an item, such as P569, means. Beta upstream.",
+        "operationId": "wikipedia.wikidata.property",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "identifier": {
+                    "type": "string",
+                    "description": "Wikidata property ID (PID), for example `P31` (instance of) or `P569` (date of birth)."
+                  },
+                  "fields": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Return only these fields, in dot notation, for example `entity.labels.en` or `entity.statements.P569`. Omit for the full record.\n\nProvider reference: maximum 50.",
+                    "x-alexandria-option-metadata": {
+                      "max": 50
+                    }
+                  }
+                },
+                "required": [
+                  "identifier"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One Wikidata property, latest revision. Entity data is CC0.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `name` | string | The entity identifier, for example Q42. |\n| `url` | string | Entity page on wikidata.org. |\n| `date_modified` | string |  |\n| `entity` | object | The entity: identifier, type (item or property), labels, descriptions and aliases keyed by language code, statements keyed by property ID (values, qualifiers, references) and sitelinks keyed by project, for example sitelinks.enwiki.title. |\n| `version` | object | Revision of the entity page. |\n| `license` | object[] | CC0 for Wikidata entity data. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Wikidata property",
+        "tags": [
+          "Wikipedia"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "web",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0001,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "9d836cb09156"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "wikipedia",
+        "x-aisa-runtime-operation": {
+          "operation_id": "wikipedia.wikidata.property",
+          "method": "POST",
+          "path": "/apis/v1/wikipedia/wikidata/property"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:22c87559d418664f926d2a887a035ff405bab1c6279488428f005308edf4ed7b"
+        },
+        "x-aisa-docs-url": "/api-reference/wikipedia/wikipedia-wikidata-property"
+      }
+    }
+  }
 }

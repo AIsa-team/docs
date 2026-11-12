@@ -5,7 +5,16 @@
         "scheme": "bearer",
         "type": "http"
       }
-    }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
   },
   "info": {
     "description": "",
@@ -33,7 +42,7 @@
       "seed_month": "2026-10",
       "composer_version": "29",
       "response_pending": [],
-      "document_hash": "sha256:b828339279ba45b32f9ee87fb24a38945802cf0ea6053937e38d3639e295a88c"
+      "document_hash": "sha256:9cdea7b6b46060e5a634c00b3a633ff14cc7b7835e10e9683f74e612153eea9f"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -86,5 +95,1199 @@
       "url": "https://dev-api.aisa.one"
     }
   ],
-  "paths": {}
+  "paths": {
+    "/apis/v1/gazette-gc-ca/legislation/get-document": {
+      "post": {
+        "description": "Use for regulation detail. 'registration' finds the edition from the year page, then the issue index (three requests); 'url' reads a page from get_issue, list_issues or list_consultations directly (French -fra URLs are read in English). Part I notice pages hold every notice of one section of the issue.",
+        "operationId": "gazette-gc-ca.legislation.get-document",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "max_text_chars": {
+                    "type": "number",
+                    "description": "Cap on the returned text (default 20000). 0 returns metadata only.\n\nProvider reference: minimum 0; maximum 200000.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 0,
+                      "max": 200000
+                    }
+                  },
+                  "registration": {
+                    "type": "string",
+                    "description": "Part II registration number: SOR/YYYY-N or SI/YYYY-N (DORS/TR and two-digit years accepted). Mutually exclusive with url."
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "A gazette.gc.ca /rp-pr/p1 or /rp-pr/p2 HTML document URL. Mutually exclusive with registration."
+                  }
+                },
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "registration": {}
+                        },
+                        "required": [
+                          "registration"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "url": {}
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "max_text_chars": 600,
+                    "registration": "SOR/2026-206"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Read one Canada Gazette document: a Part II regulation or statutory instrument by registration number (SOR/2026-206, SI/2026-58) or any Part I or Part II page by URL. Returns title, issue, registration date, enabling act, Privy Council number, the Part I prepublication statement and date from the impact analysis (proposal-to-final link), for Part I proposed regulations the statutory authorities, sponsoring department and comment period (ORCS id, closing date), and the plain text.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `consultation` | object | Part I proposed regulations open to online comment. |\n| `enabling_act` | string | Part II: enabling statute line as printed (upper case), e.g. 'EXPLOSIVES ACT'. |\n| `issue` | object |  |\n| `kind` | string | regulation = SOR, statutory_instrument = SI (Part II); proposed_regulation = a Part I regN page; notice = any other Part I page. |\n| `license` | object |  |\n| `observed_at_ms` | number |  |\n| `part` | string |  |\n| `prepublication` | object | Part II: the impact analysis sentence on prepublication in Part I; null when the page has none. |\n| `privy_council_number` | string | Order in Council number, e.g. 'P.C. 2026-960', when the instrument was made by the Governor in Council. |\n| `registration` | string | Part II: SOR/YYYY-N or SI/YYYY-N. |\n| `registration_date` | string | Part II: YYYY-MM-DD. |\n| `source_url` | string |  |\n| `sponsoring_department` | string |  |\n| `statutory_authorities` | string[] | Part I proposed regulations: enabling statutes. |\n| `text` | string | Plain text, one line per block, cut at max_text_chars. |\n| `text_chars` | number |  |\n| `text_truncated` | boolean |  |\n| `title` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-25.",
+                    "value": {
+                      "consultation": null,
+                      "enabling_act": "EXPLOSIVES ACT",
+                      "issue": {
+                        "date": "2026-10-21",
+                        "extra": false,
+                        "index_url": "https://gazette.gc.ca/rp-pr/p2/2026/2026-10-21/html/index-eng.html",
+                        "number": 21,
+                        "volume": 160
+                      },
+                      "kind": "regulation",
+                      "license": {
+                        "attribution": "Contains information licensed under the Open Government Licence - Canada. Source: Canada Gazette, Public Services and Procurement Canada (gazette.gc.ca).",
+                        "name": "Open Government Licence - Canada 2.0"
+                      },
+                      "observed_at_ms": 1792969185459,
+                      "part": "II",
+                      "prepublication": {
+                        "date": "2025-11-01",
+                        "part_i_issue_url": "https://gazette.gc.ca/rp-pr/p1/2025/2025-11-01/html/index-eng.html",
+                        "statement": "The proposed amendments were prepublished in the Canada Gazette, Part I, on November 1, 2025, followed by a 30-day comment period ending November 30, 2025."
+                      },
+                      "privy_council_number": "P.C. 2026-960",
+                      "registration": "SOR/2026-206",
+                      "registration_date": "2026-10-09",
+                      "source_url": "https://gazette.gc.ca/rp-pr/p2/2026/2026-10-21/html/sor-dors206-eng.html",
+                      "sponsoring_department": null,
+                      "statutory_authorities": [],
+                      "text": "Regulations Amending the Explosives Regulations, 2013: SOR/2026-206\nCanada Gazette, Part II, Volume 160, Number 21\nRegistration\nSOR/2026-206 October 9, 2026\nEXPLOSIVES ACT\nP.C. 2026-960 October 9, 2026\nHer Excellency the Governor General in Council, on the recommendation of the Minister of Natural Resources, makes the annexed Regulations Amending the Explosives Regulations, 2013 under section 5a of the Explosives Act b.\nRegulations Amending the Explosives Regulations, 2013\nAmendments\n1 Paragraph 4(10)(f) of the Explosives Regulations, 2013 1 is replaced by the following:\n(f) model, high-power ",
+                      "text_chars": 197204,
+                      "text_truncated": true,
+                      "title": "Regulations Amending the Explosives Regulations, 2013"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Get document",
+        "tags": [
+          "Canada Gazette"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-constraints": {
+          "required_any_of": [
+            [
+              {
+                "in": "body",
+                "name": "option_registration",
+                "selector": "/registration"
+              },
+              {
+                "in": "body",
+                "name": "option_url",
+                "selector": "/url"
+              }
+            ]
+          ]
+        },
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "960f1156833f"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "gazette-gc-ca",
+        "x-aisa-runtime-operation": {
+          "operation_id": "gazette-gc-ca.legislation.get-document",
+          "method": "POST",
+          "path": "/apis/v1/gazette-gc-ca/legislation/get-document"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:02b845f54d55ef023cc0b531883d581e301590bfc2e53ad3b2b7c9ae3778af06"
+        },
+        "x-aisa-docs-url": "/api-reference/gazette-gc-ca/gazette-gc-ca-legislation-get-document"
+      }
+    },
+    "/apis/v1/gazette-gc-ca/legislation/get-issue": {
+      "post": {
+        "description": "Use after list_issues, or when you know the issue date (Part I Saturdays, Part II Wednesdays). Extra editions have no index; open their html_url with get_document.",
+        "operationId": "gazette-gc-ca.legislation.get-issue",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "date": {
+                    "type": "string",
+                    "description": "Issue date, YYYY-MM-DD, e.g. 2026-10-21. Pattern: ^\\d{4}-\\d{2}-\\d{2}$."
+                  },
+                  "part": {
+                    "type": "string",
+                    "description": "part\n\nProvider reference: allowed values [\"I\", \"II\"]."
+                  }
+                },
+                "required": [
+                  "date",
+                  "part"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "date": "2026-10-21",
+                    "part": "II"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Table of contents of one regular Canada Gazette issue. Part I: every notice and proposed regulation with its section, organization and heading. Part II: every regulation and statutory instrument with its registration number (SOR/SI), registration date and enabling act. Each item links to its document.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `date` | string |  |\n| `entries` | object[] |  |\n| `license` | object |  |\n| `number` | number |  |\n| `observed_at_ms` | number |  |\n| `part` | string |  |\n| `source_url` | string |  |\n| `volume` | number | From the index heading; null on older indexes headed only 'INDEX'. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-25.",
+                    "value": {
+                      "count": 7,
+                      "date": "2026-10-21",
+                      "entries": [
+                        {
+                          "comment": null,
+                          "enabling_act": "Canada Post Corporation Act",
+                          "heading": null,
+                          "organization": null,
+                          "registration": "SOR/2026-207",
+                          "registration_date": "2026-10-09",
+                          "section": null,
+                          "title": "Canada Post Corporation Act (Miscellaneous Program) — Regulations Amending Certain Regulations Made Under the",
+                          "url": "https://gazette.gc.ca/rp-pr/p2/2026/2026-10-21/html/sor-dors207-eng.html"
+                        },
+                        {
+                          "comment": "new",
+                          "enabling_act": "Financial Administration Act",
+                          "heading": null,
+                          "organization": null,
+                          "registration": "SOR/2026-204",
+                          "registration_date": "2026-09-25",
+                          "section": null,
+                          "title": "Canadian Dental Care Plan Eligibility Issues — Remission Order in Respect of",
+                          "url": "https://gazette.gc.ca/rp-pr/p2/2026/2026-10-21/html/sor-dors204-eng.html"
+                        },
+                        {
+                          "comment": null,
+                          "enabling_act": "Canadian Environmental Protection Act, 1999",
+                          "heading": null,
+                          "organization": null,
+                          "registration": "SOR/2026-208",
+                          "registration_date": "2026-10-09",
+                          "section": null,
+                          "title": "Domestic Substances List — Order 2026-87-22-01 Amending the",
+                          "url": "https://gazette.gc.ca/rp-pr/p2/2026/2026-10-21/html/sor-dors208-eng.html"
+                        },
+                        {
+                          "comment": null,
+                          "enabling_act": "Explosives Act",
+                          "heading": null,
+                          "organization": null,
+                          "registration": "SOR/2026-206",
+                          "registration_date": "2026-10-09",
+                          "section": null,
+                          "title": "Explosives Regulations, 2013 — Regulations Amending the",
+                          "url": "https://gazette.gc.ca/rp-pr/p2/2026/2026-10-21/html/sor-dors206-eng.html"
+                        },
+                        {
+                          "comment": null,
+                          "enabling_act": "First Nations Elections Act",
+                          "heading": null,
+                          "organization": null,
+                          "registration": "SOR/2026-205",
+                          "registration_date": "2026-10-07",
+                          "section": null,
+                          "title": "First Nations Elections Act (Musk-kosiminiziibing) — Order Amending the Schedule to the",
+                          "url": "https://gazette.gc.ca/rp-pr/p2/2026/2026-10-21/html/sor-dors205-eng.html"
+                        },
+                        {
+                          "comment": null,
+                          "enabling_act": "Indian Act",
+                          "heading": null,
+                          "organization": null,
+                          "registration": "SOR/2026-197",
+                          "registration_date": "2026-10-07",
+                          "section": null,
+                          "title": "Indian Bands Council Elections Order (Musk-kosiminiziibing) — Order Amending the",
+                          "url": "https://gazette.gc.ca/rp-pr/p2/2026/2026-10-21/html/sor-dors197-eng.html"
+                        },
+                        {
+                          "comment": "new",
+                          "enabling_act": "An Act to amend the Criminal Code, the Sex Offender Information Registration Act and the International Transfer of Offenders Act",
+                          "heading": null,
+                          "organization": null,
+                          "registration": "SI/2026-58",
+                          "registration_date": "2026-10-21",
+                          "section": null,
+                          "title": "Order Fixing the 90th Day After the Day on Which This Order Is Made as the Day on Which Section 35 of An Act to amend the Criminal Code, the Sex Offender Information Registration Act and the International Transfer of Offenders Act Comes into Force",
+                          "url": "https://gazette.gc.ca/rp-pr/p2/2026/2026-10-21/html/si-tr58-eng.html"
+                        }
+                      ],
+                      "license": {
+                        "attribution": "Contains information licensed under the Open Government Licence - Canada. Source: Canada Gazette, Public Services and Procurement Canada (gazette.gc.ca).",
+                        "name": "Open Government Licence - Canada 2.0"
+                      },
+                      "number": 21,
+                      "observed_at_ms": 1792969185293,
+                      "part": "II",
+                      "source_url": "https://gazette.gc.ca/rp-pr/p2/2026/2026-10-21/html/index-eng.html",
+                      "volume": 160
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Get issue",
+        "tags": [
+          "Canada Gazette"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "aa91cd3a889c"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "gazette-gc-ca",
+        "x-aisa-runtime-operation": {
+          "operation_id": "gazette-gc-ca.legislation.get-issue",
+          "method": "POST",
+          "path": "/apis/v1/gazette-gc-ca/legislation/get-issue"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:28e4de3a587ace19806fa4d9ba4626cc724a43faff5e46434f73ec261da136e1"
+        },
+        "x-aisa-docs-url": "/api-reference/gazette-gc-ca/gazette-gc-ca-legislation-get-issue"
+      }
+    },
+    "/apis/v1/gazette-gc-ca/legislation/list-consultations": {
+      "post": {
+        "description": "Use to find current consultations or a proposal by name before reading it with get_document; the closed list spans past consultations whose comments are published.",
+        "operationId": "gazette-gc-ca.legislation.list-consultations",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "Words that must all appear in the title (case-insensitive).",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Default open.\n\nProvider reference: allowed values [\"open\", \"closed\"].",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "open",
+                        "closed"
+                      ]
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "query": "Foreign Influence Transparency",
+                    "status": "closed"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Proposed regulations from Canada Gazette Part I that are open for comment (with closing dates) or closed with published comments, optionally filtered by title words.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `consultations` | object[] |  |\n| `count` | number |  |\n| `license` | object |  |\n| `observed_at_ms` | number |  |\n| `query` | string |  |\n| `source_url` | string |  |\n| `status` | string |  |\n| `total` | number | Rows on the page before filtering. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-25.",
+                    "value": {
+                      "consultations": [
+                        {
+                          "comment_close": null,
+                          "comment_close_date": null,
+                          "published": "2026-01-03",
+                          "title": "Foreign Influence Transparency and Accountability Regulations",
+                          "url": "https://gazette.gc.ca/rp-pr/p1/2026/2026-01-03/html/reg1-eng.html"
+                        }
+                      ],
+                      "count": 1,
+                      "license": {
+                        "attribution": "Contains information licensed under the Open Government Licence - Canada. Source: Canada Gazette, Public Services and Procurement Canada (gazette.gc.ca).",
+                        "name": "Open Government Licence - Canada 2.0"
+                      },
+                      "observed_at_ms": 1792969185493,
+                      "query": "Foreign Influence Transparency",
+                      "source_url": "https://gazette.gc.ca/consult/consult3-eng.html",
+                      "status": "closed",
+                      "total": 250
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "List consultations",
+        "tags": [
+          "Canada Gazette"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "f1f72169babb"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "gazette-gc-ca",
+        "x-aisa-runtime-operation": {
+          "operation_id": "gazette-gc-ca.legislation.list-consultations",
+          "method": "POST",
+          "path": "/apis/v1/gazette-gc-ca/legislation/list-consultations"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:b874048d6e9ac92dec4c18861b607e78440db2422be046e6ea21c27d74490b61"
+        },
+        "x-aisa-docs-url": "/api-reference/gazette-gc-ca/gazette-gc-ca-legislation-list-consultations"
+      }
+    },
+    "/apis/v1/gazette-gc-ca/legislation/list-issues": {
+      "post": {
+        "description": "Start here to find an issue date or the edition that carries a regulation. Part I is weekly (Saturdays: notices and proposed regulations), Part II every second Wednesday (registered regulations and statutory instruments), Part III when Acts receive royal assent. Years from 1998.",
+        "operationId": "gazette-gc-ca.legislation.list-issues",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "part": {
+                    "type": "string",
+                    "description": "Gazette part.\n\nProvider reference: allowed values [\"I\", \"II\", \"III\"]."
+                  },
+                  "year": {
+                    "type": "number",
+                    "description": "Calendar year, e.g. 2026.\n\nProvider reference: minimum 1998; maximum 2100."
+                  }
+                },
+                "required": [
+                  "part",
+                  "year"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "part": "II",
+                    "year": 2025
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List the editions of one Canada Gazette part for one year: date, regular or extra, volume and number, HTML and PDF links, the SOR and SI registration ranges of each Part II edition, and the Acts of each Part III volume.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `issues` | object[] |  |\n| `license` | object |  |\n| `observed_at_ms` | number |  |\n| `part` | string |  |\n| `source_url` | string |  |\n| `volume` | number | Volume printed in the page heading. |\n| `year` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-25.",
+                    "value": {
+                      "count": 32,
+                      "issues": [
+                        {
+                          "acts": [],
+                          "date": "2025-12-31",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-12-31/html/index-eng.html",
+                          "label": "Part II, volume 159, number 27",
+                          "number": 27,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-12-31/pdf/g2-15927.pdf",
+                          "si_registrations": "SI/2025-128 to 133",
+                          "sor_registrations": "SOR/2025-248 to 249 and 252 to 254 and 265 to 287",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-12-17",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-12-17/html/index-eng.html",
+                          "label": "Part II, volume 159, number 26",
+                          "number": 26,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-12-17/pdf/g2-15926.pdf",
+                          "si_registrations": "SI/2025-108 to 127",
+                          "sor_registrations": "SOR/2025-239 to 247 and 250 to 251 and 255 to 264",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-12-17",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-12-17/html/sor-dors248-eng.html",
+                          "label": "SOR/2025-248",
+                          "number": null,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-12-17/pdf/g2-15926sup.pdf",
+                          "si_registrations": null,
+                          "sor_registrations": "SOR/2025-248",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-12-03",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-12-03/html/index-eng.html",
+                          "label": "Part II, volume 159, number 25",
+                          "number": 25,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-12-03/pdf/g2-15925.pdf",
+                          "si_registrations": null,
+                          "sor_registrations": "SOR/2025-229 to 238",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-11-19",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-11-19/html/index-eng.html",
+                          "label": "Part II, volume 159, number 24",
+                          "number": 24,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-11-19/pdf/g2-15924.pdf",
+                          "si_registrations": "SI/2025-106 to 107",
+                          "sor_registrations": "SOR/2025-215 to 228",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-11-05",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-11-05/html/index-eng.html",
+                          "label": "Part II, volume 159, number 23",
+                          "number": 23,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-11-05/pdf/g2-15923.pdf",
+                          "si_registrations": "SI/2025-104 to 105",
+                          "sor_registrations": "SOR/2025-205 and 210 to 214",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-10-22",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-10-22/html/index-eng.html",
+                          "label": "Part II, volume 159, number 22",
+                          "number": 22,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-10-22/pdf/g2-15922.pdf",
+                          "si_registrations": "SI/2025-50 and 103",
+                          "sor_registrations": "SOR/2025-202 and 209",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-10-08",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-10-08/html/index-eng.html",
+                          "label": "Part II, volume 159, number 21",
+                          "number": 21,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-10-08/pdf/g2-15921.pdf",
+                          "si_registrations": "SI/2025-102",
+                          "sor_registrations": "SOR/2025-188 to 201",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-09-24",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-09-24/html/index-eng.html",
+                          "label": "Part II, volume 159, number 20",
+                          "number": 20,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-09-24/pdf/g2-15920.pdf",
+                          "si_registrations": "SI/2025-96 to 97",
+                          "sor_registrations": "SOR/2025-182 to 187",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-09-10",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-09-10/html/index-eng.html",
+                          "label": "Part II, volume 159, number 19",
+                          "number": 19,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-09-10/pdf/g2-15919.pdf",
+                          "si_registrations": null,
+                          "sor_registrations": "SOR/2025-162 to 181",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-08-27",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-08-27/html/index-eng.html",
+                          "label": "Part II, volume 159, number 18",
+                          "number": 18,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-08-27/pdf/g2-15918.pdf",
+                          "si_registrations": null,
+                          "sor_registrations": "SOR/2025-159 to 161",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-08-13",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-08-13/html/index-eng.html",
+                          "label": "Part II, volume 159, number 17",
+                          "number": 17,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-08-13/pdf/g2-15917.pdf",
+                          "si_registrations": "SI/2025-92",
+                          "sor_registrations": "SOR/2025-152 to 158",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-07-30",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-07-30/html/index-eng.html",
+                          "label": "Part II, volume 159, number 16",
+                          "number": 16,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-07-30/pdf/g2-15916.pdf",
+                          "si_registrations": null,
+                          "sor_registrations": "SOR/2025-151",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-07-16",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-07-16/html/index-eng.html",
+                          "label": "Part II, volume 159, number 15",
+                          "number": 15,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-07-16/pdf/g2-15915.pdf",
+                          "si_registrations": "SI/2025-88 to 91",
+                          "sor_registrations": "SOR/2025-147 to 150",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-07-02",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-07-02/html/index-eng.html",
+                          "label": "Part II, volume 159, number 14",
+                          "number": 14,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-07-02/pdf/g2-15914.pdf",
+                          "si_registrations": null,
+                          "sor_registrations": "SOR/2025-137 to 146",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-06-18",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-06-18/html/index-eng.html",
+                          "label": "Part II, volume 159, number 13",
+                          "number": 13,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-06-18/pdf/g2-15913.pdf",
+                          "si_registrations": null,
+                          "sor_registrations": "SOR/2025-132 to 136",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-06-04",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-06-04/html/index-eng.html",
+                          "label": "Part II, volume 159, number 12",
+                          "number": 12,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-06-04/pdf/g2-15912.pdf",
+                          "si_registrations": "SI/2025-61 to 85",
+                          "sor_registrations": "SOR/2025-126 to 131",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-05-21",
+                          "edition": "extra",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-05-21-x4/html/si-tr61-eng.html",
+                          "label": "Part II, volume 159, Extra number 4",
+                          "number": 4,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-05-21-x4/pdf/g2-159x4.pdf",
+                          "si_registrations": "SI/2025-61",
+                          "sor_registrations": null,
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-05-21",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-05-21/html/index-eng.html",
+                          "label": "Part II, volume 159, number 11",
+                          "number": 11,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-05-21/pdf/g2-15911.pdf",
+                          "si_registrations": null,
+                          "sor_registrations": "SOR/2025-125",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-05-07",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-05-07/html/index-eng.html",
+                          "label": "Part II, volume 159, number 10",
+                          "number": 10,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-05-07/pdf/g2-15910.pdf",
+                          "si_registrations": "SI/2025-60",
+                          "sor_registrations": "SOR/2025-122 to 124",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-04-23",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-04-23/html/index-eng.html",
+                          "label": "Part II, volume 159, number 9",
+                          "number": 9,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-04-23/pdf/g2-15909.pdf",
+                          "si_registrations": "SI/2025-",
+                          "sor_registrations": "SOR/2025-118 to 121",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-04-09",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-04-09/html/index-eng.html",
+                          "label": "Part II, volume 159, number 8",
+                          "number": 8,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-04-09/pdf/g2-15908.pdf",
+                          "si_registrations": "SI/2025-57 to 59",
+                          "sor_registrations": "SOR/2025-51, 55 and 109 to 117",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-03-26",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-03-26/html/index-eng.html",
+                          "label": "Part II, volume 159, number 7",
+                          "number": 7,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-03-26/pdf/g2-15907.pdf",
+                          "si_registrations": "SI/2025-24 to 56",
+                          "sor_registrations": "SOR/2025-67 to 108",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-03-24",
+                          "edition": "extra",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-03-24-x3/html/si-tr57-eng.html",
+                          "label": "SI/2025-57",
+                          "number": null,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-03-24-x3/pdf/g2-159x3.pdf",
+                          "si_registrations": "SI/2025-57 to 59",
+                          "sor_registrations": null,
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-03-15",
+                          "edition": "extra",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-03-15-x2/html/sor-dors107-eng.html",
+                          "label": "SOR-DOR107",
+                          "number": null,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-03-15-x2/pdf/g2-159x2.pdf",
+                          "si_registrations": null,
+                          "sor_registrations": "SOR/2025-107 to 108",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-03-12",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-03-12/html/index-eng.html",
+                          "label": "Part II, volume 159, number 6",
+                          "number": 6,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-03-12/pdf/g2-15906.pdf",
+                          "si_registrations": "SI/2025-21 to 23",
+                          "sor_registrations": "SOR/2025-30 to 66",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-02-26",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-02-26/html/index-eng.html",
+                          "label": "Part II, volume 159, number 5",
+                          "number": 5,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-02-26/pdf/g2-15905.pdf",
+                          "si_registrations": "SI/2025-12 to 20",
+                          "sor_registrations": "SOR/2025-21 to 29 and 262 to 263",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-02-12",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-02-12/html/index-eng.html",
+                          "label": "Part II, volume 159, number 4",
+                          "number": 4,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-02-12/pdf/g2-15904.pdf",
+                          "si_registrations": null,
+                          "sor_registrations": "SOR/2025-2 to 16",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-01-29",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-01-29/html/index-eng.html",
+                          "label": "Part II, volume 159, number 3",
+                          "number": 3,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-01-29/pdf/g2-15903.pdf",
+                          "si_registrations": "SI/2025-11",
+                          "sor_registrations": "SOR/2025-1",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-01-15",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-01-15/html/index-eng.html",
+                          "label": "Part II, volume 159, number 2",
+                          "number": 2,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-01-15/pdf/g2-15902.pdf",
+                          "si_registrations": "SI/2025-6 to 10",
+                          "sor_registrations": "SOR/2024-287 to 295",
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-01-06",
+                          "edition": "extra",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-01-06-x1/html/si-tr9-eng.html",
+                          "label": "SI/2025-9",
+                          "number": null,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-01-06-x1/pdf/g2-159x1.pdf",
+                          "si_registrations": "SI/2025-9 to 10",
+                          "sor_registrations": null,
+                          "volume": 159
+                        },
+                        {
+                          "acts": [],
+                          "date": "2025-01-01",
+                          "edition": "regular",
+                          "html_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-01-01/html/index-eng.html",
+                          "label": "Part II, volume 159, number 1",
+                          "number": 1,
+                          "pdf_url": "https://gazette.gc.ca/rp-pr/p2/2025/2025-01-01/pdf/g2-15901.pdf",
+                          "si_registrations": "SI/2025-1 to 5",
+                          "sor_registrations": "SOR/2024-264 to 286",
+                          "volume": 159
+                        }
+                      ],
+                      "license": {
+                        "attribution": "Contains information licensed under the Open Government Licence - Canada. Source: Canada Gazette, Public Services and Procurement Canada (gazette.gc.ca).",
+                        "name": "Open Government Licence - Canada 2.0"
+                      },
+                      "observed_at_ms": 1792969185269,
+                      "part": "II",
+                      "source_url": "https://gazette.gc.ca/rp-pr/p2/2025/index-eng.html",
+                      "volume": 159,
+                      "year": 2025
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "List issues",
+        "tags": [
+          "Canada Gazette"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "81dee00a3921"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "gazette-gc-ca",
+        "x-aisa-runtime-operation": {
+          "operation_id": "gazette-gc-ca.legislation.list-issues",
+          "method": "POST",
+          "path": "/apis/v1/gazette-gc-ca/legislation/list-issues"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:c6eef70a32241b90530d298107c2799488fe4bdefca35cf264bcf2124cdc5d99"
+        },
+        "x-aisa-docs-url": "/api-reference/gazette-gc-ca/gazette-gc-ca-legislation-list-issues"
+      }
+    }
+  }
 }

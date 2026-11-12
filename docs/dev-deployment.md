@@ -82,6 +82,13 @@ publication on dev, change the default branch, approve source evidence, or
 notify consumers. All source acquisition is read-only; no business API or
 upstream provider calls are made.
 
+Dev navigation checks use `regroup_api_reference.py --check --preserve-navigation`
+to match the generator's retained directory hierarchy. The check still requires
+unique English and Chinese page sets to mirror each other, and verifies the
+platform index and Data APIs cards against that navigation. Page, slug and link
+checks also run. Production retains the default regrouping and translation checks.
+
+
 The production source uses the existing `fetch_runtime_release` reader:
 
 1. Discover the fresh published release at `https://api.aisa.one/public/api-contract/current`.
