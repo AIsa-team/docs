@@ -58,7 +58,7 @@ the new prose layer records its original document hash and exact change manifest
 Historical schema tests validate and undo that layer before their older checks;
 a separate test proves that no non-prose declaration changed in any of 43 files.
 
-The standalone, unbound Gemini contract also receives its missing description, with an exact non-prose hash check. Other generated published JSON/pages are not rewritten. The normal reviewed source
+The standalone, unbound Gemini contract also receives its missing description, with an exact non-prose hash check. Its Chinese copy, translation memory, aggregate OpenAPI and derived catalog hashes are synchronized. Other generated provider JSON/pages are not rewritten. The normal reviewed source
 bundle, Runtime contract publication and Docs projection are still required for
 customer-facing adoption. Source-review receipts, production data, prices,
 request/response schemas and routing are not modified by this work. Local tests
@@ -81,6 +81,13 @@ later prose edits, schema drift, reference cycles, identity mismatches, no chang
 to non-prose fields and facts-hash updates.
 
 CI failures must be resolved or reported without weakening publication checks.
-The first remote artifact check reported a Supadata response-contract mismatch
-and missing current source-maintenance evidence. Neither is justification for
-changing unrelated response schemas or inventing source-review receipts.
+The response comparison resolves discriminator mapping targets and recursive
+references by contract rather than generated component namespace. This avoids a
+false Supadata mismatch after prose changes the source hash; changed targets and
+constraints still fail validation.
+
+The official Polymarket Data v1 specification URL currently returns 404; its
+source-maintenance gate remains blocking. The official documentation index now
+links a v2 specification, which is not evidence that the existing v1 contract is
+unchanged. No source-review receipt is invented and no schema migration is
+included in this prose change.
