@@ -35,36 +35,152 @@ x-aisa-operation-id: "earth-search-aws-element84-com.satellite-imagery.vegetatio
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "geometry": {}
-            }
-          },
-          "minimal": {
-            "value": {
-              "geometry": {}
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
+            "collection": {
+              "type": "string",
+              "description": "`sentinel-2-c1-l2a` (Collection 1, default), `sentinel-2-l2a` (legacy archive, denser before 2023) or `auto` (c1, falling back to the legacy collection when c1 matches nothing).\n\nProvider reference: allowed values [\"auto\", \"sentinel-2-c1-l2a\", \"sentinel-2-l2a\"].",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "auto",
+                  "sentinel-2-c1-l2a",
+                  "sentinel-2-l2a"
+                ]
+              }
+            },
+            "end": {
+              "type": "string",
+              "description": "Window end, YYYY-MM-DD (UTC), inclusive. Defaults to today. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "geometry": {
               "additionalProperties": true,
-              "type": "object"
+              "type": "object",
+              "description": "GeoJSON geometry in WGS84 with [lon, lat] positions: Point, Polygon, MultiPolygon, or a Feature wrapping one. Rings must be closed; altitude is ignored; FeatureCollection and antimeridian-crossing shapes are refused (invalid_input with a JSON pointer and a stable code: ring_not_closed, latitude, longitude, too_large, too_many_vertices, feature_collection, antimeridian, unsupported_type). Open because GeoJSON allows foreign members (properties, id, bbox)."
+            },
+            "indices": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "indices",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "max_cloud_cover_pct": {
+              "type": "number",
+              "description": "Keep scenes whose tile-level eo:cloud_cover is below this percentage (Earth Search `query` filter).\n\nProvider reference: minimum 0; maximum 100.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0,
+                "max": 100
+              }
+            },
+            "max_field_cloud_share": {
+              "type": "number",
+              "description": "Skip reflectance reads when the SCL cloud share over the geometry exceeds this.\n\nProvider reference: minimum 0; maximum 1; default 0.3.",
+              "default": 0.3,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0,
+                "max": 1
+              }
+            },
+            "max_scenes": {
+              "type": "number",
+              "description": "Newest distinct acquisitions to read when searching a window.\n\nProvider reference: minimum 1; maximum 6; default 3.",
+              "default": 3,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 6
+              }
+            },
+            "scene_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Specific scenes to read; otherwise the window is searched.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "start": {
+              "type": "string",
+              "description": "Window start, YYYY-MM-DD (UTC). Earth Search holds Sentinel-2 L2A from 2015-06-27. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "zone_grid": {
+              "type": "number",
+              "description": "Zones per side of the grid over the geometry's bbox (1 disables).\n\nProvider reference: minimum 1; maximum 6; default 3.",
+              "default": 3,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 6
+              }
             }
           },
           "required": [
             "geometry"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "geometry": {
+                "coordinates": [
+                  [
+                    [
+                      -86.93,
+                      35.853
+                    ],
+                    [
+                      -86.92,
+                      35.853
+                    ],
+                    [
+                      -86.92,
+                      35.859
+                    ],
+                    [
+                      -86.93,
+                      35.859
+                    ],
+                    [
+                      -86.93,
+                      35.853
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+              "indices": [
+                "ndvi",
+                "evi",
+                "ndmi"
+              ],
+              "scene_ids": [
+                "S2B_T16SDE_20260903T163711_L2A"
+              ]
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

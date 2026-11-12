@@ -35,35 +35,155 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "url": "https://example.com"
-            }
-          },
-          "minimal": {
-            "value": {
-              "url": "https://example.com"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
+            "bbox": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "description": "[west, south, east, north] in WGS84 degrees.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "count_only": {
+              "type": "boolean",
+              "description": "Return only total_count, no rows.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "distance_m": {
+              "type": "number",
+              "description": "Search radius around point, in metres (default 0: features containing the point).\n\nProvider reference: minimum 0; maximum 50000.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0,
+                "max": 50000
+              }
+            },
+            "layer": {
+              "type": "number",
+              "description": "Layer id within the service, when the URL names the service only.\n\nProvider reference: minimum 0; maximum 999999.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0,
+                "max": 999999
+              }
+            },
+            "limit": {
+              "type": "number",
+              "description": "Rows per page; the layer's maxRecordCount may cap it lower.\n\nProvider reference: minimum 1; maximum 200; default 25.",
+              "default": 25,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 200
+              }
+            },
+            "offset": {
+              "type": "number",
+              "description": "Rows to skip (next_offset from the previous page).\n\nProvider reference: minimum 0; maximum 100000000; default 0.",
+              "default": 0,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0,
+                "max": 100000000
+              }
+            },
+            "order_by": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "`FIELD` or `FIELD DESC`. Default: object id ascending, for stable paging.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "out_fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Fields to return (case-insensitive, checked against the layer). Default: all fields.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "point": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "WGS84 point: features at (or within distance_m of) this location.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "return_geometry": {
+              "type": "boolean",
+              "description": "Include GeoJSON geometry per row (WGS84).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "spatial_rel": {
+              "type": "string",
+              "description": "Relation between the features and point/bbox.\n\nProvider reference: allowed values [\"intersects\", \"contains\", \"within\", \"envelope_intersects\"]; default \"intersects\".",
+              "default": "intersects",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "intersects",
+                  "contains",
+                  "within",
+                  "envelope_intersects"
+                ]
+              }
+            },
             "url": {
-              "type": "string"
+              "type": "string",
+              "description": "ArcGIS REST service or layer URL: https://<host>/<adaptor>/rest/services/<folder>/<service>/FeatureServer[/<layer>] or …/MapServer[/<layer>], on ArcGIS Online (services*.arcgis.com/<orgId>/arcgis/rest/services/…) or an agency's ArcGIS Server (gis.<agency>.gov/arcgis/rest/services/…). Query strings are ignored; URLs carrying a token or key are refused."
+            },
+            "where": {
+              "type": "string",
+              "description": "ArcGIS SQL-92 where clause, e.g. `PIN = '123-456-789'`, `ZONE_CODE LIKE 'R-%'`, `FLD_ZONE IN ('AE','VE')`.\n\nProvider reference: default \"1=1\".",
+              "default": "1=1",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
           "required": [
             "url"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "out_fields": [
+                "FLD_ZONE",
+                "ZONE_SUBTY",
+                "SFHA_TF",
+                "STATIC_BFE",
+                "DFIRM_ID"
+              ],
+              "point": {
+                "lat": 29.9511,
+                "lon": -90.0715
+              },
+              "url": "https://services5.arcgis.com/7weheFjxuNkGGiZi/arcgis/rest/services/USA_Flood_Hazard_Areas_view/FeatureServer/0"
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

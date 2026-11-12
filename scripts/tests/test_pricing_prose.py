@@ -14,6 +14,32 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class PricingProseTests(unittest.TestCase):
+    def test_reviewed_response_field_tables_preserve_business_prices(self):
+        from runtime_localize_openapi_zh import localize_tree, key_for
+        paths = {
+            '/apis/v1/littlecaesars-com/restaurants/get-delivery-fee',
+            '/apis/v1/notion-com/developer-documentation/get-pricing',
+            '/apis/v1/play-google-com/media/app',
+        }
+        checked = set()
+        for file in (ROOT / 'openapi/upstream').glob('alexandria-contract-part-*.json'):
+            source = json.loads(file.read_text())
+            for path in paths & source['paths'].keys():
+                response = source['paths'][path]['post']['responses']['200']
+                document = {'paths': {path: {'post': {'operationId': 'test',
+                    'description': 'Billed $0.02 per call.', 'responses': {'200': response}}}}}
+                cleaned = clean_document(document)
+                self.assertEqual(cleaned['paths'][path]['post']['responses']['200'], response)
+                self.assertNotIn('$0.02', cleaned['paths'][path]['post']['description'])
+                self.assertEqual(clean_document(cleaned), cleaned)
+                text = response['description']
+                translated = '响应字段。\n\n' + text
+                catalog = {'entries': {key_for(text): {'source': text, 'translation': translated}}}
+                localized = localize_tree(cleaned, catalog, allow_untranslated=True)
+                self.assertEqual(localized['paths'][path]['post']['responses']['200']['description'], translated)
+                checked.add(path)
+        self.assertEqual(checked, paths)
+
     def test_visible_price_tracks_runtime_in_openapi_localization_pages_and_sales(self):
         from readable_contract_notes import readable_block
         from runtime_localize_openapi_zh import localize_tree

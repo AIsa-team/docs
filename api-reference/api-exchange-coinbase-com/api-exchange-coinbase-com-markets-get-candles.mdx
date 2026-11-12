@@ -35,35 +35,75 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "product_id": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "product_id": "example"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
+            "end": {
+              "type": "string",
+              "description": "Inclusive range end, same forms as `start`. Defaults to now.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "granularity": {
+              "type": "number",
+              "description": "Bucket length in seconds: 60, 300, 900, 3600, 21600 or 86400.\n\nProvider reference: allowed values [\"60\", \"300\", \"900\", \"3600\", \"21600\", \"86400\"]; default 60.",
+              "default": 60,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "60",
+                  "300",
+                  "900",
+                  "3600",
+                  "21600",
+                  "86400"
+                ]
+              }
+            },
+            "max_candles": {
+              "type": "number",
+              "description": "Upper bound on buckets fetched in this call (300 per upstream request; requests are made sequentially to respect the 10 req/s public limit).\n\nProvider reference: minimum 1; maximum 3000; default 300.",
+              "default": 300,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 3000
+              }
+            },
             "product_id": {
-              "type": "string"
+              "type": "string",
+              "description": "Trading pair id `BASE-QUOTE` as listed by `list_products`, e.g. `BTC-USD`, `USELESS-USD`. Case-insensitive; the canonical upper-case id is returned. Pattern: ^[A-Za-z0-9]{1,20}-[A-Za-z0-9]{1,20}$."
+            },
+            "start": {
+              "type": "string",
+              "description": "Inclusive range start: RFC 3339 (`2026-07-24T00:00:00Z`) or a date (`2026-07-24`, midnight UTC). Defaults to `end` minus `max_candles` buckets.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
           "required": [
             "product_id"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "end": "2026-08-22",
+              "granularity": 86400,
+              "product_id": "BTC-USD",
+              "start": "2026-07-24"
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

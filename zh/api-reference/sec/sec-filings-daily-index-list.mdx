@@ -35,35 +35,87 @@ x-aisa-operation-id: "sec.filings.daily-index-list"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "date": "2026-10"
-            }
-          },
-          "minimal": {
-            "value": {
-              "date": "2026-10"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
+            "continuation": {
+              "type": "string",
+              "description": "Opaque cursor from the previous page's meta.page.next_cursor. It pins the publication; when the source has moved on the call fails with invalid_input at /continuation (issue code publication_changed) instead of mixing versions.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "date": {
-              "type": "string"
+              "type": "string",
+              "description": "Business day (YYYY-MM-DD). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
+            },
+            "forms": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Exact form types as the index spells them (8-K, 8-K/A, 10-Q, SCHEDULE 13D). Default: every form.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "8-K item codes (2.01, 1.01, 1.02, 5.01 ...). Filters after the submissions join, so a page can carry fewer records than page_size; M&A: 2.01 completion, 1.01 agreement (noisy), 1.02 termination, 5.01 change in control.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "join": {
+              "type": "string",
+              "description": "Which rows are joined with the filer's submissions JSON for items and the primary document: 8-K (default: 8-K and 8-K/A), all, or none.\n\nProvider reference: allowed values [\"8-K\", \"all\", \"none\"].",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "8-K",
+                  "all",
+                  "none"
+                ]
+              }
+            },
+            "page_size": {
+              "type": "number",
+              "description": "Filings per page (default 50). Each joined filer costs one submissions request.\n\nProvider reference: minimum 1; maximum 100.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 100
+              }
             }
           },
           "required": [
             "date"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "date": "2026-10-16",
+              "forms": [
+                "8-K/A"
+              ],
+              "items": [
+                "5.01"
+              ],
+              "page_size": 20
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

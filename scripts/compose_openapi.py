@@ -14,7 +14,7 @@ from typing import Any
 from upstream_auth_transports import server_auth_headers, request_auth_headers
 from urllib.parse import urlsplit, unquote
 
-VERSION = "28"
+VERSION = "29"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -393,8 +393,12 @@ def referenced_components(value: Any, document: dict) -> dict:
                 if openapi30:
                     definition = schema_30_to_31(definition) if section == "schemas" else fragment_30_to_31(definition)
                 seen.add(ref)
-                components.setdefault(section, {})[name] = copy.deepcopy(original)
-                visit({'links': {'target': definition}} if section == 'links' else definition)
+                # Different pointers into one component's $defs share the same
+                # finite component graph. Validate every pointer above, but walk
+                # the complete component only once, including recursive schemas.
+                if name not in components.get(section, {}):
+                    components.setdefault(section, {})[name] = copy.deepcopy(original)
+                    visit({'links': {'target': definition}} if section == 'links' else definition)
             map_contract_children(node, visit)
     visit(fragment_30_to_31(value) if openapi30 else value)
     return components
@@ -654,9 +658,46 @@ def constrained_names(runtime: dict) -> set:
 
 def merge_object(upstream: dict, declared: dict, constrained: set = frozenset(), kept: list | None = None,
                  prefix: str = "") -> dict:
-    merged = flatten_object(upstream)
+    # Rechecking an already composed body must preserve identical Runtime-owned
+    # cross-field rules. They are reapplied below, after provider field merging.
+    # Different or extra source rules still go through the strict flattener.
+    source = upstream
+    if (isinstance(upstream, dict) and "allOf" in declared
+            and upstream.get("allOf") == declared["allOf"]):
+        source = {key: value for key, value in upstream.items() if key != "allOf"}
+    # A supplier can forbid combining two inputs that the Runtime forwards
+    # without declaring. Preserve that exclusion only when it cannot override
+    # any Runtime-owned field or cross-field rule. Other conditionals still
+    # fail in flatten_object rather than guessing their precedence.
+    exclusion = source.get("not") if isinstance(source, dict) else None
+    excluded = exclusion.get("required") if isinstance(exclusion, dict) else None
+    provider_exclusion = (
+        isinstance(exclusion, dict) and set(exclusion) == {"required"}
+        and isinstance(excluded, list) and len(excluded) == 2
+        and all(isinstance(name, str) for name in excluded)
+        and len(set(excluded)) == 2
+        and set(excluded) <= set(source.get("properties", {}))
+        and not set(excluded).intersection(declared.get("properties", {}))
+        and not {prefix + name for name in excluded}.intersection(constrained)
+        and declared.get("additionalProperties", True) is True
+        and not any(key in declared for key in (
+            "not", "allOf", "anyOf", "oneOf", "if", "then", "else",
+            "dependentSchemas", "dependentRequired", "patternProperties")))
+    if provider_exclusion:
+        source = {key: value for key, value in source.items() if key != "not"}
+    merged = flatten_object(source)
     names = set(declared.get("properties", {}))
     source_required = set(merged.get("required", []))
+    if declared.get("additionalProperties") is False:
+        rejected = source_required - names
+        if rejected:
+            raise ValueError("source body requires inputs rejected by runtime: "
+                             + ", ".join(sorted(prefix + name for name in rejected)))
+        # A mixed operation can have a closed request and a provider-owned
+        # response. Provider-only inputs must not reopen the Runtime body.
+        merged["properties"] = {name: value for name, value in merged.get("properties", {}).items()
+                                if name in names}
+        merged["additionalProperties"] = False
     required = (source_required - names) | set(declared.get("required", []))
     for name, value in declared.get("properties", {}).items():
         if name not in required and provider_required(name in source_required, {}, value, prefix + name, constrained):
@@ -664,7 +705,7 @@ def merge_object(upstream: dict, declared: dict, constrained: set = frozenset(),
             if kept is not None:
                 kept.append(prefix + name)
         original = merged.setdefault("properties", {}).get(name, {})
-        if value.get("properties") and isinstance(original, dict) and original.get("type", "object") == "object":
+        if (value.get("properties") or value.get("additionalProperties") is False) and isinstance(original, dict) and original.get("type", "object") == "object":
             merged["properties"][name] = merge_object(original, value, constrained, kept, prefix + name + ".")
         elif (value.get("type") == "array" and value.get("items") == {}
               and isinstance(original, dict) and original.get("type") == "array"
@@ -681,6 +722,8 @@ def merge_object(upstream: dict, declared: dict, constrained: set = frozenset(),
     for key, value in declared.items():
         if key not in {"properties", "required", "additionalProperties", "type"}:
             merged[key] = copy.deepcopy(value)
+    if provider_exclusion:
+        merged["not"] = copy.deepcopy(exclusion)
     return merged
 
 
@@ -696,7 +739,7 @@ def merge_body(upstream: dict, runtime: dict, constrained: set = frozenset(), ke
         if original is None:
             raise ValueError(f"mixed body missing upstream media type {media}")
         declared = contract.get("schema", {})
-        if not declared.get("properties"):
+        if not declared.get("properties") and declared.get("additionalProperties") is not False:
             continue
         original["schema"] = merge_object(original.get("schema", {}), declared, constrained, kept)
         # Upstream request examples describe the complete body. Runtime examples
@@ -773,6 +816,15 @@ def source_success_responses(operation: dict, document: dict, output: dict, name
                        "content": response.get("content", {})}
             if response.get("x-aisa-no-content") is True:
                 payload["x-aisa-no-content"] = True
+            payload = copy.deepcopy(payload)
+            for media in payload.get("content", {}).values():
+                schema = media.get("schema") if isinstance(media, dict) else None
+                if isinstance(schema, dict) and schema.get("x-aisa-schema-completeness") == "documented-fields-only":
+                    # The full field table remains in the response description.
+                    # Raw discovery metadata stays in the reviewed source input.
+                    schema.pop("x-aisa-provider-response", None)
+                    if schema.get("description") == payload.get("description"):
+                        schema.pop("description", None)
             result[str(status)] = resolve_fragment(payload, document, output, namespace, preserve_refs=True)
     return result
 

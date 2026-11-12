@@ -35,35 +35,95 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "dataset_id": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "dataset_id": "example"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
+            "cursor": {
+              "type": "string",
+              "description": "Row offset to start from: the `next_cursor` of the previous page. Pattern: ^[0-9]{1,12}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "dataset_id": {
-              "type": "string"
+              "type": "string",
+              "description": "4x4 id (for example `24uj-dj8v`) or a data.edmonton.ca URL containing it."
+            },
+            "filters": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Bare equality filters sent as `field=value` query parameters (for example {\"job_category\": \"Commercial Final\"}); keys must be column field names, values strings.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "group": {
+              "type": "string",
+              "description": "SoQL $group; pair with aggregates in `select`.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "limit": {
+              "type": "number",
+              "description": "Rows per page. The portal caps a request at 50000; wide datasets with geometry should use far less.\n\nProvider reference: minimum 1; maximum 50000; default 100.",
+              "default": 100,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 50000
+              }
+            },
+            "order": {
+              "type": "string",
+              "description": "SoQL $order, for example `issue_date DESC` or `count(*) DESC`. Default `:id` when no `group` is given.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "q": {
+              "type": "string",
+              "description": "SoQL $q full-text search across all text columns.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "select": {
+              "type": "string",
+              "description": "SoQL $select, for example `address,construction_value` or `job_category,count(*)`. Default: all columns.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "where": {
+              "type": "string",
+              "description": "SoQL $where, for example `address like '%86 STREET NW'`, `issue_date between '2026-09-01T00:00:00' and '2026-09-30T23:59:59'`, `within_circle(geometry_point,53.5449,-113.4885,200)`.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
           "required": [
             "dataset_id"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "dataset_id": "24uj-dj8v",
+              "limit": 5,
+              "select": "row_id,permit_date,job_category,work_type,address,neighbourhood,construction_value",
+              "where": "row_id='2-472013926'"
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

@@ -35,42 +35,98 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "geometry": {},
-              "scene_id": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "geometry": {},
-              "scene_id": "example"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
+            "collection": {
+              "type": "string",
+              "description": "Collection of the scene id; inferred from the id form when omitted.\n\nProvider reference: allowed values [\"sentinel-2-c1-l2a\", \"sentinel-2-l2a\"].",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "sentinel-2-c1-l2a",
+                  "sentinel-2-l2a"
+                ]
+              }
+            },
             "geometry": {
               "additionalProperties": true,
-              "type": "object"
+              "type": "object",
+              "description": "GeoJSON geometry in WGS84 with [lon, lat] positions: Point, Polygon, MultiPolygon, or a Feature wrapping one. Rings must be closed; altitude is ignored; FeatureCollection and antimeridian-crossing shapes are refused (invalid_input with a JSON pointer and a stable code: ring_not_closed, latitude, longitude, too_large, too_many_vertices, feature_collection, antimeridian, unsupported_type). Open because GeoJSON allows foreign members (properties, id, bbox)."
+            },
+            "layer": {
+              "type": "string",
+              "description": "`true_colour` (default) reads the visual asset; `ndvi` reads red and nir.\n\nProvider reference: allowed values [\"true_colour\", \"ndvi\"].",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "true_colour",
+                  "ndvi"
+                ]
+              }
+            },
+            "max_px": {
+              "type": "number",
+              "description": "Longest side of the PNG; the native clip is enlarged by the largest whole factor that fits.\n\nProvider reference: minimum 16; maximum 1024; default 512.",
+              "default": 512,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 16,
+                "max": 1024
+              }
             },
             "scene_id": {
-              "type": "string"
+              "type": "string",
+              "description": "Earth Search item id, e.g. S2B_T16SDE_20260903T163711_L2A (sentinel-2-c1-l2a) or S2A_16SDE_20220909_0_L2A (sentinel-2-l2a). Pattern: ^[A-Za-z0-9_-]+$."
             }
           },
           "required": [
             "geometry",
             "scene_id"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "geometry": {
+                "coordinates": [
+                  [
+                    [
+                      -105.2701,
+                      40.0151
+                    ],
+                    [
+                      -105.2697,
+                      40.0151
+                    ],
+                    [
+                      -105.2697,
+                      40.0154
+                    ],
+                    [
+                      -105.2701,
+                      40.0154
+                    ],
+                    [
+                      -105.2701,
+                      40.0151
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+              "max_px": 48,
+              "scene_id": "S2A_T13TDE_20260904T175741_L2A"
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
