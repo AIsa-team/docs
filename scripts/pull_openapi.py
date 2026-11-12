@@ -346,7 +346,13 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                     frontmatter, prose = localization.split_frontmatter(text)
                     frontmatter = localization.replace_frontmatter_value(frontmatter, "title", localized_title)
                     text = "---\n" + frontmatter + "\n---\n" + prose
-                    text = re.sub(r"^openapi:.*$", lambda _: f"openapi: {reference}", text, count=1, flags=re.M)
+                    if re.search(r"^openapi:", text, re.M):
+                        text = re.sub(r"^openapi:.*$", lambda _: f"openapi: {reference}", text, count=1, flags=re.M)
+                    else:
+                        # Archived aliases have no OpenAPI frontmatter. Restore
+                        # the binding while staging so apply_retirements can
+                        # identify their route and archive them again before write.
+                        text = text.replace("---\n", f"---\nopenapi: {reference}\n", 1)
                     if "x-aisa-operation-id:" not in text:
                         text = text.replace("---\n", "---\n" + identity + "\n", 1)
                     else:

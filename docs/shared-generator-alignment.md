@@ -29,7 +29,13 @@ reviews, not again during consolidation.
 
 ## Shared code boundary
 
-These modules match the pinned dev version byte for byte:
+These modules match the pinned dev version byte for byte, except that
+`runtime_consolidate_openapi.py` now writes the aggregate JSON compactly to stay
+within GitHub's single-file limit. `pull_openapi.py` also restores the temporary
+operation binding when staging an archived alias, so retirement is reapplied
+before writing and repeated generation cannot add request/pricing blocks back.
+Both small exceptions have regressions; the JSON values and published machine
+contracts are unchanged:
 
 - `scripts/customer_price_presentation.py`
 - `scripts/readable_contract_notes.py`
@@ -63,9 +69,13 @@ hashing when switching sources, and forcing generation when the source changes.
 Main does not invoke that preview entrypoint. Copying it or dev's generated
 outputs into main would not exercise main's canonical publication path.
 
-Main keeps its own workflows, deployment settings, source authorization policy,
-publication receipts, navigation and generated files. This PR does not merge
-the dev branch wholesale or modify a Runtime deployment.
+Main keeps its own workflows, deployment settings, source authorization policy
+and formal publication receipts. After the initial CI failure, the complete PR
+candidate is regenerated through the shared Composer and page renderer, including
+its navigation, discovery catalogs and aggregates. These are reviewed candidate
+outputs, not a formal publication. The reviewed schema-input context now includes
+the complete existing source-evidence packet for these sources. This PR does not
+merge the dev branch wholesale or modify a Runtime deployment.
 
 ## Acceptance and rollout boundary
 
@@ -98,8 +108,8 @@ producer must adopt the updated Composer and source inputs before old native
 descriptions can disappear from production. A green offline suite or dev's
 raw-facts preview cannot prove that adoption. Adding reviewed sources also
 activates the existing artifact-readiness check; do not bypass it or manufacture
-publication receipts. Keep #334 Draft until applicable CI and the production
-publication acceptance are satisfied.
+publication receipts. PR #334 is ready for review at the author's request; merge
+and production publication remain gated by their applicable acceptance checks.
 
 The four dev catalog-identity conflicts, seven retained references outside the
 raw-provider index and two Adyntel operations without Runtime reference estimates
