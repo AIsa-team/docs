@@ -19,6 +19,9 @@ exits 1 and the publication is neither exported nor pushed:
   provenance field.
 * G4 example evidence: every in-scope Reference example joins a Runtime
   `x-aisa-example` record with state `verified` and the same example SHA256.
+* G6 structural consistency: declared pagination and latency are valid in
+  every formal catalog, translation and aggregate. Missing declarations do
+  not become invented pagination behavior.
 
 A missing example is not a fault: such operations are listed as pending with
 a reason and still published (Runtime/composer withhold their examples).
@@ -45,6 +48,7 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 from playground_examples import REFERENCE_LABEL, example_scenario, example_sha256  # noqa: E402
 from upstream_semantics import BLOCKING_DRIFT  # noqa: E402
 import public_projection  # noqa: E402
+from release_gate_pagination import check_g6  # noqa: E402
 import vocab_scan  # noqa: E402
 
 METHODS = ('get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace')
@@ -203,6 +207,18 @@ def operation_pointer(route, method):
     return '/paths/' + vocab_scan.escape_pointer(route) + '/' + method
 
 
+def gate_g6(root):
+    findings, total = [], 0
+    # Check all formal documents, including operations outside the R1 example
+    # scope. Load one document at a time to bound memory on large catalogs.
+    for path in sorted((root / 'openapi').rglob('*.json')):
+        rows = check_g6(json.loads(path.read_text()))
+        total += len(rows)
+        findings.extend(dict(row, location=path.relative_to(root).as_posix())
+                        for row in rows[:max(0, FINDINGS_LIMIT - len(findings))])
+    return {'status': 'failed' if total else 'passed', 'findings_total': total, 'findings': findings}
+
+
 def run(root=ROOT, *, facts_dir=None, scope_path=SCOPE, exclusions_path=EXCLUSIONS, rules_path=vocab_scan.RULES,
         drift_path=DRIFT, environ=None, yaml_loader=load_yaml, catalogs=None, projection_path=PROJECTION):
     root = Path(root)
@@ -219,6 +235,7 @@ def run(root=ROOT, *, facts_dir=None, scope_path=SCOPE, exclusions_path=EXCLUSIO
     projected = public_projection.load_catalogs(projection_path)
     vocab, placeholders, provenance, evidence, pending = [], [], [], [], []
     pages_seen, scoped, unprojected = set(), 0, set()
+    previous_zh, zh_document = None, None
     for path, document, route, method, operation in in_scope_operations(root, scope, catalogs):
         scoped += 1
         location = path.relative_to(root).as_posix()
@@ -228,7 +245,10 @@ def run(root=ROOT, *, facts_dir=None, scope_path=SCOPE, exclusions_path=EXCLUSIO
         vocab += vocab_scan.scan_json(operation, rules, location, pointer)
         zh = root / 'openapi/zh' / path.name
         if zh.is_file():
-            zh_document = json.loads(zh.read_text())
+            # Operations are grouped by catalog. Parse its translation once,
+            # not once per operation, and retain only this one catalog.
+            if zh != previous_zh:
+                previous_zh, zh_document = zh, json.loads(zh.read_text())
             zh_operation = (zh_document.get('paths', {}).get(route) or {}).get(method)
             if isinstance(zh_operation, dict):
                 vocab += vocab_scan.scan_json(zh_operation, rules, zh.relative_to(root).as_posix(), pointer)
@@ -309,6 +329,7 @@ def run(root=ROOT, *, facts_dir=None, scope_path=SCOPE, exclusions_path=EXCLUSIO
                              'violations': evidence[:FINDINGS_LIMIT], 'violations_total': len(evidence),
                              'pending_total': len(pending), 'pending_reasons': dict(sorted(reasons.items())),
                              'pending': sorted(pending, key=lambda r: (r['path'], r['method']))}
+    report['gates']['G6'] = gate_g6(root)
     report['vocab_digest'] = rules.digest
     report['rules_sha256'] = sha256_file(rules_path)
     report['status'] = 'failed' if any(gate['status'] != 'passed' for gate in report['gates'].values()) else 'passed'
@@ -343,6 +364,8 @@ def main(argv=None):
             print(f"  G3 {row['location']}: {row['rule']}", file=sys.stderr)
     for row in report['gates']['G4']['violations'][:50]:
         print(f"  G4 {row['location']}: {row['reason']}", file=sys.stderr)
+    for row in report['gates']['G6']['findings'][:50]:
+        print(f"  G6 {row['location']} {row['method']} {row['path']}: {row['code']}", file=sys.stderr)
     print(json.dumps({'status': report['status'], 'enforced': report['enforced'],
                       'gates': {name: gate['status'] for name, gate in report['gates'].items()},
                       'pending': report['gates']['G4']['pending_total']}))

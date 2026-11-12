@@ -89,6 +89,28 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertEqual(report['gates']['G4']['pending_total'], 0)
         self.assertTrue(report['enforced'])
 
+    def test_g6_invalid_declaration_blocks_the_combined_release_gate(self):
+        tree = self.tree()
+        # A separate catalog outside the three-line evidence scope must still
+        # obey the pagination/latency structure it declares.
+        path = tree.root / 'openapi/other.json'
+        document = {'paths': {'/apis/v1/other': {'get': {
+            'operationId': 'other', 'x-aisa-latency': {'timeout_seconds': -1}}}}}
+        path.write_text(json.dumps(document))
+        report = tree.run()
+        self.assertEqual(report['gates']['G6']['status'], 'failed')
+        self.assertEqual(report['status'], 'failed')
+        self.assertTrue(report['enforced'])
+        self.assertEqual(report['gates']['G6']['findings'][0]['code'], 'latency_timeout_invalid')
+        self.assertEqual(report['gates']['G6']['findings'][0]['location'], 'openapi/other.json')
+        rollback = tree.run(environ={'RELEASE_GATE_ENFORCE': 'false'})
+        self.assertEqual(rollback['status'], 'failed')
+        self.assertFalse(rollback['enforced'])
+        # Removing an unsupported declaration is different from inventing one.
+        del document['paths']['/apis/v1/other']['get']['x-aisa-latency']
+        path.write_text(json.dumps(document))
+        self.assertEqual(tree.run()['status'], 'passed')
+
     def test_g1_yaml_json_llms_and_operation_set(self):
         tree = self.tree(llms_hash='0' * 64)
         report = tree.run()

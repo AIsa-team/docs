@@ -208,6 +208,18 @@ class PaginationLatencyNotesTests(unittest.TestCase):
         'ordering': 'unstable', 'item_id': '/id'},
         'x-aisa-latency-class': 'very_slow', 'x-aisa-latency': {'timeout_seconds': 60, 'basis': 'sweep_seed'}}
 
+    def test_pending_example_preserves_pagination_and_timeout_guidance(self):
+        operation = copy.deepcopy(self.PAGINATED)
+        operation['x-aisa-verification'] = {'state': 'pending', 'reason': 'no_evidence'}
+        for language, pending, pagination, timing in (
+            ('en', 'Request example pending verification', '## Pagination', '## Response time'),
+            ('zh', '请求示例待验证', '## 翻页', '## 响应时间'),
+        ):
+            block = readable_block(operation, language)
+            for text in (pending, pagination, timing):
+                self.assertIn(text, block)
+            self.assertEqual(update_readable_block(block, operation, language), block)
+
     def test_pagination_and_latency_notes_in_both_languages(self):
         en = readable_block(self.PAGINATED)
         self.assertIn('## Pagination', en)

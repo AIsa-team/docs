@@ -512,3 +512,20 @@ the reviewed schema inputs, and repeated response descriptions/discovery fields
 are not copied into every public document. The combined release budget is
 192 MiB for the facts, native documents and aggregate together; individual roles
 remain 64 MiB for the aggregate, 8 MiB for ordinary files and 1 MiB for metadata.
+
+## Spec R1 combined release gate
+
+`python scripts/release_gate.py --facts-dir /path/to/acquired-runtime-release`
+checks aggregate identity (G1), customer vocabulary (G2), placeholders and the
+public projection (G3), example evidence (G4), and declared pagination/latency
+structure (G6) before publication. G6 scans formal catalogs, translations and
+the aggregate, including operations outside the three-line example scope.
+Its findings participate in the same blocking result as the other gates.
+`RELEASE_GATE_ENFORCE=false` is a rollback switch; it does not convert a failed
+report into a pass. The standalone pagination check's report-only option does
+not bypass this combined gate.
+
+The local combined branch does not make old generated publication files a new
+Runtime release. A fresh acquisition and regeneration remain necessary before
+these content gates can pass. Pending examples retain their notice alongside
+pagination and timeout guidance; no verification evidence is synthesized.
