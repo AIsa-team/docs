@@ -103,13 +103,16 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertTrue(report['enforced'])
         self.assertEqual(report['gates']['G6']['findings'][0]['code'], 'latency_timeout_invalid')
         self.assertEqual(report['gates']['G6']['findings'][0]['location'], 'openapi/other.json')
+        self.assertEqual(report['gates']['G6']['declarations'], {'pagination': 0, 'latency': 1})
         rollback = tree.run(environ={'RELEASE_GATE_ENFORCE': 'false'})
         self.assertEqual(rollback['status'], 'failed')
         self.assertFalse(rollback['enforced'])
         # Removing an unsupported declaration is different from inventing one.
         del document['paths']['/apis/v1/other']['get']['x-aisa-latency']
         path.write_text(json.dumps(document))
-        self.assertEqual(tree.run()['status'], 'passed')
+        empty = tree.run()
+        self.assertEqual(empty['status'], 'passed')
+        self.assertEqual(empty['gates']['G6']['declarations'], {'pagination': 0, 'latency': 0})
 
     def test_g1_yaml_json_llms_and_operation_set(self):
         tree = self.tree(llms_hash='0' * 64)

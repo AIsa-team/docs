@@ -48,7 +48,7 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 from playground_examples import REFERENCE_LABEL, example_scenario, example_sha256  # noqa: E402
 from upstream_semantics import BLOCKING_DRIFT  # noqa: E402
 import public_projection  # noqa: E402
-from release_gate_pagination import check_g6  # noqa: E402
+from release_gate_pagination import check_g6, resolve as resolve_g6  # noqa: E402
 import vocab_scan  # noqa: E402
 
 METHODS = ('get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace')
@@ -208,15 +208,28 @@ def operation_pointer(route, method):
 
 
 def gate_g6(root):
-    findings, total = [], 0
+    findings, total, scanned = [], 0, 0
+    declarations = {'pagination': 0, 'latency': 0}
     # Check all formal documents, including operations outside the R1 example
     # scope. Load one document at a time to bound memory on large catalogs.
     for path in sorted((root / 'openapi').rglob('*.json')):
-        rows = check_g6(json.loads(path.read_text()))
+        document = json.loads(path.read_text())
+        scanned += 1
+        for raw_item in (document.get('paths') or {}).values():
+            item = resolve_g6(raw_item, document)
+            if not isinstance(item, dict):
+                continue
+            for method in METHODS:
+                operation = item.get(method)
+                if isinstance(operation, dict):
+                    declarations['pagination'] += 'x-aisa-pagination' in operation
+                    declarations['latency'] += 'x-aisa-latency' in operation or 'x-aisa-latency-class' in operation
+        rows = check_g6(document)
         total += len(rows)
         findings.extend(dict(row, location=path.relative_to(root).as_posix())
                         for row in rows[:max(0, FINDINGS_LIMIT - len(findings))])
-    return {'status': 'failed' if total else 'passed', 'findings_total': total, 'findings': findings}
+    return {'status': 'failed' if total else 'passed', 'findings_total': total,
+            'findings': findings, 'documents_scanned': scanned, 'declarations': declarations}
 
 
 def run(root=ROOT, *, facts_dir=None, scope_path=SCOPE, exclusions_path=EXCLUSIONS, rules_path=vocab_scan.RULES,
