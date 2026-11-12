@@ -259,6 +259,9 @@ def public_mirror_index(root: Path, overrides: dict | None = None):
             continue
         if source.get('kind') != 'manual' or not all(source.get(k) for k in ('url', 'fetched_at', 'content_hash', 'converter')):
             raise ValueError(f'{filename}: public mirror requires complete manual provenance')
+        # Keep per-operation audit bindings in the reviewed input, not in every
+        # catalog's public provenance. The source hash still binds those inputs.
+        source = {key: value for key, value in source.items() if key != 'operation_evidence'}
         response_only = source.get('response_only') is True
         if 'response_only' in source and type(source['response_only']) is not bool:
             raise ValueError(f'{filename}: response_only must be boolean')
@@ -333,14 +336,14 @@ def previous_for_facts(facts, documents, provider):
     routes = {fact_prefix + p for p in facts.get('paths', {})}
     for name, original in documents.items():
         prefix = urlsplit((original.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
-        paths = {prefix + p: item for p, item in original.get('paths', {}).items() if name == provider or prefix + p in routes}
-        if not paths:
+        # Select matching routes before copying: most historic documents share no
+        # route with this provider, and copying each one per provider dominated
+        # complete-catalog composition time. Only selected bytes are copied.
+        selected = {prefix + p: item for p, item in original.get('paths', {}).items() if name == provider or prefix + p in routes}
+        if not selected:
             continue
-        # Copy only a document that contributes paths, and only those paths:
-        # copying every published document for every provider dominated runs.
-        memo = {}
-        document = {key: copy.deepcopy(paths if key == 'paths' else value, memo)
-                    for key, value in original.items()}
+        document = {key: copy.deepcopy(value) for key, value in original.items() if key != 'paths'}
+        document['paths'] = copy.deepcopy(selected)
         # Retained operations move under a different document root. Bind their
         # inherited authentication before merging sources and scheme namespaces;
         # otherwise retain_unregistered_history can no longer recover it.
