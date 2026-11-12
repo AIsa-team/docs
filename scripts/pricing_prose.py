@@ -364,6 +364,10 @@ def clean_page(text: str, language: str = 'en') -> str:
         # before rate cleanup; otherwise that cleanup leaves its markers behind.
         without_summary = strip_price_summary(core)
         cleaned = clean_text(without_summary, language, add_notice=False) if without_summary else ''
+        # Removing a final tariff sentence can leave one space at a paragraph
+        # end. Preserve two-space Markdown hard breaks and fenced examples.
+        if cleaned != without_summary:
+            cleaned = re.sub(r'(?<=\S)[ \t](?=\n)', '', cleaned)
         changed_prose |= cleaned != without_summary
         if cleaned != core:
             prose = prose[:len(prose) - len(prose.lstrip())] + cleaned + prose[len(prose.rstrip()):]
