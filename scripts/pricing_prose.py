@@ -241,9 +241,13 @@ def clean_page(text: str, language: str = 'en') -> str:
         core = prose.strip()
         # A chunk sits between fences (for example `<CodeGroup>` before its
         # first block); keep its surrounding newlines so a fence stays on its own line.
-        cleaned = clean_text(core, language, add_notice=False) if core else core
+        # Legacy summaries also appeared in the MDX body, including free and
+        # unpublished prices with no monetary amount. Remove the whole block
+        # before rate cleanup; otherwise that cleanup leaves its markers behind.
+        without_summary = strip_price_summary(core)
+        cleaned = clean_text(without_summary, language, add_notice=False) if without_summary else ''
+        changed_prose |= cleaned != without_summary
         if cleaned != core:
-            changed_prose = True
             prose = prose[:len(prose) - len(prose.lstrip())] + cleaned + prose[len(prose.rstrip()):]
         chunks[index] = prose
     body = ''.join(chunks)
