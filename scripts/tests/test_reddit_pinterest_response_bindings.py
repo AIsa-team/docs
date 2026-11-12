@@ -37,7 +37,7 @@ def path_hash(value):
 
 
 class SocialResponseBindingTest(unittest.TestCase):
-    def test_unreviewed_social_responses_are_explicitly_pending_in_both_locales(self):
+    def test_observed_routes_have_payloads_and_other_routes_remain_pending(self):
         for provider in CASES:
             for locale in ("", "zh/"):
                 document = load(f"openapi/{locale}{provider}.json")
@@ -46,10 +46,18 @@ class SocialResponseBindingTest(unittest.TestCase):
                     with self.subTest(provider=provider, locale=locale, path=path):
                         operation = item["get"]
                         response = operation["responses"]["200"]
-                        self.assertEqual(response["description"], PLACEHOLDER)
-                        self.assertEqual(response["content"]["application/json"], {"schema": {}})
-                        self.assertEqual(operation["x-aisa-review"]["response"], "generic")
-                        self.assertNotIn("x-aisa-response-source", operation)
+                        if path in CASES[provider]:
+                            schema = response["content"]["application/json"]["schema"]
+                            self.assertEqual(schema["type"], "object")
+                            self.assertEqual(set(schema["properties"]), {"data", "meta"})
+                            self.assertNotIn("x-aisa-response-pending", operation)
+                            self.assertNotEqual(operation.get("x-aisa-review", {}).get("response"), "generic")
+                            self.assertIn("observed", operation["x-aisa-response-source"]["source"]["response_basis"])
+                        else:
+                            self.assertEqual(response["description"], PLACEHOLDER)
+                            self.assertEqual(response["content"]["application/json"], {"schema": {}})
+                            self.assertEqual(operation["x-aisa-review"]["response"], "generic")
+                            self.assertNotIn("x-aisa-response-source", operation)
                         self.assertEqual(operation["x-aisa-response-upstream-origin-sha256"],
                                          path_hash("https://api.socialfetch.dev"))
 
@@ -58,8 +66,9 @@ class SocialResponseBindingTest(unittest.TestCase):
         for routes in CASES.values():
             for public_path, historical_path in routes.items():
                 with self.subTest(path=public_path):
-                    self.assertFalse(mirrors.get((public_path, "get"), {}).get(
-                        "independent_response_candidates"))
+                    candidates = mirrors[(public_path, "get")]["independent_response_candidates"]
+                    self.assertEqual(len(candidates), 1)
+                    self.assertEqual(candidates[0]["source"]["converter"], "scripts/observed_response_source.py@1")
                     # The historical declaration remains available for its original URL.
                     legacy = mirrors[("/apis/v1" + historical_path, "get")]
                     self.assertIn("200", legacy["response_operation"]["responses"])
@@ -76,6 +85,7 @@ class SocialResponseBindingTest(unittest.TestCase):
                 # Model runtime facts with no reviewed payload, before publication.
                 operation["responses"]["200"] = {"description": "Successful response"}
                 operation.pop("x-aisa-review", None)
+                operation.pop("x-aisa-response-source", None)
                 for mismatch in ("origin", "path"):
                     with self.subTest(path=public_path, mismatch=mismatch):
                         source = copy.deepcopy(historical)
@@ -100,7 +110,7 @@ class SocialResponseBindingTest(unittest.TestCase):
                         self.assertNotIn("content", actual["responses"]["200"])
                         self.assertEqual(actual["parameters"], operation["parameters"])
 
-    def test_pages_explain_the_missing_provider_specific_response_evidence(self):
+    def test_pages_explain_observed_provider_specific_success(self):
         for provider, routes in CASES.items():
             published = load(f"openapi/{provider}.json")
             for path in routes:
@@ -108,9 +118,12 @@ class SocialResponseBindingTest(unittest.TestCase):
                 pages = [p for p in (ROOT / "api-reference" / provider).glob("*.mdx")
                          if f'x-aisa-operation-id: "{operation_id}"' in p.read_text()]
                 self.assertEqual(len(pages), 1, operation_id)
-                for locale, pending_text in (("", "pending review"), ("zh/", "仍待审核")):
+                for locale in ("", "zh/"):
                     text = (ROOT / locale / pages[0].relative_to(ROOT)).read_text()
-                    self.assertIn(pending_text, text)
+                    self.assertIn("2026-11-12", text)
+                    self.assertIn("200", text)
+                    self.assertNotIn("pending review", text)
+                    self.assertNotIn("仍待审核", text)
                     self.assertIn("SocialFetch", text)
                     self.assertNotIn("Response`", text)
 

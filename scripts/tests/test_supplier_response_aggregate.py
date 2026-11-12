@@ -53,7 +53,7 @@ class SupplierResponseAggregateTest(unittest.TestCase):
 
     def test_inventory_does_not_count_unreviewed_responses_as_completed(self):
         inventory = json.loads(INVENTORY.read_text())
-        counts = {"declared": 0, "partial": 0, "unreviewed": 0}
+        counts = {"declared": 0, "partial": 0, "unreviewed": 0, "disabled": 0}
         identities = set()
         for row in self.rows:
             identity = (row["provider"], row["path"], row["method"])
@@ -71,7 +71,7 @@ class SupplierResponseAggregateTest(unittest.TestCase):
                     )
                 return isinstance(value, list) and any(has_unconfirmed_items(child) for child in value)
 
-            status = "partial" if reviewed and has_unconfirmed_items(operation["responses"]) else "declared" if reviewed else "unreviewed"
+            status = "disabled" if operation.get("x-aisa-status") == "disabled" else "partial" if reviewed and has_unconfirmed_items(operation["responses"]) else "declared" if reviewed else "unreviewed"
             with self.subTest(identity=identity):
                 self.assertEqual(row["response_status"], status)
                 if not reviewed:
@@ -84,6 +84,7 @@ class SupplierResponseAggregateTest(unittest.TestCase):
         self.assertEqual(inventory["counts"]["response_declarations"], counts["declared"])
         self.assertEqual(inventory["counts"].get("response_partial", 0), counts["partial"])
         self.assertEqual(inventory["counts"]["response_pending"], counts["unreviewed"])
+        self.assertEqual(inventory["counts"]["response_disabled"], counts["disabled"])
 
 
 if __name__ == "__main__":

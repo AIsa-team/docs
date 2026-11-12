@@ -1,4 +1,4 @@
-"""Replay the supported Duffel GET and keep incomplete POST variants pending."""
+"""Replay the official Duffel GET and observed POST response variants."""
 import copy
 import json
 from pathlib import Path
@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 GET_PATH = "/apis/v1/duffel/flights/offer-requests/{id}"
 POST_PATH = "/apis/v1/duffel/flights/offer-requests/create"
 GET_SOURCE = "response-duffel-flights-get-offer-request-20261110.json"
-POST_SOURCE = "response-duffel-flights-post-create-20261110.json"
+POST_SOURCE = "response-observed-duffel-itineraries-20261112.json"
 
 
 class DuffelResponseBindingTest(unittest.TestCase):
@@ -44,8 +44,8 @@ class DuffelResponseBindingTest(unittest.TestCase):
         self.assertEqual(schema["type"], "object")
         self.assertEqual(schema["required"], ["data"])
 
-    def test_both_languages_keep_post_variants_and_pending_response(self):
-        self.assertFalse((ROOT / "openapi/upstream" / POST_SOURCE).exists())
+    def test_both_languages_keep_post_variants_and_observed_201(self):
+        self.assertTrue((ROOT / "openapi/upstream" / POST_SOURCE).exists())
         for filename in ("openapi/duffel-flights.json", "openapi/zh/duffel-flights.json"):
             with self.subTest(filename=filename):
                 document = json.loads((ROOT / filename).read_text())
@@ -57,12 +57,15 @@ class DuffelResponseBindingTest(unittest.TestCase):
                 view = next(p for p in post["parameters"] if p["name"] == "view")
                 self.assertEqual(view["schema"]["enum"], ["offers", "itineraries"])
                 self.assertEqual(view["schema"]["default"], "offers")
-                self.assertFalse(has_response_payload(post["responses"]["200"]))
-                self.assertNotIn("x-aisa-response-source", post)
-                self.assertTrue(post.get("x-aisa-response-pending") or
-                                post.get("x-aisa-review", {}).get("response") == "generic")
+                self.assertNotIn("200", post["responses"])
+                self.assertTrue(has_response_payload(post["responses"]["201"]))
+                self.assertIn("x-aisa-response-source", post)
+                self.assertNotIn("x-aisa-response-pending", post)
+                schema = post["responses"]["201"]["content"]["application/json"]["schema"]
+                self.assertIn("references", schema["properties"]["data"]["properties"])
+                self.assertIn("offers", post["responses"]["2XX"]["content"]["application/json"]["schema"]["properties"]["data"]["properties"])
 
-    def test_composer_closes_only_the_get_response_gap(self):
+    def test_composer_closes_get_and_post_response_gaps(self):
         mirrors = public_mirror_index(ROOT)
         original = json.loads((ROOT / "openapi/duffel-flights.json").read_text())
         upstream = json.loads((ROOT / "openapi/upstream/duffel-flights-official.json").read_text())
@@ -84,8 +87,10 @@ class DuffelResponseBindingTest(unittest.TestCase):
                     self.assertEqual(actual["x-aisa-response-source"]["source"]["content_hash"],
                                      self.source()["info"]["x-aisa-source"]["content_hash"])
                 else:
-                    self.assertNotIn("x-aisa-response-source", actual)
-                    self.assertEqual(actual["x-aisa-response-pending"]["statuses"], ["200"])
+                    self.assertIn("x-aisa-response-source", actual)
+                    self.assertNotIn("x-aisa-response-pending", actual)
+                    self.assertIn("201", actual["responses"])
+                    self.assertNotIn("200", actual["responses"])
                     self.assertEqual(actual["parameters"], operation["parameters"])
 
     def test_get_envelope_matches_official_model_and_pinned_sdk(self):
