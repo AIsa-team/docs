@@ -140,7 +140,7 @@ class PublishedIdentityTests(unittest.TestCase):
                 ZH_OPENAPI_DIR=self.root/'openapi/zh', API_DIR=self.root/'api-reference',
                 ZH_API_DIR=self.root/'zh/api-reference'), \
                 patch.object(localization, 'load_catalog', return_value={'entries': {}}), \
-                patch.object(localization, 'translation', side_effect=lambda catalog, text, **options: text):
+                patch.object(localization, 'translation', side_effect=lambda catalog, text: text):
             localization.generate(REF)
             first = publication_hashes(self.root)
             localization.generate(REF)
