@@ -4,46 +4,16 @@ import json
 import re
 from pathlib import Path
 
-from tool_prose_editorial import editorial_text, english_prose, NOTICE, WIRE_LITERAL_TEXT
+WIRE_LITERAL_TEXT = set('''一周内 一天内 上海 不限 主体类型 九宫格 二次元 云南
+互联网新闻信息服务许可证编号 内容类目 北京 医疗健康 半年内 厨房电器 团播 国艺
+好物合集 家电 广东 开箱 归属地 所属行业 手机 故事 数码 普通笔记 服务单位 服务类别
+服饰 母婴 汽车 测评类 浙江 游戏 热销商品 生活好物评测 直播笔记 相亲 美妆 美妆个护
+舞蹈 茶 视频号 视频笔记 认证时间 该视频没有可用字幕 音乐 颜值 食品饮料
+男 女 行业洞察 产品洞察 用户洞察 趋势洞察'''.split())
 
 
 class EditorialProseTests(unittest.TestCase):
-    def test_credit_and_failure_claims_keep_functional_semantics(self):
-        text = ('A "company not found" result returns HTTP 404 with a valid JSON body '
-                'and is still billed 1 credit; only 429, 5xx, and network errors are not billed.')
-        result = editorial_text(text, notice=True)
-        self.assertIn('HTTP 404 with a valid JSON body', result)
-        self.assertNotIn('billed 1 credit', result)
-        self.assertNotIn('not billed', result)
-        self.assertIn(NOTICE, result)
-        self.assertEqual(editorial_text(result, notice=True), result)
-
-    def test_feature_flags_and_constraints_survive_rate_removal(self):
-        text = ('Request mobile enrichment. WARNING: a found mobile costs 10 credits '
-                'and also includes email enrichment; allowed values: `false`.')
-        result = editorial_text(text, notice=True)
-        self.assertIn('email enrichment', result)
-        self.assertIn('allowed values: `false`', result)
-        self.assertNotIn('10 credits', result)
-
-    def test_billing_words_are_not_a_keyword_deletion_policy(self):
-        for text in ('Cast and crew credits; licence attribution credits.',
-                     'Tax credits, company charges and airline refund quotes.',
-                     'Product price is $25. The plan is Free.',
-                     'Returns `credits_used`, `billing` and `refund` fields.',
-                     'Ordinary description.\n'):
-            self.assertEqual(editorial_text(text, notice=True), text)
-
-    def test_native_billing_claim_is_not_an_upstream_claim(self):
-        text = 'Paid: see x-aisa-pricing; charged only when the call succeeds.'
-        self.assertEqual(editorial_text(text, native=True, notice=True), text)
-
-    def test_english_prose_preserves_required_wire_literals(self):
-        self.assertEqual(english_prose('Facebook公开数据: 商品搜索'), 'Facebook public data: Product search')
-        literal = 'Use the literal prefix `内容类目#` and value `内容类目#美妆`.'
-        self.assertEqual(english_prose(literal), literal)
-
-    def test_catalog_explanations_are_english_with_explicit_wire_literal_exceptions(self):
+    def test_reviewed_wording_proposals_are_english_with_explicit_wire_literal_exceptions(self):
         root = Path(__file__).resolve().parents[2]
         non_english = re.compile(r'[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]+')
         with (root / 'docs/tool-prose-coverage-20261112.csv').open() as stream:

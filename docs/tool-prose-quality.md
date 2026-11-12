@@ -1,189 +1,62 @@
-# Complete tool prose coverage
+# Tool prose: source ownership and delivery
 
-This change covers the complete union of the checked-in Docs inventory at
-`5ebac5c42f5c9d5bb1a725f6c1e7376c39e829d0` and the public Runtime metadata
-captured on 2026-11-12. All 560 Runtime provider reads completed successfully.
-The coverage unit is a public operation; grouped Runtime identities can expand
-into more than one HTTP method. Provider-file count and Runtime-provider count
-therefore differ.
+## Architecture correction
 
-| Coverage | Count |
-|---|---:|
-| Public operations assessed | 6,468 |
-| Operations with revised text | 5,639 |
-| Existing prose preserved | 829 |
-| Guarded Runtime prose identities | 5,605 |
-| Static source operations amended | 2,156 |
-| Static source files amended | 44 |
+AIsaServices #1288 is being refactored to maintain prose at its owning source.
+The former central runtime amendment catalog and its generator-time replacement
+logic have been removed. This repository's amendment-generation script and exact
+billing-replacement table have also been removed. Neither is a publication input.
 
-The static and dynamic counts overlap; do not add them as independent tools.
-`tool-prose-coverage-20261112.csv` contains every operation, old/new prose,
-source identity, disposition and delivery location. CSV display cells normalize trailing line whitespace; exact source bytes remain identified by their hashes and amendment records. The adjacent JSON contains
-per-provider counts. `tool-prose-static-gemini.json` records the standalone Gemini change; `tool-prose-changes-20261112.json` records the exact static
-source amendments and their evidence.
+The existing `tool-prose-coverage-20261112.csv` and adjacent JSON retain the
+reviewed before/after wording proposals for 6,468 public operations. They are
+**audit records, not proof that all proposed text is in the maintained source or
+published**. The historical `runtime_entries` count of 5,605 refers to the removed
+amendment catalog. Do not report it as delivered source changes.
 
-## Wording rules and limits
+## Maintained sources
 
-Readable titles and substantive descriptions are retained. Machine-style titles
-use the existing Purpose statement when available and retain platform/API-surface
-context. Short ambiguous titles gain the existing provider display name.
-Missing or summary-only descriptions include the existing purpose plus declared
-required inputs, important optional inputs, constraints and response field names.
-Supplier examples and credentials are not copied. Optional body properties remain
-conditional. Generic response envelopes do not become invented domain fields.
-Long original text, caveats, pagination, login-cookie and account requirements
-are retained in full; concise purpose/input guidance is placed first.
+- Static Docs: `openapi/upstream/*.json`, the existing reviewed static source
+  metadata, and the standalone Gemini source. Changes remain in those files.
+  The exact amendment record identifies 2,156 static operations in 44 source
+  files plus 138 nested or introductory text fields. These counts overlap with
+  the operation inventory; they must not be added together.
+- Dynamic code-defined APIs: AIsaServices' Social, Commerce, Ads and Connector
+  definitions and the async lifecycle generator. Docs consumes their normal
+  generated Runtime contracts.
+- Gateway catalog APIs: AIsaServices' existing reviewed import inventory owns
+  names and descriptions. Its normal generator emits the existing catalog;
+  the existing insert-only import persists descriptions for newly created rows.
+- Existing database-defined APIs: `IntegrationAPIEndpoint.Name` and
+  `Description` are authoritative. A repository edit does not update these
+  records. An exact current-row export is required to prepare and review
+  guarded database changes. These updates are not yet applied.
+- Provider display titles: existing vendor definitions or provider database
+  fields. A display-title edit must not rename a route or operation ID.
 
-The follow-up fixes grouped title repetitions (including all 15 AgentMail cases),
-array items, conditional schema alternatives, allOf requirements, operation-level
-parameter overrides and named response fields inside data envelopes. 446 brief
-existing descriptions gain missing required-input guidance while retaining their
-original text. Relative to the preceding revision, 311 additional operations change.
+After source changes are applied, use the normal Runtime publication and Docs
+composition chain. There is no Docs-side override for dynamic API prose.
 
-Of the previous 903 purpose-only operations, 26 now use additional declared schema
-detail and 865 use exactly bound source descriptions: 143 from the pinned Treg
-revision and 722 from 264 public Alexandria provider pages. The excerpts, exact
-public identity, original title, source URL and captured source SHA-256 are in
-`scripts/data/tool-prose-purpose-evidence.json`. This is capability documentation,
-not new request/response schema approval or live API verification. Treg excerpts
-omit two upstream billing statements that do not establish AIsa prices.
+## Editorial policy and regression evidence
 
-12 operations still have only their declared purpose; they remain explicitly
-marked `bounded_to_declared_purpose` in the CSV and JSON. Their missing detailed
-source evidence is not replaced with invented parameters or output guarantees.
-The process combines deterministic contract extraction and explicit individual
-wording; it is not a claim that every tool received independent manual review.
+API summary/description explanations, including parameter and response prose,
+are English. Preserve the separate `zh` site and Chinese wire enum values,
+response keys and necessary literal examples. Language tests explicitly
+recognize those protocol literals; they do not translate them.
 
-A shared ANY Runtime identity receives explicitly labeled GET and POST sections
-when its published methods have different input guidance. The 11 independently
-maintained/retained static operations keep their existing prose. All future
-operator prose edits take precedence over the Runtime amendment. Its request,
-response and referenced-schema fingerprint must also match the captured Runtime
-structure. Docs mirror changes need their normal independent source review.
+Unverified upstream per-record credits, rates, free-failure and refund promises
+have been removed from the reviewed wording and static sources. Preserve usage
+counters, HTTP semantics, limits and inputs; refer to applicable AIsa pricing
+and request quotes. Verified native contract-owned charging semantics are not
+supplier advertisements and remain intact.
 
-## Source ownership and publication
+The static history tests reverse only declared summary/description edits and
+compare the original full document, preserving paths, IDs, schemas, examples,
+prices and source provenance. The editorial tests inspect the actual static
+sources as well as the explicitly labeled historical wording proposals.
 
-The AIsaServices companion changes generated contract text, not endpoint database
-rows or management UI text. This Docs PR changes manual source inputs and keeps
-captured Composio descriptions during import. Runtime description precedence
-remains intact. Source acquisition clocks and original provenance are preserved;
-the new prose layer records its original document hash and exact change manifest.
-Historical schema tests validate and undo that layer before their older checks;
-a separate test proves that no non-prose declaration changed in any of 44 files.
+Twelve historical proposals remain bounded to their declared purpose because
+additional input/output evidence is unavailable. The evidence record in
+`scripts/data/tool-prose-purpose-evidence.json` is audit-only, not runtime code.
 
-The standalone, unbound Gemini contract also receives its missing description, with an exact non-prose hash check. Its Chinese copy, translation memory, aggregate OpenAPI and derived catalog hashes are synchronized. Other generated provider JSON/pages are not rewritten. The normal reviewed source
-bundle, Runtime contract publication and Docs projection are still required for
-customer-facing adoption. Source-review receipts, production data, prices,
-request/response schemas and routing are not modified by this work. Local tests
-are not deployment or search ranking evidence.
-
-## Reproduction and validation
-
-```sh
-python3 scripts/audit_tool_prose.py --output /tmp/tool-prose-audit
-python3 scripts/prepare_tool_prose.py --docs-ref 5ebac5c42f5c9d5bb1a725f6c1e7376c39e829d0 \
-  --runtime-dir /path/to/public-runtime-capture \
-  --services-root /path/to/AIsaServices --output /tmp/tool-prose-prepared
-PYTHONPATH=scripts python3 -m unittest discover -s scripts/tests -q
-```
-
-In AIsaServices, `scripts/tool-prose-fingerprints` adds the exact fingerprint using
-the same implementation as generation. Full captured-catalog replay is available
-through `AISA_PROSE_RUNTIME_SNAPSHOT` in `packages/apicontract` tests. Tests cover
-later prose edits, schema drift, reference cycles, identity mismatches, no changes
-to non-prose fields and facts-hash updates.
-
-CI failures must be resolved or reported without weakening publication checks.
-The response comparison resolves discriminator mapping targets and recursive
-references by contract rather than generated component namespace. This avoids a
-false Supadata mismatch after prose changes the source hash; changed targets and
-constraints still fail validation.
-
-The official Polymarket Data v1 specification URL currently returns 404; its
-source-maintenance gate remains blocking. The official documentation index now
-links a v2 specification, which is not evidence that the existing v1 contract is
-unchanged. No source-review receipt is invented and no schema migration is
-included in this prose change.
-
-## Review follow-up and publication limits
-
-The preparation step removes U+200B/U+200C/U+200D/U+FEFF export artifacts and
-rejects the exact pricing placeholder `默认价格配置` as useful prose. Original
-Runtime text remains intact in matching/evidence fields. The final editorial pass
-removes unverified supplier Free claims; actual prices and billing rules are unchanged.
-
-The companion AIsaServices PR now includes Social/Commerce PR #1278. Those
-newer code-owned descriptions win over this captured prose amendment through
-the existing exact-before guard. The CSV remains the dated capture comparison,
-not a claim that old snapshot text overrides the merged resource descriptions.
-
-`response_contract` is a distinct checker fix in commit cad0b7de3, retained here
-because changing a source prose hash changes generated component namespaces.
-It warrants specific review. Tests reject a changed discriminator mapping key,
-a different mapping target, altered target constraints, missing/external targets,
-and handle recursive reference graphs; namespace-only renames compare equal.
-
-Composio conversion produces an offline source-review candidate, not published
-or trusted agent policy. It creates zero review receipts. Imported prose and
-schema descriptions remain external data; source hashing, independent review,
-and publication qualification still apply. Keyword stripping or Markdown
-quotation cannot make hostile text inert and would corrupt legitimate API
-instructions. No such security guarantee is claimed. Agent consumers must treat
-tool documentation as data subordinate to their own trusted instructions.
-
-Only Gemini's standalone published translation is changed in this PR. Other
-changes are source inputs. On future projection `pull_openapi.py` explicitly
-allows untranslated fields and uses the new English source for missing exact
-source-string translations; it does not reuse stale translations. Strict
-`runtime_localize_openapi_zh.py generate` instead fails on missing translations.
-Completing Chinese translations is required before claiming Chinese coverage.
-
-Internal audit files are explicitly excluded by `.mintignore`; GitHub retains
-the full review trail. Polymarket source-maintenance evidence continues to block
-formal publication; no approval or successful acquisition is fabricated.
-
-## Remaining source-detail gaps
-
-These are the complete 12 purpose-only cases after the follow-up. A richer public contract or exact-bound source description is still required.
-
-| Provider | Operation |
-|---|---|
-| api-ninjas | `api-ninjas.bitcoin` |
-| hackernews | `hackernews.maxitem` |
-| hackernews | `hackernews.updates` |
-| job-search | `job-search.glassdoor-realtime-list-salary-filters` |
-| twelvedata | `twelvedata.etfs-type` |
-| twelvedata | `twelvedata.get-technical-indicators-list` |
-| youtube | `youtube.shorts.trending` |
-| financial | `any_financial_apis_v1_financial_crypto_prices` |
-| financial | `any_financial_apis_v1_financial_crypto_prices_snapshot` |
-| financial | `getEarningsPressReleases` |
-| financial | `getSegmentedRevenues` |
-| financial | `getInstitutionalOwnership` |
-
-## Billing wording and English source review
-
-The follow-up removes unsupported supplier credit rates and failure/refund promises
-from operation prose, parameter/response descriptions and document introductions.
-The exact, reviewed old/new clauses are in
-`scripts/data/tool-prose-billing-corrections.json`; this is not a blanket keyword
-filter. AIsa-owned Social pricing statements remain tied to its code-owned pricing
-contract. Unverified Akta `Free` claims now defer to AIsa pricing; this supersedes
-the earlier preserve-Free editorial decision. Attribution/film credits, tax
-credits, booking refund data, business prices and returned usage fields are retained.
-The added notice points to applicable AIsa pricing and a request quote where
-supported, and distinguishes upstream counters from AIsa charges/refunds.
-
-API source explanations are English, including provider prefixes, BytePlus monitor
-and Semrush descriptions and four bilingual TikHub region-parameter declarations.
-The explicitly localized `zh` site is retained. Required Chinese enum values,
-response keys/messages and examples remain literal wire data, with English
-explanations; `WIRE_LITERAL_TEXT` records the reviewed exceptions. Language tests
-cover all 6,468 catalog rows and all static upstream source declaration prose.
-Raw captures and before/evidence text remain unchanged for provenance.
-
-The static manifest now also records 138 nested/introductory declaration text edits
-as exact JSON pointers. Only summary/description leaves may be edited; enums,
-defaults, examples, identifiers, request/response structure, pricing metadata and
-source authority/clocks must reconstruct exactly. These fields are included in
-the same 44-file source-history verification, not counted as additional tools.
+Polymarket v1 migration remains excluded. Its independent source-maintenance
+readiness failure must be reported separately, not bypassed or relabeled green.
