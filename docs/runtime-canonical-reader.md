@@ -11,6 +11,9 @@ receipt, file layout, and stage inputs.
 The outer Runtime manifest and revision hash encoding are unchanged. Its exact
 sorted file list binds every original byte. Media types remain
 `application/json`; the total limit is 128 MiB and the file count is capped at 2,048.
+The inner canonical inventory is capped at 1,024 members: up to 1,022 native
+provider files plus the aggregate and readiness report. This matches the outer
+closed graph, which also includes provider facts, index and canonical manifest.
 
 | File | Limit | Meaning |
 | --- | --- | --- |
