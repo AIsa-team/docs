@@ -17,7 +17,7 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 from runtime_contract_artifact import member_name, file_limit, validate_canonical_files
 
 MAX_FILE = 8 << 20
-MAX_TOTAL = 192 << 20
+MAX_TOTAL = 128 << 20
 HEX64 = re.compile(r'[0-9a-f]{64}')
 HEX40 = re.compile(r'[0-9a-f]{40}')
 PROVIDER = re.compile(r'[a-z0-9][a-z0-9_.-]*')
