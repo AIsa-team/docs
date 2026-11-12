@@ -69,7 +69,7 @@ class DevProductionPreviewTests(unittest.TestCase):
             acquire.assert_not_called()
             with patch.object(dev.subprocess, 'check_output', return_value='dev'), \
                     patch.object(dev.subprocess, 'run'), \
-                    patch.object(dev, 'acquire_production', return_value=({'index.json': b'{}'}, {})), \
+                    patch.object(dev, 'acquire_production', return_value=({'index.json': b'{}', 'category.json': b'{}'}, {})), \
                     patch.object(dev, 'inputs_sha256', return_value='same'), \
                     patch.object(dev, 'generate', return_value=({}, {'status': 'generated'})) as generate:
                 dev.sync(root, source='production', if_changed=True)

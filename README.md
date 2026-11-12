@@ -200,7 +200,9 @@ unchanged current pointer before and after downloading the exact immutable
 manifest; validates its revision, every file SHA/ETag and index/provider binding;
 and rejects pending or incomplete selected Runtime coverage. HTTPS verification
 is enabled, redirects and environment proxies are disabled, and acquisition is
-bounded to 180 seconds, 512 files, 8 MiB per file and 64 MiB per immutable release.
+bounded to 600 seconds, 2,048 files and 128 MiB per immutable release.
+Individual facts files are limited to 8 MiB; canonical graph members use their
+explicit type-specific limits.
 An existing output directory is never reused. Files retain their downloaded
 bytes, with both `providers/*.json` and flat copies for the existing Docs CLI.
 
