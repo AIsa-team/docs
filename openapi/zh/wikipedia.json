@@ -42,7 +42,7 @@
       "schema_version": "1",
       "composer_version": "29",
       "response_pending": [],
-      "document_hash": "sha256:36caaf9ea8a3a7fa781995d7d679905ccf64914cb17f253b61c317823be20a70"
+      "document_hash": "sha256:dc607658e8ab5df43b632e7f3dcecbd280bedf24b009f60e813311e3de69a3f2"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -97,7 +97,7 @@
   "paths": {
     "/apis/v1/wikipedia/articles/lookup": {
       "post": {
-        "description": "Read the current revision of a Wikipedia (or sister-project) article by exact title: full wikitext (or HTML with body), abstract, categories, redirects, connected Wikidata QID, license, and revision credibility signals. Use structured-contents instead when you want infobox fields, sections or references already parsed. From https://de.wikipedia.org/wiki/Berlin pass name `Berlin` and project `dewiki`. Not a search: titles must match exactly.",
+        "description": "Read the current revision of a Wikipedia (or sister-project) article by exact title: full wikitext (or HTML with body), abstract, categories, redirects, connected Wikidata QID, license, and revision credibility signals. Use structured-contents instead when you want infobox fields, sections or references already parsed. From https://de.wikipedia.org/wiki/Berlin pass name `Berlin` and project `dewiki`. Not a search: titles must match exactly. Supply fields or body separately. For projected body content, use article_body.wikitext or article_body.html in fields.",
         "operationId": "wikipedia.articles.lookup",
         "requestBody": {
           "required": true,
@@ -124,10 +124,11 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "Return only these fields, in dot notation, for example `name`, `abstract`, `url`, `version.identifier`. Omit for the full record. Wikimedia returns exactly the fields named.\n\nProvider reference: maximum 50.",
+                    "description": "Return only the named fields, using dot notation; at most 50 entries. Omit body when using fields. Include article_body.wikitext or article_body.html here to select body content.",
                     "x-alexandria-option-metadata": {
                       "max": 50
-                    }
+                    },
+                    "maxItems": 50
                   },
                   "limit": {
                     "maximum": 10,
@@ -137,8 +138,7 @@
                   },
                   "body": {
                     "type": "string",
-                    "description": "Which article_body format to include when fields is not given: `wikitext` (default, compact), `html` (MediaWiki DOM, often 5-10x larger), `both`, or `none` for metadata and abstract only.\n\nProvider reference: allowed values [\"wikitext\", \"html\", \"both\", \"none\"]; default \"wikitext\".",
-                    "default": "wikitext",
+                    "description": "Article body format when fields is omitted: wikitext (default), html, both, or none. Omit body entirely when using fields, including when no body is needed.",
                     "x-alexandria-option-metadata": {
                       "oneOf": [
                         "wikitext",
@@ -146,27 +146,361 @@
                         "both",
                         "none"
                       ]
-                    }
+                    },
+                    "enum": [
+                      "wikitext",
+                      "html",
+                      "both",
+                      "none"
+                    ]
                   }
                 },
                 "required": [
                   "limit",
                   "name"
-                ]
+                ],
+                "not": {
+                  "required": [
+                    "fields",
+                    "body"
+                  ]
+                }
+              },
+              "examples": {
+                "production": {
+                  "summary": "Verified production request (2026-11-12)",
+                  "value": {
+                    "name": "Marie_Curie",
+                    "project": "enwiki",
+                    "limit": 1,
+                    "fields": [
+                      "name",
+                      "identifier"
+                    ]
+                  }
+                }
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Articles matching the exact title in the selected project or language, newest revision each. article_body carries the format chosen with body, wikitext by default. Empty when none match. Priced per article returned.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `name` | string | Article title as displayed on the page. |\n| `identifier` | number | MediaWiki page ID; not accepted as lookup input. |\n| `abstract` | string | Short plain-text summary of the article. |\n| `url` | string | Canonical article URL, for citation. |\n| `date_created` | string |  |\n| `date_modified` | string | When the current revision was saved. |\n| `in_language` | object | Language: identifier (for example en), name and direction. |\n| `is_part_of` | object | Project: identifier (for example enwiki), code, name and url. |\n| `namespace` | object | MediaWiki namespace; 0 is the main article namespace. |\n| `main_entity` | object | Connected Wikidata item: identifier (QID such as Q7186) and url. Pass the QID to wikidata/item. |\n| `additional_entities` | object[] | Other Wikidata entities used on the page. |\n| `image` | object | Main image: content_url, width, height and thumbnail. |\n| `license` | object[] | Licenses for the content, normally CC BY-SA 4.0, with name and url. |\n| `version` | object | Current revision: identifier, editor, comment, tags, size, and credibility signals under scores (revertrisk, referencerisk, referenceneed) and maintenance_tags. |\n| `article_body` | object | Full content: wikitext by default, html (MediaWiki DOM) with body html, both with body both, absent with body none. |\n| `categories` | object[] | Categories the article belongs to: name and url. |\n| `templates` | object[] | Templates used on the page. |\n| `redirects` | object[] | Titles that redirect to this article: name and url. |\n| `protection` | object[] | Edit and move protections, absent when unprotected. |\n| `watchers_count` | number |  |\n| `event` | object | The pipeline event behind this revision: type and date_created. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "description": "Returns the tool result directly as an array of article objects. With fields, articles contain only the selected fields. body selects wikitext, html, both, or none. No article property is required because field projection is supported.\n\n| Documented field | Type | Description |\n| --- | --- | --- |\n| `name` | string | Article title as displayed on the page. |\n| `identifier` | number | MediaWiki page ID; not accepted as lookup input. |\n| `abstract` | string | Short plain-text summary of the article. |\n| `url` | string | Canonical article URL, for citation. |\n| `date_created` | string |  |\n| `date_modified` | string | When the current revision was saved. |\n| `in_language` | object | Language: identifier (for example en), name and direction. |\n| `is_part_of` | object | Project: identifier (for example enwiki), code, name and url. |\n| `namespace` | object | MediaWiki namespace; 0 is the main article namespace. |\n| `main_entity` | object | Connected Wikidata item: identifier (QID such as Q7186) and url. Pass the QID to wikidata/item. |\n| `additional_entities` | object[] | Other Wikidata entities used on the page. |\n| `image` | object | Main image: content_url, width, height and thumbnail. |\n| `license` | object[] | Licenses for the content, normally CC BY-SA 4.0, with name and url. |\n| `version` | object | Current revision: identifier, editor, comment, tags, size, and credibility signals under scores (revertrisk, referencerisk, referenceneed) and maintenance_tags. |\n| `article_body` | object | Full content: wikitext by default, html (MediaWiki DOM) with body html, both with body both, absent with body none. |\n| `categories` | object[] | Categories the article belongs to: name and url. |\n| `templates` | object[] | Templates used on the page. |\n| `redirects` | object[] | Titles that redirect to this article: name and url. |\n| `protection` | object[] | Edit and move protections, absent when unprotected. |\n| `watchers_count` | number |  |\n| `event` | object | The pipeline event behind this revision: type and date_created. |\n\nKnown structure is documented from the official provider descriptors and production calls. Optional fields and additional fields are allowed; field presence is not inferred from a single response.",
             "content": {
               "application/json": {
                 "schema": {
-                  "not": {
-                    "type": "null"
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Article title as displayed on the page."
+                      },
+                      "identifier": {
+                        "type": "number",
+                        "description": "MediaWiki page ID; not accepted as lookup input."
+                      },
+                      "abstract": {
+                        "type": "string",
+                        "description": "Short plain-text summary of the article."
+                      },
+                      "url": {
+                        "type": "string",
+                        "description": "Canonical article URL, for citation."
+                      },
+                      "date_created": {
+                        "type": "string"
+                      },
+                      "date_modified": {
+                        "type": "string",
+                        "description": "When the current revision was saved."
+                      },
+                      "in_language": {
+                        "type": "object",
+                        "properties": {
+                          "identifier": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "Language: identifier (for example en), name and direction."
+                      },
+                      "is_part_of": {
+                        "type": "object",
+                        "properties": {
+                          "identifier": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "Project: identifier (for example enwiki), code, name and url."
+                      },
+                      "namespace": {
+                        "type": "object",
+                        "properties": {
+                          "identifier": {
+                            "type": "number"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "MediaWiki namespace; 0 is the main article namespace."
+                      },
+                      "main_entity": {
+                        "type": "object",
+                        "properties": {
+                          "identifier": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "Connected Wikidata item: identifier (QID such as Q7186) and url. Pass the QID to wikidata/item."
+                      },
+                      "additional_entities": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "identifier": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            },
+                            "aspects": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "description": "Other Wikidata entities used on the page."
+                      },
+                      "image": {
+                        "type": "object",
+                        "properties": {
+                          "content_url": {
+                            "type": "string"
+                          },
+                          "width": {
+                            "type": "number"
+                          },
+                          "height": {
+                            "type": "number"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "Main image: content_url, width, height and thumbnail."
+                      },
+                      "license": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "identifier": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "description": "Licenses for the content, normally CC BY-SA 4.0, with name and url."
+                      },
+                      "version": {
+                        "type": "object",
+                        "properties": {
+                          "identifier": {
+                            "type": "number"
+                          },
+                          "comment": {
+                            "type": "string"
+                          },
+                          "tags": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "scores": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": true
+                          },
+                          "editor": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": true
+                          },
+                          "number_of_characters": {
+                            "type": "number"
+                          },
+                          "size": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "number"
+                              },
+                              "unit_text": {
+                                "type": "string"
+                              }
+                            },
+                            "additionalProperties": true
+                          },
+                          "maintenance_tags": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": true
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "Current revision: identifier, editor, comment, tags, size, and credibility signals under scores (revertrisk, referencerisk, referenceneed) and maintenance_tags."
+                      },
+                      "article_body": {
+                        "type": "object",
+                        "properties": {
+                          "wikitext": {
+                            "type": "string"
+                          },
+                          "html": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "Selected body formats. Omitted with body=none or when excluded by fields."
+                      },
+                      "categories": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "description": "Categories the article belongs to: name and url."
+                      },
+                      "templates": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "description": "Templates used on the page."
+                      },
+                      "redirects": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "description": "Titles that redirect to this article: name and url."
+                      },
+                      "protection": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string"
+                            },
+                            "level": {
+                              "type": "string"
+                            },
+                            "expiry": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "description": "Edit and move protections, absent when unprotected."
+                      },
+                      "watchers_count": {
+                        "type": "number"
+                      },
+                      "event": {
+                        "type": "object",
+                        "properties": {
+                          "identifier": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "date_created": {
+                            "type": "string"
+                          },
+                          "date_published": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "The pipeline event behind this revision: type and date_created."
+                      },
+                      "date_previously_modified": {
+                        "type": "string"
+                      },
+                      "previous_version": {
+                        "type": "object",
+                        "properties": {
+                          "identifier": {
+                            "type": "number"
+                          },
+                          "number_of_characters": {
+                            "type": "number"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    },
+                    "additionalProperties": true
                   },
                   "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "production": {
+                    "summary": "Observed production response (2026-11-12)",
+                    "description": "Response to the displayed request; data and timestamps can change.",
+                    "value": [
+                      {
+                        "name": "Marie Curie",
+                        "identifier": 20408
+                      }
+                    ]
+                  }
                 }
               }
             }
@@ -232,13 +566,21 @@
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
           "path_space": "public",
-          "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+          "content_hash": "sha256:87f944e4d129fc2244133f4d99f91fd394d0ce9bed00f3184b3e864ea0ae5a7f",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
           "fetched_at": "2026-11-11T17:31:20Z",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
           "owner": "AIsa-team/docs",
           "review_period_days": 30,
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+            "paths": [
+              "/apis/v1/pubmed-ncbi-nlm-nih-gov/publications/related",
+              "/apis/v1/wikipedia/articles/lookup"
+            ]
+          }
         },
         "x-aisa-response-source": {
           "kind": "upstream_success_contract",
@@ -250,15 +592,23 @@
             "refresh_policy": "pinned",
             "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
             "path_space": "public",
-            "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+            "content_hash": "sha256:87f944e4d129fc2244133f4d99f91fd394d0ce9bed00f3184b3e864ea0ae5a7f",
             "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
             "fetched_at": "2026-11-11T17:31:20Z",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
             "owner": "AIsa-team/docs",
             "review_period_days": 30,
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/pubmed-ncbi-nlm-nih-gov/publications/related",
+                "/apis/v1/wikipedia/articles/lookup"
+              ]
+            }
           },
-          "content_hash": "sha256:ec8f12c79c687e551487b2e3f8e469a46267dcd79d82ebfe94cd4f4879c36b81"
+          "content_hash": "sha256:5e576e919fc0dfc6028fe83b0e757adbb356d0e0019703acb2e4da08134a4145"
         },
         "x-aisa-docs-url": "/api-reference/wikipedia/wikipedia-articles-lookup"
       }
@@ -387,13 +737,21 @@
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
           "path_space": "public",
-          "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+          "content_hash": "sha256:87f944e4d129fc2244133f4d99f91fd394d0ce9bed00f3184b3e864ea0ae5a7f",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
           "fetched_at": "2026-11-11T17:31:20Z",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
           "owner": "AIsa-team/docs",
           "review_period_days": 30,
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+            "paths": [
+              "/apis/v1/pubmed-ncbi-nlm-nih-gov/publications/related",
+              "/apis/v1/wikipedia/articles/lookup"
+            ]
+          }
         },
         "x-aisa-response-source": {
           "kind": "upstream_success_contract",
@@ -405,13 +763,21 @@
             "refresh_policy": "pinned",
             "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
             "path_space": "public",
-            "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+            "content_hash": "sha256:87f944e4d129fc2244133f4d99f91fd394d0ce9bed00f3184b3e864ea0ae5a7f",
             "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
             "fetched_at": "2026-11-11T17:31:20Z",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
             "owner": "AIsa-team/docs",
             "review_period_days": 30,
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/pubmed-ncbi-nlm-nih-gov/publications/related",
+                "/apis/v1/wikipedia/articles/lookup"
+              ]
+            }
           },
           "content_hash": "sha256:919a764536667dba5d88bd042be4845ae85236f6c4e07c94a7a3a83e7164aea4"
         },
@@ -527,13 +893,21 @@
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
           "path_space": "public",
-          "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+          "content_hash": "sha256:87f944e4d129fc2244133f4d99f91fd394d0ce9bed00f3184b3e864ea0ae5a7f",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
           "fetched_at": "2026-11-11T17:31:20Z",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
           "owner": "AIsa-team/docs",
           "review_period_days": 30,
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+            "paths": [
+              "/apis/v1/pubmed-ncbi-nlm-nih-gov/publications/related",
+              "/apis/v1/wikipedia/articles/lookup"
+            ]
+          }
         },
         "x-aisa-response-source": {
           "kind": "upstream_success_contract",
@@ -545,13 +919,21 @@
             "refresh_policy": "pinned",
             "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
             "path_space": "public",
-            "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+            "content_hash": "sha256:87f944e4d129fc2244133f4d99f91fd394d0ce9bed00f3184b3e864ea0ae5a7f",
             "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
             "fetched_at": "2026-11-11T17:31:20Z",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
             "owner": "AIsa-team/docs",
             "review_period_days": 30,
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/pubmed-ncbi-nlm-nih-gov/publications/related",
+                "/apis/v1/wikipedia/articles/lookup"
+              ]
+            }
           },
           "content_hash": "sha256:7c1ee2c6206206cab8529cfae1aa41b3400a6731328c2b19d714b6329f6125d1"
         },
@@ -667,13 +1049,21 @@
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
           "path_space": "public",
-          "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+          "content_hash": "sha256:87f944e4d129fc2244133f4d99f91fd394d0ce9bed00f3184b3e864ea0ae5a7f",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
           "fetched_at": "2026-11-11T17:31:20Z",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
           "owner": "AIsa-team/docs",
           "review_period_days": 30,
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+            "paths": [
+              "/apis/v1/pubmed-ncbi-nlm-nih-gov/publications/related",
+              "/apis/v1/wikipedia/articles/lookup"
+            ]
+          }
         },
         "x-aisa-response-source": {
           "kind": "upstream_success_contract",
@@ -685,13 +1075,21 @@
             "refresh_policy": "pinned",
             "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
             "path_space": "public",
-            "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+            "content_hash": "sha256:87f944e4d129fc2244133f4d99f91fd394d0ce9bed00f3184b3e864ea0ae5a7f",
             "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
             "fetched_at": "2026-11-11T17:31:20Z",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
             "owner": "AIsa-team/docs",
             "review_period_days": 30,
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/pubmed-ncbi-nlm-nih-gov/publications/related",
+                "/apis/v1/wikipedia/articles/lookup"
+              ]
+            }
           },
           "content_hash": "sha256:97ef07ca9cdfd18fd51c1d72824c139b3ca641b0aa48b561397ca4f4d26b2fda"
         },
@@ -807,13 +1205,21 @@
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
           "path_space": "public",
-          "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+          "content_hash": "sha256:87f944e4d129fc2244133f4d99f91fd394d0ce9bed00f3184b3e864ea0ae5a7f",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
           "fetched_at": "2026-11-11T17:31:20Z",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
           "owner": "AIsa-team/docs",
           "review_period_days": 30,
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+            "paths": [
+              "/apis/v1/pubmed-ncbi-nlm-nih-gov/publications/related",
+              "/apis/v1/wikipedia/articles/lookup"
+            ]
+          }
         },
         "x-aisa-response-source": {
           "kind": "upstream_success_contract",
@@ -825,13 +1231,21 @@
             "refresh_policy": "pinned",
             "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
             "path_space": "public",
-            "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+            "content_hash": "sha256:87f944e4d129fc2244133f4d99f91fd394d0ce9bed00f3184b3e864ea0ae5a7f",
             "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
             "fetched_at": "2026-11-11T17:31:20Z",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
             "owner": "AIsa-team/docs",
             "review_period_days": 30,
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/pubmed-ncbi-nlm-nih-gov/publications/related",
+                "/apis/v1/wikipedia/articles/lookup"
+              ]
+            }
           },
           "content_hash": "sha256:22c87559d418664f926d2a887a035ff405bab1c6279488428f005308edf4ed7b"
         },
