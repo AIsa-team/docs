@@ -18,7 +18,7 @@ therefore differ.
 
 The static and dynamic counts overlap; do not add them as independent tools.
 `tool-prose-coverage-20261112.csv` contains every operation, old/new prose,
-source identity, disposition and delivery location. The adjacent JSON contains
+source identity, disposition and delivery location. CSV display cells normalize trailing line whitespace; exact source bytes remain identified by their hashes and amendment records. The adjacent JSON contains
 per-provider counts. `tool-prose-static-gemini.json` records the standalone Gemini change; `tool-prose-changes-20261112.json` records the exact static
 source amendments and their evidence.
 

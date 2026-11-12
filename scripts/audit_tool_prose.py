@@ -75,7 +75,7 @@ def write_report(root, output):
     rows = inventory(root)
     output.mkdir(parents=True, exist_ok=True)
     with (output / 'all-tools.csv').open('w', newline='') as stream:
-        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(stream, fieldnames=list(rows[0]), lineterminator="\n")
         writer.writeheader(); writer.writerows(rows)
     providers = {}
     for row in rows:
