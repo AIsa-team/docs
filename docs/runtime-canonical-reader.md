@@ -10,7 +10,7 @@ receipt, file layout, and stage inputs.
 
 The outer Runtime manifest and revision hash encoding are unchanged. Its exact
 sorted file list binds every original byte. Media types remain
-`application/json`; the total limit stays 64 MiB and the count stays 512.
+`application/json`; the total limit is 128 MiB and the file count is capped at 2,048.
 
 | File | Limit | Meaning |
 | --- | --- | --- |
