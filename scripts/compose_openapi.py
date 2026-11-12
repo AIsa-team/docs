@@ -668,6 +668,16 @@ def merge_object(upstream: dict, declared: dict, constrained: set = frozenset(),
     merged = flatten_object(source)
     names = set(declared.get("properties", {}))
     source_required = set(merged.get("required", []))
+    if declared.get("additionalProperties") is False:
+        rejected = source_required - names
+        if rejected:
+            raise ValueError("source body requires inputs rejected by runtime: "
+                             + ", ".join(sorted(prefix + name for name in rejected)))
+        # A mixed operation can have a closed request and a provider-owned
+        # response. Provider-only inputs must not reopen the Runtime body.
+        merged["properties"] = {name: value for name, value in merged.get("properties", {}).items()
+                                if name in names}
+        merged["additionalProperties"] = False
     required = (source_required - names) | set(declared.get("required", []))
     for name, value in declared.get("properties", {}).items():
         if name not in required and provider_required(name in source_required, {}, value, prefix + name, constrained):
@@ -675,7 +685,7 @@ def merge_object(upstream: dict, declared: dict, constrained: set = frozenset(),
             if kept is not None:
                 kept.append(prefix + name)
         original = merged.setdefault("properties", {}).get(name, {})
-        if value.get("properties") and isinstance(original, dict) and original.get("type", "object") == "object":
+        if (value.get("properties") or value.get("additionalProperties") is False) and isinstance(original, dict) and original.get("type", "object") == "object":
             merged["properties"][name] = merge_object(original, value, constrained, kept, prefix + name + ".")
         elif (value.get("type") == "array" and value.get("items") == {}
               and isinstance(original, dict) and original.get("type") == "array"
@@ -707,7 +717,7 @@ def merge_body(upstream: dict, runtime: dict, constrained: set = frozenset(), ke
         if original is None:
             raise ValueError(f"mixed body missing upstream media type {media}")
         declared = contract.get("schema", {})
-        if not declared.get("properties"):
+        if not declared.get("properties") and declared.get("additionalProperties") is not False:
             continue
         original["schema"] = merge_object(original.get("schema", {}), declared, constrained, kept)
         # Upstream request examples describe the complete body. Runtime examples
