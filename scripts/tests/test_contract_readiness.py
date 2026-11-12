@@ -589,6 +589,42 @@ class ReadinessTests(unittest.TestCase):
                         body['required'] = False
                     self.assertIn('runtime_body_contract_mismatch', self.errors(check_readiness(f, changed, c)), change)
 
+    def test_mixed_body_rechecks_runtime_cross_field_rules_without_weakening_them(self):
+        runtime_schema = {'type': 'object', 'properties': {
+            'name': {'type': 'string'}, 'id': {'type': 'integer'},
+            'region': {'type': 'string'}, 'country': {'type': 'string'}},
+            'allOf': [{'anyOf': [{'required': ['name']}, {'required': ['id']}]},
+                      {'anyOf': [{'required': ['region']}, {'required': ['country']}]}]}
+        for nested in (False, True):
+            with self.subTest(nested=nested):
+                f, d, c = fixture()
+                schema = ({'type': 'object', 'properties': {'options': runtime_schema}}
+                          if nested else runtime_schema)
+                body = {'content': {'application/json': {'schema': copy.deepcopy(schema)}}}
+                f['p']['paths']['/search']['get'].update({
+                    'x-aisa-validation': 'mixed', 'requestBody': copy.deepcopy(body)})
+                op = d['p']['paths']['/search']['get']
+                op.update({'x-aisa-source': {'kind': 'manual'}, 'requestBody': body})
+                before = copy.deepcopy((f, d, c))
+                self.assertEqual('passed', check_readiness(f, d, c)['status'])
+                self.assertEqual(before, (f, d, c))
+                for mutation in ('missing', 'weakened', 'stricter', 'extra', 'field_type'):
+                    changed = copy.deepcopy(d)
+                    actual = changed['p']['paths']['/search']['get']['requestBody']['content']['application/json']['schema']
+                    if nested:
+                        actual = actual['properties']['options']
+                    if mutation == 'missing':
+                        actual.pop('allOf')
+                    elif mutation == 'weakened':
+                        actual['allOf'].pop()
+                    elif mutation == 'stricter':
+                        actual['allOf'][0]['anyOf'].pop()
+                    elif mutation == 'extra':
+                        actual['allOf'].append({'not': {'required': ['name', 'id']}})
+                    else:
+                        actual['properties']['id']['type'] = 'string'
+                    self.assertNotEqual('passed', check_readiness(f, changed, c)['status'], mutation)
+
     def test_recursive_body_refs_are_finite_and_external_refs_fail_closed(self):
         f, d, c = fixture()
         schema = {'type': 'object', 'properties': {'value': {'type': 'string'}, 'next': {'$ref': '#/components/schemas/Node'}}}
