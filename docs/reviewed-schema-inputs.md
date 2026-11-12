@@ -33,9 +33,11 @@ The current checkout's Composer is never used for this replay. This allows
 derived review labels and newer Runtime facts to differ from a generated draft
 without ignoring fields or accepting a partially matching contract.
 
-The formal assessment repeats the check and records the original draft hashes
-in `registry_lineage.reviewed_native_sha256`, together with the pins, compared
-file count and differing draft names in `reviewed_native_replay` when needed.
+The formal assessment repeats the check and records identical adopted hashes
+in `registry_lineage.reviewed_native_sha256`. Differing original drafts are
+recorded separately in `replayed_draft_sha256`, together with the pins, compared
+file count and draft names in `reviewed_native_replay`. The report validator
+checks those bindings without treating the old draft hashes as current output.
 Historical native
 documents still come from F and retain their original hashes; drafts are never
 used as compatibility inputs. A draft changed after R, a legacy input without

@@ -305,6 +305,7 @@ class RegistryReplayTests(unittest.TestCase):
     def test_reviewed_draft_difference_requires_complete_pinned_replay(self):
         previous, revision, bundle = self.reviewed_native_update()
         _, lineage = self.reviewed_input_view(previous, revision, bundle)
+        original = copy.deepcopy(lineage)
         runtime = {'one': bundle.contents['input/openapi/one.json']}
         assessment = {'compiler_inputs': {'docs_ref': revision}}
         with patch('canonical_replay.replay_canonical_output', return_value={
@@ -313,11 +314,13 @@ class RegistryReplayTests(unittest.TestCase):
                 acquired=self.root, assessment=assessment, members={})
         replay.assert_called_once_with(self.root, self.root, assessment, {})
         self.assertEqual(lineage['reviewed_native_replay']['different_drafts'], ['one'])
+        self.assertEqual(lineage['replayed_draft_sha256'], original['reviewed_native_sha256'])
+        self.assertNotIn('reviewed_native_sha256', lineage)
         # A failed reproduction cannot turn a different schema into approval.
         with patch('canonical_replay.replay_canonical_output',
                    side_effect=ValueError('Canonical replay output differs')):
             with self.assertRaisesRegex(ValueError, 'replay output differs'):
-                importer.validate_reviewed_native(lineage, runtime, repository=self.root,
+                importer.validate_reviewed_native(original, runtime, repository=self.root,
                     acquired=self.root, assessment=assessment, members={})
 
     def test_reviewed_registration_still_rejects_unregistered_extra_native(self):

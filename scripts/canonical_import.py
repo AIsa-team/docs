@@ -464,6 +464,13 @@ def validate_reviewed_native(lineage, native_raw, *, repository=None, acquired=N
             'Canonical Runtime differs from reviewed native document: ' + different[0])
     from canonical_replay import replay_canonical_output
     proof = replay_canonical_output(repository, acquired, assessment, members)
+    drafts = lineage['reviewed_native_sha256']
+    lineage['replayed_draft_sha256'] = {name: drafts[name] for name in different}
+    retained = {name: value for name, value in drafts.items() if name not in different}
+    if retained:
+        lineage['reviewed_native_sha256'] = retained
+    else:
+        lineage.pop('reviewed_native_sha256')
     lineage['reviewed_native_replay'] = {**proof, 'different_drafts': sorted(different)}
 
 
