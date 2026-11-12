@@ -88,6 +88,12 @@ production Runtime publisher on dev or relabel a production receipt as dev
 evidence. Website and handbook links still need the separate dev site's domain
 when hosting is configured.
 
+Dev navigation checks use `regroup_api_reference.py --check --preserve-navigation`
+to match the generator's retained directory hierarchy. The check still requires
+unique English and Chinese page sets to mirror each other, and verifies the
+platform index and Data APIs cards against that navigation. Page, slug and link
+checks also run. Production retains the default regrouping and translation checks.
+
 ## Dev Runtime acquisition
 
 Dev exposes live facts at `/info/openapi.json` and
