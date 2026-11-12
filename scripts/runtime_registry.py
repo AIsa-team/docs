@@ -259,9 +259,6 @@ def public_mirror_index(root: Path, overrides: dict | None = None):
             continue
         if source.get('kind') != 'manual' or not all(source.get(k) for k in ('url', 'fetched_at', 'content_hash', 'converter')):
             raise ValueError(f'{filename}: public mirror requires complete manual provenance')
-        # Keep per-operation audit bindings in the reviewed input, not in every
-        # catalog's public provenance. The source hash still binds those inputs.
-        source = {key: value for key, value in source.items() if key != 'operation_evidence'}
         response_only = source.get('response_only') is True
         if 'response_only' in source and type(source['response_only']) is not bool:
             raise ValueError(f'{filename}: response_only must be boolean')

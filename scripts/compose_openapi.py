@@ -393,12 +393,8 @@ def referenced_components(value: Any, document: dict) -> dict:
                 if openapi30:
                     definition = schema_30_to_31(definition) if section == "schemas" else fragment_30_to_31(definition)
                 seen.add(ref)
-                # Different pointers into one component's $defs share the same
-                # finite component graph. Validate every pointer above, but walk
-                # the complete component only once, including recursive schemas.
-                if name not in components.get(section, {}):
-                    components.setdefault(section, {})[name] = copy.deepcopy(original)
-                    visit({'links': {'target': definition}} if section == 'links' else definition)
+                components.setdefault(section, {})[name] = copy.deepcopy(original)
+                visit({'links': {'target': definition}} if section == 'links' else definition)
             map_contract_children(node, visit)
     visit(fragment_30_to_31(value) if openapi30 else value)
     return components
@@ -784,15 +780,6 @@ def source_success_responses(operation: dict, document: dict, output: dict, name
                        "content": response.get("content", {})}
             if response.get("x-aisa-no-content") is True:
                 payload["x-aisa-no-content"] = True
-            payload = copy.deepcopy(payload)
-            for media in payload.get("content", {}).values():
-                schema = media.get("schema") if isinstance(media, dict) else None
-                if isinstance(schema, dict) and schema.get("x-aisa-schema-completeness") == "documented-fields-only":
-                    # The full field table remains in the response description.
-                    # Raw discovery metadata stays in the reviewed source input.
-                    schema.pop("x-aisa-provider-response", None)
-                    if schema.get("description") == payload.get("description"):
-                        schema.pop("description", None)
             result[str(status)] = resolve_fragment(payload, document, output, namespace, preserve_refs=True)
     return result
 
