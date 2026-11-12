@@ -1,10 +1,26 @@
-"""Preserve official JSON filter values without inventing a provider DSL schema."""
+"""Preserve documented JSON filters and echoed request values."""
 import copy
 
 SOURCE_URL = 'https://raw.githubusercontent.com/dataforseo/OpenApiDocumentation/master/openapi_specification.yaml'
-VERSION = 'scripts/import_dataforseo_filters.py@1'
+VERSION = 'scripts/import_dataforseo_filters.py@2'
 VALUE = 'AisaDataforseoFilterJsonValue'
 FILTERS = {'filters', 'initial_dataset_filters', 'backlinks_filters', 'relevant_pages_filters'}
+
+
+def normalize_response_echo(document):
+    """Task data echoes arbitrary JSON request values, not object-only values.
+
+    The official anchors/live example includes strings, a number and arrays.
+    Restrict this correction to the known upstream placeholder on the shared
+    task envelope; structured result schemas and request validation stay intact.
+    """
+    data = document.get('components', {}).get('schemas', {}).get(
+        'BaseResponseTaskInfo', {}).get('properties', {}).get('data', {})
+    if (data.get('type') != 'object' or data.get('additionalProperties') !=
+            {'type': 'object', 'nullable': True}):
+        return []
+    data['additionalProperties'] = {}
+    return [('BaseResponseTaskInfo', 'data')]
 
 
 def normalize_filters(document):
