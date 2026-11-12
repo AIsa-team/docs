@@ -207,6 +207,23 @@ jobs:
           name: formal-contract-readiness
           path: /tmp/formal-contract-readiness.json
           if-no-files-found: ignore
+      - name: Release gate (Spec #1285 R1; any failed gate blocks export and push)
+        if: steps.pull.outputs.available == 'true'
+        env:
+          SUPPLIER_VOCAB_JSON: ${{ secrets.SUPPLIER_VOCAB_JSON }}
+          # Rollback switch only; unset means enforced.
+          RELEASE_GATE_ENFORCE: ${{ vars.RELEASE_GATE_ENFORCE }}
+        run: >-
+          python scripts/release_gate.py
+          --facts-dir /tmp/formal-runtime-facts
+          --report docs/publication/release-gate.json
+      - name: Retain release gate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate
+          path: docs/publication/release-gate.json
+          if-no-files-found: ignore
       - name: Export the passed same-commit publication pointer
         if: steps.pull.outputs.available == 'true'
         env:
