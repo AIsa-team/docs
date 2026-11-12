@@ -36,6 +36,34 @@ class ConnectPublicReferenceTests(unittest.TestCase):
         return prepare(*args, metadata_sha256='a'*64, routes_sha256='b'*64, fetched_at='unknown historical capture time',
                        bindings={slug:{'tool_slug':slug,'input_schema_sha256':schema_digest(row['input_schema'])} for slug,row in args[1].items()})
 
+    def test_captured_description_survives_import_and_composer_fallback(self):
+        vendors, metadata, runtime = self.inputs()
+        description = 'Look up a named record. Requires name; mode selects one or two.'
+        metadata['DEMO_LOOKUP']['description'] = description
+        fact = runtime['demo']['paths']['/apis/v1/demo/lookup']['post']
+        fact['description'] = ''
+        doc, _ = self.prepare(vendors, metadata, runtime)
+        self.assertEqual(doc['paths']['/apis/v1/demo/lookup']['post']['description'], description)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'openapi/upstream').mkdir(parents=True)
+            (root / 'openapi/upstream/connector.json').write_text(json.dumps(doc))
+            mirrors = public_mirror_index(root)
+            composed, pending = compose(runtime['demo'], public_mirrors=mirrors)
+            self.assertEqual(pending, [])
+            self.assertIn(description, composed['paths']['/apis/v1/demo/lookup']['post']['description'])
+            fact['description'] = 'Runtime-owned updated instructions.'
+            composed, _ = compose(runtime['demo'], public_mirrors=mirrors)
+            actual = composed['paths']['/apis/v1/demo/lookup']['post']['description']
+            self.assertIn(fact['description'], actual)
+            self.assertNotIn(description, actual)
+
+    def test_invalid_description_is_not_coerced_into_prose(self):
+        vendors, metadata, runtime = self.inputs()
+        metadata['DEMO_LOOKUP']['description'] = {'unexpected': 'object'}
+        with self.assertRaisesRegex(ValueError, 'description must be text'):
+            self.prepare(vendors, metadata, runtime)
+
     def test_http_entry_accepts_root_arguments_with_closed_references(self):
         vendors, metadata, runtime = self.inputs()
         original = copy.deepcopy(metadata)
