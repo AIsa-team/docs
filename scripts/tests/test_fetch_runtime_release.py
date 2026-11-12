@@ -24,6 +24,23 @@ def encoded(value):
 
 
 class PublicReleaseTests(unittest.TestCase):
+
+    def test_current_production_aggregate_has_a_separate_bounded_reader_limit(self):
+        from runtime_contract_artifact import file_limit
+        self.assertGreater(file_limit('contracts/openapi.json'), 45448355)
+        self.assertEqual(file_limit('contracts/openapi.json'), 64 << 20)
+        self.assertEqual(file_limit('providers/example.json'), 8 << 20)
+        response = Mock(status=200)
+        response.read.return_value = b'{}'
+        response.headers.items.return_value = []
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        reader = PublicReader('https://api.aisa.one', float('inf'))
+        reader.opener = Mock()
+        reader.opener.open.return_value = response
+        reader('/public/api-contract/releases/' + 'a' * 64 + '/contracts/openapi.json')
+        response.read.assert_called_once_with((64 << 20) + 1)
+
     def test_combined_release_count_above_old_limit_still_has_a_hard_ceiling(self):
         from fetch_runtime_release import validate_current
         _, compiler, _, current, _, _ = self.fixture()

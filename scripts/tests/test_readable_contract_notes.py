@@ -14,6 +14,24 @@ import runtime_consolidate_openapi as consolidate
 ROOT = Path(__file__).resolve().parents[2]
 
 class ReadableNotesTests(unittest.TestCase):
+
+    def test_disabled_legacy_labels_are_not_a_published_tariff(self):
+        legacy = {'cost_tier': 'low', 'model': 'per_request'}
+        for language, archive, unknown in (
+                ('en', 'Historical archive: disabled, cannot be called, and no price is published.', 'Billing method unavailable.'),
+                ('zh', '历史归档接口：已停用，不可调用，价格未发布。', '计费方式暂不可用。')):
+            operation = {'x-aisa-status': 'disabled', 'x-aisa-pricing': copy.deepcopy(legacy)}
+            before = copy.deepcopy(operation)
+            self.assertIn(archive, readable_block(operation, language))
+            self.assertNotIn(unknown, readable_block(operation, language))
+            self.assertEqual(operation, before)
+            operation['x-aisa-status'] = 'enabled'
+            self.assertIn(unknown, readable_block(operation, language))
+            operation.update({'x-aisa-status': 'disabled', 'x-aisa-pricing': {
+                'kind': 'fixed_request', 'customer_micros_usd': 5000}})
+            self.assertIn('$0.005', readable_block(operation, language))
+            self.assertNotIn(archive, readable_block(operation, language))
+
     def test_safety_idempotence_and_preserve_prose(self):
         op = {'x-aisa-pricing': {'default_request_estimate_usd': .075}, 'x-aisa-constraints': {'notes': ['<script>{danger}</script> `x`\n## forged']}}
         original = copy.deepcopy(op)

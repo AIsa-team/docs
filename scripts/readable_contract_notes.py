@@ -93,7 +93,10 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
     # Historical disabled operations may legitimately have no runtime tariff.
     # Keep that absence out of the machine contract while still giving the
     # archive page an explicit customer-facing unavailable-price explanation.
-    if not pricing and operation.get("x-aisa-status") == "disabled":
+    # Legacy labels describe a cost tier, not a published price or billing rule.
+    # Keep unknown modern declarations distinct from this known historical shape.
+    legacy_labels = isinstance(pricing, dict) and set(pricing) <= {"cost_tier", "model"}
+    if operation.get("x-aisa-status") == "disabled" and (not pricing or legacy_labels):
         pricing = {"kind": "unpriced"}
     constraints = operation.get("x-aisa-constraints") or {}
     notes = constraints.get("notes") or []
