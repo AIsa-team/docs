@@ -1,23 +1,28 @@
-# Main promotion of reviewed provider documentation
+# Complete main candidate for reviewed provider contracts
 
-This candidate consolidates dev PRs #346, #347 and #350, including the required response-preservation changes from #337, #338 and #339. It starts from main `a95a9bef6b2f9e0290e05c2b9af955065ddaf3ea`. The verified dev output is `2b57134829af6817878989332d1141fc326396c5`.
+This candidate consolidates dev PRs #346, #347 and #350 and their response-preservation dependencies from #337, #338 and #339. The main baseline is `14b828ce39bf17a15f53eb31c497514ca534e0ca`; the verified dev output is `2b57134829af6817878989332d1141fc326396c5`.
 
-The reviewed inputs cover 2,063 Alexandria operations and refresh four Firecrawl passthrough responses. The broader inventory and upstream review remain in `provider-contract-review.json`; the five production probes remain in `alexandria-live-schema-review.json`. These are reviewed static contracts, with the documented-fields-only boundary retained where the supplier does not guarantee presence or a complete response schema.
+The source changes cover 2,063 Alexandria operations and four Firecrawl passthrough responses. The complete inventory/upstream review is recorded in `provider-contract-review.json`; the five production-probed operations are recorded in `alexandria-live-schema-review.json`. These remain reviewed static contracts, with documented-fields-only bounds where upstream evidence does not guarantee complete payload shape or requiredness.
 
-## Page generation
+## Coherent candidate generation
 
-The production reference generator on main, `scripts/sync_prod_runtime_docs.py`, recomposed the full catalog from the public production facts in immutable release `f3dd779b1323726549ea86ac4a22d64f58c78c33f8bcf8c8010ff42e5d3c8d8b`, generation 13850. Every downloaded facts file was checked against its manifest SHA and ETag, with an unchanged fresh current pointer before and after. This is a facts-subset acquisition for page generation, not formal canonical-release acceptance.
+The existing `pull_openapi.stage` and `runtime_consolidate_openapi.py` rebuild the affected native documents and pages in both languages, together with the complete coverage, pending metadata, registry, YAML/JSON aggregates, llms discovery and sales projection. Unrelated native documents, navigation and pages retain main's reviewed bytes. The affected pages bind to `openapi/` documents and their readable request declarations match those same documents. The 2,067 reviewed operation pairs have 4,134 matching English/Chinese pages and 704 native contract files.
 
-Only pages matching the 2,067 reviewed route/method pairs and their referenced contracts were selected from the generator output: 4,134 English/Chinese pages and 704 reference-contract files. Their hashes are recorded in [the promotion evidence](main-promotion-review.json). Existing navigation includes every selected page. These reference files let the pages display the reviewed schemas without asserting that Runtime has adopted this candidate as its formal compiler/source authority.
+The full native candidate uses the existing `unreviewed_runtime` mode used by the independent candidate checker. It retains explicit review status for unrelated incomplete source descriptions rather than inventing reviewed supplier contracts. No accepted-debt baseline or readiness rule changes.
 
-The sole semantic difference from the verified dev output is `/apis/v1/people-data-labs/company/enrich`. Dev marked that catalog blocked and retained a historic Runtime handler contract. The main candidate uses the current production mixed Alexandria operation, profile `9d71cee78359`, which is also the route already present in main's formal document. It must not be replaced by dev's historic handler envelope. Both language comparisons are recorded explicitly in the evidence.
+Local inputs are the original 561 production index/provider files from immutable release `f3dd779b1323726549ea86ac4a22d64f58c78c33f8bcf8c8010ff42e5d3c8d8b`, generation 13850. Every file's SHA256 matches the independently acquired manifest retained by CI run `43198560553`. This is a local candidate replay, not a new formal acquisition. The PR workflow reacquires fresh current independently before checking the new commit.
+
+The JSON aggregate uses compact serialization, matching Runtime's existing representation. It contains every declaration and is 65,595,183 bytes, below the existing 64 MiB role limit. YAML and JSON are checked against the same reconstructed graph. The publication pointer, formal readiness/acquisition receipts and frozen schema-input bundle remain byte-identical to main; the normal publisher remains responsible for future formal exports.
 
 ## Validation
 
-- 1,204 unit tests passed, with one existing skip; 11 policy-fixture tests and frozen-package integrity passed.
-- Frozen-catalog generation repeated with zero changed files. Its known content debt remains a diagnostic result, not publication approval.
-- All 2,067 operation pairs were checked against the verified dev contracts in both languages. The sole historical-route difference is explained above; no unexplained differences or success-response placeholders remain in these page contracts.
-- All 11 complete successful production payloads from the five earlier probes validate against the final English and Chinese composed response schemas: 22 checks. All five Runtime profile bindings still match current production. No new paid business requests were made for promotion.
-- The 4,134 selected pages resolve to their intended operation; navigation and all 4,214 main reference-page definitions pass validation.
+- All 1,204 unit tests passed, with one existing skip. The aggregate/YAML focused regressions also passed.
+- The original `check_contract_candidate.py` passed against the verified production facts and independently configured baseline `78ef376841ead8cde10a79651958790be5a0531c`: no global errors, blocked providers, source-governance failures or page/aggregate mismatches. Its publication-surface check covers 551 Runtime provider documents and 6,448 operations. The local result is candidate validation; fresh acquisition is still required in CI.
+- All 2,067 targeted operation pairs have both language pages and no unreviewed-success placeholder. Their page/contract hashes and the complete aggregate/index hashes are in [the evidence record](main-promotion-review.json).
+- The two minimized regressions exercise the actual Wikipedia native document and pages. Both now pass: request/response composition agrees with the committed contract, and the actual bilingual pages bind to that contract.
+- The five previously probed production Runtime profiles still match. The final native schemas pass 44 recorded request-case checks and 22 complete successful-response checks, reusing all 11 successful production payloads in both languages. Wayback URI syntax relies on the original actual 400/200 pair rather than an optional local format validator. No additional business API calls were made.
+- Navigation, canonical slugs, the 80 existing independent production-reference pages and all 109 payment-discovery operations pass their checks.
 
-Formal publication readiness is assessed separately by the existing PR workflow against current Runtime authority. A page-generation check or the earlier dev deployment does not approve main publication. This PR is for review and must not be merged automatically.
+People Data Labs company/enrich follows the current production mixed Alexandria route (profile `9d71cee78359`), already present on main. Dev's blocked catalog retained an older handler contract; that historical envelope is not the basis for this candidate.
+
+This PR does not export a new publication pointer or merge main. Its CI result must be checked on the latest commit before review/merge.

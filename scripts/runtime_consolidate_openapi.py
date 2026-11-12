@@ -710,7 +710,9 @@ def main():
             f.write(output)
         json_path = Path(args.output).resolve().parent / "openapi/openapi.json"
         json_path.parent.mkdir(parents=True, exist_ok=True)
-        json_path.write_text(json.dumps(unified, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
+        # The complete aggregate must fit its 64 MiB publication role budget.
+        # Match Runtime's compact JSON while preserving every declaration.
+        json_path.write_text(json.dumps(unified, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + "\n")
         index_path = Path(args.output).resolve().parent / "llms.txt"
         if index_path.is_file():
             index_path.write_text(update_discovery_index(index_path.read_text(), output.encode("utf-8")))
