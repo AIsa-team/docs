@@ -41,24 +41,24 @@ class PricingProseTests(unittest.TestCase):
             '/apis/v1/notion-com/developer-documentation/get-pricing',
             '/apis/v1/play-google-com/media/app',
         }
-        checked = set()
-        for file in (ROOT / 'openapi/upstream').glob('alexandria-contract-part-*.json'):
-            source = json.loads(file.read_text())
-            for path in paths & source['paths'].keys():
-                response = source['paths'][path]['post']['responses']['200']
+        # Freeze reviewed descriptions independently of mutable publication inputs.
+        # Source: dcb6397a9, openapi/upstream/alexandria-contract-part-*.json.
+        descriptions = json.loads((ROOT / 'scripts/tests/fixtures/reviewed-business-price-descriptions.json').read_text())
+        self.assertEqual(descriptions.keys(), paths)
+        for path, text in descriptions.items():
+            with self.subTest(path=path):
+                response = {'description': text, 'content': {'application/json': {'schema': {
+                    'type': 'object', 'x-aisa-schema-completeness': 'documented-fields-only'}}}}
                 document = {'paths': {path: {'post': {'operationId': 'test',
                     'description': 'Billed $0.02 per call.', 'responses': {'200': response}}}}}
                 cleaned = clean_document(document)
                 self.assertEqual(cleaned['paths'][path]['post']['responses']['200'], response)
                 self.assertNotIn('$0.02', cleaned['paths'][path]['post']['description'])
                 self.assertEqual(clean_document(cleaned), cleaned)
-                text = response['description']
                 translated = '响应字段。\n\n' + text
                 catalog = {'entries': {key_for(text): {'source': text, 'translation': translated}}}
                 localized = localize_tree(cleaned, catalog, allow_untranslated=True)
                 self.assertEqual(localized['paths'][path]['post']['responses']['200']['description'], translated)
-                checked.add(path)
-        self.assertEqual(checked, paths)
 
 
     def test_price_tracks_runtime_in_the_page_cost_section_not_the_description(self):

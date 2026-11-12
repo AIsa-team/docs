@@ -27,7 +27,7 @@ They do not deploy the Runtime producer.
 
 ```sh
 export RUNTIME_FACTS=/tmp/pr-334-runtime
-export PUBLISHED_REF=14b828ce39bf17a15f53eb31c497514ca534e0ca
+export PUBLISHED_REF=d27042ab62547c19aacfd75208a50408d5082cf6
 python scripts/fetch_runtime_release.py --current --output "$RUNTIME_FACTS"
 python scripts/prepare_source_receipts.py \
   --reviewed docs/current-source-review-20261009/merged-source-reviews.json \

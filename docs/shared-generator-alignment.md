@@ -34,8 +34,10 @@ These modules match the pinned dev version byte for byte, except that
 within GitHub's single-file limit. `pull_openapi.py` also restores the temporary
 operation binding when staging an archived alias, so retirement is reapplied
 before writing and repeated generation cannot add request/pricing blocks back.
-Both small exceptions have regressions; the JSON values and published machine
-contracts are unchanged:
+The two rendering/serialization exceptions have regressions. After rebasing
+onto main `d27042ab62547c19aacfd75208a50408d5082cf6`, the Runtime reader also
+retains main's 192 MiB total acquisition limit from #352. JSON values and
+published machine contracts are unchanged:
 
 - `scripts/customer_price_presentation.py`
 - `scripts/readable_contract_notes.py`
