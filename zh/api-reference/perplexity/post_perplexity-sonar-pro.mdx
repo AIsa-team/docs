@@ -4,8 +4,6 @@ title: "Sonar Pro"
 description: "提一个需要多轮检索才能回答的问题，拿回带引用的文字答案。"
 openapi: "openapi/zh/perplexity.json POST /apis/v1/perplexity/sonar-pro"
 ---
-<Warning>此页面保留原有接口文档。该接口尚未在当前 dev Runtime 合同中验证。</Warning>
-
 
 import McpSetup from "/snippets/zh/mcp-setup.mdx";
 
@@ -24,7 +22,7 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
 
 - **方法与路径:** POST /apis/v1/perplexity/sonar-pro
 - **可用状态:** enabled
-- **请求 URL 模板:** `https://dev-api.aisa.one/apis/v1/perplexity/sonar-pro`
+- **请求 URL 模板:** `https://api.aisa.one/apis/v1/perplexity/sonar-pro`
 - **Runtime 事实版本:** fb88776539957bfc86000a34a6c0da10e10cbeecf9d65c8ae1d78688c170faac
 
 [完整 OpenAPI 定义](https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev/openapi/zh/perplexity.json)
@@ -38,7 +36,7 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
   "path": "/apis/v1/perplexity/sonar-pro",
   "servers": [
     {
-      "url": "https://dev-api.aisa.one"
+      "url": "https://api.aisa.one"
     }
   ],
   "parameters": [],
@@ -48,141 +46,141 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "example": {
-          "messages": [
-            {
-              "content": "Compare the economic policies of the US and EU regarding AI regulation in 2025-2026",
-              "role": "user"
-            }
-          ],
-          "model": "sonar-pro"
-        },
         "schema": {
+          "type": "object",
+          "required": [
+            "model",
+            "messages"
+          ],
           "properties": {
-            "frequency_penalty": {
-              "default": 1,
-              "description": "根据新词元目前在文本中的出现频率对其施加惩罚。正值会降低逐字重复同一行的可能性。",
-              "maximum": 2,
-              "minimum": 0,
-              "type": "number"
-            },
-            "max_tokens": {
-              "description": "响应中要生成的最大词元数。",
-              "type": "integer"
-            },
-            "messages": {
-              "description": "由截至目前的对话内容组成的消息列表。",
-              "items": {
-                "properties": {
-                  "content": {
-                    "description": "消息内容。",
-                    "type": "string"
-                  },
-                  "role": {
-                    "description": "消息作者的角色。",
-                    "enum": [
-                      "system",
-                      "user",
-                      "assistant"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "role",
-                  "content"
-                ],
-                "type": "object"
-              },
-              "type": "array"
-            },
             "model": {
-              "description": "要使用的 Sonar 模型。",
+              "type": "string",
+              "description": "The Sonar model to use.",
               "enum": [
                 "sonar",
                 "sonar-pro",
                 "sonar-reasoning-pro",
                 "sonar-deep-research"
-              ],
-              "type": "string"
+              ]
             },
-            "presence_penalty": {
+            "messages": {
+              "type": "array",
+              "description": "A list of messages comprising the conversation so far.",
+              "items": {
+                "type": "object",
+                "required": [
+                  "role",
+                  "content"
+                ],
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "system",
+                      "user",
+                      "assistant"
+                    ],
+                    "description": "The role of the message author."
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "The content of the message."
+                  }
+                }
+              }
+            },
+            "max_tokens": {
+              "type": "integer",
+              "description": "The maximum number of tokens to generate in the response."
+            },
+            "temperature": {
+              "type": "number",
+              "description": "Sampling temperature between 0 and 2. Lower values make output more focused and deterministic.",
+              "default": 0.2,
+              "minimum": 0,
+              "maximum": 2
+            },
+            "top_p": {
+              "type": "number",
+              "description": "Nucleus sampling parameter. The model considers tokens with top_p probability mass.",
+              "default": 0.9,
+              "minimum": 0,
+              "maximum": 1
+            },
+            "top_k": {
+              "type": "integer",
+              "description": "The number of tokens to keep for top-k filtering.",
               "default": 0,
-              "description": "根据新词元此前是否已出现在文本中对其施加惩罚。正值会提高谈论新主题的可能性。",
-              "maximum": 2,
-              "minimum": -2,
-              "type": "number"
+              "minimum": 0,
+              "maximum": 2048
             },
-            "return_citations": {
-              "default": true,
-              "description": "是否在响应中返回引用和搜索结果。",
-              "type": "boolean"
+            "stream": {
+              "type": "boolean",
+              "description": "Whether to stream the response using server-sent events.",
+              "default": false
             },
             "search_context": {
-              "default": "low",
-              "description": "控制使用的搜索上下文量。会影响单次请求的成本。",
+              "type": "string",
+              "description": "Controls how much search context to use. Affects per-request cost.",
               "enum": [
                 "low",
                 "medium",
                 "high"
               ],
-              "type": "string"
+              "default": "low"
             },
-            "search_domain_filter": {
-              "description": "将搜索限制在特定域名。",
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
+            "frequency_penalty": {
+              "type": "number",
+              "description": "Penalizes new tokens based on their existing frequency in the text so far. Positive values decrease the likelihood of repeating the same line verbatim.",
+              "default": 1,
+              "minimum": 0,
+              "maximum": 2
+            },
+            "presence_penalty": {
+              "type": "number",
+              "description": "Penalizes new tokens based on whether they appear in the text so far. Positive values increase the likelihood of talking about new topics.",
+              "default": 0,
+              "minimum": -2,
+              "maximum": 2
+            },
+            "return_citations": {
+              "type": "boolean",
+              "description": "Whether to return citations and search results in the response.",
+              "default": true
             },
             "search_recency_filter": {
-              "description": "按时效性筛选搜索结果。",
+              "type": "string",
+              "description": "Filter search results by recency.",
               "enum": [
                 "month",
                 "week",
                 "day",
                 "hour"
-              ],
-              "type": "string"
+              ]
             },
-            "stream": {
-              "default": false,
-              "description": "是否使用服务器发送事件以流式方式返回响应。",
-              "type": "boolean"
-            },
-            "temperature": {
-              "default": 0.2,
-              "description": "介于 0 和 2 之间的采样温度。较低的值会使输出更集中且更具确定性。",
-              "maximum": 2,
-              "minimum": 0,
-              "type": "number"
-            },
-            "top_k": {
-              "default": 0,
-              "description": "用于 top-k 筛选的保留词元数。",
-              "maximum": 2048,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "top_p": {
-              "default": 0.9,
-              "description": "核采样参数。模型会考虑累计概率质量达到 top_p 的词元。",
-              "maximum": 1,
-              "minimum": 0,
-              "type": "number"
+            "search_domain_filter": {
+              "type": "array",
+              "description": "Limit search to specific domains.",
+              "items": {
+                "type": "string"
+              }
             }
-          },
-          "required": [
-            "model",
-            "messages"
-          ],
-          "type": "object"
+          }
+        },
+        "example": {
+          "model": "sonar-pro",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Compare the economic policies of the US and EU regarding AI regulation in 2025-2026"
+            }
+          ]
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "components": {

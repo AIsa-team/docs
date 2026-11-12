@@ -4,8 +4,6 @@ title: "搜索 Tavily 数据"
 description: "搜索网页，返回的排序结果里已经带好页面正文，不需要再调一次抓取。"
 openapi: "openapi/zh/tavily.json POST /apis/v1/tavily/search"
 ---
-<Warning>此页面保留原有接口文档。该接口尚未在当前 dev Runtime 合同中验证。</Warning>
-
 
 import McpSetup from "/snippets/zh/mcp-setup.mdx";
 
@@ -24,7 +22,7 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
 
 - **方法与路径:** POST /apis/v1/tavily/search
 - **可用状态:** enabled
-- **请求 URL 模板:** `https://dev-api.aisa.one/apis/v1/tavily/search`
+- **请求 URL 模板:** `https://api.aisa.one/apis/v1/tavily/search`
 - **Runtime 事实版本:** ea2301436db90d0b30e55885326cd5057bea93ff7d26d9bced8e1ae7f1911ef4
 
 [完整 OpenAPI 定义](https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev/openapi/zh/tavily.json)
@@ -38,7 +36,7 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
   "path": "/apis/v1/tavily/search",
   "servers": [
     {
-      "url": "https://dev-api.aisa.one"
+      "url": "https://api.aisa.one"
     }
   ],
   "parameters": [],
@@ -48,24 +46,149 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
         "schema": {
+          "type": "object",
           "properties": {
-            "auto_parameters": {
-              "default": false,
-              "description": "根据查询内容自动配置搜索参数。",
-              "type": "boolean"
+            "query": {
+              "type": "string",
+              "description": "The search query to execute with Tavily.",
+              "example": "Who is Leo Messi?"
+            },
+            "search_depth": {
+              "type": "string",
+              "enum": [
+                "advanced",
+                "basic",
+                "fast",
+                "ultra-fast"
+              ],
+              "default": "basic",
+              "description": "Controls the latency vs. relevance tradeoff. advanced gives the highest relevance with higher latency and cost; basic is balanced; fast and ultra-fast optimize for lower latency."
             },
             "chunks_per_source": {
+              "type": "integer",
               "default": 3,
-              "description": "每个来源返回的相关文本块的最大数量。",
-              "maximum": 3,
+              "description": "Maximum number of relevant chunks returned per source.",
               "minimum": 1,
-              "type": "integer"
+              "maximum": 3
+            },
+            "max_results": {
+              "type": "integer",
+              "default": 5,
+              "description": "Maximum number of search results to return.",
+              "minimum": 0,
+              "maximum": 20
+            },
+            "topic": {
+              "type": "string",
+              "enum": [
+                "general",
+                "news",
+                "finance"
+              ],
+              "default": "general",
+              "description": "Category of the search."
+            },
+            "time_range": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month",
+                "year",
+                "d",
+                "w",
+                "m",
+                "y"
+              ],
+              "description": "Time range to filter results based on publish date."
+            },
+            "start_date": {
+              "type": "string",
+              "format": "date",
+              "description": "Return results after the specified start date.",
+              "example": "2025-02-09"
+            },
+            "end_date": {
+              "type": "string",
+              "format": "date",
+              "description": "Return results before the specified end date.",
+              "example": "2025-12-29"
+            },
+            "include_answer": {
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "basic",
+                    "advanced"
+                  ]
+                }
+              ],
+              "default": false,
+              "description": "Include an LLM-generated answer. true uses the default answer mode; basic or advanced selects the answer generation mode."
+            },
+            "include_raw_content": {
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "markdown",
+                    "text"
+                  ]
+                }
+              ],
+              "default": false,
+              "description": "Include cleaned and parsed content for each search result. true or markdown returns markdown; text returns plain text and may increase latency."
+            },
+            "include_images": {
+              "type": "boolean",
+              "default": false,
+              "description": "Perform an image search and include results."
+            },
+            "include_image_descriptions": {
+              "type": "boolean",
+              "default": false,
+              "description": "Add descriptive text for each image when include_images is true."
+            },
+            "safe_search": {
+              "type": "boolean",
+              "default": false,
+              "description": "Filter out adult or unsafe content from search results. Enterprise only; not supported when search_depth is fast or ultra-fast."
+            },
+            "include_favicon": {
+              "type": "boolean",
+              "default": false,
+              "description": "Include the favicon URL for each result."
+            },
+            "include_domains": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "List of domains to specifically include in the search results.",
+              "maxItems": 300
+            },
+            "exclude_domains": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "List of domains to specifically exclude from the search results.",
+              "maxItems": 150
             },
             "country": {
-              "description": "提升特定国家/地区的搜索结果。仅当 topic 为 general 时可用。",
+              "type": "string",
+              "description": "Boost search results from a specific country. Available only when topic is general.",
               "enum": [
                 "afghanistan",
                 "albania",
@@ -233,150 +356,25 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
                 "yemen",
                 "zambia",
                 "zimbabwe"
-              ],
-              "type": "string"
-            },
-            "end_date": {
-              "description": "返回指定结束日期之前的结果。",
-              "example": "2025-12-29",
-              "format": "date",
-              "type": "string"
-            },
-            "exclude_domains": {
-              "description": "要从搜索结果中特别排除的域名列表。",
-              "items": {
-                "type": "string"
-              },
-              "maxItems": 150,
-              "type": "array"
-            },
-            "include_answer": {
-              "default": false,
-              "description": "包含由 LLM 生成的答案。true 使用默认答案模式；basic 或 advanced 用于选择答案生成模式。",
-              "oneOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "enum": [
-                    "basic",
-                    "advanced"
-                  ],
-                  "type": "string"
-                }
               ]
             },
-            "include_domains": {
-              "description": "搜索结果中需要明确包含的域名列表。",
-              "items": {
-                "type": "string"
-              },
-              "maxItems": 300,
-              "type": "array"
-            },
-            "include_favicon": {
+            "auto_parameters": {
+              "type": "boolean",
               "default": false,
-              "description": "为每个结果包含 favicon URL。",
-              "type": "boolean"
-            },
-            "include_image_descriptions": {
-              "default": false,
-              "description": "当 include_images 为 true 时，为每张图片添加描述性文本。",
-              "type": "boolean"
-            },
-            "include_images": {
-              "default": false,
-              "description": "执行图片搜索并包含搜索结果。",
-              "type": "boolean"
-            },
-            "include_raw_content": {
-              "default": false,
-              "description": "为每个搜索结果包含清理和解析后的内容。true 或 markdown 返回 Markdown；text 返回纯文本，并可能增加延迟。",
-              "oneOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "enum": [
-                    "markdown",
-                    "text"
-                  ],
-                  "type": "string"
-                }
-              ]
+              "description": "Automatically configure search parameters based on query content."
             },
             "include_usage": {
+              "type": "boolean",
               "default": false,
-              "description": "在响应中包含信用额度用量信息。",
-              "type": "boolean"
-            },
-            "max_results": {
-              "default": 5,
-              "description": "返回的最大搜索结果数。",
-              "maximum": 20,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "query": {
-              "description": "要使用 Tavily 执行的搜索查询。",
-              "example": "Who is Leo Messi?",
-              "type": "string"
-            },
-            "safe_search": {
-              "default": false,
-              "description": "从搜索结果中过滤成人或不安全内容。仅限企业版；当 search_depth 为 fast 或 ultra-fast 时不受支持。",
-              "type": "boolean"
-            },
-            "search_depth": {
-              "default": "basic",
-              "description": "控制延迟与相关性之间的权衡。advanced 以更高的延迟和成本提供最高相关性；basic 实现均衡；fast 和 ultra-fast 针对更低延迟进行优化。",
-              "enum": [
-                "advanced",
-                "basic",
-                "fast",
-                "ultra-fast"
-              ],
-              "type": "string"
-            },
-            "start_date": {
-              "description": "返回指定开始日期之后的结果。",
-              "example": "2025-02-09",
-              "format": "date",
-              "type": "string"
-            },
-            "time_range": {
-              "description": "根据发布日期筛选结果的时间范围。",
-              "enum": [
-                "day",
-                "week",
-                "month",
-                "year",
-                "d",
-                "w",
-                "m",
-                "y"
-              ],
-              "type": "string"
-            },
-            "topic": {
-              "default": "general",
-              "description": "搜索类别。",
-              "enum": [
-                "general",
-                "news",
-                "finance"
-              ],
-              "type": "string"
+              "description": "Include credit usage information in the response."
             }
           },
           "required": [
             "query"
-          ],
-          "type": "object"
+          ]
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "components": {

@@ -5,8 +5,6 @@ title: "搜索"
 description: "按语义而不是关键词搜索网页。"
 openapi: "openapi/zh/exa.json POST /apis/v1/exa/search"
 ---
-<Warning>此页面保留原有接口文档。该接口尚未在当前 dev Runtime 合同中验证。</Warning>
-
 
 <Note>参考示例是可自行编辑的固定 cURL 请求。本页暂时停用交互表单，因为嵌套内容控件可能加入未选择的选项。执行前请核对请求体并获取新报价。</Note>
 
@@ -27,7 +25,7 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
 
 - **方法与路径:** POST /apis/v1/exa/search
 - **可用状态:** enabled
-- **请求 URL 模板:** `https://dev-api.aisa.one/apis/v1/exa/search`
+- **请求 URL 模板:** `https://api.aisa.one/apis/v1/exa/search`
 - **Runtime 事实版本:** d10529a4463a002dd39ad505e0bc30212230a00b2034082221e854d90728a9b8
 
 [完整 OpenAPI 定义](https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev/openapi/zh/exa.json)
@@ -41,7 +39,7 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
   "path": "/apis/v1/exa/search",
   "servers": [
     {
-      "url": "https://dev-api.aisa.one"
+      "url": "https://api.aisa.one"
     }
   ],
   "parameters": [],
@@ -51,94 +49,19 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
         "schema": {
+          "type": "object",
           "properties": {
-            "category": {
-              "description": "关于优先抓取哪类页面的可选提示。",
-              "enum": [
-                "company",
-                "research paper",
-                "news",
-                "personal site",
-                "financial report",
-                "people"
-              ],
-              "type": "string"
-            },
-            "contents": {
-              "description": "随每条结果一并返回的内容选项。",
-              "properties": {
-                "highlights": {
-                  "description": "返回高亮的相关片段。",
-                  "type": "boolean"
-                },
-                "summary": {
-                  "description": "返回该页面由 AI 生成的摘要。",
-                  "type": "boolean"
-                },
-                "text": {
-                  "description": "返回完整的页面文本。",
-                  "type": "boolean"
-                }
-              },
-              "type": "object"
-            },
-            "endPublishedDate": {
-              "description": "仅返回在该 ISO 8601 日期当天或之前发布的结果。",
-              "format": "date-time",
-              "type": "string"
-            },
-            "excludeDomains": {
-              "description": "排除来自这些域名的结果。",
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "includeDomains": {
-              "description": "只返回来自这些域名的结果。",
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "numResults": {
-              "default": 10,
-              "description": "返回的结果数量。",
-              "maximum": 100,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "outputSchema": {
-              "description": "用于从结果中合成结构化输出的 JSON Schema。",
-              "type": "object"
-            },
             "query": {
-              "description": "自然语言搜索查询。",
-              "example": "latest evaluation frameworks for AI agents",
-              "type": "string"
-            },
-            "startPublishedDate": {
-              "description": "仅返回在该 ISO 8601 日期当天或之后发布的结果。",
-              "format": "date-time",
-              "type": "string"
-            },
-            "stream": {
-              "default": false,
-              "enum": [
-                false
-              ],
-              "type": "boolean"
-            },
-            "systemPrompt": {
-              "description": "用于引导结构化输出如何生成的指令。",
-              "type": "string"
+              "type": "string",
+              "description": "The natural-language search query.",
+              "example": "latest evaluation frameworks for AI agents"
             },
             "type": {
-              "default": "auto",
-              "description": "搜索模式。auto 让 Exa 自行选择；deep 模式以更高延迟换取更高质量的检索。",
+              "type": "string",
               "enum": [
                 "auto",
                 "fast",
@@ -147,17 +70,92 @@ import McpSetup from "/snippets/zh/mcp-setup.mdx";
                 "deep",
                 "deep-reasoning"
               ],
-              "type": "string"
+              "default": "auto",
+              "description": "Search mode. auto lets Exa choose; the deep modes trade latency for higher-quality retrieval."
+            },
+            "numResults": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10,
+              "description": "Number of results to return."
+            },
+            "category": {
+              "type": "string",
+              "enum": [
+                "company",
+                "research paper",
+                "news",
+                "personal site",
+                "financial report",
+                "people"
+              ],
+              "description": "Optional hint about the kind of pages to prioritize."
+            },
+            "includeDomains": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Only return results from these domains."
+            },
+            "excludeDomains": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Exclude results from these domains."
+            },
+            "startPublishedDate": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return results published on or after this ISO 8601 date."
+            },
+            "endPublishedDate": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only return results published on or before this ISO 8601 date."
+            },
+            "contents": {
+              "type": "object",
+              "description": "Content options to return alongside each result.",
+              "properties": {
+                "text": {
+                  "type": "boolean",
+                  "description": "Return the full page text."
+                },
+                "highlights": {
+                  "type": "boolean",
+                  "description": "Return highlighted relevant snippets."
+                },
+                "summary": {
+                  "type": "boolean",
+                  "description": "Return an AI-generated summary of the page."
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "description": "JSON Schema used to synthesize a structured output from the results."
+            },
+            "systemPrompt": {
+              "type": "string",
+              "description": "Instruction that guides how the structured output is generated."
+            },
+            "stream": {
+              "default": false,
+              "enum": [
+                false
+              ],
+              "type": "boolean"
             }
           },
           "required": [
             "query"
-          ],
-          "type": "object"
+          ]
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "components": {

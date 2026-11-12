@@ -4,7 +4,7 @@ title: "OAuth_Twitter"
 description: "Start the OAuth flow that links an X/Twitter account to your AIsa API key. Call once per source user before using any Twitter write endpoint (follow, like, post, DM)."
 openapi: "openapi/aisa-twitter.json POST /apis/v1/twitter/auth_twitter"
 ---
-<Warning>This existing API reference is preserved. This endpoint has not been verified in the current dev Runtime contract snapshot.</Warning>
+<Warning>This endpoint is disabled. Its historical documentation is retained for reference.</Warning>
 
 
 `POST /apis/v1/twitter/auth_twitter` is the first step for any X/Twitter **write** action routed through AIsa. It returns a short-lived X OAuth authorization URL — the source user opens it in a browser, approves the requested scopes, and X redirects back to AIsa's fixed callback. AIsa stores the resulting session against your API key, and every subsequent write call (e.g., [`POST /twitter/follow_twitter`](/api-reference/twitter/post_twitter-follow-twitter)) uses that session automatically.
@@ -23,7 +23,7 @@ You do not call it before every write request. The OAuth session persists agains
     Send `POST /apis/v1/twitter/auth_twitter` with your AIsa API key. The key must be sent **both** as the `Authorization: Bearer` header **and** as a required `aisa_api_key` field in the JSON body — the OAuth session is bound to that key. Optionally include a `scopes` array in the body to request a narrower set than the default.
 
     ```bash
-    curl -X POST https://dev-api.aisa.one/apis/v1/twitter/auth_twitter \
+    curl -X POST https://api.aisa.one/apis/v1/twitter/auth_twitter \
       -H "Authorization: Bearer sk-aisa-..." \
       -H "Content-Type: application/json" \
       -d '{"aisa_api_key": "sk-aisa-...", "scopes": ["follows.write", "tweet.read", "users.read"]}'
@@ -37,7 +37,7 @@ You do not call it before every write request. The OAuth session persists agains
     The response returns an `auth_url` and a `state` token. Open `auth_url` in the source user's browser. X shows its standard "Authorize AIsa to access your account" screen.
   </Step>
   <Step title="User approves">
-    After the user clicks Authorize, X redirects to AIsa's fixed callback (`https://dev-api.aisa.one/apis/v1/twitter/oauth_callback`). AIsa validates the `state` token, exchanges the authorization code for tokens, and stores the session against your API key.
+    After the user clicks Authorize, X redirects to AIsa's fixed callback (`https://api.aisa.one/apis/v1/twitter/oauth_callback`). AIsa validates the `state` token, exchanges the authorization code for tokens, and stores the session against your API key.
   </Step>
   <Step title="Write endpoints unlock">
     From this point on, any call to a Twitter write endpoint using your AIsa API key acts on behalf of the linked source user. You never pass OAuth tokens in the body of those calls.
@@ -84,9 +84,12 @@ The stored OAuth **session** itself lives longer (subject to X's token rotation 
 ## Request contract
 
 - **Method and path:** POST /apis/v1/twitter/auth&#95;twitter
-- **Availability:** enabled
-- **Request URL template:** `https://dev-api.aisa.one/apis/v1/twitter/auth_twitter`
-- **Runtime facts:** 4629b96294875c448210d32f1a74b44ad7bab9721bd58b505e76c72a31741c73
+- **Availability:** disabled
+
+**This endpoint is disabled and cannot be called. Its historical request, schema and pricing declarations are retained for reference.**
+
+- **Request URL template:** `https://api.aisa.one/apis/v1/twitter/auth_twitter`
+- **Runtime facts:** 95f0bab69c909188f46b4d41b7faa7ae0910f2464d2676da823ab3b9e2763611
 
 [Complete OpenAPI definition](https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev/openapi/aisa-twitter.json)
 
@@ -99,7 +102,7 @@ Effective request declaration (including authentication and referenced schemas):
   "path": "/apis/v1/twitter/auth_twitter",
   "servers": [
     {
-      "url": "https://dev-api.aisa.one"
+      "url": "https://api.aisa.one"
     }
   ],
   "parameters": [],
@@ -109,8 +112,33 @@ Effective request declaration (including authentication and referenced schemas):
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "aisa_api_key": {
+              "type": "string",
+              "description": "Your AIsa API key (the `sk-aisa-...` value). REQUIRED in the JSON body in addition to the `Authorization: Bearer` header — the OAuth session is bound to this key. Sending only the header returns HTTP 422; sending only the body returns 404."
+            },
+            "scopes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Optional list of X OAuth 2.0 scopes to request. Defaults to the set required by AIsa's Twitter write endpoints: `follows.write`, `tweet.read`, `users.read`, `tweet.write`, `like.write`, `dm.read`, `dm.write`.",
+              "example": [
+                "follows.write",
+                "tweet.read",
+                "users.read"
+              ]
+            }
+          },
+          "required": [
+            "aisa_api_key"
+          ]
+        },
         "example": {
           "aisa_api_key": "sk-aisa-...",
           "scopes": [
@@ -118,36 +146,11 @@ Effective request declaration (including authentication and referenced schemas):
             "tweet.read",
             "users.read"
           ]
-        },
-        "schema": {
-          "properties": {
-            "aisa_api_key": {
-              "description": "Your AIsa API key (the `sk-aisa-...` value). REQUIRED in the JSON body in addition to the `Authorization: Bearer` header — the OAuth session is bound to this key. Sending only the header returns HTTP 422; sending only the body returns 404.",
-              "type": "string"
-            },
-            "scopes": {
-              "description": "Optional list of X OAuth 2.0 scopes to request. Defaults to the set required by AIsa's Twitter write endpoints: `follows.write`, `tweet.read`, `users.read`, `tweet.write`, `like.write`, `dm.read`, `dm.write`.",
-              "example": [
-                "follows.write",
-                "tweet.read",
-                "users.read"
-              ],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "aisa_api_key"
-          ],
-          "type": "object"
         }
       }
-    },
-    "required": true
+    }
   },
-  "x-aisa-status": "enabled",
+  "x-aisa-status": "disabled",
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -165,3 +168,6 @@ Published reference price: $0.000001 USD per successful request. Your account pr
 
 
 {/* aisa-contract-details:end */}
+{/* aisa-contract-status:start */}
+Currently disabled.
+{/* aisa-contract-status:end */}
