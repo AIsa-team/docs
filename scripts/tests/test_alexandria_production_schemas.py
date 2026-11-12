@@ -87,7 +87,7 @@ class AlexandriaProductionSchemaTests(unittest.TestCase):
     def test_examples_and_prose_follow_the_supported_request_modes(self):
         pubmed = self.operations['/apis/v1/pubmed-ncbi-nlm-nih-gov/publications/related']
         media = pubmed['responses']['200']['content']['application/json']
-        self.assertEqual(media['examples']['production']['value']['results'], [])
+        self.assertEqual(media['examples']['illustrative']['value']['results'], [])
         self.assertFalse(Draft202012Validator(media['schema']).is_valid({'results': [{'title': 'summary'}]}))
         for unsupported in ('cited_in', 'references'):
             self.assertNotIn(unsupported, pubmed['description'])

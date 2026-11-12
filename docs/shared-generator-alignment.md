@@ -17,9 +17,13 @@ These pins describe code and source-input alignment, not a production rollout.
 | #349 | A bounded 1,024-member canonical inventory supports the complete catalog. Tests cover a 568-provider release, the exact inventory limit, overflow rejection and independent file-size limits. |
 | #350 | Five Alexandria schema corrections use the recorded production evidence. Composition preserves the reviewed exclusion between two supplier-only forwarded fields while rejecting conflicts with Runtime-owned fields or rules. |
 
-The twelve source files from #346/#350 match the pinned dev bytes. Only their
-eleven distinct hash-bound review receipts are added to main's existing review
-ledger; unrelated main receipts and observations are preserved. The production
+The twelve source files from #346/#350 were imported from the pinned dev bytes.
+Final review replaced four recorded production response examples with synthetic
+illustrations in three Alexandria files, as required by README. Their schemas
+and recorded response digests are unchanged. The sanitization review records
+old/new hashes; three new receipts cover the revised examples. The eleven
+original imported receipts and all unrelated main receipts/observations are
+preserved. Nine source files still match dev byte for byte. The production
 requests described in the imported review records were performed during those
 reviews, not again during consolidation.
 

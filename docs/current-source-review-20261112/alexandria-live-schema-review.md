@@ -10,7 +10,7 @@ This review covers the five operations below. It does not establish correctness 
 | `web-archive-org/captures/history` | `url="https://firecrawl.dev", limit=2` | Bare domain; extra `date`: both 400 | Object with two capture objects, available years, normalized URL, `mode="oldest"`, and two null date-related values. Corrected the URL example and removed date-selection guidance. |
 | `datalegion/companies/enrich-base` | `domain="google.com"` | Extra `name`; extra `social_url`: both 400 | Object with `matches`, nested `company` and `match_metadata`; `total` omitted. Closed request to domain and documented the observed object structure, including nullable address fields. |
 | `datalegion/people/enrich-base-no-contact` | The provider's published social URL example | Extra `first_name`: 400 | Object with `matches`, nested `person` and `match_metadata`; `total` omitted. Closed request to social_url and documented nested records and observed nullable fields. No returned personal values are committed. |
-| `wikipedia/articles/lookup` | `name="Marie_Curie", project="enwiki", limit=1` with each of the four body modes, or fields alone | Invalid body; fields together with body=none; 51 fields: 400 | Direct article array. Body keys matched the requested formats; fields-only returned exactly the selected fields. Added body enum, fields maxItems=50, and fields/body mutual exclusion. Added an actual two-field response example. |
+| `wikipedia/articles/lookup` | `name="Marie_Curie", project="enwiki", limit=1` with each of the four body modes, or fields alone | Invalid body; fields together with body=none; 51 fields: 400 | Direct article array. Body keys matched the requested formats; fields-only returned exactly the selected fields. Added body enum, fields maxItems=50, and fields/body mutual exclusion. Added a two-field response example; its final values are illustrative. |
 
 ## Wikipedia boundary evidence
 
@@ -30,7 +30,7 @@ The body default is documented in prose rather than as a schema default, so clie
 
 ## Schema validation and scope
 
-All 11 complete successful response bodies were validated locally against the final **composed** schemas. Scalar payloads and incorrect known container/field types are rejected. Wikipedia projections remain valid because article properties are optional. Data Legion's published illustrative person example remains labelled illustrative; the company example is explicitly an excerpt of the actual production response.
+All 11 complete successful response bodies were validated locally against the final **composed** schemas. Scalar payloads and incorrect known container/field types are rejected. Wikipedia projections remain valid because article properties are optional. Data Legion's person example remains labelled illustrative. During PR #334 consolidation, the four captured-response examples were replaced with synthetic illustrations under the repository's no-production-payload rule. Schemas and the recorded response digests remain unchanged; see [the sanitization review](source-example-sanitization-review.json).
 
 The schemas cover evidenced fields and leave additional properties open. Field presence is not inferred from a successful sample. Wayback's two date-related fields were observed only as null, so their descriptions record that fact without inventing an unobserved non-null type. Raw responses are retained privately with the local probe evidence; personal response values and the E2E key are not part of this PR.
 
