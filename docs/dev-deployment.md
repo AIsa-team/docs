@@ -112,6 +112,12 @@ Schema/download links point to the dev branch's generated files. This preview
 requires a production API key for an actual request; generation and validation
 never make such requests.
 
+The private generation candidate normalizes existing native document URLs to
+the selected source before composing and hashing retained operations. Repeating
+generation with the same inputs after a source switch therefore preserves both
+page content and document hashes. The source checkout and acquired facts remain
+unchanged until the validated output is explicitly written.
+
 Existing reference links are retained. Explicitly disabled operations are
 identified as historical; unsupported old pricing labels such as `cost_tier`
 and `model` do not turn an unpriced disabled endpoint into an unknown active

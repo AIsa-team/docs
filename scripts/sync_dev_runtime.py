@@ -283,6 +283,13 @@ def generate(root, files, *, source='dev', source_release=None):
     with tempfile.TemporaryDirectory(prefix='dev-docs-') as folder:
         candidate = Path(folder) / 'site'
         shutil.copytree(root, candidate, ignore=shutil.ignore_patterns('.git', '.cache', 'node_modules', '__pycache__'))
+        # Retained operations feed composition hashes. Normalize their preview
+        # URLs before composition so switching sources does not change hashes
+        # again when the generated documents become the next run's history.
+        from runtime_registry import published_documents
+        for name in published_documents(candidate):
+            path = candidate / 'openapi' / (name + '.json')
+            path.write_text(dev_urls(path.read_text(), source))
         facts = Path(folder) / 'facts'
         facts.mkdir()
         for name, raw in files.items():
