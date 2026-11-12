@@ -28,6 +28,9 @@ from internal_publication_snapshot import load_snapshot
 # change with every upstream revision. The revision is source_git_revision.
 TREG_CATALOG_URL = 'https://github.com/superdesigndev/treg/tree/main/src/treg/catalog'
 REFRESH_INTERVAL_HOURS = 12
+# Reviewed customer-facing field descriptions written by AIsa (never upstream
+# notes). Applied to every converted declaration before hashing.
+FIELD_DESCRIPTIONS = Path(__file__).resolve().parent / 'treg_field_descriptions.json'
 CONVERTER = 'scripts/prepare_treg_public_reference.py@2'
 
 
@@ -253,17 +256,123 @@ def prepare(vendors, facts, capture, selected, *, capture_sha256, rules=None):
                   {'services_revision':SERVICES_REVISION,'evidence':evidence,'omitted':omitted})
 
 
-def finish(paths, capture, capture_sha256, operation_map, notes, rules, report):
+def load_field_descriptions(path=None, rules=None):
+    """Load reviewed field descriptions; every entry must pass the vocabulary scan.
+
+    The file is reviewed input, so a hit is a hard error (never a silent drop).
+    The error names the entry location and rule only, never a matched term.
+    """
+    from vocab_scan import scan_text
+    reviewed = json.loads(Path(path or FIELD_DESCRIPTIONS).read_text())
+    require(reviewed.get('schema_version') == 1, 'unsupported field description version')
+    by_name, by_operation = reviewed.get('by_name', {}), reviewed.get('by_operation', {})
+    require(isinstance(by_name, dict) and isinstance(by_operation, dict), 'field descriptions must be maps')
+    entries = [('by_name/' + name, text) for name, text in by_name.items()]
+    for operation_id, fields in by_operation.items():
+        require(isinstance(fields, dict), 'by_operation entries must be maps: ' + operation_id)
+        for location, text in fields.items():
+            require(re.fullmatch(r'(?:query/[^/]+|body(?:/[^/]+)+)', location), 'invalid field location: ' + operation_id + ' ' + location)
+            entries.append(('by_operation/' + operation_id + '/' + location, text))
+    if rules is not None:
+        for where, text in entries:
+            require(isinstance(text, str) and text.strip() == text and text, 'empty or untrimmed field description: ' + where)
+            hits = scan_text(text, rules)
+            require(not hits, 'reviewed field description fails the vocabulary scan: ' + where + ' ' +
+                    ','.join(f'{kind}:{rule}' for kind, rule in hits))
+    return {'by_name': by_name, 'by_operation': by_operation}
+
+
+def request_fields(operation):
+    """Yield (location, name, holder) for every declared request field.
+
+    Query parameters carry their description on the Parameter Object; body
+    fields on their property schema. Locations match treg_field_descriptions.json.
+    """
+    for parameter in operation.get('parameters', []):
+        yield 'query/' + parameter['name'], parameter['name'], parameter
+    def walk(schema, prefix):
+        for name, field in (schema.get('properties') or {}).items():
+            location = prefix + '/' + name
+            yield location, name, field
+            yield from walk(field, location)
+            if isinstance(field.get('items'), dict):
+                yield from walk(field['items'], location)
+    body = ((operation.get('requestBody') or {}).get('content') or {}).get('application/json')
+    if body:
+        yield from walk(body.get('schema') or {}, 'body')
+
+
+def apply_field_descriptions(document, reviewed):
+    """Apply reviewed descriptions; by_operation wins over by_name.
+
+    Returns (applied, total, pending, unknown) for the internal report.
+    Reviewed text replaces any retained upstream description.
+    """
+    by_name, by_operation = reviewed['by_name'], reviewed['by_operation']
+    applied, total, pending, seen = 0, 0, [], set()
+    for path, item in sorted(document.get('paths', {}).items()):
+        for method, operation in sorted(item.items()):
+            operation_id = operation.get('operationId')
+            overrides = by_operation.get(operation_id, {})
+            for location, name, holder in request_fields(operation):
+                total += 1
+                text = overrides.get(location, by_name.get(name))
+                if location in overrides:
+                    seen.add((operation_id, location))
+                if text is None:
+                    pending.append({'operation_id': operation_id, 'location': location})
+                    continue
+                if location.startswith('query/'):
+                    holder.get('schema', {}).pop('description', None)
+                holder['description'] = text
+                applied += 1
+    unknown = [{'operation_id': o, 'location': l} for o, fields in sorted(by_operation.items())
+               for l in sorted(fields) if (o, l) not in seen]
+    return applied, total, pending, unknown
+
+
+def reapply_field_descriptions(published, reviewed):
+    """Re-apply reviewed field descriptions to a committed declaration offline.
+
+    The committed file is the importer output plus operations retained by
+    refresh_upstream.preserve_removed (and its merged components). Its
+    content_hash covers the importer output only, so the hash is recomputed
+    over that same view; capture, revision and policy fields are unchanged.
+    """
+    document = copy.deepcopy(published)
+    source = document['info'].pop('x-aisa-source')
+    importer = copy.deepcopy(document)
+    importer.pop('components', None)
+    for row in source.get('retained_operations', []):
+        method, path = row.split(' ', 1)
+        importer['paths'].get(path, {}).pop(method.lower(), None)
+        if not importer['paths'].get(path, True):
+            importer['paths'].pop(path)
+    require(digest(importer) == source['content_hash'], 'committed declaration does not match its content_hash')
+    apply_field_descriptions(importer, reviewed)
+    apply_field_descriptions(document, reviewed)
+    source['content_hash'] = digest(importer)
+    document['info']['x-aisa-source'] = source
+    return document
+
+
+def finish(paths, capture, capture_sha256, operation_map, notes, rules, report, field_descriptions=None):
     revision = capture['revision']
     document={'openapi':'3.1.0','info':{'title':'Treg public request definitions','version':revision},'paths':paths}
-    pending = scrub_descriptions(document, rules if rules is not None else vocabulary_rules(document))
+    rules = rules if rules is not None else vocabulary_rules(document)
+    reviewed = field_descriptions if field_descriptions is not None else load_field_descriptions(rules=rules)
+    applied, total, field_pending, unknown = apply_field_descriptions(document, reviewed)
+    pending = scrub_descriptions(document, rules)
     document['info']['x-aisa-source']=source_metadata(document, revision=revision, acquired_at=capture['acquired_at'],
         capture_sha256=capture_sha256, operation_map=operation_map)
     # Internal report only: upstream notes and dropped descriptions never
     # enter the published declaration.
     report.update({'request_operations':len(paths),'formal_publication':False,'response_operations_added':0,
                    'treg_revision':revision,'internal_notes':notes,
-                   'description_pending':[{'operation_id':o,'pointer':p} for o,p in pending]})
+                   'description_pending':[{'operation_id':o,'pointer':p} for o,p in pending],
+                   'field_descriptions':{'applied':applied,'fields':total},
+                   'field_description_pending':field_pending,
+                   'field_description_unknown':unknown})
     return document, report
 
 
@@ -334,6 +443,15 @@ def import_treg_public(root=None, *, revision=None, get=None):
 
 
 def main():
+    import sys
+    if sys.argv[1:2] == ['--reapply-field-descriptions']:
+        # Offline: apply reviewed field descriptions to the committed declaration.
+        target = Path(__file__).resolve().parents[1] / 'openapi/upstream/treg-public.json'
+        published = json.loads(target.read_text())
+        rules = vocabulary_rules(published)
+        updated = reapply_field_descriptions(published, load_field_descriptions(rules=rules))
+        target.write_text(json.dumps(updated, indent=2, ensure_ascii=False) + '\n')
+        return
     parser=argparse.ArgumentParser(description=__doc__)
     for name in ('services-repository','snapshot','snapshot-proof','pending-pages-receipt',
                  'capture','source-directory','output','report'):
