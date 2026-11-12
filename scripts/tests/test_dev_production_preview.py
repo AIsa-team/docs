@@ -100,6 +100,8 @@ class DevProductionPreviewTests(unittest.TestCase):
                      '/old': {'get': {'operationId': 'old', 'x-aisa-status': 'disabled',
                                      'x-aisa-pricing': {'cost_tier': 'low', 'model': 'per_request'}}}}
             (root / 'openapi/example.json').write_text(json.dumps({'paths': paths}))
+            (root / 'openapi/unverified.json').write_text(json.dumps({'paths': {
+                '/legacy': {'get': {'operationId': 'legacy'}}}}))
             (root / 'docs.json').write_text('{"navigation":{"pages":[]}}')
             for language, prefix in [('en', ''), ('zh', 'zh/')]:
                 for name in ('current', 'old'):
@@ -107,6 +109,8 @@ class DevProductionPreviewTests(unittest.TestCase):
                     page.parent.mkdir(parents=True, exist_ok=True)
                     page.write_text('---\nopenapi: "openapi/example.json GET /' + name + '"\n---\n'
                                     + dev.ARCHIVE_NOTE + dev.HISTORIC_NOTES[language])
+                legacy = root / (prefix + 'api-reference/example/legacy.mdx')
+                legacy.write_text('---\nopenapi: "openapi/unverified.json GET /legacy"\n---\n')
             dev.scope_presentation(root, {'info': {}, 'paths': {}}, {'example': {}}, source='production')
             for language, prefix in [('en', ''), ('zh', 'zh/')]:
                 current = (root / (prefix + 'api-reference/example/current.mdx')).read_text()
@@ -115,3 +119,6 @@ class DevProductionPreviewTests(unittest.TestCase):
                 self.assertNotIn('dev Runtime', old)
                 self.assertIn(dev.DISABLED_NOTES[language], old)
                 self.assertIn('历史归档接口' if language == 'zh' else 'Historical archive', old)
+                legacy = (root / (prefix + 'api-reference/example/legacy.mdx')).read_text()
+                self.assertIn(dev.PRODUCTION_NOTES[language], legacy)
+                self.assertNotIn('历史归档接口' if language == 'zh' else 'Historical archive', legacy)

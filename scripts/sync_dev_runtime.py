@@ -174,12 +174,9 @@ def scope_presentation(candidate, aggregate, summary, *, source='dev'):
             if unverified:
                 language = 'zh' if base.startswith('zh/') else 'en'
                 text = clean_page(text, language)
-                # A retained operation without a Runtime pricing declaration
-                # is still a historical archive. The readable presentation
-                # layer supplies the archive status while the OpenAPI
-                # operation and metadata remain unchanged.
+                # Absence from a selected catalog does not prove an endpoint
+                # is disabled. Only an explicit retained status may say that.
                 presentation_operation = copy.deepcopy(operation) if operation is not None else {}
-                presentation_operation.setdefault('x-aisa-status', 'disabled')
                 if operation is not None:
                     text = update_readable_block(text, presentation_operation, language, translated_note,
                         document=documents[name], method=method.lower(), path=path, spec_path=name)
