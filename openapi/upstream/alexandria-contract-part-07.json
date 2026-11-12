@@ -11,10 +11,10 @@
       "refresh_policy": "pinned",
       "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
       "path_space": "public",
-      "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+      "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
       "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
       "fetched_at": "2026-11-11T17:31:20Z",
-      "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+      "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
       "operation_evidence": [
         {
           "path": "/apis/v1/allbirds-com/products/collections",
@@ -2206,7 +2206,14 @@
       ],
       "owner": "AIsa-team/docs",
       "review_period_days": 30,
-      "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+      "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+      "production_schema_review": {
+        "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+        "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+        "paths": [
+          "/apis/v1/web-archive-org/captures/history"
+        ]
+      }
     }
   },
   "servers": [
@@ -79941,22 +79948,15 @@
       "post": {
         "operationId": "web-archive-org.captures.history",
         "summary": "History",
-        "description": "Oldest indexed snapshots (default 5, maximum 20), or the snapshot closest to midnight UTC on date YYYYMMDD; earlier wins ties. One page, not a domain crawl. Replay may redirect.",
+        "description": "Return the oldest indexed snapshots for one page. Send an absolute URL including its scheme and a limit from 1 to 20. Replay may redirect.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": true,
+                "additionalProperties": false,
                 "properties": {
-                  "date": {
-                    "type": "string",
-                    "description": "Pattern: ^[0-9]{8}$.",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  },
                   "limit": {
                     "type": "integer",
                     "description": "limit\n\nProvider reference: minimum 1; maximum 20; default 5.",
@@ -79971,7 +79971,7 @@
                   },
                   "url": {
                     "type": "string",
-                    "description": "url",
+                    "description": "Absolute page URL including its scheme, for example https://firecrawl.dev.",
                     "x-alexandria-option-metadata": {
                       "required": true,
                       "in": "body"
@@ -79987,11 +79987,11 @@
                 ]
               },
               "examples": {
-                "provider": {
-                  "summary": "Official provider example; checked against AIsa request constraints",
+                "production": {
+                  "summary": "Verified production request (2026-11-12)",
                   "value": {
-                    "limit": 2,
-                    "url": "firecrawl.dev"
+                    "url": "https://firecrawl.dev",
+                    "limit": 2
                   }
                 }
               }
@@ -80000,14 +80000,51 @@
         },
         "responses": {
           "200": {
-            "description": "Oldest indexed snapshots (default 5, maximum 20), or the snapshot closest to midnight UTC on date YYYYMMDD; earlier wins ties. One page, not a domain crawl. Replay may redirect.\n\nThe response contains the tool result directly.\n\nThe provider identifies `captures` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `archive_url` | string |  |\n| `status` | number |  |\n| `timestamp` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "description": "Returns the tool result directly as an object containing captures. The supported request lists the oldest snapshots for a page.\n\n| Documented field | Type | Description |\n| --- | --- | --- |\n| `captures` | object[] | Snapshot records. |\n| `captures[].archive_url` | string | Archived page URL. |\n| `captures[].status` | number | Archived HTTP status. |\n| `captures[].timestamp` | string | Archive capture timestamp. |\n| `available_years` | number[] | Years with indexed captures. |\n| `mode` | string | Observed value: oldest. |\n| `url` | string | Normalized page URL. |\n| `requested_date` | observed null | No date is accepted by this route. |\n| `exact_date_match` | observed null | No date comparison was requested. |\n\nKnown structure is documented from the official provider descriptors and production calls. Optional fields and additional fields are allowed; field presence is not inferred from a single response.",
             "content": {
               "application/json": {
                 "schema": {
-                  "not": {
-                    "type": "null"
+                  "type": "object",
+                  "properties": {
+                    "available_years": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    },
+                    "captures": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "archive_url": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "number"
+                          },
+                          "timestamp": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    },
+                    "exact_date_match": {
+                      "description": "Null in the observed oldest-snapshots response. Other representations are not documented for this route."
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "requested_date": {
+                      "description": "Null in the observed response; this route accepts only url and limit."
+                    },
+                    "url": {
+                      "type": "string"
+                    }
                   },
-                  "description": "Oldest indexed snapshots (default 5, maximum 20), or the snapshot closest to midnight UTC on date YYYYMMDD; earlier wins ties. One page, not a domain crawl. Replay may redirect.\n\nThe response contains the tool result directly.\n\nThe provider identifies `captures` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `archive_url` | string |  |\n| `status` | number |  |\n| `timestamp` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+                  "additionalProperties": true,
+                  "description": "Returns the tool result directly as an object containing captures. The supported request lists the oldest snapshots for a page.\n\n| Documented field | Type | Description |\n| --- | --- | --- |\n| `captures` | object[] | Snapshot records. |\n| `captures[].archive_url` | string | Archived page URL. |\n| `captures[].status` | number | Archived HTTP status. |\n| `captures[].timestamp` | string | Archive capture timestamp. |\n| `available_years` | number[] | Years with indexed captures. |\n| `mode` | string | Observed value: oldest. |\n| `url` | string | Normalized page URL. |\n| `requested_date` | observed null | No date is accepted by this route. |\n| `exact_date_match` | observed null | No date comparison was requested. |\n\nKnown structure is documented from the official provider descriptors and production calls. Optional fields and additional fields are allowed; field presence is not inferred from a single response.",
                   "x-aisa-schema-completeness": "documented-fields-only",
                   "x-aisa-provider-response": {
                     "about": "Oldest indexed snapshots (default 5, maximum 20), or the snapshot closest to midnight UTC on date YYYYMMDD; earlier wins ties. One page, not a domain crawl. Replay may redirect.",
@@ -80030,9 +80067,9 @@
                   }
                 },
                 "examples": {
-                  "provider": {
-                    "summary": "Official provider example",
-                    "description": "Published by the provider on 2026-09-17.",
+                  "production": {
+                    "summary": "Observed production response (2026-11-12)",
+                    "description": "Response to the displayed request; data and timestamps can change.",
                     "value": {
                       "available_years": [
                         2024,

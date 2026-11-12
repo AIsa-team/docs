@@ -11,10 +11,10 @@
       "refresh_policy": "pinned",
       "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
       "path_space": "public",
-      "content_hash": "sha256:7992435a87ac9a1f24a1506c8640b4c1ebfbc00c91c029d7f4cc13b8a3224585",
+      "content_hash": "sha256:87f944e4d129fc2244133f4d99f91fd394d0ce9bed00f3184b3e864ea0ae5a7f",
       "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
       "fetched_at": "2026-11-11T17:31:20Z",
-      "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+      "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
       "operation_evidence": [
         {
           "path": "/apis/v1/afcd-foodstandards-gov-au/foods/foods-by-nutrient",
@@ -3223,7 +3223,15 @@
       ],
       "owner": "AIsa-team/docs",
       "review_period_days": 30,
-      "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+      "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+      "production_schema_review": {
+        "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+        "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+        "paths": [
+          "/apis/v1/pubmed-ncbi-nlm-nih-gov/publications/related",
+          "/apis/v1/wikipedia/articles/lookup"
+        ]
+      }
     }
   },
   "servers": [
@@ -90460,18 +90468,18 @@
       "post": {
         "operationId": "pubmed-ncbi-nlm-nih-gov.publications.related",
         "summary": "Related",
-        "description": "Expand from one paper to its neighbourhood: reviews on the same topic (`similar`), later work building on it (`cited_in`) or what it built on (`references`).",
+        "description": "Find similar PubMed articles for a PMID. Send all four fields: pmid, kind=\"similar\", include_summaries=false, and limit. This route returns linked identifiers without document summaries.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": true,
+                "additionalProperties": false,
                 "properties": {
                   "include_summaries": {
                     "type": "boolean",
-                    "description": "When false, return ids only (one upstream request).",
+                    "description": "Must be false. Linked identifiers are returned in ids; results is empty.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     },
@@ -90479,7 +90487,7 @@
                   },
                   "kind": {
                     "type": "string",
-                    "description": "kind\n\nProvider reference: allowed values [\"similar\", \"cited_in\", \"references\"]; default \"similar\".",
+                    "description": "Use \"similar\" for this route.",
                     "default": "similar",
                     "x-alexandria-option-metadata": {
                       "in": "body",
@@ -90493,7 +90501,7 @@
                   },
                   "limit": {
                     "type": "integer",
-                    "description": "How many linked ids to return summaries for (and to list in `ids`).\n\nProvider reference: minimum 1; maximum 50; default 20.",
+                    "description": "Maximum number of linked identifiers to return, from 1 to 50.",
                     "default": 20,
                     "x-alexandria-option-metadata": {
                       "in": "body",
@@ -90521,8 +90529,8 @@
                 ]
               },
               "examples": {
-                "provider": {
-                  "summary": "Request verified on 2026-11-11",
+                "production": {
+                  "summary": "Verified production request (2026-11-12)",
                   "value": {
                     "kind": "similar",
                     "limit": 2,
@@ -90536,14 +90544,166 @@
         },
         "responses": {
           "200": {
-            "description": "Articles linked to one PMID through NCBI E-utilities elink (ep-21): `similar` (PubMed's computed similar-articles list, `pubmed_pubmed`, the article itself removed), `cited_in` (PubMed articles citing it, `pubmed_pubmed_citedin`) or `references` (its references that are in PubMed, `pubmed_pubmed_refs`). Returns every linked PMID count, the first `limit` ids and, unless disabled, their document summaries via esummary (ep-18). An unknown PMID is `not_found`; a known article with no links of that kind is a valid empty list.\n\nThe response contains the tool result directly.\n\nThe provider identifies `results` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `authors` | string[] | Author names in PubMed short form (`Rasgon JL`), in order. |\n| `cited_by_count_pmc` | number | Number of PMC articles citing this one (`pmcrefcount`); null when PubMed leaves it blank. |\n| `db` | string | Database the record came from (`pubmed` or `pmc`). |\n| `doi` | string | DOI; null when the record has none. |\n| `epub_date` | string | Electronic publication date; null when empty. |\n| `id` | string | Entrez uid in the queried database: the PMID for `pubmed`, the PMCID digits for `pmc`. |\n| `issue` | string |  |\n| `journal` | string | Journal abbreviation (`source`), e.g. `Integr Comp Biol`; null when absent. |\n| `journal_full` | string | Full journal name; null when absent. |\n| `languages` | string[] | ISO-639-2 language codes (`eng`); empty when the database does not report them. |\n| `last_author` | string | Last author short name; null when PubMed omits it. |\n| `pages` | string |  |\n| `pmcid` | string | PMCID with prefix (`PMC10755176`); null when the article is not in PMC. |\n| `pmid` | string | PMID from the record's article ids; null when the record has none. |\n| `pub_date` | string | Publication date as PubMed prints it (`2023 Dec 29`); null when empty. |\n| `publication_types` | string[] | PubMed publication types (`Review`, `Journal Article`, ...); empty for `pmc` records, which do not carry them. |\n| `record_status` | string | PubMed record status (`PubMed - indexed for MEDLINE`, `PubMed`, ...); null for `pmc`. |\n| `title` | string | Article title as PubMed stores it (may end with a period). |\n| `url` | string | Canonical page: `https://pubmed.ncbi.nlm.nih.gov/{pmid}/` or `https://pmc.ncbi.nlm.nih.gov/articles/{pmcid}/`. |\n| `volume` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "description": "Returns the tool result directly as an object. With the supported include_summaries=false request, ids contains linked PMIDs and results is empty.\n\n| Documented field | Type | Description |\n| --- | --- | --- |\n| `ids` | string[] | Linked PMIDs, capped by limit. |\n| `results` | array | Empty; summaries are disabled for this route. |\n| `kind` | string | Relationship requested: similar. |\n| `linkname` | string | NCBI relationship name. |\n| `pmid` | string | Input PMID. |\n| `total_count` | number | Total linked identifiers before applying limit. |\n| `source_url` | string | Source link. |\n| `observed_at_ms` | number | Observation timestamp in milliseconds. |\n\nKnown structure is documented from the official provider descriptors and production calls. Optional fields and additional fields are allowed; field presence is not inferred from a single response.",
             "content": {
               "application/json": {
                 "schema": {
-                  "not": {
-                    "type": "null"
+                  "type": "object",
+                  "properties": {
+                    "ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "linkname": {
+                      "type": "string"
+                    },
+                    "observed_at_ms": {
+                      "type": "number"
+                    },
+                    "pmid": {
+                      "type": "string"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "authors": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "Author names in PubMed short form (`Rasgon JL`), in order."
+                          },
+                          "cited_by_count_pmc": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "description": "Number of PMC articles citing this one (`pmcrefcount`); null when PubMed leaves it blank."
+                          },
+                          "db": {
+                            "type": "string",
+                            "description": "Database the record came from (`pubmed` or `pmc`)."
+                          },
+                          "doi": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "DOI; null when the record has none."
+                          },
+                          "epub_date": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "Electronic publication date; null when empty."
+                          },
+                          "id": {
+                            "type": "string",
+                            "description": "Entrez uid in the queried database: the PMID for `pubmed`, the PMCID digits for `pmc`."
+                          },
+                          "issue": {
+                            "type": "string"
+                          },
+                          "journal": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "Journal abbreviation (`source`), e.g. `Integr Comp Biol`; null when absent."
+                          },
+                          "journal_full": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "Full journal name; null when absent."
+                          },
+                          "languages": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "ISO-639-2 language codes (`eng`); empty when the database does not report them."
+                          },
+                          "last_author": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "Last author short name; null when PubMed omits it."
+                          },
+                          "pages": {
+                            "type": "string"
+                          },
+                          "pmcid": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "PMCID with prefix (`PMC10755176`); null when the article is not in PMC."
+                          },
+                          "pmid": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "PMID from the record's article ids; null when the record has none."
+                          },
+                          "pub_date": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "Publication date as PubMed prints it (`2023 Dec 29`); null when empty."
+                          },
+                          "publication_types": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "PubMed publication types (`Review`, `Journal Article`, ...); empty for `pmc` records, which do not carry them."
+                          },
+                          "record_status": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "PubMed record status (`PubMed - indexed for MEDLINE`, `PubMed`, ...); null for `pmc`."
+                          },
+                          "title": {
+                            "type": "string",
+                            "description": "Article title as PubMed stores it (may end with a period)."
+                          },
+                          "url": {
+                            "type": "string",
+                            "description": "Canonical page: `https://pubmed.ncbi.nlm.nih.gov/{pmid}/` or `https://pmc.ncbi.nlm.nih.gov/articles/{pmcid}/`."
+                          },
+                          "volume": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "maxItems": 0,
+                      "description": "Empty when include_summaries is false, as required by this route."
+                    },
+                    "source_url": {
+                      "type": "string"
+                    },
+                    "total_count": {
+                      "type": "number"
+                    }
                   },
-                  "description": "Articles linked to one PMID through NCBI E-utilities elink (ep-21): `similar` (PubMed's computed similar-articles list, `pubmed_pubmed`, the article itself removed), `cited_in` (PubMed articles citing it, `pubmed_pubmed_citedin`) or `references` (its references that are in PubMed, `pubmed_pubmed_refs`). Returns every linked PMID count, the first `limit` ids and, unless disabled, their document summaries via esummary (ep-18). An unknown PMID is `not_found`; a known article with no links of that kind is a valid empty list.\n\nThe response contains the tool result directly.\n\nThe provider identifies `results` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `authors` | string[] | Author names in PubMed short form (`Rasgon JL`), in order. |\n| `cited_by_count_pmc` | number | Number of PMC articles citing this one (`pmcrefcount`); null when PubMed leaves it blank. |\n| `db` | string | Database the record came from (`pubmed` or `pmc`). |\n| `doi` | string | DOI; null when the record has none. |\n| `epub_date` | string | Electronic publication date; null when empty. |\n| `id` | string | Entrez uid in the queried database: the PMID for `pubmed`, the PMCID digits for `pmc`. |\n| `issue` | string |  |\n| `journal` | string | Journal abbreviation (`source`), e.g. `Integr Comp Biol`; null when absent. |\n| `journal_full` | string | Full journal name; null when absent. |\n| `languages` | string[] | ISO-639-2 language codes (`eng`); empty when the database does not report them. |\n| `last_author` | string | Last author short name; null when PubMed omits it. |\n| `pages` | string |  |\n| `pmcid` | string | PMCID with prefix (`PMC10755176`); null when the article is not in PMC. |\n| `pmid` | string | PMID from the record's article ids; null when the record has none. |\n| `pub_date` | string | Publication date as PubMed prints it (`2023 Dec 29`); null when empty. |\n| `publication_types` | string[] | PubMed publication types (`Review`, `Journal Article`, ...); empty for `pmc` records, which do not carry them. |\n| `record_status` | string | PubMed record status (`PubMed - indexed for MEDLINE`, `PubMed`, ...); null for `pmc`. |\n| `title` | string | Article title as PubMed stores it (may end with a period). |\n| `url` | string | Canonical page: `https://pubmed.ncbi.nlm.nih.gov/{pmid}/` or `https://pmc.ncbi.nlm.nih.gov/articles/{pmcid}/`. |\n| `volume` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+                  "additionalProperties": true,
+                  "description": "Returns the tool result directly as an object. With the supported include_summaries=false request, ids contains linked PMIDs and results is empty.\n\n| Documented field | Type | Description |\n| --- | --- | --- |\n| `ids` | string[] | Linked PMIDs, capped by limit. |\n| `results` | array | Empty; summaries are disabled for this route. |\n| `kind` | string | Relationship requested: similar. |\n| `linkname` | string | NCBI relationship name. |\n| `pmid` | string | Input PMID. |\n| `total_count` | number | Total linked identifiers before applying limit. |\n| `source_url` | string | Source link. |\n| `observed_at_ms` | number | Observation timestamp in milliseconds. |\n\nKnown structure is documented from the official provider descriptors and production calls. Optional fields and additional fields are allowed; field presence is not inferred from a single response.",
                   "x-aisa-schema-completeness": "documented-fields-only",
                   "x-aisa-provider-response": {
                     "about": "Articles linked to one PMID through NCBI E-utilities elink (ep-21): `similar` (PubMed's computed similar-articles list, `pubmed_pubmed`, the article itself removed), `cited_in` (PubMed articles citing it, `pubmed_pubmed_citedin`) or `references` (its references that are in PubMed, `pubmed_pubmed_refs`). Returns every linked PMID count, the first `limit` ids and, unless disabled, their document summaries via esummary (ep-18). An unknown PMID is `not_found`; a known article with no links of that kind is a valid empty list.",
@@ -90651,9 +90811,9 @@
                   }
                 },
                 "examples": {
-                  "provider": {
-                    "summary": "Official provider example",
-                    "description": "Published by the provider on 2026-09-24.",
+                  "production": {
+                    "summary": "Observed production response (2026-11-12)",
+                    "description": "Response to the displayed request; data and timestamps can change.",
                     "value": {
                       "ids": [
                         "32715554",
@@ -90661,85 +90821,9 @@
                       ],
                       "kind": "similar",
                       "linkname": "pubmed_pubmed",
-                      "observed_at_ms": 1790282928697,
+                      "observed_at_ms": 1794470060096,
                       "pmid": "37742320",
-                      "results": [
-                        {
-                          "authors": [
-                            "Chaverra-Rodriguez D",
-                            "Dalla Benetta E",
-                            "Heu CC",
-                            "Rasgon JL",
-                            "Ferree PM",
-                            "Akbari OS"
-                          ],
-                          "cited_by_count_pmc": null,
-                          "db": "pubmed",
-                          "doi": "10.1111/imb.12663",
-                          "epub_date": "2020 Aug 19",
-                          "id": "32715554",
-                          "issue": "6",
-                          "journal": "Insect Mol Biol",
-                          "journal_full": "Insect molecular biology",
-                          "languages": [
-                            "eng"
-                          ],
-                          "last_author": "Akbari OS",
-                          "pages": "569-577",
-                          "pmcid": null,
-                          "pmid": "32715554",
-                          "pub_date": "2020 Dec",
-                          "publication_types": [
-                            "Journal Article",
-                            "Research Support, N.I.H., Extramural",
-                            "Research Support, Non-U.S. Gov't",
-                            "Research Support, U.S. Gov't, Non-P.H.S."
-                          ],
-                          "record_status": "PubMed - indexed for MEDLINE",
-                          "title": "Germline mutagenesis of Nasonia vitripennis through ovarian delivery of CRISPR-Cas9 ribonucleoprotein.",
-                          "url": "https://pubmed.ncbi.nlm.nih.gov/32715554/",
-                          "volume": "29"
-                        },
-                        {
-                          "authors": [
-                            "Macias VM",
-                            "McKeand S",
-                            "Chaverra-Rodriguez D",
-                            "Hughes GL",
-                            "Fazekas A",
-                            "Pujhari S",
-                            "Jasinskiene N",
-                            "James AA",
-                            "Rasgon JL"
-                          ],
-                          "cited_by_count_pmc": 18,
-                          "db": "pubmed",
-                          "doi": "10.1534/g3.120.401133",
-                          "epub_date": "2020 Apr 9",
-                          "id": "32122959",
-                          "issue": "4",
-                          "journal": "G3 (Bethesda)",
-                          "journal_full": "G3 (Bethesda, Md.)",
-                          "languages": [
-                            "eng"
-                          ],
-                          "last_author": "Rasgon JL",
-                          "pages": "1353-1360",
-                          "pmcid": "PMC7144067",
-                          "pmid": "32122959",
-                          "pub_date": "2020 Apr 9",
-                          "publication_types": [
-                            "Journal Article",
-                            "Research Support, N.I.H., Extramural",
-                            "Research Support, Non-U.S. Gov't",
-                            "Research Support, U.S. Gov't, Non-P.H.S."
-                          ],
-                          "record_status": "PubMed - indexed for MEDLINE",
-                          "title": "Cas9-Mediated Gene-Editing in the Malaria Mosquito Anopheles stephensi by ReMOT Control.",
-                          "url": "https://pubmed.ncbi.nlm.nih.gov/32122959/",
-                          "volume": "10"
-                        }
-                      ],
+                      "results": [],
                       "source_url": "https://pubmed.ncbi.nlm.nih.gov/?linkname=pubmed_pubmed&from_uid=37742320",
                       "total_count": 99
                     }
@@ -106767,7 +106851,7 @@
       "post": {
         "operationId": "wikipedia.articles.lookup",
         "summary": "Article",
-        "description": "Read the current revision of a Wikipedia (or sister-project) article by exact title: full wikitext (or HTML with body), abstract, categories, redirects, connected Wikidata QID, license, and revision credibility signals. Use structured-contents instead when you want infobox fields, sections or references already parsed. From https://de.wikipedia.org/wiki/Berlin pass name `Berlin` and project `dewiki`. Not a search: titles must match exactly.",
+        "description": "Read the current revision of a Wikipedia (or sister-project) article by exact title: full wikitext (or HTML with body), abstract, categories, redirects, connected Wikidata QID, license, and revision credibility signals. Use structured-contents instead when you want infobox fields, sections or references already parsed. From https://de.wikipedia.org/wiki/Berlin pass name `Berlin` and project `dewiki`. Not a search: titles must match exactly. Supply fields or body separately. For projected body content, use article_body.wikitext or article_body.html in fields.",
         "requestBody": {
           "required": true,
           "content": {
@@ -106797,10 +106881,11 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "Return only these fields, in dot notation, for example `name`, `abstract`, `url`, `version.identifier`. Omit for the full record. Wikimedia returns exactly the fields named.\n\nProvider reference: maximum 50.",
+                    "description": "Return only the named fields, using dot notation; at most 50 entries. Omit body when using fields. Include article_body.wikitext or article_body.html here to select body content.",
                     "x-alexandria-option-metadata": {
                       "max": 50
-                    }
+                    },
+                    "maxItems": 50
                   },
                   "limit": {
                     "type": "integer",
@@ -106815,8 +106900,7 @@
                   },
                   "body": {
                     "type": "string",
-                    "description": "Which article_body format to include when fields is not given: `wikitext` (default, compact), `html` (MediaWiki DOM, often 5-10x larger), `both`, or `none` for metadata and abstract only.\n\nProvider reference: allowed values [\"wikitext\", \"html\", \"both\", \"none\"]; default \"wikitext\".",
-                    "default": "wikitext",
+                    "description": "Article body format when fields is omitted: wikitext (default), html, both, or none. Omit body entirely when using fields, including when no body is needed.",
                     "x-alexandria-option-metadata": {
                       "oneOf": [
                         "wikitext",
@@ -106824,27 +106908,349 @@
                         "both",
                         "none"
                       ]
-                    }
+                    },
+                    "enum": [
+                      "wikitext",
+                      "html",
+                      "both",
+                      "none"
+                    ]
                   }
                 },
                 "required": [
                   "limit",
                   "name"
-                ]
+                ],
+                "not": {
+                  "required": [
+                    "fields",
+                    "body"
+                  ]
+                }
+              },
+              "examples": {
+                "production": {
+                  "summary": "Verified production request (2026-11-12)",
+                  "value": {
+                    "name": "Marie_Curie",
+                    "project": "enwiki",
+                    "limit": 1,
+                    "fields": [
+                      "name",
+                      "identifier"
+                    ]
+                  }
+                }
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Articles matching the exact title in the selected project or language, newest revision each. article_body carries the format chosen with body, wikitext by default. Empty when none match. Priced per article returned.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `name` | string | Article title as displayed on the page. |\n| `identifier` | number | MediaWiki page ID; not accepted as lookup input. |\n| `abstract` | string | Short plain-text summary of the article. |\n| `url` | string | Canonical article URL, for citation. |\n| `date_created` | string |  |\n| `date_modified` | string | When the current revision was saved. |\n| `in_language` | object | Language: identifier (for example en), name and direction. |\n| `is_part_of` | object | Project: identifier (for example enwiki), code, name and url. |\n| `namespace` | object | MediaWiki namespace; 0 is the main article namespace. |\n| `main_entity` | object | Connected Wikidata item: identifier (QID such as Q7186) and url. Pass the QID to wikidata/item. |\n| `additional_entities` | object[] | Other Wikidata entities used on the page. |\n| `image` | object | Main image: content_url, width, height and thumbnail. |\n| `license` | object[] | Licenses for the content, normally CC BY-SA 4.0, with name and url. |\n| `version` | object | Current revision: identifier, editor, comment, tags, size, and credibility signals under scores (revertrisk, referencerisk, referenceneed) and maintenance_tags. |\n| `article_body` | object | Full content: wikitext by default, html (MediaWiki DOM) with body html, both with body both, absent with body none. |\n| `categories` | object[] | Categories the article belongs to: name and url. |\n| `templates` | object[] | Templates used on the page. |\n| `redirects` | object[] | Titles that redirect to this article: name and url. |\n| `protection` | object[] | Edit and move protections, absent when unprotected. |\n| `watchers_count` | number |  |\n| `event` | object | The pipeline event behind this revision: type and date_created. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "description": "Returns the tool result directly as an array of article objects. With fields, articles contain only the selected fields. body selects wikitext, html, both, or none. No article property is required because field projection is supported.\n\n| Documented field | Type | Description |\n| --- | --- | --- |\n| `name` | string | Article title as displayed on the page. |\n| `identifier` | number | MediaWiki page ID; not accepted as lookup input. |\n| `abstract` | string | Short plain-text summary of the article. |\n| `url` | string | Canonical article URL, for citation. |\n| `date_created` | string |  |\n| `date_modified` | string | When the current revision was saved. |\n| `in_language` | object | Language: identifier (for example en), name and direction. |\n| `is_part_of` | object | Project: identifier (for example enwiki), code, name and url. |\n| `namespace` | object | MediaWiki namespace; 0 is the main article namespace. |\n| `main_entity` | object | Connected Wikidata item: identifier (QID such as Q7186) and url. Pass the QID to wikidata/item. |\n| `additional_entities` | object[] | Other Wikidata entities used on the page. |\n| `image` | object | Main image: content_url, width, height and thumbnail. |\n| `license` | object[] | Licenses for the content, normally CC BY-SA 4.0, with name and url. |\n| `version` | object | Current revision: identifier, editor, comment, tags, size, and credibility signals under scores (revertrisk, referencerisk, referenceneed) and maintenance_tags. |\n| `article_body` | object | Full content: wikitext by default, html (MediaWiki DOM) with body html, both with body both, absent with body none. |\n| `categories` | object[] | Categories the article belongs to: name and url. |\n| `templates` | object[] | Templates used on the page. |\n| `redirects` | object[] | Titles that redirect to this article: name and url. |\n| `protection` | object[] | Edit and move protections, absent when unprotected. |\n| `watchers_count` | number |  |\n| `event` | object | The pipeline event behind this revision: type and date_created. |\n\nKnown structure is documented from the official provider descriptors and production calls. Optional fields and additional fields are allowed; field presence is not inferred from a single response.",
             "content": {
               "application/json": {
                 "schema": {
-                  "not": {
-                    "type": "null"
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Article title as displayed on the page."
+                      },
+                      "identifier": {
+                        "type": "number",
+                        "description": "MediaWiki page ID; not accepted as lookup input."
+                      },
+                      "abstract": {
+                        "type": "string",
+                        "description": "Short plain-text summary of the article."
+                      },
+                      "url": {
+                        "type": "string",
+                        "description": "Canonical article URL, for citation."
+                      },
+                      "date_created": {
+                        "type": "string"
+                      },
+                      "date_modified": {
+                        "type": "string",
+                        "description": "When the current revision was saved."
+                      },
+                      "in_language": {
+                        "type": "object",
+                        "properties": {
+                          "identifier": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "Language: identifier (for example en), name and direction."
+                      },
+                      "is_part_of": {
+                        "type": "object",
+                        "properties": {
+                          "identifier": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "Project: identifier (for example enwiki), code, name and url."
+                      },
+                      "namespace": {
+                        "type": "object",
+                        "properties": {
+                          "identifier": {
+                            "type": "number"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "MediaWiki namespace; 0 is the main article namespace."
+                      },
+                      "main_entity": {
+                        "type": "object",
+                        "properties": {
+                          "identifier": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "Connected Wikidata item: identifier (QID such as Q7186) and url. Pass the QID to wikidata/item."
+                      },
+                      "additional_entities": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "identifier": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            },
+                            "aspects": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "description": "Other Wikidata entities used on the page."
+                      },
+                      "image": {
+                        "type": "object",
+                        "properties": {
+                          "content_url": {
+                            "type": "string"
+                          },
+                          "width": {
+                            "type": "number"
+                          },
+                          "height": {
+                            "type": "number"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "Main image: content_url, width, height and thumbnail."
+                      },
+                      "license": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "identifier": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "description": "Licenses for the content, normally CC BY-SA 4.0, with name and url."
+                      },
+                      "version": {
+                        "type": "object",
+                        "properties": {
+                          "identifier": {
+                            "type": "number"
+                          },
+                          "comment": {
+                            "type": "string"
+                          },
+                          "tags": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "scores": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": true
+                          },
+                          "editor": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": true
+                          },
+                          "number_of_characters": {
+                            "type": "number"
+                          },
+                          "size": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "number"
+                              },
+                              "unit_text": {
+                                "type": "string"
+                              }
+                            },
+                            "additionalProperties": true
+                          },
+                          "maintenance_tags": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": true
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "Current revision: identifier, editor, comment, tags, size, and credibility signals under scores (revertrisk, referencerisk, referenceneed) and maintenance_tags."
+                      },
+                      "article_body": {
+                        "type": "object",
+                        "properties": {
+                          "wikitext": {
+                            "type": "string"
+                          },
+                          "html": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "Selected body formats. Omitted with body=none or when excluded by fields."
+                      },
+                      "categories": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "description": "Categories the article belongs to: name and url."
+                      },
+                      "templates": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "description": "Templates used on the page."
+                      },
+                      "redirects": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "description": "Titles that redirect to this article: name and url."
+                      },
+                      "protection": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string"
+                            },
+                            "level": {
+                              "type": "string"
+                            },
+                            "expiry": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "description": "Edit and move protections, absent when unprotected."
+                      },
+                      "watchers_count": {
+                        "type": "number"
+                      },
+                      "event": {
+                        "type": "object",
+                        "properties": {
+                          "identifier": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "date_created": {
+                            "type": "string"
+                          },
+                          "date_published": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true,
+                        "description": "The pipeline event behind this revision: type and date_created."
+                      },
+                      "date_previously_modified": {
+                        "type": "string"
+                      },
+                      "previous_version": {
+                        "type": "object",
+                        "properties": {
+                          "identifier": {
+                            "type": "number"
+                          },
+                          "number_of_characters": {
+                            "type": "number"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    },
+                    "additionalProperties": true
                   },
-                  "description": "Articles matching the exact title in the selected project or language, newest revision each. article_body carries the format chosen with body, wikitext by default. Empty when none match. Priced per article returned.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `name` | string | Article title as displayed on the page. |\n| `identifier` | number | MediaWiki page ID; not accepted as lookup input. |\n| `abstract` | string | Short plain-text summary of the article. |\n| `url` | string | Canonical article URL, for citation. |\n| `date_created` | string |  |\n| `date_modified` | string | When the current revision was saved. |\n| `in_language` | object | Language: identifier (for example en), name and direction. |\n| `is_part_of` | object | Project: identifier (for example enwiki), code, name and url. |\n| `namespace` | object | MediaWiki namespace; 0 is the main article namespace. |\n| `main_entity` | object | Connected Wikidata item: identifier (QID such as Q7186) and url. Pass the QID to wikidata/item. |\n| `additional_entities` | object[] | Other Wikidata entities used on the page. |\n| `image` | object | Main image: content_url, width, height and thumbnail. |\n| `license` | object[] | Licenses for the content, normally CC BY-SA 4.0, with name and url. |\n| `version` | object | Current revision: identifier, editor, comment, tags, size, and credibility signals under scores (revertrisk, referencerisk, referenceneed) and maintenance_tags. |\n| `article_body` | object | Full content: wikitext by default, html (MediaWiki DOM) with body html, both with body both, absent with body none. |\n| `categories` | object[] | Categories the article belongs to: name and url. |\n| `templates` | object[] | Templates used on the page. |\n| `redirects` | object[] | Titles that redirect to this article: name and url. |\n| `protection` | object[] | Edit and move protections, absent when unprotected. |\n| `watchers_count` | number |  |\n| `event` | object | The pipeline event behind this revision: type and date_created. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+                  "description": "Returns the tool result directly as an array of article objects. With fields, articles contain only the selected fields. body selects wikitext, html, both, or none. No article property is required because field projection is supported.\n\n| Documented field | Type | Description |\n| --- | --- | --- |\n| `name` | string | Article title as displayed on the page. |\n| `identifier` | number | MediaWiki page ID; not accepted as lookup input. |\n| `abstract` | string | Short plain-text summary of the article. |\n| `url` | string | Canonical article URL, for citation. |\n| `date_created` | string |  |\n| `date_modified` | string | When the current revision was saved. |\n| `in_language` | object | Language: identifier (for example en), name and direction. |\n| `is_part_of` | object | Project: identifier (for example enwiki), code, name and url. |\n| `namespace` | object | MediaWiki namespace; 0 is the main article namespace. |\n| `main_entity` | object | Connected Wikidata item: identifier (QID such as Q7186) and url. Pass the QID to wikidata/item. |\n| `additional_entities` | object[] | Other Wikidata entities used on the page. |\n| `image` | object | Main image: content_url, width, height and thumbnail. |\n| `license` | object[] | Licenses for the content, normally CC BY-SA 4.0, with name and url. |\n| `version` | object | Current revision: identifier, editor, comment, tags, size, and credibility signals under scores (revertrisk, referencerisk, referenceneed) and maintenance_tags. |\n| `article_body` | object | Full content: wikitext by default, html (MediaWiki DOM) with body html, both with body both, absent with body none. |\n| `categories` | object[] | Categories the article belongs to: name and url. |\n| `templates` | object[] | Templates used on the page. |\n| `redirects` | object[] | Titles that redirect to this article: name and url. |\n| `protection` | object[] | Edit and move protections, absent when unprotected. |\n| `watchers_count` | number |  |\n| `event` | object | The pipeline event behind this revision: type and date_created. |\n\nKnown structure is documented from the official provider descriptors and production calls. Optional fields and additional fields are allowed; field presence is not inferred from a single response.",
                   "x-aisa-schema-completeness": "documented-fields-only",
                   "x-aisa-provider-response": {
                     "about": "Articles matching the exact title in the selected project or language, newest revision each. article_body carries the format chosen with body, wikitext by default. Empty when none match. Priced per article returned.",
@@ -106956,6 +107362,18 @@
                     ],
                     "key": "",
                     "paginated": true
+                  }
+                },
+                "examples": {
+                  "production": {
+                    "summary": "Observed production response (2026-11-12)",
+                    "description": "Response to the displayed request; data and timestamps can change.",
+                    "value": [
+                      {
+                        "name": "Marie Curie",
+                        "identifier": 20408
+                      }
+                    ]
                   }
                 }
               }

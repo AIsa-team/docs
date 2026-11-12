@@ -46,7 +46,7 @@ class ProviderContractSourceTests(unittest.TestCase):
                         Draft202012Validator(media['schema']).validate(example['value'])
                 request_examples += len(request.get('examples', {}))
                 response_examples += len(response.get('examples', {}))
-        self.assertEqual((request_examples, response_examples), (1872, 1872))
+        self.assertEqual((request_examples, response_examples), (1873, 1873))
 
     def test_firecrawl_response_sources_pin_the_exact_passthrough_and_refs(self):
         sources = list((ROOT / 'openapi/upstream').glob('response-firecrawl-post-*.json'))
