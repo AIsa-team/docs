@@ -5,7 +5,16 @@
         "scheme": "bearer",
         "type": "http"
       }
-    }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
   },
   "info": {
     "description": "",
@@ -33,7 +42,7 @@
       "schema_version": "1",
       "composer_version": "29",
       "response_pending": [],
-      "document_hash": "sha256:4af564e1640d60b69326801a168cc6b995b12c7047c304d6c17e96b00c1936ee"
+      "document_hash": "sha256:fb23ae35df41566d4414b61a5526e9b9d28bd3b008f8e2e71074d6dbf0d1227f"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -85,5 +94,2346 @@
       "url": "https://dev-api.aisa.one"
     }
   ],
-  "paths": {}
+  "paths": {
+    "/apis/v1/earth-search-aws-element84-com/satellite-imagery/render-clip": {
+      "post": {
+        "description": "To show a field on a given date. Get the scene id from search_scenes. Sizes grow with the geometry: keep max_px small for large fields.",
+        "operationId": "earth-search-aws-element84-com.satellite-imagery.render-clip",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "collection": {
+                    "type": "string",
+                    "description": "Collection of the scene id; inferred from the id form when omitted.\n\nProvider reference: allowed values [\"sentinel-2-c1-l2a\", \"sentinel-2-l2a\"].",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "sentinel-2-c1-l2a",
+                        "sentinel-2-l2a"
+                      ]
+                    }
+                  },
+                  "geometry": {
+                    "additionalProperties": true,
+                    "type": "object",
+                    "description": "GeoJSON geometry in WGS84 with [lon, lat] positions: Point, Polygon, MultiPolygon, or a Feature wrapping one. Rings must be closed; altitude is ignored; FeatureCollection and antimeridian-crossing shapes are refused (invalid_input with a JSON pointer and a stable code: ring_not_closed, latitude, longitude, too_large, too_many_vertices, feature_collection, antimeridian, unsupported_type). Open because GeoJSON allows foreign members (properties, id, bbox)."
+                  },
+                  "layer": {
+                    "type": "string",
+                    "description": "`true_colour` (default) reads the visual asset; `ndvi` reads red and nir.\n\nProvider reference: allowed values [\"true_colour\", \"ndvi\"].",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "true_colour",
+                        "ndvi"
+                      ]
+                    }
+                  },
+                  "max_px": {
+                    "type": "number",
+                    "description": "Longest side of the PNG; the native clip is enlarged by the largest whole factor that fits.\n\nProvider reference: minimum 16; maximum 1024; default 512.",
+                    "default": 512,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 16,
+                      "max": 1024
+                    }
+                  },
+                  "scene_id": {
+                    "type": "string",
+                    "description": "Earth Search item id, e.g. S2B_T16SDE_20260903T163711_L2A (sentinel-2-c1-l2a) or S2A_16SDE_20220909_0_L2A (sentinel-2-l2a). Pattern: ^[A-Za-z0-9_-]+$."
+                  }
+                },
+                "required": [
+                  "geometry",
+                  "scene_id"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "geometry": {
+                      "coordinates": [
+                        [
+                          [
+                            -105.2701,
+                            40.0151
+                          ],
+                          [
+                            -105.2697,
+                            40.0151
+                          ],
+                          [
+                            -105.2697,
+                            40.0154
+                          ],
+                          [
+                            -105.2701,
+                            40.0154
+                          ],
+                          [
+                            -105.2701,
+                            40.0151
+                          ]
+                        ]
+                      ],
+                      "type": "Polygon"
+                    },
+                    "max_px": 48,
+                    "scene_id": "S2A_T13TDE_20260904T175741_L2A"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A true-colour (TCI) or NDVI PNG of the geometry's bounding box from one scene at native 10 m, enlarged by a whole-number nearest-neighbour factor within max_px, pixels outside the geometry dimmed. Returned as base64 (programs have no artifact storage).\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `asset_keys` | string[] |  |\n| `bounds_utm` | object | Projected bounds of the geometry (EPSG above); the clip covers the pixels touching them. |\n| `bytes_read` | number |  |\n| `collection` | string |  |\n| `date` | string |  |\n| `datetime` | string |  |\n| `epsg` | number |  |\n| `height` | number |  |\n| `image_bytes` | number |  |\n| `image_png_base64` | string | PNG, RGB 8-bit, base64. |\n| `layer` | string |  |\n| `legend` | string |  |\n| `location` | object | Echo of the geometry the result describes. |\n| `missing` | object[] | Layers that could not be produced, with the reason, instead of guessed values. |\n| `native_height` | number |  |\n| `native_width` | number | Clip width in native pixels before enlargement. |\n| `observed_at_ms` | number |  |\n| `pixel_size_m` | number |  |\n| `pixels_inside_geometry` | number |  |\n| `scale_factor` | number |  |\n| `scene_id` | string |  |\n| `sources` | object[] | Where the values came from: one entry per Earth Search document read. |\n| `spatial_precision` | string |  |\n| `width` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-01.",
+                    "value": {
+                      "asset_keys": [
+                        "visual"
+                      ],
+                      "bounds_utm": {
+                        "xmax": 476983.64666648704,
+                        "xmin": 476949.40946222196,
+                        "ymax": 4429501.405501108,
+                        "ymin": 4429468.004886297
+                      },
+                      "bytes_read": 2521313,
+                      "collection": "sentinel-2-c1-l2a",
+                      "date": "2026-09-04",
+                      "datetime": "2026-09-04T18:03:10.203000Z",
+                      "epsg": 32613,
+                      "height": 45,
+                      "image_bytes": 210,
+                      "image_png_base64": "iVBORw0KGgoAAAANSUhEUgAAAC0AAAAtCAIAAAC1eHXNAAAAmUlEQVR4nO3OPQrCMACG4YIi1f5pTdsQKiVoERezqIgKHZ29/2U8wbsEun3wHOBJ2i4ldbMizubEdAVp6zVJ9NBDDz1iH3afkef9QKaPJyEMRA899NBjjocxOfm+z+T1OJJxrEhRLokeeuihR/SjMRn5TRdyu1pyCiVJiwXRQw899Ih/9BXxbkvaekMG3xDX74geeuihR+zjD+domJPDl3q7AAAAAElFTkSuQmCC",
+                      "layer": "true_colour",
+                      "legend": "Sentinel-2 true colour (TCI, bands 4/3/2 as 8-bit); pixels outside the geometry are dimmed",
+                      "location": {
+                        "area_m2": 1136,
+                        "bbox": [
+                          -105.2701,
+                          40.0151,
+                          -105.2697,
+                          40.0154
+                        ],
+                        "centroid": [
+                          -105.2699,
+                          40.01525
+                        ],
+                        "kind": "Polygon"
+                      },
+                      "missing": [],
+                      "native_height": 5,
+                      "native_width": 5,
+                      "observed_at_ms": 1790875796048,
+                      "pixel_size_m": 10,
+                      "pixels_inside_geometry": 9,
+                      "scale_factor": 9,
+                      "scene_id": "S2A_T13TDE_20260904T175741_L2A",
+                      "sources": [
+                        {
+                          "name": "Element 84 Earth Search",
+                          "observed_at": "2026-10-01T17:29:56Z",
+                          "url": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-c1-l2a/items/S2A_T13TDE_20260904T175741_L2A"
+                        }
+                      ],
+                      "spatial_precision": "polygon",
+                      "width": 45
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Render clip",
+        "tags": [
+          "Element 84 Earth Search (Sentinel-2 L2A)"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "2e366e1489b7"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "earth-search-aws-element84-com",
+        "x-aisa-runtime-operation": {
+          "operation_id": "earth-search-aws-element84-com.satellite-imagery.render-clip",
+          "method": "POST",
+          "path": "/apis/v1/earth-search-aws-element84-com/satellite-imagery/render-clip"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:076ca58076e529f2553a4325b2713232dd39e6793498809d0258b17034d20b90"
+        },
+        "x-aisa-docs-url": "/api-reference/earth-search-aws-element84-com/earth-search-aws-element84-com-satellite-imagery-render-clip"
+      }
+    },
+    "/apis/v1/earth-search-aws-element84-com/satellite-imagery/scene-availability": {
+      "post": {
+        "description": "To see whether a period has usable imagery, or how dense the archive is for a place, before calling search_scenes or vegetation_indices.",
+        "operationId": "earth-search-aws-element84-com.satellite-imagery.scene-availability",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "collection": {
+                    "type": "string",
+                    "description": "`sentinel-2-c1-l2a` (Collection 1, default), `sentinel-2-l2a` (legacy archive, denser before 2023) or `auto` (c1, falling back to the legacy collection when c1 matches nothing).\n\nProvider reference: allowed values [\"auto\", \"sentinel-2-c1-l2a\", \"sentinel-2-l2a\"].",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "auto",
+                        "sentinel-2-c1-l2a",
+                        "sentinel-2-l2a"
+                      ]
+                    }
+                  },
+                  "end": {
+                    "type": "string",
+                    "description": "Window end, YYYY-MM-DD (UTC), inclusive. Defaults to today. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "geometry": {
+                    "additionalProperties": true,
+                    "type": "object",
+                    "description": "GeoJSON geometry in WGS84 with [lon, lat] positions: Point, Polygon, MultiPolygon, or a Feature wrapping one. Rings must be closed; altitude is ignored; FeatureCollection and antimeridian-crossing shapes are refused (invalid_input with a JSON pointer and a stable code: ring_not_closed, latitude, longitude, too_large, too_many_vertices, feature_collection, antimeridian, unsupported_type). Open because GeoJSON allows foreign members (properties, id, bbox)."
+                  },
+                  "start": {
+                    "type": "string",
+                    "description": "Window start, YYYY-MM-DD (UTC). Earth Search holds Sentinel-2 L2A from 2015-06-27. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                },
+                "required": [
+                  "geometry"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "end": "2026-09-10",
+                    "geometry": {
+                      "coordinates": [
+                        [
+                          [
+                            -86.93,
+                            35.853
+                          ],
+                          [
+                            -86.92,
+                            35.853
+                          ],
+                          [
+                            -86.92,
+                            35.859
+                          ],
+                          [
+                            -86.93,
+                            35.859
+                          ],
+                          [
+                            -86.93,
+                            35.853
+                          ]
+                        ]
+                      ],
+                      "type": "Polygon"
+                    },
+                    "start": "2026-07-15"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "How many Sentinel-2 scenes cover a geometry's bounding box in a window, by month, cloud-cover bucket, MGRS tile and platform (GET /v1/aggregate). Cheap pre-check before reading pixels.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `bbox_queried` | number[] |  |\n| `collections` | object[] | `auto` queries sentinel-2-c1-l2a and, when the window starts before 2023, sentinel-2-l2a as well. |\n| `location` | object | Echo of the geometry the result describes. |\n| `missing` | object[] | Layers that could not be produced, with the reason, instead of guessed values. |\n| `notes` | string[] |  |\n| `observed_at_ms` | number |  |\n| `sources` | object[] | Where the values came from: one entry per Earth Search document read. |\n| `spatial_precision` | string |  |\n| `total_scenes` | number | Sum over the collections queried. |\n| `window` | object |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-01.",
+                    "value": {
+                      "bbox_queried": [
+                        -86.93,
+                        35.853,
+                        -86.92,
+                        35.859
+                      ],
+                      "collections": [
+                        {
+                          "by_cloud_cover": [
+                            {
+                              "from_pct": null,
+                              "range": "*-5.0",
+                              "scenes": 3,
+                              "to_pct": 5
+                            },
+                            {
+                              "from_pct": 5,
+                              "range": "5.0-15.0",
+                              "scenes": 2,
+                              "to_pct": 15
+                            },
+                            {
+                              "from_pct": 15,
+                              "range": "15.0-40.0",
+                              "scenes": 8,
+                              "to_pct": 40
+                            },
+                            {
+                              "from_pct": 40,
+                              "range": "40.0-*",
+                              "scenes": 17,
+                              "to_pct": null
+                            }
+                          ],
+                          "by_month": [
+                            {
+                              "month": "2026-07",
+                              "scenes": 8
+                            },
+                            {
+                              "month": "2026-08",
+                              "scenes": 16
+                            },
+                            {
+                              "month": "2026-09",
+                              "scenes": 6
+                            }
+                          ],
+                          "by_platform": [
+                            {
+                              "platform": "sentinel-2b",
+                              "scenes": 12
+                            },
+                            {
+                              "platform": "sentinel-2c",
+                              "scenes": 12
+                            },
+                            {
+                              "platform": "sentinel-2a",
+                              "scenes": 6
+                            }
+                          ],
+                          "by_tile": [
+                            {
+                              "grid_code": "MGRS-16SDE",
+                              "scenes": 15
+                            },
+                            {
+                              "grid_code": "MGRS-16SEE",
+                              "scenes": 15
+                            }
+                          ],
+                          "collection": "sentinel-2-c1-l2a",
+                          "total_scenes": 30
+                        }
+                      ],
+                      "location": {
+                        "area_m2": 601272,
+                        "bbox": [
+                          -86.93,
+                          35.853,
+                          -86.92,
+                          35.859
+                        ],
+                        "centroid": [
+                          -86.925,
+                          35.856
+                        ],
+                        "kind": "Polygon"
+                      },
+                      "missing": [],
+                      "notes": [
+                        "counts are per MGRS tile intersecting the bbox: a field near a tile edge is counted once per tile and per pass"
+                      ],
+                      "observed_at_ms": 1790875737132,
+                      "sources": [
+                        {
+                          "name": "Element 84 Earth Search",
+                          "observed_at": "2026-10-01T17:28:56Z",
+                          "url": "https://earth-search.aws.element84.com/v1/aggregate?collections=sentinel-2-c1-l2a&bbox=-86.93,35.853,-86.92,35.859&datetime=2026-07-15T00:00:00Z/2026-09-10T23:59:59Z&aggregations=total_count,datetime_frequency,cloud_cover_frequency,grid_code_frequency,platform_frequency"
+                        }
+                      ],
+                      "spatial_precision": "grid_cell",
+                      "total_scenes": 30,
+                      "window": {
+                        "end": "2026-09-10",
+                        "start": "2026-07-15"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Scene availability",
+        "tags": [
+          "Element 84 Earth Search (Sentinel-2 L2A)"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "c9593b2c7d59"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "earth-search-aws-element84-com",
+        "x-aisa-runtime-operation": {
+          "operation_id": "earth-search-aws-element84-com.satellite-imagery.scene-availability",
+          "method": "POST",
+          "path": "/apis/v1/earth-search-aws-element84-com/satellite-imagery/scene-availability"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:2e3d41ad602d2bb342bb893c1fc5b279e00805113e6cdc0902502c08b9158c5f"
+        },
+        "x-aisa-docs-url": "/api-reference/earth-search-aws-element84-com/earth-search-aws-element84-com-satellite-imagery-scene-availability"
+      }
+    },
+    "/apis/v1/earth-search-aws-element84-com/satellite-imagery/scene-detail": {
+      "post": {
+        "description": "When you need asset URLs or raster metadata for a scene id returned by search_scenes.",
+        "operationId": "earth-search-aws-element84-com.satellite-imagery.scene-detail",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "collection": {
+                    "type": "string",
+                    "description": "Collection of the scene id; inferred from the id form when omitted.\n\nProvider reference: allowed values [\"sentinel-2-c1-l2a\", \"sentinel-2-l2a\"].",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "sentinel-2-c1-l2a",
+                        "sentinel-2-l2a"
+                      ]
+                    }
+                  },
+                  "scene_id": {
+                    "type": "string",
+                    "description": "Earth Search item id, e.g. S2B_T16SDE_20260903T163711_L2A (sentinel-2-c1-l2a) or S2A_16SDE_20220909_0_L2A (sentinel-2-l2a). Pattern: ^[A-Za-z0-9_-]+$."
+                  }
+                },
+                "required": [
+                  "scene_id"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "scene_id": "S2B_T16SDE_20260903T163711_L2A"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One Sentinel-2 scene with every asset: COG hrefs on the S3 buckets, projection, shape, transform, data type, nodata, scale and offset (GET /v1/collections/{collection}/items/{id}).\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `assets` | object[] |  |\n| `bbox` | number[] | Scene bbox [min_lon, min_lat, max_lon, max_lat]. |\n| `boa_offset_applied` | boolean | Legacy items only: whether the BOA offset is already applied. |\n| `cloud_cover_pct` | number | eo:cloud_cover over the whole tile. |\n| `cloud_high_probability_pct` | number |  |\n| `cloud_medium_probability_pct` | number |  |\n| `cloud_shadow_pct` | number |  |\n| `collection` | string |  |\n| `constellation` | string |  |\n| `covers_geometry` | boolean | Whether the scene footprint contains every vertex of the geometry; null when the footprint was not returned. |\n| `created` | string |  |\n| `date` | string | Acquisition date YYYY-MM-DD (UTC). |\n| `datetime` | string | Acquisition time, RFC 3339 UTC. |\n| `epsg` | number | UTM zone EPSG code of the tile's rasters. |\n| `footprint` | object | GeoJSON footprint of the scene as Earth Search returns it (Polygon or MultiPolygon). |\n| `grid_code` | string | MGRS tile, e.g. MGRS-16SDE. |\n| `id` | string | Earth Search item id; the form differs per collection (S2B_T16SDE_20260903T163711_L2A in sentinel-2-c1-l2a, S2A_16SDE_20220909_0_L2A in sentinel-2-l2a). |\n| `item_url` | string | STAC item URL on Earth Search. |\n| `missing` | object[] | Layers that could not be produced, with the reason, instead of guessed values. |\n| `nodata_pixel_pct` | number | Share of the tile without data (partial acquisitions). |\n| `not_vegetated_pct` | number |  |\n| `observed_at_ms` | number |  |\n| `platform` | string | sentinel-2a, sentinel-2b or sentinel-2c. |\n| `processing_baseline` | string |  |\n| `product_uri` | string |  |\n| `snow_ice_pct` | number |  |\n| `sources` | object[] | Where the values came from: one entry per Earth Search document read. |\n| `spatial_precision` | string | Scene-level values describe the MGRS tile, not the geometry. |\n| `sun_azimuth` | number |  |\n| `sun_elevation` | number |  |\n| `thin_cirrus_pct` | number |  |\n| `thumbnail_url` | string | Whole-tile preview JPEG (redirects to the asset bucket). |\n| `updated` | string |  |\n| `vegetation_pct` | number |  |\n| `water_pct` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-01.",
+                    "value": {
+                      "assets": [
+                        {
+                          "data_type": "uint16",
+                          "file_size_bytes": 1767881,
+                          "gsd_m": 20,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/AOT.tif",
+                          "key": "aot",
+                          "nodata": 0,
+                          "offset": 0,
+                          "roles": [
+                            "data"
+                          ],
+                          "scale": 0.001,
+                          "shape": [
+                            5490,
+                            5490
+                          ],
+                          "title": "Aerosol optical thickness (AOT)",
+                          "transform": [
+                            20,
+                            0,
+                            399960,
+                            0,
+                            -20,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": "uint16",
+                          "file_size_bytes": 202645038,
+                          "gsd_m": 10,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/B02.tif",
+                          "key": "blue",
+                          "nodata": 0,
+                          "offset": -0.1,
+                          "roles": [
+                            "data",
+                            "reflectance"
+                          ],
+                          "scale": 0.0001,
+                          "shape": [
+                            10980,
+                            10980
+                          ],
+                          "title": "Blue - 10m",
+                          "transform": [
+                            10,
+                            0,
+                            399960,
+                            0,
+                            -10,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": "uint8",
+                          "file_size_bytes": 1283727,
+                          "gsd_m": 20,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/CLD_20m.tif",
+                          "key": "cloud",
+                          "nodata": 0,
+                          "offset": null,
+                          "roles": [
+                            "data",
+                            "cloud"
+                          ],
+                          "scale": null,
+                          "shape": [
+                            5490,
+                            5490
+                          ],
+                          "title": "Cloud Probabilities",
+                          "transform": [
+                            20,
+                            0,
+                            399960,
+                            0,
+                            -20,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": "uint16",
+                          "file_size_bytes": 5780958,
+                          "gsd_m": 60,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/B01.tif",
+                          "key": "coastal",
+                          "nodata": 0,
+                          "offset": -0.1,
+                          "roles": [
+                            "data",
+                            "reflectance"
+                          ],
+                          "scale": 0.0001,
+                          "shape": [
+                            1830,
+                            1830
+                          ],
+                          "title": "Coastal - 60m",
+                          "transform": [
+                            60,
+                            0,
+                            399960,
+                            0,
+                            -60,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": null,
+                          "file_size_bytes": 547962,
+                          "gsd_m": null,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/metadata.xml",
+                          "key": "granule_metadata",
+                          "nodata": null,
+                          "offset": null,
+                          "roles": [
+                            "metadata"
+                          ],
+                          "scale": null,
+                          "shape": null,
+                          "title": null,
+                          "transform": null,
+                          "type": "application/xml"
+                        },
+                        {
+                          "data_type": "uint16",
+                          "file_size_bytes": 216889348,
+                          "gsd_m": 10,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/B03.tif",
+                          "key": "green",
+                          "nodata": 0,
+                          "offset": -0.1,
+                          "roles": [
+                            "data",
+                            "reflectance"
+                          ],
+                          "scale": 0.0001,
+                          "shape": [
+                            10980,
+                            10980
+                          ],
+                          "title": "Green - 10m",
+                          "transform": [
+                            10,
+                            0,
+                            399960,
+                            0,
+                            -10,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": "uint16",
+                          "file_size_bytes": 250036833,
+                          "gsd_m": 10,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/B08.tif",
+                          "key": "nir",
+                          "nodata": 0,
+                          "offset": -0.1,
+                          "roles": [
+                            "data",
+                            "reflectance"
+                          ],
+                          "scale": 0.0001,
+                          "shape": [
+                            10980,
+                            10980
+                          ],
+                          "title": "NIR 1 - 10m",
+                          "transform": [
+                            10,
+                            0,
+                            399960,
+                            0,
+                            -10,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": "uint16",
+                          "file_size_bytes": 63013392,
+                          "gsd_m": 20,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/B8A.tif",
+                          "key": "nir08",
+                          "nodata": 0,
+                          "offset": -0.1,
+                          "roles": [
+                            "data",
+                            "reflectance"
+                          ],
+                          "scale": 0.0001,
+                          "shape": [
+                            5490,
+                            5490
+                          ],
+                          "title": "NIR 2 - 20m",
+                          "transform": [
+                            20,
+                            0,
+                            399960,
+                            0,
+                            -20,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": "uint16",
+                          "file_size_bytes": 7047801,
+                          "gsd_m": 60,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/B09.tif",
+                          "key": "nir09",
+                          "nodata": 0,
+                          "offset": -0.1,
+                          "roles": [
+                            "data",
+                            "reflectance"
+                          ],
+                          "scale": 0.0001,
+                          "shape": [
+                            1830,
+                            1830
+                          ],
+                          "title": "NIR 3 - 60m",
+                          "transform": [
+                            60,
+                            0,
+                            399960,
+                            0,
+                            -60,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": null,
+                          "file_size_bytes": 192885,
+                          "gsd_m": 320,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/L2A_PVI.tif",
+                          "key": "preview",
+                          "nodata": null,
+                          "offset": null,
+                          "roles": [
+                            "overview"
+                          ],
+                          "scale": null,
+                          "shape": [
+                            343,
+                            343
+                          ],
+                          "title": "True color preview",
+                          "transform": [
+                            320,
+                            0,
+                            399960,
+                            0,
+                            -320,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": null,
+                          "file_size_bytes": 55044,
+                          "gsd_m": null,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/product_metadata.xml",
+                          "key": "product_metadata",
+                          "nodata": null,
+                          "offset": null,
+                          "roles": [
+                            "metadata"
+                          ],
+                          "scale": null,
+                          "shape": null,
+                          "title": null,
+                          "transform": null,
+                          "type": "application/xml"
+                        },
+                        {
+                          "data_type": "uint16",
+                          "file_size_bytes": 211145735,
+                          "gsd_m": 10,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/B04.tif",
+                          "key": "red",
+                          "nodata": 0,
+                          "offset": -0.1,
+                          "roles": [
+                            "data",
+                            "reflectance"
+                          ],
+                          "scale": 0.0001,
+                          "shape": [
+                            10980,
+                            10980
+                          ],
+                          "title": "Red - 10m",
+                          "transform": [
+                            10,
+                            0,
+                            399960,
+                            0,
+                            -10,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": "uint16",
+                          "file_size_bytes": 58413409,
+                          "gsd_m": 20,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/B05.tif",
+                          "key": "rededge1",
+                          "nodata": 0,
+                          "offset": -0.1,
+                          "roles": [
+                            "data",
+                            "reflectance"
+                          ],
+                          "scale": 0.0001,
+                          "shape": [
+                            5490,
+                            5490
+                          ],
+                          "title": "Red Edge 1 - 20m",
+                          "transform": [
+                            20,
+                            0,
+                            399960,
+                            0,
+                            -20,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": "uint16",
+                          "file_size_bytes": 61717904,
+                          "gsd_m": 20,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/B06.tif",
+                          "key": "rededge2",
+                          "nodata": 0,
+                          "offset": -0.1,
+                          "roles": [
+                            "data",
+                            "reflectance"
+                          ],
+                          "scale": 0.0001,
+                          "shape": [
+                            5490,
+                            5490
+                          ],
+                          "title": "Red Edge 2 - 20m",
+                          "transform": [
+                            20,
+                            0,
+                            399960,
+                            0,
+                            -20,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": "uint16",
+                          "file_size_bytes": 62775072,
+                          "gsd_m": 20,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/B07.tif",
+                          "key": "rededge3",
+                          "nodata": 0,
+                          "offset": -0.1,
+                          "roles": [
+                            "data",
+                            "reflectance"
+                          ],
+                          "scale": 0.0001,
+                          "shape": [
+                            5490,
+                            5490
+                          ],
+                          "title": "Red Edge 3 - 20m",
+                          "transform": [
+                            20,
+                            0,
+                            399960,
+                            0,
+                            -20,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": "uint8",
+                          "file_size_bytes": 1581257,
+                          "gsd_m": 20,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/SCL.tif",
+                          "key": "scl",
+                          "nodata": 0,
+                          "offset": null,
+                          "roles": [
+                            "data"
+                          ],
+                          "scale": null,
+                          "shape": [
+                            5490,
+                            5490
+                          ],
+                          "title": "Scene classification map (SCL)",
+                          "transform": [
+                            20,
+                            0,
+                            399960,
+                            0,
+                            -20,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": "uint8",
+                          "file_size_bytes": 59412,
+                          "gsd_m": null,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/SNW_20m.tif",
+                          "key": "snow",
+                          "nodata": 0,
+                          "offset": null,
+                          "roles": [
+                            "data",
+                            "snow-ice"
+                          ],
+                          "scale": null,
+                          "shape": [
+                            5490,
+                            5490
+                          ],
+                          "title": "Snow Probabilities",
+                          "transform": [
+                            20,
+                            0,
+                            399960,
+                            0,
+                            -20,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": "uint16",
+                          "file_size_bytes": 61250525,
+                          "gsd_m": 20,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/B11.tif",
+                          "key": "swir16",
+                          "nodata": 0,
+                          "offset": -0.1,
+                          "roles": [
+                            "data",
+                            "reflectance"
+                          ],
+                          "scale": 0.0001,
+                          "shape": [
+                            5490,
+                            5490
+                          ],
+                          "title": "SWIR 1.6μm - 20m",
+                          "transform": [
+                            20,
+                            0,
+                            399960,
+                            0,
+                            -20,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": "uint16",
+                          "file_size_bytes": 59083267,
+                          "gsd_m": 20,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/B12.tif",
+                          "key": "swir22",
+                          "nodata": 0,
+                          "offset": -0.1,
+                          "roles": [
+                            "data",
+                            "reflectance"
+                          ],
+                          "scale": 0.0001,
+                          "shape": [
+                            5490,
+                            5490
+                          ],
+                          "title": "SWIR 2.2μm - 20m",
+                          "transform": [
+                            20,
+                            0,
+                            399960,
+                            0,
+                            -20,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": null,
+                          "file_size_bytes": 36765,
+                          "gsd_m": null,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/L2A_PVI.jpg",
+                          "key": "thumbnail",
+                          "nodata": null,
+                          "offset": null,
+                          "roles": [
+                            "thumbnail"
+                          ],
+                          "scale": null,
+                          "shape": null,
+                          "title": "Thumbnail of preview image",
+                          "transform": null,
+                          "type": "image/jpeg"
+                        },
+                        {
+                          "data_type": null,
+                          "file_size_bytes": 1488,
+                          "gsd_m": null,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/tileInfo.json",
+                          "key": "tileinfo_metadata",
+                          "nodata": null,
+                          "offset": null,
+                          "roles": [
+                            "metadata"
+                          ],
+                          "scale": null,
+                          "shape": null,
+                          "title": null,
+                          "transform": null,
+                          "type": "application/json"
+                        },
+                        {
+                          "data_type": "uint8",
+                          "file_size_bytes": 297413363,
+                          "gsd_m": 10,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/TCI.tif",
+                          "key": "visual",
+                          "nodata": 0,
+                          "offset": null,
+                          "roles": [
+                            "visual"
+                          ],
+                          "scale": null,
+                          "shape": [
+                            10980,
+                            10980
+                          ],
+                          "title": "True color image",
+                          "transform": [
+                            10,
+                            0,
+                            399960,
+                            0,
+                            -10,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        },
+                        {
+                          "data_type": "uint16",
+                          "file_size_bytes": 48656960,
+                          "gsd_m": 20,
+                          "href": "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/16/S/DE/2026/9/S2B_T16SDE_20260903T163711_L2A/WVP.tif",
+                          "key": "wvp",
+                          "nodata": 0,
+                          "offset": 0,
+                          "roles": [
+                            "data"
+                          ],
+                          "scale": 0.001,
+                          "shape": [
+                            5490,
+                            5490
+                          ],
+                          "title": "Water Vapour (WVP)",
+                          "transform": [
+                            20,
+                            0,
+                            399960,
+                            0,
+                            -20,
+                            4000020
+                          ],
+                          "type": "image/tiff; application=geotiff; profile=cloud-optimized"
+                        }
+                      ],
+                      "bbox": [
+                        -88.111914,
+                        35.149921,
+                        -86.891522,
+                        36.14484
+                      ],
+                      "boa_offset_applied": null,
+                      "cloud_cover_pct": 4.791281,
+                      "cloud_high_probability_pct": 2.386382,
+                      "cloud_medium_probability_pct": 2.403234,
+                      "cloud_shadow_pct": 4.197391,
+                      "collection": "sentinel-2-c1-l2a",
+                      "constellation": "sentinel-2",
+                      "covers_geometry": null,
+                      "created": "2026-09-05T15:05:45.403Z",
+                      "date": "2026-09-03",
+                      "datetime": "2026-09-03T16:43:38.040000Z",
+                      "epsg": 32616,
+                      "footprint": {
+                        "coordinates": [
+                          [
+                            [
+                              -88.11191385205836,
+                              36.13972769324406
+                            ],
+                            [
+                              -88.0982820530267,
+                              35.1499211736146
+                            ],
+                            [
+                              -86.89285176524282,
+                              35.154851672138626
+                            ],
+                            [
+                              -86.89152152018616,
+                              36.14484027029347
+                            ],
+                            [
+                              -88.11191385205836,
+                              36.13972769324406
+                            ]
+                          ]
+                        ],
+                        "type": "Polygon"
+                      },
+                      "grid_code": "MGRS-16SDE",
+                      "id": "S2B_T16SDE_20260903T163711_L2A",
+                      "item_url": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-c1-l2a/items/S2B_T16SDE_20260903T163711_L2A",
+                      "missing": [],
+                      "nodata_pixel_pct": 0,
+                      "not_vegetated_pct": 2.968009,
+                      "observed_at_ms": 1790875731014,
+                      "platform": "sentinel-2b",
+                      "processing_baseline": "05.12",
+                      "product_uri": "S2B_MSIL2A_20260903T162829_N0512_R083_T16SDE_20260903T221327.SAFE",
+                      "snow_ice_pct": 0,
+                      "sources": [
+                        {
+                          "name": "Element 84 Earth Search",
+                          "observed_at": "2026-10-01T17:28:51Z",
+                          "url": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-c1-l2a/items/S2B_T16SDE_20260903T163711_L2A"
+                        }
+                      ],
+                      "spatial_precision": "grid_cell",
+                      "sun_azimuth": 148.110972011988,
+                      "sun_elevation": 57.9660563048985,
+                      "thin_cirrus_pct": 0.001666,
+                      "thumbnail_url": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-c1-l2a/items/S2B_T16SDE_20260903T163711_L2A/thumbnail",
+                      "updated": "2026-09-05T15:05:45.403Z",
+                      "vegetation_pct": 86.681187,
+                      "water_pct": 1.036709
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Scene detail",
+        "tags": [
+          "Element 84 Earth Search (Sentinel-2 L2A)"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "2785eca49a95"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "earth-search-aws-element84-com",
+        "x-aisa-runtime-operation": {
+          "operation_id": "earth-search-aws-element84-com.satellite-imagery.scene-detail",
+          "method": "POST",
+          "path": "/apis/v1/earth-search-aws-element84-com/satellite-imagery/scene-detail"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:1b456af5043d1f05a1f690842d22734346cb796aa87778a9f69356189e6cdfb6"
+        },
+        "x-aisa-docs-url": "/api-reference/earth-search-aws-element84-com/earth-search-aws-element84-com-satellite-imagery-scene-detail"
+      }
+    },
+    "/apis/v1/earth-search-aws-element84-com/satellite-imagery/search-scenes": {
+      "post": {
+        "description": "Start here to find scene ids and dates for a field, then pass them to vegetation_indices or render_clip. Percentages are per MGRS tile, not per field; use vegetation_indices for the field's own cloud share.",
+        "operationId": "earth-search-aws-element84-com.satellite-imagery.search-scenes",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "collection": {
+                    "type": "string",
+                    "description": "`sentinel-2-c1-l2a` (Collection 1, default), `sentinel-2-l2a` (legacy archive, denser before 2023) or `auto` (c1, falling back to the legacy collection when c1 matches nothing).\n\nProvider reference: allowed values [\"auto\", \"sentinel-2-c1-l2a\", \"sentinel-2-l2a\"].",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "auto",
+                        "sentinel-2-c1-l2a",
+                        "sentinel-2-l2a"
+                      ]
+                    }
+                  },
+                  "continuation": {
+                    "type": "string",
+                    "description": "Opaque token from a previous page.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "end": {
+                    "type": "string",
+                    "description": "Window end, YYYY-MM-DD (UTC), inclusive. Defaults to today. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "geometry": {
+                    "additionalProperties": true,
+                    "type": "object",
+                    "description": "GeoJSON geometry in WGS84 with [lon, lat] positions: Point, Polygon, MultiPolygon, or a Feature wrapping one. Rings must be closed; altitude is ignored; FeatureCollection and antimeridian-crossing shapes are refused (invalid_input with a JSON pointer and a stable code: ring_not_closed, latitude, longitude, too_large, too_many_vertices, feature_collection, antimeridian, unsupported_type). Open because GeoJSON allows foreign members (properties, id, bbox)."
+                  },
+                  "limit": {
+                    "type": "number",
+                    "description": "Scenes per page.\n\nProvider reference: minimum 1; maximum 100; default 20.",
+                    "default": 20,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 100
+                    }
+                  },
+                  "max_cloud_cover_pct": {
+                    "type": "number",
+                    "description": "Keep scenes whose tile-level eo:cloud_cover is below this percentage (Earth Search `query` filter).\n\nProvider reference: minimum 0; maximum 100.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 0,
+                      "max": 100
+                    }
+                  },
+                  "start": {
+                    "type": "string",
+                    "description": "Window start, YYYY-MM-DD (UTC). Earth Search holds Sentinel-2 L2A from 2015-06-27. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                },
+                "required": [
+                  "geometry"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "end": "2026-09-10",
+                    "geometry": {
+                      "coordinates": [
+                        [
+                          [
+                            -86.93,
+                            35.853
+                          ],
+                          [
+                            -86.92,
+                            35.853
+                          ],
+                          [
+                            -86.92,
+                            35.859
+                          ],
+                          [
+                            -86.93,
+                            35.859
+                          ],
+                          [
+                            -86.93,
+                            35.853
+                          ]
+                        ]
+                      ],
+                      "type": "Polygon"
+                    },
+                    "limit": 3,
+                    "max_cloud_cover_pct": 30,
+                    "start": "2026-07-15"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sentinel-2 L2A scenes intersecting a geometry in a date window, newest first, with tile-level cloud cover and other scene percentages (POST /v1/search with intersects, datetime, query, sortby, fields).\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `collection` | string | Collection the scenes come from. |\n| `continuation` | string | Pass back as `continuation` for the next page; null when exhausted. |\n| `location` | object | Echo of the geometry the result describes. |\n| `matched` | number | Scenes matching the query in this collection (numberMatched). |\n| `max_cloud_cover_pct` | number |  |\n| `missing` | object[] | Layers that could not be produced, with the reason, instead of guessed values. |\n| `notes` | string[] |  |\n| `observed_at_ms` | number |  |\n| `returned` | number |  |\n| `scenes` | object[] |  |\n| `sources` | object[] | Where the values came from: one entry per Earth Search document read. |\n| `spatial_precision` | string |  |\n| `window` | object |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-01.",
+                    "value": {
+                      "collection": "sentinel-2-c1-l2a",
+                      "continuation": "sentinel-2-c1-l2a|2026-09-03T16:43:38.040000Z",
+                      "location": {
+                        "area_m2": 601272,
+                        "bbox": [
+                          -86.93,
+                          35.853,
+                          -86.92,
+                          35.859
+                        ],
+                        "centroid": [
+                          -86.925,
+                          35.856
+                        ],
+                        "kind": "Polygon"
+                      },
+                      "matched": 10,
+                      "max_cloud_cover_pct": 30,
+                      "missing": [],
+                      "notes": [],
+                      "observed_at_ms": 1790875722878,
+                      "returned": 3,
+                      "scenes": [
+                        {
+                          "bbox": [
+                            -88.111914,
+                            35.149921,
+                            -86.891522,
+                            36.14484
+                          ],
+                          "cloud_cover_pct": 28.96958,
+                          "cloud_shadow_pct": 6.142063,
+                          "collection": "sentinel-2-c1-l2a",
+                          "covers_geometry": true,
+                          "date": "2026-09-10",
+                          "datetime": "2026-09-10T16:43:54.948000Z",
+                          "epsg": 32616,
+                          "grid_code": "MGRS-16SDE",
+                          "id": "S2A_T16SDE_20260910T164143_L2A",
+                          "item_url": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-c1-l2a/items/S2A_T16SDE_20260910T164143_L2A",
+                          "nodata_pixel_pct": 0,
+                          "not_vegetated_pct": 3.097369,
+                          "platform": "sentinel-2a",
+                          "processing_baseline": "05.12",
+                          "snow_ice_pct": 0,
+                          "spatial_precision": "grid_cell",
+                          "sun_elevation": 55.8536601036066,
+                          "thumbnail_url": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-c1-l2a/items/S2A_T16SDE_20260910T164143_L2A/thumbnail",
+                          "vegetation_pct": 59.415716,
+                          "water_pct": 0.992933
+                        },
+                        {
+                          "bbox": [
+                            -88.111914,
+                            35.149921,
+                            -86.891522,
+                            36.14484
+                          ],
+                          "cloud_cover_pct": 19.830154,
+                          "cloud_shadow_pct": 9.640406,
+                          "collection": "sentinel-2-c1-l2a",
+                          "covers_geometry": true,
+                          "date": "2026-09-08",
+                          "datetime": "2026-09-08T16:43:38.417000Z",
+                          "epsg": 32616,
+                          "grid_code": "MGRS-16SDE",
+                          "id": "S2C_T16SDE_20260908T163821_L2A",
+                          "item_url": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-c1-l2a/items/S2C_T16SDE_20260908T163821_L2A",
+                          "nodata_pixel_pct": 0,
+                          "not_vegetated_pct": 3.726975,
+                          "platform": "sentinel-2c",
+                          "processing_baseline": "05.12",
+                          "snow_ice_pct": 0,
+                          "spatial_precision": "grid_cell",
+                          "sun_elevation": 56.4510399171648,
+                          "thumbnail_url": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-c1-l2a/items/S2C_T16SDE_20260908T163821_L2A/thumbnail",
+                          "vegetation_pct": 65.065086,
+                          "water_pct": 0.734808
+                        },
+                        {
+                          "bbox": [
+                            -88.111914,
+                            35.149921,
+                            -86.891522,
+                            36.14484
+                          ],
+                          "cloud_cover_pct": 4.791281,
+                          "cloud_shadow_pct": 4.197391,
+                          "collection": "sentinel-2-c1-l2a",
+                          "covers_geometry": true,
+                          "date": "2026-09-03",
+                          "datetime": "2026-09-03T16:43:38.040000Z",
+                          "epsg": 32616,
+                          "grid_code": "MGRS-16SDE",
+                          "id": "S2B_T16SDE_20260903T163711_L2A",
+                          "item_url": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-c1-l2a/items/S2B_T16SDE_20260903T163711_L2A",
+                          "nodata_pixel_pct": 0,
+                          "not_vegetated_pct": 2.968009,
+                          "platform": "sentinel-2b",
+                          "processing_baseline": "05.12",
+                          "snow_ice_pct": 0,
+                          "spatial_precision": "grid_cell",
+                          "sun_elevation": 57.9660563048985,
+                          "thumbnail_url": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-c1-l2a/items/S2B_T16SDE_20260903T163711_L2A/thumbnail",
+                          "vegetation_pct": 86.681187,
+                          "water_pct": 1.036709
+                        }
+                      ],
+                      "sources": [
+                        {
+                          "name": "Element 84 Earth Search",
+                          "observed_at": "2026-10-01T17:28:42Z",
+                          "url": "https://earth-search.aws.element84.com/v1/search"
+                        }
+                      ],
+                      "spatial_precision": "grid_cell",
+                      "window": {
+                        "end": "2026-09-10",
+                        "start": "2026-07-15"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Search scenes",
+        "tags": [
+          "Element 84 Earth Search (Sentinel-2 L2A)"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "c7ee89212416"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "earth-search-aws-element84-com",
+        "x-aisa-runtime-operation": {
+          "operation_id": "earth-search-aws-element84-com.satellite-imagery.search-scenes",
+          "method": "POST",
+          "path": "/apis/v1/earth-search-aws-element84-com/satellite-imagery/search-scenes"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:fd688b138e45b20a22a00c4ca4c141edfc861a3e0e3642ac389acec25a804484"
+        },
+        "x-aisa-docs-url": "/api-reference/earth-search-aws-element84-com/earth-search-aws-element84-com-satellite-imagery-search-scenes"
+      }
+    },
+    "/apis/v1/earth-search-aws-element84-com/satellite-imagery/vegetation-indices": {
+      "post": {
+        "description": "For a paddock, field or parcel: how green or moist is it per scene, how much of it was cloudy, and which zones lag. Pass scene_ids from search_scenes, or a window and the newest clear scenes are chosen.",
+        "operationId": "earth-search-aws-element84-com.satellite-imagery.vegetation-indices",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "collection": {
+                    "type": "string",
+                    "description": "`sentinel-2-c1-l2a` (Collection 1, default), `sentinel-2-l2a` (legacy archive, denser before 2023) or `auto` (c1, falling back to the legacy collection when c1 matches nothing).\n\nProvider reference: allowed values [\"auto\", \"sentinel-2-c1-l2a\", \"sentinel-2-l2a\"].",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "auto",
+                        "sentinel-2-c1-l2a",
+                        "sentinel-2-l2a"
+                      ]
+                    }
+                  },
+                  "end": {
+                    "type": "string",
+                    "description": "Window end, YYYY-MM-DD (UTC), inclusive. Defaults to today. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "geometry": {
+                    "additionalProperties": true,
+                    "type": "object",
+                    "description": "GeoJSON geometry in WGS84 with [lon, lat] positions: Point, Polygon, MultiPolygon, or a Feature wrapping one. Rings must be closed; altitude is ignored; FeatureCollection and antimeridian-crossing shapes are refused (invalid_input with a JSON pointer and a stable code: ring_not_closed, latitude, longitude, too_large, too_many_vertices, feature_collection, antimeridian, unsupported_type). Open because GeoJSON allows foreign members (properties, id, bbox)."
+                  },
+                  "indices": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "indices",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "max_cloud_cover_pct": {
+                    "type": "number",
+                    "description": "Keep scenes whose tile-level eo:cloud_cover is below this percentage (Earth Search `query` filter).\n\nProvider reference: minimum 0; maximum 100.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 0,
+                      "max": 100
+                    }
+                  },
+                  "max_field_cloud_share": {
+                    "type": "number",
+                    "description": "Skip reflectance reads when the SCL cloud share over the geometry exceeds this.\n\nProvider reference: minimum 0; maximum 1; default 0.3.",
+                    "default": 0.3,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 0,
+                      "max": 1
+                    }
+                  },
+                  "max_scenes": {
+                    "type": "number",
+                    "description": "Newest distinct acquisitions to read when searching a window.\n\nProvider reference: minimum 1; maximum 6; default 3.",
+                    "default": 3,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 6
+                    }
+                  },
+                  "scene_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Specific scenes to read; otherwise the window is searched.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "start": {
+                    "type": "string",
+                    "description": "Window start, YYYY-MM-DD (UTC). Earth Search holds Sentinel-2 L2A from 2015-06-27. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "zone_grid": {
+                    "type": "number",
+                    "description": "Zones per side of the grid over the geometry's bbox (1 disables).\n\nProvider reference: minimum 1; maximum 6; default 3.",
+                    "default": 3,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 6
+                    }
+                  }
+                },
+                "required": [
+                  "geometry"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "geometry": {
+                      "coordinates": [
+                        [
+                          [
+                            -86.93,
+                            35.853
+                          ],
+                          [
+                            -86.92,
+                            35.853
+                          ],
+                          [
+                            -86.92,
+                            35.859
+                          ],
+                          [
+                            -86.93,
+                            35.859
+                          ],
+                          [
+                            -86.93,
+                            35.853
+                          ]
+                        ]
+                      ],
+                      "type": "Polygon"
+                    },
+                    "indices": [
+                      "ndvi",
+                      "evi",
+                      "ndmi"
+                    ],
+                    "scene_ids": [
+                      "S2B_T16SDE_20260903T163711_L2A"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "NDVI, EVI and NDMI statistics (mean, median, p10, p90, min, max, std) over a geometry per scene, computed from the Sentinel-2 COGs by HTTP range request: SCL read first for the field's cloud share, cloudy scenes skipped, reflectance = scale * DN + offset from the item's raster:bands, pixels counted when their centre falls inside the geometry, plus a zone grid of weak areas.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `bytes_read` | number |  |\n| `collection` | string |  |\n| `formulas` | object |  |\n| `indices_requested` | string[] |  |\n| `location` | object | Echo of the geometry the result describes. |\n| `max_field_cloud_share` | number |  |\n| `missing` | object[] | Layers that could not be produced, with the reason, instead of guessed values. |\n| `notes` | string[] |  |\n| `observed_at_ms` | number |  |\n| `pixel_rule` | string |  |\n| `scenes` | object[] | Newest first. |\n| `sources` | object[] | Where the values came from: one entry per Earth Search document read. |\n| `spatial_precision` | string |  |\n| `window` | object | Null when scene_ids were given. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-01.",
+                    "value": {
+                      "bytes_read": 4281103,
+                      "collection": "sentinel-2-c1-l2a",
+                      "formulas": {
+                        "evi": "2.5 * (B08 - B04) / (B08 + 6 * B04 - 7.5 * B02 + 1)",
+                        "ndmi": "(B8A - B11) / (B8A + B11)",
+                        "ndvi": "(B08 - B04) / (B08 + B04)"
+                      },
+                      "indices_requested": [
+                        "ndvi",
+                        "evi",
+                        "ndmi"
+                      ],
+                      "location": {
+                        "area_m2": 601272,
+                        "bbox": [
+                          -86.93,
+                          35.853,
+                          -86.92,
+                          35.859
+                        ],
+                        "centroid": [
+                          -86.925,
+                          35.856
+                        ],
+                        "kind": "Polygon"
+                      },
+                      "max_field_cloud_share": 0.3,
+                      "missing": [],
+                      "notes": [],
+                      "observed_at_ms": 1790875769551,
+                      "pixel_rule": "a pixel counts when its centre falls inside the geometry; SCL classes 3, 8, 9, 10 are cloud; reflectance = scale * DN + offset from the item's raster:bands",
+                      "scenes": [
+                        {
+                          "assets_read": 6,
+                          "bbox": [
+                            -88.111914,
+                            35.149921,
+                            -86.891522,
+                            36.14484
+                          ],
+                          "bytes_read": 4281103,
+                          "cloud_cover_pct": 4.791281,
+                          "cloud_shadow_pct": 4.197391,
+                          "collection": "sentinel-2-c1-l2a",
+                          "covers_geometry": true,
+                          "date": "2026-09-03",
+                          "datetime": "2026-09-03T16:43:38.040000Z",
+                          "epsg": 32616,
+                          "field": {
+                            "clear_share": 1,
+                            "cloud_share": 0,
+                            "nodata_share": 0,
+                            "pixels_20m": 1530,
+                            "scl_classes": [
+                              {
+                                "class": 4,
+                                "name": "vegetation",
+                                "pixels": 1299,
+                                "share": 0.849
+                              },
+                              {
+                                "class": 5,
+                                "name": "not_vegetated",
+                                "pixels": 231,
+                                "share": 0.151
+                              }
+                            ]
+                          },
+                          "grid_code": "MGRS-16SDE",
+                          "id": "S2B_T16SDE_20260903T163711_L2A",
+                          "indices": {
+                            "evi": {
+                              "masked_cloud_pixels": 0,
+                              "masked_nodata_pixels": 0,
+                              "max": 0.7397,
+                              "mean": 0.3997,
+                              "median": 0.4132,
+                              "min": -0.0074,
+                              "p10": 0.212,
+                              "p90": 0.555,
+                              "pixel_size_m": 10,
+                              "pixels": 5940,
+                              "std": 0.1278,
+                              "zones": [
+                                {
+                                  "col": 0,
+                                  "mean": 0.3935,
+                                  "pixels": 630,
+                                  "row": 0,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 1,
+                                  "mean": 0.2921,
+                                  "pixels": 630,
+                                  "row": 0,
+                                  "weak": true
+                                },
+                                {
+                                  "col": 2,
+                                  "mean": 0.5077,
+                                  "pixels": 630,
+                                  "row": 0,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 0,
+                                  "mean": 0.3913,
+                                  "pixels": 690,
+                                  "row": 1,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 1,
+                                  "mean": 0.2532,
+                                  "pixels": 690,
+                                  "row": 1,
+                                  "weak": true
+                                },
+                                {
+                                  "col": 2,
+                                  "mean": 0.5258,
+                                  "pixels": 690,
+                                  "row": 1,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 0,
+                                  "mean": 0.398,
+                                  "pixels": 660,
+                                  "row": 2,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 1,
+                                  "mean": 0.3564,
+                                  "pixels": 660,
+                                  "row": 2,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 2,
+                                  "mean": 0.4802,
+                                  "pixels": 660,
+                                  "row": 2,
+                                  "weak": false
+                                }
+                              ]
+                            },
+                            "ndmi": {
+                              "masked_cloud_pixels": 0,
+                              "masked_nodata_pixels": 0,
+                              "max": 0.365,
+                              "mean": 0.1039,
+                              "median": 0.146,
+                              "min": -0.3128,
+                              "p10": -0.1517,
+                              "p90": 0.2864,
+                              "pixel_size_m": 20,
+                              "pixels": 1530,
+                              "std": 0.1641,
+                              "zones": [
+                                {
+                                  "col": 0,
+                                  "mean": 0.085,
+                                  "pixels": 165,
+                                  "row": 0,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 1,
+                                  "mean": -0.0628,
+                                  "pixels": 165,
+                                  "row": 0,
+                                  "weak": true
+                                },
+                                {
+                                  "col": 2,
+                                  "mean": 0.2511,
+                                  "pixels": 165,
+                                  "row": 0,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 0,
+                                  "mean": 0.1221,
+                                  "pixels": 165,
+                                  "row": 1,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 1,
+                                  "mean": -0.1172,
+                                  "pixels": 165,
+                                  "row": 1,
+                                  "weak": true
+                                },
+                                {
+                                  "col": 2,
+                                  "mean": 0.2529,
+                                  "pixels": 165,
+                                  "row": 1,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 0,
+                                  "mean": 0.1384,
+                                  "pixels": 180,
+                                  "row": 2,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 1,
+                                  "mean": 0.0177,
+                                  "pixels": 180,
+                                  "row": 2,
+                                  "weak": true
+                                },
+                                {
+                                  "col": 2,
+                                  "mean": 0.2402,
+                                  "pixels": 180,
+                                  "row": 2,
+                                  "weak": false
+                                }
+                              ]
+                            },
+                            "ndvi": {
+                              "masked_cloud_pixels": 0,
+                              "masked_nodata_pixels": 0,
+                              "max": 0.8846,
+                              "mean": 0.6014,
+                              "median": 0.6307,
+                              "min": -0.0128,
+                              "p10": 0.3228,
+                              "p90": 0.8177,
+                              "pixel_size_m": 10,
+                              "pixels": 5940,
+                              "std": 0.1806,
+                              "zones": [
+                                {
+                                  "col": 0,
+                                  "mean": 0.6016,
+                                  "pixels": 630,
+                                  "row": 0,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 1,
+                                  "mean": 0.4371,
+                                  "pixels": 630,
+                                  "row": 0,
+                                  "weak": true
+                                },
+                                {
+                                  "col": 2,
+                                  "mean": 0.7234,
+                                  "pixels": 630,
+                                  "row": 0,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 0,
+                                  "mean": 0.585,
+                                  "pixels": 690,
+                                  "row": 1,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 1,
+                                  "mean": 0.3845,
+                                  "pixels": 690,
+                                  "row": 1,
+                                  "weak": true
+                                },
+                                {
+                                  "col": 2,
+                                  "mean": 0.7386,
+                                  "pixels": 690,
+                                  "row": 1,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 0,
+                                  "mean": 0.6161,
+                                  "pixels": 660,
+                                  "row": 2,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 1,
+                                  "mean": 0.5333,
+                                  "pixels": 660,
+                                  "row": 2,
+                                  "weak": false
+                                },
+                                {
+                                  "col": 2,
+                                  "mean": 0.7957,
+                                  "pixels": 660,
+                                  "row": 2,
+                                  "weak": false
+                                }
+                              ]
+                            }
+                          },
+                          "item_url": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-c1-l2a/items/S2B_T16SDE_20260903T163711_L2A",
+                          "missing": [],
+                          "nodata_pixel_pct": 0,
+                          "not_vegetated_pct": 2.968009,
+                          "platform": "sentinel-2b",
+                          "processing_baseline": "05.12",
+                          "snow_ice_pct": 0,
+                          "spatial_precision": "grid_cell",
+                          "sun_elevation": 57.9660563048985,
+                          "thumbnail_url": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-c1-l2a/items/S2B_T16SDE_20260903T163711_L2A/thumbnail",
+                          "vegetation_pct": 86.681187,
+                          "water_pct": 1.036709
+                        }
+                      ],
+                      "sources": [
+                        {
+                          "name": "Element 84 Earth Search",
+                          "observed_at": "2026-10-01T17:29:25Z",
+                          "url": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-c1-l2a/items/S2B_T16SDE_20260903T163711_L2A"
+                        }
+                      ],
+                      "spatial_precision": "polygon",
+                      "window": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Vegetation indices",
+        "tags": [
+          "Element 84 Earth Search (Sentinel-2 L2A)"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "b0e57f3278c9"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "earth-search-aws-element84-com",
+        "x-aisa-runtime-operation": {
+          "operation_id": "earth-search-aws-element84-com.satellite-imagery.vegetation-indices",
+          "method": "POST",
+          "path": "/apis/v1/earth-search-aws-element84-com/satellite-imagery/vegetation-indices"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:a3bfa989984ede59c4e8b0c29ad07de5682ae096e2991f7a038e2592179c6db5"
+        },
+        "x-aisa-docs-url": "/api-reference/earth-search-aws-element84-com/earth-search-aws-element84-com-satellite-imagery-vegetation-indices"
+      }
+    }
+  }
 }

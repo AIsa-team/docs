@@ -5,7 +5,16 @@
         "scheme": "bearer",
         "type": "http"
       }
-    }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
   },
   "info": {
     "description": "",
@@ -33,7 +42,7 @@
       "schema_version": "1",
       "composer_version": "29",
       "response_pending": [],
-      "document_hash": "sha256:0d99b428963a8ef9d8724735bff464946bcb8e50dc57ce837b3095abf8e373d5"
+      "document_hash": "sha256:80978461a277a2c016701271ba6cc201a788492dd324148ed8d77cf03f2b9cca"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -85,5 +94,1399 @@
       "url": "https://dev-api.aisa.one"
     }
   ],
-  "paths": {}
+  "paths": {
+    "/apis/v1/grants-nih-gov/opportunities/records-changes": {
+      "post": {
+        "description": "Notices released this week or since the last run; set `type` to `active` for NOFOs released in the window.",
+        "operationId": "grants-nih-gov.opportunities.records-changes",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "cursor": {
+                    "type": "string",
+                    "description": "cursor",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "notice_subject": {
+                    "type": "string",
+                    "description": "Exact notice subject as the Guide lists it, e.g. `Notice of Change to Funding Opportunity`, `Notice of Intent to Publish`.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "page_size": {
+                    "type": "number",
+                    "description": "page_size\n\nProvider reference: minimum 1; maximum 1000; default 1000.",
+                    "default": 1000,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 1000
+                    }
+                  },
+                  "since": {
+                    "type": "string",
+                    "description": "First release date, inclusive (UTC calendar date). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
+                  },
+                  "type": {
+                    "type": "string",
+                    "description": "type\n\nProvider reference: allowed values [\"active\", \"activenosis\", \"expired\", \"expirednosis\", \"notices\"]; default \"notices\".",
+                    "default": "notices",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "active",
+                        "activenosis",
+                        "expired",
+                        "expirednosis",
+                        "notices"
+                      ]
+                    }
+                  },
+                  "until": {
+                    "type": "string",
+                    "description": "Last release date, inclusive. Default: today (UTC). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                },
+                "required": [
+                  "since"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "page_size": 5,
+                    "since": "2026-10-11",
+                    "until": "2026-10-18"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The publisher's own delta: Guide documents released in a date window (`daterange` on the index release date), default segment `notices` (Notices of Change to a NOFO, Notices of Intent to Publish, policy notices, RFIs). `referenced_docnums` on each record names the NOFO a change notice amends (from its title and related documents). Optional `notice_subject` filter. Pages of up to 1000 in rowid order; the cursor pins the window total and fails with `publication_changed` when it moves. When the gateway is unavailable and the segment is `notices`, the official RSS feed is filtered to the window and returned as a partial result.\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `activity_codes` | string[] | `ac` normalized to an array (the index sometimes sends a single string). |\n| `application_due_dates_raw` | string | `appreceiptdate` verbatim, usually `Multiple dates, see announcement.`; never parsed. |\n| `application_types` | string[] |  |\n| `clinical_trials` | string | Clinical trial allowance as indexed: Required, Optional, Not_Allowed, Basic_Trial, Required_Infrastructure. |\n| `direct_cost_cap_raw` | string | `fadirectcosts` verbatim (`none` or a number). |\n| `direct_cost_cap_usd` | number | `fadirectcosts` as a number when it is one; null for `none` or absent. |\n| `docnum` | string |  |\n| `doctype` | string | RFA, PA, PAR, PAS, NOSIS or NOT as the index states it. |\n| `expiration_date` | string |  |\n| `expiration_date_raw` | string |  |\n| `grants_gov_id` | string | `ggid`: the Grants.gov opportunity id, for hand-off to the grants-gov program. |\n| `grants_gov_url` | string |  |\n| `html_filename` | string | `filename` when the document HTML exists on grants.nih.gov; null when the document lives only on Grants.gov. |\n| `html_url` | string |  |\n| `last_receipt_date` | string | `lard`: last application receipt date when the index carries one as a date. |\n| `last_receipt_date_raw` | string |  |\n| `letter_of_intent_due_raw` | string | `intentdate` verbatim: free text such as `30 days prior to the application due date` or `Not Applicable`; never parsed. |\n| `notice_subject` | string | Notice category (e.g. `Notice of Change to Funding Opportunity`, `Notice of Intent to Publish`, `Notice of Special Interest`). |\n| `open_date` | string | Earliest submission date. |\n| `open_date_raw` | string |  |\n| `parent_foa` | string | `Yes` when the NOFO is a parent announcement, `No` otherwise, null for notices. |\n| `parent_ic` | string | Funder parent organization code (NIH, CDC, FDA, AHRQ, ...). |\n| `participating_ics` | string[] | `sponsors` with the index's `none` placeholder removed. |\n| `policy_categories` | string[] |  |\n| `primary_ic` | string | Issuing institute or center code (NIDA, NCI, OD, ...). |\n| `publication_id` | string | Segment publication pin at retrieval: `<segment>:<total>:<max_rowid>` for the gateway, `rss:<last-modified>` for the RSS fallback. |\n| `purpose_html` | string | `purpose` synopsis as indexed (HTML fragments possible). |\n| `purpose_text` | string | `purpose` with tags stripped and entities decoded. |\n| `referenced_docnums` | string[] | Derived: every Guide document number found in the title and `related_docs`; for a Notice of Change this names the NOFO it amends. |\n| `related_docs` | string[] | `relatedDocs` as published (free text such as `Reissue of PAR-24-151` or a bare notice number). |\n| `release_date` | string |  |\n| `release_date_raw` | string |  |\n| `retrieved_at` | string | RFC 3339 UTC time of the upstream fetch. |\n| `rowid` | number | Monotonic index row id (the Elasticsearch `_id`); the stable sort key. Null only for RSS-fallback records. |\n| `segment` | string | Index `type`: which listing segment the document belongs to today. |\n| `source_record_id` | string | The Guide document number (`docnum`), e.g. PAR-27-053, RFA-LM-28-001, NOT-OD-26-130. |\n| `source_url` | string | The grants.nih.gov document when it exists, otherwise the Grants.gov opportunity page the Guide links to, otherwise the Guide search for the docnum. |\n| `title` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-18.",
+                    "value": {
+                      "backend": "gateway",
+                      "count": 1,
+                      "next_cursor": null,
+                      "notice_subject": null,
+                      "offset": 0,
+                      "publication_id": "notices:2026-10-11..2026-10-18:1",
+                      "records": [
+                        {
+                          "activity_codes": [],
+                          "application_due_dates_raw": null,
+                          "application_types": [],
+                          "clinical_trials": null,
+                          "direct_cost_cap_raw": null,
+                          "direct_cost_cap_usd": null,
+                          "docnum": "NOT-OD-26-130",
+                          "doctype": "NOT",
+                          "expiration_date": null,
+                          "expiration_date_raw": null,
+                          "grants_gov_id": null,
+                          "grants_gov_url": null,
+                          "html_filename": "NOT-OD-26-130.html",
+                          "html_url": "https://grants.nih.gov/grants/guide/notice-files/NOT-OD-26-130.html",
+                          "last_receipt_date": null,
+                          "last_receipt_date_raw": null,
+                          "letter_of_intent_due_raw": null,
+                          "notice_subject": "Request for Information",
+                          "open_date": null,
+                          "open_date_raw": null,
+                          "parent_foa": null,
+                          "parent_ic": "NIH",
+                          "participating_ics": [],
+                          "policy_categories": [],
+                          "primary_ic": "OD",
+                          "publication_id": "notices:2026-10-11..2026-10-18:1",
+                          "purpose_html": "pThe National Institutes of Health (NIH) is seeking input from the biomedical research community and other interested parties on opportunities to further reduce administrative burden associated with obtaining, maintaining, and reporting on NIH extramural research funding./p",
+                          "purpose_text": "pThe National Institutes of Health (NIH) is seeking input from the biomedical research community and other interested parties on opportunities to further reduce administrative burden associated with obtaining, maintaining, and reporting on NIH extramural research funding./p",
+                          "referenced_docnums": [],
+                          "related_docs": [],
+                          "release_date": "2026-10-15",
+                          "release_date_raw": "2026-10-15T15:25:34.000Z",
+                          "retrieved_at": "2026-10-18T18:54:43Z",
+                          "rowid": 43155,
+                          "segment": "notices",
+                          "source_record_id": "NOT-OD-26-130",
+                          "source_url": "https://grants.nih.gov/grants/guide/notice-files/NOT-OD-26-130.html",
+                          "title": "Request for Information (RFI): Opportunities to Reduce Administrative Burden in NIH Extramural Research"
+                        }
+                      ],
+                      "retrieved_at": "2026-10-18T18:54:43Z",
+                      "segment": "notices",
+                      "since": "2026-10-11",
+                      "total": 1,
+                      "until": "2026-10-18"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Records changes",
+        "tags": [
+          "NIH Guide for Grants and Contracts"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "ae30d30e392c"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "grants-nih-gov",
+        "x-aisa-runtime-operation": {
+          "operation_id": "grants-nih-gov.opportunities.records-changes",
+          "method": "POST",
+          "path": "/apis/v1/grants-nih-gov/opportunities/records-changes"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:a5cb965d37478153f90dba661fc2e97921392529a56332c3960b7234de00454e"
+        },
+        "x-aisa-docs-url": "/api-reference/grants-nih-gov/grants-nih-gov-opportunities-records-changes"
+      }
+    },
+    "/apis/v1/grants-nih-gov/opportunities/records-get": {
+      "post": {
+        "description": "Detail for a docnum from records_list, records_changes or search.",
+        "operationId": "grants-nih-gov.opportunities.records-get",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "docnum": {
+                    "type": "string",
+                    "description": "Guide document number (PAR-27-053, RFA-LM-28-001, NOT-OD-26-130); a grants.nih.gov guide URL ending in `<docnum>.html` is accepted too."
+                  }
+                },
+                "required": [
+                  "docnum"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "docnum": "PAR-27-053"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One Guide document by its number (`docnum`, e.g. PAR-27-053): the index record plus the grants.nih.gov HTML parsed into assistance listing numbers, eligible organizations, number of applications (with the derived `limited_submission`), letter of intent due date, application due dates and expiration date (NOFO pages) or release/effective dates, related announcements, issuer and purpose (notice pages). `document_status` says what happened: `parsed`; `grants_gov_only` when the index has no HTML filename (the NOFO lives only on Grants.gov: use `grants_gov_id` with the grants-gov program); `missing` when grants.nih.gov answered 404 for the listed file; `unrecognized_layout` when the page has none of the Guide labels (legacy documents).\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `document` | object |  |\n| `document_status` | string |  |\n| `record` | object | One NIH Guide document (NOFO, NOSI or notice) shaped from the Guide search index `_source`. Raw date strings are kept beside parsed dates; free-text deadlines are never converted. Fields the index leaves null stay null; the RSS fallback fills only identity, title, release date and URLs. |\n| `retrieved_at` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-18.",
+                    "value": {
+                      "document": {
+                        "activity_code_text": "R61/R33 Exploratory/Developmental Phased Award",
+                        "announcement_type_text": "Reissue of PAR-23-157",
+                        "application_due_dates": [
+                          "2026-11-02",
+                          "2027-02-19",
+                          "2027-06-17",
+                          "2027-10-20",
+                          "2028-02-22",
+                          "2028-06-16"
+                        ],
+                        "application_due_dates_raw": "Review and Award Cycles New Renewal / Resubmission / Revision (as allowed) AIDS - New/Renewal/Resubmission/Revision, as allowed Scientific Merit Review Advisory Council Review Earliest Start Date November 02, 2026 November 02, 2026 Not Applicable March 2027 May 2027 July 2027 February 19, 2027 February 19, 2027 Not Applicable July 2027 October 2027 December 2027 June 17, 2027 June 17, 2027 Not Applicable November 2027 January 2028 April 2028 October 20, 2027 October 20, 2027 Not Applicable March 2028 May 2028 July 2028 February 22, 2028 February 22, 2028 Not Applicable July 2028 October 2028 December 2028 June 16, 2028 June 16, 2028 Not Applicable November 2028 January 2029 April 2029 All applications are due by 5:00 PM local time of applicant organization. Applicants are encouraged to apply early to allow adequate time to make any corrections to errors found in the application during the submission process by the due date.",
+                        "assistance_listing_numbers": [
+                          "93.279"
+                        ],
+                        "assistance_listing_text": "93.279",
+                        "award_budget_text": "For the R61 planning phase, the combined budget for direct costs for up to two years may not exceed $500,000. For the R33 phase, budgets are not limited, but need to reflect the actual needs of the proposed project.",
+                        "award_project_period_text": "The maximum period of the combined R61 and R33 phases is 5 years, with up to 2 years for the R61 phase and up to 3 years for the R33 phase. The scope of the proposed project should determine the requested project period.",
+                        "companion_funding_opportunity_text": "None",
+                        "components_text": "NATIONAL INSTITUTE ON DRUG ABUSE (NIDA)",
+                        "derived_fields": [
+                          "limited_submission"
+                        ],
+                        "effective_date_raw": null,
+                        "eligible_organizations": [
+                          "Higher Education Institutions - Includes all types",
+                          "Public/State Controlled Institutions of Higher Education",
+                          "Private Institutions of Higher Education",
+                          "Nonprofits Other Than Institutions of Higher Education",
+                          "Nonprofits with 501(c)(3) IRS Status (Other than Institutions of Higher Education)",
+                          "Nonprofits without 501(c)(3) IRS Status (Other than Institutions of Higher Education)",
+                          "For-Profit Organizations",
+                          "Small Businesses",
+                          "For-Profit Organizations (Other than Small Businesses)",
+                          "Local Governments",
+                          "State Governments",
+                          "County Governments",
+                          "City or Township Governments",
+                          "Special District Governments",
+                          "Indian/Native American Tribal Governments (Federally Recognized)",
+                          "Indian/Native American Tribal Governments (Other than Federally Recognized)",
+                          "Federal Governments",
+                          "Eligible Agencies of the Federal Government",
+                          "U.S. Territory or Possession",
+                          "Other",
+                          "Independent School Districts",
+                          "Public Housing Authorities/Indian Housing Authorities",
+                          "Native American Tribal Organizations (other than Federally recognized tribal governments)",
+                          "Faith-based or Community-based Organizations",
+                          "Regional Organizations"
+                        ],
+                        "eligible_organizations_text": "Higher Education Institutions - Includes all typesPublic/State Controlled Institutions of Higher EducationPrivate Institutions of Higher EducationNonprofits Other Than Institutions of Higher EducationNonprofits with 501(c)(3) IRS Status (Other than Institutions of Higher Education)Nonprofits without 501(c)(3) IRS Status (Other than Institutions of Higher Education)For-Profit OrganizationsSmall BusinessesFor-Profit Organizations (Other than Small Businesses)Local GovernmentsState GovernmentsCounty GovernmentsCity or Township GovernmentsSpecial District GovernmentsIndian/Native American Tribal Governments (Federally Recognized)Indian/Native American Tribal Governments (Other than Federally Recognized). Federal Governments Eligible Agencies of the Federal Government U.S. Territory or Possession Other Independent School Districts Public Housing Authorities/Indian Housing Authorities Native American Tribal Organizations (other than Federally recognized tribal governments) Faith-based or Community-based Organizations Regional Organizations",
+                        "expiration_date": "2028-06-17",
+                        "expiration_date_raw": "June 17, 2028",
+                        "issued_by_text": null,
+                        "kind": "nofo",
+                        "letter_of_intent_due_raw": null,
+                        "limited_submission": false,
+                        "notice_number": null,
+                        "notice_purpose_text": null,
+                        "number_of_applications_text": "Applicant organizations may submit more than one application, provided that each application is scientifically distinct. The NIH will not accept duplicate or highly overlapping applications under review at the same time, per NIH Grants Policy Statement Section 2.3.7.4 Submission of Resubmission Application. This means that the NIH will not accept: A new (A0) application that is submitted before issuance of the summary statement from the review of an overlapping new (A0) or resubmission (A1) application. A resubmission (A1) application that is submitted before issuance of the summary statement from the review of the previous new (A0) application. An application that has substantial overlap with another application pending appeal of initial peer review (see NIH Grants Policy Statement 2.3.9.4 Similar, Essentially Identical, or Identical Applications).",
+                        "open_date_raw": "October 02, 2026",
+                        "participating_organizations_text": "National Institutes of Health (NIH)",
+                        "posted_date_raw": null,
+                        "related_announcements": [],
+                        "related_announcements_text": null,
+                        "related_notices": [],
+                        "related_notices_text": "Check for any recent Notices of NIH Policy Changes that may impact application requirements.",
+                        "release_date_raw": null,
+                        "title": "PAR-27-053: Exploratory Clinical Neuroscience Research on Substance Use Disorders (R61/R33 Clinical Trial Optional)",
+                        "url": "https://grants.nih.gov/grants/guide/pa-files/PAR-27-053.html"
+                      },
+                      "document_status": "parsed",
+                      "record": {
+                        "activity_codes": [
+                          "R61",
+                          "R33"
+                        ],
+                        "application_due_dates_raw": null,
+                        "application_types": [],
+                        "clinical_trials": "Optional",
+                        "direct_cost_cap_raw": null,
+                        "direct_cost_cap_usd": null,
+                        "docnum": "PAR-27-053",
+                        "doctype": "PAR",
+                        "expiration_date": "2028-06-17",
+                        "expiration_date_raw": "2028-06-17T00:00:00.000Z",
+                        "grants_gov_id": "361518",
+                        "grants_gov_url": "https://www.grants.gov/search-results-detail/361518",
+                        "html_filename": "PAR-27-053.html",
+                        "html_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-27-053.html",
+                        "last_receipt_date": null,
+                        "last_receipt_date_raw": null,
+                        "letter_of_intent_due_raw": null,
+                        "notice_subject": null,
+                        "open_date": null,
+                        "open_date_raw": null,
+                        "parent_foa": "No",
+                        "parent_ic": "NIH",
+                        "participating_ics": [],
+                        "policy_categories": [],
+                        "primary_ic": "NIDA",
+                        "publication_id": "active:2026-10-18T18:53:53Z",
+                        "purpose_html": "This notice of funding opportunity (NOFO) uses a R61/R33 Phased Innovation Award activity code to support clinical research applications that are exploratory and developmental in nature and focus on understanding the neurobiological mechanisms underlying substance use disorders (SUD), including fundamental circuitry and behavior relevant to substance use. For projects not requiring a phased research approach, applicants are encouraged to apply under a different funding activity code (e.g., PA-25-305 \"Research Project Grant (Parent R01 Clinical Trial Required)\" or its subsequent reissue).",
+                        "purpose_text": "This notice of funding opportunity (NOFO) uses a R61/R33 Phased Innovation Award activity code to support clinical research applications that are exploratory and developmental in nature and focus on understanding the neurobiological mechanisms underlying substance use disorders (SUD), including fundamental circuitry and behavior relevant to substance use. For projects not requiring a phased research approach, applicants are encouraged to apply under a different funding activity code (e.g., PA-25-305 \"Research Project Grant (Parent R01 Clinical Trial Required)\" or its subsequent reissue).",
+                        "referenced_docnums": [],
+                        "related_docs": [],
+                        "release_date": "2026-08-31",
+                        "release_date_raw": "2026-08-31T00:00:00.000Z",
+                        "retrieved_at": "2026-10-18T18:53:53Z",
+                        "rowid": 43088,
+                        "segment": "active",
+                        "source_record_id": "PAR-27-053",
+                        "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-27-053.html",
+                        "title": "Exploratory Clinical Neuroscience Research on Substance Use Disorders (R61/R33 Clinical Trial Optional)"
+                      },
+                      "retrieved_at": "2026-10-18T18:53:53Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Records get",
+        "tags": [
+          "NIH Guide for Grants and Contracts"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "2860ba07c518"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "grants-nih-gov",
+        "x-aisa-runtime-operation": {
+          "operation_id": "grants-nih-gov.opportunities.records-get",
+          "method": "POST",
+          "path": "/apis/v1/grants-nih-gov/opportunities/records-get"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:a00366dbe2c1271690ba5807cc0888625a362e6add546b42ad72ac36045e6b87"
+        },
+        "x-aisa-docs-url": "/api-reference/grants-nih-gov/grants-nih-gov-opportunities-records-get"
+      }
+    },
+    "/apis/v1/grants-nih-gov/opportunities/records-list": {
+      "post": {
+        "description": "Full snapshot of a segment for downstream diffing. Pass `type` for other segments; follow `next_cursor` until it is null.",
+        "operationId": "grants-nih-gov.opportunities.records-list",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "cursor": {
+                    "type": "string",
+                    "description": "`next_cursor` from the previous page.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "page_size": {
+                    "type": "number",
+                    "description": "page_size\n\nProvider reference: minimum 1; maximum 1000; default 1000.",
+                    "default": 1000,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 1000
+                    }
+                  },
+                  "type": {
+                    "type": "string",
+                    "description": "Index segment. Ignored when `cursor` is given (the cursor carries it).\n\nProvider reference: allowed values [\"active\", \"activenosis\", \"expired\", \"expirednosis\", \"notices\"]; default \"active\".",
+                    "default": "active",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "active",
+                        "activenosis",
+                        "expired",
+                        "expirednosis",
+                        "notices"
+                      ]
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "page_size": 3,
+                    "type": "active"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The full current list of one index segment (default `active`: the active NOFOs), sorted by rowid ascending, up to 1000 records per page. The cursor pins the segment, the offset, the total and the highest rowid; every page re-reads total and max rowid and fails with `publication_changed` (failure code invalid_input, issue code `publication_changed` at /cursor) when the segment moved, instead of mixing publications. Segments: active, activenosis, expired, expirednosis, notices (notices: about 17 pages). When the gateway is unavailable and the segment is `notices`, the official RSS feed (`/grants/guide/newsfeed/fundingopps.xml`, the latest notices only) is returned as a partial page instead.\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `activity_codes` | string[] | `ac` normalized to an array (the index sometimes sends a single string). |\n| `application_due_dates_raw` | string | `appreceiptdate` verbatim, usually `Multiple dates, see announcement.`; never parsed. |\n| `application_types` | string[] |  |\n| `clinical_trials` | string | Clinical trial allowance as indexed: Required, Optional, Not_Allowed, Basic_Trial, Required_Infrastructure. |\n| `direct_cost_cap_raw` | string | `fadirectcosts` verbatim (`none` or a number). |\n| `direct_cost_cap_usd` | number | `fadirectcosts` as a number when it is one; null for `none` or absent. |\n| `docnum` | string |  |\n| `doctype` | string | RFA, PA, PAR, PAS, NOSIS or NOT as the index states it. |\n| `expiration_date` | string |  |\n| `expiration_date_raw` | string |  |\n| `grants_gov_id` | string | `ggid`: the Grants.gov opportunity id, for hand-off to the grants-gov program. |\n| `grants_gov_url` | string |  |\n| `html_filename` | string | `filename` when the document HTML exists on grants.nih.gov; null when the document lives only on Grants.gov. |\n| `html_url` | string |  |\n| `last_receipt_date` | string | `lard`: last application receipt date when the index carries one as a date. |\n| `last_receipt_date_raw` | string |  |\n| `letter_of_intent_due_raw` | string | `intentdate` verbatim: free text such as `30 days prior to the application due date` or `Not Applicable`; never parsed. |\n| `notice_subject` | string | Notice category (e.g. `Notice of Change to Funding Opportunity`, `Notice of Intent to Publish`, `Notice of Special Interest`). |\n| `open_date` | string | Earliest submission date. |\n| `open_date_raw` | string |  |\n| `parent_foa` | string | `Yes` when the NOFO is a parent announcement, `No` otherwise, null for notices. |\n| `parent_ic` | string | Funder parent organization code (NIH, CDC, FDA, AHRQ, ...). |\n| `participating_ics` | string[] | `sponsors` with the index's `none` placeholder removed. |\n| `policy_categories` | string[] |  |\n| `primary_ic` | string | Issuing institute or center code (NIDA, NCI, OD, ...). |\n| `publication_id` | string | Segment publication pin at retrieval: `<segment>:<total>:<max_rowid>` for the gateway, `rss:<last-modified>` for the RSS fallback. |\n| `purpose_html` | string | `purpose` synopsis as indexed (HTML fragments possible). |\n| `purpose_text` | string | `purpose` with tags stripped and entities decoded. |\n| `referenced_docnums` | string[] | Derived: every Guide document number found in the title and `related_docs`; for a Notice of Change this names the NOFO it amends. |\n| `related_docs` | string[] | `relatedDocs` as published (free text such as `Reissue of PAR-24-151` or a bare notice number). |\n| `release_date` | string |  |\n| `release_date_raw` | string |  |\n| `retrieved_at` | string | RFC 3339 UTC time of the upstream fetch. |\n| `rowid` | number | Monotonic index row id (the Elasticsearch `_id`); the stable sort key. Null only for RSS-fallback records. |\n| `segment` | string | Index `type`: which listing segment the document belongs to today. |\n| `source_record_id` | string | The Guide document number (`docnum`), e.g. PAR-27-053, RFA-LM-28-001, NOT-OD-26-130. |\n| `source_url` | string | The grants.nih.gov document when it exists, otherwise the Grants.gov opportunity page the Guide links to, otherwise the Guide search for the docnum. |\n| `title` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-18.",
+                    "value": {
+                      "backend": "gateway",
+                      "count": 3,
+                      "max_rowid": 43157,
+                      "next_cursor": "v1.active.3.380.43157",
+                      "offset": 0,
+                      "page_hash": "e382747e2ae03171368e313c84a73c8b52a855ff51f806331da34331bcffc56e",
+                      "publication_id": "active:380:43157",
+                      "records": [
+                        {
+                          "activity_codes": [
+                            "332"
+                          ],
+                          "application_due_dates_raw": null,
+                          "application_types": [
+                            "Revision"
+                          ],
+                          "clinical_trials": "Optional",
+                          "direct_cost_cap_raw": "none",
+                          "direct_cost_cap_usd": null,
+                          "docnum": "PA-23-317",
+                          "doctype": "PA",
+                          "expiration_date": "2026-11-24",
+                          "expiration_date_raw": "2026-11-24T00:00:00.000Z",
+                          "grants_gov_id": "351124",
+                          "grants_gov_url": "https://www.grants.gov/search-results-detail/351124",
+                          "html_filename": "PA-23-317.html",
+                          "html_url": "https://grants.nih.gov/grants/guide/pa-files/PA-23-317.html",
+                          "last_receipt_date": "2026-01-27",
+                          "last_receipt_date_raw": "2026-01-27T00:00:00.000Z",
+                          "letter_of_intent_due_raw": "Not Applicable",
+                          "notice_subject": null,
+                          "open_date": "2023-11-22",
+                          "open_date_raw": "2023-11-22T00:00:00.000Z",
+                          "parent_foa": "No",
+                          "parent_ic": "NIH",
+                          "participating_ics": [
+                            "FIC",
+                            "NCATS",
+                            "NCCIH",
+                            "NCI",
+                            "NEI",
+                            "NHGRI",
+                            "NIA",
+                            "NIAAA",
+                            "NICHD",
+                            "NIDA",
+                            "NIDCR",
+                            "NIDDK",
+                            "NIMH",
+                            "NIMHD"
+                          ],
+                          "policy_categories": [],
+                          "primary_ic": "NIH",
+                          "publication_id": "active:380:43157",
+                          "purpose_html": "The National Institutes of Health (NIH) hereby notifies NIH award recipients that funds may be available for revision applications to support the expansion of existing projects and/or programs within the awarding IC identified in the competitive revision Notice of Special Interest (NOSI). Applications for Revisions will be evaluated for scientific and technical merit by (an) appropriate Scientific Review Group(s), in accordance with NIH peer review policy and procedures, using the stated review criteria. Only applications submitted in response to a NOSI published by an NIH Institute or Center will be allowed to apply to this NOFO.",
+                          "purpose_text": "The National Institutes of Health (NIH) hereby notifies NIH award recipients that funds may be available for revision applications to support the expansion of existing projects and/or programs within the awarding IC identified in the competitive revision Notice of Special Interest (NOSI). Applications for Revisions will be evaluated for scientific and technical merit by (an) appropriate Scientific Review Group(s), in accordance with NIH peer review policy and procedures, using the stated review criteria. Only applications submitted in response to a NOSI published by an NIH Institute or Center will be allowed to apply to this NOFO.",
+                          "referenced_docnums": [
+                            "NOT-AI-24-034",
+                            "NOT-ES-24-013",
+                            "NOT-AG-24-059",
+                            "NOT-EY-25-005",
+                            "NOT-DE-26-002",
+                            "PA-20-163",
+                            "NOT-OD-25-116",
+                            "NOT-OD-24-084",
+                            "NOT-MH-25-010",
+                            "NOT-OD-22-198",
+                            "NOT-OD-22-189",
+                            "PA-18-935",
+                            "NOT-TW-24-004"
+                          ],
+                          "related_docs": [
+                            "NOT-AI-24-034",
+                            "NOT-ES-24-013",
+                            "NOT-AG-24-059",
+                            "NOT-EY-25-005",
+                            "NOT-DE-26-002",
+                            "Reissue of PA-20-163",
+                            "NOT-OD-25-116",
+                            "NOT-OD-24-084",
+                            "NOT-MH-25-010",
+                            "NOT-OD-22-198",
+                            "NOT-OD-22-189",
+                            "PA-18-935",
+                            "NOT-TW-24-004"
+                          ],
+                          "release_date": "2023-11-24",
+                          "release_date_raw": "2023-11-24T11:17:59.000Z",
+                          "retrieved_at": "2026-10-18T18:54:22Z",
+                          "rowid": 39992,
+                          "segment": "active",
+                          "source_record_id": "PA-23-317",
+                          "source_url": "https://grants.nih.gov/grants/guide/pa-files/PA-23-317.html",
+                          "title": "Competing Revisions to Existing NIH Single Project Research Grants and Cooperative Agreements (Clinical Trial Optional)"
+                        },
+                        {
+                          "activity_codes": [
+                            "K12"
+                          ],
+                          "application_due_dates_raw": null,
+                          "application_types": [
+                            "New",
+                            "Renewal",
+                            "Resubmission"
+                          ],
+                          "clinical_trials": "Optional",
+                          "direct_cost_cap_raw": "750000",
+                          "direct_cost_cap_usd": 750000,
+                          "docnum": "PAR-24-089",
+                          "doctype": "PAR",
+                          "expiration_date": "2026-11-14",
+                          "expiration_date_raw": "2026-11-14T00:00:00.000Z",
+                          "grants_gov_id": "351679",
+                          "grants_gov_url": "https://www.grants.gov/search-results-detail/351679",
+                          "html_filename": "PAR-24-089.html",
+                          "html_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-24-089.html",
+                          "last_receipt_date": "2026-11-13",
+                          "last_receipt_date_raw": "2026-11-13T00:00:00.000Z",
+                          "letter_of_intent_due_raw": "Not Applicable",
+                          "notice_subject": null,
+                          "open_date": "2024-02-06",
+                          "open_date_raw": "2024-02-06T00:00:00.000Z",
+                          "parent_foa": "No",
+                          "parent_ic": "NIH",
+                          "participating_ics": [],
+                          "policy_categories": [],
+                          "primary_ic": "NIDA",
+                          "publication_id": "active:380:43157",
+                          "purpose_html": "This funding opportunity announcement (FOA) encourages applications for institutional research career development (K12) programs that propose to support intensive supervised research training and career development experiences for clinician scientists (Scholars) leading to research independence in the area of substance use and substance use disorder research.",
+                          "purpose_text": "This funding opportunity announcement (FOA) encourages applications for institutional research career development (K12) programs that propose to support intensive supervised research training and career development experiences for clinician scientists (Scholars) leading to research independence in the area of substance use and substance use disorder research.",
+                          "referenced_docnums": [
+                            "PAR-20-249",
+                            "NOT-OD-26-029",
+                            "NOT-OD-24-084",
+                            "NOT-OD-22-198",
+                            "NOT-OD-22-189",
+                            "NOT-OD-14-113",
+                            "NOT-DA-07-013"
+                          ],
+                          "related_docs": [
+                            "Reissue of PAR-20-249",
+                            "NOT-OD-26-029",
+                            "NOT-OD-24-084",
+                            "NOT-OD-22-198",
+                            "NOT-OD-22-189",
+                            "NOT-OD-14-113",
+                            "NOT-DA-07-013"
+                          ],
+                          "release_date": "2024-01-03",
+                          "release_date_raw": "2024-01-03T09:48:05.000Z",
+                          "retrieved_at": "2026-10-18T18:54:22Z",
+                          "rowid": 40207,
+                          "segment": "active",
+                          "source_record_id": "PAR-24-089",
+                          "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-24-089.html",
+                          "title": "NIDA Mentored Clinical Scientist Development Program Award in Substance Use and Substance Use Disorder Research (K12 Clinical Trial Optional)"
+                        },
+                        {
+                          "activity_codes": [
+                            "RM1"
+                          ],
+                          "application_due_dates_raw": "Multiple dates, see announcement.",
+                          "application_types": [
+                            "New",
+                            "Resubmission",
+                            "Revision"
+                          ],
+                          "clinical_trials": "Optional",
+                          "direct_cost_cap_raw": "1500000",
+                          "direct_cost_cap_usd": 1500000,
+                          "docnum": "RFA-DA-25-060",
+                          "doctype": "RFA",
+                          "expiration_date": "2027-03-06",
+                          "expiration_date_raw": "2027-03-06T00:00:00.000Z",
+                          "grants_gov_id": "351847",
+                          "grants_gov_url": "https://www.grants.gov/search-results-detail/351847",
+                          "html_filename": "RFA-DA-25-060.html",
+                          "html_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-DA-25-060.html",
+                          "last_receipt_date": "2027-03-05",
+                          "last_receipt_date_raw": "2027-03-05T00:00:00.000Z",
+                          "letter_of_intent_due_raw": "30 days prior to the application due date",
+                          "notice_subject": null,
+                          "open_date": "2024-07-15",
+                          "open_date_raw": "2024-07-15T00:00:00.000Z",
+                          "parent_foa": "No",
+                          "parent_ic": "NIH",
+                          "participating_ics": [],
+                          "policy_categories": [],
+                          "primary_ic": "NIDA",
+                          "publication_id": "active:380:43157",
+                          "purpose_html": "The purpose of this Funding Opportunity Announcement (FOA) is to support high priority research at the intersection of HIV and substance use. This FOA invites innovative research projects with the potential to open new areas of HIV/AIDS research and/or lead to new avenues for prevention, treatment and cure of HIV among people who use drugs (PWUD). Applications submitted under this FOA are required to have a detailed research plan, preliminary data, and a clear description of the nexus with substance use. This FOA is open to both individual researchers and research teams and includes all areas of research from basic science to clinical and implementation research. All studies must focus on NIH HIV/AIDS Research Priorities: NOT-OD-20-018: UPDATE: NIH HIV/AIDS Research Priorities and Guidelines for Determining HIV/AIDS Funding.",
+                          "purpose_text": "The purpose of this Funding Opportunity Announcement (FOA) is to support high priority research at the intersection of HIV and substance use. This FOA invites innovative research projects with the potential to open new areas of HIV/AIDS research and/or lead to new avenues for prevention, treatment and cure of HIV among people who use drugs (PWUD). Applications submitted under this FOA are required to have a detailed research plan, preliminary data, and a clear description of the nexus with substance use. This FOA is open to both individual researchers and research teams and includes all areas of research from basic science to clinical and implementation research. All studies must focus on NIH HIV/AIDS Research Priorities: NOT-OD-20-018: UPDATE: NIH HIV/AIDS Research Priorities and Guidelines for Determining HIV/AIDS Funding.",
+                          "referenced_docnums": [
+                            "NOT-OD-26-029",
+                            "NOT-OD-24-084",
+                            "NOT-DA-24-019",
+                            "NOT-OD-22-198",
+                            "NOT-OD-22-189",
+                            "RFA-DA-22-040",
+                            "NOT-OD-20-018",
+                            "PAR-23-064",
+                            "PAR-23-076"
+                          ],
+                          "related_docs": [
+                            "NOT-OD-26-029",
+                            "NOT-OD-24-084",
+                            "NOT-DA-24-019",
+                            "NOT-OD-22-198",
+                            "NOT-OD-22-189",
+                            "Companion of RFA-DA-22-040",
+                            "NOT-OD-20-018",
+                            "PAR-23-064",
+                            "PAR-23-076"
+                          ],
+                          "release_date": "2024-01-17",
+                          "release_date_raw": "2024-01-17T14:16:47.000Z",
+                          "retrieved_at": "2026-10-18T18:54:22Z",
+                          "rowid": 40254,
+                          "segment": "active",
+                          "source_record_id": "RFA-DA-25-060",
+                          "source_url": "https://grants.nih.gov/grants/guide/rfa-files/RFA-DA-25-060.html",
+                          "title": "High Priority HIV and Substance Use Research (RM1 Clinical Trial Optional)"
+                        }
+                      ],
+                      "retrieved_at": "2026-10-18T18:54:22Z",
+                      "segment": "active",
+                      "total": 380
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Records list",
+        "tags": [
+          "NIH Guide for Grants and Contracts"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "3be71b9727d5"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "grants-nih-gov",
+        "x-aisa-runtime-operation": {
+          "operation_id": "grants-nih-gov.opportunities.records-list",
+          "method": "POST",
+          "path": "/apis/v1/grants-nih-gov/opportunities/records-list"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:4900b604262d1a7580ed25aa9758651fa2103719985f288c6f585cc2c02279a2"
+        },
+        "x-aisa-docs-url": "/api-reference/grants-nih-gov/grants-nih-gov-opportunities-records-list"
+      }
+    },
+    "/apis/v1/grants-nih-gov/opportunities/search": {
+      "post": {
+        "description": "Ad-hoc lookups for a user (all active R01 NOFOs from NIDA, PARs mentioning substance use disorder). Use records_list for a full snapshot.",
+        "operationId": "grants-nih-gov.opportunities.search",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "activity_code": {
+                    "type": "string",
+                    "description": "Activity code, e.g. R01, R61, K99, `Admin Supp`. Pattern: ^[A-Za-z0-9 ]{2,12}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "clinical_trials": {
+                    "type": "string",
+                    "description": "clinical_trials\n\nProvider reference: allowed values [\"Required\", \"Optional\", \"Not_Allowed\", \"Basic_Trial\", \"Required_Infrastructure\"].",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "Required",
+                        "Optional",
+                        "Not_Allowed",
+                        "Basic_Trial",
+                        "Required_Infrastructure"
+                      ]
+                    }
+                  },
+                  "cursor": {
+                    "type": "string",
+                    "description": "cursor",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "doctype": {
+                    "type": "string",
+                    "description": "doctype\n\nProvider reference: allowed values [\"RFA\", \"PA\", \"PAR\", \"PAS\", \"NOSIS\"].",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "RFA",
+                        "PA",
+                        "PAR",
+                        "PAS",
+                        "NOSIS"
+                      ]
+                    }
+                  },
+                  "notice_subject": {
+                    "type": "string",
+                    "description": "notice_subject",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "page_size": {
+                    "type": "number",
+                    "description": "page_size\n\nProvider reference: minimum 1; maximum 100; default 20.",
+                    "default": 20,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 100
+                    }
+                  },
+                  "parent_ic": {
+                    "type": "string",
+                    "description": "Parent organization code, e.g. NIH, CDC, FDA, AHRQ. Pattern: ^[A-Za-z]{2,10}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "primary_ic": {
+                    "type": "string",
+                    "description": "Issuing IC code, e.g. NIDA, NCI, OD. Pattern: ^[A-Za-z]{2,10}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "Free text; wrap a phrase or a docnum in double quotes for an exact match.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "type": {
+                    "type": "string",
+                    "description": "type\n\nProvider reference: allowed values [\"active\", \"activenosis\", \"expired\", \"expirednosis\", \"notices\"]; default \"active\".",
+                    "default": "active",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "active",
+                        "activenosis",
+                        "expired",
+                        "expirednosis",
+                        "notices"
+                      ]
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "activity_code": "R61",
+                    "doctype": "PAR",
+                    "page_size": 5,
+                    "primary_ic": "NIDA"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Keyword and facet search over the Guide index: free text (`query`, quoted phrases supported; relevance order), issuing IC (`primary_ic`), parent organization (`parent_ic`), activity code, document type (RFA, PA, PAR, PAS, NOSIS), clinical-trial allowance and notice subject, within one segment (default `active`). Without `query` the newest documents come first.\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `activity_codes` | string[] | `ac` normalized to an array (the index sometimes sends a single string). |\n| `application_due_dates_raw` | string | `appreceiptdate` verbatim, usually `Multiple dates, see announcement.`; never parsed. |\n| `application_types` | string[] |  |\n| `clinical_trials` | string | Clinical trial allowance as indexed: Required, Optional, Not_Allowed, Basic_Trial, Required_Infrastructure. |\n| `direct_cost_cap_raw` | string | `fadirectcosts` verbatim (`none` or a number). |\n| `direct_cost_cap_usd` | number | `fadirectcosts` as a number when it is one; null for `none` or absent. |\n| `docnum` | string |  |\n| `doctype` | string | RFA, PA, PAR, PAS, NOSIS or NOT as the index states it. |\n| `expiration_date` | string |  |\n| `expiration_date_raw` | string |  |\n| `grants_gov_id` | string | `ggid`: the Grants.gov opportunity id, for hand-off to the grants-gov program. |\n| `grants_gov_url` | string |  |\n| `html_filename` | string | `filename` when the document HTML exists on grants.nih.gov; null when the document lives only on Grants.gov. |\n| `html_url` | string |  |\n| `last_receipt_date` | string | `lard`: last application receipt date when the index carries one as a date. |\n| `last_receipt_date_raw` | string |  |\n| `letter_of_intent_due_raw` | string | `intentdate` verbatim: free text such as `30 days prior to the application due date` or `Not Applicable`; never parsed. |\n| `notice_subject` | string | Notice category (e.g. `Notice of Change to Funding Opportunity`, `Notice of Intent to Publish`, `Notice of Special Interest`). |\n| `open_date` | string | Earliest submission date. |\n| `open_date_raw` | string |  |\n| `parent_foa` | string | `Yes` when the NOFO is a parent announcement, `No` otherwise, null for notices. |\n| `parent_ic` | string | Funder parent organization code (NIH, CDC, FDA, AHRQ, ...). |\n| `participating_ics` | string[] | `sponsors` with the index's `none` placeholder removed. |\n| `policy_categories` | string[] |  |\n| `primary_ic` | string | Issuing institute or center code (NIDA, NCI, OD, ...). |\n| `publication_id` | string | Segment publication pin at retrieval: `<segment>:<total>:<max_rowid>` for the gateway, `rss:<last-modified>` for the RSS fallback. |\n| `purpose_html` | string | `purpose` synopsis as indexed (HTML fragments possible). |\n| `purpose_text` | string | `purpose` with tags stripped and entities decoded. |\n| `referenced_docnums` | string[] | Derived: every Guide document number found in the title and `related_docs`; for a Notice of Change this names the NOFO it amends. |\n| `related_docs` | string[] | `relatedDocs` as published (free text such as `Reissue of PAR-24-151` or a bare notice number). |\n| `release_date` | string |  |\n| `release_date_raw` | string |  |\n| `retrieved_at` | string | RFC 3339 UTC time of the upstream fetch. |\n| `rowid` | number | Monotonic index row id (the Elasticsearch `_id`); the stable sort key. Null only for RSS-fallback records. |\n| `segment` | string | Index `type`: which listing segment the document belongs to today. |\n| `source_record_id` | string | The Guide document number (`docnum`), e.g. PAR-27-053, RFA-LM-28-001, NOT-OD-26-130. |\n| `source_url` | string | The grants.nih.gov document when it exists, otherwise the Grants.gov opportunity page the Guide links to, otherwise the Guide search for the docnum. |\n| `title` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-18.",
+                    "value": {
+                      "count": 1,
+                      "next_cursor": null,
+                      "offset": 0,
+                      "records": [
+                        {
+                          "activity_codes": [
+                            "R61",
+                            "R33"
+                          ],
+                          "application_due_dates_raw": null,
+                          "application_types": [],
+                          "clinical_trials": "Optional",
+                          "direct_cost_cap_raw": null,
+                          "direct_cost_cap_usd": null,
+                          "docnum": "PAR-27-053",
+                          "doctype": "PAR",
+                          "expiration_date": "2028-06-17",
+                          "expiration_date_raw": "2028-06-17T00:00:00.000Z",
+                          "grants_gov_id": "361518",
+                          "grants_gov_url": "https://www.grants.gov/search-results-detail/361518",
+                          "html_filename": "PAR-27-053.html",
+                          "html_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-27-053.html",
+                          "last_receipt_date": null,
+                          "last_receipt_date_raw": null,
+                          "letter_of_intent_due_raw": null,
+                          "notice_subject": null,
+                          "open_date": null,
+                          "open_date_raw": null,
+                          "parent_foa": "No",
+                          "parent_ic": "NIH",
+                          "participating_ics": [],
+                          "policy_categories": [],
+                          "primary_ic": "NIDA",
+                          "publication_id": "active:search:2026-10-18T18:54:49Z",
+                          "purpose_html": "This notice of funding opportunity (NOFO) uses a R61/R33 Phased Innovation Award activity code to support clinical research applications that are exploratory and developmental in nature and focus on understanding the neurobiological mechanisms underlying substance use disorders (SUD), including fundamental circuitry and behavior relevant to substance use. For projects not requiring a phased research approach, applicants are encouraged to apply under a different funding activity code (e.g., PA-25-305 \"Research Project Grant (Parent R01 Clinical Trial Required)\" or its subsequent reissue).",
+                          "purpose_text": "This notice of funding opportunity (NOFO) uses a R61/R33 Phased Innovation Award activity code to support clinical research applications that are exploratory and developmental in nature and focus on understanding the neurobiological mechanisms underlying substance use disorders (SUD), including fundamental circuitry and behavior relevant to substance use. For projects not requiring a phased research approach, applicants are encouraged to apply under a different funding activity code (e.g., PA-25-305 \"Research Project Grant (Parent R01 Clinical Trial Required)\" or its subsequent reissue).",
+                          "referenced_docnums": [],
+                          "related_docs": [],
+                          "release_date": "2026-08-31",
+                          "release_date_raw": "2026-08-31T00:00:00.000Z",
+                          "retrieved_at": "2026-10-18T18:54:49Z",
+                          "rowid": 43088,
+                          "segment": "active",
+                          "source_record_id": "PAR-27-053",
+                          "source_url": "https://grants.nih.gov/grants/guide/pa-files/PAR-27-053.html",
+                          "title": "Exploratory Clinical Neuroscience Research on Substance Use Disorders (R61/R33 Clinical Trial Optional)"
+                        }
+                      ],
+                      "retrieved_at": "2026-10-18T18:54:49Z",
+                      "segment": "active",
+                      "sort": "reldate:desc",
+                      "total": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "搜索",
+        "tags": [
+          "NIH Guide for Grants and Contracts"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "1c057c9f49f8"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "grants-nih-gov",
+        "x-aisa-runtime-operation": {
+          "operation_id": "grants-nih-gov.opportunities.search",
+          "method": "POST",
+          "path": "/apis/v1/grants-nih-gov/opportunities/search"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:44914a1c5cb259024dffd8feb90ca03137808b2650b89d5f952ce60b839d9777"
+        },
+        "x-aisa-docs-url": "/api-reference/grants-nih-gov/grants-nih-gov-opportunities-search"
+      }
+    },
+    "/apis/v1/grants-nih-gov/opportunities/source-status": {
+      "post": {
+        "description": "Before a full records_list run, or to decide whether anything changed since the last run (compare `version`, `segments[].max_rowid` and `segments[].total`).",
+        "operationId": "grants-nih-gov.opportunities.source-status",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {}
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cheap version check of the Guide index: per segment (active, activenosis, expired, expirednosis, notices) the record count, the highest rowid and the latest document, plus the newest release date overall. `version` is the SHA-256 of the canonical segment tuples; for segments that fit one page (at most 1000 records) `content_hash` is the SHA-256 of the sorted (rowid, docnum, reldate, expdate) tuples of every record. The index is an API, not a file, so there is no size.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `file_urls` | string[] |  |\n| `publication_id` | string | `nih-guidedocs:<first 16 hex of version>`. |\n| `published_at` | string | Newest `reldate` in the whole index (RFC 3339 as indexed). |\n| `retrieved_at` | string |  |\n| `segments` | object[] |  |\n| `total_records` | number |  |\n| `version` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-18.",
+                    "value": {
+                      "file_urls": [
+                        "https://vtbgfslh0k.execute-api.us-east-1.amazonaws.com/prod/data?perpage=1000&sort=rowid:asc&from=0&type=active",
+                        "https://vtbgfslh0k.execute-api.us-east-1.amazonaws.com/prod/data?perpage=1000&sort=rowid:asc&from=0&type=activenosis",
+                        "https://vtbgfslh0k.execute-api.us-east-1.amazonaws.com/prod/data?perpage=1000&sort=rowid:asc&from=0&type=expired",
+                        "https://vtbgfslh0k.execute-api.us-east-1.amazonaws.com/prod/data?perpage=1000&sort=rowid:asc&from=0&type=expirednosis",
+                        "https://vtbgfslh0k.execute-api.us-east-1.amazonaws.com/prod/data?perpage=1000&sort=rowid:asc&from=0&type=notices"
+                      ],
+                      "publication_id": "nih-guidedocs:e138709497c2a1c0",
+                      "published_at": "2026-10-16T00:00:00.000Z",
+                      "retrieved_at": "2026-10-18T18:53:40Z",
+                      "segments": [
+                        {
+                          "content_hash": "3adc511468feee69fd4d687253f4f0f108736eac6affe675fc546a3489d177be",
+                          "latest_docnum": "RFA-LM-28-001",
+                          "latest_release_date": "2026-10-16T00:00:00.000Z",
+                          "list_url": "https://vtbgfslh0k.execute-api.us-east-1.amazonaws.com/prod/data?perpage=1000&sort=rowid:asc&from=0&type=active",
+                          "max_rowid": 43157,
+                          "total": 380,
+                          "type": "active"
+                        },
+                        {
+                          "content_hash": null,
+                          "latest_docnum": null,
+                          "latest_release_date": null,
+                          "list_url": "https://vtbgfslh0k.execute-api.us-east-1.amazonaws.com/prod/data?perpage=1000&sort=rowid:asc&from=0&type=activenosis",
+                          "max_rowid": null,
+                          "total": 0,
+                          "type": "activenosis"
+                        },
+                        {
+                          "content_hash": null,
+                          "latest_docnum": "RFA-DK-27-127",
+                          "latest_release_date": "2026-08-31T00:00:00.000Z",
+                          "list_url": "https://vtbgfslh0k.execute-api.us-east-1.amazonaws.com/prod/data?perpage=1000&sort=rowid:asc&from=0&type=expired",
+                          "max_rowid": 43085,
+                          "total": 17290,
+                          "type": "expired"
+                        },
+                        {
+                          "content_hash": null,
+                          "latest_docnum": "NOT-DE-24-027",
+                          "latest_release_date": "2024-05-23T16:38:29.000Z",
+                          "list_url": "https://vtbgfslh0k.execute-api.us-east-1.amazonaws.com/prod/data?perpage=1000&sort=rowid:asc&from=0&type=expirednosis",
+                          "max_rowid": 42386,
+                          "total": 1169,
+                          "type": "expirednosis"
+                        },
+                        {
+                          "content_hash": null,
+                          "latest_docnum": "NOT-OD-26-130",
+                          "latest_release_date": "2026-10-15T15:25:34.000Z",
+                          "list_url": "https://vtbgfslh0k.execute-api.us-east-1.amazonaws.com/prod/data?perpage=1000&sort=rowid:asc&from=0&type=notices",
+                          "max_rowid": 43155,
+                          "total": 16801,
+                          "type": "notices"
+                        }
+                      ],
+                      "total_records": 35640,
+                      "version": "e138709497c2a1c08731fcba8c95edbabfc3e316f0698c1d0df23fa14a4aa839"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Source status",
+        "tags": [
+          "NIH Guide for Grants and Contracts"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "a6128b45c23e"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "grants-nih-gov",
+        "x-aisa-runtime-operation": {
+          "operation_id": "grants-nih-gov.opportunities.source-status",
+          "method": "POST",
+          "path": "/apis/v1/grants-nih-gov/opportunities/source-status"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:4c24b0f98b9276ce53d29a8dea04ad1b6d2114d43c18c7c65697e6303a35557e",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:0253e0b40c743ea99cead4566d7afa8505c416c0e2edad91e964ecaa6310062d"
+        },
+        "x-aisa-docs-url": "/api-reference/grants-nih-gov/grants-nih-gov-opportunities-source-status"
+      }
+    }
+  }
 }
