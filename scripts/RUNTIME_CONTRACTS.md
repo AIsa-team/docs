@@ -403,7 +403,7 @@ outside that unchanged W0 package; it creates no real review receipts. Productio
 composition and formal assessment do not read these fixtures.
 
 New pull, refresh and convergence-monitor workflows are manual-only in this code
-change. The existing `sync-openapi.yml` workflow is preserved. W4 separately
+change. The legacy `sync-openapi.yml` workflow has since been removed. W4 separately
 reviews and enables the documented schedules, dispatch integration and formal
 publication path after its real inputs exist. Merging generator code does not
 activate those maintenance workflows or advance a consumer source pin.
@@ -500,9 +500,10 @@ that success cache. The origin receipt is outside the content graph to avoid a
 self-reference and is authenticated through the producer rather than trusted alone.
 
 Operator/CDN limits and real normal/lost-dispatch timing receipts remain W4 work.
-The legacy `sync-openapi` writer exits 3 when a runtime registry exists, directing
-publication to the single strictly assessed `pull-openapi` path. Without a
-registry, its existing legacy consolidator and outputs remain unchanged.
+The legacy `sync-openapi.yml` writer has been removed; `pull-openapi` is the
+single strictly assessed publication path. `publication_surface.py
+--legacy-write` still exits 3 when a runtime registry exists, so a re-added
+legacy writer cannot publish over the formal path.
 
 ## Resolving a missing contract
 
