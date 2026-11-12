@@ -189,7 +189,8 @@ def public_catalog_ids(root=ROOT):
     return sorted(p.stem for p in (Path(root) / 'openapi').glob('*.json') if p.stem != 'openapi')
 
 
-DEFAULT_GLOBS = ('openapi/*.json', 'openapi/zh/*.json', 'api-reference/**/*.mdx',
+DEFAULT_GLOBS = ('openapi/*.json', 'openapi/zh/*.json', 'openapi-public/*.json', 'openapi-public/zh/*.json',
+                 'api-reference/**/*.mdx',
                  'zh/api-reference/**/*.mdx', 'llms.txt', 'docs.json')
 
 
