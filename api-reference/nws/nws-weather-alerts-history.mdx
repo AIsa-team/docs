@@ -1,6 +1,6 @@
 ---
 title: "Alerts history"
-openapi: "openapi/nws.json POST /apis/v1/nws/weather/alerts-history"
+openapi: "reference-contracts/nws.json POST /apis/v1/nws/weather/alerts-history"
 x-aisa-operation-id: "nws.weather.alerts-history"
 ---
 
@@ -14,7 +14,7 @@ x-aisa-operation-id: "nws.weather.alerts-history"
 - **Request URL template:** `https://api.aisa.one/apis/v1/nws/weather/alerts-history`
 - **Runtime facts:** 848c2c8886b782af9d9d8531883bb7132c4a9f4c5f19ffc2608c0a5ff1f8a24b
 
-[Complete OpenAPI definition](https://aisa.one/docs/openapi/nws.json)
+[Complete OpenAPI definition](https://aisa.one/docs/reference-contracts/nws.json)
 
 Effective request and pricing declaration (including authentication and referenced schemas):
 
@@ -35,48 +35,98 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "end": "example",
-              "geometry": {},
-              "start": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "end": "example",
-              "geometry": {},
-              "start": "example"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
+            "continuation": {
+              "type": "string",
+              "description": "Opaque cursor from the previous page's meta.page.next_cursor.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "end": {
-              "type": "string"
+              "type": "string",
+              "description": "Last day of the window, YYYY-MM-DD (UTC, through 23:59:59). At most 31 days after start. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
+            },
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep only these event names (case-insensitive substring match on the NWS event name).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             },
             "geometry": {
               "additionalProperties": true,
-              "type": "object"
+              "type": "object",
+              "description": "GeoJSON (RFC 7946, WGS84, [lon, lat]) Point, Polygon or MultiPolygon, or a Feature wrapping one. Rings must be closed; altitude is ignored. A FeatureCollection is refused (send one place per call), as is a geometry crossing the antimeridian. Invalid input is `invalid_input` with a JSON pointer and a stable code (ring_not_closed, latitude, longitude, too_large, too_many_vertices, outside_coverage)."
+            },
+            "limit": {
+              "type": "number",
+              "description": "Alerts per page before polygon filtering.\n\nProvider reference: minimum 1; maximum 500; default 100.",
+              "default": 100,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 500
+              }
             },
             "start": {
-              "type": "string"
+              "type": "string",
+              "description": "First day of the window, YYYY-MM-DD (UTC, from 00:00:00). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
             }
           },
           "required": [
             "end",
             "geometry",
             "start"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "end": "2026-10-01",
+              "geometry": {
+                "coordinates": [
+                  [
+                    [
+                      -100.1,
+                      35.26
+                    ],
+                    [
+                      -100.08,
+                      35.26
+                    ],
+                    [
+                      -100.08,
+                      35.28
+                    ],
+                    [
+                      -100.1,
+                      35.28
+                    ],
+                    [
+                      -100.1,
+                      35.26
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+              "start": "2026-09-25"
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

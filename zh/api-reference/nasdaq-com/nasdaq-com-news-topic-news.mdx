@@ -1,6 +1,6 @@
 ---
 title: "Topic news"
-openapi: "openapi/zh/nasdaq-com.json POST /apis/v1/nasdaq-com/news/topic-news"
+openapi: "reference-contracts/zh/nasdaq-com.json POST /apis/v1/nasdaq-com/news/topic-news"
 x-aisa-operation-id: "nasdaq-com.news.topic-news"
 ---
 
@@ -14,7 +14,7 @@ x-aisa-operation-id: "nasdaq-com.news.topic-news"
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/nasdaq-com/news/topic-news`
 - **Runtime 事实版本:** 1453a50b8d058b4a4029b73a1eab64f13048cc398403e113dd1b01227809540a
 
-[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/nasdaq-com.json)
+[完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/nasdaq-com.json)
 
 有效请求与价格声明（包括认证和引用的 schema）：
 
@@ -35,35 +35,59 @@ x-aisa-operation-id: "nasdaq-com.news.topic-news"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "topic_id": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "topic_id": "example"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
+            "limit": {
+              "type": "number",
+              "description": "Rows per page (1-100).\n\nProvider reference: minimum 1; maximum 100; default 20.",
+              "default": 20,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 100
+              }
+            },
+            "offset": {
+              "type": "number",
+              "description": "Rows to skip. Nasdaq serves at most 500 rows per feed and its edge denies deeper offsets, so 490 is the last usable offset; `next_offset` from the previous page is the safe value.\n\nProvider reference: minimum 0; maximum 490.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0,
+                "max": 490
+              }
+            },
             "topic_id": {
-              "type": "string"
+              "type": "string",
+              "description": "Nasdaq topic term id, e.g. `4006` for Markets; read it from `primary_topic_id` on a feed row. Pattern: ^[0-9]{1,12}$."
+            },
+            "with_publish_times": {
+              "type": "boolean",
+              "description": "Also fetch the matching RSS feed (one extra request) and copy its pubDate into `published_at` for the stories it lists (the 15 newest). Set false to save the request.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
           "required": [
             "topic_id"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "limit": 10,
+              "topic_id": "4006"
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

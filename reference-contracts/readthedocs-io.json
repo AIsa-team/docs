@@ -5,7 +5,16 @@
         "scheme": "bearer",
         "type": "http"
       }
-    }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
   },
   "info": {
     "description": "",
@@ -30,9 +39,9 @@
       "generator_version": "3",
       "protocol_version": "1",
       "schema_version": "1",
-      "composer_version": "28",
+      "composer_version": "29",
       "response_pending": [],
-      "document_hash": "sha256:b056f8abc1f3193ea629aa78b8a79b0940f5a409a59f38324f9adf7d50d8b411"
+      "document_hash": "sha256:0535d42fd2a4548ed96b1a6834aa8770a72ccc08a6d522dd691328049ca19737"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -84,5 +93,1461 @@
       "url": "https://api.aisa.one"
     }
   ],
-  "paths": {}
+  "paths": {
+    "/apis/v1/readthedocs-io/developer-documentation/get-page": {
+      "post": {
+        "description": "To read a documentation page verbatim with a citable URL, for example a search_docs hit, a list_pages entry or a pasted *.readthedocs.io link. On large API pages read the outline first, then one section or definition at a time.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "readthedocs-io.developer-documentation.get-page",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "max_chars": {
+                    "type": "number",
+                    "description": "Truncate content to this many characters (default 100000).\n\nProvider reference: minimum 500; maximum 2000000.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 500,
+                      "max": 2000000
+                    }
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "With project: the page path relative to the version root (reference/Image.html, user-guide/sync-waves/) or from the site root when it starts with / (/en/stable/reference/Image.html, as search_docs returns)."
+                  },
+                  "project": {
+                    "type": "string",
+                    "description": "Read the Docs project slug, the <project> in https://<project>.readthedocs.io (e.g. pillow, argo-cd, pypdf, pymupdf). Pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$."
+                  },
+                  "section": {
+                    "type": "string",
+                    "description": "Return only this part of the page: a heading (text or anchor, case-insensitive, e.g. Modifying Pages or how-sync-waves-work) and its subsections, or a Sphinx API definition anchor (e.g. Page.get_text, PIL.Image.Image.resize) up to the next definition. Overrides a URL #anchor. Unknown sections are not_found.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "A page URL on https://<project>.readthedocs.io/, e.g. https://pillow.readthedocs.io/en/stable/reference/Image.html. A site-root URL follows the redirect to the default version's index. Pattern: ^[Hh][Tt][Tt][Pp][Ss]?://."
+                  },
+                  "version": {
+                    "type": "string",
+                    "description": "Version slug as it appears in the docs URL (latest, stable, a branch or tag slug such as release-3.6 or 6.1.0). Defaults to the project's default version. Pattern: ^[A-Za-z0-9._-]{1,100}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                },
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "path": {}
+                        },
+                        "required": [
+                          "path"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "project": {}
+                        },
+                        "required": [
+                          "project"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "url": {}
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "url": "https://argo-cd.readthedocs.io/en/stable/user-guide/sync-waves/"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One Read the Docs page as Markdown, from the Markdown the platform serves to agents (GET <page> with Accept: text/markdown): url, project, title, description, the heading outline (level, text, anchor) and the page content from its first title, without the theme's navigation sidebar, the On this page table and heading permalink marks, plus the project name, version and build time from the addons API. section (or a URL #anchor) returns one heading subtree or one Sphinx API definition such as Page.get_text, so very large reference pages can be read piece by piece. Takes a pasted URL, or project plus path (relative to the version root, or from the site root as search_docs returns it) and optional version. max_chars truncates. Missing pages and sections are not_found.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `built_at` | string | When Read the Docs last built the docs version serving this page (successful build finish time, ISO 8601); the closest published last-updated date. Null when not reported. |\n| `chars` | number | Content length before truncation, in characters. |\n| `content` | string | Markdown of the page or selected section, truncated at max_chars. |\n| `definitions` | string[] | Anchors of the Sphinx API definitions on the page (e.g. Page.get_text), in order; each is a valid section. Empty for pages without autodoc entries. |\n| `description` | string | Page description from the page metadata, when the theme sets one. |\n| `observed_at_ms` | number |  |\n| `outline` | object[] | Headings of the whole page in order, outside code blocks. |\n| `project` | string | Project subdomain of the page. |\n| `project_name` | string | Project display name from the addons API. |\n| `section` | object | The selected heading or definition when section or a URL #anchor was given. |\n| `title` | string | Page title from the page metadata, else its first level-1 heading. |\n| `truncated` | boolean |  |\n| `url` | string | The page URL that answered, after redirects. |\n| `version` | string | Version slug the page belongs to; null when the addons API does not resolve one. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-22T19:08:01Z.",
+                    "value": {
+                      "built_at": "2026-10-20T19:30:25.762937Z",
+                      "chars": 11823,
+                      "content": "# Sync Phases and Waves\n\nSync phases and hooks define when resources are applied such as before or after the main sync operation. This makes it possible to define jobs, or any other resource to run or be applied in any specific order.\n\nArgo CD has the following hook types:\n\n| Hook | Description |\n| --- | --- |\n| `PreSync` | Executes prior to the application of the manifests. |\n| `Sync` | Executes after all `PreSync` hooks completed and were successful, at the same time as the application of the manifests. |\n| `Skip` | Indicates to Argo CD to skip the application of the manifest. |\n| `PostSync` | Executes after all `Sync` hooks completed and were successful, a successful application, and all resources in a `Healthy` state. |\n| `SyncFail` | Executes when the sync operation fails. |\n| `PreDelete` | Executes before Application resources are deleted. Only runs when the entire Application is being deleted, not during normal sync operations (even with pruning enabled. ) |\n| `PostDelete` | Executes after all Application resources are deleted. *Available starting in v2.10.* |\n\nAdding the argocd.argoproj.io/hook annotation to a resource will assign it to a specific phase. During a Sync operation, Argo CD will apply the resource during the appropriate phase of the deployment. Hooks can be any type of Kubernetes resource kind, but tend to be Pod, Job or Argo Workflows. Multiple hooks can be specified as a comma separated list.\n\n## How phases work?\n\nArgo CD will respect resources assigned to different phases, during a sync operation Argo CD will do the following:\n\n1. Apply all the resources marked as PreSync hooks. If any of them fails the whole sync process will stop and will be marked as failed\n2. Apply all the resources marked as Sync hooks. If any of them fails the whole sync process will be marked as failed. Hooks marked with SyncFail will also run\n3. Apply all the resources marked as PostSync hooks. If any of them fails the whole sync process will be marked as failed.\n\nHooks marked with Skip will not be applied.\n\nHere is a graphical overview of the sync process:\n\n![phases](https://argo-cd.readthedocs.io/en/stable/user-guide/how_phases_work.png)\n\nYou can use this simple lifecycle method in various scenarios. For example you can run an essential check as a PreSync hook. If it fails then the whole sync operation will stop preventing the deployment from taking place. In a similar manner you can run smoke tests as PostSync hooks. If they succeed you know that your application has passed the validation. If they fail then the whole deployment will be marked as failed and Argo CD can then notify you in order to take further actions.\n\nHooks do not run during a selective sync operation. During the SyncFail phase, hooks can be used for cleanup and other housekeeping tasks. If a SyncFail hook itself fails, Argo CD does not take any additional action beyond marking the overall operation as failed.\n\nDuring pruning, the wave order is reversed from the creation order. Resources in higher waves are pruned first. If pruning any resource in a wave fails, the operation is marked as failed, and resources in lower waves are not processed. This ensures that dependent resources are deleted in the correct order.\n\n## Hook lifecycle and cleanup\n\nArgo CD offers several methods to clean up hooks and decide how much history will be kept for previous runs. In the most basic case you can use the argocd.argoproj.io/hook-delete-policy to decide when a hook will be deleted. This can take the following values:\n\n| Policy | Description |\n| --- | --- |\n| `HookSucceeded` | The hook resource is deleted when the sync succeeds. For completion-based hooks such as `Job` or `Workflow`, this typically happens after the hook completes successfully. |\n| `HookFailed` | The hook resource is deleted after the hook failed. |\n| `BeforeHookCreation` | Any existing hook resource is deleted before the new one is created (since v1.3). It is meant to be used with `/metadata/name`. |\n\nNote that if no deletion policy is specified, Argo CD will automatically assume `BeforeHookCreation` rules.\n\nWhen Helm hook annotations are mapped onto Argo CD hooks, delete-policy evaluation still follows Argo CD sync phases and sync result semantics rather than Helm's per-hook-event lifecycle. For example, a `PreSync` resource mapped from Helm may remain available until later phases finish, and passive resources such as `ServiceAccount` do not have a completion state like `Job` or `Workflow`.\n\n## PreDelete and PostDelete Hooks\n\n### PreDelete Hooks\n\nPreDelete hooks execute before an Application and its resources are deleted. They run only during Application deletion (e.g., `kubectl delete application` or `argocd app delete`), not during normal sync operations, even when pruning is enabled. **Behavior:**\n\n1. When an Application is deleted, Argo CD checks for PreDelete hooks defined in the Application's manifests\n2. If PreDelete hooks exist, they are created and executed before any Application resources are deleted\n3. Argo CD waits for all PreDelete hooks to reach a Healthy state before proceeding with deletion\n4. Once all PreDelete hooks complete successfully, they are cleaned up and the Application resources are deleted\n\n**Failure Handling:**\n\nIf a PreDelete hook fails (e.g., a Job fails or a Pod crashes), the Application deletion is blocked:\n\n- The Application will remain in a deleting state with a `DeletionError` condition\n- Application resources will not be deleted until the hook succeeds\n- The user can fix the failing hook by updating its manifest in the git repository\n- After fixing the hook, Argo CD will automatically retry the deletion on the next reconciliation\n- Alternatively, the user can manually delete the failing hook resource to allow deletion to proceed\n\n### PostDelete Hooks\n\nPostDelete hooks execute after all Application resources have been deleted. They are useful for cleanup operations, notifications, or removing external resources.\n\n**Behavior:**\n\n1. Application resources are deleted first\n2. Once all Application resources are fully removed, PostDelete hooks are created and executed\n3. Argo CD waits for all PostDelete hooks to reach a Healthy state\n4. Once all PostDelete hooks complete successfully, they are cleaned up and the Application is fully removed\n\n**Failure Handling:**\n\nIf a PostDelete hook fails:\n\n- The Application is already deleted from the cluster, but the Application CR remains with a `DeletionError` condition\n- The user can fix the failing hook by updating its manifest in the git repository\n- After fixing the hook, Argo CD will automatically retry on the next reconciliation\n- Alternatively, the user can manually delete the failing hook resource to complete the Application deletion\n\n## How sync waves work?\n\nArgo CD also offers an alternative method of changing the sync order of resources. These are sync waves. They are defined by the argocd.argoproj.io/sync-wave annotation. The value is an integer that defines the ordering (ArgoCD will start deploying from the lowest number and finish with the highest number).\n\nHooks and resources are assigned to wave 0 by default. The wave can be negative, so you can create a wave that runs before all other resources.\n\nWhen a sync operation takes place, Argo CD will:\n\n1. Order all resources according to their wave (lowest to highest)\n2. Apply the resources according to the resulting sequence\n\nThere is currently a delay between each sync wave in order to give other controllers a chance to react to the spec change that was just applied. This also prevents Argo CD from assessing resource health too quickly (against the stale object), causing hooks to fire prematurely. The current delay between each sync wave is 2 seconds and can be configured via the environment variable ARGOCD\\_SYNC\\_WAVE\\_DELAY.\n\n## Combining Sync waves and hooks\n\nWhile you can use sync waves on their own, for maximum flexibility you can combine them with hooks. This way you can use sync phases for coarse grained ordering and sync waves for defining the exact order of a resource within an individual phase.\n\n![waves](https://argo-cd.readthedocs.io/en/stable/user-guide/how_waves_work.png)\n\nWhen Argo CD starts a sync, it orders the resources in the following precedence:\n\n1. The phase\n2. The wave they are in (lower values first)\n3. By kind (e.g. namespaces first and then other Kubernetes resources, followed by custom resources)\n4. By name\n\nOnce the order is defined:\n\n1. First Argo CD determines the number of the first wave to apply. This is the first number where any resource is out-of-sync or unhealthy.\n2. It applies resources in that wave.\n3. It repeats this process until all phases and waves are in-sync and healthy.\n\nBecause an application can have resources that are unhealthy in the first wave, it may be that the app can never get to healthy.\n\n## How Do I Configure Phases?\n\nPre-sync and post-sync can only contain hooks. Apply the hook annotation:\n\n```\nmetadata:\n  annotations:\n    argocd.argoproj.io/hook: PreSync\n```\n\n[Read more about hooks](https://argo-cd.readthedocs.io/en/stable/user-guide/resource_hooks/).\n\n## How Do I Configure Waves?\n\nSpecify the wave using the following annotation:\n\n```\nmetadata:\n  annotations:\n    argocd.argoproj.io/sync-wave: \"5\"\n```\n\nHooks and resources are assigned to wave zero by default. The wave can be negative, so you can create a wave that runs before all other resources.\n\n## Examples\n\n### Send message to Slack when sync completes\n\nThe following example uses the Slack API to send a Slack message when sync completes:\n\n```\napiVersion: batch/v1\nkind: Job\nmetadata:\n  generateName: app-slack-notification-\n  annotations:\n    argocd.argoproj.io/hook: PostSync\n    argocd.argoproj.io/hook-delete-policy: HookSucceeded\nspec:\n  template:\n    spec:\n      containers:\n        - name: slack-notification\n          image: curlimages/curl\n          command:\n            - curl\n            - '-X'\n            - POST\n            - '--data-urlencode'\n            - >-\n              payload={\"channel\": \"#somechannel\", \"username\": \"hello\", \"text\":\n              \"App Sync succeeded\", \"icon_emoji\": \":ghost:\"}\n            - 'https://hooks.slack.com/services/...'\n      restartPolicy: Never\n  backoffLimit: 2\n```\n\n### Initialize or migrate a database\n\nThe following example runs a db initialization/migration command before the main sync operation (also in wave -1):\n\n```\napiVersion: batch/v1\nkind: Job\nmetadata:\n  name: db-migrate\n  annotations:\n    argocd.argoproj.io/hook: PreSync\n    argocd.argoproj.io/hook-delete-policy: HookSucceeded\n    argocd.argoproj.io/sync-wave: '-1'\nspec:\n  ttlSecondsAfterFinished: 360\n  template:\n    spec:\n      containers:\n        - name: postgresql-client\n          image: 'my-postgres-data:11.5'\n          imagePullPolicy: Always\n          env:\n            - name: PGPASSWORD\n              value: admin\n            - name: POSTGRES_HOST\n              value: my_postgresql_db\n          command:\n            - psql\n            - '-h=my_postgresql_db'\n            - '-U postgres'\n            - '-f preload.sql'\n      restartPolicy: Never\n  backoffLimit: 1\n```\n\n### Work around ArgoCD sync failure\n\nUpgrading ingress-nginx controller (managed by helm) with ArgoCD 2.x sometimes fails to work resulting in:\n\n| . | . |\n| --- | --- |\n| OPERATION | Sync |\n| PHASE | Running |\n| MESSAGE | waiting for completion of hook batch/Job/ingress-nginx-admission-create |\n\n| . | . |\n| --- | --- |\n| KIND | batch/v1/Job |\n| NAMESPACE | ingress-nginx |\n| NAME | ingress-nginx-admission-create |\n| STATUS | Running |\n| HOOK | PreSync |\n| MESSAGE | Pending deletion |\n\nTo work around this, a helm user can add:\n\n```\ningress-nginx:\n  controller:\n    admissionWebhooks:\n      annotations:\n        argocd.argoproj.io/hook: Skip\n```\n\nWhich results in a successful sync.",
+                      "definitions": [],
+                      "description": null,
+                      "observed_at_ms": 1792696080577,
+                      "outline": [
+                        {
+                          "anchor": null,
+                          "level": 1,
+                          "text": "Sync Phases and Waves"
+                        },
+                        {
+                          "anchor": null,
+                          "level": 2,
+                          "text": "How phases work?"
+                        },
+                        {
+                          "anchor": null,
+                          "level": 2,
+                          "text": "Hook lifecycle and cleanup"
+                        },
+                        {
+                          "anchor": null,
+                          "level": 2,
+                          "text": "PreDelete and PostDelete Hooks"
+                        },
+                        {
+                          "anchor": null,
+                          "level": 3,
+                          "text": "PreDelete Hooks"
+                        },
+                        {
+                          "anchor": null,
+                          "level": 3,
+                          "text": "PostDelete Hooks"
+                        },
+                        {
+                          "anchor": null,
+                          "level": 2,
+                          "text": "How sync waves work?"
+                        },
+                        {
+                          "anchor": null,
+                          "level": 2,
+                          "text": "Combining Sync waves and hooks"
+                        },
+                        {
+                          "anchor": null,
+                          "level": 2,
+                          "text": "How Do I Configure Phases?"
+                        },
+                        {
+                          "anchor": null,
+                          "level": 2,
+                          "text": "How Do I Configure Waves?"
+                        },
+                        {
+                          "anchor": null,
+                          "level": 2,
+                          "text": "Examples"
+                        },
+                        {
+                          "anchor": null,
+                          "level": 3,
+                          "text": "Send message to Slack when sync completes"
+                        },
+                        {
+                          "anchor": null,
+                          "level": 3,
+                          "text": "Initialize or migrate a database"
+                        },
+                        {
+                          "anchor": null,
+                          "level": 3,
+                          "text": "Work around ArgoCD sync failure"
+                        }
+                      ],
+                      "project": "argo-cd",
+                      "project_name": "argo-cd",
+                      "section": null,
+                      "title": "Sync Phases and Waves",
+                      "truncated": false,
+                      "url": "https://argo-cd.readthedocs.io/en/stable/user-guide/sync-waves/",
+                      "version": "stable"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Get page",
+        "tags": [
+          "Read the Docs"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-constraints": {
+          "required_any_of": [
+            [
+              {
+                "in": "body",
+                "name": "option_path",
+                "selector": "/path"
+              },
+              {
+                "in": "body",
+                "name": "option_project",
+                "selector": "/project"
+              },
+              {
+                "in": "body",
+                "name": "option_url",
+                "selector": "/url"
+              }
+            ]
+          ]
+        },
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "50628d980c42"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "readthedocs-io",
+        "x-aisa-runtime-operation": {
+          "operation_id": "readthedocs-io.developer-documentation.get-page",
+          "method": "POST",
+          "path": "/apis/v1/readthedocs-io/developer-documentation/get-page"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:fa729995ff6e76a9f297d8dfd8dd2f03ad8acfe471bb9737f132daf5bc1baf74",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:fa729995ff6e76a9f297d8dfd8dd2f03ad8acfe471bb9737f132daf5bc1baf74",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:cbd3151ef6ea13bcbd411fd8cbce3df894dac34cd00460aa267516f5e10939dc"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/readthedocs-io/readthedocs-io-developer-documentation-get-page"
+      }
+    },
+    "/apis/v1/readthedocs-io/developer-documentation/get-project": {
+      "post": {
+        "description": "Start here to learn which versions and translations a Read the Docs project publishes, its default version, its source repository, or the offline PDF, EPUB or zipped HTML build of a version, before searching or reading a specific version.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "readthedocs-io.developer-documentation.get-project",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "project": {
+                    "type": "string",
+                    "description": "Read the Docs project slug, the <project> in https://<project>.readthedocs.io (e.g. pillow, argo-cd, pypdf, pymupdf). Pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$."
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "Alternatively any page URL on https://<project>.readthedocs.io/; the project (and, where the function uses it, the version) is read from it. Exactly one of project or url. Pattern: ^[Hh][Tt][Tt][Pp][Ss]?://."
+                  }
+                },
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "project": {}
+                        },
+                        "required": [
+                          "project"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "url": {}
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "project": "pillow"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One Read the Docs project from its per-site addons API (GET https://<project>.readthedocs.io/_/addons/): slug, name, language, programming language, homepage, repository, default version and branch, docs root, versioning scheme, parent project for subprojects, every active version (slug, type, ref, hidden flag, docs root, PDF/EPUB/zip downloads) and translations. With a pasted URL, current_version is the version that URL is on. Unknown projects are not_found.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `current_version` | object | The version a pasted URL is on; null for a project slug or a site-root URL. |\n| `observed_at_ms` | number |  |\n| `project` | object |  |\n| `site_url` | string |  |\n| `translations` | object[] |  |\n| `versions` | object[] | Every active version, in the platform's order. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-22T19:07:40Z.",
+                    "value": {
+                      "current_version": null,
+                      "observed_at_ms": 1792696060248,
+                      "project": {
+                        "created": "2014-10-01T19:19:11.351761Z",
+                        "default_branch": "main",
+                        "default_version": "stable",
+                        "documentation_url": "https://pillow.readthedocs.io/en/stable/",
+                        "homepage": "https://python-pillow.org",
+                        "language": {
+                          "code": "en",
+                          "name": "English"
+                        },
+                        "modified": "2026-08-26T18:14:18.605521Z",
+                        "name": "Pillow",
+                        "programming_language": {
+                          "code": "py",
+                          "name": "Python"
+                        },
+                        "repository_url": "https://github.com/python-pillow/Pillow.git",
+                        "single_version": false,
+                        "slug": "pillow",
+                        "subproject_of": null,
+                        "translation_of": null,
+                        "versioning_scheme": "multiple_versions_with_translations"
+                      },
+                      "site_url": "https://pillow.readthedocs.io/",
+                      "translations": [],
+                      "versions": [
+                        {
+                          "documentation_url": "https://pillow.readthedocs.io/en/stable/",
+                          "downloads": {
+                            "epub": null,
+                            "htmlzip": null,
+                            "pdf": "https://pillow.readthedocs.io/_/downloads/en/stable/pdf/"
+                          },
+                          "hidden": false,
+                          "ref": "13.0.0",
+                          "slug": "stable",
+                          "type": "tag",
+                          "verbose_name": "stable"
+                        },
+                        {
+                          "documentation_url": "https://pillow.readthedocs.io/en/latest/",
+                          "downloads": {
+                            "epub": null,
+                            "htmlzip": null,
+                            "pdf": "https://pillow.readthedocs.io/_/downloads/en/latest/pdf/"
+                          },
+                          "hidden": false,
+                          "ref": null,
+                          "slug": "latest",
+                          "type": "branch",
+                          "verbose_name": "latest"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Get project",
+        "tags": [
+          "Read the Docs"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-constraints": {
+          "required_any_of": [
+            [
+              {
+                "in": "body",
+                "name": "option_project",
+                "selector": "/project"
+              },
+              {
+                "in": "body",
+                "name": "option_url",
+                "selector": "/url"
+              }
+            ]
+          ]
+        },
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "b4ab6310b9bd"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "readthedocs-io",
+        "x-aisa-runtime-operation": {
+          "operation_id": "readthedocs-io.developer-documentation.get-project",
+          "method": "POST",
+          "path": "/apis/v1/readthedocs-io/developer-documentation/get-project"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:fa729995ff6e76a9f297d8dfd8dd2f03ad8acfe471bb9737f132daf5bc1baf74",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:fa729995ff6e76a9f297d8dfd8dd2f03ad8acfe471bb9737f132daf5bc1baf74",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:00e57661148a46c1208a1d7ef1f069b34bcc786ba6f988a33b83998d23dd935e"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/readthedocs-io/readthedocs-io-developer-documentation-get-project"
+      }
+    },
+    "/apis/v1/readthedocs-io/developer-documentation/list-pages": {
+      "post": {
+        "description": "To see what a project's docs contain, browse a version's table of pages, or find pages by title before reading them with get_page.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "readthedocs-io.developer-documentation.list-pages",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "limit": {
+                    "type": "number",
+                    "description": "Pages to return (default 200).\n\nProvider reference: minimum 1; maximum 1000.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 1000
+                    }
+                  },
+                  "offset": {
+                    "type": "number",
+                    "description": "Pages to skip; pass next_offset to continue.\n\nProvider reference: minimum 0; maximum 100000.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 0,
+                      "max": 100000
+                    }
+                  },
+                  "path_prefix": {
+                    "type": "string",
+                    "description": "Only pages whose path starts with this, relative to the version root (user-guide/, operator-manual/) or from the site root (/en/stable/user-guide/).",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "project": {
+                    "type": "string",
+                    "description": "Read the Docs project slug, the <project> in https://<project>.readthedocs.io (e.g. pillow, argo-cd, pypdf, pymupdf). Pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$."
+                  },
+                  "q": {
+                    "type": "string",
+                    "description": "Case-insensitive substring filter on page title or path.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "Alternatively any page URL on https://<project>.readthedocs.io/; the project (and, where the function uses it, the version) is read from it. Exactly one of project or url. Pattern: ^[Hh][Tt][Tt][Pp][Ss]?://."
+                  },
+                  "version": {
+                    "type": "string",
+                    "description": "Version slug as it appears in the docs URL (latest, stable, a branch or tag slug such as release-3.6 or 6.1.0). Defaults to the project's default version. Pattern: ^[A-Za-z0-9._-]{1,100}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                },
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "project": {}
+                        },
+                        "required": [
+                          "project"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "url": {}
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "path_prefix": "user-guide/",
+                    "project": "argo-cd",
+                    "q": "sync",
+                    "version": "stable"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Every page of one version of a Read the Docs project, from the generator's own search index: Sphinx searchindex.js (docnames and titles, with URLs built for the html or dirhtml builder from _static/documentation_options.js) or MkDocs search/search_index.json or Zensical search.json (entries without an anchor). Returns title, path and URL per page with optional path_prefix (a section such as user-guide/) and q filters and offset paging, so a section can be listed and then read page by page with get_page. Sites built with other generators are not_found.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `generator` | string |  |\n| `next_offset` | number |  |\n| `observed_at_ms` | number |  |\n| `offset` | number |  |\n| `pages` | object[] |  |\n| `path_prefix` | string | The path_prefix applied, relative to the version root. |\n| `project` | string |  |\n| `root_url` | string | Docs root of the version; page URLs are root_url + path. |\n| `total` | number | Pages matching q (all pages without q). |\n| `version` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-22T19:08:18Z.",
+                    "value": {
+                      "count": 11,
+                      "generator": "mkdocs",
+                      "next_offset": null,
+                      "observed_at_ms": 1792696098409,
+                      "offset": 0,
+                      "pages": [
+                        {
+                          "path": "user-guide/auto_sync/",
+                          "title": "Automated Sync Policy",
+                          "url": "https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/"
+                        },
+                        {
+                          "path": "user-guide/selective_sync/",
+                          "title": "Selective Sync",
+                          "url": "https://argo-cd.readthedocs.io/en/stable/user-guide/selective_sync/"
+                        },
+                        {
+                          "path": "user-guide/sync-kubectl/",
+                          "title": "Sync Applications with Kubectl",
+                          "url": "https://argo-cd.readthedocs.io/en/stable/user-guide/sync-kubectl/"
+                        },
+                        {
+                          "path": "user-guide/sync-options/",
+                          "title": "Sync Options",
+                          "url": "https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/"
+                        },
+                        {
+                          "path": "user-guide/sync-waves/",
+                          "title": "Sync Phases and Waves",
+                          "url": "https://argo-cd.readthedocs.io/en/stable/user-guide/sync-waves/"
+                        },
+                        {
+                          "path": "user-guide/sync_windows/",
+                          "title": "Sync Windows",
+                          "url": "https://argo-cd.readthedocs.io/en/stable/user-guide/sync_windows/"
+                        },
+                        {
+                          "path": "user-guide/commands/argocd_app_sync/",
+                          "title": "argocd app sync Command Reference",
+                          "url": "https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_app_sync/"
+                        },
+                        {
+                          "path": "user-guide/commands/argocd_proj_windows_disable-manual-sync/",
+                          "title": "argocd proj windows disable-manual-sync Command Reference",
+                          "url": "https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_proj_windows_disable-manual-sync/"
+                        },
+                        {
+                          "path": "user-guide/commands/argocd_proj_windows_disable-sync-overrun/",
+                          "title": "argocd proj windows disable-sync-overrun Command Reference",
+                          "url": "https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_proj_windows_disable-sync-overrun/"
+                        },
+                        {
+                          "path": "user-guide/commands/argocd_proj_windows_enable-manual-sync/",
+                          "title": "argocd proj windows enable-manual-sync Command Reference",
+                          "url": "https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_proj_windows_enable-manual-sync/"
+                        },
+                        {
+                          "path": "user-guide/commands/argocd_proj_windows_enable-sync-overrun/",
+                          "title": "argocd proj windows enable-sync-overrun Command Reference",
+                          "url": "https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_proj_windows_enable-sync-overrun/"
+                        }
+                      ],
+                      "path_prefix": "user-guide/",
+                      "project": "argo-cd",
+                      "root_url": "https://argo-cd.readthedocs.io/en/stable/",
+                      "total": 11,
+                      "version": "stable"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "List pages",
+        "tags": [
+          "Read the Docs"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-constraints": {
+          "required_any_of": [
+            [
+              {
+                "in": "body",
+                "name": "option_project",
+                "selector": "/project"
+              },
+              {
+                "in": "body",
+                "name": "option_url",
+                "selector": "/url"
+              }
+            ]
+          ]
+        },
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "79959f12a31e"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "readthedocs-io",
+        "x-aisa-runtime-operation": {
+          "operation_id": "readthedocs-io.developer-documentation.list-pages",
+          "method": "POST",
+          "path": "/apis/v1/readthedocs-io/developer-documentation/list-pages"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:fa729995ff6e76a9f297d8dfd8dd2f03ad8acfe471bb9737f132daf5bc1baf74",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:fa729995ff6e76a9f297d8dfd8dd2f03ad8acfe471bb9737f132daf5bc1baf74",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:f04201cc095009340387f85ecaf7cd85d10451f05ffa13c4b3485a497b949749"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/readthedocs-io/readthedocs-io-developer-documentation-list-pages"
+      }
+    },
+    "/apis/v1/readthedocs-io/developer-documentation/search-docs": {
+      "post": {
+        "description": "To find where a topic, API or setting is documented in a Read the Docs project (e.g. resize in pillow, sync waves in argo-cd), then read the hit with get_page.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "readthedocs-io.developer-documentation.search-docs",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "page": {
+                    "type": "number",
+                    "description": "Result page, 1-based; pass next_page to continue.\n\nProvider reference: minimum 1; maximum 100.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 100
+                    }
+                  },
+                  "project": {
+                    "type": "string",
+                    "description": "Read the Docs project slug, the <project> in https://<project>.readthedocs.io (e.g. pillow, argo-cd, pypdf, pymupdf). Pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$."
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "Search terms (the platform's full-text syntax)."
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "Alternatively any page URL on https://<project>.readthedocs.io/; the project (and, where the function uses it, the version) is read from it. Exactly one of project or url. Pattern: ^[Hh][Tt][Tt][Pp][Ss]?://."
+                  },
+                  "version": {
+                    "type": "string",
+                    "description": "Version slug as it appears in the docs URL (latest, stable, a branch or tag slug such as release-3.6 or 6.1.0). Defaults to the project's default version. Pattern: ^[A-Za-z0-9._-]{1,100}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                },
+                "required": [
+                  "query"
+                ],
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "project": {}
+                        },
+                        "required": [
+                          "project"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "url": {}
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "project": "pillow",
+                    "query": "resize",
+                    "version": "stable"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Full-text search of one Read the Docs project with the platform's own search API (GET https://<project>.readthedocs.io/_/api/v3/search/?q=project:<project>/<version> <query>): ranked pages with title, URL, path, project and version, and the matching sections (anchor id, title, deep link, a 500-character content snippet and plain-text highlights). Searches the default version unless version is given; a pasted URL searches that URL's version. Paginates with page and next_page. An unknown project or version is not_found; a query with no hits is an empty result.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `filter` | string | The project:<slug>[/<version>] scope sent upstream. |\n| `next_page` | number |  |\n| `observed_at_ms` | number |  |\n| `page` | number |  |\n| `project` | string | Project slug the search ran on. |\n| `query` | string |  |\n| `results` | object[] |  |\n| `total` | number | Total matching pages across all result pages. |\n| `version` | string | Version slug the search ran on. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-22T19:07:50Z.",
+                    "value": {
+                      "count": 15,
+                      "filter": "project:pillow/stable",
+                      "next_page": 2,
+                      "observed_at_ms": 1792696070666,
+                      "page": 1,
+                      "project": "pillow",
+                      "query": "resize",
+                      "results": [
+                        {
+                          "path": "/en/stable/releasenotes/2.7.0.html",
+                          "project": "pillow",
+                          "sections": [
+                            {
+                              "content": "In most cases, convolution is more a expensive algorithm for downscaling because it takes into account all the pixels of source image. Therefore BILINEAR and BICUBIC filters’ performance can be lower than before. On the other hand the quality of BILINEAR and BICUBIC was close to NEAREST. So if such quality is suitable for your tasks you can switch to NEAREST filter for downscaling, which will give a huge improvement in performance. At the same time performance of convolution resampling for downs...",
+                              "highlights": [
+                                "Resize performance"
+                              ],
+                              "id": "resize-performance",
+                              "title": "Resize performance",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/releasenotes/2.7.0.html#resize-performance"
+                            },
+                            {
+                              "content": "Image resizing methods resize() and thumbnail() take a resample argument, which tells which filter should be used for resampling. Possible values are: NEAREST, BILINEAR, BICUBIC and ANTIALIAS. Almost all of them were changed in this version.",
+                              "highlights": [
+                                "Image resizing methods resize() and thumbnail() take a resample argument, which tells which filter should"
+                              ],
+                              "id": "image-resizing-filters",
+                              "title": "Image resizing filters",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/releasenotes/2.7.0.html#image-resizing-filters"
+                            },
+                            {
+                              "content": "A new LANCZOS constant was added instead of ANTIALIAS. When ANTIALIAS was initially added, it was the only high-quality filter based on convolutions. It’s name was supposed to reflect this. Starting from Pillow 2.7.0 all resize method are based on convolutions. All of them are antialias from now on. And the real name of the ANTIALIAS filter is Lanczos filter. The ANTIALIAS constant is left for backward compatibility and is an alias for LANCZOS.",
+                              "highlights": [
+                                "Starting from Pillow 2.7.0 all resize method are based on convolutions."
+                              ],
+                              "id": "antialias-renamed-to-lanczos",
+                              "title": "Antialias renamed to Lanczos",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/releasenotes/2.7.0.html#antialias-renamed-to-lanczos"
+                            }
+                          ],
+                          "title": "2.7.0 (2014-12-31)",
+                          "title_highlights": [],
+                          "url": "https://pillow.readthedocs.io/en/stable/releasenotes/2.7.0.html",
+                          "version": "stable"
+                        },
+                        {
+                          "path": "/en/stable/reference/ImageOps.html",
+                          "project": "pillow",
+                          "sections": [
+                            {
+                              "content": "from PIL import Image, ImageOps size = (100, 150) with Image.open(\"Tests/images/hopper.webp\") as im: ImageOps.contain(im, size).save(\"imageops_contain.webp\") ImageOps.cover(im, size).save(\"imageops_cover.webp\") ImageOps.fit(im, size).save(\"imageops_fit.webp\") ImageOps.pad(im, size, color=\"#f00\").save(\"imageops_pad.webp\") # thumbnail() can also be used, # but will modify the image object in place im.thumbnail(size) im.save(\"image_thumbnail.webp\") thumbnail() contain() cover() fit() pad() Given si...",
+                              "highlights": [
+                                "Resize relative to a given size"
+                              ],
+                              "id": "resize-relative-to-a-given-size",
+                              "title": "Resize relative to a given size",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/reference/ImageOps.html#resize-relative-to-a-given-size"
+                            },
+                            {
+                              "content": "Returns a resized version of the image, so that the requested size is covered, while maintaining the original aspect ratio. Parameters: image – The image to resize. size – The requested output size in pixels, given as a (width, height) tuple. method – Resampling method to use. Default is BICUBIC. See Filters. Returns: An image.",
+                              "highlights": [
+                                "Parameters: image – The image to resize. size – The requested output size in pixels, given as a (width"
+                              ],
+                              "id": "PIL.ImageOps.cover",
+                              "title": "PIL.ImageOps.cover(image: Image, size: tuple[int, int], method: int = Resampling.BICUBIC) → Image[source]",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/reference/ImageOps.html#PIL.ImageOps.cover"
+                            },
+                            {
+                              "content": "Returns a resized version of the image, set to the maximum width and height within the requested size, while maintaining the original aspect ratio. Parameters: image – The image to resize. size – The requested output size in pixels, given as a (width, height) tuple. method – Resampling method to use. Default is BICUBIC. See Filters. Returns: An image.",
+                              "highlights": [
+                                "Parameters: image – The image to resize. size – The requested output size in pixels, given as a (width"
+                              ],
+                              "id": "PIL.ImageOps.contain",
+                              "title": "PIL.ImageOps.contain(image: Image, size: tuple[int, int], method: int = Resampling.BICUBIC) → Image[source]",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/reference/ImageOps.html#PIL.ImageOps.contain"
+                            }
+                          ],
+                          "title": "ImageOps module",
+                          "title_highlights": [],
+                          "url": "https://pillow.readthedocs.io/en/stable/reference/ImageOps.html",
+                          "version": "stable"
+                        },
+                        {
+                          "path": "/en/stable/releasenotes/7.0.0.html",
+                          "project": "pillow",
+                          "sections": [
+                            {
+                              "content": "reduce() is a highly efficient operation to reduce an image by integer times. Normally, it shouldn’t be used directly. Used internally by resize() and thumbnail() methods to speed up resize when a new argument reducing_gap is set.",
+                              "highlights": [
+                                "Used internally by resize() and thumbnail() methods to speed up resize when a new argument reducing_gap"
+                              ],
+                              "id": "new-image-reduce-method",
+                              "title": "New Image.reduce() method",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/releasenotes/7.0.0.html#new-image-reduce-method"
+                            },
+                            {
+                              "content": "The default resampling filter has been changed to the high-quality convolution Image.BICUBIC instead of Image.NEAREST, for the resize() method and the pad(), scale() and fit() functions. Image.NEAREST is still always used for images in “P” and “1” modes. See Filters to learn the difference. In short, Image.NEAREST is a very fast filter, but simple and low-quality.",
+                              "highlights": [
+                                "has been changed to the high-quality convolution Image.BICUBIC instead of Image.NEAREST, for the resize"
+                              ],
+                              "id": "default-resampling-filter",
+                              "title": "Default resampling filter",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/releasenotes/7.0.0.html#default-resampling-filter"
+                            },
+                            {
+                              "content": "If the draft() method has no effect, it returns None. If it does have an effect, then it previously returned the image itself. However, unlike other chain methods, draft() does not return a modified version of the image, but modifies it in-place. So instead, if draft() has an effect, Pillow will now return a tuple of the image mode and a co-ordinate box. The box is the original coordinates in the bounds of resulting image. This may be useful in a subsequent resize() call.",
+                              "highlights": [
+                                "This may be useful in a subsequent resize() call."
+                              ],
+                              "id": "image-draft-return-value",
+                              "title": "Image.draft() return value",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/releasenotes/7.0.0.html#image-draft-return-value"
+                            }
+                          ],
+                          "title": "7.0.0 (2020-01-02)",
+                          "title_highlights": [],
+                          "url": "https://pillow.readthedocs.io/en/stable/releasenotes/7.0.0.html",
+                          "version": "stable"
+                        },
+                        {
+                          "path": "/en/stable/handbook/concepts.html",
+                          "project": "pillow",
+                          "sections": [
+                            {
+                              "content": "For geometry operations that may map multiple input pixels to a single output pixel, the Python Imaging Library provides different resampling filters. Resampling.NEAREST Pick one nearest pixel from the input image. Ignore all other input pixels. Resampling.BOX Each pixel of the source image contributes to one pixel of the destination image with identical weights. For upscaling, this is equivalent to Resampling.NEAREST. This filter can only be used with the resize() and thumbnail() methods. Added...",
+                              "highlights": [
+                                "This filter can only be used with the resize() and thumbnail() methods. Added in version 3.4.0."
+                              ],
+                              "id": "filters",
+                              "title": "Filters",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/handbook/concepts.html#filters"
+                            }
+                          ],
+                          "title": "Concepts",
+                          "title_highlights": [],
+                          "url": "https://pillow.readthedocs.io/en/stable/handbook/concepts.html",
+                          "version": "stable"
+                        },
+                        {
+                          "path": "/en/stable/releasenotes/13.0.0.html",
+                          "project": "pillow",
+                          "sections": [
+                            {
+                              "content": "Two new filters are available for resize() and thumbnail(): Image.Resampling.MKS2013 and Image.Resampling.MKS2021. These are versions of the Magic Kernel Sharp filter.",
+                              "highlights": [
+                                "Two new filters are available for resize() and thumbnail(): Image.Resampling.MKS2013 and Image.Resampling.MKS2021"
+                              ],
+                              "id": "new-resizing-filters",
+                              "title": "New resizing filters",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html#new-resizing-filters"
+                            },
+                            {
+                              "content": "The reducing_gap argument to resize() is now applied to RGBA and LA images. Previously, these modes ignored the argument, including when called by thumbnail(), which uses reducing_gap=2.0 by default.",
+                              "highlights": [
+                                "The reducing_gap argument to resize() is now applied to RGBA and LA images."
+                              ],
+                              "id": "resizing-images-with-alpha",
+                              "title": "Resizing images with alpha",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html#resizing-images-with-alpha"
+                            }
+                          ],
+                          "title": "13.0.0 (2026-10-16)",
+                          "title_highlights": [],
+                          "url": "https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html",
+                          "version": "stable"
+                        },
+                        {
+                          "path": "/en/stable/releasenotes/4.0.0.html",
+                          "project": "pillow",
+                          "sections": [
+                            {
+                              "content": "The stretch function on the core image object has been removed. This used to be for enlarging the image, but has been aliased to resize recently.",
+                              "highlights": [
+                                "This used to be for enlarging the image, but has been aliased to resize recently."
+                              ],
+                              "id": "image-core-stretch-removed",
+                              "title": "Image.core.stretch removed",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/releasenotes/4.0.0.html#image-core-stretch-removed"
+                            }
+                          ],
+                          "title": "4.0.0 (2017-01-01)",
+                          "title_highlights": [],
+                          "url": "https://pillow.readthedocs.io/en/stable/releasenotes/4.0.0.html",
+                          "version": "stable"
+                        },
+                        {
+                          "path": "/en/stable/handbook/tutorial.html",
+                          "project": "pillow",
+                          "sections": [
+                            {
+                              "content": "The PIL.Image.Image class contains methods to resize() and rotate() an image. The former takes a tuple giving the new size, the latter the angle in degrees counterclockwise.",
+                              "highlights": [
+                                "The PIL.Image.Image class contains methods to resize() and rotate() an image."
+                              ],
+                              "id": "geometrical-transforms",
+                              "title": "Geometrical transforms",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/handbook/tutorial.html#geometrical-transforms"
+                            },
+                            {
+                              "content": "Instead of calculating the size of the new image when resizing, you can also choose to resize relative to a given size. from PIL import Image, ImageOps size = (100, 150) with Image.open(\"hopper.webp\") as im: ImageOps.contain(im, size).save(\"imageops_contain.webp\") ImageOps.cover(im, size).save(\"imageops_cover.webp\") ImageOps.fit(im, size).save(\"imageops_fit.webp\") ImageOps.pad(im, size, color=\"#f00\").save(\"imageops_pad.webp\") # thumbnail() can also be used, # but will modify the image object in...",
+                              "highlights": [
+                                "Instead of calculating the size of the new image when resizing, you can also choose to resize relative"
+                              ],
+                              "id": "relative-resizing",
+                              "title": "Relative resizing",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/handbook/tutorial.html#relative-resizing"
+                            },
+                            {
+                              "content": "from PIL import Image, PSDraw import os # Define the PostScript file ps_file = open(\"hopper.ps\", \"wb\") # Create a PSDraw object ps = PSDraw.PSDraw(ps_file) # Start the document ps.begin_document() # Set the text to be drawn text = \"Hopper\" # Define the PostScript font font_name = \"Helvetica-Narrow-Bold\" font_size = 36 # Calculate text size (approximation as PSDraw doesn't provide direct method) # Assuming average character width as 0.6 of the font size text_width = len(text) * font_size * 0.6 te...",
+                              "highlights": [
+                                "image_path = \"hopper.ppm\" # Update this with your image path with Image.open(image_path) as im: # Resize"
+                              ],
+                              "id": "drawing-postscript",
+                              "title": "Drawing PostScript",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/handbook/tutorial.html#drawing-postscript"
+                            }
+                          ],
+                          "title": "Tutorial",
+                          "title_highlights": [],
+                          "url": "https://pillow.readthedocs.io/en/stable/handbook/tutorial.html",
+                          "version": "stable"
+                        },
+                        {
+                          "path": "/en/stable/releasenotes/5.4.0.html",
+                          "project": "pillow",
+                          "sections": [
+                            {
+                              "content": "Now uses one resize operation with box parameter internally instead of a crop and scale operations sequence. This improves the performance and accuracy of cropping since the box parameter accepts float values.",
+                              "highlights": [
+                                "Now uses one resize operation with box parameter internally instead of a crop and scale operations sequence"
+                              ],
+                              "id": "imageops-fit",
+                              "title": "ImageOps.fit",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/releasenotes/5.4.0.html#imageops-fit"
+                            }
+                          ],
+                          "title": "5.4.0 (2019-01-01)",
+                          "title_highlights": [],
+                          "url": "https://pillow.readthedocs.io/en/stable/releasenotes/5.4.0.html",
+                          "version": "stable"
+                        },
+                        {
+                          "path": "/en/stable/releasenotes/10.1.0.html",
+                          "project": "pillow",
+                          "sections": [
+                            {
+                              "content": "Returns a resized version of the image, so that the requested size is covered, while maintaining the original aspect ratio. See Resize relative to a given size for a comparison between this and similar ImageOps methods.",
+                              "highlights": [
+                                "See Resize relative to a given size for a comparison between this and similar ImageOps methods."
+                              ],
+                              "id": "imageops-cover",
+                              "title": "ImageOps.cover",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/releasenotes/10.1.0.html#imageops-cover"
+                            }
+                          ],
+                          "title": "10.1.0 (2023-10-15)",
+                          "title_highlights": [],
+                          "url": "https://pillow.readthedocs.io/en/stable/releasenotes/10.1.0.html",
+                          "version": "stable"
+                        },
+                        {
+                          "path": "/en/stable/releasenotes/4.3.0.html",
+                          "project": "pillow",
+                          "sections": [
+                            {
+                              "content": "Added new argument box for PIL.Image.Image.resize(). This argument defines a source rectangle from within the source image to be resized. This is very similar to the image.crop(box).resize(size) sequence except that box can be specified with subpixel accuracy.",
+                              "highlights": [
+                                "This is very similar to the image.crop(box).resize(size) sequence except that box can be specified with"
+                              ],
+                              "id": "partial-resampling",
+                              "title": "Partial resampling",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/releasenotes/4.3.0.html#partial-resampling"
+                            }
+                          ],
+                          "title": "4.3.0 (2017-10-02)",
+                          "title_highlights": [],
+                          "url": "https://pillow.readthedocs.io/en/stable/releasenotes/4.3.0.html",
+                          "version": "stable"
+                        },
+                        {
+                          "path": "/en/stable/handbook/image-file-formats.html",
+                          "project": "pillow",
+                          "sections": [
+                            {
+                              "content": "Pillow reads JPEG, JFIF, and Adobe JPEG files containing L, RGB, or CMYK data. It writes standard and progressive JFIF files. Using the draft() method, you can speed things up by converting RGB images to L, and resize images to 1/2, 1/4 or 1/8 of their original size while loading them. By default Pillow doesn’t allow loading of truncated JPEG files, set ImageFile.LOAD_TRUNCATED_IMAGES to override this.",
+                              "highlights": [
+                                "Using the draft() method, you can speed things up by converting RGB images to L, and resize images to"
+                              ],
+                              "id": "jpeg",
+                              "title": "JPEG",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#jpeg"
+                            }
+                          ],
+                          "title": "Image file formats",
+                          "title_highlights": [],
+                          "url": "https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html",
+                          "version": "stable"
+                        },
+                        {
+                          "path": "/en/stable/releasenotes/5.3.0.html",
+                          "project": "pillow",
+                          "sections": [
+                            {
+                              "content": "If you attempt to set the size of an image directly, e.g. im.size = (100, 100), you will now receive an AttributeError. This is not about removing existing functionality, but instead about raising an explicit error to prevent later consequences. The resize method is the correct way to change an image’s size. The exceptions to this are: The ICO and ICNS image formats, which use im.size = (100, 100) to select a subimage. The TIFF image format, which now has a DeprecationWarning for this action, as...",
+                              "highlights": [
+                                "The resize method is the correct way to change an image’s size."
+                              ],
+                              "id": "image-size",
+                              "title": "Image size",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/releasenotes/5.3.0.html#image-size"
+                            }
+                          ],
+                          "title": "5.3.0 (2018-10-01)",
+                          "title_highlights": [],
+                          "url": "https://pillow.readthedocs.io/en/stable/releasenotes/5.3.0.html",
+                          "version": "stable"
+                        },
+                        {
+                          "path": "/en/stable/reference/ImageTransform.html",
+                          "project": "pillow",
+                          "sections": [
+                            {
+                              "content": "Bases: Transform Define a transform to extract a subregion from an image. Maps a rectangle (defined by two corners) from the image to a rectangle of the given size. The resulting image will contain data sampled from between the corners, such that (x0, y0) in the input image will end up at (0,0) in the output image, and (x1, y1) at size. This method can be used to crop, stretch, shrink, or mirror an arbitrary rectangle in the current image. It is slightly slower than crop, but about as fast as a...",
+                              "highlights": [
+                                "It is slightly slower than crop, but about as fast as a corresponding resize operation."
+                              ],
+                              "id": "PIL.ImageTransform.ExtentTransform",
+                              "title": "class PIL.ImageTransform.ExtentTransform(data: Sequence[Any])[source]",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/reference/ImageTransform.html#PIL.ImageTransform.ExtentTransform"
+                            }
+                          ],
+                          "title": "ImageTransform module",
+                          "title_highlights": [],
+                          "url": "https://pillow.readthedocs.io/en/stable/reference/ImageTransform.html",
+                          "version": "stable"
+                        },
+                        {
+                          "path": "/en/stable/genindex.html",
+                          "project": "pillow",
+                          "sections": [
+                            {
+                              "content": "R10G10B10_XR_BIAS_A2_UNORM (PIL.DdsImagePlugin.DXGI_FORMAT attribute) R10G10B10A2_TYPELESS (PIL.DdsImagePlugin.DXGI_FORMAT attribute) R10G10B10A2_UINT (PIL.DdsImagePlugin.DXGI_FORMAT attribute) R10G10B10A2_UNORM (PIL.DdsImagePlugin.DXGI_FORMAT attribute) R11G11B10_FLOAT (PIL.DdsImagePlugin.DXGI_FORMAT attribute) R16_FLOAT (PIL.DdsImagePlugin.DXGI_FORMAT attribute) R16_SINT (PIL.DdsImagePlugin.DXGI_FORMAT attribute) R16_SNORM (PIL.DdsImagePlugin.DXGI_FORMAT attribute) R16_TYPELESS (PIL.DdsImagePl...",
+                              "highlights": [
+                                "attribute) reset() (PIL.ImageFile.Parser method) (PIL.TiffImagePlugin.ImageFileDirectory_v2 method) resize"
+                              ],
+                              "id": "R",
+                              "title": "R",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/genindex.html#R"
+                            }
+                          ],
+                          "title": "Index",
+                          "title_highlights": [],
+                          "url": "https://pillow.readthedocs.io/en/stable/genindex.html",
+                          "version": "stable"
+                        },
+                        {
+                          "path": "/en/stable/_modules/PIL/ImageTransform.html",
+                          "project": "pillow",
+                          "sections": [
+                            {
+                              "content": "# # The Python Imaging Library. # $Id$ # # transform wrappers # # History: # 2002-04-08 fl Created # # Copyright (c) 2002 by Secret Labs AB # Copyright (c) 2002 by Fredrik Lundh # # See the README file for information on usage and redistribution. # from __future__ import annotations from . import Image TYPE_CHECKING = False if TYPE_CHECKING: from collections.abc import Sequence from typing import Any [docs] class Transform(Image.ImageTransformHandler): \"\"\"Base class for other transforms defined...",
+                              "highlights": [
+                                "It is slightly slower than crop, but about as fast as a corresponding resize operation."
+                              ],
+                              "id": "furo-main-content",
+                              "title": "Source code for PIL.ImageTransform",
+                              "type": "section",
+                              "url": "https://pillow.readthedocs.io/en/stable/_modules/PIL/ImageTransform.html#furo-main-content"
+                            }
+                          ],
+                          "title": "Source code for PIL.ImageTransform",
+                          "title_highlights": [],
+                          "url": "https://pillow.readthedocs.io/en/stable/_modules/PIL/ImageTransform.html",
+                          "version": "stable"
+                        }
+                      ],
+                      "total": 17,
+                      "version": "stable"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Search docs",
+        "tags": [
+          "Read the Docs"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-constraints": {
+          "required_any_of": [
+            [
+              {
+                "in": "body",
+                "name": "option_project",
+                "selector": "/project"
+              },
+              {
+                "in": "body",
+                "name": "option_url",
+                "selector": "/url"
+              }
+            ]
+          ]
+        },
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "96a0a83dd7da"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "readthedocs-io",
+        "x-aisa-runtime-operation": {
+          "operation_id": "readthedocs-io.developer-documentation.search-docs",
+          "method": "POST",
+          "path": "/apis/v1/readthedocs-io/developer-documentation/search-docs"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:fa729995ff6e76a9f297d8dfd8dd2f03ad8acfe471bb9737f132daf5bc1baf74",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:fa729995ff6e76a9f297d8dfd8dd2f03ad8acfe471bb9737f132daf5bc1baf74",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:ccb00b014dc8f8e239b891238af86cae28a5397cb05bed94bd52f86725cf7f6d"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/readthedocs-io/readthedocs-io-developer-documentation-search-docs"
+      }
+    }
+  }
 }

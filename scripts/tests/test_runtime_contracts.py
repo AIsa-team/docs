@@ -53,6 +53,48 @@ def operation(document):
 
 
 class CompositionTests(unittest.TestCase):
+    def test_mixed_closed_body_keeps_runtime_boundary_and_source_annotations(self):
+        for nested in (False, True):
+            with self.subTest(nested=nested):
+                runtime, upstream = facts("mixed"), mirror()
+                declared = {"type": "object", "additionalProperties": False,
+                            "properties": {"email": {"type": "string"}}, "required": ["email"]}
+                source = {"type": "object", "additionalProperties": True,
+                          "properties": {"email": {"type": "string", "description": "Provider email."},
+                                         "extra": {"type": "string"}}, "required": ["email"]}
+                if nested:
+                    declared = {"type": "object", "properties": {"options": declared}}
+                    source = {"type": "object", "properties": {"options": source}}
+                operation(runtime)["requestBody"] = {"content": {"application/json": {"schema": declared}}}
+                upstream["components"]["schemas"]["Body"] = source
+                document, pending = compose(runtime, upstream)
+                self.assertFalse(pending)
+                schema = operation(document)["requestBody"]["content"]["application/json"]["schema"]
+                if nested:
+                    schema = schema["properties"]["options"]
+                self.assertIs(schema["additionalProperties"], False)
+                self.assertEqual(set(schema["properties"]), {"email"})
+                self.assertEqual(schema["properties"]["email"]["description"], "Provider email.")
+
+    def test_mixed_closed_empty_body_does_not_publish_provider_inputs(self):
+        runtime, upstream = facts("mixed"), mirror()
+        operation(runtime)["requestBody"] = {"content": {"application/json": {"schema": {
+            "type": "object", "properties": {}, "additionalProperties": False}}}}
+        upstream["components"]["schemas"]["Body"].pop("required")
+        document, pending = compose(runtime, upstream)
+        self.assertFalse(pending)
+        schema = operation(document)["requestBody"]["content"]["application/json"]["schema"]
+        self.assertEqual(schema["properties"], {})
+        self.assertIs(schema["additionalProperties"], False)
+
+    def test_mixed_closed_body_cannot_hide_unforwarded_required_provider_input(self):
+        runtime, upstream = facts("mixed"), mirror()
+        operation(runtime)["requestBody"] = {"content": {"application/json": {"schema": {
+            "type": "object", "properties": {"name": {"type": "string"}}, "additionalProperties": False}}}}
+        document, pending = compose(runtime, upstream)
+        self.assertEqual(document["paths"], {})
+        self.assertEqual(pending[0]["reason"], "source body requires inputs rejected by runtime: email")
+
     def test_provider_header_needs_forwarding_even_when_runtime_declares_its_type(self):
         runtime, upstream = facts("mixed"), mirror()
         header = {"name": "Parallel-Beta", "in": "header", "schema": {"type": "string"}}

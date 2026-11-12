@@ -1,6 +1,6 @@
 ---
 title: "Search dockets"
-openapi: "openapi/courtlistener-com.json POST /apis/v1/courtlistener-com/dockets/search-dockets"
+openapi: "reference-contracts/courtlistener-com.json POST /apis/v1/courtlistener-com/dockets/search-dockets"
 x-aisa-operation-id: "courtlistener-com.dockets.search-dockets"
 ---
 
@@ -14,7 +14,7 @@ x-aisa-operation-id: "courtlistener-com.dockets.search-dockets"
 - **Request URL template:** `https://api.aisa.one/apis/v1/courtlistener-com/dockets/search-dockets`
 - **Runtime facts:** c0a8094e895a38a6fc6a9db13020c094c76ec8e867bde1af25e64950a9f4e734
 
-[Complete OpenAPI definition](https://aisa.one/docs/openapi/courtlistener-com.json)
+[Complete OpenAPI definition](https://aisa.one/docs/reference-contracts/courtlistener-com.json)
 
 Effective request and pricing declaration (including authentication and referenced schemas):
 
@@ -35,22 +35,98 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "attorney_name": "example"
+        "schema": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "attorney_name": {
+              "type": "string",
+              "description": "attorney_name"
+            },
+            "case_name": {
+              "type": "string",
+              "description": "case_name"
+            },
+            "cause": {
+              "type": "string",
+              "description": "cause"
+            },
+            "court": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "description": "CourtListener court ids (not jurisdiction or state names) to restrict the search to, e.g. scotus, ca9, nysd, cal, calctapp, ny, nyappdiv, tex, texapp, fla. An unknown id such as texas, tx or ca matches nothing and returns zero results. List every court you need: ny does not include nyappdiv. Use the courts function to find ids (jurisdiction S / SA are state supreme and appellate courts)."
+            },
+            "cursor": {
+              "type": "string",
+              "description": "Not served keyless: the feeds have no further pages, so any cursor fails with a non-retryable upstream_blocked error.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "docket_id": {
+              "type": "number",
+              "description": "CourtListener docket id for a single-docket lookup.\n\nProvider reference: minimum 1."
+            },
+            "docket_number": {
+              "type": "string",
+              "description": "PACER docket number, e.g. 1:20-cv-03010. Combine with court for an exact match."
+            },
+            "filed_after": {
+              "type": "string",
+              "description": "Earliest filing date, inclusive (YYYY-MM-DD). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "filed_before": {
+              "type": "string",
+              "description": "Latest filing date, inclusive (YYYY-MM-DD). Use the same date as filed_after for a single day. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "judge": {
+              "type": "string",
+              "description": "Assigned judge name."
+            },
+            "nature_of_suit": {
+              "type": "string",
+              "description": "nature_of_suit"
+            },
+            "order_by": {
+              "type": "string",
+              "description": "Keyless feeds always return the newest matches first. score desc (default) and dateFiled desc are accepted; other orders need a CourtListener API token and fail with a non-retryable upstream_blocked error.\n\nProvider reference: allowed values [\"score desc\", \"dateFiled desc\", \"dateFiled asc\"]; default \"score desc\".",
+              "default": "score desc",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "score desc",
+                  "dateFiled desc",
+                  "dateFiled asc"
+                ]
+              }
+            },
+            "party_name": {
+              "type": "string",
+              "description": "Party name. CourtListener stems and tokenizes it, so Bakers also matches Baker; set party_name_exact for an exact phrase."
+            },
+            "party_name_exact": {
+              "type": "boolean",
+              "description": "Match party_name as an exact quoted phrase without stemming, so Bakers no longer matches Baker or Bake. Requires party_name.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "query": {
+              "type": "string",
+              "description": "Full-text query over docket metadata; supports fielded clauses such as party:(Google) or docketNumber:\"1:20-cv-03010\"."
             }
           },
-          "minimal": {
-            "value": {
-              "attorney_name": "example"
-            }
-          }
-        },
-        "schema": {
-          "additionalProperties": true,
           "allOf": [
             {
               "anyOf": [
@@ -136,47 +212,21 @@ Effective request and pricing declaration (including authentication and referenc
                 }
               ]
             }
-          ],
-          "properties": {
-            "attorney_name": {
-              "type": "string"
-            },
-            "case_name": {
-              "type": "string"
-            },
-            "cause": {
-              "type": "string"
-            },
-            "court": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "docket_id": {
-              "type": "number"
-            },
-            "docket_number": {
-              "type": "string"
-            },
-            "judge": {
-              "type": "string"
-            },
-            "nature_of_suit": {
-              "type": "string"
-            },
-            "party_name": {
-              "type": "string"
-            },
-            "query": {
-              "type": "string"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "court": [
+                "nysd"
+              ],
+              "docket_number": "1:20-cv-03010"
             }
-          },
-          "type": "object"
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

@@ -1,6 +1,6 @@
 ---
 title: "Records list"
-openapi: "openapi/zh/ftpgeoinfo-msl-mt-gov.json POST /apis/v1/ftpgeoinfo-msl-mt-gov/gis-layers/records-list"
+openapi: "reference-contracts/zh/ftpgeoinfo-msl-mt-gov.json POST /apis/v1/ftpgeoinfo-msl-mt-gov/gis-layers/records-list"
 x-aisa-operation-id: "ftpgeoinfo-msl-mt-gov.gis-layers.records-list"
 ---
 
@@ -14,7 +14,7 @@ x-aisa-operation-id: "ftpgeoinfo-msl-mt-gov.gis-layers.records-list"
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/ftpgeoinfo-msl-mt-gov/gis-layers/records-list`
 - **Runtime 事实版本:** 3f332013ecc860692fae282afed87ca8dd879f3e2250b6b95df2153bf28ae589
 
-[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/ftpgeoinfo-msl-mt-gov.json)
+[完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/ftpgeoinfo-msl-mt-gov.json)
 
 有效请求与价格声明（包括认证和引用的 schema）：
 
@@ -35,35 +35,65 @@ x-aisa-operation-id: "ftpgeoinfo-msl-mt-gov.gis-layers.records-list"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "layer": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "layer": "example"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
+            "cursor": {
+              "type": "string",
+              "description": "next_cursor from the previous page. Carries the layer, the segment/filter, the pinned publication (editingInfo.dataLastEditDate) and the last OBJECTID. When the layer has been republished since, the call fails with invalid_input and issue code `publication_changed`: restart from page one. Pattern: ^[0-9a-f]+$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "exclude_owner": {
+              "type": "boolean",
+              "description": "parcels only: do not request the MCA 2-6-1017 owner fields (OwnerName, OwnerAddress1-3, OwnerCity, OwnerState, OwnerZipCode, DbaName, CareOfTaxpayer); `owner` is then null. Ignored on other layers.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "layer": {
-              "type": "string"
+              "type": "string",
+              "description": "parcels | public_lands | conservation_easements | addresses | roads | boundaries:<layer id>. Pattern: ^(parcels|public_lands|conservation_easements|addresses|roads|boundaries:[0-9]{1,3})$."
+            },
+            "page_size": {
+              "type": "number",
+              "description": "Rows per page; default and maximum is the layer's maxRecordCount (2000; 1000 for addresses). A 2000-row parcel page is about 2.3 MB.\n\nProvider reference: minimum 1; maximum 2000.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 2000
+              }
+            },
+            "segment": {
+              "type": "string",
+              "description": "County segment key. parcels: the CountyName value ('Gallatin', 'Lewis and Clark'); addresses and roads: the County / County_L value ('Gallatin County'; a bare county name is normalised by appending ' County'). Required for parcels, addresses and roads (statewide lists are 100-460 pages); not accepted for conservation_easements, public_lands or boundaries, which list statewide. Pattern: ^[A-Za-z][A-Za-z .'-]*$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
           "required": [
             "layer"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "exclude_owner": true,
+              "layer": "parcels",
+              "page_size": 3,
+              "segment": "Gallatin"
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

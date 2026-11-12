@@ -341,17 +341,19 @@ def translate(batch_size: int, limit: int | None, workers: int, worker: int) -> 
     print(f"worker={worker}/{workers} translated this run={completed}")
 
 
-def translation(catalog: dict[str, Any], source: str) -> str:
+def translation(catalog: dict[str, Any], source: str, *, preserve_payload_fields: bool = False) -> str:
     entry = catalog["entries"].get(key_for(source))
     if not entry or entry.get("source") != source or not entry.get("translation"):
         raise KeyError(f"missing translation: {source[:100]!r}")
+    if preserve_payload_fields:
+        return entry['translation']
     from pricing_prose import clean_text
     return clean_text(entry["translation"], 'zh')
 
 
 def localize_tree(node: Any, catalog: dict[str, Any], path: tuple[str, ...] = (), *, allow_untranslated: bool = False) -> Any:
     if isinstance(node, dict):
-        from pricing_prose import strip_price_summary, add_price_summary
+        from pricing_prose import strip_price_summary, add_price_summary, documented_payload_fields
         is_operation = isinstance(node.get('operationId'), str) and 'x-aisa-pricing' in node
         result = {}
         for key, value in node.items():
@@ -360,7 +362,8 @@ def localize_tree(node: Any, catalog: dict[str, Any], path: tuple[str, ...] = ()
                     if is_operation and key == 'description':
                         value = strip_price_summary(value)
                     try:
-                        result[key] = translation(catalog, value) if value else ''
+                        result[key] = translation(catalog, value, preserve_payload_fields=(
+                            key == 'description' and documented_payload_fields(node))) if value else ''
                     except KeyError:
                         if not allow_untranslated:
                             raise

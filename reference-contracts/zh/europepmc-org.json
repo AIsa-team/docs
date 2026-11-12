@@ -5,7 +5,16 @@
         "scheme": "bearer",
         "type": "http"
       }
-    }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
   },
   "info": {
     "description": "",
@@ -30,9 +39,9 @@
       "generator_version": "3",
       "protocol_version": "1",
       "schema_version": "1",
-      "composer_version": "28",
+      "composer_version": "29",
       "response_pending": [],
-      "document_hash": "sha256:ba1de59e2af27e52c4c3131d4124035960ce267a3f4e053ddafbf90cdc200f87"
+      "document_hash": "sha256:6b2d71da52398ab1058b7633e3e31d2ccb495f6d1c78e81fcbdb9c9ea6593c32"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -84,5 +93,1367 @@
       "url": "https://api.aisa.one"
     }
   ],
-  "paths": {}
+  "paths": {
+    "/apis/v1/europepmc-org/publications/annotations": {
+      "post": {
+        "description": "After `search` or `get`, to list the genes, diseases, chemicals, organisms or accessions an article discusses with machine-readable IDs, e.g. to pass UniProt accessions to a protein database or PDB IDs to a structure database. Filter with `types` and `sections` (e.g. only `methods`).\n\n<!-- aisa-pricing:start -->\n按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit $0.0001 USD。 最终费用以账户适用价格及实际结算为准。\n<!-- aisa-pricing:end -->",
+        "operationId": "europepmc-org.publications.annotations",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "PMID (`9500320`), PMCID (`PMC3257301`), Europe PMC preprint ID (`PPR1105504`), DOI (`10.1371/journal.ppat.1002485`, also `doi:...`) or a SOURCE:ID from `search`. Give `id` or `url`.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "limit": {
+                    "type": "number",
+                    "description": "Most entities, and most relationships, returned.\n\nProvider reference: minimum 1; maximum 200; default 25.",
+                    "default": 25,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 200
+                    }
+                  },
+                  "sections": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Only annotations located in these sections; annotations without a location are then left out.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Annotation types to return; all when omitted. `gene_disease`, `gene_drug`, `disease_drug` and `gene_function` are relationships.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "An article URL instead of `id`: europepmc.org (`/article/MED/9500320`, `/abstract/MED/...`, `/articles/PMC3257301`), pubmed.ncbi.nlm.nih.gov, pmc.ncbi.nlm.nih.gov, doi.org, biorxiv.org or medrxiv.org.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "id": "PMC3257301",
+                    "limit": 5,
+                    "types": [
+                      "genes_proteins",
+                      "diseases",
+                      "chemicals"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Text-mined annotations of one article from the Europe PMC annotations platform (SciLite): the genes and proteins, diseases, chemicals, organisms, GO terms, experimental methods and database accession numbers named in it, each grounded to a database identifier (UniProt, NCBI Taxonomy, ChEBI, GO, UMLS, EFO, PDB, ENA and others), plus gene-disease, gene-drug and disease-drug relationships (Open Targets) and gene-function statements (SIB). Entities are merged per identifier with a mention count, the matched spellings, the sections they occur in and one example in context, sorted by mentions; relationships keep the sentence that states them. Coverage is the abstract for every article and the body for open-access full text. For an article whose licence does not allow commercial reuse, sentences and context from outside the title and abstract are left out (`text_withheld`) while entities and identifiers stay. Europe PMC publishes annotations as public domain.\n\nThe response contains the tool result directly.\n\nThe provider identifies `entities` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `database` | string | Database or ontology of `identifier`: `uniprot`, `ncbi_taxonomy`, `chebi`, `go`, `umls`, `efo`, `obi`, `pdb`, `ena`, `ensembl`, `chembl`, `doi`, ...; null when the URI is not recognised. |\n| `example` | string | One mention with its surrounding words; null when withheld or not provided. |\n| `identifier` | string | Identifier in that database: `P04637`, `9606`, `CHEBI:17822`, `GO:0055090`, `C0037278`, `6VXX`. |\n| `matched_text` | string[] | Up to five distinct spellings found in the text. |\n| `mentions` | number |  |\n| `name` | string | The ontology or database term. |\n| `sections` | string[] | Sections the mentions occur in. |\n| `type` | string |  |\n| `uri` | string | The URI the annotation links to. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-20.",
+                    "value": {
+                      "article": {
+                        "doi": "10.1371/journal.ppat.1002485",
+                        "europepmc_url": "https://europepmc.org/article/MED/22253597",
+                        "full_text": "available",
+                        "id": "MED:22253597",
+                        "license": {
+                          "commercial_reuse": true,
+                          "name": "CC BY"
+                        },
+                        "pmcid": "PMC3257301",
+                        "pmid": "22253597",
+                        "source": "pubmed",
+                        "title": "The bZIP transcription factor Rca1p is a central regulator of a novel CO₂ sensing pathway in yeast."
+                      },
+                      "attribution": {
+                        "terms_url": "https://europepmc.org/AnnotationsSubmission",
+                        "text": "Text-mined annotations from the Europe PMC annotations platform (Europe PMC), published by Europe PMC as public domain. Cite: Europe PMC in 2023, Nucleic Acids Research 52(D1):D1668-D1676 (2024), https://doi.org/10.1093/nar/gkad1085"
+                      },
+                      "entities": [
+                        {
+                          "database": "uniprot",
+                          "example": "YPD of strains RCA1/ rca1 Δ+",
+                          "identifier": "P40341",
+                          "matched_text": [
+                            "RCA1"
+                          ],
+                          "mentions": 53,
+                          "name": "YM9582.14C",
+                          "sections": [
+                            "methods",
+                            "results",
+                            "discussion",
+                            "supplementary"
+                          ],
+                          "type": "genes_proteins",
+                          "uri": "https://www.uniprot.org/uniprotkb/P40341/entry"
+                        },
+                        {
+                          "database": "uniprot",
+                          "example": "and carbonic anhydrase (CA).",
+                          "identifier": "A0A0B7P3V8",
+                          "matched_text": [
+                            "CA"
+                          ],
+                          "mentions": 46,
+                          "name": "YPL060C-A",
+                          "sections": [
+                            "abstract",
+                            "introduction",
+                            "results",
+                            "discussion"
+                          ],
+                          "type": "genes_proteins",
+                          "uri": "https://www.uniprot.org/uniprotkb/A0A0B7P3V8/entry"
+                        },
+                        {
+                          "database": "uniprot",
+                          "example": "diluted as follows: anti-NCE103 at 1∶500, anti-LacZ",
+                          "identifier": "P53615",
+                          "matched_text": [
+                            "NCE103"
+                          ],
+                          "mentions": 20,
+                          "name": "N2695",
+                          "sections": [
+                            "methods",
+                            "results",
+                            "discussion",
+                            "supplementary"
+                          ],
+                          "type": "genes_proteins",
+                          "uri": "https://www.uniprot.org/uniprotkb/P53615/entry"
+                        },
+                        {
+                          "database": "uniprot",
+                          "example": "Δ+ RCA1 − HA 3 (tagged) were",
+                          "identifier": "P69209",
+                          "matched_text": [
+                            "HA"
+                          ],
+                          "mentions": 18,
+                          "name": "Head activator",
+                          "sections": [
+                            "methods",
+                            "results",
+                            "supplementary"
+                          ],
+                          "type": "genes_proteins",
+                          "uri": "https://www.uniprot.org/uniprotkb/P69209/entry"
+                        },
+                        {
+                          "database": "uniprot",
+                          "example": "The bZIP transcription factor factor Rca1p is",
+                          "identifier": "Q707Y7",
+                          "matched_text": [
+                            "transcription factor",
+                            "transcriptional factor"
+                          ],
+                          "mentions": 17,
+                          "name": "MATalpha1 transcription factor",
+                          "sections": [
+                            "title",
+                            "abstract",
+                            "introduction",
+                            "results",
+                            "discussion"
+                          ],
+                          "type": "genes_proteins",
+                          "uri": "https://www.uniprot.org/uniprotkb/Q707Y7/entry"
+                        }
+                      ],
+                      "limit": 5,
+                      "observed_at_ms": 1792530591400,
+                      "providers": [
+                        "Europe PMC"
+                      ],
+                      "relations": [],
+                      "sections": null,
+                      "text_withheld": false,
+                      "total_entities": 75,
+                      "total_relations": 0,
+                      "types": [
+                        "genes_proteins",
+                        "diseases",
+                        "chemicals"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Annotations",
+        "tags": [
+          "Europe PMC"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "8b068721b9ac"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "europepmc-org",
+        "x-aisa-runtime-operation": {
+          "operation_id": "europepmc-org.publications.annotations",
+          "method": "POST",
+          "path": "/apis/v1/europepmc-org/publications/annotations"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:e30ac5c32efd0cbb213c9b64cbb121bd912a172748ed09a6f74b84e8677429d1"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/europepmc-org/europepmc-org-publications-annotations"
+      }
+    },
+    "/apis/v1/europepmc-org/publications/full-text": {
+      "post": {
+        "description": "Read an article's methods, results or data-availability statement when `search` or `get` shows `full_text: available`. For anything else, `get` returns the abstract and links.\n\n<!-- aisa-pricing:start -->\n按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit $0.0001 USD。 最终费用以账户适用价格及实际结算为准。\n<!-- aisa-pricing:end -->",
+        "operationId": "europepmc-org.publications.full-text",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "PMID (`9500320`), PMCID (`PMC3257301`), Europe PMC preprint ID (`PPR1105504`), DOI (`10.1371/journal.ppat.1002485`, also `doi:...`) or a SOURCE:ID from `search`. Give `id` or `url`.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "max_chars": {
+                    "type": "number",
+                    "description": "Most characters of text returned across the abstract, sections, captions and tables, in that order; `truncated` says when the cap was hit.\n\nProvider reference: minimum 1000; maximum 200000; default 40000.",
+                    "default": 40000,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1000,
+                      "max": 200000
+                    }
+                  },
+                  "sections": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Parts to return; omit for the whole article (abstract, every section, figures and tables).",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "An article URL instead of `id`: europepmc.org (`/article/MED/9500320`, `/abstract/MED/...`, `/articles/PMC3257301`), pubmed.ncbi.nlm.nih.gov, pmc.ncbi.nlm.nih.gov, doi.org, biorxiv.org or medrxiv.org.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "id": "PPR1319985",
+                    "max_chars": 3000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Full text of one open-access article or preprint from Europe PMC's JATS XML, as plain-text sections (introduction, methods, results, discussion, conclusions, data availability, acknowledgements, supplementary, other) with their headings, plus the abstract, figure captions and tables as rows of cells. Text is returned only when Europe PMC lists the article as open access under CC0, CC BY, CC BY-SA or CC BY-ND and the article's own licence statement agrees; otherwise `availability` is `license_restricted` (CC BY-NC variants, free-to-read only) or `not_available` (no open full text) with a message and the europepmc.org link, and no text. This covers PMC articles and the preprints whose full text only Europe PMC holds (bioRxiv, medRxiv, Research Square). `sections` picks parts and `max_chars` caps the total; `attribution` is the credit line the licence requires. Unknown identifiers are `not_found`.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `abstract` | string |  |\n| `attribution` | object | Credit Europe PMC (EMBL-EBI) wherever this data is shown. |\n| `availability` | string | `available`: text returned. `license_restricted`: the licence does not allow commercial reuse. `not_available`: Europe PMC holds no open full text. |\n| `characters` | number | Characters of text returned. |\n| `doi` | string |  |\n| `europepmc_url` | string | The record's page on europepmc.org. |\n| `figures` | object[] |  |\n| `id` | string | Europe PMC record ID as SOURCE:ID (`MED:22253597`, `PPR:PPR1105504`, `AGR:IND44331483`); every function accepts it as `id`. |\n| `license` | object | The article's licence, which governs reuse of the text. |\n| `max_chars` | number |  |\n| `message` | string | Why no text was returned; null when it was. |\n| `observed_at_ms` | number | When this result was fetched, in milliseconds since the Unix epoch. |\n| `pmcid` | string | PubMed Central ID. |\n| `pmid` | string | PubMed ID. |\n| `sections` | object[] | Top-level sections in reading order; subsection headings appear on their own lines in `text`. |\n| `source` | string | Record source: `pubmed` (MEDLINE/PubMed), `pmc` (PMC full text without a PubMed record), `preprint`, `patent`, `agricola`, `book` and others. |\n| `tables` | object[] |  |\n| `title` | string | Title as plain text. |\n| `truncated` | boolean |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-20.",
+                    "value": {
+                      "abstract": "Introduction\n\nThe role of population-wide smoking cessation campaigns is uncertain as smoking prevalence reaches historically low levels. We examined whether the Power to Quit campaign in England, which aimed to increase uptake of evidence-based cessation support, particularly digital aids, was associated with changes in quitting behaviour.\n\nMethods\n\nWe analysed nationally-representative cross-sectional surveys of adults in England who smoked in the past year, conducted immediately before (n=803) and after (n=1,713) the campaign (February-April 2026). Logistic regression estimated associations with quit attempts, digital cessation support, local Stop Smoking Services (SSS), and quit success, overall and by social grade. Exploratory analyses examined participants recognising campaign materials (n=799). Smoking Toolkit Study (STS) data (January 2023-June 2026; n=11,442) were used to contextualise findings against longer-term trends.\n\nResults\n\nIn the primary pre/post analysis, there were increases in quit attempts (48.4% to 52.3%, aOR=1.16 [95%CI=0.97-1.38]), attempts involving digital support (16.0% to 18.4%, aOR=1.18 [0.92-1.50], and attempts involving SSS (2.4% to 3.6%, aOR=1.53 [0.89-2.65]), although estimates were uncertain. Associations were larger among participants recognising campaign materials (quit attempts: 64.9%, aOR=1.82 [1.47-2.26]; digital support: 28.7%, aOR=1.88 [1.44-2.45]; SSS: 5.4%, aOR=2.14 [1.19-3.88]). Increases in support uptake were particularly evident among less advantaged adults. There was no clear evidence of a change in quit success. STS data showed increases in support uptake continued from before the campaign.\n\nConclusions\n\nPower to Quit coincided with increased engagement with cessation support, particularly among less advantaged adults and those recognising campaign materials. Increases in support continued pre-campaign trends, indicating that the contribution of the campaign occurred within a broader period of changing cessation behaviour.\n\nImplications\n\nNational mass media campaigns appear to still contribute to increasing engagement with evidence-based cessation support when smoking prevalence is low, particularly among more disadvantaged groups, where smoking remains more common and quit success rates are lower. Although Power to Quit was a population-wide campaign, media planning prioritised areas with higher smoking prevalence and settings where smoking was more common and habitual, alongside sociodemographic targeting where feasible. These findings suggest that population-wide campaigns and targeted delivery strategies can be complementary rather than competing approaches.",
+                      "attribution": {
+                        "terms_url": "https://www.ebi.ac.uk/about/terms-of-use",
+                        "text": "Jackson SE, Brown J. Are population-wide mass media campaigns still relevant in an era of low smoking prevalence? Insights from the Power to Quit campaign in England. medRxiv. https://doi.org/10.64898/2026.09.14.26362985. Licensed under CC BY (https://creativecommons.org/licenses/by/4.0/). Full text via Europe PMC (https://europepmc.org), EMBL-EBI."
+                      },
+                      "availability": "available",
+                      "characters": 3000,
+                      "doi": "10.64898/2026.09.14.26362985",
+                      "europepmc_url": "https://europepmc.org/article/PPR/PPR1319985",
+                      "figures": [],
+                      "id": "PPR:PPR1319985",
+                      "license": {
+                        "commercial_reuse": true,
+                        "name": "CC BY",
+                        "statement": "https://creativecommons.org/licenses/by/4.0/This work is licensed under a CC BY 4.0 International license.",
+                        "url": "https://creativecommons.org/licenses/by/4.0/"
+                      },
+                      "max_chars": 3000,
+                      "message": null,
+                      "observed_at_ms": 1792530593088,
+                      "pmcid": null,
+                      "pmid": null,
+                      "sections": [
+                        {
+                          "kind": "introduction",
+                          "text": "Mass media tobacco control campaigns are an effective population-level intervention for increasing smoking cessation activity.1 However, in a context where smoking prevalence in England has reached historically low levels,2,3 it is increasingly important to consider the role of broad population campaigns within tobacco control strategies. K",
+                          "title": "Introduction"
+                        }
+                      ],
+                      "source": "preprint",
+                      "tables": [],
+                      "title": "Are population-wide mass media campaigns still relevant in an era of low smoking prevalence? Insights from the Power to Quit campaign in England",
+                      "truncated": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Full text",
+        "tags": [
+          "Europe PMC"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "76f340c03e83"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "europepmc-org",
+        "x-aisa-runtime-operation": {
+          "operation_id": "europepmc-org.publications.full-text",
+          "method": "POST",
+          "path": "/apis/v1/europepmc-org/publications/full-text"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:d09b0d3a000a6c1a2252de736db0323faf5964711a10afdad8074135843761f3"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/europepmc-org/europepmc-org-publications-full-text"
+      }
+    },
+    "/apis/v1/europepmc-org/publications/get": {
+      "post": {
+        "description": "Read one paper's abstract and metadata, check whether it was retracted or has a published version, or find which grants funded it. Use the `id` from `search` or any PMID, PMCID, PPR ID or DOI the user gives.\n\n<!-- aisa-pricing:start -->\n按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit $0.0001 USD。 最终费用以账户适用价格及实际结算为准。\n<!-- aisa-pricing:end -->",
+        "operationId": "europepmc-org.publications.get",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "PMID (`9500320`), PMCID (`PMC3257301`), Europe PMC preprint ID (`PPR1105504`), DOI (`10.1371/journal.ppat.1002485`, also `doi:...`) or a SOURCE:ID from `search`. Give `id` or `url`.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "An article URL instead of `id`: europepmc.org (`/article/MED/9500320`, `/abstract/MED/...`, `/articles/PMC3257301`), pubmed.ncbi.nlm.nih.gov, pmc.ncbi.nlm.nih.gov, doi.org, biorxiv.org or medrxiv.org.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "id": "PMC3257301"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One Europe PMC record by PMID, PMCID, Europe PMC preprint ID, DOI or article URL (europepmc.org, PubMed, PMC, doi.org, bioRxiv, medRxiv): title, authors with ORCID iDs and affiliations, journal or preprint server with volume, issue and pages, publication date and types, the abstract, keywords, MeSH terms, chemicals, funding grants, the licence and whether `full_text` can return the text, full-text links (Europe PMC, publisher, DOI), citation count, retraction status, and linked records: a preprint's published version, an article's preprint, retraction notices, errata and comments. A DOI resolves to the Europe PMC record that carries it. Unknown identifiers are `not_found`.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `abstract` | string | Abstract as plain text, structured headings on their own lines. Abstracts are returned for every article, as PubMed shows them. |\n| `attribution` | object | Credit Europe PMC (EMBL-EBI) wherever this data is shown. |\n| `author_count` | number |  |\n| `authors` | object[] | Authors in order, at most 200; see `author_count`. |\n| `chemicals` | object[] |  |\n| `cited_by_count` | number |  |\n| `database_links` | string[] | Databases that cross-reference this article (`PDB`, `UNIPROT`, `INTACT`, ...). |\n| `doi` | string |  |\n| `europepmc_url` | string | The record's page on europepmc.org. |\n| `full_text` | string | `available`: open access in Europe PMC under a licence that allows commercial reuse (CC0, CC BY, CC BY-SA, CC BY-ND), so `full_text` returns it. `license_restricted`: readable on europepmc.org but not reusable (CC BY-NC variants, or free to read with no open licence). `not_available`: abstract and metadata only; `get` lists publisher links. |\n| `full_text_links` | object[] |  |\n| `grants` | object[] | Funding Europe PMC links to the article. |\n| `has_references` | boolean | Europe PMC holds the reference list. |\n| `id` | string | Europe PMC record ID as SOURCE:ID (`MED:22253597`, `PPR:PPR1105504`, `AGR:IND44331483`); every function accepts it as `id`. |\n| `journal` | object | Journal details; null for preprints, books and patents. |\n| `keywords` | string[] |  |\n| `language` | string | ISO 639-2 code, e.g. `eng`. |\n| `license` | object | The article's own licence, which governs reuse of its text. |\n| `mesh_terms` | object[] |  |\n| `observed_at_ms` | number | When this result was fetched, in milliseconds since the Unix epoch. |\n| `open_access` | boolean |  |\n| `pmcid` | string | PubMed Central ID. |\n| `pmid` | string | PubMed ID. |\n| `publication_date` | string | First publication date, YYYY-MM-DD. |\n| `publication_types` | string[] |  |\n| `publisher` | string | Preprint server or book publisher (`bioRxiv`, `medRxiv`, `Research Square`). |\n| `related` | object[] | Linked records: preprint and published versions, retractions, errata, comments. |\n| `retracted` | boolean | Flagged as a retracted publication or linked to a retraction notice. |\n| `source` | string | Record source: `pubmed` (MEDLINE/PubMed), `pmc` (PMC full text without a PubMed record), `preprint`, `patent`, `agricola`, `book` and others. |\n| `text_mined_accession_types` | string[] | Kinds of accession numbers text-mined from the article (`pdb`, `gen` for ENA/GenBank, `doi`, ...); `annotations` lists them. |\n| `title` | string | Title as plain text. |\n| `version` | number | Preprint version number. |\n| `year` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-20.",
+                    "value": {
+                      "abstract": "Like many organisms the fungal pathogen Candida albicans senses changes in the environmental CO(2) concentration. This response involves two major proteins: adenylyl cyclase and carbonic anhydrase (CA). Here, we demonstrate that CA expression is tightly controlled by the availability of CO(2) and identify the bZIP transcription factor Rca1p as the first CO(2) regulator of CA expression in yeast. We show that Rca1p upregulates CA expression during contact with mammalian phagocytes and demonstrate that serine 124 is critical for Rca1p signaling, which occurs independently of adenylyl cyclase. ChIP-chip analysis and the identification of Rca1p orthologs in the model yeast Saccharomyces cerevisiae (Cst6p) point to the broad significance of this novel pathway in fungi. By using advanced microscopy we visualize for the first time the impact of CO(2) build-up on gene expression in entire fungal populations with an exceptional level of detail. Our results present the bZIP protein Rca1p as the first fungal regulator of carbonic anhydrase, and reveal the existence of an adenylyl cyclase independent CO(2) sensing pathway in yeast. Rca1p appears to regulate cellular metabolism in response to CO(2) availability in environments as diverse as the phagosome, yeast communities or liquid culture.",
+                      "attribution": {
+                        "terms_url": "https://www.ebi.ac.uk/about/terms-of-use",
+                        "text": "Europe PMC (https://europepmc.org), EMBL-EBI. Cite: Europe PMC in 2023, Nucleic Acids Research 52(D1):D1668-D1676 (2024), https://doi.org/10.1093/nar/gkad1085"
+                      },
+                      "author_count": 12,
+                      "authors": [
+                        {
+                          "affiliations": [
+                            "School of Biosciences, University of Kent, Canterbury, United Kingdom."
+                          ],
+                          "name": "Cottier F",
+                          "orcid": null
+                        },
+                        {
+                          "affiliations": [],
+                          "name": "Raymond M",
+                          "orcid": null
+                        },
+                        {
+                          "affiliations": [],
+                          "name": "Kurzai O",
+                          "orcid": "0000-0002-7277-2646"
+                        },
+                        {
+                          "affiliations": [],
+                          "name": "Bolstad M",
+                          "orcid": null
+                        },
+                        {
+                          "affiliations": [],
+                          "name": "Leewattanapasuk W",
+                          "orcid": null
+                        },
+                        {
+                          "affiliations": [],
+                          "name": "Jiménez-López C",
+                          "orcid": null
+                        },
+                        {
+                          "affiliations": [],
+                          "name": "Lorenz MC",
+                          "orcid": "0000-0002-7881-8027"
+                        },
+                        {
+                          "affiliations": [],
+                          "name": "Sanglard D",
+                          "orcid": "0000-0002-5244-4178"
+                        },
+                        {
+                          "affiliations": [],
+                          "name": "Váchová L",
+                          "orcid": "0000-0002-8143-6054"
+                        },
+                        {
+                          "affiliations": [],
+                          "name": "Pavelka N",
+                          "orcid": "0000-0003-4542-9970"
+                        },
+                        {
+                          "affiliations": [],
+                          "name": "Palková Z",
+                          "orcid": "0000-0002-0864-8042"
+                        },
+                        {
+                          "affiliations": [],
+                          "name": "Mühlschlegel FA",
+                          "orcid": null
+                        }
+                      ],
+                      "chemicals": [
+                        {
+                          "name": "YTA12 protein, S cerevisiae",
+                          "registry_number": "EC 3.6.1.-"
+                        },
+                        {
+                          "name": "Saccharomyces cerevisiae Proteins",
+                          "registry_number": null
+                        },
+                        {
+                          "name": "Mitochondrial Proteins",
+                          "registry_number": null
+                        },
+                        {
+                          "name": "Basic-Leucine Zipper Transcription Factors",
+                          "registry_number": null
+                        },
+                        {
+                          "name": "Metalloendopeptidases",
+                          "registry_number": "EC 3.4.24.-"
+                        },
+                        {
+                          "name": "Adenosine Triphosphatases",
+                          "registry_number": "EC 3.6.1.-"
+                        },
+                        {
+                          "name": "Carbon Dioxide",
+                          "registry_number": "142M471B3J"
+                        }
+                      ],
+                      "cited_by_count": 47,
+                      "database_links": [],
+                      "doi": "10.1371/journal.ppat.1002485",
+                      "europepmc_url": "https://europepmc.org/article/MED/22253597",
+                      "full_text": "available",
+                      "full_text_links": [
+                        {
+                          "availability": "Subscription required",
+                          "format": "doi",
+                          "site": "DOI",
+                          "url": "https://doi.org/10.1371/journal.ppat.1002485"
+                        },
+                        {
+                          "availability": "Open access",
+                          "format": "html",
+                          "site": "Europe_PMC",
+                          "url": "https://europepmc.org/articles/PMC3257301"
+                        },
+                        {
+                          "availability": "Open access",
+                          "format": "pdf",
+                          "site": "Europe_PMC",
+                          "url": "https://europepmc.org/articles/PMC3257301?pdf=render"
+                        }
+                      ],
+                      "grants": [
+                        {
+                          "agency": "NIAID NIH HHS",
+                          "grant_id": "R21 AI071134"
+                        },
+                        {
+                          "agency": "CIHR",
+                          "grant_id": "MOP-84341"
+                        },
+                        {
+                          "agency": "NIAID NIH HHS",
+                          "grant_id": "R01 AI075091"
+                        },
+                        {
+                          "agency": "Medical Research Council",
+                          "grant_id": "G0601049"
+                        },
+                        {
+                          "agency": "Howard Hughes Medical Institute",
+                          "grant_id": null
+                        },
+                        {
+                          "agency": "NIAID NIH HHS",
+                          "grant_id": "R21AI071134"
+                        },
+                        {
+                          "agency": "Biotechnology and Biological Sciences Research Council",
+                          "grant_id": null
+                        }
+                      ],
+                      "has_references": true,
+                      "id": "MED:22253597",
+                      "journal": {
+                        "abbreviation": "PLoS Pathog",
+                        "essn": "1553-7374",
+                        "issn": "1553-7366",
+                        "issue": "1",
+                        "pages": "e1002485",
+                        "title": "PLoS pathogens",
+                        "volume": "8"
+                      },
+                      "keywords": [],
+                      "language": "eng",
+                      "license": {
+                        "commercial_reuse": true,
+                        "name": "CC BY"
+                      },
+                      "mesh_terms": [
+                        {
+                          "descriptor": "Phagosomes",
+                          "major_topic": false,
+                          "qualifiers": [
+                            "genetics",
+                            "metabolism"
+                          ]
+                        },
+                        {
+                          "descriptor": "Organisms, Genetically Modified",
+                          "major_topic": false,
+                          "qualifiers": []
+                        },
+                        {
+                          "descriptor": "Saccharomyces cerevisiae",
+                          "major_topic": true,
+                          "qualifiers": [
+                            "genetics",
+                            "metabolism",
+                            "physiology"
+                          ]
+                        },
+                        {
+                          "descriptor": "Yeasts",
+                          "major_topic": false,
+                          "qualifiers": [
+                            "genetics",
+                            "metabolism",
+                            "physiology"
+                          ]
+                        },
+                        {
+                          "descriptor": "Carbon Dioxide",
+                          "major_topic": false,
+                          "qualifiers": [
+                            "metabolism"
+                          ]
+                        },
+                        {
+                          "descriptor": "Metalloendopeptidases",
+                          "major_topic": false,
+                          "qualifiers": [
+                            "genetics",
+                            "metabolism",
+                            "physiology"
+                          ]
+                        },
+                        {
+                          "descriptor": "Saccharomyces cerevisiae Proteins",
+                          "major_topic": false,
+                          "qualifiers": [
+                            "genetics",
+                            "metabolism",
+                            "physiology"
+                          ]
+                        },
+                        {
+                          "descriptor": "Mitochondrial Proteins",
+                          "major_topic": false,
+                          "qualifiers": [
+                            "genetics",
+                            "metabolism",
+                            "physiology"
+                          ]
+                        },
+                        {
+                          "descriptor": "Oligonucleotide Array Sequence Analysis",
+                          "major_topic": false,
+                          "qualifiers": []
+                        },
+                        {
+                          "descriptor": "Microbiological Techniques",
+                          "major_topic": false,
+                          "qualifiers": []
+                        },
+                        {
+                          "descriptor": "Chromatin Immunoprecipitation",
+                          "major_topic": false,
+                          "qualifiers": []
+                        },
+                        {
+                          "descriptor": "Gene Expression Profiling",
+                          "major_topic": false,
+                          "qualifiers": []
+                        },
+                        {
+                          "descriptor": "Environment",
+                          "major_topic": false,
+                          "qualifiers": []
+                        },
+                        {
+                          "descriptor": "Signal Transduction",
+                          "major_topic": false,
+                          "qualifiers": [
+                            "genetics",
+                            "physiology"
+                          ]
+                        },
+                        {
+                          "descriptor": "Gene Expression Regulation, Fungal",
+                          "major_topic": false,
+                          "qualifiers": []
+                        },
+                        {
+                          "descriptor": "Models, Biological",
+                          "major_topic": false,
+                          "qualifiers": []
+                        },
+                        {
+                          "descriptor": "Basic-Leucine Zipper Transcription Factors",
+                          "major_topic": false,
+                          "qualifiers": [
+                            "genetics",
+                            "metabolism",
+                            "physiology"
+                          ]
+                        },
+                        {
+                          "descriptor": "Adenosine Triphosphatases",
+                          "major_topic": false,
+                          "qualifiers": [
+                            "genetics",
+                            "metabolism",
+                            "physiology"
+                          ]
+                        },
+                        {
+                          "descriptor": "Quorum Sensing",
+                          "major_topic": false,
+                          "qualifiers": [
+                            "genetics"
+                          ]
+                        },
+                        {
+                          "descriptor": "Biota",
+                          "major_topic": false,
+                          "qualifiers": []
+                        }
+                      ],
+                      "observed_at_ms": 1792530588071,
+                      "open_access": true,
+                      "pmcid": "PMC3257301",
+                      "pmid": "22253597",
+                      "publication_date": "2012-01-12",
+                      "publication_types": [
+                        "Research Support, Non-U.S. Gov't",
+                        "research-article",
+                        "Journal Article",
+                        "Research Support, N.I.H., Extramural"
+                      ],
+                      "publisher": null,
+                      "related": [],
+                      "retracted": false,
+                      "source": "pubmed",
+                      "text_mined_accession_types": [],
+                      "title": "The bZIP transcription factor Rca1p is a central regulator of a novel CO₂ sensing pathway in yeast.",
+                      "version": null,
+                      "year": 2012
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Get",
+        "tags": [
+          "Europe PMC"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "93c55cb92be4"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "europepmc-org",
+        "x-aisa-runtime-operation": {
+          "operation_id": "europepmc-org.publications.get",
+          "method": "POST",
+          "path": "/apis/v1/europepmc-org/publications/get"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:2cf370aa730888dacdf2b6fefdd6785347c2f58f8c3d256dd9ed74bc16422e8b"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/europepmc-org/europepmc-org-publications-get"
+      }
+    },
+    "/apis/v1/europepmc-org/publications/search": {
+      "post": {
+        "description": "Start here to find papers or preprints on a topic, method, gene, dataset or grant, then call `get` for the abstract and full record, `annotations` for the genes, diseases, chemicals and accessions text-mined from an article, or `full_text` when a result's `full_text` is `available`. Use `source: [\"preprint\"]` for preprints and `accession` for papers that use a given structure or dataset.\n\n<!-- aisa-pricing:start -->\n按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit $0.0001 USD。 最终费用以账户适用价格及实际结算为准。\n<!-- aisa-pricing:end -->",
+        "operationId": "europepmc-org.publications.search",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "accession": {
+                    "type": "string",
+                    "description": "Only articles that mention this database accession, as Europe PMC text-mines them: a PDB ID (`6VXX`), UniProt accession (`P04637`), GEO series (`GSE2034`), ENA/GenBank accession, clinical-trial ID (`NCT04368728`), DOI of a dataset and others.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "cursor": {
+                    "type": "string",
+                    "description": "`next_cursor` from the previous page. Repeat the same query, filters, sort and limit with it.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "from_date": {
+                    "type": "string",
+                    "description": "Earliest first-publication date: YYYY, YYYY-MM or YYYY-MM-DD. Pattern: ^[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "full_text_only": {
+                    "type": "boolean",
+                    "description": "true: only articles whose full text `full_text` returns (open access in Europe PMC under a commercial-reuse licence).",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "license": {
+                    "type": "string",
+                    "description": "Only articles under this licence. `commercial_reuse` is any of CC0, CC BY, CC BY-SA and CC BY-ND.\n\nProvider reference: allowed values [\"commercial_reuse\", \"cc0\", \"cc_by\", \"cc_by_sa\", \"cc_by_nd\", \"cc_by_nc\", \"cc_by_nc_sa\", \"cc_by_nc_nd\"].",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "commercial_reuse",
+                        "cc0",
+                        "cc_by",
+                        "cc_by_sa",
+                        "cc_by_nd",
+                        "cc_by_nc",
+                        "cc_by_nc_sa",
+                        "cc_by_nc_nd"
+                      ]
+                    }
+                  },
+                  "limit": {
+                    "type": "number",
+                    "description": "Results per page.\n\nProvider reference: minimum 1; maximum 100; default 10.",
+                    "default": 10,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 100
+                    }
+                  },
+                  "open_access": {
+                    "type": "boolean",
+                    "description": "true: only open-access records; false: only records that are not.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "Free text or Europe PMC query syntax, e.g. `furin cleavage site`, `\"base editing\" AND TITLE:mouse`, `AUTH:\"Doudna JA\"`, `GRANT_AGENCY:\"Wellcome Trust\"`, `MESH:\"Alzheimer Disease\"`. Use `*` to match everything and narrow with filters."
+                  },
+                  "section": {
+                    "type": "string",
+                    "description": "Confine `query` to one part of the article: `title`, `title_abstract`, `body` (full text), or a full-text section. Section searches match only articles whose full text Europe PMC holds.\n\nProvider reference: allowed values [\"title\", \"title_abstract\", \"body\", \"introduction\", \"methods\", \"results\", \"discussion\", \"conclusions\", \"figures\", \"tables\", \"supplementary\", \"data_availability\", \"acknowledgements\"].",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "title",
+                        "title_abstract",
+                        "body",
+                        "introduction",
+                        "methods",
+                        "results",
+                        "discussion",
+                        "conclusions",
+                        "figures",
+                        "tables",
+                        "supplementary",
+                        "data_availability",
+                        "acknowledgements"
+                      ]
+                    }
+                  },
+                  "sort": {
+                    "type": "string",
+                    "description": "`relevance` (Europe PMC's ranking), `newest` (first publication date) or `most_cited`.\n\nProvider reference: allowed values [\"relevance\", \"newest\", \"most_cited\"]; default \"relevance\".",
+                    "default": "relevance",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "relevance",
+                        "newest",
+                        "most_cited"
+                      ]
+                    }
+                  },
+                  "source": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Only these record sources, e.g. `[\"preprint\"]`.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "to_date": {
+                    "type": "string",
+                    "description": "Latest first-publication date: YYYY, YYYY-MM or YYYY-MM-DD, inclusive. Pattern: ^[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "limit": 3,
+                    "query": "AlphaFold protein structure prediction",
+                    "sort": "most_cited"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search Europe PMC, EMBL-EBI's life-science literature database: PubMed/MEDLINE abstracts, PMC and Europe PMC open-access full text, preprints (bioRxiv, medRxiv, Research Square, SSRN and others), Agricola, patents, theses and NHS evidence. `query` takes free text or Europe PMC syntax (`TITLE:`, `AUTH:`, `ABSTRACT:`, `METHODS:`, `MESH:`, `GRANT_AGENCY:`, `JOURNAL:`, quoted phrases, AND/OR/NOT). Unlike PubMed, a query also matches the full text of open-access articles and preprints, and `section` confines it to one part such as methods, figures, tables or data availability. Filters: `accession` (articles citing a database accession such as a PDB, UniProt, GEO or clinical-trial ID), `source` (only preprints, say), `open_access`, `license`, `full_text_only` (articles `full_text` can return) and a first-publication date range. Each result has the Europe PMC ID, PMID, PMCID, DOI, title, authors, journal or preprint server, year, publication types, licence with a commercial-reuse flag, full-text availability, citation count and retraction flag. `total_count` is the full hit count and `next_cursor` pages onward. Europe PMC answers a malformed query with zero hits, not an error; `europepmc_query` shows exactly what was sent.\n\nThe response contains the tool result directly.\n\nThe provider identifies `results` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `authors` | string | Author list as Europe PMC abbreviates it (`Cottier F, Raymond M, ...`). |\n| `cited_by_count` | number | Citations Europe PMC counts. |\n| `doi` | string |  |\n| `europepmc_url` | string | The record's page on europepmc.org. |\n| `full_text` | string | `available`: open access in Europe PMC under a licence that allows commercial reuse (CC0, CC BY, CC BY-SA, CC BY-ND), so `full_text` returns it. `license_restricted`: readable on europepmc.org but not reusable (CC BY-NC variants, or free to read with no open licence). `not_available`: abstract and metadata only; `get` lists publisher links. |\n| `id` | string | Europe PMC record ID as SOURCE:ID (`MED:22253597`, `PPR:PPR1105504`, `AGR:IND44331483`); every function accepts it as `id`. |\n| `journal` | string | Journal title, or the preprint server or publisher for preprints and books. |\n| `license` | object | The article's own licence, which governs reuse of its text. |\n| `open_access` | boolean | Europe PMC's open-access flag. |\n| `pmcid` | string | PubMed Central ID. |\n| `pmid` | string | PubMed ID. |\n| `publication_date` | string | First publication date, YYYY-MM-DD. |\n| `publication_types` | string[] | Publication types (`Journal Article`, `Review`, `Preprint`, `Retracted Publication`, ...). |\n| `retracted` | boolean | Flagged as a retracted publication or linked to a retraction notice. |\n| `source` | string | Record source: `pubmed` (MEDLINE/PubMed), `pmc` (PMC full text without a PubMed record), `preprint`, `patent`, `agricola`, `book` and others. |\n| `title` | string | Title as plain text. |\n| `year` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-20.",
+                    "value": {
+                      "attribution": {
+                        "terms_url": "https://www.ebi.ac.uk/about/terms-of-use",
+                        "text": "Europe PMC (https://europepmc.org), EMBL-EBI. Cite: Europe PMC in 2023, Nucleic Acids Research 52(D1):D1668-D1676 (2024), https://doi.org/10.1093/nar/gkad1085"
+                      },
+                      "europepmc_query": "AlphaFold protein structure prediction",
+                      "limit": 3,
+                      "next_cursor": "AoJdpQQoNDYxMTAwNTE=.3.e02ead8d1cb13b51",
+                      "observed_at_ms": 1792530586466,
+                      "offset": 0,
+                      "query": "AlphaFold protein structure prediction",
+                      "results": [
+                        {
+                          "authors": "Jumper J, Evans R, Pritzel A, Green T, Figurnov M, Ronneberger O, Tunyasuvunakool K, Bates R, Žídek A, Potapenko A, Bridgland A, Meyer C, Kohl SAA, Ballard AJ, Cowie A, Romera-Paredes B, Nikolov S, Jain R, Adler J, Back T, Petersen S, Reiman D, Clancy E, Zielinski M, Steinegger M, Pacholska M, Berghammer T, Bodenstein S, Silver D, Vinyals O, Senior AW, Kavukcuoglu K, Kohli P, Hassabis D.",
+                          "cited_by_count": 37040,
+                          "doi": "10.1038/s41586-021-03819-2",
+                          "europepmc_url": "https://europepmc.org/article/MED/34265844",
+                          "full_text": "available",
+                          "id": "MED:34265844",
+                          "journal": "Nature",
+                          "license": {
+                            "commercial_reuse": true,
+                            "name": "CC BY"
+                          },
+                          "open_access": true,
+                          "pmcid": "PMC8371605",
+                          "pmid": "34265844",
+                          "publication_date": "2021-07-15",
+                          "publication_types": [
+                            "Research Support, Non-U.S. Gov't",
+                            "research-article",
+                            "Journal Article"
+                          ],
+                          "retracted": false,
+                          "source": "pubmed",
+                          "title": "Highly accurate protein structure prediction with AlphaFold.",
+                          "year": 2021
+                        },
+                        {
+                          "authors": "Abramson J, Adler J, Dunger J, Evans R, Green T, Pritzel A, Ronneberger O, Willmore L, Ballard AJ, Bambrick J, Bodenstein SW, Evans DA, Hung CC, O'Neill M, Reiman D, Tunyasuvunakool K, Wu Z, Žemgulytė A, Arvaniti E, Beattie C, Bertolli O, Bridgland A, Cherepanov A, Congreve M, Cowen-Rivers AI, Cowie A, Figurnov M, Fuchs FB, Gladman H, Jain R, Khan YA, Low CMR, Perlin K, Potapenko A, Savy P, Singh S, Stecula A, Thillaisundaram A, Tong C, Yakneen S, Zhong ED, Zielinski M, Žídek A, Bapst V, Kohli P, Jaderberg M, Hassabis D, Jumper JM.",
+                          "cited_by_count": 12534,
+                          "doi": "10.1038/s41586-024-07487-w",
+                          "europepmc_url": "https://europepmc.org/article/MED/38718835",
+                          "full_text": "available",
+                          "id": "MED:38718835",
+                          "journal": "Nature",
+                          "license": {
+                            "commercial_reuse": true,
+                            "name": "CC BY"
+                          },
+                          "open_access": true,
+                          "pmcid": "PMC11168924",
+                          "pmid": "38718835",
+                          "publication_date": "2024-05-08",
+                          "publication_types": [
+                            "research-article",
+                            "Journal Article"
+                          ],
+                          "retracted": false,
+                          "source": "pubmed",
+                          "title": "Accurate structure prediction of biomolecular interactions with AlphaFold 3.",
+                          "year": 2024
+                        },
+                        {
+                          "authors": "Mirdita M, Schütze K, Moriwaki Y, Heo L, Ovchinnikov S, Steinegger M.",
+                          "cited_by_count": 8797,
+                          "doi": "10.1038/s41592-022-01488-1",
+                          "europepmc_url": "https://europepmc.org/article/MED/35637307",
+                          "full_text": "available",
+                          "id": "MED:35637307",
+                          "journal": "Nature methods",
+                          "license": {
+                            "commercial_reuse": true,
+                            "name": "CC BY"
+                          },
+                          "open_access": true,
+                          "pmcid": "PMC9184281",
+                          "pmid": "35637307",
+                          "publication_date": "2022-05-30",
+                          "publication_types": [
+                            "Research Support, Non-U.S. Gov't",
+                            "research-article",
+                            "Research Support, U.S. Gov't, Non-P.H.S.",
+                            "Journal Article",
+                            "Research Support, N.I.H., Extramural"
+                          ],
+                          "retracted": false,
+                          "source": "pubmed",
+                          "title": "ColabFold: making protein folding accessible to all.",
+                          "year": 2022
+                        }
+                      ],
+                      "sort": "most_cited",
+                      "total_count": 21189
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "搜索",
+        "tags": [
+          "Europe PMC"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "a841161eb928"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "europepmc-org",
+        "x-aisa-runtime-operation": {
+          "operation_id": "europepmc-org.publications.search",
+          "method": "POST",
+          "path": "/apis/v1/europepmc-org/publications/search"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:010541911968a44d34f972c52d7c4aded8516043fa81128361a15e16c1bfea1d"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/europepmc-org/europepmc-org-publications-search"
+      }
+    }
+  }
 }

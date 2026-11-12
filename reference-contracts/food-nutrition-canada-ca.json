@@ -5,7 +5,16 @@
         "scheme": "bearer",
         "type": "http"
       }
-    }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
   },
   "info": {
     "description": "",
@@ -31,9 +40,9 @@
       "generator_version": "3",
       "protocol_version": "1",
       "schema_version": "1",
-      "composer_version": "28",
+      "composer_version": "29",
       "response_pending": [],
-      "document_hash": "sha256:bfbdefc42d8e402281cb6367f2a8dc17324cfb813a0fc5b9efcbd65ae6aded78"
+      "document_hash": "sha256:5be772d4ab5e19ef4306417a961a9f1feced60aa26ada439b304700ec521ba76"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -85,5 +94,1532 @@
       "url": "https://api.aisa.one"
     }
   ],
-  "paths": {}
+  "paths": {
+    "/apis/v1/food-nutrition-canada-ca/foods/get-food": {
+      "post": {
+        "description": "After `search_foods` or `search_foods_by_nutrient` returned a food code, or when the user pastes a food-nutrition.canada.ca serving-portion or nutrientReport URL.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "food-nutrition-canada-ca.foods.get-food",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "food_code": {
+                    "type": "number",
+                    "description": "CNF food code (e.g. 61 Milk, fluid, partly skimmed, 2% M.F.; 119 Cheese, cheddar). Give this or `url`.\n\nProvider reference: minimum 1; maximum 99999999.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 99999999
+                    }
+                  },
+                  "lang": {
+                    "type": "string",
+                    "description": "Language of the description, nutrient names, measure, refuse, yield and source texts.\n\nProvider reference: allowed values [\"en\", \"fr\"]; default \"en\".",
+                    "default": "en",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "en",
+                        "fr"
+                      ]
+                    }
+                  },
+                  "measure": {
+                    "type": "string",
+                    "description": "One of the food's measure names as the CNF writes them (e.g. '250ml', '100ml diced', '1 slice'); spaces, commas and case are ignored. Adds `value_per_measure` to every nutrient row and sets `selected_measure`.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "nutrient_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "description": "Return only these CNF nutrient ids (`nutrient_name_id` from `list_nutrients`). An id that is not in the CNF nutrient dictionary is invalid input; a known nutrient the CNF does not report for this food is simply absent.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "A CNF page URL carrying the food code: https://food-nutrition.canada.ca/cnf-fce/serving-portion?id={food_code} or .../nutrientReport-rapportAliment?food-aliment-id={food_code}&id=...",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "food_code": 61,
+                    "measure": "250ml",
+                    "nutrient_ids": [
+                      203,
+                      208,
+                      301,
+                      339,
+                      324
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The complete Canadian Nutrient File record of one food by `food_code` (or a pasted CNF serving-portion / nutrientReport page URL): description, every nutrient the CNF reports for it per 100 g edible portion, joined with the CNF nutrient dictionary (symbol, INFOODS tagname, unit such as g / mg / µg / IU / kcal, decimals, nutrient group) and the data-source code list (provenance; source 1 marks values changed to meet Canadian fortification regulations), plus the food's serving measures with conversion factors and gram weights, refuse (inedible portion) rows and yield rows. Nutrients the CNF does not report for a food are absent, never zero-filled. `nutrient_ids` restricts the nutrient rows (203 Protein, 208 Energy kcal, 301 Calcium, 339 Vitamin D µg, 324 Vitamin D IU, ...; see `list_nutrients`); `measure` names one of the food's measures (e.g. '250ml') and adds `value_per_measure` to every nutrient row. Seven to eight anonymous GET calls to /api/canadian-nutrient-file/ (food, nutrientamount, servingsize, refuseamount, yieldamount, nutrientname, nutrientgroup, nutrientsource). An unknown food code is `not_found` (the API answers an empty list).\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `attribution` | string |  |\n| `data_version` | string |  |\n| `description` | string |  |\n| `food_code` | number |  |\n| `lang` | string |  |\n| `measures` | object[] |  |\n| `nutrient_count` | number | Nutrient rows returned (after the `nutrient_ids` filter). |\n| `nutrients` | object[] |  |\n| `observed_at_ms` | number |  |\n| `refuse` | object[] |  |\n| `selected_measure` | object | The measure `value_per_measure` refers to; null when none was requested. |\n| `source_url` | string | The API call that returned the nutrient amounts. |\n| `url` | string | The food's serving-size page in the CNF web app. |\n| `yields` | object[] |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-14.",
+                    "value": {
+                      "attribution": "Canadian Nutrient File, Health Canada. Open Government Licence - Canada.",
+                      "data_version": "CNF 2015 (online publication; Health Canada states it will not be updated while a CNF 2026 dataset is prepared)",
+                      "description": "Milk, fluid, partly skimmed, 2% M.F.",
+                      "food_code": 61,
+                      "lang": "en",
+                      "measures": [
+                        {
+                          "conversion_factor": 1.03128,
+                          "grams": 103.128,
+                          "measure_name": "100ml"
+                        },
+                        {
+                          "conversion_factor": 2.57819,
+                          "grams": 257.819,
+                          "measure_name": "250ml"
+                        }
+                      ],
+                      "nutrient_count": 5,
+                      "nutrients": [
+                        {
+                          "decimals": 2,
+                          "group_id": 1,
+                          "group_name": "Proximates",
+                          "name": "PROTEIN",
+                          "number_observation": 13,
+                          "nutrient_name_id": 203,
+                          "source_description": "No change from USDA",
+                          "source_id": 0,
+                          "standard_error": 0,
+                          "symbol": "PROT",
+                          "tagname": "PROCNT",
+                          "unit": "g",
+                          "value_per_100g": 3.3,
+                          "value_per_measure": 8.508027,
+                          "web_name": "Protein"
+                        },
+                        {
+                          "decimals": 0,
+                          "group_id": 1,
+                          "group_name": "Proximates",
+                          "name": "ENERGY (KILOCALORIES)",
+                          "number_observation": 0,
+                          "nutrient_name_id": 208,
+                          "source_description": "No change from USDA",
+                          "source_id": 0,
+                          "standard_error": 0,
+                          "symbol": "KCAL",
+                          "tagname": "ENERC_KCAL",
+                          "unit": "kCal",
+                          "value_per_100g": 50,
+                          "value_per_measure": 128.9095,
+                          "web_name": "Energy (kcal)"
+                        },
+                        {
+                          "decimals": 0,
+                          "group_id": 3,
+                          "group_name": "Minerals",
+                          "name": "CALCIUM",
+                          "number_observation": 4,
+                          "nutrient_name_id": 301,
+                          "source_description": "No change from USDA",
+                          "source_id": 0,
+                          "standard_error": 1,
+                          "symbol": "CA",
+                          "tagname": "CA",
+                          "unit": "mg",
+                          "value_per_100g": 120,
+                          "value_per_measure": 309.3828,
+                          "web_name": "Calcium, Ca"
+                        },
+                        {
+                          "decimals": 1,
+                          "group_id": 4,
+                          "group_name": "Vitamins",
+                          "name": "VITAMIN D (D2 + D3)",
+                          "number_observation": 0,
+                          "nutrient_name_id": 339,
+                          "source_description": "Nutrient levels changed to meet the canadian regulations",
+                          "source_id": 1,
+                          "standard_error": 0,
+                          "symbol": "D3+D2-µG",
+                          "tagname": "VITD_ µG",
+                          "unit": "µg",
+                          "value_per_100g": 0.99585,
+                          "value_per_measure": 2.567491,
+                          "web_name": "Vitamin D"
+                        },
+                        {
+                          "decimals": 0,
+                          "group_id": 4,
+                          "group_name": "Vitamins",
+                          "name": "VITAMIN D (INTERNATIONAL UNITS)",
+                          "number_observation": 0,
+                          "nutrient_name_id": 324,
+                          "source_description": "Nutrient levels changed to meet the canadian regulations",
+                          "source_id": 1,
+                          "standard_error": 0,
+                          "symbol": "D-IU",
+                          "tagname": "VITD_IU",
+                          "unit": "IU",
+                          "value_per_100g": 39.834,
+                          "value_per_measure": 102.69962,
+                          "web_name": "Vitamin D (IU)"
+                        }
+                      ],
+                      "observed_at_ms": 1791942586049,
+                      "refuse": [
+                        {
+                          "refuse_amount": 0,
+                          "refuse_name": "total refuse"
+                        }
+                      ],
+                      "selected_measure": {
+                        "conversion_factor": 2.57819,
+                        "grams": 257.819,
+                        "measure_name": "250ml"
+                      },
+                      "source_url": "https://food-nutrition.canada.ca/api/canadian-nutrient-file/nutrientamount/?lang=en&id=61&type=json",
+                      "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=61",
+                      "yields": []
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Get food",
+        "tags": [
+          "Canadian Nutrient File, Health Canada (food-nutrition.canada.ca)"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "d405e5b59748"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "food-nutrition-canada-ca",
+        "x-aisa-runtime-operation": {
+          "operation_id": "food-nutrition-canada-ca.foods.get-food",
+          "method": "POST",
+          "path": "/apis/v1/food-nutrition-canada-ca/foods/get-food"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:9ff6b7bf81b80d323fc8c157f903e2a69123c30343fbfe85724af88ca186e465"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/food-nutrition-canada-ca/food-nutrition-canada-ca-foods-get-food"
+      }
+    },
+    "/apis/v1/food-nutrition-canada-ca/foods/list-food-groups": {
+      "post": {
+        "description": "To pick a `food_group_id` before `search_foods_by_nutrient`, or to list the CNF food groups.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "food-nutrition-canada-ca.foods.list-food-groups",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {}
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The 23 Canadian Nutrient File food groups (Dairy and Egg Products, Baked Products, Beef Products, Beverages, ...) with the `food_group_id` that `search_foods_by_nutrient` takes. The CNF JSON API has no food-group resource (its /foodgroup route answers an empty list), so this reads the food-group select of the CNF web app's 'Search by nutrient' form (GET /cnf-fce/newNutrientSearch, anonymous). English names only (the form is served in English).\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `attribution` | string |  |\n| `count` | number |  |\n| `food_groups` | object[] |  |\n| `observed_at_ms` | number |  |\n| `source_url` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-14.",
+                    "value": {
+                      "attribution": "Canadian Nutrient File, Health Canada. Open Government Licence - Canada.",
+                      "count": 23,
+                      "food_groups": [
+                        {
+                          "food_group_id": 1,
+                          "name": "Dairy and Egg Products"
+                        },
+                        {
+                          "food_group_id": 2,
+                          "name": "Spices and Herbs"
+                        },
+                        {
+                          "food_group_id": 3,
+                          "name": "Babyfoods"
+                        },
+                        {
+                          "food_group_id": 4,
+                          "name": "Fats and Oils"
+                        },
+                        {
+                          "food_group_id": 5,
+                          "name": "Poultry Products"
+                        },
+                        {
+                          "food_group_id": 6,
+                          "name": "Soups, Sauces and Gravies"
+                        },
+                        {
+                          "food_group_id": 7,
+                          "name": "Sausages and Luncheon meats"
+                        },
+                        {
+                          "food_group_id": 8,
+                          "name": "Breakfast cereals"
+                        },
+                        {
+                          "food_group_id": 9,
+                          "name": "Fruits and fruit juices"
+                        },
+                        {
+                          "food_group_id": 10,
+                          "name": "Pork Products"
+                        },
+                        {
+                          "food_group_id": 11,
+                          "name": "Vegetables and Vegetable Products"
+                        },
+                        {
+                          "food_group_id": 12,
+                          "name": "Nuts and Seeds"
+                        },
+                        {
+                          "food_group_id": 13,
+                          "name": "Beef Products"
+                        },
+                        {
+                          "food_group_id": 14,
+                          "name": "Beverages"
+                        },
+                        {
+                          "food_group_id": 15,
+                          "name": "Finfish and Shellfish Products"
+                        },
+                        {
+                          "food_group_id": 16,
+                          "name": "Legumes and Legume Products"
+                        },
+                        {
+                          "food_group_id": 17,
+                          "name": "Lamb, Veal and Game"
+                        },
+                        {
+                          "food_group_id": 18,
+                          "name": "Baked Products"
+                        },
+                        {
+                          "food_group_id": 19,
+                          "name": "Sweets"
+                        },
+                        {
+                          "food_group_id": 20,
+                          "name": "Cereals, Grains and Pasta"
+                        },
+                        {
+                          "food_group_id": 21,
+                          "name": "Fast Foods"
+                        },
+                        {
+                          "food_group_id": 22,
+                          "name": "Mixed Dishes"
+                        },
+                        {
+                          "food_group_id": 25,
+                          "name": "Snacks"
+                        }
+                      ],
+                      "observed_at_ms": 1791942606528,
+                      "source_url": "https://food-nutrition.canada.ca/cnf-fce/newNutrientSearch"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "List food groups",
+        "tags": [
+          "Canadian Nutrient File, Health Canada (food-nutrition.canada.ca)"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "af1af7343b2c"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "food-nutrition-canada-ca",
+        "x-aisa-runtime-operation": {
+          "operation_id": "food-nutrition-canada-ca.foods.list-food-groups",
+          "method": "POST",
+          "path": "/apis/v1/food-nutrition-canada-ca/foods/list-food-groups"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:947e5fca2db707ba6313997d4522c7fe057a6df0c98a94bad3784a88113a722c"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/food-nutrition-canada-ca/food-nutrition-canada-ca-foods-list-food-groups"
+      }
+    },
+    "/apis/v1/food-nutrition-canada-ca/foods/list-nutrients": {
+      "post": {
+        "description": "To pick `nutrient_ids` for `get_food` or the `nutrient_id` for `search_foods_by_nutrient`, or to decode unit, group and source codes.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "food-nutrition-canada-ca.foods.list-nutrients",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "group_id": {
+                    "type": "number",
+                    "description": "Keep only nutrients of this CNF nutrient group (1 Proximates, 2 Other Carbohydrates, 3 Minerals, 4 Vitamins, 5 Amino Acids, 6 Lipids, 7 Other components).\n\nProvider reference: minimum 1.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1
+                    }
+                  },
+                  "lang": {
+                    "type": "string",
+                    "description": "lang\n\nProvider reference: allowed values [\"en\", \"fr\"]; default \"en\".",
+                    "default": "en",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "en",
+                        "fr"
+                      ]
+                    }
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "Substring to find in the nutrient name, display name, symbol or tagname (e.g. 'vitamin d', 'PROT', 'folate'). Omitted or empty returns all 152 nutrients (~40 KB).",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "query": "vitamin d"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The Canadian Nutrient File reference tables: the nutrient dictionary (152 nutrients: `nutrient_name_id`, symbol, name, display name, INFOODS tagname, unit, decimals, nutrient group, display order), the seven nutrient groups and the data-source code list (provenance texts such as 'Nutrient levels changed to meet the canadian regulations'). `query` filters nutrients by a case- and accent-insensitive substring of the name, display name, symbol or tagname; `group_id` filters by nutrient group. Groups and sources are always returned in full. Three anonymous GET calls to /api/canadian-nutrient-file/ (nutrientname, nutrientgroup, nutrientsource).\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `attribution` | string |  |\n| `count` | number |  |\n| `group_id` | number |  |\n| `groups` | object[] |  |\n| `lang` | string |  |\n| `nutrients` | object[] |  |\n| `observed_at_ms` | number |  |\n| `query` | string |  |\n| `source_url` | string |  |\n| `sources` | object[] |  |\n| `total` | number | Nutrients in the CNF dictionary before filtering. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-14.",
+                    "value": {
+                      "attribution": "Canadian Nutrient File, Health Canada. Open Government Licence - Canada.",
+                      "count": 3,
+                      "group_id": null,
+                      "groups": [
+                        {
+                          "name": "Proximates",
+                          "nutrient_group_id": 1,
+                          "order": 1
+                        },
+                        {
+                          "name": "Other Carbohydrates",
+                          "nutrient_group_id": 2,
+                          "order": 2
+                        },
+                        {
+                          "name": "Minerals",
+                          "nutrient_group_id": 3,
+                          "order": 3
+                        },
+                        {
+                          "name": "Vitamins",
+                          "nutrient_group_id": 4,
+                          "order": 4
+                        },
+                        {
+                          "name": "Amino Acids",
+                          "nutrient_group_id": 5,
+                          "order": 5
+                        },
+                        {
+                          "name": "Lipids",
+                          "nutrient_group_id": 6,
+                          "order": 6
+                        },
+                        {
+                          "name": "Other components",
+                          "nutrient_group_id": 7,
+                          "order": 7
+                        }
+                      ],
+                      "lang": "en",
+                      "nutrients": [
+                        {
+                          "decimals": 1,
+                          "group_id": 4,
+                          "group_name": "Vitamins",
+                          "name": "VITAMIN D (D2 + D3)",
+                          "nutrient_code": 328,
+                          "nutrient_name_id": 339,
+                          "symbol": "D3+D2-µG",
+                          "tagname": "VITD_ µG",
+                          "unit": "µg",
+                          "web_name": "Vitamin D",
+                          "web_order": 85
+                        },
+                        {
+                          "decimals": 1,
+                          "group_id": 4,
+                          "group_name": "Vitamins",
+                          "name": "VITAMIN D2, ERGOCALCIFEROL",
+                          "nutrient_code": 325,
+                          "nutrient_name_id": 876,
+                          "symbol": "D2-µG",
+                          "tagname": "ERGCAL",
+                          "unit": "µg",
+                          "web_name": "Vitamin D2 (ergocalciferol)",
+                          "web_order": 86
+                        },
+                        {
+                          "decimals": 0,
+                          "group_id": 4,
+                          "group_name": "Vitamins",
+                          "name": "VITAMIN D (INTERNATIONAL UNITS)",
+                          "nutrient_code": 324,
+                          "nutrient_name_id": 324,
+                          "symbol": "D-IU",
+                          "tagname": "VITD_IU",
+                          "unit": "IU",
+                          "web_name": "Vitamin D (IU)",
+                          "web_order": 87
+                        }
+                      ],
+                      "observed_at_ms": 1791942601505,
+                      "query": "vitamin d",
+                      "source_url": "https://food-nutrition.canada.ca/api/canadian-nutrient-file/nutrientname/?lang=en&type=json",
+                      "sources": [
+                        {
+                          "description": "Imputed data that USDA has deleted",
+                          "nutrient_source_code": 18,
+                          "nutrient_source_id": 108
+                        },
+                        {
+                          "description": "Nutrient analyzed in a Canadian government lab",
+                          "nutrient_source_code": 3,
+                          "nutrient_source_id": 3
+                        },
+                        {
+                          "description": "Nutrient calculated from data other than USDA",
+                          "nutrient_source_code": 2,
+                          "nutrient_source_id": 2
+                        },
+                        {
+                          "description": "Nutrient levels changed to meet the canadian regulations",
+                          "nutrient_source_code": 1,
+                          "nutrient_source_id": 1
+                        },
+                        {
+                          "description": "No change from USDA",
+                          "nutrient_source_code": 0,
+                          "nutrient_source_id": 0
+                        },
+                        {
+                          "description": "Nutrient value is an assumed zero",
+                          "nutrient_source_code": 12,
+                          "nutrient_source_id": 12
+                        },
+                        {
+                          "description": "Nutrient calculated from USDA data",
+                          "nutrient_source_code": 4,
+                          "nutrient_source_id": 4
+                        },
+                        {
+                          "description": "Nutrient imputed from a similar USDA food",
+                          "nutrient_source_code": 5,
+                          "nutrient_source_id": 5
+                        },
+                        {
+                          "description": "Nutrient from canadian industry. Documentation incomplete.",
+                          "nutrient_source_code": 6,
+                          "nutrient_source_id": 6
+                        },
+                        {
+                          "description": "Nutrient analyzed in Canadian product (non-government lab). Documentation complete.",
+                          "nutrient_source_code": 7,
+                          "nutrient_source_id": 7
+                        },
+                        {
+                          "description": "Nutrient value of food created for the Nutrition Canada Survey",
+                          "nutrient_source_code": 8,
+                          "nutrient_source_id": 8
+                        },
+                        {
+                          "description": "Nutrient from the label declaration",
+                          "nutrient_source_code": 9,
+                          "nutrient_source_id": 9
+                        },
+                        {
+                          "description": "Provisional data",
+                          "nutrient_source_code": 14,
+                          "nutrient_source_id": 14
+                        },
+                        {
+                          "description": "Danish Food Composition Databank (revision 5.0)   Danish Institute for Food and Veterinary Research (revision 5)",
+                          "nutrient_source_code": 82,
+                          "nutrient_source_id": 82
+                        },
+                        {
+                          "description": "Nutrient value imputed from data other than USDA",
+                          "nutrient_source_code": 15,
+                          "nutrient_source_id": 15
+                        },
+                        {
+                          "description": "Nutrient derived from scientific literature",
+                          "nutrient_source_code": 10,
+                          "nutrient_source_id": 10
+                        },
+                        {
+                          "description": "Fineli.  Finnish food composition database.  National Public Health Institute.",
+                          "nutrient_source_code": 83,
+                          "nutrient_source_id": 83
+                        },
+                        {
+                          "description": "Calculated using a recipe",
+                          "nutrient_source_code": 51,
+                          "nutrient_source_id": 102
+                        },
+                        {
+                          "description": "Calculated field",
+                          "nutrient_source_code": 16,
+                          "nutrient_source_id": 106
+                        },
+                        {
+                          "description": "Calculated from analytical Canadian data",
+                          "nutrient_source_code": 17,
+                          "nutrient_source_id": 107
+                        }
+                      ],
+                      "total": 152
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "List nutrients",
+        "tags": [
+          "Canadian Nutrient File, Health Canada (food-nutrition.canada.ca)"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "24689da87008"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "food-nutrition-canada-ca",
+        "x-aisa-runtime-operation": {
+          "operation_id": "food-nutrition-canada-ca.foods.list-nutrients",
+          "method": "POST",
+          "path": "/apis/v1/food-nutrition-canada-ca/foods/list-nutrients"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:abe48daa2d476eaaa8e1efc3857c403e3fda39d7156b8a47c3f23e27ff1e79d9"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/food-nutrition-canada-ca/food-nutrition-canada-ca-foods-list-nutrients"
+      }
+    },
+    "/apis/v1/food-nutrition-canada-ca/foods/search-foods": {
+      "post": {
+        "description": "Start here to find CNF food codes by name, in English or French; then call `get_food` for nutrients and measures.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "food-nutrition-canada-ca.foods.search-foods",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "lang": {
+                    "type": "string",
+                    "description": "Language of the food descriptions searched and returned.\n\nProvider reference: allowed values [\"en\", \"fr\"]; default \"en\".",
+                    "default": "en",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "en",
+                        "fr"
+                      ]
+                    }
+                  },
+                  "limit": {
+                    "type": "number",
+                    "description": "Rows per page.\n\nProvider reference: minimum 1; maximum 200; default 50.",
+                    "default": 50,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 200
+                    }
+                  },
+                  "offset": {
+                    "type": "number",
+                    "description": "Rows to skip; the page's `next_offset` / continuation cursor.\n\nProvider reference: minimum 0; default 0.",
+                    "default": 0,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 0
+                    }
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "Words to find in the food description (all must match, any order, accents and case ignored), or a food code."
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "query": "cheese cheddar"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Find Canadian Nutrient File foods by name. The CNF API has no server-side search: the function downloads the complete food list (GET /api/canadian-nutrient-file/food/, 5,690 rows, ~470 KB) and matches client-side the way the CNF web app does: case- and accent-insensitive, every word of the query must appear somewhere in the food description, in any order ('apple raw' finds 'Pineapple, raw'). A query that is only digits also matches the food code exactly. Results keep the API's order, are paged with `limit`/`offset` and report `total_matches`; no match is a valid empty result. Each row carries the `food_code` that `get_food` takes and the food's CNF serving-size page URL. `lang` selects English or French descriptions (same food codes).\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `attribution` | string |  |\n| `count` | number |  |\n| `foods` | object[] |  |\n| `lang` | string |  |\n| `limit` | number |  |\n| `next_offset` | number | Offset of the next page; null when this page is the last. |\n| `observed_at_ms` | number |  |\n| `offset` | number |  |\n| `query` | string |  |\n| `source_url` | string |  |\n| `total_foods` | number | Foods in the complete CNF list the search ran over. |\n| `total_matches` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-14.",
+                    "value": {
+                      "attribution": "Canadian Nutrient File, Health Canada. Open Government Licence - Canada.",
+                      "count": 22,
+                      "foods": [
+                        {
+                          "food_code": 51,
+                          "food_description": "Cheese, processed, cheddar, cold pack",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=51"
+                        },
+                        {
+                          "food_code": 105,
+                          "food_description": "Cheese, cheddar or colby type, low fat (7% M.F.)",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=105"
+                        },
+                        {
+                          "food_code": 106,
+                          "food_description": "Cheese, cheddar or colby type, low sodium",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=106"
+                        },
+                        {
+                          "food_code": 119,
+                          "food_description": "Cheese, cheddar",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=119"
+                        },
+                        {
+                          "food_code": 1143,
+                          "food_description": "Wiener (cheesefurter), cheddar smokie",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=1143"
+                        },
+                        {
+                          "food_code": 930,
+                          "food_description": "Soup, cheddar cheese, canned, condensed",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=930"
+                        },
+                        {
+                          "food_code": 1051,
+                          "food_description": "Soup, cheddar cheese, canned, condensed, water added",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=1051"
+                        },
+                        {
+                          "food_code": 5566,
+                          "food_description": "Cheese, cheddar, imitation",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=5566"
+                        },
+                        {
+                          "food_code": 5601,
+                          "food_description": "Cheese, processed product, cheddar, slices, low sodium",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=5601"
+                        },
+                        {
+                          "food_code": 5675,
+                          "food_description": "Sausage, smoked, with cheddar cheese, pre-cooked",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=5675"
+                        },
+                        {
+                          "food_code": 5257,
+                          "food_description": "Soup, cheddar cheese, canned, condensed, 2% M.F. milk added",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=5257"
+                        },
+                        {
+                          "food_code": 5459,
+                          "food_description": "Cheese, cheddar, imitation, low cholesterol",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=5459"
+                        },
+                        {
+                          "food_code": 6038,
+                          "food_description": "Cheese, cheddar, reduced fat (18%)",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=6038"
+                        },
+                        {
+                          "food_code": 7005,
+                          "food_description": "Cheese, processed product, cheddar, slices",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=7005"
+                        },
+                        {
+                          "food_code": 7008,
+                          "food_description": "Cheese, processed product, cheddar, reduced fat, slices",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=7008"
+                        },
+                        {
+                          "food_code": 7009,
+                          "food_description": "Cheese, processed product, cheddar, fat free, slices",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=7009"
+                        },
+                        {
+                          "food_code": 7012,
+                          "food_description": "Cheese, processed product, cheddar, loaf",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=7012"
+                        },
+                        {
+                          "food_code": 7013,
+                          "food_description": "Cheese, processed product, cheddar, spread",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=7013"
+                        },
+                        {
+                          "food_code": 7014,
+                          "food_description": "Cheese, processed product, cheddar, reduced fat, spread",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=7014"
+                        },
+                        {
+                          "food_code": 7353,
+                          "food_description": "Sausage, smoked, with cheddar cheese, pre-cooked, reheated",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=7353"
+                        },
+                        {
+                          "food_code": 7355,
+                          "food_description": "Sausage, smoked, with cheddar cheese, pre-cooked, reduced fat",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=7355"
+                        },
+                        {
+                          "food_code": 7356,
+                          "food_description": "Sausage, smoked, with cheddar cheese, pre-cooked, reheated, reduced fat",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=7356"
+                        }
+                      ],
+                      "lang": "en",
+                      "limit": 50,
+                      "next_offset": null,
+                      "observed_at_ms": 1791942596472,
+                      "offset": 0,
+                      "query": "cheese cheddar",
+                      "source_url": "https://food-nutrition.canada.ca/api/canadian-nutrient-file/food/?lang=en&type=json",
+                      "total_foods": 5690,
+                      "total_matches": 22
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Search foods",
+        "tags": [
+          "Canadian Nutrient File, Health Canada (food-nutrition.canada.ca)"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "d2fd8e4da7bc"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "food-nutrition-canada-ca",
+        "x-aisa-runtime-operation": {
+          "operation_id": "food-nutrition-canada-ca.foods.search-foods",
+          "method": "POST",
+          "path": "/apis/v1/food-nutrition-canada-ca/foods/search-foods"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:58d4b4dcc1a828c8d4f416379a6554936f3a5e76da9c0818eef935bcdc14f8f3"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/food-nutrition-canada-ca/food-nutrition-canada-ca-foods-search-foods"
+      }
+    },
+    "/apis/v1/food-nutrition-canada-ca/foods/search-foods-by-nutrient": {
+      "post": {
+        "description": "To compare foods on one nutrient ('protein across cheeses': nutrient 203, food group 1), or to list the foods of a food group ranked by a nutrient.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "food-nutrition-canada-ca.foods.search-foods-by-nutrient",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "food_group_id": {
+                    "type": "number",
+                    "description": "CNF food group id from `list_food_groups`; 0 (default) searches all food groups.\n\nProvider reference: minimum 0; default 0.",
+                    "default": 0,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 0
+                    }
+                  },
+                  "include_trace": {
+                    "type": "boolean",
+                    "description": "Also list foods whose amount is a trace (the form's 'Include all values = trace').",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "limit": {
+                    "type": "number",
+                    "description": "limit\n\nProvider reference: minimum 1; maximum 500; default 50.",
+                    "default": 50,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 500
+                    }
+                  },
+                  "nutrient_id": {
+                    "type": "number",
+                    "description": "CNF `nutrient_name_id` (e.g. 203 Protein, 339 Vitamin D µg, 301 Calcium).\n\nProvider reference: minimum 1."
+                  },
+                  "offset": {
+                    "type": "number",
+                    "description": "offset\n\nProvider reference: minimum 0; default 0.",
+                    "default": 0,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 0
+                    }
+                  },
+                  "sort": {
+                    "type": "string",
+                    "description": "Order by nutrient amount.\n\nProvider reference: allowed values [\"desc\", \"asc\"]; default \"desc\".",
+                    "default": "desc",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "desc",
+                        "asc"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "nutrient_id"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "food_group_id": 1,
+                    "limit": 10,
+                    "nutrient_id": 339
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Foods ranked by the amount of one nutrient, optionally within one CNF food group: the CNF web app's 'Search by nutrient' (GET /cnf-fce/newNutrientSearch for the session cookie and CSRF token, then POST /cnf-fce/nutrientSearch-rechercheAliment in the same session; the only food-group aware surface of the CNF). Every matching food comes back with the CNF's chosen portion, its gram weight and the nutrient amount per that portion in the nutrient's unit, sorted by amount descending (or ascending). The web app returns the whole result in one page (e.g. 219 dairy foods for Vitamin D); the function pages it with `limit`/`offset` and reports `total_records` as the page states it. `nutrient_id` must be one of the 152 nutrients the form offers (`list_nutrients`; a different id is `not_found`), `food_group_id` one of the 23 groups or 0 for all (`list_food_groups`). Each row carries the `food_code` for `get_food` and the CNF nutrient-report URL. English only (the form is served in English).\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `attribution` | string |  |\n| `count` | number |  |\n| `food_group` | object |  |\n| `foods` | object[] |  |\n| `include_trace` | boolean |  |\n| `limit` | number |  |\n| `next_offset` | number |  |\n| `nutrient` | object |  |\n| `observed_at_ms` | number |  |\n| `offset` | number |  |\n| `sort` | string |  |\n| `source_url` | string |  |\n| `total_records` | number | Records the result page announces. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-14.",
+                    "value": {
+                      "attribution": "Canadian Nutrient File, Health Canada. Open Government Licence - Canada.",
+                      "count": 10,
+                      "food_group": {
+                        "food_group_id": 1,
+                        "name": "Dairy and Egg Products"
+                      },
+                      "foods": [
+                        {
+                          "amount": 3.5,
+                          "amount_text": "3.5",
+                          "food_code": 66,
+                          "food_name": "Milk, dry whole",
+                          "measure_id": 602916,
+                          "portion": "amount to make 250ml",
+                          "report_url": "https://food-nutrition.canada.ca/cnf-fce/nutrientReport-rapportAliment?food-aliment-id=66&id=602916",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=66",
+                          "weight_g": 33.47
+                        },
+                        {
+                          "amount": 3.2,
+                          "amount_text": "3.2",
+                          "food_code": 55,
+                          "food_name": "Eggnog, 7% M.F., Canadian product, 4% to 8% M.F.",
+                          "measure_id": 44117,
+                          "portion": "250ml",
+                          "report_url": "https://food-nutrition.canada.ca/cnf-fce/nutrientReport-rapportAliment?food-aliment-id=55&id=44117",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=55",
+                          "weight_g": 268.38
+                        },
+                        {
+                          "amount": 2.8,
+                          "amount_text": "2.8",
+                          "food_code": 5270,
+                          "food_name": "Chocolate syrup, thin type, 2% M.F. milk added",
+                          "measure_id": 602488,
+                          "portion": "250ml",
+                          "report_url": "https://food-nutrition.canada.ca/cnf-fce/nutrientReport-rapportAliment?food-aliment-id=5270&id=602488",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=5270",
+                          "weight_g": 297.97
+                        },
+                        {
+                          "amount": 2.7,
+                          "amount_text": "2.7",
+                          "food_code": 2867,
+                          "food_name": "Chocolate syrup, thin type, whole milk added",
+                          "measure_id": 589746,
+                          "portion": "250ml",
+                          "report_url": "https://food-nutrition.canada.ca/cnf-fce/nutrientReport-rapportAliment?food-aliment-id=2867&id=589746",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=2867",
+                          "weight_g": 297.97
+                        },
+                        {
+                          "amount": 2.7,
+                          "amount_text": "2.7",
+                          "food_code": 140,
+                          "food_name": "Milk, evaporated, whole, canned, undiluted, 7.8% M.F.",
+                          "measure_id": 626717,
+                          "portion": "amount to make 250ml",
+                          "report_url": "https://food-nutrition.canada.ca/cnf-fce/nutrientReport-rapportAliment?food-aliment-id=140&id=626717",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=140",
+                          "weight_g": 133.14
+                        },
+                        {
+                          "amount": 2.7,
+                          "amount_text": "2.7",
+                          "food_code": 153,
+                          "food_name": "Milk, evaporated, partly skimmed, canned, undiluted, 2% M.F.",
+                          "measure_id": 626718,
+                          "portion": "amount to make 250ml",
+                          "report_url": "https://food-nutrition.canada.ca/cnf-fce/nutrientReport-rapportAliment?food-aliment-id=153&id=626718",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=153",
+                          "weight_g": 133.14
+                        },
+                        {
+                          "amount": 2.7,
+                          "amount_text": "2.7",
+                          "food_code": 112,
+                          "food_name": "Milk, evaporated, skim, canned, undiluted, 0.2% M.F.",
+                          "measure_id": 626716,
+                          "portion": "amount to make 250ml",
+                          "report_url": "https://food-nutrition.canada.ca/cnf-fce/nutrientReport-rapportAliment?food-aliment-id=112&id=626716",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=112",
+                          "weight_g": 133.14
+                        },
+                        {
+                          "amount": 2.6,
+                          "amount_text": "2.6",
+                          "food_code": 61,
+                          "food_name": "Milk, fluid, partly skimmed, 2% M.F.",
+                          "measure_id": 44127,
+                          "portion": "250ml",
+                          "report_url": "https://food-nutrition.canada.ca/cnf-fce/nutrientReport-rapportAliment?food-aliment-id=61&id=44127",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=61",
+                          "weight_g": 257.82
+                        },
+                        {
+                          "amount": 2.6,
+                          "amount_text": "2.6",
+                          "food_code": 113,
+                          "food_name": "Milk, fluid, whole, pasteurized, homogenized, 3.25% M.F.",
+                          "measure_id": 44223,
+                          "portion": "250ml",
+                          "report_url": "https://food-nutrition.canada.ca/cnf-fce/nutrientReport-rapportAliment?food-aliment-id=113&id=44223",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=113",
+                          "weight_g": 257.82
+                        },
+                        {
+                          "amount": 2.6,
+                          "amount_text": "2.6",
+                          "food_code": 114,
+                          "food_name": "Milk, fluid, skim",
+                          "measure_id": 44224,
+                          "portion": "250ml",
+                          "report_url": "https://food-nutrition.canada.ca/cnf-fce/nutrientReport-rapportAliment?food-aliment-id=114&id=44224",
+                          "url": "https://food-nutrition.canada.ca/cnf-fce/serving-portion?id=114",
+                          "weight_g": 258.88
+                        }
+                      ],
+                      "include_trace": false,
+                      "limit": 10,
+                      "next_offset": 10,
+                      "nutrient": {
+                        "name": "Vitamins: Vitamin D",
+                        "nutrient_id": 339,
+                        "unit": "µg"
+                      },
+                      "observed_at_ms": 1791942611776,
+                      "offset": 0,
+                      "sort": "desc",
+                      "source_url": "https://food-nutrition.canada.ca/cnf-fce/nutrientSearch-rechercheAliment",
+                      "total_records": 219
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Search foods by nutrient",
+        "tags": [
+          "Canadian Nutrient File, Health Canada (food-nutrition.canada.ca)"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "bc5c49dc07d5"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "food-nutrition-canada-ca",
+        "x-aisa-runtime-operation": {
+          "operation_id": "food-nutrition-canada-ca.foods.search-foods-by-nutrient",
+          "method": "POST",
+          "path": "/apis/v1/food-nutrition-canada-ca/foods/search-foods-by-nutrient"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:a4dfa85425c03efcd9cef8ffed7ff8930d887a1f7819fcfe3ffd92c03690aa34",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:a69aba295c7a6db48776c1fd8d46dff5de71f27149df2a4964ad20650d19b9b8"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/food-nutrition-canada-ca/food-nutrition-canada-ca-foods-search-foods-by-nutrient"
+      }
+    }
+  }
 }

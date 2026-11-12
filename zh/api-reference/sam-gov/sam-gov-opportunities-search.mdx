@@ -1,6 +1,6 @@
 ---
 title: "搜索"
-openapi: "openapi/zh/sam-gov.json POST /apis/v1/sam-gov/opportunities/search"
+openapi: "reference-contracts/zh/sam-gov.json POST /apis/v1/sam-gov/opportunities/search"
 x-aisa-operation-id: "sam-gov.opportunities.search"
 ---
 
@@ -14,7 +14,7 @@ x-aisa-operation-id: "sam-gov.opportunities.search"
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/sam-gov/opportunities/search`
 - **Runtime 事实版本:** 6afb59b1b1976ca6604a41edfa9dc1c17c5fb2d43858ea29b9cb2e476266ac32
 
-[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/sam-gov.json)
+[完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/sam-gov.json)
 
 有效请求与价格声明（包括认证和引用的 schema）：
 
@@ -35,23 +35,172 @@ x-aisa-operation-id: "sam-gov.opportunities.search"
     }
   ],
   "requestBody": {
+    "required": false,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
+        "schema": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "agency_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "SAM.gov federal organization ids at any hierarchy level (100000000 = Dept of Defense, 300000188 = Dept of the Navy, 100006688 = Dept of Veterans Affairs). Matched as OR.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "cursor": {
+              "type": "string",
+              "description": "Opaque cursor from a previous response's next_cursor. Bound to the same filters and page_size; valid for 24 hours; then cursor_expired.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "include_attachments": {
+              "type": "boolean",
+              "description": "Also list each notice's attachments (one more upstream request per record). Requires include_details and page_size <= 50.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "include_details": {
+              "type": "boolean",
+              "description": "Fetch each hit's notice detail (one extra upstream request per record) so naics_codes, set_aside, place_of_performance and the full description are populated. false returns summary records with detail_level=summary.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "naics_codes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "NAICS codes or prefixes (2 to 6 digits). Matched as OR.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "notice_types": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Notice types (SAM.gov codes p,o,k,a,r,s,i,g,u,f,l). Empty = all.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "page_size": {
+              "type": "number",
+              "description": "Records per page. At most 50 when include_attachments is true.\n\nProvider reference: minimum 1; maximum 100; default 20.",
+              "default": 20,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 100
+              }
+            },
+            "published_from": {
+              "type": "string",
+              "description": "Inclusive lower bound (YYYY-MM-DD, US Eastern calendar day) on the notice's latest publication/modification date. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "published_to": {
+              "type": "string",
+              "description": "Inclusive upper bound (YYYY-MM-DD). Must not be before published_from. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "query": {
+              "type": "string",
+              "description": "Keyword query matched against title, solicitation number and description. Multi-word queries combine per query_mode (default: every word must match). Empty matches everything.\n\nProvider reference: default \"\".",
+              "default": "",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "query_mode": {
+              "type": "string",
+              "description": "How the words of query must match, as SAM.gov's own keyword search offers them (upstream qMode): all = every word (SAM.gov's default), any = at least one word, exact = the phrase as written.\n\nProvider reference: allowed values [\"all\", \"any\", \"exact\"]; default \"all\".",
+              "default": "all",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "all",
+                  "any",
+                  "exact"
+                ]
+              }
+            },
+            "response_deadline_from": {
+              "type": "string",
+              "description": "Inclusive lower bound (YYYY-MM-DD) on the response deadline.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "response_deadline_to": {
+              "type": "string",
+              "description": "Inclusive upper bound (YYYY-MM-DD) on the response deadline.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "set_asides": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "SAM.gov set-aside codes (SBA = total small business, 8A, HZC = HUBZone, SDVOSBC, WOSB, EDWOSB, ...). Matched as OR.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "sort": {
+              "type": "string",
+              "description": "sort\n\nProvider reference: allowed values [\"updated_desc\", \"updated_asc\", \"relevance\", \"deadline_asc\", \"deadline_desc\"]; default \"updated_desc\".",
+              "default": "updated_desc",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "updated_desc",
+                  "updated_asc",
+                  "relevance",
+                  "deadline_asc",
+                  "deadline_desc"
+                ]
+              }
+            },
+            "statuses": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Notice status as SAM.gov indexes it. active = accepting responses / not yet archived; inactive = archived. Both = no status filter.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            }
           }
         },
-        "schema": {
-          "additionalProperties": true,
-          "type": "object"
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "include_details": false,
+              "page_size": 2,
+              "query": "cybersecurity"
+            }
+          }
         }
       }
-    },
-    "required": false
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

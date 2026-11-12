@@ -5,7 +5,16 @@
         "scheme": "bearer",
         "type": "http"
       }
-    }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
   },
   "info": {
     "description": "",
@@ -31,9 +40,9 @@
       "generator_version": "3",
       "protocol_version": "1",
       "schema_version": "1",
-      "composer_version": "28",
+      "composer_version": "29",
       "response_pending": [],
-      "document_hash": "sha256:cfb32684849d1e0322c24cef958288eb07e0e9e718ca2c8ec04959eaedd8ac8b"
+      "document_hash": "sha256:628b2a71dff4389ad4f000d605b5b2168b180061661ddd1483de33789563caea"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -85,5 +94,1021 @@
       "url": "https://api.aisa.one"
     }
   ],
-  "paths": {}
+  "paths": {
+    "/apis/v1/cslb-ca-gov/licenses/find-contractors-by-location": {
+      "post": {
+        "description": "You need licensed contractors of a given classification (B, C-10, C-53 ...) near a California ZIP code or in a city.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "cslb-ca-gov.licenses.find-contractors-by-location",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "city": {
+                    "type": "string",
+                    "description": "California city name (at least 4 characters, as the form requires). Exactly one of zip_code or city.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "classification": {
+                    "type": "string",
+                    "description": "Classification option value of the form: A, B, B-2, C-10, C-53, C-61/D-35, ASB, HAZ ... (C53 and c-53 are normalised to C-53; a limited specialty given by its D number alone, D-21 or D21 as get_license prints it, resolves to C-61/D-21)."
+                  },
+                  "zip_code": {
+                    "type": "string",
+                    "description": "Five-digit ZIP code. Exactly one of zip_code or city. Pattern: ^[0-9]{5}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                },
+                "required": [
+                  "classification"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "classification": "C-53",
+                    "zip_code": "93464"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The board's Find a Licensed Contractor search (ZipCodeSearch.aspx): currently licensed contractors holding one classification whose address of record is in a ZIP code or city. Two upstream requests (form GET for the WebForms state, then the search postback). Returns the board's count sentence value and every row of the result grid (license number, business name, address, city, ZIP, phone) in the board's randomly generated order; a search with no contractors is a successful empty result (count 0).\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `classification` | object |  |\n| `contractors` | object[] |  |\n| `count` | number | The board's 'Your search returned a list of N licensed contractors' value. |\n| `data_current_as_of` | string |  |\n| `observed_at_ms` | number |  |\n| `query` | object |  |\n| `source_url` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-04.",
+                    "value": {
+                      "classification": {
+                        "code": "C-53",
+                        "name": "Swimming Pool"
+                      },
+                      "contractors": [
+                        {
+                          "address": "PO BOX 423",
+                          "business_name": "TURNER POOLS SERVICES",
+                          "city": "SOLVANG",
+                          "detail_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/LicenseDetail.aspx?LicNum=1053788",
+                          "license_number": "1053788",
+                          "phone": "(805) 453-1205",
+                          "zip_code": "93464"
+                        }
+                      ],
+                      "count": 1,
+                      "data_current_as_of": "Data current as of 10/4/2026 2:14:06 PM",
+                      "observed_at_ms": 1791148446515,
+                      "query": {
+                        "city": null,
+                        "classification": "C-53",
+                        "zip_code": "93464"
+                      },
+                      "source_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/ZipCodeSearch.aspx"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Find contractors by location",
+        "tags": [
+          "California CSLB contractor license lookup"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "13acca29cb1c"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "cslb-ca-gov",
+        "x-aisa-runtime-operation": {
+          "operation_id": "cslb-ca-gov.licenses.find-contractors-by-location",
+          "method": "POST",
+          "path": "/apis/v1/cslb-ca-gov/licenses/find-contractors-by-location"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+            "paths": [
+              "/apis/v1/datalegion/companies/enrich-base",
+              "/apis/v1/datalegion/people/enrich-base-no-contact"
+            ]
+          }
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/datalegion/companies/enrich-base",
+                "/apis/v1/datalegion/people/enrich-base-no-contact"
+              ]
+            }
+          },
+          "content_hash": "sha256:482ed8d22049275309d15d6a8ab5e91df05dbbffd22b45dbabf4b7c3262a707d"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/cslb-ca-gov/cslb-ca-gov-licenses-find-contractors-by-location"
+      }
+    },
+    "/apis/v1/cslb-ca-gov/licenses/get-complaint-disclosure": {
+      "post": {
+        "description": "You have a license number (typically one whose get_license output carries complaint_disclosure_url) and need its disciplinary cases.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "cslb-ca-gov.licenses.get-complaint-disclosure",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "license_number": {
+                    "type": "string",
+                    "description": "CSLB license number or a cslb.ca.gov URL carrying LicNum=."
+                  }
+                },
+                "required": [
+                  "license_number"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "license_number": "721836"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The public complaint disclosure page of a CSLB license (ComplaintDisclosure.aspx?LicType=LIC&LicNum=): the cases the board discloses under B&P 7124.6 (case number, date, status such as LICENSE REVOKED or CURRENTLY UNDER DISCIPLINARY ORDER, number of complaints, CaseViolationDisclosure link). A license without disclosable cases is a successful result with an empty cases list. Fails with not_found when the board shows no license for the number.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `business_name` | string |  |\n| `cases` | object[] |  |\n| `license_number` | string |  |\n| `observed_at_ms` | number |  |\n| `source_url` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-04.",
+                    "value": {
+                      "business_name": "FIVE STAR GENERAL CONTRACTOR",
+                      "cases": [
+                        {
+                          "case_number": "N 2022 000158",
+                          "complaint_count": 1,
+                          "date": "2023-03-06",
+                          "detail_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/CaseViolationDisclosure.aspx?LicType=LIC&LicNum=721836&LmfPre=&Region=N&FiscalYear=2022&SeqNbr=158&ActionCde=DD13&Status=LICENSE+REVOKED++++++++++++++++++++++++++++++1&LicName=FIVE+STAR+GENERAL+CONTRACTOR&StatusDt=03/06/2023&Complaints=LICENSE%20REVOKED%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%201",
+                          "status": "LICENSE REVOKED"
+                        },
+                        {
+                          "case_number": "N 2017 000420",
+                          "complaint_count": 1,
+                          "date": "2019-09-20",
+                          "detail_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/CaseViolationDisclosure.aspx?LicType=LIC&LicNum=721836&LmfPre=&Region=N&FiscalYear=2017&SeqNbr=420&ActionCde=DD**&Status=CURRENTLY+UNDER+DISCIPLINARY+ORDER+++++++++++1&LicName=FIVE+STAR+GENERAL+CONTRACTOR&StatusDt=09/20/2019&Complaints=CURRENTLY%20UNDER%20DISCIPLINARY%20ORDER%20%20%20%20%20%20%20%20%20%20%201",
+                          "status": "CURRENTLY UNDER DISCIPLINARY ORDER"
+                        },
+                        {
+                          "case_number": "N 2005 000264",
+                          "complaint_count": 2,
+                          "date": "2011-09-04",
+                          "detail_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/CaseViolationDisclosure.aspx?LicType=LIC&LicNum=721836&LmfPre=&Region=N&FiscalYear=2005&SeqNbr=264&ActionCde=DPRV&Status=PREVIOUS+CASE++++++++++++++++++++++++++++++++2&LicName=FIVE+STAR+GENERAL+CONTRACTOR&StatusDt=09/04/2011&Complaints=PREVIOUS%20CASE%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%202",
+                          "status": "PREVIOUS CASE"
+                        }
+                      ],
+                      "license_number": "721836",
+                      "observed_at_ms": 1791148468125,
+                      "source_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/ComplaintDisclosure.aspx?LicType=LIC&LicNum=721836"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Get complaint disclosure",
+        "tags": [
+          "California CSLB contractor license lookup"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "734506d35184"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "cslb-ca-gov",
+        "x-aisa-runtime-operation": {
+          "operation_id": "cslb-ca-gov.licenses.get-complaint-disclosure",
+          "method": "POST",
+          "path": "/apis/v1/cslb-ca-gov/licenses/get-complaint-disclosure"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+            "paths": [
+              "/apis/v1/datalegion/companies/enrich-base",
+              "/apis/v1/datalegion/people/enrich-base-no-contact"
+            ]
+          }
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/datalegion/companies/enrich-base",
+                "/apis/v1/datalegion/people/enrich-base-no-contact"
+              ]
+            }
+          },
+          "content_hash": "sha256:f6856a5546b76a61696751e1cebab8bc67a1adf42e775c58cf29f145088bc6f2"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/cslb-ca-gov/cslb-ca-gov-licenses-get-complaint-disclosure"
+      }
+    },
+    "/apis/v1/cslb-ca-gov/licenses/get-license": {
+      "post": {
+        "description": "You have a CSLB license number (from search_contractors_by_name, find_contractors_by_location, list_license_personnel or a pasted LicenseDetail.aspx URL) and need the full license status record.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "cslb-ca-gov.licenses.get-license",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "license_number": {
+                    "type": "string",
+                    "description": "CSLB license number (1 to 9 digits, e.g. 1053788) or a cslb.ca.gov URL carrying LicNum=."
+                  }
+                },
+                "required": [
+                  "license_number"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "license_number": "1053788"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The CSLB license detail page (LicenseDetail.aspx?LicNum=) for one contractor license number: business name and DBA, address lines, phone, entity type, issue/reissue/expire dates, the status sentence and whether the license is current and active, additional status lines and the complaint-disclosure link when the board shows one, classifications (code and name), every bond block (Contractor's Bond, Disciplinary Bond, Bond of Qualifying Individual: surety, bond number, amount, effective and cancellation dates, history link), the workers' compensation block (carrier, policy, dates, classification codes) and the Miscellaneous Information action lines. Dates are converted to YYYY-MM-DD; the board's 'Data current as of' stamp is kept verbatim. Fails with not_found when the board answers 'License Number does not exist.'\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `action_items` | object[] | Miscellaneous Information lines ('MM/DD/YYYY - TEXT'); empty when the block is absent. |\n| `additional_status` | string[] | Lines of the 'Additional Status' block (suspensions, disciplinary notes); empty when the block is absent. |\n| `address_lines` | string[] | Address of record lines as printed (street or PO box, then 'CITY, ST ZIP'). |\n| `bonds` | object[] |  |\n| `business_name` | string |  |\n| `classifications` | object[] |  |\n| `complaint_disclosure_url` | string | ComplaintDisclosure.aspx link when the board flags complaint disclosure information for this license; null otherwise (B&P 7124.6). |\n| `data_current_as_of` | string | The board's stamp verbatim, Pacific time (e.g. 'Data current as of 10/4/2026 1:55:16 PM'). |\n| `dba` | string | The 'DBA ...' line of the business information block, without the DBA prefix; null when the license has no DBA line. |\n| `entity_type` | string |  |\n| `expire_date` | string |  |\n| `issue_date` | string | YYYY-MM-DD, or the board's text verbatim when it is not a date. |\n| `license_number` | string |  |\n| `observed_at_ms` | number |  |\n| `personnel_url` | string |  |\n| `phone` | string |  |\n| `reissue_date` | string |  |\n| `source_url` | string |  |\n| `status_is_active` | boolean | True when the status sentence says the license is current and active. |\n| `status_text` | string | The board's status sentence, e.g. 'This license is current and active.' |\n| `workers_comp` | object |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-04.",
+                    "value": {
+                      "action_items": [
+                        {
+                          "date": "2022-01-14",
+                          "text": "LICENSE REISSUED TO ANOTHER ENTITY"
+                        }
+                      ],
+                      "additional_status": [],
+                      "address_lines": [
+                        "PO BOX 423",
+                        "SOLVANG, CA 93464"
+                      ],
+                      "bonds": [
+                        {
+                          "amount": "$25,000",
+                          "bond_number": "PB10163411795",
+                          "cancellation_date": null,
+                          "effective_date": "2026-06-05",
+                          "history_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/ContractorBondingHistory.aspx?LicNum=1053788&BondType=CB",
+                          "surety": "PHILADELPHIA INDEMNITY INSURANCE COMPANY",
+                          "surety_code": "H22",
+                          "text": "This license filed a Contractor's Bond with PHILADELPHIA INDEMNITY INSURANCE COMPANY.",
+                          "type": "Contractor's Bond"
+                        },
+                        {
+                          "amount": null,
+                          "bond_number": null,
+                          "cancellation_date": null,
+                          "effective_date": "2023-07-28",
+                          "history_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/BQIBondingHistory.aspx?Licnum=1053788&QualIndv=1",
+                          "surety": null,
+                          "surety_code": null,
+                          "text": "The qualifying individual SCOTT TURNER certified that he/she owns 10 percent or more of the voting stock/membership interest of this company; therefore, the Bond of Qualifying Individual is not required.",
+                          "type": "Bond of Qualifying Individual"
+                        }
+                      ],
+                      "business_name": "TURNER POOLS INC",
+                      "classifications": [
+                        {
+                          "code": "D35",
+                          "name": "C-61 / D35 - POOL AND SPA MAINTENANCE",
+                          "url": "https://www.cslb.ca.gov/About_Us/Library/Licensing_Classifications/Licensing_Classifications_Detail.aspx?Class=D35"
+                        },
+                        {
+                          "code": "C53",
+                          "name": "C53 - SWIMMING POOL",
+                          "url": "https://www.cslb.ca.gov/About_Us/Library/Licensing_Classifications/Licensing_Classifications_Detail.aspx?Class=C53"
+                        }
+                      ],
+                      "complaint_disclosure_url": null,
+                      "data_current_as_of": "Data current as of 10/4/2026 2:13:40 PM",
+                      "dba": "TURNER POOL SERVICES",
+                      "entity_type": "Corporation",
+                      "expire_date": "2028-01-31",
+                      "issue_date": "2019-05-20",
+                      "license_number": "1053788",
+                      "observed_at_ms": 1791148420567,
+                      "personnel_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/PersonnelList.aspx?LicNum=1053788",
+                      "phone": "(805) 453-1205",
+                      "reissue_date": "2022-01-14",
+                      "source_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/LicenseDetail.aspx?LicNum=1053788",
+                      "status_is_active": true,
+                      "status_text": "This license is current and active.",
+                      "workers_comp": {
+                        "carrier": "EVEREST NATIONAL INSURANCE COMPANY",
+                        "carrier_code": "282",
+                        "class_codes": [
+                          {
+                            "code": "9097",
+                            "description": "Swimming Pool Cleaning/Servicing"
+                          }
+                        ],
+                        "effective_date": "2026-06-15",
+                        "expire_date": "2027-06-15",
+                        "history_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/WCHistory.aspx?LicNum=1053788",
+                        "policy_number": "7600025649261",
+                        "text": "This license has workers compensation insurance with the EVEREST NATIONAL INSURANCE COMPANY"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Get license",
+        "tags": [
+          "California CSLB contractor license lookup"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "a69389f4cfd2"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "cslb-ca-gov",
+        "x-aisa-runtime-operation": {
+          "operation_id": "cslb-ca-gov.licenses.get-license",
+          "method": "POST",
+          "path": "/apis/v1/cslb-ca-gov/licenses/get-license"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+            "paths": [
+              "/apis/v1/datalegion/companies/enrich-base",
+              "/apis/v1/datalegion/people/enrich-base-no-contact"
+            ]
+          }
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/datalegion/companies/enrich-base",
+                "/apis/v1/datalegion/people/enrich-base-no-contact"
+              ]
+            }
+          },
+          "content_hash": "sha256:c2fba160fae2b11a4049961d47420ffc5816e2b9265f6e51b61ac11448781f4c"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/cslb-ca-gov/cslb-ca-gov-licenses-get-license"
+      }
+    },
+    "/apis/v1/cslb-ca-gov/licenses/list-license-personnel": {
+      "post": {
+        "description": "You have a license number and need its qualifying individuals, officers or owners.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "cslb-ca-gov.licenses.list-license-personnel",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "license_number": {
+                    "type": "string",
+                    "description": "CSLB license number or a cslb.ca.gov URL carrying LicNum=."
+                  }
+                },
+                "required": [
+                  "license_number"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "license_number": "1053788"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The personnel list of a CSLB license (PersonnelList.aspx?LicNum=): people currently associated with the license and people no longer associated, each with name, title, association date, classification, the board's person id (SeqNumber) and the PersonnelDetail.aspx link. Fails with not_found when the board shows no license for the number.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `business_name` | string | The page's Contractor Name cell; the board leaves it empty on the GET variant of this page, hence null. |\n| `current` | object[] |  |\n| `former` | object[] |  |\n| `license_number` | string |  |\n| `observed_at_ms` | number |  |\n| `source_url` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-04.",
+                    "value": {
+                      "business_name": null,
+                      "current": [
+                        {
+                          "association_date": "2019-05-20",
+                          "classification": "D35",
+                          "detail_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/PersonnelDetail.aspx?LicNum=1053788&SeqNumber=1024072&LicName=",
+                          "disassociation_date": null,
+                          "has_additional_classifications": true,
+                          "name": "SCOTT TURNER",
+                          "seq_number": "1024072",
+                          "title": "RMO / CEO / PRES"
+                        }
+                      ],
+                      "former": [],
+                      "license_number": "1053788",
+                      "observed_at_ms": 1791148457305,
+                      "source_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/PersonnelList.aspx?LicNum=1053788"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "List license personnel",
+        "tags": [
+          "California CSLB contractor license lookup"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "d42b68c6d653"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "cslb-ca-gov",
+        "x-aisa-runtime-operation": {
+          "operation_id": "cslb-ca-gov.licenses.list-license-personnel",
+          "method": "POST",
+          "path": "/apis/v1/cslb-ca-gov/licenses/list-license-personnel"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+            "paths": [
+              "/apis/v1/datalegion/companies/enrich-base",
+              "/apis/v1/datalegion/people/enrich-base-no-contact"
+            ]
+          }
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/datalegion/companies/enrich-base",
+                "/apis/v1/datalegion/people/enrich-base-no-contact"
+              ]
+            }
+          },
+          "content_hash": "sha256:3812d65fd41940e3467de47aaad372bccefdfd708fbf18dc7088d858257eba6e"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/cslb-ca-gov/cslb-ca-gov-licenses-list-license-personnel"
+      }
+    },
+    "/apis/v1/cslb-ca-gov/licenses/search-contractors-by-name": {
+      "post": {
+        "description": "You know (the start of) a California contractor's business name and need the license number(s) to look up.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "cslb-ca-gov.licenses.search-contractors-by-name",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "continuation": {
+                    "type": "string",
+                    "description": "Opaque cursor returned by the previous page.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Start of the business name (case-insensitive), or a NameSearch.aspx URL carrying NextName=."
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "name": "Turner Pools"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Business-name search of the CSLB license database (NameSearch.aspx): one page of up to 49 name rows whose business name starts with the given text, in the board's order, each with name type (Print = the name as printed on the license, Name = the business name of record, DBA, Previous), license number, city and status word. The board's result list is an alphabetical cursor over all names; rows outside the prefix are filtered out and an empty page is a successful empty result. A continuation is returned while every row on the page still matched the prefix.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `observed_at_ms` | number |  |\n| `query` | string |  |\n| `results` | object[] |  |\n| `source_url` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-04.",
+                    "value": {
+                      "count": 4,
+                      "observed_at_ms": 1791148431645,
+                      "query": "Turner Pools",
+                      "results": [
+                        {
+                          "business_name": "TURNER POOLS",
+                          "city": "ENCINITAS",
+                          "detail_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/LicenseDetail.aspx?LicNum=838212",
+                          "license_number": "838212",
+                          "name_type": "DBA",
+                          "status": "Inactive"
+                        },
+                        {
+                          "business_name": "TURNER POOLS INC DBA TURNER POOL SERVICES",
+                          "city": "SOLVANG",
+                          "detail_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/LicenseDetail.aspx?LicNum=1053788",
+                          "license_number": "1053788",
+                          "name_type": "Print",
+                          "status": "Active"
+                        },
+                        {
+                          "business_name": "TURNER POOLS INC",
+                          "city": "SOLVANG",
+                          "detail_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/LicenseDetail.aspx?LicNum=1053788",
+                          "license_number": "1053788",
+                          "name_type": "Name",
+                          "status": "Active"
+                        },
+                        {
+                          "business_name": "TURNER POOLS SERVICES",
+                          "city": "SOLVANG",
+                          "detail_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/LicenseDetail.aspx?LicNum=1053788",
+                          "license_number": "1053788",
+                          "name_type": "DBA",
+                          "status": "Active"
+                        }
+                      ],
+                      "source_url": "https://www.cslb.ca.gov/OnlineServices/CheckLicenseII/NameSearch.aspx?NextName=Turner+Pools&NextLicNum="
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Search contractors by name",
+        "tags": [
+          "California CSLB contractor license lookup"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "data",
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.0005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "13a75985e94f"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "cslb-ca-gov",
+        "x-aisa-runtime-operation": {
+          "operation_id": "cslb-ca-gov.licenses.search-contractors-by-name",
+          "method": "POST",
+          "path": "/apis/v1/cslb-ca-gov/licenses/search-contractors-by-name"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+            "paths": [
+              "/apis/v1/datalegion/companies/enrich-base",
+              "/apis/v1/datalegion/people/enrich-base-no-contact"
+            ]
+          }
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/datalegion/companies/enrich-base",
+                "/apis/v1/datalegion/people/enrich-base-no-contact"
+              ]
+            }
+          },
+          "content_hash": "sha256:f168bd65a42ed5d829d56e4aa9f2658d091dd8dc9cbae788eb6d59ac036042db"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/cslb-ca-gov/cslb-ca-gov-licenses-search-contractors-by-name"
+      }
+    }
+  }
 }

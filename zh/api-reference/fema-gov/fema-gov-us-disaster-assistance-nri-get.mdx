@@ -1,6 +1,6 @@
 ---
 title: "Nri get"
-openapi: "openapi/zh/fema-gov.json POST /apis/v1/fema-gov/us-disaster-assistance/nri-get"
+openapi: "reference-contracts/zh/fema-gov.json POST /apis/v1/fema-gov/us-disaster-assistance/nri-get"
 x-aisa-operation-id: "fema-gov.us-disaster-assistance.nri-get"
 ---
 
@@ -14,7 +14,7 @@ x-aisa-operation-id: "fema-gov.us-disaster-assistance.nri-get"
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/fema-gov/us-disaster-assistance/nri-get`
 - **Runtime 事实版本:** 57ce16342ebaa5cad2eef4733dc2ccf227f63e710b67c7cee358fdf2602551b7
 
-[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/fema-gov.json)
+[完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/fema-gov.json)
 
 有效请求与价格声明（包括认证和引用的 schema）：
 
@@ -35,41 +35,66 @@ x-aisa-operation-id: "fema-gov.us-disaster-assistance.nri-get"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "id": "example",
-              "table": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "id": "example",
-              "table": "example"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Optional column selection for `record.fields` (names as in NRIDataDictionary.csv, e.g. RISK_SCORE, WFIR_RISKR, IFLD_EALT); the identity columns are always present at the record's top level. Without it every column of the row is returned (465-476 per row).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "id": {
-              "type": "string"
+              "type": "string",
+              "description": "NRI_ID (C30031, T30031000100, S30), the bare FIPS (30031, 30031000100, 30), a USPS state code (MT) for states, or the OID_ row number for tribal tables. Pattern: ^[A-Za-z0-9]+$."
+            },
+            "release": {
+              "type": "string",
+              "description": "Release path segment under /about/reports-and-data/openfema/nri/. FEMA serves only the current release (v120 = NRI v1.20, December 2025; v119 is a 404), so leave the default unless a newer release is published. Pattern: ^v[0-9]{3}$.\n\nProvider reference: default \"v120\".",
+              "default": "v120",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             },
             "table": {
-              "type": "string"
+              "type": "string",
+              "description": "Which NRI table: `states` (56 rows), `counties` (3,232), `tribal_counties` (1,232 county x tribal-area rows), `tribal_tracts` (3,364 tract x tribal-area rows) or `tracts` (~85,155 census tracts, 634 MB, read by byte range).\n\nProvider reference: allowed values [\"states\", \"counties\", \"tribal_counties\", \"tribal_tracts\", \"tracts\"]."
             }
           },
           "required": [
             "id",
             "table"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "fields": [
+                "POPULATION",
+                "RISK_SCORE",
+                "RISK_RATNG",
+                "EAL_RATNG",
+                "SOVI_RATNG",
+                "RESL_RATNG",
+                "WFIR_RISKR",
+                "IFLD_RISKR"
+              ],
+              "id": "30031",
+              "table": "counties"
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

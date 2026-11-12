@@ -1,6 +1,6 @@
 ---
 title: "搜索"
-openapi: "openapi/zh/pubmed-ncbi-nlm-nih-gov.json POST /apis/v1/pubmed-ncbi-nlm-nih-gov/publications/search"
+openapi: "reference-contracts/zh/pubmed-ncbi-nlm-nih-gov.json POST /apis/v1/pubmed-ncbi-nlm-nih-gov/publications/search"
 x-aisa-operation-id: "pubmed-ncbi-nlm-nih-gov.publications.search"
 ---
 
@@ -14,7 +14,7 @@ x-aisa-operation-id: "pubmed-ncbi-nlm-nih-gov.publications.search"
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/pubmed-ncbi-nlm-nih-gov/publications/search`
 - **Runtime 事实版本:** 51b10e4663d505fff4e16d5488deb12ab1cf2f9590a5893a2dd7cbf33e214be4
 
-[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/pubmed-ncbi-nlm-nih-gov.json)
+[完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/pubmed-ncbi-nlm-nih-gov.json)
 
 有效请求与价格声明（包括认证和引用的 schema）：
 
@@ -35,35 +35,97 @@ x-aisa-operation-id: "pubmed-ncbi-nlm-nih-gov.publications.search"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "query": "nike"
-            }
-          },
-          "minimal": {
-            "value": {
-              "query": "nike"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
+            "db": {
+              "type": "string",
+              "description": "Entrez database: `pubmed` (citations and abstracts) or `pmc` (PubMed Central full-text articles).\n\nProvider reference: allowed values [\"pubmed\", \"pmc\"]; default \"pubmed\".",
+              "default": "pubmed",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "pubmed",
+                  "pmc"
+                ]
+              }
+            },
+            "include_summaries": {
+              "type": "boolean",
+              "description": "When false, skip the esummary call and return ids only (one upstream request instead of two).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "limit": {
+              "type": "number",
+              "description": "Results per page (esearch retmax).\n\nProvider reference: minimum 1; maximum 50; default 20.",
+              "default": 20,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 50
+              }
+            },
+            "max_date": {
+              "type": "string",
+              "description": "Latest publication date, same forms as `min_date`. Requires `min_date`. Pattern: ^[0-9]{4}(/[0-9]{2}(/[0-9]{2})?)?$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "min_date": {
+              "type": "string",
+              "description": "Earliest publication date, `YYYY`, `YYYY/MM` or `YYYY/MM/DD` (esearch mindate with datetype=pdat). Requires `max_date`. Pattern: ^[0-9]{4}(/[0-9]{2}(/[0-9]{2})?)?$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "offset": {
+              "type": "number",
+              "description": "Zero-based index of the first result (esearch retstart). E-utilities cap offset + limit at 10,000.\n\nProvider reference: minimum 0; maximum 9950; default 0.",
+              "default": 0,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0,
+                "max": 9950
+              }
+            },
             "query": {
-              "type": "string"
+              "type": "string",
+              "description": "PubMed query; free text or field-tagged syntax exactly as accepted by the PubMed search box."
+            },
+            "sort": {
+              "type": "string",
+              "description": "`relevance` (PubMed best match) or `pub_date` (newest first).\n\nProvider reference: allowed values [\"relevance\", \"pub_date\"]; default \"relevance\".",
+              "default": "relevance",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "relevance",
+                  "pub_date"
+                ]
+              }
             }
           },
           "required": [
             "query"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "query": "crispr gene editing"
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

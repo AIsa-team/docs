@@ -1,6 +1,6 @@
 ---
 title: "Search products"
-openapi: "openapi/zh/affiliate-com.json POST /apis/v1/affiliate-com/products/search"
+openapi: "reference-contracts/zh/affiliate-com.json POST /apis/v1/affiliate-com/products/search"
 x-aisa-operation-id: "affiliate-com.products.search"
 ---
 
@@ -14,7 +14,7 @@ x-aisa-operation-id: "affiliate-com.products.search"
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/affiliate-com/products/search`
 - **Runtime 事实版本:** 0a6b8c48bca8c4db625abb482ae634848ff6a1cfbfd9a8f82a6b6a6f6edf5315
 
-[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/affiliate-com.json)
+[完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/affiliate-com.json)
 
 有效请求与价格声明（包括认证和引用的 schema）：
 
@@ -35,22 +35,146 @@ x-aisa-operation-id: "affiliate-com.products.search"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "keyword": "nike"
+        "schema": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "keyword": {
+              "type": "string",
+              "description": "Plain-text search such as `JBL speaker`; sent as the string form of `search`."
+            },
+            "search": {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array",
+              "description": "Filter objects `{ field, value, operator }`, ANDed together. Fields include any, name, brand, category, barcode, sku, asin, merchant.id, network.id, final_price, currency, availability, on_sale, merchant.countries. Operators: =, !=, LIKE, NOT LIKE, >, <, >=, <=, NOT NULL. `||` in value ORs values.\n\nProvider reference: maximum 30."
+            },
+            "query": {
+              "additionalProperties": true,
+              "type": "object",
+              "description": "Rule builder `{ rules_operator: any|all, rules: [{ conditions_operator, conditions: [{ field, operator, value }] }] }`. Exclusive with keyword and search."
+            },
+            "per_page": {
+              "type": "number",
+              "description": "Products per page, 1 to 50. Defaults to 10 here.\n\nProvider reference: minimum 1; maximum 50.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 50
+              }
+            },
+            "page": {
+              "type": "number",
+              "description": "Page number, starting at 1.\n\nProvider reference: minimum 1.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1
+              }
+            },
+            "after": {
+              "type": "string",
+              "description": "Deep-pagination cursor from the previous response's meta.after, for results past 10,000 on plans that allow it.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "exact_total": {
+              "type": "boolean",
+              "description": "Count meta.total past 10,000 precisely, at some extra latency.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Product fields to return, for example `id`, `name`, `final_price`, `urls`.\n\nProvider reference: maximum 50.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 50
+              }
+            },
+            "sort_order": {
+              "type": "string",
+              "description": "Sort direction.\n\nProvider reference: allowed values [\"asc\", \"desc\"].",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "asc",
+                  "desc"
+                ]
+              }
+            },
+            "duplicate_fields_to_exclude": {
+              "type": "string",
+              "description": "Deduplicate by name, image_url, direct_url, barcode or merchant.id. Comma syntax applies each independently and accepts `[N]` caps (`name,merchant.id[10]`); `a||b` drops a row when either has appeared.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "facets": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Aggregations to include: network, merchant, final_price, or dotted sub-fields such as network.name.\n\nProvider reference: maximum 20.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 20
+              }
+            },
+            "sort_by": {
+              "type": "string",
+              "description": "Sort field: relevance, id, barcode, ean, gtin, upc, isbn, asin, name, currency, regular_price, final_price, sale_discount, stock_quantity, commissionable_status, brand, category, color, gender, size, author, network.id, network.name, merchant.id, merchant.name, added_at, updated_at.\n\nProvider reference: allowed values [\"relevance\", \"id\", \"barcode\", \"ean\", \"gtin\", \"upc\", \"isbn\", \"asin\", \"name\", \"currency\", \"regular_price\", \"final_price\", \"sale_discount\", \"stock_quantity\", \"commissionable_status\", \"brand\", \"category\", \"color\", \"gender\", \"size\", \"author\", \"network.id\", \"network.name\", \"merchant.id\", \"merchant.name\", \"added_at\", \"updated_at\"].",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "relevance",
+                  "id",
+                  "barcode",
+                  "ean",
+                  "gtin",
+                  "upc",
+                  "isbn",
+                  "asin",
+                  "name",
+                  "currency",
+                  "regular_price",
+                  "final_price",
+                  "sale_discount",
+                  "stock_quantity",
+                  "commissionable_status",
+                  "brand",
+                  "category",
+                  "color",
+                  "gender",
+                  "size",
+                  "author",
+                  "network.id",
+                  "network.name",
+                  "merchant.id",
+                  "merchant.name",
+                  "added_at",
+                  "updated_at"
+                ]
+              }
+            },
+            "balanced_mix": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "`{ field, max_per_value, interleave?, weights? }` to keep one merchant or brand from dominating. Not combinable with duplicate_fields_to_exclude.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
-          "minimal": {
-            "value": {
-              "keyword": "nike"
-            }
-          }
-        },
-        "schema": {
-          "additionalProperties": true,
           "allOf": [
             {
               "anyOf": [
@@ -80,28 +204,19 @@ x-aisa-operation-id: "affiliate-com.products.search"
                 }
               ]
             }
-          ],
-          "properties": {
-            "keyword": {
-              "type": "string"
-            },
-            "query": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "search": {
-              "items": {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              "type": "array"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "keyword": "running shoes",
+              "per_page": 3
             }
-          },
-          "type": "object"
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

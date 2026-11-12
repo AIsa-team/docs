@@ -1,6 +1,6 @@
 ---
 title: "Search elements"
-openapi: "openapi/zh/openstreetmap-org.json POST /apis/v1/openstreetmap-org/places/search-elements"
+openapi: "reference-contracts/zh/openstreetmap-org.json POST /apis/v1/openstreetmap-org/places/search-elements"
 x-aisa-operation-id: "openstreetmap-org.places.search-elements"
 ---
 
@@ -14,7 +14,7 @@ x-aisa-operation-id: "openstreetmap-org.places.search-elements"
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/openstreetmap-org/places/search-elements`
 - **Runtime 事实版本:** 71227d20d5b4437a20ed5eaea2a67e262c0501d96b79b198ba41d7da9c9d15bf
 
-[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/openstreetmap-org.json)
+[完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/openstreetmap-org.json)
 
 有效请求与价格声明（包括认证和引用的 schema）：
 
@@ -35,36 +35,109 @@ x-aisa-operation-id: "openstreetmap-org.places.search-elements"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "tags": {}
-            }
-          },
-          "minimal": {
-            "value": {
-              "tags": {}
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
+            "area_relation_id": {
+              "type": "number",
+              "description": "OSM relation id of an administrative boundary (e.g. 242397 for Porto Alegre); mapped to Overpass area 3600000000 + id.\n\nProvider reference: minimum 1.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1
+              }
+            },
+            "around": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Circle filter.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "bbox": {
+              "type": "string",
+              "description": "Bounding box `min_lon,min_lat,max_lon,max_lat` (left,bottom,right,top) in WGS84 decimal degrees, the OSM API convention. Pattern: ^\\s*-?\\d+(\\.\\d+)?\\s*,\\s*-?\\d+(\\.\\d+)?\\s*,\\s*-?\\d+(\\.\\d+)?\\s*,\\s*-?\\d+(\\.\\d+)?\\s*$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "limit": {
+              "type": "number",
+              "description": "Maximum elements (Overpass `out ... N`).\n\nProvider reference: minimum 1; maximum 2000; default 100.",
+              "default": 100,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 2000
+              }
+            },
+            "polygon": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "description": "Polygon as `[lat, lon]` pairs (at least 3), e.g. a `geocode` boundary ring.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "tags": {
               "additionalProperties": true,
-              "type": "object"
+              "type": "object",
+              "description": "Tag filters, all must match: `{\"amenity\": \"restaurant\"}`; `\"*\"` requires the key only, e.g. `{\"shop\": \"*\"}`. Keys and values are OSM tag strings; `\"` and `\\` are rejected."
+            },
+            "timeout_s": {
+              "type": "number",
+              "description": "Overpass `[timeout]` in seconds.\n\nProvider reference: minimum 5; maximum 60; default 25.",
+              "default": 25,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 5,
+                "max": 60
+              }
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Element types to return; all three when omitted.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
           "required": [
             "tags"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "around": {
+                "lat": -30.0325,
+                "lon": -51.2304,
+                "radius_m": 400
+              },
+              "limit": 10,
+              "tags": {
+                "leisure": "park",
+                "name": "*"
+              },
+              "types": [
+                "way"
+              ]
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

@@ -1,6 +1,6 @@
 ---
 title: "Ticker news"
-openapi: "openapi/zh/nasdaq-com.json POST /apis/v1/nasdaq-com/news/ticker-news"
+openapi: "reference-contracts/zh/nasdaq-com.json POST /apis/v1/nasdaq-com/news/ticker-news"
 x-aisa-operation-id: "nasdaq-com.news.ticker-news"
 ---
 
@@ -14,7 +14,7 @@ x-aisa-operation-id: "nasdaq-com.news.ticker-news"
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/nasdaq-com/news/ticker-news`
 - **Runtime 事实版本:** 1453a50b8d058b4a4029b73a1eab64f13048cc398403e113dd1b01227809540a
 
-[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/nasdaq-com.json)
+[完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/nasdaq-com.json)
 
 有效请求与价格声明（包括认证和引用的 schema）：
 
@@ -35,35 +35,99 @@ x-aisa-operation-id: "nasdaq-com.news.ticker-news"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "ticker": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "ticker": "example"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
+            "asset_class": {
+              "type": "string",
+              "description": "Nasdaq asset class of the ticker. `etf` for exchange-traded funds (SPY, QQQ); everything else is `stocks`.\n\nProvider reference: allowed values [\"stocks\", \"etf\"]; default \"stocks\".",
+              "default": "stocks",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "stocks",
+                  "etf"
+                ]
+              }
+            },
+            "from": {
+              "type": "string",
+              "description": "Earliest publish day to return, YYYY-MM-DD (US-Eastern, inclusive, compared with published_date). The scan stops at the first older story. Nasdaq keeps 500 rows per ticker, about two months for a heavily covered stock; a window_reached warning says when from lies beyond them. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "include_press_releases": {
+              "type": "boolean",
+              "description": "Also fetch the ticker's `press_release` feed (one extra request) and merge its newest `limit` releases that pass `from`/`to` and `relevant_only` into the first page (`offset` 0) as `kind: press_release` rows, ordered newest first with the news by `published_date`; `count` may then exceed `limit`. Deeper pages are news only; `has_more` and `next_offset` follow the news feed. Releases carry no `published_at` (pass their `url` to `article` for it). For every release use `press_releases`.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "limit": {
+              "type": "number",
+              "description": "Rows per page (1-100).\n\nProvider reference: minimum 1; maximum 100; default 20.",
+              "default": 20,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 100
+              }
+            },
+            "offset": {
+              "type": "number",
+              "description": "Feed rows to skip, counting rows the filters skip too. Nasdaq serves at most 500 rows per feed and its edge denies deeper offsets, so 490 is the last usable offset; next_offset from the previous page is the safe value.\n\nProvider reference: minimum 0; maximum 490.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0,
+                "max": 490
+              }
+            },
+            "relevant_only": {
+              "type": "boolean",
+              "description": "Return only stories about the ticker (about_ticker true): Nasdaq's primary_symbol is the ticker, or with no primary symbol the ticker is the only tag or the headline names the ticker or the company. false returns every story that tags the ticker, market wraps and stories filed under other companies included.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "ticker": {
-              "type": "string"
+              "type": "string",
+              "description": "Exchange ticker as Nasdaq spells it (AAPL, BRK.B, SPY). Case-insensitive. Pattern: ^[A-Za-z][A-Za-z0-9.\\-]{0,9}$."
+            },
+            "to": {
+              "type": "string",
+              "description": "Latest publish day to return, YYYY-MM-DD (US-Eastern, inclusive). Newer stories are skipped. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "with_publish_times": {
+              "type": "boolean",
+              "description": "Also fetch the matching RSS feed (one extra request) and copy its pubDate into `published_at` for the stories it lists (the 15 newest). Set false to save the request.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
           "required": [
             "ticker"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "limit": 10,
+              "ticker": "AAPL"
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

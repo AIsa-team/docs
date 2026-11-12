@@ -1,6 +1,6 @@
 ---
 title: "Query dataset"
-openapi: "openapi/socrata-com.json POST /apis/v1/socrata-com/open-data/query-dataset"
+openapi: "reference-contracts/socrata-com.json POST /apis/v1/socrata-com/open-data/query-dataset"
 x-aisa-operation-id: "socrata-com.open-data.query-dataset"
 ---
 
@@ -14,7 +14,7 @@ x-aisa-operation-id: "socrata-com.open-data.query-dataset"
 - **Request URL template:** `https://api.aisa.one/apis/v1/socrata-com/open-data/query-dataset`
 - **Runtime facts:** 625f83db9201183eb89bace8adb584a6724e12d212fef3b0c7babc8d8a32dd58
 
-[Complete OpenAPI definition](https://aisa.one/docs/openapi/socrata-com.json)
+[Complete OpenAPI definition](https://aisa.one/docs/reference-contracts/socrata-com.json)
 
 Effective request and pricing declaration (including authentication and referenced schemas):
 
@@ -35,41 +35,96 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "dataset_id": "example",
-              "portal": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "dataset_id": "example",
-              "portal": "example"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
             "dataset_id": {
-              "type": "string"
+              "type": "string",
+              "description": "The dataset's Socrata 4x4 id (for example ydr8-5enu, from search_datasets) or a dataset URL on the same portal: /d/<id>, /<Category>/<Name>/<id>, /resource/<id>.json."
+            },
+            "group": {
+              "type": "string",
+              "description": "SoQL $group, e.g. `permit_type` (with an aggregate in select).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "limit": {
+              "type": "number",
+              "description": "Rows per page (1-1000). A page is also cut at about 1 MB of row data; continue from next_offset.\n\nProvider reference: minimum 1; maximum 1000; default 100.",
+              "default": 100,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 1000
+              }
+            },
+            "offset": {
+              "type": "number",
+              "description": "Row offset (next_offset of the previous page).\n\nProvider reference: minimum 0; maximum 100000000; default 0.",
+              "default": 0,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0,
+                "max": 100000000
+              }
+            },
+            "order": {
+              "type": "string",
+              "description": "SoQL $order, e.g. `issue_date DESC`. Defaults to the row id `:id` for stable paging (none for aggregates).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             },
             "portal": {
-              "type": "string"
+              "type": "string",
+              "description": "The portal: its hostname (data.cityofchicago.org, data.ny.gov, www.dallasopendata.com) or any URL on it. Must be a Socrata domain served by the Socrata Discovery API (US or EU region); anything else fails with invalid_input not_socrata_portal before the host is contacted."
+            },
+            "q": {
+              "type": "string",
+              "description": "Full-text search across the dataset's text columns.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "select": {
+              "type": "string",
+              "description": "SoQL $select without the keyword: columns, aliases, aggregates. E.g. `permit_, permit_type, issue_date` or `permit_type, count(*) AS n`.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "where": {
+              "type": "string",
+              "description": "SoQL $where without the keyword. String literals in single quotes ('O''Hare' escapes a quote). E.g. `issue_date >= '2024-01-01' AND permit_type = 'PERMIT - NEW CONSTRUCTION'`, `within_circle(location, 41.88, -87.63, 500)`.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
           "required": [
             "dataset_id",
             "portal"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "dataset_id": "ydr8-5enu",
+              "limit": 5,
+              "portal": "data.cityofchicago.org",
+              "select": "id, permit_, permit_type, issue_date, street_number, street_direction, street_name",
+              "where": "permit_ = '100084789'"
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

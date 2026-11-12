@@ -5050,7 +5050,7 @@
       "generator_version": "3",
       "protocol_version": "1",
       "schema_version": "1",
-      "composer_version": "28",
+      "composer_version": "29",
       "response_pending": [
         {
           "operation_id": "people-data-labs.companies-enrich",
@@ -5089,7 +5089,7 @@
           "reason": "public success response has no authoritative payload declaration"
         }
       ],
-      "document_hash": "sha256:fcc357eea49c3a145e5ed0f836a0034070b32bf97d92453e0a56ff91d1d4e687"
+      "document_hash": "sha256:aa732e9c1fbc82b71d5050a5b7090fc16a25906f77705d24108730cc61d80242"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -5524,6 +5524,557 @@
           }
         ],
         "x-aisa-docs-url": "https://aisa.one/docs/api-reference/people-data-labs/people-data-labs-companies-search"
+      }
+    },
+    "/apis/v1/people-data-labs/company/enrich": {
+      "post": {
+        "description": "Use when you have one company and want its firmographics, funding and headcount. Give it a domain, ticker or social profile if you possibly can - a bare name is the identifier most likely to miss.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "people-data-labs.company.enrich",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "pdl_id": {
+                    "type": "string",
+                    "description": "PDL company id, or a LinkedIn company slug such as `google`. A hard override: sent alongside anything else, every other match input is ignored."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Company name, for example \"Google, Inc.\". The weakest identifier by a distance - an ambiguous name answers 404 rather than guessing - so prefer website, ticker or profile whenever you have one."
+                  },
+                  "ticker": {
+                    "type": "string",
+                    "description": "Stock ticker."
+                  },
+                  "website": {
+                    "type": "string",
+                    "description": "Company domain. The most reliable single identifier."
+                  },
+                  "profile": {
+                    "type": "string",
+                    "description": "Social profile URL, for example linkedin.com/company/google."
+                  },
+                  "location": {
+                    "type": "string",
+                    "description": "Free-form location. Raises the likelihood of a name match; never sufficient on its own."
+                  },
+                  "street_address": {
+                    "type": "string",
+                    "description": "Street address, one value. Never sufficient on its own."
+                  },
+                  "locality": {
+                    "type": "string",
+                    "description": "City, one value. Never sufficient on its own."
+                  },
+                  "region": {
+                    "type": "string",
+                    "description": "State or region, one value. Never sufficient on its own."
+                  },
+                  "country": {
+                    "type": "string",
+                    "description": "Country, one value. Never sufficient on its own."
+                  },
+                  "postal_code": {
+                    "type": "string",
+                    "description": "Postal code, one value. Never sufficient on its own."
+                  },
+                  "min_likelihood": {
+                    "type": "number",
+                    "description": "Refuse a match below this confidence, 1-10, default 2. At 2 the match is only 10-30% likely to be the record asked for. Raising it turns a weak match into a 404, which is the cheaper answer: a 404 is free here and a wrong record is not.\n\nProvider reference: minimum 1; maximum 10; default 2.",
+                    "default": 2,
+                    "x-alexandria-option-metadata": {
+                      "min": 1,
+                      "max": 10
+                    }
+                  },
+                  "required": {
+                    "type": "string",
+                    "description": "Boolean expression over required top-level output fields using AND, OR and parentheses. Fields used as matching inputs cannot also be required. Access depends on the key's field bundles."
+                  },
+                  "data_include": {
+                    "type": "string",
+                    "description": "Comma-separated schema fields to return, dot notation for subfields, a leading `-` to exclude instead, `\"\"` for none. Use it to reduce response size."
+                  },
+                  "include_if_matched": {
+                    "type": "boolean",
+                    "description": "Return matching inputs: top-level matched for enrichment, or matched_on within Identify candidates.\n\nProvider reference: default false.",
+                    "default": false
+                  },
+                  "titlecase": {
+                    "type": "boolean",
+                    "description": "Return titlecased values. Responses are lowercase otherwise, which matters when the output is shown to a person rather than matched on.\n\nProvider reference: default false.",
+                    "default": false
+                  }
+                },
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "name": {}
+                        },
+                        "required": [
+                          "name"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "pdl_id": {}
+                        },
+                        "required": [
+                          "pdl_id"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "profile": {}
+                        },
+                        "required": [
+                          "profile"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "ticker": {}
+                        },
+                        "required": [
+                          "ticker"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "website": {}
+                        },
+                        "required": [
+                          "website"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "website": "example.com"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Full company record (only representative fields are listed here), with the schema fields at the TOP LEVEL beside `status` and `likelihood` - this endpoint does not wrap them in `data`. Fields the record has no value for come back null rather than absent.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `likelihood` | number | Match confidence, 1-10. |\n| `status` | number | HTTP-style status mirrored into the body: 200 for a match. The call itself already answers 404 on a miss, so this is only ever 200 here. |\n| `matched` | string[] | Matching inputs, present when include_if_matched is true. |\n| `id` | string | PDL company id, and the pdl_id every other company capability takes. |\n| `name` | string | Canonical name. |\n| `website` | string | Primary domain. |\n| `industry` | string | Industry. |\n| `size` | string | Headcount band. |\n| `employee_count` | number | Headcount. |\n| `location` | object | Headquarters, with locality, region, country, metro, street_address and postal_code under it. |\n| `total_funding_raised` | number | Total funding raised. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example (illustrative)",
+                    "description": "Published by the provider on 2026-09-30.",
+                    "value": {
+                      "employee_count": 120,
+                      "id": "example-company",
+                      "industry": "computer software",
+                      "likelihood": 9,
+                      "location": {
+                        "country": "united states"
+                      },
+                      "name": "Example Company",
+                      "status": 200,
+                      "website": "example.com"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Company enrichment",
+        "tags": [
+          "People Data Labs"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "people",
+        "x-aisa-constraints": {
+          "required_any_of": [
+            [
+              {
+                "in": "body",
+                "name": "option_name",
+                "selector": "/name"
+              },
+              {
+                "in": "body",
+                "name": "option_pdl_id",
+                "selector": "/pdl_id"
+              },
+              {
+                "in": "body",
+                "name": "option_profile",
+                "selector": "/profile"
+              },
+              {
+                "in": "body",
+                "name": "option_ticker",
+                "selector": "/ticker"
+              },
+              {
+                "in": "body",
+                "name": "option_website",
+                "selector": "/website"
+              }
+            ]
+          ]
+        },
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "9d71cee78359"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "people-data-labs",
+        "x-aisa-runtime-operation": {
+          "operation_id": "people-data-labs.company.enrich",
+          "method": "POST",
+          "path": "/apis/v1/people-data-labs/company/enrich"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+            "paths": [
+              "/apis/v1/web-archive-org/captures/history"
+            ]
+          }
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/web-archive-org/captures/history"
+              ]
+            }
+          },
+          "content_hash": "sha256:3cff027f065845d0f22fda4aa458eb6d142d6c4824457cb18d40baf0e7562b43"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/people-data-labs/people-data-labs-company-enrich"
+      }
+    },
+    "/apis/v1/people-data-labs/company/search": {
+      "post": {
+        "description": "Use to find companies by attribute - industry, headcount, funding stage, location - rather than to look one up you can already name. Each returned company costs 50 credits. Smaller pages reduce payload size.\n\n<!-- aisa-pricing:start -->\nUsage-based billing; Default request estimate: $0.005 USD (not a fixed price). Declared unit rate: $0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.\n<!-- aisa-pricing:end -->",
+        "operationId": "people-data-labs.company.search",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "query": {
+                    "additionalProperties": true,
+                    "type": "object",
+                    "description": "Elasticsearch 7.7 query object over the company schema. Only term, terms, exists, bool, match, range, match_phrase, wildcard, prefix and match_all are accepted. Any array inside it is capped at 100 elements - a tenth of what the person endpoints allow, so a filter list carried over from there will fail. Send this or sql, never both."
+                  },
+                  "sql": {
+                    "type": "string",
+                    "description": "`SELECT * FROM company WHERE ...`. Column selection and LIMIT are ignored, and at most 20 LIKE '%...%' terms are allowed. Send this or query, never both."
+                  },
+                  "size": {
+                    "maximum": 2,
+                    "minimum": 1,
+                    "type": "integer",
+                    "description": "Request 1-2 companies per call, costing 50 credits per returned company. PDL supports 1-100 upstream, but Exchange authorization is capped at 100 credits, so callers must use size 1 or 2.\n\nProvider reference: minimum 1; maximum 100; default 1."
+                  },
+                  "scroll_token": {
+                    "type": "string",
+                    "description": "The scroll_token from the previous response, replayed with the identical query, for the next page. A 404 while scrolling means the results are exhausted, not that the query broke.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "titlecase": {
+                    "type": "boolean",
+                    "description": "Return titlecased values. Responses are lowercase otherwise, which matters when the output is shown to a person rather than matched on.\n\nProvider reference: default false.",
+                    "default": false,
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                },
+                "required": [
+                  "size"
+                ],
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "query": {}
+                        },
+                        "required": [
+                          "query"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "sql": {}
+                        },
+                        "required": [
+                          "sql"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "size": 1,
+                    "sql": "SELECT * FROM company WHERE industry = 'computer software'"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Full company records under `data` (only representative fields are listed here), sorted by profile completeness, with `total` and `scroll_token` in the envelope. A query matching nothing is a 200 with total 0, not a 404 - read total, never the status code.\n\nThe response contains the tool result directly.\n\nThe provider identifies `data` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `id` | string | PDL company id, and the pdl_id every other company capability takes. |\n| `name` | string | Canonical name. |\n| `website` | string | Primary domain. |\n| `industry` | string | Industry. |\n| `size` | string | Headcount band. |\n| `employee_count` | number | Headcount. |\n| `location` | object | Headquarters, with locality, region, country, metro, street_address and postal_code under it. |\n| `total_funding_raised` | number | Total funding raised. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
+                "examples": {
+                  "provider": {
+                    "summary": "Official provider example (illustrative)",
+                    "description": "Published by the provider on 2026-09-30.",
+                    "value": {
+                      "data": [
+                        {
+                          "employee_count": 120,
+                          "id": "example-company",
+                          "industry": "computer software",
+                          "location": {
+                            "country": "united states"
+                          },
+                          "name": "Example Company",
+                          "website": "example.com"
+                        }
+                      ],
+                      "scroll_token": "example-scroll-token",
+                      "status": 200,
+                      "total": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Error response; upstream passthrough responses may use provider formats"
+          }
+        },
+        "summary": "Company search",
+        "tags": [
+          "People Data Labs"
+        ],
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          },
+          "mpp": false,
+          "mpp_methods": [],
+          "x402": false
+        },
+        "x-aisa-category": "people",
+        "x-aisa-constraints": {
+          "required_any_of": [
+            [
+              {
+                "in": "body",
+                "name": "option_query",
+                "selector": "/query"
+              },
+              {
+                "in": "body",
+                "name": "option_sql",
+                "selector": "/sql"
+              }
+            ]
+          ]
+        },
+        "x-aisa-passthrough": true,
+        "x-aisa-pricing": {
+          "cost_contract": "response_units",
+          "customer_multiplier": 1.0,
+          "customer_pricing": "provider_cost_multiplier",
+          "default_request_estimate_usd": 0.005,
+          "estimate_source": "profile_seed",
+          "evidence_source": "response_body",
+          "unit": "provider_credit",
+          "unit_rate_usd": 0.0001
+        },
+        "x-aisa-query-policy": {
+          "ignore_undeclared": false,
+          "request_wins": false
+        },
+        "x-aisa-revision": {
+          "customer_pricing_ref": "660b80f46152",
+          "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
+          "profile_ref": "9d1d8c16e6c7"
+        },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "people-data-labs",
+        "x-aisa-runtime-operation": {
+          "operation_id": "people-data-labs.company.search",
+          "method": "POST",
+          "path": "/apis/v1/people-data-labs/company/search"
+        },
+        "x-aisa-source": {
+          "kind": "manual",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "path_space": "public",
+          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+            "paths": [
+              "/apis/v1/web-archive-org/captures/history"
+            ]
+          }
+        },
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/web-archive-org/captures/history"
+              ]
+            }
+          },
+          "content_hash": "sha256:24c6b41f0be2ca694f98a8bb92630e7f36d0bdfeb6e15fdc0cf68af8ba5692ce"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/people-data-labs/people-data-labs-company-search"
       }
     },
     "/apis/v1/people-data-labs/enrich-bulk-company-data": {

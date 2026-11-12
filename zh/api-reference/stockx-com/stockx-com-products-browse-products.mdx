@@ -1,6 +1,6 @@
 ---
 title: "Browse products"
-openapi: "openapi/zh/stockx-com.json POST /apis/v1/stockx-com/products/browse-products"
+openapi: "reference-contracts/zh/stockx-com.json POST /apis/v1/stockx-com/products/browse-products"
 x-aisa-operation-id: "stockx-com.products.browse-products"
 ---
 
@@ -14,7 +14,7 @@ x-aisa-operation-id: "stockx-com.products.browse-products"
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/stockx-com/products/browse-products`
 - **Runtime 事实版本:** 2f95b4a678f966cd35ba5cd449f6e426fc7b130136a65ca3fd44c7da0ab5ded6
 
-[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/stockx-com.json)
+[完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/stockx-com.json)
 
 有效请求与价格声明（包括认证和引用的 schema）：
 
@@ -35,35 +35,111 @@ x-aisa-operation-id: "stockx-com.products.browse-products"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "category": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "category": "example"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
             "category": {
-              "type": "string"
+              "type": "string",
+              "description": "Level-1 category alias: sneakers, shoes, apparel, accessories, collectibles, electronics, trading-cards, ... Pattern: ^[a-z0-9][a-z0-9-]{0,79}$."
+            },
+            "country": {
+              "type": "string",
+              "description": "StockX market: US (prices in USD) or GB (prices in GBP). Other markets exist upstream but were not verified.\n\nProvider reference: allowed values [\"US\", \"GB\"]; default \"US\".",
+              "default": "US",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "US",
+                  "GB"
+                ]
+              }
+            },
+            "filters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "description": "Additional filters applied together with the category.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "include_filters": {
+              "type": "boolean",
+              "description": "Also return the filter definitions and option counts for this slice (large).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "limit": {
+              "type": "number",
+              "description": "Results per page (the web app uses 10, 20 or 40).\n\nProvider reference: minimum 1; maximum 40; default 20.",
+              "default": 20,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 40
+              }
+            },
+            "page": {
+              "type": "number",
+              "description": "1-based page index.\n\nProvider reference: minimum 1; maximum 100; default 1.",
+              "default": 1,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 100
+              }
+            },
+            "sort": {
+              "type": "string",
+              "description": "Sort id as the site names it (getBrowseSorts).\n\nProvider reference: allowed values [\"featured\", \"most-active\", \"lowest_ask\", \"highest_bid\", \"release_date\", \"last_sale\", \"price_premium\", \"deadstock_sold\", \"recent_bids\", \"recent_asks\"]; default \"most-active\".",
+              "default": "most-active",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "featured",
+                  "most-active",
+                  "lowest_ask",
+                  "highest_bid",
+                  "release_date",
+                  "last_sale",
+                  "price_premium",
+                  "deadstock_sold",
+                  "recent_bids",
+                  "recent_asks"
+                ]
+              }
             }
           },
           "required": [
             "category"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "category": "sneakers",
+              "filters": [
+                {
+                  "id": "brand",
+                  "values": [
+                    "Jordan"
+                  ]
+                }
+              ],
+              "limit": 5
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {

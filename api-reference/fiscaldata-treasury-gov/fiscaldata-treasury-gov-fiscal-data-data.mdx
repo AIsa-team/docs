@@ -1,6 +1,6 @@
 ---
 title: "Data"
-openapi: "openapi/fiscaldata-treasury-gov.json POST /apis/v1/fiscaldata-treasury-gov/fiscal-data/data"
+openapi: "reference-contracts/fiscaldata-treasury-gov.json POST /apis/v1/fiscaldata-treasury-gov/fiscal-data/data"
 x-aisa-operation-id: "fiscaldata-treasury-gov.fiscal-data.data"
 ---
 
@@ -14,7 +14,7 @@ x-aisa-operation-id: "fiscaldata-treasury-gov.fiscal-data.data"
 - **Request URL template:** `https://api.aisa.one/apis/v1/fiscaldata-treasury-gov/fiscal-data/data`
 - **Runtime facts:** b0e8f25dda8fa66f7a2bc4131305570b2e3a4fc3aa1776a34f371c88414c5a2d
 
-[Complete OpenAPI definition](https://aisa.one/docs/openapi/fiscaldata-treasury-gov.json)
+[Complete OpenAPI definition](https://aisa.one/docs/reference-contracts/fiscaldata-treasury-gov.json)
 
 Effective request and pricing declaration (including authentication and referenced schemas):
 
@@ -35,35 +35,88 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "endpoint": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "endpoint": "example"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
+            "cursor": {
+              "type": "string",
+              "description": "next_cursor from the previous page of the same query.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "endpoint": {
-              "type": "string"
+              "type": "string",
+              "description": "Table path under /services/api/fiscal_service/, e.g. v2/accounting/od/debt_to_penny (the `endpoint` of a table in `datasets`). Pattern: ^/?v[12](/[a-z0-9_]+){2,5}/?$."
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Columns to return (record_date is always included). Omitted or null returns every column. Notes: Fiscal Data aggregates rows that become identical when columns are dropped, and sort keys must be among the returned columns (sorting on a dropped column is rejected upstream).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "filter": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "description": "Clauses are ANDed.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "page_size": {
+              "type": "number",
+              "description": "page_size\n\nProvider reference: minimum 1; maximum 10000; default 100.",
+              "default": 100,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 10000
+              }
+            },
+            "sort": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "description": "Sort keys in priority order. Omitted or null sorts by record_date descending (newest first).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
           "required": [
             "endpoint"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "endpoint": "v2/accounting/od/debt_to_penny",
+              "filter": [
+                {
+                  "field": "record_date",
+                  "op": "eq",
+                  "value": "2024-01-31"
+                }
+              ]
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
