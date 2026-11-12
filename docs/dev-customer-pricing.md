@@ -63,6 +63,19 @@ Subsequent runs must be idempotent. A dev PR is reviewed before merging; the
 existing dev generator and separate Mintlify project publish after that merge.
 An Actions check alone is not evidence that the dev site has deployed.
 
+Fix pricing in the generator, not in generated MDX files. `clean_page` removes
+legacy price blocks from both frontmatter and body, outside fenced examples;
+`readable_contract_notes` then writes the current customer price. This includes
+free and unpublished legacy blocks that have no dollar amount. Generator PRs
+contain code, tests and documentation; the normal dev workflow commits outputs.
+
+`test_pricing_generation` exercises composition and canonical page projection
+for all price families, starting with stale pages. It regenerates twice and
+changes a source price to prove the output follows the declaration. The dev
+entrypoint is covered separately by `test_dev_pricing_generation`. Canonical
+projection preserves verified producer bytes; its producer must run the updated
+Composer to remove old summaries from native operation descriptions.
+
 Run the offline checks documented in [dev deployment](dev-deployment.md).
 For the focused regressions:
 
@@ -70,6 +83,8 @@ For the focused regressions:
 PYTHONPATH=scripts/tests python -m unittest \
   scripts.tests.test_customer_price_presentation \
   scripts.tests.test_dev_customer_pricing \
+  scripts.tests.test_pricing_generation \
+  scripts.tests.test_dev_pricing_generation \
   scripts.tests.test_pricing_prose \
   scripts.tests.test_readable_contract_notes \
   scripts.tests.test_unified_surfaces -v
