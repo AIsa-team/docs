@@ -199,3 +199,69 @@ class ReadableNotesTests(unittest.TestCase):
             guide = (ROOT/(prefix+'guides/pricing.mdx')).read_text()
             for field in ['billing_multiplier_ppm','1,000,000','X-AISA-Customer-Cost-Micros-USD','cost_estimate','customer_cost_micros_usd']:
                 self.assertIn(field, guide)
+
+
+class PaginationLatencyNotesTests(unittest.TestCase):
+    """Spec #1285 R1: public pagination/latency guidance, never supplier names."""
+    PAGINATED = {'operationId': 'users_search', 'x-aisa-pagination': {
+        'style': 'cursor', 'request': {'param': 'cursor', 'in': 'query', 'size_param': 'limit'},
+        'ordering': 'unstable', 'item_id': '/id'},
+        'x-aisa-latency-class': 'very_slow', 'x-aisa-latency': {'timeout_seconds': 60, 'basis': 'sweep_seed'}}
+
+    def test_pagination_and_latency_notes_in_both_languages(self):
+        en = readable_block(self.PAGINATED)
+        self.assertIn('## Pagination', en)
+        self.assertIn('Pass `aisa_pagination.next_cursor` as `cursor` (query parameter) to fetch the next page; stop when `aisa_pagination.has_more` is false.', en)
+        self.assertIn('de-duplicate by `/id`.', en)
+        self.assertIn('Page size parameter: `limit`', en)
+        self.assertIn('## Response time', en)
+        self.assertIn('Typically takes longer than 30 seconds.', en)
+        self.assertIn('HTTP 503 within 60 seconds; set your client timeout slightly above that (for example 65 seconds).', en)
+        zh = readable_block(self.PAGINATED, 'zh')
+        self.assertIn('## 翻页', zh)
+        self.assertIn('把 `aisa_pagination.next_cursor` 作为 `cursor`（查询参数）传入即可获取下一页；`aisa_pagination.has_more` 为 false 时停止。', zh)
+        self.assertIn('请按 `/id` 去重。', zh)
+        self.assertIn('## 响应时间', zh)
+        self.assertIn('60 秒内返回结果或 HTTP 503', zh)
+        for block in (en, zh):
+            self.assertTrue(block.startswith(BEGIN_MARK) and block.endswith(END_MARK))
+            self.assertNotIn('\n\n\n', block)
+            self.assertEqual(update_readable_block(block, self.PAGINATED, 'zh' if block is zh else 'en'), block)
+
+    def test_unstable_without_item_id_and_body_param_and_next_link(self):
+        op = copy.deepcopy(self.PAGINATED)
+        op['x-aisa-pagination'] = {'style': 'page', 'request': {'param': 'page', 'in': 'body'}, 'ordering': 'unstable', 'max_pages': 5}
+        en = readable_block(op)
+        self.assertIn('as `page` (request body field)', en)
+        self.assertIn('de-duplicate by a stable id.', en)
+        self.assertIn('At most 5 pages can be fetched.', en)
+        self.assertNotIn('opaque', en)
+        op['x-aisa-pagination'] = {'style': 'next_link', 'request': {'param': 'aisa_cursor', 'in': 'query'}, 'ordering': 'stable'}
+        en = readable_block(op)
+        self.assertIn('as `aisa_cursor` (query parameter)', en)
+        self.assertIn('opaque value; pass it back unchanged.', en)
+        self.assertNotIn('repeat across pages', en)
+
+    def test_latency_only_and_undeclared_operations(self):
+        block = readable_block({'x-aisa-latency-class': 'fast'})
+        self.assertIn('Typically returns within 10 seconds.', block)
+        self.assertNotIn('503', block)
+        self.assertNotIn('## Pagination', block)
+        self.assertEqual(readable_block({'operationId': 'plain'}), '')
+        priced = readable_block({'x-aisa-pricing': {'default_request_estimate_usd': .01}})
+        self.assertNotIn('## Pagination', priced)
+        self.assertNotIn('## Response time', priced)
+
+    def test_request_contract_block_stays_parseable(self):
+        from public_surface_checks import request_blocks
+        op = {**copy.deepcopy(self.PAGINATED), 'x-aisa-pricing': {'default_request_estimate_usd': .01}}
+        document = {'paths': {'/users/search': {'get': op}}}
+        for language in ('en', 'zh'):
+            block = readable_block(op, language, document=document, method='get', path='/users/search', spec_path='openapi/p.json')
+            record = request_blocks(block)[('users_search', 'GET', '/users/search')][0]
+            self.assertIsNotNone(record['price_summary'])
+            self.assertIn('## ' + ('Pagination' if language == 'en' else '翻页'), block)
+
+
+BEGIN_MARK = '{/* aisa-contract-details:start */}'
+END_MARK = '{/* aisa-contract-details:end */}'
