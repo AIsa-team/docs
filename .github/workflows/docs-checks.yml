@@ -30,7 +30,14 @@ jobs:
       - name: API reference slugs
         run: python scripts/validate_runtime_api_reference_slugs.py --generated-only
       - name: Generated API navigation, platform index, and Data APIs cards
-        run: python scripts/regroup_api_reference.py --check
+        env:
+          DOCS_TARGET_BRANCH: ${{ github.base_ref || github.ref_name }}
+        run: |
+          if [ "$DOCS_TARGET_BRANCH" = "dev" ]; then
+            python scripts/regroup_api_reference.py --check --preserve-navigation
+          else
+            python scripts/regroup_api_reference.py --check
+          fi
       - name: Model tables match the model snapshot
         run: python scripts/model_pages.py --check
       # Only MDX pages: Markdown under scripts/tests/fixtures is frozen
