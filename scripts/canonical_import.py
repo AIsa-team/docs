@@ -421,8 +421,8 @@ def schema_input_view_files(repository, current_view, docs_ref, previous_ref, *,
     # A reviewed registration may already have a draft native file before its
     # first formal promotion. Those draft bytes never enter frozen_files: the
     # verified Runtime supplies the new output. Every prior native above still
-    # requires original bytes or an exact reviewed draft whose canonical Runtime
-    # equality is checked before projection; unrelated additions remain rejected.
+    # requires original bytes or an exact reviewed draft. Different Runtime
+    # output requires a complete pinned replay before projection.
     require(previous_native_names <= current_native_names and
             current_native_names - previous_native_names <= reviewed_additions,
             'Current native graph differs from prior formal graph')
@@ -451,12 +451,20 @@ def schema_input_view_files(repository, current_view, docs_ref, previous_ref, *,
     return files, lineage
 
 
-def validate_reviewed_native(lineage, native_raw):
-    """A reviewed draft may only be adopted by the identical Runtime contract."""
+def validate_reviewed_native(lineage, native_raw, *, repository=None, acquired=None,
+                             assessment=None, members=None):
+    """Require draft equality or reproduce the entire independently pinned graph."""
     from schema_input_bundle import sha
-    for provider, expected in lineage.get('reviewed_native_sha256', {}).items():
-        require(provider in native_raw and sha(native_raw[provider]) == expected,
-                'Canonical Runtime differs from reviewed native document: ' + provider)
+    different = [provider for provider, expected in lineage.get('reviewed_native_sha256', {}).items()
+                 if provider not in native_raw or sha(native_raw[provider]) != expected]
+    if not different:
+        return
+    require(repository is not None and acquired is not None and
+            assessment and assessment.get('compiler_inputs') and members is not None,
+            'Canonical Runtime differs from reviewed native document: ' + different[0])
+    from canonical_replay import replay_canonical_output
+    proof = replay_canonical_output(repository, acquired, assessment, members)
+    lineage['reviewed_native_replay'] = {**proof, 'different_drafts': sorted(different)}
 
 
 def acquired_members(acquired, assessment):
@@ -509,7 +517,8 @@ def assess_canonical_candidate(repository, current_view, projected_view, acquire
         verified_manifest = strict_json(contents[MANIFEST])
         require(canonical(verified_manifest) == canonical(manifest), 'Canonical manifest changed during assessment')
         native_raw = {Path(name).stem: raw for name, raw in contents.items() if NATIVE.fullmatch(name)}
-        validate_reviewed_native(lineage, native_raw)
+        validate_reviewed_native(lineage, native_raw, repository=repository, acquired=acquired,
+                                 assessment=input_assessment, members=contents)
         native = {name: strict_json(raw) for name, raw in native_raw.items()}
         facts = {Path(name).stem: strict_json(raw) for name, raw in contents.items() if name.startswith('providers/')}
         metadata = project_metadata(view, facts, strict_json(contents['index.json']),

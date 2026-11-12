@@ -23,13 +23,25 @@ schema before the worker can build it. The order is:
 
 When R also contains regenerated native documents, the first canonical
 publication may adopt those reviewed drafts. The publisher authenticates each
-changed native file against its exact bytes at the Runtime-locked R, and requires
-the verified Runtime native document to have the same canonical JSON hash before
-projecting any output. The formal assessment repeats this check and records the
-adopted hashes in `registry_lineage.reviewed_native_sha256`. Historical native
+changed native file against its exact bytes at the Runtime-locked R. If the
+Runtime native hashes equal those drafts, projection proceeds directly. If they
+differ, the publisher reconstructs the exact locked schema bundle and Composer
+sources from immutable Git, verifies both manifest digests, and runs that pinned
+Composer against the same verified acquisition in a private directory. Every
+native, aggregate and readiness byte must equal Runtime before projection.
+The current checkout's Composer is never used for this replay. This allows
+derived review labels and newer Runtime facts to differ from a generated draft
+without ignoring fields or accepting a partially matching contract.
+
+The formal assessment repeats the check and records the original draft hashes
+in `registry_lineage.reviewed_native_sha256`, together with the pins, compared
+file count and differing draft names in `reviewed_native_replay` when needed.
+Historical native
 documents still come from F and retain their original hashes; drafts are never
 used as compatibility inputs. A draft changed after R, a legacy input without
-reviewed provenance, or an older Runtime contract is rejected before writes.
+reviewed provenance, a stale compiler/input binding, or output that cannot be
+reproduced from the deployed pins is rejected before writes. This reader-only
+fallback does not change the worker's locked inputs or compiler revision.
 
 Merge the Docs publisher support before deploying the Services input-lock
 promotion. The API and worker must both carry the new lock before Runtime can
