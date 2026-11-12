@@ -69,102 +69,75 @@ production receipts, push to `main`, or notify production consumers. Scheduled
 workflows continue to run from the repository's default branch (`main`). Do not
 change the default branch to dev.
 
-## API environment is a separate configuration
+## Production contract preview on dev
 
-The dev sync fixes its origin in `scripts/sync_dev_runtime.py` and rewrites
-generated API and console addresses to dev. API Reference preserves the existing
-directory and group hierarchy, adding new dev endpoint pages without replacing
-old links. Historic pages absent from the verified dev contract remain visible
-with an English/Chinese notice that they have not been verified in dev. Their
-existing endpoint identities and examples remain intact. The aggregate OpenAPI
-includes only successfully composed dev contracts; keeping a reference page
-does not add an unverified operation to this dev artifact. The registry retains
-reviewed source configuration; only
-dev-indexed catalogs are selected in the private composition candidate.
-Source facts remain unchanged during composition, and
-production publication receipts are retained as history. The generated OpenAPI
-is a dev presentation, not the production canonical artifact. Do not enable the
-production Runtime publisher on dev or relabel a production receipt as dev
-evidence. Website and handbook links still need the separate dev site's domain
-when hosting is configured.
+The documentation deployment and API contract source are separate. The dev
+workflow currently runs `sync_dev_runtime.py --source production`: it reads
+public production metadata and publishes the generated preview only to `dev`.
+The normal timer uses the same source, so a later refresh cannot replace the
+preview with the smaller dev catalog.
 
-## Dev Runtime acquisition
+This is an explicit preview configuration. It does not enable production
+publication on dev, change the default branch, approve source evidence, or
+notify consumers. All source acquisition is read-only; no business API or
+upstream provider calls are made.
 
-Dev exposes live facts at `/info/openapi.json` and
-`/info/openapi/{provider}.json`; it does not have an enabled durable immutable
-release publisher. The gateway's dedicated `dev-runtime-contracts` route allows
-only GET, HEAD and OPTIONS on those public paths, forwarded to api-service in
-namespace `dev`.
+The production source uses the existing `fetch_runtime_release` reader:
 
-The reader requires the complete index, rejects pending projections, matches
-provider facts hashes to index entries, reads each provider twice, and checks
-the index and category again. Changed, missing or stale responses reject the
-entire candidate. Bounded HTTPS requests use no credentials, redirects or
-production fallback. The existing offline Composer and page generator read
-configured source mirrors locally; they never call provider business APIs.
-Undefined or invalid new contracts stay pending in the report and are excluded
-from the dev aggregate and generated additions. Previously listed references
-remain in their directory with the unverified notice. The generator restores
-the previous navigation after composition and adds new page links only once,
-so subsequent runs cannot discard the old hierarchy. The report counts visible
-historic pages separately from unlisted archived pages. A partial generation explicitly
-records `status: partial` and `blocked_providers`; it does not assert that every
-Runtime contract passed composition.
+1. Discover the fresh published release at `https://api.aisa.one/public/api-contract/current`.
+2. Download its immutable manifest members and verify hashes, ETags, complete
+   provider coverage, canonical graph consistency, byte bounds and freshness.
+3. Require the current release and category content to remain stable across
+   acquisition. A missing, changed or invalid release aborts the run; there is
+   no fallback to old files or a mixture of live provider responses.
+4. Recompose the verified raw provider facts with the dev generator and reviewed
+   source configuration. The preview uses new presentation code; it does not
+   claim to be a production canonical publication.
 
-Run locally from `dev` (omit `--write` for a dry run):
+`docs/dev-runtime.json` records the production origin, release revision,
+compiler, generation and input hashes, alongside `environment: dev` and
+`formal_publication: false`. The fixed reader from main is reused with its
+bounded parallel acquisition and complete-release size limits.
+
+API URLs remain production URLs because those are the contracts being
+previewed. They must not be rewritten to dev endpoints which may not exist.
+Schema/download links point to the dev branch's generated files. This preview
+requires a production API key for an actual request; generation and validation
+never make such requests.
+
+Existing reference links are retained. Explicitly disabled operations are
+identified as historical; unsupported old pricing labels such as `cost_tier`
+and `model` do not turn an unpriced disabled endpoint into an unknown active
+billing rule. Other unverified references remain marked as unverified; changing
+the input source does not waive identity, schema or source-review checks.
+
+For a local dry run on the dev branch:
 
 ```sh
-python scripts/sync_dev_runtime.py --write --report /tmp/dev-runtime-report.json
-python scripts/check_nav_integrity.py
-python scripts/validate_runtime_api_reference_slugs.py --generated-only
+python scripts/sync_dev_runtime.py --source production --report /tmp/dev-runtime-report.json
 ```
 
-### Automatic generation from the dev Runtime
+Add `--write` to apply validated outputs. The command rejects every branch
+except dev before acquisition or writes. `--source dev` remains available for
+explicit dev API checks; its complete live-facts reader retains double reads,
+provider hashes, a stable catalog and no redirects.
 
-Docs owns the same pull-and-generate responsibility as production. Development
-uses the live facts reader above because its formal immutable publisher is not
-enabled:
+## Automatic preview generation
 
-```text
-AIsaServices/dev -> deploy dev Runtime
-  -> Docs timer dispatches generate-dev-docs.yml at ref dev
-  -> Docs/dev pulls current dev contracts -> generate and validate
-  -> commit validated generated files and push directly to dev
-  -> Mintlify publishes aisa-docs-dev.mintlify.site
-```
+The default-branch timer only dispatches `generate-dev-docs.yml` at `ref: dev`.
+The dev workflow owns acquisition and generation, checks navigation and slugs,
+and commits only its generated-file allowlist. Mintlify publishes the generated
+dev commit at `https://aisa-docs-dev.mintlify.dev/docs`.
 
-GitHub schedules execute only from the default branch. The main version of
-`generate-dev-docs.yml` therefore contains only a ten-minute timer and a dispatch
-to the same workflow file at `ref: dev`. It does not check out code, read Runtime
-contracts, generate files or write a branch. The dev version contains the actual
-generator and accepts manual runs and pushes changing generator scripts,
-reviewed schema mirrors or the registry. Merge the generator PR into dev before
-merging the timer PR into main. Both changes require review through PRs.
+A fresh verified release is required even when `--if-changed` skips generation.
+Switching the source, release or input fingerprint prevents a skip. Generator
+changes force regeneration. No timestamps are added to committed output; the
+run artifact carries the observation time.
 
-The generator always checks out dev. It compares a fresh, verified snapshot's
-content fingerprint against `docs/dev-runtime.json`, rather than waiting for a
-particular Services Git SHA or HTTP revision header. New deployments with changed
-public contracts are picked up on a later timer run. Missing, stale or changing
-responses fail acquisition and preserve published files. This remains a dev
-preview, separate from formal production publication and consumer notification.
-
-The generation job requests only Contents write permission for the Docs
-repository's `GITHUB_TOKEN`. No PR creation permission or App credentials are
-required; dev branch rules must permit this token to push. Only the generated
-file allowlist is committed after validation. If remote dev changed during
-generation, publication fails and a later run must regenerate from the latest
-dev. The push never forces or rebases the validated candidate. Unchanged output
-creates no commit. Pushes made with `GITHUB_TOKEN` do not trigger additional
-GitHub Actions push workflows; the generation job performs its own validation.
-
-A fresh stable snapshot is acquired even when generation is skipped. Category
-cache timestamps are excluded from both fingerprints and snapshot hashes, so
-unchanged data cannot add timestamp-only commits to dev. Pushes that
-change generator inputs force generation; manual runs can select `force`.
-New or changed contracts use the existing Composer; blocked providers remain
-explicit in `docs/dev-runtime.json` and the Actions generation report. No
-business API or upstream provider calls are made. To retry, run **Generate dev
-Runtime docs**, selecting dev, or use the main timer's manual dispatch.
+If acquisition or validation fails, the current site remains intact. If dev
+moves during generation, publication fails and a later run regenerates from the
+new tip; it never force pushes or rebases a validated candidate. The workflow
+cannot commit or publish to main.
 
 ## Work on dev
 

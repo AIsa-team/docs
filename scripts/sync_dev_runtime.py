@@ -1,7 +1,8 @@
-"""Generate dev documentation from a stable public dev Runtime facts snapshot.
+"""Generate dev documentation from verified dev or production Runtime facts.
 
 This is a dev preview consumer, independent of production formal publication.
-It never acquires production inputs, approves source receipts, or notifies consumers.
+Production preview reads public immutable releases but never publishes to main,
+approves source receipts, or notifies production consumers.
 """
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -19,6 +20,7 @@ import time
 import yaml
 
 from fetch_runtime_release import PublicReader, decode, require, sha, category_content
+from fetch_runtime_release import acquire as acquire_release, validate_current, ACQUISITION_SECONDS
 from pull_openapi import stage, update_disabled_indexing
 from check_nav_integrity import nav_pages
 from pricing_prose import clean_page, remove_price_summary
@@ -31,6 +33,7 @@ from runtime_consolidate_openapi import (build_unified_spec, publication_yaml,
 
 
 DEV_ORIGIN = 'https://dev-api.aisa.one'
+PROD_ORIGIN = 'https://api.aisa.one'
 ROOT = Path(__file__).resolve().parents[1]
 KEY = re.compile(r'[a-z0-9][a-z0-9_.-]*')
 ARCHIVE_NOTE = '<Warning>This endpoint is unavailable in the current dev Runtime contract snapshot.</Warning>\n\n'
@@ -38,6 +41,33 @@ HISTORIC_NOTES = {
     'en': '<Warning>This existing API reference is preserved. This endpoint has not been verified in the current dev Runtime contract snapshot.</Warning>\n\n',
     'zh': '<Warning>此页面保留原有接口文档。该接口尚未在当前 dev Runtime 合同中验证。</Warning>\n\n',
 }
+PRODUCTION_NOTES = {
+    'en': '<Warning>This reference has not been verified against the current production API contract.</Warning>\n\n',
+    'zh': '<Warning>此文档尚未通过当前生产接口契约的核验。</Warning>\n\n',
+}
+DISABLED_NOTES = {
+    'en': '<Warning>This endpoint is disabled. Its historical documentation is retained for reference.</Warning>\n\n',
+    'zh': '<Warning>此接口已停用，保留历史文档仅供参考。</Warning>\n\n',
+}
+
+
+def source_origin(source):
+    require(source in {'dev', 'production'}, 'Unsupported Runtime source')
+    return PROD_ORIGIN if source == 'production' else DEV_ORIGIN
+
+
+def acquire_production(reader):
+    """Reuse the production release reader; do not fall back to mixed live facts."""
+    current = decode(reader('/public/api-contract/current')[0])
+    revision, compiler = current.get('artifact_revision'), current.get('compiler_revision')
+    validate_current(current, revision, compiler)
+    contents, category, _, _, receipt = acquire_release(revision, compiler, reader)
+    files = {'index.json': contents['index.json'], 'category.json': category}
+    files.update({Path(name).name: raw for name, raw in contents.items() if name.startswith('providers/')})
+    provenance = {key: receipt[key] for key in (
+        'artifact_revision', 'compiler_revision', 'source_digest', 'generation',
+        'fresh_before_and_after', 'provider_count')}
+    return files, provenance
 
 
 def prune_navigation(node, hidden):
@@ -82,7 +112,7 @@ def preserve_navigation(previous, current):
     return merge(previous, additions)
 
 
-def scope_presentation(candidate, aggregate, summary):
+def scope_presentation(candidate, aggregate, summary, *, source='dev'):
     """Preserve reference navigation; aggregate only verified dev contracts."""
     config_path = candidate / 'docs.json'
     config = json.loads(config_path.read_text())
@@ -99,8 +129,9 @@ def scope_presentation(candidate, aggregate, summary):
     if 'providers' in metadata:
         metadata['providers'] = {key: value for key, value in metadata['providers'].items() if key in active}
     aggregate['info']['title'] = 'AIsa Dev API'
-    aggregate['info']['x-aisa-environment'] = 'dev'
-    aggregate['info']['x-aisa-publication-kind'] = 'live_facts_preview'
+    aggregate['info']['x-aisa-environment'] = source
+    aggregate['info']['x-aisa-docs-environment'] = 'dev'
+    aggregate['info']['x-aisa-publication-kind'] = 'production_release_preview' if source == 'production' else 'live_facts_preview'
     documents = {}
     catalog_path = candidate / 'translations/openapi-zh.json'
     catalog = json.loads(catalog_path.read_text()) if catalog_path.exists() else {'entries': {}}
@@ -138,7 +169,7 @@ def scope_presentation(candidate, aggregate, summary):
             reference = page.relative_to(candidate).with_suffix('').as_posix()
             unlisted = unverified and reference not in listed
             text = update_disabled_indexing(text, unlisted).replace(ARCHIVE_NOTE, '')
-            for note in HISTORIC_NOTES.values():
+            for note in (*HISTORIC_NOTES.values(), *PRODUCTION_NOTES.values(), *DISABLED_NOTES.values()):
                 text = text.replace(note, '')
             if unverified:
                 language = 'zh' if base.startswith('zh/') else 'en'
@@ -160,6 +191,9 @@ def scope_presentation(candidate, aggregate, summary):
                 else:
                     preserved.add(reference)
                     notice = HISTORIC_NOTES['zh' if base.startswith('zh/') else 'en']
+                if source == 'production':
+                    notes = DISABLED_NOTES if operation is not None and operation.get('x-aisa-status') == 'disabled' else PRODUCTION_NOTES
+                    notice = notes[language]
                 # Put the notice after frontmatter, preserving endpoint identity.
                 end = text.index('\n---\n', 4) + 5
                 text = text[:end] + notice + text[end:]
@@ -167,10 +201,10 @@ def scope_presentation(candidate, aggregate, summary):
 
     config['name'] = 'AIsa Dev'
     config.setdefault('markdown', {})['instructions'] = (
-        '- Environment: dev. Use a dev API key with `Authorization: Bearer $AISA_API_KEY`.\n'
-        '- API base: `https://dev-api.aisa.one/apis/v1`. Follow each operation\'s servers.\n'
+        f'- Documentation environment: dev. API environment: {source}. Use an API key for that environment.\n'
+        f'- API base: `{source_origin(source)}/apis/v1`. Follow each operation\'s servers.\n'
         '- Dev OpenAPI: https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev/openapi.yaml.\n'
-        '- Call only operations present in the dev contract. Do not make paid calls to test availability.\n'
+        '- Call only operations present in the selected contract. Do not make paid calls to test availability.\n'
         '- Never print, log, or commit API keys.'
     )
     config_path.write_text(json.dumps(config, indent=2, ensure_ascii=False) + '\n')
@@ -217,9 +251,14 @@ def acquire(reader):
     return files
 
 
-def dev_urls(text):
-    return (text.replace('https://api.aisa.one', DEV_ORIGIN)
-            .replace('https://console.aisa.one', 'https://dev-console.aisa.one')
+def dev_urls(text, source='dev'):
+    # Switch only the known first-party API/console origins when previewing
+    # another source; schema links always point to this dev documentation build.
+    if source == 'production':
+        text = text.replace(DEV_ORIGIN, PROD_ORIGIN).replace('https://dev-console.aisa.one', 'https://console.aisa.one')
+    else:
+        text = text.replace(PROD_ORIGIN, DEV_ORIGIN).replace('https://console.aisa.one', 'https://dev-console.aisa.one')
+    return (text
             .replace('https://aisa.one/docs/openapi/',
                      'https://raw.githubusercontent.com/AIsa-team/docs/refs/heads/dev/openapi/')
             .replace('https://aisa.one/openapi.yaml',
@@ -240,8 +279,9 @@ def inputs_sha256(files):
     return sha(json.dumps(snapshot_hashes(files), sort_keys=True, separators=(',', ':')).encode())
 
 
-def generate(root, files):
+def generate(root, files, *, source='dev', source_release=None):
     """Stage with the existing Composer/page generator; never mutate input files."""
+    origin = source_origin(source)
     previous_navigation = json.loads((root / 'docs.json').read_text()).get('navigation', {})
     with tempfile.TemporaryDirectory(prefix='dev-docs-') as folder:
         candidate = Path(folder) / 'site'
@@ -261,7 +301,7 @@ def generate(root, files):
         registry_path.write_text(yaml.safe_dump(registry, sort_keys=False, allow_unicode=True))
         context = {'offline': True}
         history = published_history(root)
-        changes, summary = stage(candidate, facts, DEV_ORIGIN, True, context,
+        changes, summary = stage(candidate, facts, origin, True, context,
                                  identity_history=history, reuse_unchanged_documents=False)
         blocked = [key for key, value in summary.items() if value.get('blocked')]
         for path, text in changes.items():
@@ -278,7 +318,7 @@ def generate(root, files):
         # The platform index lists every platform group, including new ones.
         write_index_pages(candidate)
         aggregate = build_unified_spec(root=candidate)
-        presentation = scope_presentation(candidate, aggregate, summary)
+        presentation = scope_presentation(candidate, aggregate, summary, source=source)
         inject_x402_annotations(aggregate)
         remove_v2_path_mirrors(aggregate)
         (candidate / 'openapi/openapi.json').write_text(json.dumps(aggregate, ensure_ascii=False, separators=(',', ':')) + '\n')
@@ -292,14 +332,16 @@ def generate(root, files):
             name = path.relative_to(candidate).as_posix()
             if name.startswith(('scripts/', 'snippets/', 'zh/snippets/')):
                 continue
-            outputs[name] = dev_urls(path.read_text()).encode()
+            outputs[name] = dev_urls(path.read_text(), source).encode()
         # Scope acquisition/composition in the private candidate while keeping
         # reviewed source configuration for history and future dev catalogs.
         retained_registry['providers'].update(yaml.safe_load(registry_path.read_text())['providers'])
         outputs['openapi/registry.yaml'] = yaml.safe_dump(
             retained_registry, sort_keys=False, allow_unicode=True).encode()
-        report = {'schema_version': 1, 'environment': 'dev', 'runtime_origin': DEV_ORIGIN,
-                  'kind': 'live_facts_preview', 'formal_publication': False,
+        report = {'schema_version': 1, 'environment': 'dev', 'runtime_origin': origin,
+                  'source_environment': source, 'source_release': source_release,
+                  'kind': 'production_release_preview' if source == 'production' else 'live_facts_preview',
+                  'formal_publication': False,
                   'status': 'partial' if blocked or any(pending['providers'].values()) else 'generated',
                   'blocked_providers': blocked, **presentation,
                   'inputs_sha256': inputs_sha256(files),
@@ -313,16 +355,18 @@ def generate(root, files):
         return outputs, report
 
 
-def sync(root, *, write=False, if_changed=False, reader=None):
+def sync(root, *, write=False, if_changed=False, reader=None, source='dev'):
     branch = subprocess.check_output(['git', 'branch', '--show-current'], cwd=root, text=True).strip()
     require(branch == 'dev', 'Dev Runtime sync requires the dev branch')
-    reader = reader or PublicReader(DEV_ORIGIN, time.monotonic() + 600)
-    files = acquire(reader)
-    print('Acquired stable dev Runtime facts: ' + str(len(files) - 2) + ' providers', flush=True)
+    origin = source_origin(source)
+    reader = reader or PublicReader(origin, time.monotonic() + ACQUISITION_SECONDS)
+    files, source_release = acquire_production(reader) if source == 'production' else (acquire(reader), None)
+    print('Acquired verified ' + source + ' Runtime facts: ' + str(len(files) - 2) + ' providers', flush=True)
     previous_path = root / 'docs/dev-runtime.json'
     if if_changed and previous_path.exists():
         previous = json.loads(previous_path.read_text())
-        if (previous.get('environment') == 'dev' and previous.get('runtime_origin') == DEV_ORIGIN
+        if (previous.get('environment') == 'dev' and previous.get('runtime_origin') == origin
+                and previous.get('source_release') == source_release
                 and previous.get('formal_publication') is False
                 and previous.get('status') in {'generated', 'partial'}
                 and previous.get('inputs_sha256') == inputs_sha256(files)):
@@ -334,7 +378,7 @@ def sync(root, *, write=False, if_changed=False, reader=None):
     cache.mkdir(parents=True, exist_ok=True)
     for name, raw in files.items():
         (cache / name).write_bytes(raw)
-    outputs, report = generate(root, files)
+    outputs, report = generate(root, files, source=source, source_release=source_release)
     changed = {name: raw for name, raw in outputs.items()
                if not (root / name).exists() or (root / name).read_bytes() != raw}
     # Reuse presentation validation against a complete private candidate before
@@ -362,15 +406,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=ROOT)
     parser.add_argument('--write', action='store_true')
+    parser.add_argument('--source', choices=('dev', 'production'), default='dev',
+                        help='API contract source; output and publication always remain on dev')
     parser.add_argument('--if-changed', action='store_true',
                         help='Skip generation when verified dev Runtime inputs are unchanged')
     parser.add_argument('--report', type=Path, required=True)
     args = parser.parse_args()
     try:
-        report = sync(args.root, write=args.write, if_changed=args.if_changed)
+        report = sync(args.root, write=args.write, if_changed=args.if_changed, source=args.source)
         result = 0
     except Exception as exc:
-        report = {'environment': 'dev', 'runtime_origin': DEV_ORIGIN,
+        report = {'environment': 'dev', 'runtime_origin': source_origin(args.source),
                   'status': 'failed', 'error': str(exc) if isinstance(exc, ValueError) else type(exc).__name__}
         result = 1
     args.report.parent.mkdir(parents=True, exist_ok=True)
