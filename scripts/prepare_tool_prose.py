@@ -14,6 +14,7 @@ import re
 import subprocess
 
 from audit_tool_prose import METHODS, SKIP, PRICE
+from tool_prose_editorial import editorial_text, english_prose
 
 
 def resolve(value, document, seen=()):
@@ -298,6 +299,8 @@ def prepare(root, runtime_dir, services_root, output, docs_ref=None):
                 if fact:
                     used_runtime.add(key)
                     description = retain_runtime_free_statement(description, fact[0])
+                summary = english_prose(summary)
+                description = editorial_text(description, native=path.startswith(('/apis/v1/social/', '/apis/v1/ads/')), notice=True)
                 before = {'summary': operation.get('summary', ''), 'description': clean(operation.get('description'))}
                 after = {'summary': summary, 'description': description}
                 changed = before != after
@@ -353,6 +356,8 @@ def prepare(root, runtime_dir, services_root, output, docs_ref=None):
         if (path, method, operation_id) in used_runtime:
             continue
         summary, description, disposition = prepare_text(operation, document, document['paths'][path])
+        summary = english_prose(summary)
+        description = editorial_text(description, native=path.startswith(('/apis/v1/social/', '/apis/v1/ads/')), notice=True)
         before = {'summary': operation.get('summary', ''), 'description': clean(operation.get('description'))}
         after = {'summary': summary, 'description': description}
         changed = before != after

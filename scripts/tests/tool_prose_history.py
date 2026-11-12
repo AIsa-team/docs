@@ -33,6 +33,17 @@ def before_tool_prose_amendment(root, name, document=None):
     if not edits:
         raise ValueError('Missing prose amendment entries')
     for row in edits:
+        if 'pointer' in row:
+            pointer = row['pointer']
+            if not pointer or pointer[-1] not in ('summary', 'description'):
+                raise ValueError('Non-prose amendment pointer')
+            node = document
+            for part in pointer[:-1]:
+                node = node[part]
+            if node[pointer[-1]] != row['after']:
+                raise ValueError('Declaration prose differs from reviewed change table')
+            node[pointer[-1]] = row['before']
+            continue
         operation = document['paths'][row['source_path']][row['method']]
         for key in ('summary', 'description'):
             if operation.get(key) != row['after'][key]:

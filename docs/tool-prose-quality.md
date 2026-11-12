@@ -10,10 +10,10 @@ therefore differ.
 | Coverage | Count |
 |---|---:|
 | Public operations assessed | 6,468 |
-| Operations with revised text | 5,630 |
-| Existing prose preserved | 838 |
-| Guarded Runtime prose identities | 5,596 |
-| Static source operations amended | 2,089 |
+| Operations with revised text | 5,639 |
+| Existing prose preserved | 829 |
+| Guarded Runtime prose identities | 5,605 |
+| Static source operations amended | 2,156 |
 | Static source files amended | 44 |
 
 The static and dynamic counts overlap; do not add them as independent tools.
@@ -108,9 +108,9 @@ included in this prose change.
 ## Review follow-up and publication limits
 
 The preparation step removes U+200B/U+200C/U+200D/U+FEFF export artifacts and
-rejects the exact pricing placeholder `默认价格配置` as useful prose. Explicit
-Runtime `Free` statements survive the known `See the published pricing`
-projection substitution; no prices or billing rules change.
+rejects the exact pricing placeholder `默认价格配置` as useful prose. Original
+Runtime text remains intact in matching/evidence fields. The final editorial pass
+removes unverified supplier Free claims; actual prices and billing rules are unchanged.
 
 The companion AIsaServices PR now includes Social/Commerce PR #1278. Those
 newer code-owned descriptions win over this captured prose amendment through
@@ -160,3 +160,30 @@ These are the complete 12 purpose-only cases after the follow-up. A richer publi
 | financial | `getEarningsPressReleases` |
 | financial | `getSegmentedRevenues` |
 | financial | `getInstitutionalOwnership` |
+
+## Billing wording and English source review
+
+The follow-up removes unsupported supplier credit rates and failure/refund promises
+from operation prose, parameter/response descriptions and document introductions.
+The exact, reviewed old/new clauses are in
+`scripts/data/tool-prose-billing-corrections.json`; this is not a blanket keyword
+filter. AIsa-owned Social pricing statements remain tied to its code-owned pricing
+contract. Unverified Akta `Free` claims now defer to AIsa pricing; this supersedes
+the earlier preserve-Free editorial decision. Attribution/film credits, tax
+credits, booking refund data, business prices and returned usage fields are retained.
+The added notice points to applicable AIsa pricing and a request quote where
+supported, and distinguishes upstream counters from AIsa charges/refunds.
+
+API source explanations are English, including provider prefixes, BytePlus monitor
+and Semrush descriptions and four bilingual TikHub region-parameter declarations.
+The explicitly localized `zh` site is retained. Required Chinese enum values,
+response keys/messages and examples remain literal wire data, with English
+explanations; `WIRE_LITERAL_TEXT` records the reviewed exceptions. Language tests
+cover all 6,468 catalog rows and all static upstream source declaration prose.
+Raw captures and before/evidence text remain unchanged for provenance.
+
+The static manifest now also records 138 nested/introductory declaration text edits
+as exact JSON pointers. Only summary/description leaves may be edited; enums,
+defaults, examples, identifiers, request/response structure, pricing metadata and
+source authority/clocks must reconstruct exactly. These fields are included in
+the same 44-file source-history verification, not counted as additional tools.

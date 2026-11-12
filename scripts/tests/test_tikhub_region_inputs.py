@@ -61,7 +61,13 @@ class TikHubRegionInputsTests(unittest.TestCase):
             composed, pending = compose(runtime, public_mirrors=mirrors)
             self.assertFalse(pending)
             parameters = composed['paths'][row['public_path']]['get']['parameters']
-            self.assertEqual([p for p in parameters if p.get('name') == 'region'], [row['parameter']])
+            expected = copy.deepcopy(row['parameter'])
+            # The later English-only prose amendment preserves the complete
+            # parameter contract; only the duplicated Chinese explanation changes.
+            wording = 'Region code: US/SG/MY/PH/TH/VN/ID/JP/MX; GB and BR are unavailable.'
+            expected['description'] = wording
+            expected['schema']['description'] = wording
+            self.assertEqual([p for p in parameters if p.get('name') == 'region'], [expected])
 
 
 if __name__ == '__main__':
