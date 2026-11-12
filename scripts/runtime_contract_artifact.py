@@ -13,8 +13,8 @@ MAX_METADATA = 1 << 20
 # The current production aggregate is about 45 MB. Keep an explicit ceiling
 # while accepting the complete graph; individual provider limits stay separate.
 MAX_AGGREGATE = 64 << 20
-# The outer 2,048-file release includes both facts and native files. Its
-# largest closed graph has 1,022 providers plus aggregate/readiness members.
+# Native catalogs can group raw facts differently. Bound their inventory
+# separately while retaining the outer 2,048-file cap over the whole release.
 MAX_CANONICAL_MEMBERS = 1024
 FACT = re.compile(r'(?:index\.json|providers/[a-z0-9][a-z0-9_.-]*\.json)')
 NATIVE = re.compile(r'contracts/native/[a-z0-9][a-z0-9_.-]*\.json')
