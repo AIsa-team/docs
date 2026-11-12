@@ -10,6 +10,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import public_projection  # noqa: E402
 import release_gate  # noqa: E402
 from playground_examples import example_sha256  # noqa: E402
 
@@ -64,10 +65,13 @@ class Tree:
         self.exclusions.write_text(json.dumps({'schema_version': 1, 'docs_only': [], 'release_only': []}))
         self.drift = self.root / 'drift.json'
         self.drift.write_text(json.dumps({'schema_version': 1, 'operations': []}))
+        self.projection = self.root / 'projection.json'
+        self.projection.write_text(json.dumps({'schema_version': 1, 'catalogs': ['widgets']}))
+        public_projection.write(self.root, ['widgets'])
 
     def run(self, environ=None, **kwargs):
         options = dict(facts_dir=self.facts, scope_path=self.scope, exclusions_path=self.exclusions,
-                       drift_path=self.drift, environ={'SUPPLIER_VOCAB_JSON': TERMS, **(environ or {})},
+                       drift_path=self.drift, projection_path=self.projection, environ={'SUPPLIER_VOCAB_JSON': TERMS, **(environ or {})},
                        yaml_loader=lambda path: json.loads(Path(path).read_text()))
         options.update(kwargs)
         return release_gate.run(self.root, **options)
@@ -132,10 +136,31 @@ class ReleaseGateTests(unittest.TestCase):
 
     def test_g3_checks_a_published_projection(self):
         tree = self.tree()
-        (tree.root / 'openapi-public').mkdir()
         (tree.root / 'openapi-public/widgets.json').write_text(json.dumps({'x-aisa-source': {}}))
         g3 = tree.run()['gates']['G3']
         self.assertEqual((g3['status'], g3['public_projection']), ('failed', 'checked'))
+        self.assertIn('PV02', {row['rule'] for row in g3['provenance']})
+
+    def test_g3_projection_must_cover_scope_and_be_current(self):
+        tree = self.tree()
+        g3 = tree.run()['gates']['G3']
+        self.assertEqual((g3['status'], g3['provenance']), ('passed', []))
+        # An in-scope catalog outside the reviewed list blocks the release.
+        tree.projection.write_text(json.dumps({'schema_version': 1, 'catalogs': []}))
+        rules = {(row['rule'], row.get('problem')) for row in tree.run()['gates']['G3']['provenance']}
+        self.assertIn(('PV04', 'in_scope_catalog_not_projected'), rules)
+        self.assertIn(('PV03', 'unexpected'), rules)
+        tree.projection.write_text(json.dumps({'schema_version': 1, 'catalogs': ['widgets']}))
+        # A formal catalog change without a fresh projection is stale.
+        catalog = json.loads((tree.root / 'openapi/widgets.json').read_text())
+        catalog['paths']['/apis/v1/widgets/search']['get']['summary'] = 'Changed'
+        (tree.root / 'openapi/widgets.json').write_text(json.dumps(catalog))
+        g3 = tree.run()['gates']['G3']
+        self.assertEqual(g3['provenance'], [{'location': 'openapi-public/widgets.json', 'rule': 'PV03', 'problem': 'stale'}])
+        public_projection.write(tree.root, ['widgets'])
+        self.assertEqual(tree.run()['gates']['G3']['status'], 'passed')
+        (tree.root / 'openapi-public/widgets.json').unlink()
+        self.assertEqual(tree.run()['gates']['G3']['provenance'][0]['problem'], 'missing')
 
     def test_g4_example_without_verified_evidence_blocks(self):
         for op, reason in [(operation(verified=False), 'reference_example_without_verified_evidence'),
@@ -172,7 +197,8 @@ class ReleaseGateTests(unittest.TestCase):
     def test_cli_exit_codes_and_rollback_switch(self):
         tree = self.tree({'/apis/v1/widgets/search': {'get': operation(verified=False)}})
         args = ['--root', str(tree.root), '--facts-dir', str(tree.facts), '--scope', str(tree.scope),
-                '--exclusions', str(tree.exclusions), '--drift', str(tree.drift), '--report', str(tree.root / 'gate.json')]
+                '--exclusions', str(tree.exclusions), '--drift', str(tree.drift), '--projection', str(tree.projection),
+                '--report', str(tree.root / 'gate.json')]
         with mock.patch.object(release_gate, 'load_yaml', lambda path: json.loads(Path(path).read_text())), \
                 contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             with mock.patch.dict('os.environ', {'RELEASE_GATE_ENFORCE': ''}):

@@ -13,7 +13,9 @@ class MintStaticExclusionTests(unittest.TestCase):
     def test_only_aggregate_is_excluded_and_canonical_redirect_is_retained(self):
         patterns = [line.strip() for line in (ROOT / '.mintignore').read_text().splitlines()
                     if line.strip() and not line.lstrip().startswith('#')]
-        self.assertEqual(patterns, ['/openapi.yaml', '/openapi/openapi.json'])
+        # Spec #1285 R1: provenance mirrors and internal evidence are not served;
+        # API page sources (openapi/<id>.json, openapi-public/) stay available.
+        self.assertEqual(patterns, ['/openapi.yaml', '/openapi/openapi.json', '/openapi/upstream/', '/docs/', '/scripts/'])
         redirects = json.loads((ROOT / 'docs.json').read_text())['redirects']
         for source in ('/openapi.json', '/openapi/openapi.json'):
             self.assertIn({'source': source, 'destination': 'https://aisa.one/openapi.json', 'permanent': True}, redirects)

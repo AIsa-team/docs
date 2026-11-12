@@ -14,7 +14,9 @@ exits 1 and the publication is neither exported nor pushed:
   hash text (vocab_scan.py).
 * G3 forbidden content: no placeholder values in in-scope request examples or
   Reference examples; no provenance field names in rendered pages or llms.txt;
-  no provenance fields in the public projection when one is published.
+  the public projection openapi-public/ (public_projection.py) exists for
+  every in-scope catalog, equals a fresh projection of openapi/, and holds no
+  provenance field.
 * G4 example evidence: every in-scope Reference example joins a Runtime
   `x-aisa-example` record with state `verified` and the same example SHA256.
 
@@ -42,12 +44,14 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 
 from playground_examples import REFERENCE_LABEL, example_scenario, example_sha256  # noqa: E402
 from upstream_semantics import BLOCKING_DRIFT  # noqa: E402
+import public_projection  # noqa: E402
 import vocab_scan  # noqa: E402
 
 METHODS = ('get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace')
 SCOPE = ROOT / 'scripts/release_gate_scope.json'
 EXCLUSIONS = ROOT / 'scripts/aggregate_exclusions.json'
 DRIFT = ROOT / 'docs/publication/upstream-drift.json'
+PROJECTION = public_projection.CATALOGS
 REPORT = ROOT / 'docs/publication/release-gate.json'
 AGGREGATE = 'contracts/openapi.json'
 INTEGRATION_PREFIX = '/apis/v1/'
@@ -200,7 +204,7 @@ def operation_pointer(route, method):
 
 
 def run(root=ROOT, *, facts_dir=None, scope_path=SCOPE, exclusions_path=EXCLUSIONS, rules_path=vocab_scan.RULES,
-        drift_path=DRIFT, environ=None, yaml_loader=load_yaml, catalogs=None):
+        drift_path=DRIFT, environ=None, yaml_loader=load_yaml, catalogs=None, projection_path=PROJECTION):
     root = Path(root)
     environ = os.environ if environ is None else environ
     scope = load_scope(scope_path)
@@ -212,12 +216,15 @@ def run(root=ROOT, *, facts_dir=None, scope_path=SCOPE, exclusions_path=EXCLUSIO
     report = {'schema_version': 1, 'gates': {}}
     report['gates']['G1'] = gate_g1(root, facts_dir, exclusions, yaml_loader=yaml_loader)
 
+    projected = public_projection.load_catalogs(projection_path)
     vocab, placeholders, provenance, evidence, pending = [], [], [], [], []
-    pages_seen, scoped = set(), 0
+    pages_seen, scoped, unprojected = set(), 0, set()
     for path, document, route, method, operation in in_scope_operations(root, scope, catalogs):
         scoped += 1
         location = path.relative_to(root).as_posix()
         pointer = operation_pointer(route, method)
+        if path.stem not in projected:
+            unprojected.add(path.stem)
         vocab += vocab_scan.scan_json(operation, rules, location, pointer)
         zh = root / 'openapi/zh' / path.name
         if zh.is_file():
@@ -271,7 +278,11 @@ def run(root=ROOT, *, facts_dir=None, scope_path=SCOPE, exclusions_path=EXCLUSIO
                 for number, line in enumerate(target.read_text().split('\n'), 1):
                     if PROVENANCE_TEXT.search(line):
                         provenance.append({'location': f'llms.txt:{number}', 'rule': 'PV01'})
-    projection = root / 'openapi-public'
+    for name in sorted(unprojected):
+        provenance.append({'location': f'openapi/{name}.json', 'rule': 'PV04', 'problem': 'in_scope_catalog_not_projected'})
+    for name, problem in public_projection.check(root, projected):
+        provenance.append({'location': name, 'rule': 'PV03', 'problem': problem})
+    projection = root / public_projection.PUBLIC_DIR
     projection_state = 'absent'
     if projection.is_dir():
         projection_state = 'checked'
@@ -313,10 +324,11 @@ def main(argv=None):
     parser.add_argument('--exclusions', type=Path, default=EXCLUSIONS)
     parser.add_argument('--rules', type=Path, default=vocab_scan.RULES)
     parser.add_argument('--drift', type=Path, default=DRIFT)
+    parser.add_argument('--projection', type=Path, default=PROJECTION, help='Reviewed public projection catalog list')
     parser.add_argument('--report', type=Path, default=REPORT)
     args = parser.parse_args(argv)
     report = run(args.root, facts_dir=args.facts_dir, scope_path=args.scope, exclusions_path=args.exclusions,
-                 rules_path=args.rules, drift_path=args.drift)
+                 rules_path=args.rules, drift_path=args.drift, projection_path=args.projection)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2, ensure_ascii=False) + '\n')
     for name, gate in report['gates'].items():

@@ -103,7 +103,10 @@ def request_details(operation, document, method, path, spec_path, language="en")
     revision = document.get("info", {}).get("x-aisa-document", {})
     if revision.get("facts_hash"):
         lines.append("- **" + t("Runtime facts", "Runtime 事实版本") + ":** " + safe(revision["facts_hash"]))
-    lines += ["", "[" + t("Complete OpenAPI definition", "完整 OpenAPI 定义") + "](https://aisa.one/docs/" + spec_path + ")", "",
+    # Spec #1285 R1: projected catalogs link their customer-facing copy
+    # (openapi-public/, provenance removed) instead of the formal file.
+    from public_projection import link_catalogs, public_path
+    lines += ["", "[" + t("Complete OpenAPI definition", "完整 OpenAPI 定义") + "](https://aisa.one/docs/" + public_path(spec_path, link_catalogs()) + ")", "",
               t("Effective request and pricing declaration (including authentication and referenced schemas):", "有效请求与价格声明（包括认证和引用的 schema）："), ""]
     serialized = json.dumps(request, ensure_ascii=False, indent=2, allow_nan=False)
     # A source string cannot terminate this fenced code block.
