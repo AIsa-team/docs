@@ -10,11 +10,11 @@ therefore differ.
 | Coverage | Count |
 |---|---:|
 | Public operations assessed | 6,468 |
-| Operations with revised text | 5,319 |
-| Existing prose preserved | 1,149 |
-| Guarded Runtime prose identities | 5,295 |
-| Static source operations amended | 1,865 |
-| Static source files amended | 42 |
+| Operations with revised text | 5,630 |
+| Existing prose preserved | 838 |
+| Guarded Runtime prose identities | 5,596 |
+| Static source operations amended | 2,089 |
+| Static source files amended | 44 |
 
 The static and dynamic counts overlap; do not add them as independent tools.
 `tool-prose-coverage-20261112.csv` contains every operation, old/new prose,
@@ -34,10 +34,23 @@ conditional. Generic response envelopes do not become invented domain fields.
 Long original text, caveats, pagination, login-cookie and account requirements
 are retained in full; concise purpose/input guidance is placed first.
 
-For 903 operations the available contract only establishes a purpose, without
-usable named request or response fields. Their wording stays within that declared
-purpose and provider context. This is complete coverage of the available evidence,
-not a claim of 900 newly verified upstream schemas or individual live execution.
+The follow-up fixes grouped title repetitions (including all 15 AgentMail cases),
+array items, conditional schema alternatives, allOf requirements, operation-level
+parameter overrides and named response fields inside data envelopes. 446 brief
+existing descriptions gain missing required-input guidance while retaining their
+original text. Relative to the preceding revision, 311 additional operations change.
+
+Of the previous 903 purpose-only operations, 26 now use additional declared schema
+detail and 865 use exactly bound source descriptions: 143 from the pinned Treg
+revision and 722 from 264 public Alexandria provider pages. The excerpts, exact
+public identity, original title, source URL and captured source SHA-256 are in
+`scripts/data/tool-prose-purpose-evidence.json`. This is capability documentation,
+not new request/response schema approval or live API verification. Treg excerpts
+omit two upstream billing statements that do not establish AIsa prices.
+
+12 operations still have only their declared purpose; they remain explicitly
+marked `bounded_to_declared_purpose` in the CSV and JSON. Their missing detailed
+source evidence is not replaced with invented parameters or output guarantees.
 The process combines deterministic contract extraction and explicit individual
 wording; it is not a claim that every tool received independent manual review.
 
@@ -56,7 +69,7 @@ captured Composio descriptions during import. Runtime description precedence
 remains intact. Source acquisition clocks and original provenance are preserved;
 the new prose layer records its original document hash and exact change manifest.
 Historical schema tests validate and undo that layer before their older checks;
-a separate test proves that no non-prose declaration changed in any of 42 files.
+a separate test proves that no non-prose declaration changed in any of 44 files.
 
 The standalone, unbound Gemini contract also receives its missing description, with an exact non-prose hash check. Its Chinese copy, translation memory, aggregate OpenAPI and derived catalog hashes are synchronized. Other generated provider JSON/pages are not rewritten. The normal reviewed source
 bundle, Runtime contract publication and Docs projection are still required for
@@ -128,3 +141,22 @@ Completing Chinese translations is required before claiming Chinese coverage.
 Internal audit files are explicitly excluded by `.mintignore`; GitHub retains
 the full review trail. Polymarket source-maintenance evidence continues to block
 formal publication; no approval or successful acquisition is fabricated.
+
+## Remaining source-detail gaps
+
+These are the complete 12 purpose-only cases after the follow-up. A richer public contract or exact-bound source description is still required.
+
+| Provider | Operation |
+|---|---|
+| api-ninjas | `api-ninjas.bitcoin` |
+| hackernews | `hackernews.maxitem` |
+| hackernews | `hackernews.updates` |
+| job-search | `job-search.glassdoor-realtime-list-salary-filters` |
+| twelvedata | `twelvedata.etfs-type` |
+| twelvedata | `twelvedata.get-technical-indicators-list` |
+| youtube | `youtube.shorts.trending` |
+| financial | `any_financial_apis_v1_financial_crypto_prices` |
+| financial | `any_financial_apis_v1_financial_crypto_prices_snapshot` |
+| financial | `getEarningsPressReleases` |
+| financial | `getSegmentedRevenues` |
+| financial | `getInstitutionalOwnership` |

@@ -11,7 +11,7 @@ class ToolProseHistoryTests(unittest.TestCase):
     def test_all_amended_sources_preserve_every_nonprose_declaration(self):
         rows = json.loads((ROOT / 'docs/tool-prose-changes-20261112.json').read_text())
         names = {row['source_file'] for row in rows}
-        self.assertEqual(len(names), 42)
+        self.assertEqual(len(names), 44)
         for name in sorted(names):
             with self.subTest(source=name):
                 before_tool_prose_amendment(ROOT, name)

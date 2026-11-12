@@ -87,28 +87,87 @@ def field_text(name, schema, description=''):
     return text.rstrip('.') + '.'
 
 
+def summary_only(description, *summaries):
+    def normalized(text):
+        return re.sub(r'\s+', ' ', clean(text)).strip().rstrip('.。').casefold()
+    value = normalized(description)
+    if not value or value in {'n/a', 'tbd', 'todo', 'no description', 'no description available'}:
+        return True
+    return any(normalized(summary) == value or
+               any(normalized(summary).endswith(separator + value) for separator in (' - ', ': ', ' / '))
+               for summary in summaries)
+
+
+def unconditional_required(schema, document, depth=0):
+    if depth > 5:
+        return set()
+    schema = resolve(schema, document)
+    names = set(schema.get('required', []))
+    for branch in schema.get('allOf', []):
+        names |= unconditional_required(branch, document, depth + 1)
+    return names
+
+
+def body_fields(schema, document, location, depth=0, inherited_required=()):
+    """Read declarations without flattening alternative branches into one contract."""
+    if depth > 5:
+        return []
+    schema = resolve(schema, document)
+    required = set(inherited_required) | unconditional_required(schema, document)
+    fields = [(name in required, location, field_text(name, resolve(field, document)))
+              for name, field in schema.get('properties', {}).items()]
+    if schema.get('type') == 'array' or 'items' in schema:
+        fields += body_fields(schema.get('items', {}), document, location + ' array item', depth + 1)
+    for branch in schema.get('allOf', []):
+        fields += body_fields(branch, document, location, depth + 1, required)
+    for keyword in ('oneOf', 'anyOf'):
+        branches = schema.get(keyword, [])
+        for index, branch in enumerate(branches):
+            conditional = f'{location}, {keyword} variant {index + 1} of {len(branches)} when selected'
+            fields += body_fields(branch, document, conditional, depth + 1, required)
+    return list(dict.fromkeys(fields))
+
+
+def response_fields(schema, document, prefix='', depth=0):
+    if depth > 5:
+        return []
+    schema = resolve(schema, document)
+    if schema.get('type') == 'array' or 'items' in schema:
+        return response_fields(schema.get('items', {}), document, prefix + '[]', depth + 1)
+    result = []
+    for name, field in schema.get('properties', {}).items():
+        path = (prefix + '.' if prefix else '') + name
+        if name in {'data', 'result', 'results'}:
+            result += response_fields(field, document, path, depth + 1)
+        elif name not in {'code', 'message', 'msg', 'status', 'success', 'request_id', 'error'}:
+            result.append(path)
+    for keyword in ('allOf', 'oneOf', 'anyOf'):
+        for branch in schema.get(keyword, []):
+            result += response_fields(branch, document, prefix, depth + 1)
+    return list(dict.fromkeys(result))
+
+
 def details(operation, document, path_item):
     required, optional = [], []
+    parameters = {}
     for raw in path_item.get('parameters', []) + operation.get('parameters', []):
         parameter = resolve(raw, document)
-        if not parameter.get('name'):
-            continue
+        if parameter.get('name'):
+            parameters[(parameter.get('in'), parameter['name'])] = parameter
+    for parameter in parameters.values():
         if parameter.get('in') == 'header' and not parameter.get('required'):
             continue
         text = field_text(parameter['name'], resolve(parameter.get('schema', {}), document), parameter.get('description', ''))
         (required if parameter.get('required') else optional).append((parameter.get('in', 'parameter'), text))
     body = resolve(operation.get('requestBody', {}), document)
     for media, content in body.get('content', {}).items():
-        if media != 'application/json':
+        if media not in {'application/json', 'application/x-www-form-urlencoded', 'multipart/form-data'}:
             continue
-        schema = resolve(content.get('schema', {}), document)
-        for name, field in schema.get('properties', {}).items():
-            # A required property in an optional body is conditional, not a
-            # globally required input.
-            is_required = name in schema.get('required', [])
-            location = 'JSON body' if body.get('required') else 'JSON body, when supplied'
-            (required if is_required else optional).append((location, field_text(name, resolve(field, document))))
-        break
+        location = 'JSON body' if media == 'application/json' else media + ' body'
+        if not body.get('required'):
+            location += ', when supplied'
+        for is_required, field_location, text in body_fields(content.get('schema', {}), document, location):
+            (required if is_required else optional).append((field_location, text))
     sections = []
     for label, fields, limit in [('Required inputs', required, len(required)), ('Key optional inputs', optional, 5)]:
         if fields:
@@ -119,14 +178,7 @@ def details(operation, document, path_item):
             continue
         response = resolve(raw, document)
         for content in response.get('content', {}).values():
-            schema = resolve(content.get('schema', {}), document)
-            if schema.get('type') == 'array':
-                schema = resolve(schema.get('items', {}), document)
-            # Envelope-only properties do not establish domain output content.
-            properties = schema.get('properties', {})
-            for name in properties:
-                if name not in {'code', 'message', 'msg', 'data', 'status', 'success', 'request_id', 'error'}:
-                    outputs.append(name)
+            outputs += response_fields(content.get('schema', {}), document)
         if outputs:
             break
     if outputs:
@@ -143,12 +195,17 @@ def prepare_text(operation, document, path_item):
         summary = provider_title + ': ' + summary
     before = clean(operation.get('description'))
     guidance, has_details = details(operation, document, path_item)
-    if not before or before.strip('. ').casefold() == summary.strip('. ').casefold():
+    if summary_only(before, summary, operation.get('summary', '')):
         lead = summary.rstrip('. ') + '.'
         if provider_title and provider_title.casefold() not in lead.casefold():
             lead = provider_title + ': ' + lead
         description = lead + ('\n\n' + guidance if guidance else '')
         disposition = 'expanded_from_declared_contract' if has_details else 'bounded_to_declared_purpose'
+    elif guidance and len(before) < 240 and any(
+            name.casefold() not in before.casefold()
+            for name in re.findall(r'`([^`]+)`', guidance.split('Key optional inputs:')[0].split('Declared response fields')[0])):
+        description = before + '\n\n' + guidance
+        disposition = 'supplemented_existing_prose'
     elif len(before) > 4000:
         # Retain the complete original; front-load the declared purpose and
         # required inputs for bounded search text, never truncate caveats.
@@ -163,7 +220,29 @@ def prepare_text(operation, document, path_item):
     return summary, description, disposition
 
 
+def enrich_purpose(operation, path, method, description, disposition, evidence):
+    """Use an exact, captured source binding only for otherwise purpose-only text.
+
+    These excerpts describe capability, not a new public request/response schema.
+    Never overwrite independently maintained caveats or infer wire parameters.
+    """
+    key = (path, method.upper(), operation.get('operationId'))
+    source = evidence.get(key)
+    if (disposition != 'bounded_to_declared_purpose' or not source or
+            operation.get('summary', '') != source['before_summary']):
+        return description, disposition, None
+    purpose = source['description'].strip()
+    if not purpose or purpose.startswith('$'):
+        raise ValueError('Unresolved source prose: ' + str(key))
+    return description + '\n\n' + purpose, 'expanded_from_bound_source', source
+
+
 def prepare(root, runtime_dir, services_root, output, docs_ref=None):
+    evidence_path = root / 'scripts/data/tool-prose-purpose-evidence.json'
+    source_rows = json.loads(evidence_path.read_text()) if evidence_path.exists() else []
+    purpose_evidence = {(r['path'], r['method'], r['operation_id']): r for r in source_rows}
+    if len(purpose_evidence) != len(source_rows):
+        raise ValueError('Duplicate source prose identity')
     runtime = {}
     for file in sorted(runtime_dir.glob('*.json')):
         if file.name == 'receipt.json':
@@ -205,6 +284,8 @@ def prepare(root, runtime_dir, services_root, output, docs_ref=None):
                 if operation_id in curated:
                     summary = curated[operation_id]['summary']; description = curated[operation_id]['description']
                     disposition = 'individual_draft'
+                description, disposition, purpose_source = enrich_purpose(
+                    operation, path, method, description, disposition, purpose_evidence)
                 key = (path, method, operation_id)
                 fact = runtime.get(key)
                 binding = operation.get('x-aisa-runtime-operation', {})
@@ -237,6 +318,8 @@ def prepare(root, runtime_dir, services_root, output, docs_ref=None):
                                           'runtime_document_sha256': runtime_hash,
                                           'public_method': method.upper(),
                                           'manual_draft': disposition == 'individual_draft'}}
+                    if purpose_source:
+                        entry['evidence']['purpose_source'] = purpose_source
                     if key in entries_by_key:
                         previous_entry = entries_by_key[key]
                         if (entry['summary'], entry['description']) != (previous_entry['summary'], previous_entry['description']):
