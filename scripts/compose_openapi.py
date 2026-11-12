@@ -658,14 +658,7 @@ def constrained_names(runtime: dict) -> set:
 
 def merge_object(upstream: dict, declared: dict, constrained: set = frozenset(), kept: list | None = None,
                  prefix: str = "") -> dict:
-    # Rechecking an already composed body must preserve identical Runtime-owned
-    # cross-field rules. They are reapplied below, after provider field merging.
-    # Different or extra source rules still go through the strict flattener.
-    source = upstream
-    if (isinstance(upstream, dict) and "allOf" in declared
-            and upstream.get("allOf") == declared["allOf"]):
-        source = {key: value for key, value in upstream.items() if key != "allOf"}
-    merged = flatten_object(source)
+    merged = flatten_object(upstream)
     names = set(declared.get("properties", {}))
     source_required = set(merged.get("required", []))
     required = (source_required - names) | set(declared.get("required", []))
