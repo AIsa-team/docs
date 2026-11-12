@@ -18,8 +18,15 @@ def runtime_metadata_mirrors(facts, upstream, mirrors):
     or an assertion that the relay enforces these parameters.
     """
     # Derive afresh: an entry computed for an earlier snapshot is never reused.
-    result = {key: value for key, value in (mirrors or {}).items()
-              if value.get('source', {}).get('kind') != 'runtime_metadata'}
+    result = {}
+    for key, value in (mirrors or {}).items():
+        if value.get('source', {}).get('kind') != 'runtime_metadata':
+            result[key] = value
+        elif value.get('independent_response_candidates'):
+            # Recompute managed request metadata, but retain independently
+            # indexed response evidence across repeated composition.
+            result[key] = {'response_only': True, 'operation': {}, 'source': {},
+                           'independent_response_candidates': value['independent_response_candidates']}
     sources = upstream if isinstance(upstream, list) else ([upstream] if upstream else [])
     prefix = urlsplit((facts.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
     def unique(pairs):
@@ -93,7 +100,8 @@ def runtime_metadata_mirrors(facts, upstream, mirrors):
                 if any(type(parameter.get('required')) is not bool or parameter.get('schema', {}).get('type') not in {'string', 'integer', 'number', 'boolean'} for parameter in parameters):
                     raise ValueError('incomplete parameter fragment')
                 key = (prefix + route, method.lower())
-                if key in result:
+                existing = result.get(key, {})
+                if existing and not existing.get('response_only'):
                     raise ValueError('ambiguous managed request authority')
                 source = {'kind': 'runtime_metadata', 'url': 'https://api.aisa.one/public/api-contract/current',
                     'authority': 'backend-managed endpoint.Description.methods.requestParams', 'validation_owner': 'provider',
@@ -105,6 +113,8 @@ def runtime_metadata_mirrors(facts, upstream, mirrors):
                     'content_hash': digest({'parameters': parameters, 'runtime_description': raw, 'official_fragment': fragment})}
                 result[key] = {'operation': {'operationId': runtime['operationId'], 'parameters': parameters},
                                'source': source, 'components': {}, 'response_operation': {}, 'response_components': {}, 'openapi': '3.1.0'}
+                if existing.get('independent_response_candidates'):
+                    result[key]['independent_response_candidates'] = existing['independent_response_candidates']
             except (ValueError, KeyError, TypeError, AttributeError, RecursionError):
                 continue  # No schema is safer than guessing from malformed/ambiguous metadata.
     return result

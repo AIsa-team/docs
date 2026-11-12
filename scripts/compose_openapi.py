@@ -318,6 +318,53 @@ def selector_value(selector):
     return selector["value"]
 
 
+def legacy_response_origin(document, operation_source, sources, upstream_path, method):
+    """Bind legacy passthrough to the selected official request authority.
+
+    This does not manufacture a Runtime response descriptor. A managed request
+    can use its uniquely identified official fragment's server; a normal
+    request uses the selected operation's effective server. Missing or
+    ambiguous origins cannot authorize an independent response source.
+    """
+    managed = operation_source.get("kind") == "runtime_metadata"
+    if not document and managed:
+        parent = operation_source.get("official_parameter_source", {})
+        matches = [source for source in sources if parent and all(
+            source.get("info", {}).get("x-aisa-source", {}).get(key) == value
+            for key, value in parent.items())]
+        if len(matches) != 1:
+            return None
+        document = matches[0]
+    if not document or document.get("info", {}).get("x-aisa-source", {}).get("kind") not in {"manual", "provider_openapi"}:
+        return None
+    server_sets = []
+    if managed:
+        fragment = document.get("x-aisa-incomplete-request-definitions", {}).get(upstream_path, {})
+        if fragment.get("path") != upstream_path or fragment.get("method", "").lower() != method:
+            return None
+        server_sets.append(document.get("servers", []))
+    else:
+        for path, raw_item in document.get("paths", {}).items():
+            item = effective_object(raw_item, document)
+            if method not in item:
+                continue
+            narrowed = {**document, "paths": {path: raw_item}}
+            if method in upstream_path_item(narrowed, upstream_path):
+                server_sets.append(item[method].get("servers", item.get("servers", document.get("servers", []))))
+    if len(server_sets) != 1 or not isinstance(server_sets[0], list) or len(server_sets[0]) != 1:
+        return None
+    url = server_sets[0][0].get("url") if isinstance(server_sets[0][0], dict) else None
+    if not isinstance(url, str) or "{" in url or "}" in url:
+        return None
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return None
+    if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
+        return None
+    return hashlib.sha256((parsed.scheme + "://" + parsed.netloc).encode()).hexdigest()
+
+
 def select_upstream_operations(sources, path, selector=None):
     """Keep source documents separate; select only matching official engine enums."""
     value = selector_value(selector) if selector is not None else None
@@ -1154,6 +1201,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     # This authority is independent from request validation and
                     # never discovers methods or contributes request fields.
                     descriptor_present = any(k in runtime for k in ("x-aisa-response-passthrough", "x-aisa-response-upstream-path-sha256", "x-aisa-response-upstream-origin-sha256"))
+                    legacy_independent_binding = False
                     if descriptor_present:
                         response_operation, response_document = {}, {}
                         transport = runtime.get("x-aisa-response-passthrough")
@@ -1180,13 +1228,37 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                                     used_mirrors[f"response {actual_method} {public_path}"] = selected_response
                         elif any(k in runtime for k in ("x-aisa-response-upstream-path-sha256", "x-aisa-response-upstream-origin-sha256")):
                             response_error = "transformed response must not declare passthrough binding hashes"
+                    elif runtime.get("x-aisa-passthrough") is True:
+                        # Older provider-validated routes already attest full
+                        # passthrough and expose their upstream path. Bind an
+                        # independent response only to the same selected
+                        # official request source's unambiguous server origin.
+                        choices = public_mirrors.get((public_path, actual_method), {}).get("independent_response_candidates", [])
+                        if choices:
+                            legacy_independent_binding = True
+                            response_operation, response_document = {}, {}
+                            upstream_path = runtime.get("x-aisa-upstream-path")
+                            path_hash = hashlib.sha256(upstream_path.encode()).hexdigest() if isinstance(upstream_path, str) else None
+                            origin_hash = legacy_response_origin(selected_document, operation_source, candidates,
+                                                                 upstream_path, actual_method)
+                            if (len(choices) != 1 or not path_hash or not origin_hash
+                                    or choices[0].get("source", {}).get("upstream_path_sha256") != path_hash
+                                    or choices[0].get("source", {}).get("upstream_origin_sha256") != origin_hash):
+                                response_error = "independent response source binding is ambiguous or changed"
+                            else:
+                                selected_response = choices[0]
+                                response_operation = selected_response.get("response_operation", {})
+                                response_document = {"openapi": selected_response.get("openapi", "3.1.0"),
+                                                     "components": selected_response.get("response_components", {})}
+                                response_source = selected_response["source"]
+                                used_mirrors[f"response {actual_method} {public_path}"] = selected_response
                     try:
                         fresh = source_success_responses(response_operation, response_document, output, "response_" + digest(response_source)[7:19] + ".json", runtime.get("responses", {}))
                     except (ValueError, KeyError, TypeError) as exc:
                         response_error = str(exc)
                     source_payloads = {}
                     response_identity = (facts_prefix + path, actual_method, operation_id)
-                    old_responses = {} if descriptor_present else published_responses.get(response_identity, {})
+                    old_responses = {} if descriptor_present or legacy_independent_binding else published_responses.get(response_identity, {})
                     if fresh and "200" not in fresh and (runtime.get("x-aisa-passthrough") is True or runtime.get("x-aisa-response-passthrough") is True) and not has_response_payload(operation.get("responses", {}).get("200", {})):
                         operation.get("responses", {}).pop("200", None)
                         old_responses = {status: response for status, response in old_responses.items() if status != "200"}
