@@ -165,7 +165,7 @@ class DevCustomerPricingTests(unittest.TestCase):
                     self.assertEqual(repeated[name], raw, name)
         self.assertEqual(document, original)
 
-    def test_retained_operation_without_pricing_gets_archive_copy_without_mutating_contract(self):
+    def test_retained_operation_without_status_does_not_invent_disabled_archive(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'openapi').mkdir()
@@ -184,10 +184,11 @@ class DevCustomerPricingTests(unittest.TestCase):
             dev.scope_presentation(root, {'info': {}, 'paths': {}}, {})
             after = json.loads((root / 'openapi/legacy.json').read_text())
             self.assertEqual(after, before)
-            self.assertIn('Historical archive: disabled, cannot be called, and no price is published.',
-                          (root / 'api-reference/legacy/old.mdx').read_text())
-            self.assertIn('历史归档接口：已停用，不可调用，价格未发布。',
-                          (root / 'zh/api-reference/legacy/old.mdx').read_text())
+            for language, prefix in [('en', ''), ('zh', 'zh/')]:
+                text = (root / (prefix + 'api-reference/legacy/old.mdx')).read_text()
+                self.assertIn(dev.ARCHIVE_NOTE, text)
+                self.assertNotIn('Historical archive: disabled', text)
+                self.assertNotIn('历史归档接口：已停用', text)
 
     def test_manually_authored_free_helper_has_customer_price_block(self):
         root = Path(__file__).resolve().parents[2]

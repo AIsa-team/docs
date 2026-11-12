@@ -10,13 +10,13 @@ receipt, file layout, and stage inputs.
 
 The outer Runtime manifest and revision hash encoding are unchanged. Its exact
 sorted file list binds every original byte. Media types remain
-`application/json`; the total limit stays 64 MiB and the count stays 512.
+`application/json`; the total limit is 128 MiB and the file count is capped at 2,048.
 
 | File | Limit | Meaning |
 | --- | --- | --- |
 | `index.json`, `providers/<provider>.json` | 8 MiB each | Original closed Runtime facts graph |
 | `contracts/native/<provider>.json` | 8 MiB each | Complete canonical native documents |
-| `contracts/openapi.json` | 32 MiB | Complete aggregate, the only larger-file exception |
+| `contracts/openapi.json` | 64 MiB | Complete aggregate, the only larger-file exception |
 | `contracts/readiness.json` | 1 MiB | Passed compilation report, not new source authorization |
 | `contracts/manifest.json` | 1 MiB | Exact canonical graph and build/source binding |
 

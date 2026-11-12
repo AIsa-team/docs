@@ -10,7 +10,9 @@ MANIFEST = 'contracts/manifest.json'
 AGGREGATE = 'contracts/openapi.json'
 READINESS = 'contracts/readiness.json'
 MAX_METADATA = 1 << 20
-MAX_AGGREGATE = 32 << 20
+# The current production aggregate is about 45 MB. Keep an explicit ceiling
+# while accepting the complete graph; individual provider limits stay separate.
+MAX_AGGREGATE = 64 << 20
 FACT = re.compile(r'(?:index\.json|providers/[a-z0-9][a-z0-9_.-]*\.json)')
 NATIVE = re.compile(r'contracts/native/[a-z0-9][a-z0-9_.-]*\.json')
 HEX64 = re.compile(r'[0-9a-f]{64}')
