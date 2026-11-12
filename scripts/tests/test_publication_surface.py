@@ -367,9 +367,9 @@ class PublicationSurfaceTests(unittest.TestCase):
         self.assertEqual(result.returncode, 3)
         self.assertIn(b'pull-openapi', result.stderr)
         self.assertEqual(before, publication_hashes(self.root))
-        workflow = (script.parents[1] / '.github/workflows/sync-openapi.yml').read_text()
-        self.assertLess(workflow.index('publication_surface.py --legacy-write'), workflow.index('Copy spec to docs repo root'))
-        self.assertLess(workflow.index('publication_surface.py --legacy-write'), workflow.index('Commit and push'))
+        # The legacy sync-openapi.yml writer was removed; pull-openapi is the
+        # only workflow that publishes the consolidated contract.
+        self.assertFalse((script.parents[1] / '.github/workflows/sync-openapi.yml').exists())
 
     def test_published_identity_reuses_all_old_alias_urls_after_path_migration(self):
         root = self.root
