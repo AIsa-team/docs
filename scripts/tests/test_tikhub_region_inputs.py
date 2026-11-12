@@ -8,6 +8,7 @@ from compose_openapi import compose, digest
 from runtime_registry import public_mirror_index
 from source_governance import policy_errors
 from test_runtime_contracts import facts, operation
+from test_tikhub_response_amendment import undo_response_amendment
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -18,6 +19,7 @@ class TikHubRegionInputsTests(unittest.TestCase):
         review = json.loads((ROOT / 'docs/current-source-review-20261017/tikhub-region-inputs-review.json').read_text())
         doc = json.loads((ROOT / review['source_file']).read_text())
         source = doc['info'].pop('x-aisa-source')
+        source = undo_response_amendment(self, doc, source)
         self.assertEqual(source['content_hash'], digest(doc))
         # Validate this historical amendment against its exact source, after
         # undoing the separately reviewed later nullable-only amendment.

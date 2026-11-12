@@ -5,8 +5,9 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from source_provenance import (KEY, compact_document, expand_document, merge_provenance,
-                               validate_document)
+from source_provenance import (KEY, MIN_BYTES, PREFIX, canonical, compact_document,
+                               expand_document, merge_provenance, source_hash,
+                               source_slots, validate_document)
 from runtime_registry import previous_for_facts
 from pull_openapi import retain_unregistered_history
 from runtime_localize_openapi_zh import iter_spec_strings
@@ -30,6 +31,22 @@ def fixture():
 
 
 class ProvenanceTests(unittest.TestCase):
+    def test_repeated_small_amendment_history_is_interned_losslessly(self):
+        source = {'kind': 'manual', 'content_hash': 'sha256:current',
+                  'url': 'https://official.example/reference',
+                  'prior_source': {'content_hash': 'sha256:prior', 'evidence': 'x' * 1000}}
+        original = {'info': {}, 'paths': {
+            f'/route/{index}': {'get': {'x-aisa-source': copy.deepcopy(source)}}
+            for index in range(100)}}
+        self.assertLess(len(canonical(source)), MIN_BYTES)
+        compact = compact_document(copy.deepcopy(original))
+        self.assertEqual(len(compact['info'][KEY]), 1)
+        self.assertEqual(expand_document(compact), original)
+        self.assertEqual(compact_document(copy.deepcopy(compact)), compact)
+        self.assertLess(len(canonical(compact)), len(canonical(original)) / 2)
+        single = {'info': {}, 'paths': {'/one': {'get': {'x-aisa-source': source}}}}
+        self.assertEqual(compact_document(copy.deepcopy(single)), single)
+
     def test_lossless_idempotent_and_preserves_instance_data(self):
         original = fixture()
         actual = compact_document(copy.deepcopy(original))
@@ -148,15 +165,53 @@ class ProvenanceTests(unittest.TestCase):
         self.assertEqual(candidate['components']['securitySchemes']['Auth'], {'type': 'http', 'scheme': 'bearer'})
 
     def test_committed_fred_evidence_rehydrates_and_stays_small(self):
-        path = Path(__file__).resolve().parents[2] / 'openapi/fred.json'
-        original = json.loads(path.read_text())
-        result = compact_document(copy.deepcopy(original))
-        self.assertEqual(expand_document(result), expand_document(original))
-        self.assertLess(len(json.dumps(result, indent=2).encode()), 2_000_000)
-        self.assertEqual(len(result['info'][KEY]), 1)
-        # Provenance compaction must preserve the actual publication inventory;
-        # a later reviewed Runtime release may add or retire FRED routes.
-        self.assertEqual(set(result['paths']), set(original['paths']))
+        root = Path(__file__).resolve().parents[2]
+        for relative in ('openapi/fred.json', 'openapi/zh/fred.json'):
+            with self.subTest(path=relative):
+                original = json.loads((root / relative).read_text())
+                expanded = expand_document(original)
+                result = compact_document(copy.deepcopy(original))
+                self.assertEqual(expand_document(result), expanded)
+                self.assertEqual(compact_document(copy.deepcopy(result)), result)
+                # Request and response evidence can come from different source
+                # revisions. Every distinct large source must be stored once,
+                # referenced by all its consumers, and never left unused.
+                expected = {source_hash(parent[key]): parent[key]
+                            for parent, key in source_slots(expanded)
+                            if len(canonical(parent[key])) >= MIN_BYTES}
+                self.assertTrue(expected)
+                self.assertGreater(sum(1 for parent, key in source_slots(expanded)
+                                       if len(canonical(parent[key])) >= MIN_BYTES),
+                                   len(expected))
+                for document in (original, result):
+                    validate_document(document)
+                    self.assertLess(len(json.dumps(document, indent=2).encode()), 2_000_000)
+                    self.assertEqual(document['info'][KEY], expected)
+                    references = set()
+                    for parent, key in source_slots(document):
+                        source = parent[key]
+                        if 'provenance_sha256' in source:
+                            digest = source['provenance_sha256']
+                            self.assertEqual(source['provenance_ref'], PREFIX + digest)
+                            references.add(digest)
+                        else:
+                            self.assertLess(len(canonical(source)), MIN_BYTES)
+                    self.assertEqual(references, set(expected))
+                # Compaction must preserve the actual publication inventory;
+                # a later Runtime release may add or retire FRED routes.
+                self.assertEqual(set(result['paths']), set(original['paths']))
+
+    def test_historical_fred_source_keeps_its_original_converter(self):
+        root = Path(__file__).resolve().parents[2]
+        historical_hash = 'sha256:06efd48203091b8238e8d15621ad6ccd1b588101282c5e3230c3a81220652459'
+        for relative in ('openapi/fred.json', 'openapi/zh/fred.json'):
+            with self.subTest(path=relative):
+                document = expand_document(json.loads((root / relative).read_text()))
+                for parent, key in source_slots(document):
+                    source = parent[key]
+                    if source.get('content_hash') == historical_hash:
+                        self.assertEqual(source['converter'], 'scripts/import_fred_reference.py@5')
+                        self.assertFalse(source['response_schema_available'])
 
 
 if __name__ == '__main__':

@@ -93,6 +93,22 @@ class ResponseSchemaCompletenessTests(unittest.TestCase):
             repeated, _ = compose(runtime, source, previous=document)
             self.assertNotIn('x-aisa-response-pending', operation(repeated))
 
+    def test_exact_unreviewed_placeholder_is_replaceable_by_reviewed_source(self):
+        runtime, source = facts('provider'), mirror()
+        operation(runtime)['x-aisa-passthrough'] = True
+        operation(runtime)['responses']['200'] = {
+            'description': 'Successful response. The payload schema has not been reviewed yet.',
+            'content': {'application/json': {'schema': {}}},
+        }
+        operation(source)['responses'] = {'200': {'description': 'Reviewed response', 'content': {
+            'application/json': {'schema': {'type': 'object', 'properties': {'ok': {'type': 'boolean'}}}}}}}
+        document, pending = compose(runtime, source)
+        self.assertEqual(pending, [])
+        response = operation(document)['responses']['200']
+        self.assertEqual(response['description'], 'Reviewed response')
+        self.assertEqual(response['content']['application/json']['schema']['properties']['ok']['type'], 'boolean')
+        self.assertNotIn('x-aisa-response-pending', operation(document))
+
     def test_invalid_schema_types_do_not_count_as_complete(self):
         for value in (None, 0, 1, 'object', []):
             with self.subTest(value=value):

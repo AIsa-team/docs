@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Convert locked official FRED HTML parameter references; never infer response schemas."""
+"""Convert locked official FRED HTML parameter references.
+
+The official pages identify JSON and XML representations and include examples,
+but do not publish a complete member/element declaration.  The converter
+therefore publishes the wire representation (open JSON object or XML string)
+without inferring fields from examples.
+"""
 import argparse
 from datetime import datetime, timezone
 import hashlib
@@ -13,7 +19,7 @@ from compose_openapi import digest
 from source_json import checked_float
 
 INDEX = 'https://fred.stlouisfed.org/docs/api/fred/'
-CONVERTER = 'scripts/import_fred_reference.py@5'
+CONVERTER = 'scripts/import_fred_reference.py@6'
 GEO_REFERENCE = {
     '/geofred/shapes/file': 'shapes.html',
     '/geofred/series/group': 'series_group.html',
@@ -197,8 +203,31 @@ def reject_json_constant(token):
     raise ValueError('non-JSON response example constant')
 
 
+def representation_schema(media_type):
+    """Return the narrow schema established by the official representation.
+
+    FRED's reference pages document the media type and examples, but leave the
+    JSON member set and XML element vocabulary unspecified.  An open schema is
+    intentional here: it records the response wire type while avoiding
+    sample-derived properties, requiredness, enums, or numeric types.
+    """
+    if media_type == 'application/json':
+        return {
+            'type': 'object',
+            'additionalProperties': True,
+            'description': 'The official reference declares a JSON object but does not declare its member set; fields remain open.',
+        }
+    if media_type == 'text/xml':
+        return {
+            'type': 'string',
+            'contentMediaType': 'application/xml',
+            'description': 'The official reference declares an XML document but does not declare its element set; content remains open.',
+        }
+    raise ValueError('unsupported FRED response representation: ' + media_type)
+
+
 def response_evidence(content):
-    # Carry explicit representations/examples, never infer schema from samples.
+    # Carry explicit representations/examples, never infer fields from samples.
     media = set(re.findall(r'HTTP Content-Type is ([a-z]+/[a-z0-9.+-]*[a-z0-9+-])', content.text()))
     content_values, pending, declarations = {}, [], []
     representation, response = None, False
@@ -256,11 +285,16 @@ def response_evidence(content):
                 value = raw
             bucket = content_values.setdefault(kind, {'examples': {}})['examples']
             bucket['official_' + str(len(bucket) + 1)] = {'value': value, 'description': 'Official response example only; not a complete payload schema.'}
-    for kind in sorted(media):
-        content_values.setdefault(kind, {})
+    # Some saved reference fragments omit the HTTP Content-Type line while
+    # still declaring the representation heading and example.  The heading is
+    # explicit response evidence, so retain that media type for the open wire
+    # schema as well.
+    for kind in sorted(media | set(content_values)):
+        content_values.setdefault(kind, {})['schema'] = representation_schema(kind)
     return {'content': content_values, 'pending': pending,
             'field_declarations': declarations,
-            'schema_status': 'not_declared_in_reference', 'schema_inferred': False}
+            'schema_status': 'open_representation_only', 'schema_inferred': False,
+            'schema_basis': 'official_reference_representation_declaration'}
 
 
 def parse_reference(raw, url):
@@ -299,7 +333,7 @@ def parse_reference(raw, url):
     if not any(p['name'] == 'api_key' and p['required'] for p in parameters):
         raise ValueError('official provider authentication declaration missing')
     evidence = response_evidence(content)
-    response = {'description': 'Official representation and examples only; no complete response schema is declared.'}
+    response = {'description': 'Official representation declared; member fields remain open because the reference does not publish a complete schema.'}
     if evidence['content']:
         response['content'] = evidence['content']
     return path, {'summary': description or title, 'description': description,
@@ -411,10 +445,12 @@ def import_reference(provider, url=INDEX, fetcher=None):
               'index_sha256': hashlib.sha256(index).hexdigest(), 'references': sources, 'pending_references': pending,
               'operation_identity_evidence': identities,
               'request_contract_source': 'official_html_parameter_declarations',
-              'response_schema_available': False,
-              'response_example_contract': 'authoritative examples retained without schema inference or debt closure',
+              'response_schema_available': True,
+              'response_schema_status': 'open_representation_only',
+              'response_example_contract': 'authoritative examples retained; JSON/XML wire types are declared open because the reference does not publish member schemas',
               'limitations': ['Conditional prose constraints remain descriptions, not executable validation.',
-                             'References with incomplete type or required/optional declarations are explicitly pending and not emitted.']}
+                             'References with incomplete type or required/optional declarations are explicitly pending and not emitted.',
+                             'FRED references do not declare JSON members or XML elements; response schemas intentionally remain open and do not infer fields from examples.']}
     document = {'openapi': '3.1.0', 'info': {'title': 'Official FRED reference', 'version': 'reference-html-1', 'x-aisa-source': source},
                 'servers': [{'url': 'https://api.stlouisfed.org'}], 'paths': paths,
                 'components': {'securitySchemes': {'fred_api_key': {'type': 'apiKey', 'in': 'query', 'name': 'api_key'}}}}
