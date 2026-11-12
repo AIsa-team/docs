@@ -32,8 +32,10 @@ Some Integration API operations use one standard error envelope. You can recogni
 This example illustrates the envelope; the request ID is illustrative.
 
 - **Supplier-side failure: `503 service_unavailable`.** Every failure on the supplier's side has the same public answer: a rate limit, temporary unavailability, a timeout, an upstream error, an unusable response, or a problem with AIsa's own upstream account. `retry_hint` says what to do next. The message is fixed and never names the cause.
-- **Request error: `400 invalid_request`.** AIsa answers `400` only when the request is provably wrong: the gateway's contract check failed, or the request was rejected for a named parameter. `param` names it; `missing` and `unsupported` list parameters when known.
-- **Not found.** On some operations, a verified business miss stays `404 not_found`.
+- **Request error: `400 invalid_request`.** AIsa answers `400` when the request is wrong: the gateway's contract check failed, or the data source rejected the request's input. `param` names the parameter when it is known (always one of the parameters you sent or a path parameter); `missing` and `unsupported` list parameters when known.
+- **Not found: `404 not_found`.** The lookup completed and found nothing, for example an unknown profile, person, or company. Do not retry the same request. It is not charged.
+- **Not accessible: `403 target_not_accessible`.** The requested target exists but is private or restricted. Do not retry the same request.
+- In all three cases, `message` is a fixed text from AIsa, `retryable` is `false`, and `retry_hint` is `never`.
 - **No `502` or `504`.** AIsa never returns `502` or `504` on these operations. A `502` or `504`, or an HTML or `application/problem+json` error page, without `X-Request-ID` comes from the network edge in front of AIsa, not from AIsa. Retry it after a delay.
 - **Request ID.** `X-Request-ID` is always present and equals `error.request_id`. It is an opaque string, so do not parse it. It can start with `req_` when the request was rejected before a charge was reserved, and with `imc_` afterwards.
 - **Cost header.** `X-AISA-Customer-Cost-Micros-USD: 0` on an error confirms that the request was not charged. The header is absent while the outcome is pending reconciliation (`reconcile_first`).
@@ -53,7 +55,7 @@ This example illustrates the envelope; the request ID is illustrative.
 | `502` `provider request failed`, `provider response could not be accounted`, or `provider response cannot be reconciled` | `503 service_unavailable` |
 | `provider_unavailable`, `upstream_rate_limited`, `upstream_temporarily_unavailable`, `upstream_request_failed`, `provider_accounting_pending`, `provider_capacity_exhausted`, or a supplier-specific code | `503 service_unavailable`; `retry_hint` distinguishes the cases |
 | Supplier `429` passed through | `503 service_unavailable` with `retry_hint: after_delay` |
-| Supplier `4xx` passed through with the supplier's message | `400 invalid_request` with `param` when provably a request error, otherwise `503 service_unavailable` |
+| Supplier `4xx` passed through with the supplier's message | `404 not_found` for a lookup that found nothing, `403 target_not_accessible` for a private target, `400 invalid_request` (with `param` when known) for rejected input; any other rejection is `503 service_unavailable` |
 | No cost header on errors | `0` when confirmed not charged; absent while pending reconciliation |
 
 Operations outside the standard envelope keep the formats described in the rest of this page.

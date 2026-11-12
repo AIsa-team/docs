@@ -32,8 +32,10 @@ Integration API 保留多种兼容错误格式。`error` 可以是字符串或�
 此示例只说明信封形状，请求 ID 为示意值。
 
 - **供应商侧故障：`503 service_unavailable`。** 供应商侧的各类故障对外是同一个答复：限流、临时不可用、超时、上游错误、响应无法使用，以及 AIsa 自己在上游的账户问题。下一步怎么做看 `retry_hint`。消息文本固定，不说明具体原因。
-- **请求错误：`400 invalid_request`。** 只有能证明请求本身有误时才返回 `400`：网关契约校验未通过，或请求因某个具名参数被拒。`param` 指出该参数；已知时，`missing` 和 `unsupported` 会列出相关参数。
-- **未找到。** 部分操作中，已核实的业务未命中仍返回 `404 not_found`。
+- **请求错误：`400 invalid_request`。** 请求本身有误时返回 `400`：网关契约校验未通过，或数据源拒绝了请求的输入。已知时 `param` 指出该参数（一定是你发送的参数或路径参数）；已知时，`missing` 和 `unsupported` 会列出相关参数。
+- **未找到：`404 not_found`。** 查询已完成但没有结果，例如资料、人员或公司不存在。原样重试没有帮助。不扣费。
+- **无法访问：`403 target_not_accessible`。** 目标存在，但为私密或受限。原样重试没有帮助。
+- 以上三种情况，`message` 都是 AIsa 的固定文本，`retryable` 为 `false`，`retry_hint` 为 `never`。
 - **不会返回 `502` 或 `504`。** 在这些操作上，AIsa 不会返回 `502` 或 `504`。不带 `X-Request-ID` 的 `502`/`504`，或 HTML、`application/problem+json` 错误页，来自 AIsa 前面的网络边缘，不是 AIsa 写出的，请等待片刻后重试。
 - **请求 ID。** `X-Request-ID` 一定存在，且与 `error.request_id` 相同。它是不透明字符串，不要解析。预扣费用之前就被拒绝的请求，ID 可能以 `req_` 开头；之后的以 `imc_` 开头。
 - **费用头。** 错误响应带 `X-AISA-Customer-Cost-Micros-USD: 0`，表示已确认本次请求未扣费。结果仍待对账时（`reconcile_first`）不带该响应头。
@@ -53,7 +55,7 @@ Integration API 保留多种兼容错误格式。`error` 可以是字符串或�
 | `502` `provider request failed`、`provider response could not be accounted` 或 `provider response cannot be reconciled` | `503 service_unavailable` |
 | `provider_unavailable`、`upstream_rate_limited`、`upstream_temporarily_unavailable`、`upstream_request_failed`、`provider_accounting_pending`、`provider_capacity_exhausted` 或供应商自己的错误码 | `503 service_unavailable`；用 `retry_hint` 区分 |
 | 透传供应商的 `429` | `503 service_unavailable`，`retry_hint: after_delay` |
-| 透传带供应商消息的 `4xx` | 能证明是请求错误时为 `400 invalid_request` 并带 `param`，否则为 `503 service_unavailable` |
+| 透传带供应商消息的 `4xx` | 查询无结果为 `404 not_found`；目标私密为 `403 target_not_accessible`；输入被拒为 `400 invalid_request`（已知时带 `param`）；其他拒绝为 `503 service_unavailable` |
 | 错误响应不带费用头 | 已确认未扣费时为 `0`；待对账时不带 |
 
 不使用标准信封的操作，仍按本页其余部分所述的格式返回。
