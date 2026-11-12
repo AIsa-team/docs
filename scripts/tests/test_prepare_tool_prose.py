@@ -22,6 +22,13 @@ class ToolProsePreparationTests(unittest.TestCase):
         self.assertEqual(retain_runtime_free_statement('Poll status with credentials.', runtime),
                          'Poll status with credentials.')
 
+    def test_internal_kalshi_document_id_is_not_a_public_provider_name(self):
+        summary, description, _ = prepare_text(
+            {'summary': 'Get Market Price', 'description': '默认价格配置'},
+            {'info': {'title': 'kalshi-unauthorized'}}, {})
+        self.assertEqual(summary, 'Kalshi: Get Market Price')
+        self.assertNotIn('kalshi-unauthorized', summary + description)
+
     def test_generic_schema_does_not_invent_fields_or_account_scope(self):
         operation = {'summary': 'Search', 'requestBody': {'content': {'application/json': {
             'schema': {'type': 'object', 'additionalProperties': True}}}},

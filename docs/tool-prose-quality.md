@@ -13,8 +13,8 @@ therefore differ.
 | Operations with revised text | 5,319 |
 | Existing prose preserved | 1,149 |
 | Guarded Runtime prose identities | 5,295 |
-| Static source operations amended | 1,867 |
-| Static source files amended | 43 |
+| Static source operations amended | 1,865 |
+| Static source files amended | 42 |
 
 The static and dynamic counts overlap; do not add them as independent tools.
 `tool-prose-coverage-20261112.csv` contains every operation, old/new prose,
@@ -56,7 +56,7 @@ captured Composio descriptions during import. Runtime description precedence
 remains intact. Source acquisition clocks and original provenance are preserved;
 the new prose layer records its original document hash and exact change manifest.
 Historical schema tests validate and undo that layer before their older checks;
-a separate test proves that no non-prose declaration changed in any of 43 files.
+a separate test proves that no non-prose declaration changed in any of 42 files.
 
 The standalone, unbound Gemini contract also receives its missing description, with an exact non-prose hash check. Its Chinese copy, translation memory, aggregate OpenAPI and derived catalog hashes are synchronized. Other generated provider JSON/pages are not rewritten. The normal reviewed source
 bundle, Runtime contract publication and Docs projection are still required for

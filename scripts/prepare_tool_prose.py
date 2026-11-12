@@ -137,6 +137,8 @@ def details(operation, document, path_item):
 def prepare_text(operation, document, path_item):
     summary = title(operation)
     provider_title = document.get('info', {}).get('title', '').strip()
+    # This document ID describes authorization state, not the public brand.
+    provider_title = {'kalshi-unauthorized': 'Kalshi'}.get(provider_title, provider_title)
     if provider_title and ':' not in summary and len(summary.split()) <= 3 and provider_title.casefold() not in summary.casefold():
         summary = provider_title + ': ' + summary
     before = clean(operation.get('description'))
