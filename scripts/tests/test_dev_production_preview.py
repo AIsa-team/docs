@@ -75,6 +75,41 @@ class DevProductionPreviewTests(unittest.TestCase):
                 dev.sync(root, source='production', if_changed=True)
             generate.assert_called_once()
 
+    def test_source_switch_normalizes_retained_history_before_hashing(self):
+        _, _, reader = test_dev_runtime.DevRuntimeTests().fixture()
+        files = dev.acquire(reader)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'openapi').mkdir()
+            (root / 'openapi/registry.yaml').write_text('auto_register: true\nproviders: {}\n')
+            (root / 'docs.json').write_text('{"navigation":{"languages":[]}}')
+
+            def write(outputs):
+                for name, raw in outputs.items():
+                    target = root / name
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(raw)
+
+            write(dev.generate(root, files)[0])
+            spec = root / 'openapi/similarweb.json'
+            document = json.loads(spec.read_text())
+            old = copy.deepcopy(document['paths']['/apis/v1/similarweb/test']['post'])
+            old.update(operationId='historic_identity', servers=[{'url': dev.DEV_ORIGIN}])
+            for key in ('x-aisa-identity', 'x-aisa-runtime-operation'):
+                old.pop(key, None)
+            document['paths']['/apis/v1/similarweb/retired'] = {'post': old}
+            spec.write_text(json.dumps(document))
+            for source, origin in [('production', dev.PROD_ORIGIN), ('dev', dev.DEV_ORIGIN)]:
+                with self.subTest(source=source):
+                    before = spec.read_bytes()
+                    outputs, _ = dev.generate(root, files, source=source)
+                    self.assertEqual(spec.read_bytes(), before)
+                    write(outputs)
+                    repeated, _ = dev.generate(root, files, source=source)
+                    self.assertEqual([name for name in outputs if outputs[name] != repeated.get(name)], [])
+                    retained = json.loads(outputs['openapi/similarweb.json'])['paths']['/apis/v1/similarweb/retired']['post']
+                    self.assertEqual(retained['servers'], [{'url': origin}])
+
     def test_disabled_legacy_labels_are_not_a_published_tariff(self):
         legacy = {'cost_tier': 'low', 'model': 'per_request'}
         for language, archive, unknown in (
