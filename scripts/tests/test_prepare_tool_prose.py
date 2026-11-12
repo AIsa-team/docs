@@ -3,10 +3,25 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from prepare_tool_prose import prepare_text, details, title
+from prepare_tool_prose import prepare_text, details, title, retain_runtime_free_statement
 
 
 class ToolProsePreparationTests(unittest.TestCase):
+    def test_invisible_and_pricing_placeholders_are_not_descriptions(self):
+        for text in ('\u200c', '\u200b\ufeff', '默认价格配置'):
+            _, description, _ = prepare_text({'summary': 'Search', 'description': text},
+                                             {'info': {'title': 'Demo'}}, {})
+            self.assertEqual(description, 'Demo: Search.')
+        _, description, _ = prepare_text({'summary': 'Search', 'description': '\u200cRequires a cookie.'}, {}, {})
+        self.assertEqual(description, 'Requires a cookie.')
+
+    def test_exact_runtime_free_statement_survives_projection_boilerplate(self):
+        runtime = {'description': 'Poll status. Free.'}
+        self.assertEqual(retain_runtime_free_statement('Poll status. See the published pricing.', runtime),
+                         'Poll status. Free.')
+        self.assertEqual(retain_runtime_free_statement('Poll status with credentials.', runtime),
+                         'Poll status with credentials.')
+
     def test_generic_schema_does_not_invent_fields_or_account_scope(self):
         operation = {'summary': 'Search', 'requestBody': {'content': {'application/json': {
             'schema': {'type': 'object', 'additionalProperties': True}}}},

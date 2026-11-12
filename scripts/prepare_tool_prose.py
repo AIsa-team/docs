@@ -33,11 +33,25 @@ def resolve(value, document, seen=()):
 
 
 def clean(value):
-    return PRICE.sub('', value or '').strip()
+    # Export artifacts must not make invisible-only text look substantive.
+    text = re.sub(r'[\u200b-\u200d\ufeff]', '', PRICE.sub('', value or '')).strip()
+    return '' if text == '默认价格配置' else text
+
+
+def retain_runtime_free_statement(description, runtime_operation):
+    """Do not replace an explicit Runtime Free statement with projection boilerplate.
+
+    Only reverse this exact known editorial substitution; this does not infer
+    pricing or reconcile independently different supplier descriptions.
+    """
+    original = clean(runtime_operation.get('description'))
+    if original and re.sub(r'\bFree\b', 'See the published pricing', original) == description:
+        return original
+    return description
 
 
 def title(operation):
-    old = operation.get('summary', '').strip()
+    old = clean(operation.get('summary'))
     description = clean(operation.get('description'))
     # Only machine tokens are normalized; readable titles and parameter names
     # inside backticks are left alone.
@@ -57,7 +71,7 @@ def title(operation):
 
 def field_text(name, schema, description=''):
     text = f'`{name}`'
-    note = (description or schema.get('description') or '').strip()
+    note = clean(description or schema.get('description'))
     # Avoid reproducing lengthy supplier tutorials/examples in the search lead.
     if note and len(note) <= 240 and '\n' not in note:
         text += ': ' + note.rstrip('.')
@@ -200,6 +214,7 @@ def prepare(root, runtime_dir, services_root, output, docs_ref=None):
                     fact = runtime.get(key)
                 if fact:
                     used_runtime.add(key)
+                    description = retain_runtime_free_statement(description, fact[0])
                 before = {'summary': operation.get('summary', ''), 'description': clean(operation.get('description'))}
                 after = {'summary': summary, 'description': description}
                 changed = before != after

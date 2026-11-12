@@ -10,9 +10,9 @@ therefore differ.
 | Coverage | Count |
 |---|---:|
 | Public operations assessed | 6,468 |
-| Operations with revised text | 5,314 |
-| Existing prose preserved | 1,154 |
-| Guarded Runtime prose identities | 5,290 |
+| Operations with revised text | 5,319 |
+| Existing prose preserved | 1,149 |
+| Guarded Runtime prose identities | 5,295 |
 | Static source operations amended | 1,867 |
 | Static source files amended | 43 |
 
@@ -34,7 +34,7 @@ conditional. Generic response envelopes do not become invented domain fields.
 Long original text, caveats, pagination, login-cookie and account requirements
 are retained in full; concise purpose/input guidance is placed first.
 
-For 900 operations the available contract only establishes a purpose, without
+For 903 operations the available contract only establishes a purpose, without
 usable named request or response fields. Their wording stays within that declared
 purpose and provider context. This is complete coverage of the available evidence,
 not a claim of 900 newly verified upstream schemas or individual live execution.
@@ -91,3 +91,40 @@ source-maintenance gate remains blocking. The official documentation index now
 links a v2 specification, which is not evidence that the existing v1 contract is
 unchanged. No source-review receipt is invented and no schema migration is
 included in this prose change.
+
+## Review follow-up and publication limits
+
+The preparation step removes U+200B/U+200C/U+200D/U+FEFF export artifacts and
+rejects the exact pricing placeholder `默认价格配置` as useful prose. Explicit
+Runtime `Free` statements survive the known `See the published pricing`
+projection substitution; no prices or billing rules change.
+
+The companion AIsaServices PR now includes Social/Commerce PR #1278. Those
+newer code-owned descriptions win over this captured prose amendment through
+the existing exact-before guard. The CSV remains the dated capture comparison,
+not a claim that old snapshot text overrides the merged resource descriptions.
+
+`response_contract` is a distinct checker fix in commit cad0b7de3, retained here
+because changing a source prose hash changes generated component namespaces.
+It warrants specific review. Tests reject a changed discriminator mapping key,
+a different mapping target, altered target constraints, missing/external targets,
+and handle recursive reference graphs; namespace-only renames compare equal.
+
+Composio conversion produces an offline source-review candidate, not published
+or trusted agent policy. It creates zero review receipts. Imported prose and
+schema descriptions remain external data; source hashing, independent review,
+and publication qualification still apply. Keyword stripping or Markdown
+quotation cannot make hostile text inert and would corrupt legitimate API
+instructions. No such security guarantee is claimed. Agent consumers must treat
+tool documentation as data subordinate to their own trusted instructions.
+
+Only Gemini's standalone published translation is changed in this PR. Other
+changes are source inputs. On future projection `pull_openapi.py` explicitly
+allows untranslated fields and uses the new English source for missing exact
+source-string translations; it does not reuse stale translations. Strict
+`runtime_localize_openapi_zh.py generate` instead fails on missing translations.
+Completing Chinese translations is required before claiming Chinese coverage.
+
+Internal audit files are explicitly excluded by `.mintignore`; GitHub retains
+the full review trail. Polymarket source-maintenance evidence continues to block
+formal publication; no approval or successful acquisition is fabricated.
