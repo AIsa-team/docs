@@ -1,3 +1,4 @@
+from tool_prose_history import before_tool_prose_amendment
 import copy
 import json
 from pathlib import Path
@@ -16,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 class TikHubRegionInputsTests(unittest.TestCase):
     def test_only_two_exact_official_optional_query_parameters_are_added(self):
         review = json.loads((ROOT / 'docs/current-source-review-20261017/tikhub-region-inputs-review.json').read_text())
-        doc = json.loads((ROOT / review['source_file']).read_text())
+        doc = before_tool_prose_amendment(ROOT, review['source_file'])
         source = doc['info'].pop('x-aisa-source')
         self.assertEqual(source['content_hash'], digest(doc))
         # Validate this historical amendment against its exact source, after

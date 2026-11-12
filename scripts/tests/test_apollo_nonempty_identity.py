@@ -1,3 +1,4 @@
+from tool_prose_history import before_tool_prose_amendment
 import copy
 import json
 from pathlib import Path
@@ -15,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 class ApolloNonemptyIdentityTests(unittest.TestCase):
     def test_flags_and_empty_values_cannot_stand_in_for_identity(self):
         review = json.loads((ROOT / 'docs/current-source-review-20261017/apollo-nonempty-identity-review.json').read_text())
-        doc = json.loads((ROOT / review['source_file']).read_text())
+        doc = before_tool_prose_amendment(ROOT, review['source_file'])
         schema = doc['paths'][review['source_path']]['post']['requestBody']['content']['application/json']['schema']
         validator = Draft7Validator(schema)
         for value in ({}, {'reveal_personal_emails': True}, {'reveal_personal_emails': False},
@@ -31,7 +32,7 @@ class ApolloNonemptyIdentityTests(unittest.TestCase):
 
     def test_only_the_existing_client_identity_rule_is_completed(self):
         review = json.loads((ROOT / 'docs/current-source-review-20261017/apollo-nonempty-identity-review.json').read_text())
-        doc = json.loads((ROOT / review['source_file']).read_text())
+        doc = before_tool_prose_amendment(ROOT, review['source_file'])
         source = doc['info'].pop('x-aisa-source')
         self.assertEqual(source['content_hash'], digest(doc))
         source = undo_object_body_amendment(self, ROOT, doc, source)
