@@ -6,11 +6,16 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 from compose_openapi import METHODS, resolve
-from upstream_semantics import compare_contracts, path_item
+from upstream_semantics import classify_drift, compare_contracts, drift_document, path_item
 from runtime_consolidate_openapi import merge_components
 from import_upstream import import_source
 from source_governance import (POLICY_FIELDS, acquisition_receipt, observation,
                                policy_errors, receipt_key, source_report)
+
+# Spec #1285 R1: request-declaration drift is classified for the in-scope
+# gateway declarations and written to docs/publication/upstream-drift.json.
+DRIFT_SOURCES = frozenset({'treg-public'})
+DRIFT_PATH = 'docs/publication/upstream-drift.json'
 
 
 def inherited_parameters(item, operation, document):
@@ -79,7 +84,8 @@ def refresh(root, fetch=import_source, checked_at=None, receipts=None, attempts=
     changes, report = {}, {'updated': {}, 'manual': [], 'pinned': {}, 'failed': {},
                            'checked_at': checked_at.isoformat(), 'checked': {},
                            'comparison_version': 'scripts/upstream_semantics.py@2',
-                           'sources': {}, 'receipts': receipts, 'attempts': attempts, 'policy_errors': {}}
+                           'sources': {}, 'receipts': receipts, 'attempts': attempts, 'policy_errors': {},
+                           'drift': {}}
     for path in sorted((root / 'openapi/upstream').glob('*.json')):
         previous = json.loads(path.read_text())
         source = previous.get('info', {}).get('x-aisa-source', {})
@@ -106,6 +112,8 @@ def refresh(root, fetch=import_source, checked_at=None, receipts=None, attempts=
             evidence = {'previous': source_evidence(source, checked_at),
                         'fetched': source_evidence(updated_source, checked_at)}
             if updated_source['content_hash'] == source.get('content_hash'):
+                if path.stem in DRIFT_SOURCES:
+                    report['drift'][path.stem] = []
                 report['checked'][path.stem] = {'status': 'source_unchanged', **evidence}
                 if not problems:
                     receipts[receipt_key(source)] = acquisition_receipt(source, checked_at)
@@ -114,6 +122,8 @@ def refresh(root, fetch=import_source, checked_at=None, receipts=None, attempts=
                 continue
             phase = 'semantic_comparison'
             semantic = compare_contracts(previous, updated)
+            if path.stem in DRIFT_SOURCES:
+                report['drift'][path.stem] = classify_drift(previous, updated)
             report['checked'][path.stem] = {'status': semantic['status'], **evidence}
             phase = 'retain_removals'
             retained, removed = preserve_removed(previous, updated, path.name)
@@ -142,6 +152,24 @@ def refresh(root, fetch=import_source, checked_at=None, receipts=None, attempts=
     return changes, report
 
 
+def write_drift(target, report, previous_path):
+    """Write unresolved drift when every drift source was assessed this run.
+
+    A failed acquisition writes nothing, so the previous drift on main is kept.
+    Unchanged drift keeps the previous document byte-identical.
+    """
+    if set(report.get('drift', {})) != set(DRIFT_SOURCES):
+        return False
+    previous = json.loads(previous_path.read_text()) if previous_path.exists() else None
+    rows = [row for source in sorted(DRIFT_SOURCES) for row in report['drift'][source]]
+    document = drift_document(rows, previous, now=report['checked_at'])
+    if previous is not None and previous.get('operations') == document['operations']:
+        document = previous
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(document, indent=2, ensure_ascii=False) + '\n')
+    return True
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
@@ -149,6 +177,7 @@ def main(argv=None):
     parser.add_argument('--report', type=Path)
     parser.add_argument('--receipts', type=Path, help='Existing workflow receipt report/cache; no receipt inferred from fetched_at')
     parser.add_argument('--audit-only', action='store_true', help='Assess all source policies/receipts without fetching or writing')
+    parser.add_argument('--drift-output', type=Path, help='Write unresolved request drift (public operation ids and field names only)')
     args = parser.parse_args(argv)
     saved = json.loads(args.receipts.read_text()) if args.receipts and args.receipts.exists() else {}
     receipts = saved.get('receipts', {})
@@ -157,6 +186,8 @@ def main(argv=None):
     if args.write:
         for path, text in changes.items():
             path.write_text(text)
+    if args.drift_output:
+        write_drift(args.drift_output, report, args.root / DRIFT_PATH)
     rendered = json.dumps(report, indent=2) + '\n'
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)

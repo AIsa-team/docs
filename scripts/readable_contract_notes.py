@@ -7,6 +7,13 @@ import re
 
 BEGIN = "{/* aisa-contract-details:start */}"
 END = "{/* aisa-contract-details:end */}"
+# Spec #1285 R1: shown when Runtime has no current production evidence for
+# this operation's request example (x-aisa-verification.state == pending).
+PENDING_NOTICE_EN = ("> **Request example pending verification.** The request example for this endpoint has not yet "
+                     "been verified in production, so no reference example is shown. Confirm your parameters with a "
+                     "free quote request (`X-AISA-Cost-Mode: quote`) before running it.")
+PENDING_NOTICE_ZH = ("> **请求示例待验证。** 此接口的请求示例尚未在生产环境验证，因此不显示参考示例。"
+                     "请先用免费的报价模式（`X-AISA-Cost-Mode: quote`）确认参数，再正式调用。")
 
 
 def strip_generated_block(text):
@@ -111,9 +118,12 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
     pricing = operation.get("x-aisa-pricing") or {}
     constraints = operation.get("x-aisa-constraints") or {}
     notes = constraints.get("notes") or []
-    if not pricing and not notes and document is None:
+    pending = (operation.get("x-aisa-verification") or {}).get("state") == "pending"
+    if not pricing and not notes and not pending and document is None:
         return ""
     lines = [BEGIN, ""]
+    if pending:
+        lines += [PENDING_NOTICE_ZH if zh else PENDING_NOTICE_EN, ""]
     if document is not None:
         lines += request_details(operation, document, method, path, spec_path, language)
     if pricing or notes:

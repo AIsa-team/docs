@@ -34,7 +34,19 @@ jobs:
       - name: Stage source updates and comparison evidence
         id: refresh
         continue-on-error: true
-        run: python scripts/refresh_upstream.py --write --receipts .cache/source-reviews.json --report /tmp/upstream-report.json
+        env:
+          # Retained upstream descriptions must pass the supplier vocabulary.
+          SUPPLIER_VOCAB_JSON: ${{ secrets.SUPPLIER_VOCAB_JSON }}
+        run: >-
+          python scripts/refresh_upstream.py --write --receipts .cache/source-reviews.json
+          --report /tmp/upstream-report.json --drift-output /tmp/upstream-drift/upstream-drift.json
+      - name: Upload unresolved request drift
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-drift
+          path: /tmp/upstream-drift/upstream-drift.json
+          if-no-files-found: ignore
       - name: Upload source comparison report
         if: always()
         uses: actions/upload-artifact@v4
@@ -168,3 +180,41 @@ jobs:
       - name: Report acquisition, policy or missing/overdue review failures
         if: steps.refresh.outcome == 'failure'
         run: exit 1
+
+  # Spec #1285 R1: unresolved request drift (public operation ids and field
+  # names only) is recorded on main so the worker contractsurface alerts and
+  # the release gate lists affected operations as pending. The reviewed
+  # declaration change itself still lands only through the review PR above.
+  drift:
+    needs: refresh
+    if: always() && needs.refresh.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: upstream-drift
+          path: /tmp/upstream-drift
+      - name: Commit changed drift to main
+        run: |
+          if [ ! -f /tmp/upstream-drift/upstream-drift.json ]; then
+            echo 'Drift was not assessed this run; previous drift retained.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          cp /tmp/upstream-drift/upstream-drift.json docs/publication/upstream-drift.json
+          if git diff --quiet -- docs/publication/upstream-drift.json; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add docs/publication/upstream-drift.json
+          git commit -m 'chore: record unresolved upstream request drift'
+          for attempt in 1 2 3; do
+            git push origin HEAD:main && exit 0
+            git pull --rebase origin main
+          done
+          exit 1

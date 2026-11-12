@@ -1256,15 +1256,18 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
     if unreviewed_runtime:
         hash_inputs["unreviewed_runtime"] = UNREVIEWED_RUNTIME_POLICY
     document_meta["document_hash"] = digest(hash_inputs)
-    from playground_examples import add_get_code_sample, add_body_code_sample
+    from playground_examples import add_get_code_sample, add_body_code_sample, apply_example_verification
     for path, item in output["paths"].items():
         for method, operation in item.items():
             if method in METHODS:
+                if not apply_example_verification(operation):
+                    continue
                 if method == "get":
                     add_get_code_sample(operation, path, operation.get("servers", item.get("servers", output.get("servers", []))))
                 elif method in {"post", "put", "patch"}:
                     add_body_code_sample(operation, method, path, operation.get("servers", item.get("servers", output.get("servers", []))))
     from source_provenance import compact_document
     from pricing_prose import clean_document
-    output = clean_document(output)
+    from customer_wording import apply as customer_wording
+    output = customer_wording(clean_document(output))
     return compact_document(output), pending
