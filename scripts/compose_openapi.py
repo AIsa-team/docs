@@ -750,6 +750,90 @@ def merge_body(upstream: dict, runtime: dict, constrained: set = frozenset(), ke
 # Publication of Runtime operations without reviewed inputs. The generic schema
 # claims only that the success body is JSON; it never describes its fields.
 UNREVIEWED_RUNTIME_POLICY = "unreviewed-runtime-v1"
+# Runtime-owned public contract metadata (Spec #1285 R1). These are part of the
+# customer contract, not provenance: the composer copies them from Runtime
+# facts unchanged and every public projection (Mintlify, llms, MCP) keeps them.
+PUBLIC_CONTRACT_EXTENSIONS = frozenset({"x-aisa-pagination", "x-aisa-latency-class", "x-aisa-latency"})
+PAGINATION_PROPERTY = "aisa_pagination"
+_PAGINATION_WRAPPER_KEYS = {"type", "properties", "additionalProperties", "required"}
+
+
+def runtime_pagination_property(runtime: dict) -> dict | None:
+    """The gateway-added ``aisa_pagination`` property of the Runtime 200 schema."""
+    if not isinstance(runtime.get("x-aisa-pagination"), dict):
+        return None
+    schema = (runtime.get("responses", {}).get("200", {}).get("content", {})
+              .get("application/json", {}).get("schema"))
+    properties = schema.get("properties") if isinstance(schema, dict) else None
+    value = properties.get(PAGINATION_PROPERTY) if isinstance(properties, dict) else None
+    return copy.deepcopy(value) if isinstance(value, dict) else None
+
+
+def is_pagination_wrapper(schema: Any) -> bool:
+    """A schema that only declares the gateway pagination envelope."""
+    return (isinstance(schema, dict) and set(schema) <= _PAGINATION_WRAPPER_KEYS
+            and schema.get("type", "object") == "object"
+            and isinstance(schema.get("properties"), dict) and set(schema["properties"]) == {PAGINATION_PROPERTY}
+            and set(schema.get("required", [])) <= {PAGINATION_PROPERTY})
+
+
+def without_pagination_payload(response: dict) -> dict:
+    """Remove the gateway ``aisa_pagination`` envelope from a success response.
+
+    Runtime declares ``aisa_pagination`` on otherwise payload-less 200
+    responses. That declaration must not suppress the reviewed source payload,
+    and a previously published envelope must not become part of a retained
+    success contract (it is re-merged from Runtime facts on every compose).
+    A pagination-only payload is dropped entirely.
+    """
+    if not isinstance(response, dict):
+        return response
+    media = response.get("content", {}).get("application/json") if isinstance(response.get("content"), dict) else None
+    schema = media.get("schema") if isinstance(media, dict) else None
+    if not isinstance(schema, dict):
+        return response
+    result = copy.deepcopy(response)
+    target = result["content"]["application/json"]
+    if is_pagination_wrapper(schema):
+        if set(response["content"]) == {"application/json"} and set(media) == {"schema"}:
+            result.pop("content")
+        else:
+            target.pop("schema")
+    elif set(schema) == {"allOf"} and isinstance(schema["allOf"], list) and len(schema["allOf"]) == 2 \
+            and is_pagination_wrapper(schema["allOf"][1]):
+        target["schema"] = copy.deepcopy(schema["allOf"][0])
+    elif isinstance(schema.get("properties"), dict) and PAGINATION_PROPERTY in schema["properties"]:
+        target["schema"]["properties"].pop(PAGINATION_PROPERTY)
+    else:
+        return response
+    return result
+
+
+def merge_pagination_property(response: dict, prop: dict) -> None:
+    """Merge Runtime's ``aisa_pagination`` into the effective 200 JSON schema (idempotent)."""
+    if not isinstance(response, dict) or "$ref" in response or response.get("x-aisa-no-content") is True:
+        return
+    content = response.get("content")
+    if not content:
+        content = response["content"] = {"application/json": {}}
+    media = content.get("application/json")
+    if not isinstance(media, dict):
+        # A non-JSON payload cannot carry the envelope; release_gate_pagination reports it.
+        return
+    schema = media.get("schema", {})
+    wrapper = {"type": "object", "properties": {PAGINATION_PROPERTY: copy.deepcopy(prop)}}
+    if schema is True or schema == {}:
+        media["schema"] = wrapper
+    elif isinstance(schema, dict) and isinstance(schema.get("allOf"), list) and set(schema) == {"allOf"} \
+            and schema["allOf"] and is_pagination_wrapper(schema["allOf"][-1]):
+        schema["allOf"][-1] = wrapper
+    elif isinstance(schema, dict) and not ({"$ref", "allOf", "anyOf", "oneOf", "not", "if"} & set(schema)) \
+            and schema.get("type", "object") == "object":
+        schema.setdefault("properties", {})[PAGINATION_PROPERTY] = copy.deepcopy(prop)
+    elif isinstance(schema, dict):
+        media["schema"] = {"allOf": [schema, wrapper]}
+
+
 UNREVIEWED_SUCCESS_SCHEMA = {}
 UNREVIEWED_SUCCESS_DESCRIPTION = "Successful response. The payload schema has not been reviewed yet."
 
@@ -851,7 +935,7 @@ def published_success_responses(previous: dict | None) -> dict:
             for status, response in operation.get("responses", {}).items():
                 if not re.fullmatch(r"2(?:[0-9]{2}|XX)", str(status)):
                     continue
-                resolved = response_object(response, previous)
+                resolved = without_pagination_payload(response_object(response, previous))
                 if has_response_payload(resolved):
                     # Do not copy legacy headers/links: runtime owns protocol.
                     responses[str(status)] = {
@@ -1030,6 +1114,12 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     server_auth = server_auth_headers(runtime, facts.get("info", {}).get("x-aisa-provider"), actual_method, selected_document, mirror)
                     request_auth = request_auth_headers(runtime, facts.get("info", {}).get("x-aisa-provider"), actual_method, selected_document, mirror, public_path=public_path)
                     operation = copy.deepcopy(runtime)
+                    pagination_property = runtime_pagination_property(runtime)
+                    runtime_responses = runtime.get("responses", {})
+                    if pagination_property is not None and isinstance(operation.get("responses", {}).get("200"), dict):
+                        # Runtime adds only the envelope; the payload comes from reviewed sources.
+                        operation["responses"]["200"] = without_pagination_payload(operation["responses"]["200"])
+                        runtime_responses = {**runtime_responses, "200": operation["responses"]["200"]}
                     capabilities = operation.get("x-aisa-capabilities", {})
                     for payment in ("mpp", "x402"):
                         if payment + "_methods" in capabilities:
@@ -1169,7 +1259,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         elif any(k in runtime for k in ("x-aisa-response-upstream-path-sha256", "x-aisa-response-upstream-origin-sha256")):
                             response_error = "transformed response must not declare passthrough binding hashes"
                     try:
-                        fresh = source_success_responses(response_operation, response_document, output, "response_" + digest(response_source)[7:19] + ".json", runtime.get("responses", {}))
+                        fresh = source_success_responses(response_operation, response_document, output, "response_" + digest(response_source)[7:19] + ".json", runtime_responses)
                     except (ValueError, KeyError, TypeError) as exc:
                         response_error = str(exc)
                     source_payloads = {}
@@ -1240,6 +1330,9 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                                "statuses": unknown, "reason": response_error or "public success response has no authoritative payload declaration"}
                         response_gaps.append(gap)
                         operation["x-aisa-response-pending"] = copy.deepcopy(gap)
+                    if pagination_property is not None and "200" in operation.get("responses", {}):
+                        # After gap detection: the envelope never counts as a reviewed payload.
+                        merge_pagination_property(operation["responses"]["200"], pagination_property)
                     if operation_id in ids:
                         raise IdentityError(f"duplicate operationId: {operation_id}")
                     ids.add(operation_id)

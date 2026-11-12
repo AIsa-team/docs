@@ -104,6 +104,67 @@ def request_details(operation, document, method, path, spec_path, language="en")
     return lines + [fence + "json", serialized, fence, ""]
 
 
+LATENCY_TYPICAL = {
+    "fast": ("Typically returns within 10 seconds.", "通常 10 秒内返回。"),
+    "slow": ("Typically returns within 30 seconds.", "通常 30 秒内返回。"),
+    "very_slow": ("Typically takes longer than 30 seconds.", "通常需要 30 秒以上。"),
+}
+
+
+def pagination_and_latency_lines(operation, language="en"):
+    """Public, supplier-neutral guidance from x-aisa-pagination and x-aisa-latency."""
+    zh = language == "zh"
+    def t(en, cn): return cn if zh else en
+    def text(value): return safe(value) if isinstance(value, str) else ""
+    lines = []
+    pagination = operation.get("x-aisa-pagination")
+    request = pagination.get("request") if isinstance(pagination, dict) else None
+    param = request.get("param") if isinstance(request, dict) else None
+    if isinstance(param, str) and param:
+        where = request.get("in")
+        location = (t(" (request body field)", "（请求体字段）") if where == "body"
+                    else t(" (query parameter)", "（查询参数）") if where == "query" else "")
+        lines += ["## " + t("Pagination", "翻页"), "",
+                  "- " + text(t("Pass ", "把 ")) + code("aisa_pagination.next_cursor")
+                  + text(t(" as ", " 作为 ")) + code(param) + text(location)
+                  + text(t(" to fetch the next page; stop when ", ("" if location else " ") + "传入即可获取下一页；")) + code("aisa_pagination.has_more")
+                  + text(t(" is false.", " 为 false 时停止。")),
+                  "- " + text(t("The same values are returned in the ", "响应头 ")) + code("X-AISA-Has-More")
+                  + text(t(" and ", " 与 ")) + code("X-AISA-Next-Cursor")
+                  + text(t(" response headers.", " 返回相同的值。"))]
+        if pagination.get("style") == "next_link":
+            lines.append("- " + text(t("The cursor is an opaque value; pass it back unchanged.", "游标是不透明值，请原样传回。")))
+        size_param = request.get("size_param")
+        if isinstance(size_param, str) and size_param:
+            lines.append("- " + text(t("Page size parameter: ", "页大小参数：")) + code(size_param))
+        max_pages = pagination.get("max_pages")
+        if type(max_pages) is int and max_pages > 0:
+            lines.append("- " + text(t(f"At most {max_pages} pages can be fetched.", f"最多可获取 {max_pages} 页。")))
+        if pagination.get("ordering") == "unstable":
+            item_id = pagination.get("item_id")
+            if isinstance(item_id, str) and item_id:
+                lines.append("- " + text(t("Results may repeat across pages; de-duplicate by ", "结果可能跨页重复，请按 "))
+                             + code(item_id) + text(t(".", " 去重。")))
+            else:
+                lines.append("- " + text(t("Results may repeat across pages; de-duplicate by a stable id.",
+                                           "结果可能跨页重复，请按稳定的 ID 去重。")))
+        lines.append("")
+    latency = operation.get("x-aisa-latency")
+    latency = latency if isinstance(latency, dict) else {}
+    typical = LATENCY_TYPICAL.get(operation.get("x-aisa-latency-class"))
+    timeout = latency.get("timeout_seconds")
+    if typical or type(timeout) is int:
+        lines += ["## " + t("Response time", "响应时间"), ""]
+        if typical:
+            lines.append("- " + text(t(*typical)))
+        if type(timeout) is int:
+            lines.append("- " + text(t(
+                f"The server answers with a result or HTTP 503 within {timeout} seconds; set your client timeout slightly above that (for example {timeout + 5} seconds).",
+                f"服务端会在 {timeout} 秒内返回结果或 HTTP 503；请把客户端超时设置得略高于此值（例如 {timeout + 5} 秒）。")))
+        lines.append("")
+    return lines
+
+
 def readable_block(operation, language="en", translate=None, *, document=None, method=None, path=None, spec_path=None):
     zh = language == "zh"
     def t(en, cn): return cn if zh else en
@@ -111,7 +172,8 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
     pricing = operation.get("x-aisa-pricing") or {}
     constraints = operation.get("x-aisa-constraints") or {}
     notes = constraints.get("notes") or []
-    if not pricing and not notes and document is None:
+    behaviour = pagination_and_latency_lines(operation, language)
+    if not pricing and not notes and not behaviour and document is None:
         return ""
     lines = [BEGIN, ""]
     if document is not None:
@@ -194,6 +256,8 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
                 if zh and translate:
                     note = translate(note)
                 lines.append("- " + safe(note))
+    if behaviour:
+        lines += ([""] if lines[-1] != "" else []) + behaviour[:-1]
     lines += ["", END]
     return "\n".join(lines)
 
