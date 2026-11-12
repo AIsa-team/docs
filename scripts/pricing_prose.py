@@ -232,17 +232,6 @@ def place_notice(body: str, notice: str) -> str:
     return body.rstrip('\n') + '\n\n' + notice + '\n'
 
 
-def documented_payload_fields(node: dict) -> bool:
-    """Reviewed field prose describes payload values, including business prices."""
-    if node.get('x-aisa-schema-completeness') == 'documented-fields-only':
-        return True
-    content = node.get('content')
-    return isinstance(content, dict) and any(
-        isinstance(media, dict) and isinstance(media.get('schema'), dict)
-        and media['schema'].get('x-aisa-schema-completeness') == 'documented-fields-only'
-        for media in content.values())
-
-
 def clean_document(document: dict) -> dict:
     """Walk declaration objects without changing examples or extension metadata."""
     from compose_openapi import map_contract_children
@@ -259,11 +248,6 @@ def clean_document(document: dict) -> dict:
             result['description'] = reconcile_free_claim(result['description'], result.get('x-aisa-pricing'))
         for field in ('description', 'summary', 'title'):
             if isinstance(result.get(field), str):
-                # A response field table is part of the data contract. Product
-                # prices, delivery fees and subscription prices are not API
-                # billing claims, even when their descriptions contain dollars.
-                if field == 'description' and documented_payload_fields(result):
-                    continue
                 result[field] = clean_text(result[field])
         if is_operation:
             add_price_summary(result)
