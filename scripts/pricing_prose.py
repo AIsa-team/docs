@@ -81,8 +81,31 @@ NOTICE_ZH = '当前价格请查看费用与请求规则；接口支持报价时�
 FENCES = re.compile(r'(```[^\n]*\n.*?```|~~~[^\n]*\n.*?~~~|<pre\b[^>]*>.*?</pre>)', re.S | re.I)
 PARTS = re.compile(r'(\n+|[;；](?![^()]*\))|(?<=[.!?。！？])\s+(?!\d)|<br\s*/?>|</?p\b[^>]*>|(?=\bNote:?)|(?<=false)(?=Note))', re.I)
 NON_RATE = re.compile(r'products that cost|sort by|(?:minimum|maximum) price of|price per contract|price_centicents|YES at|NO at|shares redeem', re.I)
+# The space before the parenthetical goes with it, so no "item ." remains.
 PRICE_PARENTHETICAL = re.compile(
-    r'\(\s*(?:US)?\$\s*\d+(?:\.\d+)?(?:\s*/\s*(?:request|call)(?:[^()\n]*))?\s*\)', re.I)
+    r'[ \t]*\(\s*(?:US)?\$\s*\d+(?:\.\d+)?(?:\s*/\s*(?:request|call)(?:[^()\n]*))?\s*\)', re.I)
+# A sentence (single line breaks allowed) saying a request is charged or billed once.
+UPSTREAM_ONCE_SENTENCE = re.compile(
+    r'(?<![^\s])(?=[^\s.!?])(?:[^.!?\n]|\n(?!\n))*?\b(?:charged|billed)\s+(?:only\s+)?once\b[^.!?\n]*[.!?]', re.I)
+
+
+def drop_upstream_once(chunk):
+    """Drop each such sentence with the spacing on one side of it."""
+    count = 0
+    while match := UPSTREAM_ONCE_SENTENCE.search(chunk):
+        begin, end = match.span()
+        after = re.match(r'[ \t]+(?=\S)', chunk[end:])
+        if after:
+            end += after.end()
+        else:
+            begin = len(chunk[:begin].rstrip(' \t'))
+        chunk = chunk[:begin] + chunk[end:]
+        count += 1
+    return chunk, count
+
+
+# A sentence that is only a billing statement once its amount is removed.
+BILLING_ONLY = re.compile(r'\W*(?:billed|charged|priced)\b', re.I)
 CONDITIONAL_SURCHARGE = re.compile(
     r'\byou will be (?:charged|billed) (?:extra\s+)?(?:' + MONEY.pattern + r')(?:\s+extra)?', re.I)
 
@@ -108,11 +131,16 @@ def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
     changed = False
     for index in range(0, len(chunks), 2):
         chunk = chunks[index]
-        for old, current in zip(LEGACY_NOTICES, (NOTICE, NOTICE_ZH)):
-            chunk = chunk.replace(old, current)
+        for previous, current in zip(LEGACY_NOTICES, (NOTICE, NOTICE_ZH)):
+            chunk = chunk.replace(previous, current)
         changed |= chunk != chunks[index]
         # Keep the model choice while removing its obsolete rate assertion.
         chunk, count = re.subn(r'(`[^`]+`) is billed at \$\d+(?:\.\d+)? per request\.', r'\1 is supported.', chunk)
+        changed |= bool(count)
+        # Upstream request de-duplication ("Repeat lookups of the same tweet
+        # within the same UTC day are charged once") is not AIsa's charge rule;
+        # x-aisa-pricing is. Single line breaks stay inside a sentence.
+        chunk, count = drop_upstream_once(chunk)
         changed |= bool(count)
         # Preserve the condition that changes provider usage while removing its
         # stale monetary amount. This does not assert a customer surcharge.
@@ -138,7 +166,16 @@ def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
                 # limits or other caller instructions with it.
                 without_rate, count = PRICE_PARENTHETICAL.subn('', part)
                 if count and not MONEY.search(without_rate):
-                    parts[j] = without_rate.rstrip()
+                    if BILLING_ONLY.match(without_rate):
+                        # "Billed as a posts read ($0.005)." says nothing once
+                        # its amount is gone: drop the sentence and its spacing.
+                        parts[j] = ''
+                        if j + 1 < len(parts) and parts[j + 1].strip(' \t') == '':
+                            parts[j + 1] = ''
+                        elif j > 0 and parts[j - 1].strip(' \t') == '':
+                            parts[j - 1] = ''
+                    else:
+                        parts[j] = without_rate.rstrip()
                     changed = True
                     continue
                 # A price-only bullet under a Price heading has its unit in the
@@ -177,6 +214,18 @@ def place_notice(body: str, notice: str) -> str:
     return body.rstrip('\n') + '\n\n' + notice + '\n'
 
 
+def documented_payload_fields(node: dict) -> bool:
+    """Reviewed field prose describes payload values, including business prices."""
+    if node.get('x-aisa-schema-completeness') == 'documented-fields-only':
+        return True
+    content = node.get('content')
+    return isinstance(content, dict) and any(
+        isinstance(media, dict) and isinstance(media.get('schema'), dict)
+        and media['schema'].get('x-aisa-schema-completeness') == 'documented-fields-only'
+        for media in content.values())
+
+
+
 def clean_document(document: dict) -> dict:
     """Walk declaration objects without changing examples or extension metadata."""
     from compose_openapi import map_contract_children
@@ -193,6 +242,11 @@ def clean_document(document: dict) -> dict:
             result['description'] = reconcile_free_claim(result['description'], result.get('x-aisa-pricing'))
         for field in ('description', 'summary', 'title'):
             if isinstance(result.get(field), str):
+                # A response field table is part of the data contract. Product
+                # prices, delivery fees and subscription prices are not API
+                # billing claims, even when their descriptions contain dollars.
+                if field == 'description' and documented_payload_fields(result):
+                    continue
                 result[field] = clean_text(result[field])
         if is_operation:
             remove_price_summary(result)

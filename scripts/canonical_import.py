@@ -146,6 +146,18 @@ def project_metadata(input_view, catalog_facts, index, category, native, produce
             'facts_by_provider': facts_by_provider, 'runtime_index': copy.deepcopy(index)}
 
 
+def retired_page_references(root):
+    """Archived pages of editorially retired routes, as page references.
+
+    An archive page no longer carries OpenAPI frontmatter, but it remains the
+    stable page of its route; apply_retirements re-archives it after projection.
+    """
+    from retirement_pages import retirement_rows
+    return [('docs/human-api-retirements.json', '', path, method.lower(), page)
+            for (method, path), page in sorted(retirement_rows(root).items())]
+
+
+
 def project_surfaces(input_view, native_raw, aggregate_raw, metadata):
     """Return byte outputs; native/full JSON stay the exact verified producer bytes."""
     from pull_openapi import (existing_page_references, generate_pages,
@@ -156,15 +168,22 @@ def project_surfaces(input_view, native_raw, aggregate_raw, metadata):
     native = {name: strict_json(raw) for name, raw in native_raw.items()}
     original = published_documents(root)
     changes = {}
-    references = existing_page_references(root)
+    references = existing_page_references(root) + retired_page_references(root)
+    identities = {}  # Page headers are read once for every provider in this projection.
     for provider in sorted(metadata['registry']['providers']):
         require(provider in native, 'Missing canonical provider for page projection')
+        if provider in metadata.get('retained_empty_placeholders', ()):
+            continue
         generate_pages(root, provider, native[provider], changes, original.get(provider),
-                       decorate_links=False, page_references=references, require_existing_links=True)
+                       decorate_links=False, page_references=references, require_existing_links=True,
+                       page_identity_cache=identities)
     translation_path = root / 'translations/openapi-zh.json'
     catalog = strict_json(translation_path.read_bytes()) if translation_path.exists() else {'entries': {}}
     refresh_localized_documents(root, native, changes, catalog)
     refresh_legacy_page_blocks(root, native, changes, catalog)
+    # Editorially retired routes keep their archived pages, exactly as in stage().
+    from human_api_retirements import apply_retirements
+    apply_retirements(root, changes)
     require(all(canonical(native[name]) == canonical(strict_json(raw)) for name, raw in native_raw.items()),
             'Projection changed canonical native declarations')
     byte_changes = {path.relative_to(root).as_posix(): text.encode() for path, text in changes.items()}

@@ -17,7 +17,7 @@ class CapabilityAccessFieldTests(unittest.TestCase):
             "mpp": True, "x402": False}})
 
     def test_access_fields_must_be_text(self):
-        with self.assertRaisesRegex(ValueError, "access text"):
+        with self.assertRaisesRegex(ValueError, "capability text"):
             validate_payment_capabilities({"x-aisa-capabilities": {"required_scope": ["social:read"]}})
 
     def test_unknown_fields_are_still_refused(self):

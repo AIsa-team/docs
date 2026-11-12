@@ -14,7 +14,7 @@ from typing import Any
 from upstream_auth_transports import server_auth_headers, request_auth_headers
 from urllib.parse import urlsplit, unquote
 
-VERSION = "27"
+VERSION = "29"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -36,16 +36,13 @@ def validate_payment_capabilities(operation: dict) -> None:
     if "x-aisa-capabilities" not in operation:
         return
     capabilities = operation["x-aisa-capabilities"]
-    # The access fields are declared by Services' publication contract
-    # (validatePublicationCapabilities): the catalogue capability an operation
-    # serves, the API-key scope it needs and its resource shape. They are text,
-    # never payment switches.
-    access = {"capability", "required_scope", "publish_scope", "scope_rule", "shape"}
-    allowed = {"mpp", "mpp_methods", "x402", "x402_methods", "quote", "max_price", "idempotency"} | access
+    # Code-owned handlers publish scope/shape identity in this same Runtime
+    # envelope. Preserve it without interpreting it as payment enablement.
+    text_fields = {"max_price", "idempotency", "capability", "required_scope",
+                   "publish_scope", "scope_rule", "shape"}
+    allowed = {"mpp", "mpp_methods", "x402", "x402_methods", "quote"} | text_fields
     if not isinstance(capabilities, dict) or set(capabilities) - allowed:
         raise ValueError("invalid runtime payment capabilities")
-    if any(name in capabilities and not isinstance(capabilities[name], str) for name in access):
-        raise ValueError("invalid runtime capability access text")
     for name in ("mpp", "x402"):
         if name in capabilities and type(capabilities[name]) is not bool:
             raise ValueError("runtime payment capability must be boolean")
@@ -57,7 +54,7 @@ def validate_payment_capabilities(operation: dict) -> None:
                            or method != method.upper() for method in methods)
                     or len(set(methods)) != len(methods)):
                 raise ValueError("invalid runtime payment method declaration")
-    for name in ("max_price", "idempotency"):
+    for name in text_fields:
         if name in capabilities and not isinstance(capabilities[name], str):
             raise ValueError("invalid runtime payment capability text")
     if "quote" in capabilities:
@@ -396,8 +393,12 @@ def referenced_components(value: Any, document: dict) -> dict:
                 if openapi30:
                     definition = schema_30_to_31(definition) if section == "schemas" else fragment_30_to_31(definition)
                 seen.add(ref)
-                components.setdefault(section, {})[name] = copy.deepcopy(original)
-                visit({'links': {'target': definition}} if section == 'links' else definition)
+                # Different pointers into one component's $defs share the same
+                # finite component graph. Validate every pointer above, but walk
+                # the complete component only once, including recursive schemas.
+                if name not in components.get(section, {}):
+                    components.setdefault(section, {})[name] = copy.deepcopy(original)
+                    visit({'links': {'target': definition}} if section == 'links' else definition)
             map_contract_children(node, visit)
     visit(fragment_30_to_31(value) if openapi30 else value)
     return components
@@ -619,6 +620,21 @@ def provider_required(source_required: bool, declared: dict, schema: dict, name:
             and name not in constrained)
 
 
+def forwards_undeclared_query(runtime: dict) -> bool:
+    """Read the Runtime forwarding fact independently of target-value precedence.
+
+    OpenQuery preserves fixed target values while forwarding undeclared caller
+    parameters. It is distinct from TargetQueryRequestWins; the owning Runtime
+    compiler prohibits combining it with request-wins or ignore-undeclared.
+    """
+    policy = runtime.get('x-aisa-query-policy', {})
+    if not isinstance(policy, dict) or any(type(value) is not bool for value in policy.values()):
+        raise ValueError('invalid runtime query forwarding policy')
+    if policy.get('open_query') is True and (policy.get('request_wins') is True or policy.get('ignore_undeclared') is True):
+        raise ValueError('conflicting runtime open-query forwarding policy')
+    return policy.get('open_query') is True or policy.get('request_wins') is True
+
+
 def constrained_names(runtime: dict) -> set:
     """Field names the Runtime's cross-field constraints refer to."""
     names = set()
@@ -642,7 +658,14 @@ def constrained_names(runtime: dict) -> set:
 
 def merge_object(upstream: dict, declared: dict, constrained: set = frozenset(), kept: list | None = None,
                  prefix: str = "") -> dict:
-    merged = flatten_object(upstream)
+    # Rechecking an already composed body must preserve identical Runtime-owned
+    # cross-field rules. They are reapplied below, after provider field merging.
+    # Different or extra source rules still go through the strict flattener.
+    source = upstream
+    if (isinstance(upstream, dict) and "allOf" in declared
+            and upstream.get("allOf") == declared["allOf"]):
+        source = {key: value for key, value in upstream.items() if key != "allOf"}
+    merged = flatten_object(source)
     names = set(declared.get("properties", {}))
     source_required = set(merged.get("required", []))
     required = (source_required - names) | set(declared.get("required", []))
@@ -690,6 +713,18 @@ def merge_body(upstream: dict, runtime: dict, constrained: set = frozenset(), ke
         # Upstream request examples describe the complete body. Runtime examples
         # only cover declared fields and must not replace the complete example.
     return result
+
+
+# Publication of Runtime operations without reviewed inputs. The generic schema
+# claims only that the success body is JSON; it never describes its fields.
+UNREVIEWED_RUNTIME_POLICY = "unreviewed-runtime-v1"
+UNREVIEWED_SUCCESS_SCHEMA = {}
+UNREVIEWED_SUCCESS_DESCRIPTION = "Successful response. The payload schema has not been reviewed yet."
+
+
+def is_unreviewed_request(operation: dict) -> bool:
+    review = operation.get("x-aisa-review")
+    return isinstance(review, dict) and review.get("status") == "unreviewed" and review.get("request") == "runtime_binding"
 
 
 def has_response_contract(response: dict) -> bool:
@@ -749,6 +784,15 @@ def source_success_responses(operation: dict, document: dict, output: dict, name
                        "content": response.get("content", {})}
             if response.get("x-aisa-no-content") is True:
                 payload["x-aisa-no-content"] = True
+            payload = copy.deepcopy(payload)
+            for media in payload.get("content", {}).values():
+                schema = media.get("schema") if isinstance(media, dict) else None
+                if isinstance(schema, dict) and schema.get("x-aisa-schema-completeness") == "documented-fields-only":
+                    # The full field table remains in the response description.
+                    # Raw discovery metadata stays in the reviewed source input.
+                    schema.pop("x-aisa-provider-response", None)
+                    if schema.get("description") == payload.get("description"):
+                        schema.pop("description", None)
             result[str(status)] = resolve_fragment(payload, document, output, namespace, preserve_refs=True)
     return result
 
@@ -830,7 +874,17 @@ def incomplete_source_diagnostic(sources: list, upstream_path: str, method: str,
 
 def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = None,
             previous: dict | None = None, public_mirrors: dict | None = None,
-            source_bindings: dict | None = None) -> tuple[dict, list]:
+            source_bindings: dict | None = None, *, unreviewed_runtime: bool = False) -> tuple[dict, list]:
+    """Compose one provider from Runtime facts and reviewed sources.
+
+    ``unreviewed_runtime`` publishes a Runtime operation that has no reviewed
+    source operation from its own Runtime binding (identity, status, method,
+    path, pricing, declared parameters and body) instead of leaving it pending,
+    and gives an enabled operation without a reviewed success payload an
+    explicitly generic JSON schema. Such operations carry ``x-aisa-review`` so
+    consumers can tell them apart from reviewed contracts. Public ANY routes,
+    source-bound credentials and reviewed operations are unchanged.
+    """
     overlay = overlay or {}
     validate_overlay(overlay)
     if not isinstance(facts.get("paths"), dict) or not facts.get("openapi", "").startswith("3.1"):
@@ -908,6 +962,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     selected_document = {}
                     operation_source = {}
                     response_operation, response_document = {}, {}
+                    unreviewed_request = False
                     if validation != "runtime" or method == "x-aisa-any" or "x-aisa-request-auth" in runtime:
                         if actual_method in upstream_item:
                             selected_document = upstream_matches[actual_method][0]
@@ -932,6 +987,12 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             mirror = resolve_fragment(mirror, {"openapi": selected.get("openapi", "3.1.0"), "components": selected.get("components", {})}, output, "manual_" + digest(operation_source)[7:19] + ".json")
                             response_operation = selected.get("response_operation", {})
                             response_document = {"openapi": selected.get("openapi", "3.1.0"), "components": selected.get("response_components", {})}
+                        elif unreviewed_runtime and method != "x-aisa-any" and "x-aisa-request-auth" not in runtime:
+                            # No reviewed source operation: the Runtime binding is the
+                            # only request authority, exactly as for validation=runtime.
+                            # A disabled operation keeps its Runtime status, so disabling
+                            # an unreviewed route never withholds the whole artifact.
+                            unreviewed_request = True
                         else:
                             raise ValueError("upstream operation missing")
                     server_auth = server_auth_headers(runtime, facts.get("info", {}).get("x-aisa-provider"), actual_method, selected_document, mirror)
@@ -960,9 +1021,9 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         elif len(methods) > 1:
                             candidate = f"{actual_method}_{base_id}"
                             operation["operationId"] = candidate if len(candidate) <= 56 else candidate[:49] + "_" + hashlib.sha256(f"{actual_method} {public_path}".encode()).hexdigest()[:6]
-                    if validation != "runtime":
+                    if validation != "runtime" and not unreviewed_request:
                         runtime_fields = {(p["in"], p["name"]) for p in runtime.get("parameters", [])}
-                        query_passthrough = runtime.get("x-aisa-query-policy", {}).get("request_wins", False)
+                        query_passthrough = forwards_undeclared_query(runtime)
                         if bound_source and not runtime.get("x-aisa-upstream-selector"):
                             for parameter in mirror.get("parameters", []):
                                 if parameter.get("in") == "query" and parameter.get("required") and isinstance(parameter.get("schema"), dict) and "default" in parameter["schema"]:
@@ -1116,6 +1177,32 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                                if re.fullmatch(r"2(?:[0-9]{2}|XX)", str(status))
                                and not (str(status) in {"204", "205"} and not response.get("content"))
                                and not has_response_contract(response)]
+                    unreviewed_response = []
+                    if (unreviewed_runtime and unknown and not response_error
+                            and operation.get("x-aisa-status") == "enabled"):
+                        for status in unknown:
+                            generic = operation["responses"][status]
+                            if not isinstance(generic, dict) or "$ref" in generic:
+                                continue
+                            # Keep reviewed media types and their official examples; only
+                            # the missing payload schema becomes explicitly generic.
+                            content = generic.get("content") if isinstance(generic.get("content"), dict) else {}
+                            kept = {}
+                            for media, item in content.items():
+                                item = copy.deepcopy(item) if isinstance(item, dict) else {}
+                                item.setdefault("schema", copy.deepcopy(UNREVIEWED_SUCCESS_SCHEMA))
+                                kept[media] = item
+                            generic["content"] = kept or {"application/json": {"schema": copy.deepcopy(UNREVIEWED_SUCCESS_SCHEMA)}}
+                            generic["description"] = UNREVIEWED_SUCCESS_DESCRIPTION
+                            unreviewed_response.append(status)
+                        unknown = [status for status in unknown if status not in unreviewed_response]
+                    if unreviewed_request or unreviewed_response:
+                        operation["x-aisa-review"] = {
+                            "status": "unreviewed",
+                            "request": "runtime_binding" if unreviewed_request else "reviewed_source",
+                            "response": ("generic" if unreviewed_response else
+                                         "pending" if unknown or response_error else "reviewed_source"),
+                        }
                     if unknown or response_error:
                         gap = {"operation_id": operation_id, "path": path, "method": actual_method.upper(),
                                "statuses": unknown, "reason": response_error or "public success response has no authoritative payload declaration"}
@@ -1133,7 +1220,10 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
     document_meta = output["info"]["x-aisa-document"]
     document_meta["composer_version"] = VERSION
     document_meta["response_pending"] = response_gaps
-    document_meta["document_hash"] = digest({"facts_hash": meta["facts_hash"], "upstream": upstream, "overlay": overlay, "composer_version": VERSION, "published_success_responses": retained_responses, "public_mirrors": used_mirrors, "source_bindings": source_bindings})
+    hash_inputs = {"facts_hash": meta["facts_hash"], "upstream": upstream, "overlay": overlay, "composer_version": VERSION, "published_success_responses": retained_responses, "public_mirrors": used_mirrors, "source_bindings": source_bindings}
+    if unreviewed_runtime:
+        hash_inputs["unreviewed_runtime"] = UNREVIEWED_RUNTIME_POLICY
+    document_meta["document_hash"] = digest(hash_inputs)
     from playground_examples import add_get_code_sample, add_body_code_sample
     for path, item in output["paths"].items():
         for method, operation in item.items():

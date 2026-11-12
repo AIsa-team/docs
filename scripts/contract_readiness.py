@@ -18,9 +18,9 @@ METHODS = frozenset(('get', 'post', 'put', 'patch', 'delete', 'head', 'options',
 # helpers perform no fetching. Parameter requiredness follows the same Runtime
 # ownership boundary as composition; independent recomposition proves its source.
 try:
-    from .compose_openapi import merge_body, parameter_wire_default, referenced_components, resolve, effective_public_operation, provider_required, constrained_names
+    from .compose_openapi import merge_body, parameter_wire_default, referenced_components, resolve, effective_public_operation, provider_required, constrained_names, is_unreviewed_request
 except ImportError:  # CLI imports scripts directly on sys.path.
-    from compose_openapi import merge_body, parameter_wire_default, referenced_components, resolve, effective_public_operation, provider_required, constrained_names
+    from compose_openapi import merge_body, parameter_wire_default, referenced_components, resolve, effective_public_operation, provider_required, constrained_names, is_unreviewed_request
 
 
 def _schema_contract(value, link=False):
@@ -148,7 +148,8 @@ def _runtime_body_errors(fact, facts_document, operation, document):
         runtime = resolve(runtime_body, facts_document, preserve_recursive=True)
         actual = resolve(operation['requestBody'], document, preserve_recursive=True)
         actual_contract = _body_contract(actual)
-        if fact.get('x-aisa-validation') == 'runtime':
+        if fact.get('x-aisa-validation') == 'runtime' or is_unreviewed_request(operation):
+            # An unreviewed operation publishes exactly the Runtime declaration.
             expected = _body_contract(runtime)
         else:
             # The composer defines which mixed fields runtime owns. Applying
@@ -273,7 +274,21 @@ def _runtime_accounting(index, facts, errors, missing, retained_providers, cover
     pending_paths = {row.get('path') for row in pending_rows}
     if None in excluded_paths | pending_paths or len(excluded_paths) != len(excluded) or len(pending_paths) != len(pending_rows):
         errors.append(_error('duplicate_or_missing_endpoint_path'))
-    if inventory != selected + len(excluded) or selected != projected + pending or pending != len(pending_rows):
+    # Unpublished gateway rows have no customer route. Runtime deliberately
+    # exposes only their count, never the private gateway/provider identity.
+    excluded_counts = cov.get('excluded_counts', {})
+    if not isinstance(excluded_counts, dict):
+        errors.append(_error('invalid_endpoint_counts'))
+        return
+    unpublished_reason = 'unpublished_duplicate_route'
+    unpublished = excluded_counts.get(unpublished_reason, 0)
+    if (type(unpublished) is not int or unpublished < 0 or unpublished > inventory or
+            (unpublished_reason in excluded_counts and unpublished == 0)):
+        errors.append(_error('invalid_endpoint_counts'))
+        return
+    if any(row.get('reason') == unpublished_reason for row in excluded):
+        errors.append(_error('unpublished_endpoint_identity_exposed'))
+    if inventory != selected + len(excluded) + unpublished or selected != projected + pending or pending != len(pending_rows):
         errors.append(_error('endpoint_accounting_mismatch'))
     if excluded_paths & pending_paths:
         errors.append(_error('endpoint_outcome_overlap'))
@@ -305,7 +320,9 @@ def _runtime_accounting(index, facts, errors, missing, retained_providers, cover
             errors.append(_error('fact_endpoint_not_in_inventory'))
         providers = index.get('providers')
         if isinstance(providers, list):
-            actual_counts = {}
+            # Code-owned lifecycle providers may publish derived operations
+            # without any DB-owned endpoints. Their explicit zero is valid.
+            actual_counts = {row.get('id'): 0 for row in providers}
             for row in explicit:
                 actual_counts[row.get('provider')] = actual_counts.get(row.get('provider'), 0) + 1
             expected_counts = {row.get('id'): row.get('endpoint_count') for row in providers}
@@ -495,7 +512,8 @@ def check_readiness(facts_by_provider, documents_by_provider, coverage,
                     if op.get('x-aisa-contract-pending'):
                         result['errors'].append(_error('composed_operation_marked_pending', provider, path, method))
                     validation = fact.get('x-aisa-validation')
-                    if validation != 'runtime' and not op.get('x-aisa-source', {}).get('kind'):
+                    # An explicitly unreviewed operation is bound to Runtime alone.
+                    if validation != 'runtime' and not op.get('x-aisa-source', {}).get('kind') and not is_unreviewed_request(op):
                         result['errors'].append(_error('missing_request_source', provider, path, method))
                     for code, parameter in _runtime_parameter_errors(fact, fact_document, op, document):
                         result['errors'].append(_error(code, provider, path, method, parameter=parameter))
