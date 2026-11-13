@@ -98,6 +98,10 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
     legacy_labels = isinstance(pricing, dict) and set(pricing) <= {"cost_tier", "model"}
     if operation.get("x-aisa-status") == "disabled" and (not pricing or legacy_labels):
         pricing = {"kind": "unpriced"}
+    elif not pricing and (document is not None or operation.get("operationId") or "x-aisa-status" in operation):
+        # Preserved references can have no Runtime tariff at all. Say so in
+        # the page without inventing a price, free access, or disabled status.
+        pricing = {"kind": "unknown"}
     constraints = operation.get("x-aisa-constraints") or {}
     notes = constraints.get("notes") or []
     if not pricing and not notes and document is None:

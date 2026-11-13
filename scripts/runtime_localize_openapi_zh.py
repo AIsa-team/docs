@@ -474,12 +474,14 @@ def generate(published_ref=None) -> None:
             # editorial prose translate. The page header retains proven aliases.
             spec = sources[OPENAPI_DIR / reference[1]]
             operation = spec.get('paths', {}).get(reference[3], {}).get(reference[2].lower(), {})
-        localized_body = update_readable_block(localized_body, operation, "zh", translated_note,
+        from pricing_prose import clean_page
+        localized_page = clean_page(f"---\n{frontmatter}\n---\n{localized_body}", "zh")
+        localized_page = update_readable_block(localized_page, operation, "zh", translated_note,
             **({"document": spec, "method": reference[2], "path": reference[3],
                 "spec_path": "openapi/zh/" + reference[1]} if reference else {}))
         target = ZH_API_DIR / mdx_path.relative_to(API_DIR)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(f"---\n{frontmatter}\n---\n{localized_body}")
+        target.write_text(localized_page)
         generated += 1
     print(f"generated specs={len(list(ZH_OPENAPI_DIR.glob('*.json')))} mdx={generated}")
 

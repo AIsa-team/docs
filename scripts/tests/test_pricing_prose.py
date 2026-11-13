@@ -194,12 +194,41 @@ class PricingProseTests(unittest.TestCase):
         op = {'x-aisa-pricing': {'default_request_estimate_usd': .08}}
         result = update_readable_block(clean_page(page), op)
         self.assertNotIn('$0.24', result)
-        self.assertIn('| funding | 3 |', result)
+        self.assertIn('| funding |', result)
+        self.assertNotIn('Credits', result)
+        self.assertNotIn('See current pricing', result)
         self.assertIn('0.08', result)
         self.assertEqual(update_readable_block(clean_page(result), op), result)
         source = 'Domain rating'
         catalog = {'entries': {key_for(source): {'source': source, 'translation': '查询域名。每次收费 $0.02。'}}}
         self.assertNotIn('$0.02', translation(catalog, source))
+
+    def test_old_tariff_table_keeps_business_columns_without_placeholder_or_credit_rates(self):
+        for title, credit, price, placeholder in (
+                ('Section', 'Credits', 'Price', 'See current pricing'),
+                ('部分', '积分', '价格', '见当前定价')):
+            table = (f'| {title} | {credit} | {price} | Highlights |\n|---|---|---|---|\n'
+                     f'| funding | 3 | {placeholder} | rounds and investors |\n'
+                     f'| industry | 0.5 | {placeholder} | sectors |\n')
+            page = '---\ntitle: Enrichment\n---\n\n' + table
+            result = clean_page(page)
+            self.assertIn('| funding | rounds and investors |', result)
+            self.assertIn('| industry | sectors |', result)
+            for value in (credit, price, placeholder, '| 3 |', '| 0.5 |'):
+                self.assertNotIn(value, result)
+            self.assertEqual(clean_page(result), result)
+            fenced = '---\ntitle: Example\n---\n\n```markdown\n' + table + '```\n'
+            self.assertEqual(clean_page(fenced), fenced)
+        business = '---\ntitle: Products\n---\n\n| Product | Price |\n|---|---|\n| Book | $12 |\n'
+        self.assertEqual(clean_page(business), business)
+
+    def test_tariff_columns_without_trailing_pipes_preserve_table_line_boundaries(self):
+        from pricing_prose import strip_tariff_columns
+        for newline in ('\n', '\r\n'):
+            table = newline.join(('| Endpoint | Price', '|---|---', '| search | $0.1', ''))
+            expected = newline.join(('| Endpoint ', '|---', '| search ', ''))
+            self.assertEqual(strip_tariff_columns(table), expected)
+            self.assertEqual(strip_tariff_columns(expected), expected)
 
     def test_page_cleanup_leaves_no_pricing_placeholder_and_preserves_examples(self):
         page = ('---\ntitle: Cancel\n---\nLead.\n\nReference price: $0.02 USD per successful request.\n\n'
@@ -339,6 +368,7 @@ class PricingProseTests(unittest.TestCase):
                 ({'cost_contract': 'explicit_zero', 'default_request_estimate_usd': .001}, False),
                 ({'customer_pricing': 'usage', 'default_request_estimate_usd': .001}, False),
                 ({'customer_pricing': 'fixed_success', 'default_request_estimate_usd': 0}, False),
+                ({'customer_pricing': 'fixed_success', 'default_request_estimate_usd': .001, 'estimate_source': 'unavailable'}, False),
                 ({'customer_pricing': 'fixed_success', 'default_request_estimate_usd': .001, 'reference_unavailable': True}, False)):
             with self.subTest(pricing=pricing):
                 result = clean_document({'paths': {'/test': {'get': {
@@ -346,7 +376,17 @@ class PricingProseTests(unittest.TestCase):
                 description = result['paths']['/test']['get']['description']
                 self.assertIn('from free text', description)
                 self.assertEqual('Free, suitable' not in description, replace)
+                self.assertNotIn('See the published pricing', description)
+                if replace:
+                    self.assertIn('Suitable as health check.', description)
                 self.assertEqual(clean_document(result), result)
+
+    def test_standalone_free_claim_removal_preserves_quoted_payload(self):
+        from pricing_prose import reconcile_free_claim
+        pricing = {'customer_pricing': 'fixed_success', 'default_request_estimate_usd': .001}
+        example = '```text\nFree.\n```'
+        self.assertEqual(reconcile_free_claim('Resolve free text. Free.\n\n' + example, pricing),
+                         'Resolve free text. \n\n' + example)
 
 
 if __name__ == '__main__':

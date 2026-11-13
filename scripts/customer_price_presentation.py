@@ -68,6 +68,9 @@ def event_description(pricing, zh):
     if isinstance(meter, str) and meter:
         description = re.sub(r'^Publication is metered under ' + re.escape(meter)
                              + r'(?::<[^>]+>)?\.\s*', '', description)
+        description = re.sub(r'^Each platform target that publishes successfully is metered once under '
+                             + re.escape(meter) + r'(?::<[^>]+>)?, including after retries\.\s*',
+                             'Publication retries do not incur duplicate charges. ', description)
     # Replace only recognized clauses, keeping all other customer conditions.
     # In particular, recognizing the rates must not discard a new fee or waiver.
     if zh and meter == 'social.post.published':
@@ -78,6 +81,8 @@ def event_description(pricing, zh):
             lambda m: f'每个成功发布的目标单独收费：X 普通帖子 {m[1]} USD；正文含链接 {m[2]} USD'
                       f'（媒体链接不影响价格）；其他平台 {m[3]} USD。', description)
         translations = {
+            'Not charged in the current period.': '当前周期不收费。',
+            'Publication retries do not incur duplicate charges.': '发布重试不会重复收费。',
             'One post may target X together with other platforms.': '同一帖子可以同时发布到 X 和其他平台。',
             "A failed target is not charged, and a target whose own charge is refused (insufficient balance or the request's maximum price) fails alone while the other targets publish.":
                 '发布失败的目标不收费；某个目标因余额不足或超过请求最高限价被拒付时，仅该目标失败，其他目标继续发布。',
@@ -101,6 +106,13 @@ def fixed_conditions(pricing, zh):
     if ('Failed or unknown outcomes are not charged.' in description or
             'A run that did not succeed is never charged:' in description):
         parts.append('失败或结果未知时不收费。' if zh else 'Failed or unknown outcomes are not charged.')
+    if 'A refused or failed call, or one whose outcome is unknown, is not charged.' in description:
+        parts.append('请求被拒绝、失败或结果未知时不收费。' if zh else
+                     'Refused or failed calls, and calls with unknown outcomes, are not charged.')
+    if 'X accounts are not accepted.' in description:
+        parts.append('不支持 X 账户。' if zh else 'X accounts are not supported.')
+    if 'Needs an X account.' in description:
+        parts.append('需要 X 账户。' if zh else 'An X account is required.')
     if 'This is the price on every plan;' in description:
         parts.append('所有套餐价格相同。' if zh else 'The same price applies on every plan.')
     cache = re.search(r'Repeated identical requests within (\d+) (minutes|hours) are served from cache at no charge', description)
@@ -146,6 +158,8 @@ def fixed_request_summary(pricing, zh):
             parts.append(t(f'Default request estimate: {amount} USD.', f'默认请求预估费用：{amount} USD。'))
     variants = pricing.get('variants')
     if isinstance(variants, dict):
+        if parts and variants:
+            parts[0] = t('Default option: ', '默认选项：') + parts[0]
         for name, variant in sorted(variants.items()):
             if not isinstance(variant, dict):
                 continue
@@ -190,6 +204,10 @@ def pricing_summary(pricing, language='en'):
         summary = fixed_request_summary(pricing, zh)
     elif family == 'metered_event':
         summary = event_description(pricing, zh) or t('Charged per successful event; price unavailable.', '按成功事件收费；价格暂不可用。')
+        if summary in (t('Not charged in the current period.', '当前周期不收费。'),
+                       t('Publication retries do not incur duplicate charges. Not charged in the current period.',
+                         '发布重试不会重复收费。 当前周期不收费。')):
+            return summary
     elif family == 'model_catalog':
         # Runtime carries the selected model's billing units and the n semantics.
         description = pricing.get('description', '')
@@ -203,6 +221,9 @@ def pricing_summary(pricing, language='en'):
                         '价格取决于模型、分辨率和时长；按所选模型的每秒、每次请求或 token 用量价格计费。')
         else:
             summary = t('Price depends on the selected model and request options.', '价格取决于所选模型和请求选项。')
+        if 'The charge is held at submission and settled when the task ends.' in description:
+            summary += ' ' + t('The charge is held at submission and settled when the task ends.',
+                               '提交任务时预留费用，任务结束时结算。')
     else:
         total = reference_total(pricing)
         if family == 'fixed_success' and total:

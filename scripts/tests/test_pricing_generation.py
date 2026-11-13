@@ -1,6 +1,8 @@
 """Pricing survives real composition and canonical page regeneration."""
 import copy
 import json
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -29,11 +31,41 @@ def pricing_cases():
         'async': ({'kind': 'metered_result', 'customer_unit_price_usd': .005},
                   '$0.005 USD per billable unit', '每计费单位 $0.005 USD'),
         'social': (copy.deepcopy(SOCIAL_PRICING), 'an X post costs $0.015', 'X 普通帖子 $0.015 USD'),
+        'social_free_period': ({'kind': 'metered_event', 'meter': 'social.post.published', 'description':
+                               'Each platform target that publishes successfully is metered once under '
+                               'social.post.published:<platform>, including after retries. Not charged in the current period.'},
+                               'Not charged in the current period.', '当前周期不收费。'),
         'model': ({'kind': 'model_catalog', 'description': 'Fixed price whatever n is.'},
                   'regardless of n; token-priced models charge for actual token usage', '不随 n 改变；按 token 定价的模型按实际用量收费'),
+        'video': ({'kind': 'model_catalog', 'description':
+                  'Price is listed per second, per request or by tokens. '
+                  'The charge is held at submission and settled when the task ends.'},
+                  'held at submission and settled when the task ends', '提交任务时预留费用，任务结束时结算'),
         'free': ({'kind': 'no_customer_charge'}, 'No additional charge for this operation.', '此操作不另收费。'),
+        'free_ads': ({'kind': 'no_customer_charge', 'description':
+                     'Ad spend is billed by the ad platform to the connected ad account, never by AIsa.'},
+                     'Ad spend is billed separately by the ad platform', '广告投放费用由广告平台'),
+        'free_cancel': ({'kind': 'no_customer_charge', 'description':
+                        "No new customer charge is authorized; cancellation may complete an existing job's settlement."},
+                        'Cancelling may still settle charges for the existing job', '取消任务时仍可能结算该任务已产生的费用'),
+        'zero_success': ({'customer_pricing': 'fixed_success', 'default_request_estimate_usd': 0},
+                         '$0 USD per successful request', '每次成功请求 $0 USD'),
+        'fixed_cached': ({'kind': 'fixed_request', 'customer_micros_usd': 1000, 'description':
+                          'Failed or unknown outcomes are not charged. '
+                          'Repeated identical requests within 15 minutes are served from cache at no charge; '
+                          'force a fresh read, which is charged.'},
+                          'within 15 minutes are free. A forced refresh is charged.', '15 分钟内的相同请求命中缓存时免费。 强制刷新按次收费。'),
+        'fixed_same_plan': ({'kind': 'fixed_request', 'customer_micros_usd': 300, 'description':
+                             'This is the price on every plan; no plan multiplier applies. '
+                             'A run that did not succeed is never charged: refused, failed, or unknown.'},
+                             'The same price applies on every plan.', '所有套餐价格相同。'),
         'archive': ({'kind': 'unpriced'}, 'Historical archive: disabled, cannot be called, and no price is published.',
                     '历史归档接口：已停用，不可调用，价格未发布。'),
+        'archive_missing': ({}, 'Historical archive: disabled, cannot be called, and no price is published.',
+                            '历史归档接口：已停用，不可调用，价格未发布。'),
+        'disabled_priced': ({'customer_pricing': 'fixed_success', 'default_request_estimate_usd': .012},
+                            '$0.012 USD per successful request', '每次成功请求 $0.012 USD'),
+        'missing': ({}, 'Billing method unavailable.', '计费方式暂不可用。'),
         'unknown': ({'kind': 'future_tariff'}, 'Billing method unavailable.', '计费方式暂不可用。'),
         'adyntel': ({'cost_contract': 'response_units', 'estimate_source': 'unavailable',
                      'estimate_unavailable_reason': 'reference_request_unavailable'},
@@ -49,7 +81,8 @@ def pricing_cases():
         cases[cost] = ({'cost_contract': cost, 'default_request_estimate_usd': .01476},
                        'Usage-based pricing. Default request estimate: $0.01476 USD.', '按实际用量收费。 默认请求预估费用：$0.01476 USD。')
     for pricing, _, _ in cases.values():
-        pricing.update(customer_multiplier=3, unit_rate_usd=.000001, unit='provider_credit')
+        if pricing:
+            pricing.update(customer_multiplier=3, unit_rate_usd=.000001, unit='provider_credit')
     return cases
 
 
@@ -62,7 +95,7 @@ def pricing_document():
         op.update(operationId=name, description='Find records.\n\n' + OLD_SUMMARY)
         op['x-aisa-pricing'] = pricing
         op['x-aisa-docs-url'] = 'https://aisa.one/docs/api-reference/prices/' + name
-        if name == 'archive':
+        if name in ('archive', 'archive_missing', 'disabled_priced'):
             op['x-aisa-status'] = 'disabled'
         document['paths']['/apis/v1/prices/' + name] = {'get': op}
     return document
@@ -110,6 +143,82 @@ class PricingGenerationTests(unittest.TestCase):
         self.addCleanup(self.fixture.tearDown)
         self.root = self.fixture.root
         seed_old_pages(self.root)
+
+    def test_standalone_localization_cleans_old_free_and_archive_page_markers(self):
+        import runtime_localize_openapi_zh as localization
+        from readable_contract_notes import strip_generated_block
+        document = pricing_document()
+        document['paths'] = {path: item for path, item in document['paths'].items()
+                             if item['get']['operationId'] in ('free', 'archive')}
+        for path in (self.root / 'api-reference/prices').glob('*.mdx'):
+            if path.stem not in ('free', 'archive'):
+                path.unlink()
+        (self.root / 'openapi/prices.json').write_text(json.dumps(document))
+        strings = {'Find records.'}
+        strings.update(value for _, value in localization.iter_spec_strings(document))
+        for page in (self.root / 'api-reference/prices').glob('*.mdx'):
+            header, body = localization.split_frontmatter(page.read_text())
+            strings.add(strip_generated_block(body))
+            for field in ('title', 'description', 'excerpt'):
+                value = localization.frontmatter_value(header, field)
+                if value:
+                    strings.add(value)
+        # Exercise the actual translation cleanup with a deterministic catalog.
+        catalog = {'entries': {localization.key_for(value): {'source': value, 'translation': value}
+                                for value in strings if value.strip()}}
+        with patch.multiple(localization, ROOT=self.root, OPENAPI_DIR=self.root / 'openapi',
+                            ZH_OPENAPI_DIR=self.root / 'openapi/zh', API_DIR=self.root / 'api-reference',
+                            ZH_API_DIR=self.root / 'zh/api-reference'), \
+                patch.object(localization, 'load_catalog', return_value=catalog):
+            for repeat in range(2):
+                localization.generate()
+                for name, expected in (('free', '此操作不另收费。'), ('archive', '历史归档接口：已停用')):
+                    text = (self.root / f'zh/api-reference/prices/{name}.mdx').read_text()
+                    self.assertIn(expected, text)
+                    self.assertEqual(text.count('## 费用与请求规则'), 1)
+                    for forbidden in ('aisa-pricing:', NOTICE, NOTICE_ZH, 'Declared unit rate'):
+                        self.assertNotIn(forbidden, text)
+                if repeat:
+                    self.assertEqual(first, page_snapshot(self.root))
+                first = page_snapshot(self.root)
+
+    def test_production_reference_republication_labels_missing_tariff_without_mutating_contract(self):
+        from test_prod_runtime_docs import ProductionReferenceTests
+        import sync_prod_runtime_docs as prod
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            files = ProductionReferenceTests().fixture(root)
+            source = {'openapi': '3.1.0', 'info': {'title': 'Account', 'version': '1'},
+                      'servers': [{'url': 'https://api.aisa.one'}],
+                      'paths': {'/usage': {'get': {'operationId': 'accountUsage',
+                                'responses': {'200': {'description': 'Usage records'}}}}}}
+            for prefix in ('', 'zh/'):
+                spec = root / f'reference-contracts/{prefix}account.json'
+                spec.parent.mkdir(parents=True, exist_ok=True)
+                spec.write_text(json.dumps(source))
+                page = root / f'{prefix}api-reference/account-usage.mdx'
+                page.parent.mkdir(parents=True, exist_ok=True)
+                page.write_text('---\ntitle: Account usage\nopenapi: "reference-contracts/' + prefix
+                                + 'account.json GET /usage"\nx-aisa-operation-id: "accountUsage"\n---\n')
+            for repeat in range(2):
+                outputs, _ = prod.generate(root, files)
+                pages = {}
+                for prefix, expected in (('', 'Billing method unavailable.'), ('zh/', '计费方式暂不可用。')):
+                    key = prefix + 'api-reference/account-usage.mdx'
+                    text = outputs[key].decode()
+                    self.assertIn(expected, text)
+                    self.assertNotIn('No additional charge', text)
+                    self.assertNotIn('历史归档接口', text)
+                    self.assertNotIn('aisa-pricing:', text)
+                    pages[key] = text
+                self.assertEqual(json.loads(outputs['reference-contracts/account.json']), source)
+                if repeat:
+                    self.assertEqual(first, pages)
+                first = pages
+                for name, value in outputs.items():
+                    dest = root / name
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_bytes(value)
 
     def test_old_composer_credit_descriptions_upgrade_and_stay_upgraded(self):
         document = pricing_document()

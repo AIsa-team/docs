@@ -9,7 +9,7 @@ from __future__ import annotations
 import copy
 import re
 import yaml
-from customer_price_presentation import pricing_summary, usd
+from customer_price_presentation import pricing_summary, reference_total, usd
 
 # Legacy markers. Mintlify shows an HTML comment in an OpenAPI description as
 # literal text, so new summaries carry no marker; these are only stripped.
@@ -244,12 +244,17 @@ def reconcile_free_claim(text, pricing):
     """A positive customer success price contradicts an unqualified Free claim."""
     if not isinstance(pricing, dict) or pricing.get('customer_pricing') != 'fixed_success':
         return text
-    amount = usd(pricing.get('default_request_estimate_usd'))
+    amount = reference_total(pricing)
     if amount is None or amount == '$0' or pricing.get('reference_unavailable'):
         return text
-    # A standalone billing sentence/clause, never descriptions such as free text.
-    return re.sub(r'(?:(?<=\.)|^)\s*Free(?=[.,;]|$)',
-                  ' See the published pricing', text)
+    # A standalone billing sentence/clause, never descriptions such as free text
+    # or quoted example data. Remove it without creating a pricing placeholder.
+    chunks = FENCES.split(text)
+    for index in range(0, len(chunks), 2):
+        chunks[index] = re.sub(r'(^|(?<=[.!?])\s+)Free[,;]\s*([a-z])',
+                               lambda m: m[1] + m[2].upper(), chunks[index])
+        chunks[index] = re.sub(r'(^|(?<=[.!?])\s+)Free(?:\.(?=\s|$)|$)', r'\1', chunks[index])
+    return ''.join(chunks).strip()
 
 
 def clean_text(text: str, language: str = 'en') -> str:
@@ -392,6 +397,43 @@ def clean_document(document: dict) -> dict:
     return output
 
 
+def strip_tariff_columns(text):
+    """Keep the business columns of API rate tables, without supplier tariffs."""
+    lines = text.splitlines(keepends=True)
+    price_names = {'price', 'pricing', 'cost', 'usd', '价格', '费用', '计费'}
+    credit_names = {'credit', 'credits', '积分', '点数'}
+    api_names = {'section', 'endpoint', 'api', 'operation', 'request', 'plan', '接口', '操作', '请求', '套餐'}
+    index = 0
+    while index + 1 < len(lines):
+        if not lines[index].lstrip().startswith('|'):
+            index += 1
+            continue
+        end = index + 1
+        while end < len(lines) and lines[end].lstrip().startswith('|'):
+            end += 1
+        endings = [line[len(line.rstrip('\r\n')):] for line in lines[index:end]]
+        rows = [re.split(r'(?<!\\)\|', line.rstrip('\r\n')) for line in lines[index:end]]
+        if len(rows) < 2 or not all(re.fullmatch(r'\s*:?-+:?\s*', cell)
+                                    for cell in rows[1][1:] if cell.strip()):
+            index = end
+            continue
+        names = [cell.strip().strip('*`').lower() for cell in rows[0]]
+        credit_columns = {i for i, name in enumerate(names) if name in credit_names}
+        price_columns = {i for i, name in enumerate(names) if name in price_names}
+        placeholders = any(re.search(r'See current pricing|See the published pricing|见当前定价', cell, re.I)
+                           for row in rows[2:] for i, cell in enumerate(row) if i in price_columns)
+        tariff = credit_columns or placeholders or set(names) & api_names
+        removed = price_columns | credit_columns if tariff else set()
+        if removed:
+            for row_index, row in enumerate(rows):
+                if not any(name for i, name in enumerate(names) if i not in removed):
+                    lines[index + row_index] = ''
+                else:
+                    lines[index + row_index] = '|'.join(cell for i, cell in enumerate(row) if i not in removed) + endings[row_index]
+        index = end
+    return ''.join(lines)
+
+
 def clean_page(text: str, language: str = 'en') -> str:
     """Clean handwritten API-page prose before adding Runtime's managed block."""
     from runtime_localize_openapi_zh import split_frontmatter, replace_frontmatter_value
@@ -405,25 +447,10 @@ def clean_page(text: str, language: str = 'en') -> str:
             updated = clean_text(strip_price_summary(value), language)
             if updated != value:
                 header = replace_frontmatter_value(header, key, updated)
-    # Preserve the useful section/parameter columns of handwritten rate tables.
+    # Preserve business columns, never replace supplier prices with placeholders.
     chunks = FENCES.split(body)
     for index in range(0, len(chunks), 2):
-        lines = chunks[index].splitlines(keepends=True)
-        price_columns = []
-        for i, line in enumerate(lines):
-            if not line.lstrip().startswith('|'):
-                price_columns = []
-                continue
-            cells = line.split('|')
-            columns = [j for j, cell in enumerate(cells) if cell.strip().lower() in ('price', 'pricing', '计费', '价格')]
-            if columns:
-                price_columns = columns
-            elif price_columns and (MONEY.search(line) or CREDITS.search(line)):
-                for j in price_columns:
-                    if j < len(cells) and (MONEY.search(cells[j]) or CREDITS.search(cells[j])):
-                        cells[j] = ' 见当前定价 ' if language == 'zh' else ' See current pricing '
-                lines[i] = '|'.join(cells)
-        prose = ''.join(lines)
+        prose = strip_tariff_columns(chunks[index])
         core = prose.strip()
         # A chunk sits between fences (for example `<CodeGroup>` before its
         # first block); keep its surrounding newlines so a fence stays on its own line.

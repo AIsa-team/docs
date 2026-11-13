@@ -161,6 +161,40 @@ class CustomerPricePresentationTests(unittest.TestCase):
         self.assertNotIn('Draft creation is free', pricing_summary(pricing))
         self.assertNotIn('草稿', pricing_summary(pricing, 'zh'))
 
+    def test_social_current_period_waiver_never_reuses_other_snapshot_rates(self):
+        pricing = {'kind': 'metered_event', 'meter': 'social.post.published', 'description':
+                   'Each platform target that publishes successfully is metered once under '
+                   'social.post.published:<platform>, including after retries. Not charged in the current period.'}
+        self.assertEqual(pricing_summary(pricing),
+                         'Publication retries do not incur duplicate charges. Not charged in the current period.')
+        self.assertEqual(pricing_summary(pricing, 'zh'), '发布重试不会重复收费。 当前周期不收费。')
+        extra = ' A separate scheduling fee is $0.003.'
+        pricing['description'] += extra
+        for language in ('en', 'zh'):
+            text = pricing_summary(pricing, language)
+            self.assertIn(extra.strip(), text)
+            self.assertNotIn('social.post.published', text)
+
+    def test_social_platform_variants_keep_rejection_rules_and_account_restrictions(self):
+        description = ('This is the price on every plan; no plan multiplier applies. '
+                       'A refused or failed call, or one whose outcome is unknown, is not charged.')
+        pricing = {'kind': 'fixed_request', 'customer_micros_usd': 100, 'description': description,
+                   'variants': {'twitter': {'kind': 'fixed_request', 'customer_micros_usd': 15000}}}
+        for language in ('en', 'zh'):
+            text = pricing_summary(pricing, language)
+            self.assertIn('$0.0001', text)
+            self.assertIn('$0.015', text)
+            self.assertIn('默认选项：' if language == 'zh' else 'Default option:', text)
+            self.assertIn('请求被拒绝、失败或结果未知时不收费' if language == 'zh' else
+                          'Refused or failed calls, and calls with unknown outcomes, are not charged', text)
+            self.assertNotIn('may differ', text)
+        for declaration, english, chinese in (
+                ('X accounts are not accepted.', 'X accounts are not supported.', '不支持 X 账户。'),
+                ('Needs an X account.', 'An X account is required.', '需要 X 账户。')):
+            pricing['description'] = description + ' ' + declaration
+            self.assertIn(english, pricing_summary(pricing))
+            self.assertIn(chinese, pricing_summary(pricing, 'zh'))
+
     def test_customer_conditions_survive_document_and_page_generation(self):
         from pricing_prose import clean_document
         from readable_contract_notes import readable_block
@@ -206,6 +240,21 @@ class CustomerPricePresentationTests(unittest.TestCase):
         for description, expected in [('whatever n is', 'regardless of n'),
                                       ('per second, per request or by tokens', 'per second'), ('', 'selected model')]:
             self.assertIn(expected, pricing_summary({'kind': 'model_catalog', 'description': description}))
+
+    def test_video_model_preserves_submission_hold_and_terminal_settlement(self):
+        description = ('Charged at the selected model\'s catalog price, which can depend on the requested '
+                       'resolution and duration and is listed per second, per request or by tokens. '
+                       'The charge is held at submission and settled when the task ends.')
+        pricing = {'kind': 'model_catalog', 'description': description,
+                   'estimate_source': 'unavailable', 'estimate_unavailable_reason': 'model_dependent_price'}
+        english = pricing_summary(pricing)
+        chinese = pricing_summary(pricing, 'zh')
+        self.assertIn('per second, per request or by token usage', english)
+        self.assertIn('held at submission and settled when the task ends', english)
+        self.assertIn('提交任务时预留费用，任务结束时结算', chinese)
+        self.assertNotIn('$', english + chinese)
+        pricing['description'] = 'Fixed-price models charge once per request, whatever n is.'
+        self.assertNotIn('held at submission', pricing_summary(pricing))
 
     def test_same_plan_action_price_preserves_failure_waiver_without_account_variation(self):
         pricing = {

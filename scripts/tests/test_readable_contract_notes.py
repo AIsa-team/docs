@@ -15,6 +15,27 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class ReadableNotesTests(unittest.TestCase):
 
+    def test_absent_pricing_is_explicit_without_guessing_price_or_availability(self):
+        for status in (None, 'enabled', 'disabled'):
+            for value in (None, {}):
+                operation = {'operationId': 'reference'}
+                if status is not None:
+                    operation['x-aisa-status'] = status
+                if value is not None:
+                    operation['x-aisa-pricing'] = value
+                original = copy.deepcopy(operation)
+                for language in ('en', 'zh'):
+                    text = readable_block(operation, language)
+                    if status == 'disabled':
+                        self.assertIn('历史归档接口' if language == 'zh' else 'Historical archive', text)
+                    else:
+                        self.assertIn('计费方式暂不可用' if language == 'zh' else 'Billing method unavailable', text)
+                        self.assertNotIn('disabled', text)
+                        self.assertNotIn('已停用', text)
+                    self.assertNotIn('$', text)
+                    self.assertNotIn('No additional charge', text)
+                self.assertEqual(operation, original)
+
     def test_disabled_legacy_labels_are_not_a_published_tariff(self):
         legacy = {'cost_tier': 'low', 'model': 'per_request'}
         for language, archive, unknown in (
