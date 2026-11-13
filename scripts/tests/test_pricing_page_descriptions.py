@@ -177,7 +177,16 @@ class PublishedPricingDescriptionTests(unittest.TestCase):
         self.assertIn('This endpoint is disabled and cannot be called.', result)
 
     def test_standalone_translation_keeps_generated_description_refreshable(self):
+        self.assert_standalone_description_refresh('Find records.', 'Find archived records.')
+
+    def test_standalone_translation_tracks_quoted_multiline_generated_descriptions(self):
+        self.assert_standalone_description_refresh('Find "current" records.\nUse \\filters.',
+                                                  'Find "archived" records.\nUse \\other-filters.')
+
+    def assert_standalone_description_refresh(self, initial, updated):
         import runtime_localize_openapi_zh as localization
+        self.document['paths']['/apis/v1/prices/free']['get']['description'] = initial + '\n\n' + fixtures.OLD_SUMMARY
+        self.raw = json.dumps(self.document).encode()
         self.project()
         path = '/apis/v1/prices/free'
         self.document['paths'] = {path: self.document['paths'][path]}
@@ -192,8 +201,8 @@ class PublishedPricingDescriptionTests(unittest.TestCase):
         header, body = split_frontmatter(english.read_text())
         strings.add(localization.strip_generated_block(body))
         strings.update(str(value) for value in yaml.safe_load(header).values())
-        strings.update(('Find records.', 'Find archived records.'))
-        translations = {'Find records.': '查找记录。', 'Find archived records.': '查找归档记录。'}
+        strings.update((initial, updated))
+        translations = {initial: '查找记录。\n使用筛选器。', updated: '查找归档记录。\n使用新筛选器。'}
         catalog = {'entries': {localization.key_for(text): {'source': text,
                               'translation': translations.get(text, text)} for text in strings if text.strip()}}
         (self.root / 'translations').mkdir(exist_ok=True)
@@ -206,11 +215,11 @@ class PublishedPricingDescriptionTests(unittest.TestCase):
         zh = self.root / 'zh/api-reference/prices/free.mdx'
         header, _ = split_frontmatter(zh.read_text())
         self.assertIn(DESCRIPTION_HASH, yaml.safe_load(header))
-        self.document['paths'][path]['get']['description'] = 'Find archived records.\n\n' + fixtures.OLD_SUMMARY
+        self.document['paths'][path]['get']['description'] = updated + '\n\n' + fixtures.OLD_SUMMARY
         self.raw = json.dumps(self.document).encode()
         self.project()
         header, _ = split_frontmatter(zh.read_text())
-        self.assertEqual(yaml.safe_load(header)['description'], '查找归档记录。')
+        self.assertEqual(yaml.safe_load(header)['description'], translations[updated])
 
 
 if __name__ == '__main__':

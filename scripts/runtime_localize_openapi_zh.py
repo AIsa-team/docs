@@ -29,6 +29,8 @@ import sys
 from pathlib import Path
 from typing import Any, Iterator
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 OPENAPI_DIR = ROOT / "openapi"
 ZH_OPENAPI_DIR = OPENAPI_DIR / "zh"
@@ -440,10 +442,17 @@ def generate(published_ref=None) -> None:
             frontmatter = replace_frontmatter_value(frontmatter, "title", translation(catalog, title))
         if description:
             from pricing_prose import DESCRIPTION_HASH
-            generated = frontmatter_value(frontmatter, DESCRIPTION_HASH) == hashlib.sha256(description.encode()).hexdigest()
+            description_metadata = yaml.safe_load(frontmatter) or {}
+            decoded_description = description_metadata.get('description')
+            description_is_generated = (isinstance(decoded_description, str)
+                and description_metadata.get(DESCRIPTION_HASH)
+                == hashlib.sha256(decoded_description.encode()).hexdigest())
+            if description_is_generated:
+                # Hash/translate decoded prose, not JSON-escaped YAML scalars.
+                description = decoded_description
             localized_description = translation(catalog, description)
             frontmatter = replace_frontmatter_value(frontmatter, "description", localized_description)
-            if generated:
+            if description_is_generated:
                 frontmatter = replace_frontmatter_value(frontmatter, DESCRIPTION_HASH,
                     hashlib.sha256(localized_description.encode()).hexdigest())
         if excerpt:
