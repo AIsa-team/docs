@@ -89,6 +89,13 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertEqual(report['gates']['G4']['pending_total'], 0)
         self.assertTrue(report['enforced'])
 
+    def test_g6_is_wired_into_the_shared_release_gate(self):
+        from unittest.mock import patch
+        with patch('release_gate.check_g6', return_value=[{'code': 'pagination_missing_param'}]):
+            report = self.tree().run()
+        self.assertEqual(report['gates']['G6']['status'], 'failed')
+        self.assertEqual(report['status'], 'failed')
+
     def test_g1_yaml_json_llms_and_operation_set(self):
         tree = self.tree(llms_hash='0' * 64)
         report = tree.run()

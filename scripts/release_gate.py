@@ -45,6 +45,7 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 from playground_examples import REFERENCE_LABEL, example_scenario, example_sha256  # noqa: E402
 from upstream_semantics import BLOCKING_DRIFT  # noqa: E402
 import public_projection  # noqa: E402
+from release_gate_pagination import check_g6
 import vocab_scan  # noqa: E402
 
 METHODS = ('get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace')
@@ -219,8 +220,12 @@ def run(root=ROOT, *, facts_dir=None, scope_path=SCOPE, exclusions_path=EXCLUSIO
     projected = public_projection.load_catalogs(projection_path)
     vocab, placeholders, provenance, evidence, pending = [], [], [], [], []
     pages_seen, scoped, unprojected = set(), 0, set()
+    pagination_findings, pagination_documents = [], set()
     for path, document, route, method, operation in in_scope_operations(root, scope, catalogs):
         scoped += 1
+        if path not in pagination_documents:
+            pagination_documents.add(path)
+            pagination_findings.extend(check_g6(document))
         location = path.relative_to(root).as_posix()
         pointer = operation_pointer(route, method)
         if path.stem not in projected:
@@ -309,6 +314,8 @@ def run(root=ROOT, *, facts_dir=None, scope_path=SCOPE, exclusions_path=EXCLUSIO
                              'violations': evidence[:FINDINGS_LIMIT], 'violations_total': len(evidence),
                              'pending_total': len(pending), 'pending_reasons': dict(sorted(reasons.items())),
                              'pending': sorted(pending, key=lambda r: (r['path'], r['method']))}
+    report['gates']['G6'] = {'status': 'failed' if pagination_findings else 'passed',
+                             'findings': pagination_findings[:FINDINGS_LIMIT], 'findings_total': len(pagination_findings)}
     report['vocab_digest'] = rules.digest
     report['rules_sha256'] = sha256_file(rules_path)
     report['status'] = 'failed' if any(gate['status'] != 'passed' for gate in report['gates'].values()) else 'passed'
