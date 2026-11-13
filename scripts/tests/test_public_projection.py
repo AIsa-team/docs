@@ -107,6 +107,21 @@ class ProjectionTests(unittest.TestCase):
             public_projection.write(root)
             self.assertEqual(public_projection.check(root), [])
 
+    def test_page_renderer_uses_public_schema_and_hides_formal_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'api-reference').mkdir()
+            page = root / 'api-reference/widgets.mdx'
+            page.write_text('---\nopenapi: "openapi/widgets.json GET /widgets"\n---\nEditorial prose.\n')
+            (root / '.mintignore').write_text('/openapi.yaml\n')
+            changes = public_projection.public_surface_changes(root, ['widgets'])
+            self.assertIn(b'openapi-public/widgets.json', changes['api-reference/widgets.mdx'])
+            self.assertIn(b'Editorial prose.', changes['api-reference/widgets.mdx'])
+            self.assertIn(b'/openapi/widgets.json', changes['.mintignore'])
+            for name, raw in changes.items():
+                (root / name).write_bytes(raw)
+            self.assertEqual(public_projection.public_surface_changes(root, ['widgets']), {})
+
     def test_catalog_list_validation(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'list.json'

@@ -121,14 +121,22 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
     pricing = customer_pricing(operation.get("x-aisa-pricing") or {})
     constraints = operation.get("x-aisa-constraints") or {}
     notes = constraints.get("notes") or []
+    observations = operation.get("x-aisa-observed-responses") or {}
     pending = (operation.get("x-aisa-verification") or {}).get("state") == "pending"
-    if not pricing and not notes and not pending and document is None:
+    if not pricing and not notes and not pending and not observations and document is None:
         return ""
     lines = [BEGIN, ""]
     if pending:
         lines += [PENDING_NOTICE_ZH if zh else PENDING_NOTICE_EN, ""]
     if document is not None:
         lines += request_details(operation, document, method, path, spec_path, language)
+    if observations:
+        lines += ["## " + t("Observed response structure", "已观察到的响应结构"), "",
+                  t("The response observations below come from successful probes or sampled requests. They are partial: fields and types may vary, and no field is guaranteed to be present. Reviewed response definitions take precedence. No real response values are published.",
+                    "以下结构来自探针或抽样请求的成功结果，只反映已观察到的部分：字段和类型可能变化，不保证每次都有。已有正式响应定义优先；这里不发布真实响应值。"), ""]
+        for status, observation in sorted(observations.items()):
+            lines += [line(t("HTTP status / last observed", "HTTP 状态 / 最近观察日期"), status + " / " + observation["last_observed"]), "",
+                      "```json", json.dumps(observation["schema"], ensure_ascii=False, indent=2), "```", ""]
     if pricing or notes:
         lines += ["## " + t("Cost and request rules", "费用与请求规则"), ""]
     if pricing:

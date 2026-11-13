@@ -14,7 +14,7 @@ from typing import Any
 from upstream_auth_transports import server_auth_headers, request_auth_headers
 from urllib.parse import urlsplit, unquote
 
-VERSION = "29"
+VERSION = "30"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -25,6 +25,58 @@ NAMED_CONTRACT_MAPS = {"properties", "patternProperties", "$defs", "definitions"
 # consumers inspect references inside them, although OpenAPI validators ignore
 # them. Keep the original in the upstream mirror, not the public projection.
 NON_PUBLIC_EXTENSIONS = {"x-stainless-override-schema"}
+
+
+def descriptive_text(editorial, runtime, mirror):
+    """Static prose explains the API; runtime declarations still own its behavior."""
+    if editorial.get("description"):
+        return editorial["description"]
+    parts = [mirror.get("description"), runtime.get("description")]
+    parts = [text.strip() for text in parts if isinstance(text, str) and text.strip()
+             and text.strip() != runtime.get("summary", "").strip()]
+    return "\n\n".join(dict.fromkeys(parts)) or runtime.get("description")
+
+
+def apply_observed_responses(operation):
+    """Fill missing schemas from immutable runtime evidence, never from local samples.
+
+    Reviewed/owned payloads win. Observed shapes are explicitly partial and cannot
+    assert required fields, enums, formats, bounds or production example values.
+    """
+    observations = operation.get("x-aisa-observed-responses", {})
+    if not isinstance(observations, dict):
+        raise ValueError("invalid observed response facts")
+    applied = []
+    for status, observation in observations.items():
+        if (not re.fullmatch(r"2[0-9]{2}", status) or not isinstance(observation, dict)
+                or set(observation) != {"schema", "completeness", "last_observed", "origins"}
+                or observation["completeness"] != "observed"):
+            raise ValueError("invalid observed response facts")
+        def validate_shape(schema, depth=0):
+            if (not isinstance(schema, dict) or depth > 13
+                    or set(schema) - {"type", "properties", "items", "additionalProperties"}):
+                raise ValueError("observed responses must contain only structural facts")
+            if schema.get("additionalProperties", True) is not True:
+                raise ValueError("observed objects must stay open")
+            for name, child in schema.get("properties", {}).items():
+                if not re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$-]{0,63}", name):
+                    raise ValueError("invalid observed response property")
+                validate_shape(child, depth + 1)
+            if "items" in schema:
+                validate_shape(schema["items"], depth + 1)
+        validate_shape(observation["schema"])
+        response = operation.setdefault("responses", {}).setdefault(status, {"description": "Successful response"})
+        # A declared empty object/array is still an official schema. Observations
+        # remain available in the extension, but never rewrite that declaration.
+        if has_response_payload(response):
+            continue
+        response["content"] = {"application/json": {"schema": copy.deepcopy(observation["schema"])}}
+        response["description"] = ("Observed successful JSON response. This partial structure comes from successful "
+                                   "probe or sampled requests; fields and types may vary. No field is guaranteed "
+                                   "to be present. Last observed: " + observation["last_observed"] + ".")
+        response["x-aisa-response-observation"] = {k: copy.deepcopy(v) for k, v in observation.items() if k != "schema"}
+        applied.append(status)
+    return applied
 
 
 def validate_payment_capabilities(operation: dict) -> None:
@@ -852,6 +904,8 @@ def published_success_responses(previous: dict | None) -> dict:
                 if not re.fullmatch(r"2(?:[0-9]{2}|XX)", str(status)):
                     continue
                 resolved = response_object(response, previous)
+                if resolved.get("x-aisa-response-observation") or operation.get("x-aisa-review", {}).get("response") == "generic":
+                    continue  # Expired observations and placeholders are not reviewed source contracts.
                 if has_response_payload(resolved):
                     # Do not copy legacy headers/links: runtime owns protocol.
                     responses[str(status)] = {
@@ -1030,6 +1084,9 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     server_auth = server_auth_headers(runtime, facts.get("info", {}).get("x-aisa-provider"), actual_method, selected_document, mirror)
                     request_auth = request_auth_headers(runtime, facts.get("info", {}).get("x-aisa-provider"), actual_method, selected_document, mirror, public_path=public_path)
                     operation = copy.deepcopy(runtime)
+                    observed_methods = operation.pop("x-aisa-observed-response-methods", {})
+                    if method == "x-aisa-any" and observed_methods:
+                        operation["x-aisa-observed-responses"] = copy.deepcopy(observed_methods.get(actual_method.upper(), {}))
                     capabilities = operation.get("x-aisa-capabilities", {})
                     for payment in ("mpp", "x402"):
                         if payment + "_methods" in capabilities:
@@ -1120,7 +1177,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             operation["x-aisa-provider-required"] = sorted(kept_required)
                         operation["x-aisa-source"] = copy.deepcopy(operation_source)
                     editorial = overlay.get(operation["operationId"], overlay.get(base_id, {}))
-                    description = editorial.get("description") or runtime.get("description") or mirror.get("description")
+                    description = descriptive_text(editorial, runtime, mirror)
                     if description:
                         operation["description"] = description
                     notes = editorial.get("x-aisa-notes", [])
@@ -1173,6 +1230,8 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     except (ValueError, KeyError, TypeError) as exc:
                         response_error = str(exc)
                     source_payloads = {}
+                    if not editorial.get("description") and not mirror.get("description") and response_operation.get("description"):
+                        operation["description"] = descriptive_text(editorial, runtime, response_operation)
                     response_identity = (facts_prefix + path, actual_method, operation_id)
                     old_responses = {} if descriptor_present else published_responses.get(response_identity, {})
                     if fresh and "200" not in fresh and (runtime.get("x-aisa-passthrough") is True or runtime.get("x-aisa-response-passthrough") is True) and not has_response_payload(operation.get("responses", {}).get("200", {})):
@@ -1205,6 +1264,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             "kind": "published_success_contract",
                             "content_hash": digest(retained),
                         })
+                    observed_statuses = apply_observed_responses(operation)
                     unknown = [str(status) for status, response in operation.get("responses", {}).items()
                                if re.fullmatch(r"2(?:[0-9]{2}|XX)", str(status))
                                and not (str(status) in {"204", "205"} and not response.get("content"))
@@ -1228,11 +1288,11 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             generic["description"] = UNREVIEWED_SUCCESS_DESCRIPTION
                             unreviewed_response.append(status)
                         unknown = [status for status in unknown if status not in unreviewed_response]
-                    if unreviewed_request or unreviewed_response:
+                    if unreviewed_request or unreviewed_response or observed_statuses:
                         operation["x-aisa-review"] = {
                             "status": "unreviewed",
                             "request": "runtime_binding" if unreviewed_request else "reviewed_source",
-                            "response": ("generic" if unreviewed_response else
+                            "response": ("observed" if observed_statuses else "generic" if unreviewed_response else
                                          "pending" if unknown or response_error else "reviewed_source"),
                         }
                     if unknown or response_error:

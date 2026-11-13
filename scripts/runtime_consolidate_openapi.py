@@ -415,7 +415,7 @@ def load_spec(filepath):
 # reference-contracts/; like pull_openapi.existing_page_references, they are
 # still that operation's page, and the Runtime aggregate links to them.
 PAGE_BINDING = re.compile(
-    r"^openapi:\s*['\"]?((?:openapi|reference-contracts)/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", re.M)
+    r"^openapi:\s*['\"]?((?:openapi(?:-public)?|reference-contracts)/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", re.M)
 
 
 def endpoint_page_links(root=None):

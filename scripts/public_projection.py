@@ -17,9 +17,9 @@ the projected document; the formal hash it replaces is kept as
 can bind the projection to the formal publication.
 
 The reviewed catalog list is scripts/public_projection.json. API reference
-pages of those catalogs link their "Complete OpenAPI definition" to the
-projection (readable_contract_notes). Formal validation keeps reading
-openapi/ and is unchanged.
+pages of those catalogs use the projection for both their Mintlify schema
+reference and their "Complete OpenAPI definition" link. Original formal files
+are excluded from the deployed site. Formal validation keeps reading openapi/.
 
     python scripts/public_projection.py --write   # regenerate (publication)
     python scripts/public_projection.py --check   # exit 1 if missing or stale
@@ -33,6 +33,7 @@ import argparse
 import copy
 import hashlib
 import json
+import re
 from pathlib import Path
 import sys
 
@@ -181,12 +182,42 @@ def actual_files(root):
             for path in sorted(directory.rglob('*')) if path.is_file()}
 
 
+def public_surface_changes(root, catalogs):
+    """Keep Mintlify's actual schema input on the same customer projection.
+
+    Formal OpenAPI remains available to private build/replay tooling, and is
+    excluded from the deployed site. Existing editorial MDX stays byte-identical
+    apart from its schema reference.
+    """
+    root = Path(root)
+    changes = {}
+    for directory in ('api-reference', 'zh/api-reference'):
+        for page in (root / directory).rglob('*.mdx'):
+            text = page.read_text()
+            projected = re.sub(r'^(openapi:\s*[\"\']?)(openapi/[^\s\"\']+\.json)',
+                               lambda match: match[1] + public_path(match[2], catalogs), text, flags=re.M)
+            if projected != text:
+                changes[page.relative_to(root).as_posix()] = projected.encode()
+    ignore = root / '.mintignore'
+    if ignore.is_file():
+        start, end = '# BEGIN customer contract projection', '# END customer contract projection'
+        text = ignore.read_text()
+        text = re.sub(re.escape(start) + r'.*?' + re.escape(end) + r'\n?', '', text, flags=re.S).rstrip()
+        excluded = [f'/openapi/{prefix}{name}.json' for name in sorted(catalogs) for prefix in ('', 'zh/')]
+        updated = text + '\n' + start + '\n' + '\n'.join(excluded) + '\n' + end + '\n'
+        if updated != ignore.read_text():
+            changes['.mintignore'] = updated.encode()
+    return changes
+
+
 def check(root=ROOT, catalogs=None):
     """[(relative path, problem)] with problem in missing | stale | unexpected."""
     expected, actual = expected_files(root, catalogs), actual_files(root)
     problems = [(name, 'missing') for name in sorted(set(expected) - set(actual))]
     problems += [(name, 'stale') for name in sorted(set(expected) & set(actual)) if expected[name] != actual[name]]
     problems += [(name, 'unexpected') for name in sorted(set(actual) - set(expected))]
+    selected = load_catalogs(Path(root) / "scripts/public_projection.json") if catalogs is None else catalogs
+    problems += [(name, "private_surface") for name in sorted(public_surface_changes(root, selected))]
     return problems
 
 
@@ -202,6 +233,9 @@ def write(root=ROOT, catalogs=None):
         target.parent.mkdir(parents=True, exist_ok=True)
         if not target.is_file() or target.read_bytes() != raw:
             target.write_bytes(raw)
+    selected = load_catalogs(root / "scripts/public_projection.json") if catalogs is None else catalogs
+    for name, raw in public_surface_changes(root, selected).items():
+        (root / name).write_bytes(raw)
     return sorted(expected)
 
 
