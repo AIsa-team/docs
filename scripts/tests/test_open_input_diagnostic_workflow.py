@@ -237,6 +237,11 @@ class OpenInputWorkflowTests(unittest.TestCase):
         self.assertIn('--current',byname['Acquire one complete fresh immutable Runtime release']['run'])
         self.assertEqual(yaml.safe_load(WORKFLOW.read_text())['jobs']['contracts']['needs'],['changes','code-contracts','artifact-contracts'])
         self.assertNotIn('continue-on-error',WORKFLOW.read_text())
+        gate=byname['Release gate on the candidate (same mode as publication)']
+        self.assertNotIn('GH_TOKEN',gate['env'])
+        self.assertIn('python scripts/release_gate.py',gate['run'])
+        self.assertIn("needs.changes.outputs.input_candidate != 'true'",gate['if'])
+        self.assertIn('python scripts/check_reviewed_schema_inputs.py',byname['Check explicit reviewed source-only input without claiming formal output']['run'])
 
     def test_nonselected_parsed_workflow_preserves_every_original_job_and_step(self):
         workflow=yaml.safe_load(WORKFLOW.read_text())
@@ -248,7 +253,8 @@ class OpenInputWorkflowTests(unittest.TestCase):
             'Checkout exact trusted base for EKS source input reader','Select exact EKS source input diagnostic',
             'Generate existing read App token for EKS source evidence','Checkout pinned original Go snapshot validator',
             'Use original EKS snapshot Go validator toolchain','Check authenticated EKS source input diagnostic compatibility',
-            'Retain EKS source input compatibility receipt')
+            'Retain EKS source input compatibility receipt',
+            'Release gate on the candidate (same mode as publication)')
         original=[]
         for row in rows:
             if row.get('name') in added: continue
