@@ -65,7 +65,8 @@ def stage_canonical(root, facts, *, baseline, source_receipts=None, checked_at=N
         require(canonical(strict_json(members[MANIFEST])) == canonical(manifest),
                 'Canonical manifest changed during staging')
         native_raw = {Path(name).stem: raw for name, raw in members.items() if NATIVE.fullmatch(name)}
-        validate_reviewed_native(lineage, native_raw)
+        validate_reviewed_native(lineage, native_raw, repository=root, acquired=facts,
+                                 assessment=assessment, members=members)
         native = {name: strict_json(raw) for name, raw in native_raw.items()}
         catalogs = {Path(name).stem: strict_json(raw) for name, raw in members.items() if name.startswith('providers/')}
         metadata = project_metadata(view, catalogs, strict_json(members['index.json']),
