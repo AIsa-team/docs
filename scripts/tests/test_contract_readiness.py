@@ -35,6 +35,7 @@ def index(paths, operations=None, pending=None, excluded=None):
 
 
 class ReadinessTests(unittest.TestCase):
+
     def test_unpublished_gateway_rows_are_counted_without_private_paths(self):
         facts, documents, coverage = fixture()
         runtime = index(['/search'])
