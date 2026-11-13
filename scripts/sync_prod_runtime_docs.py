@@ -22,19 +22,12 @@ from check_nav_integrity import nav_pages
 from identity_compatibility import published_history
 from internal_publication_snapshot import load_snapshot
 from validate_prod_reference_pages import validate_reference_pages
+from readable_contract_notes import clean_reference_notices
 
 
 PROD_ORIGIN = 'https://api.aisa.one'
 REFERENCE_DIR = 'reference-contracts'
 ROOT = Path(__file__).resolve().parents[1]
-ARCHIVE_NOTES = {
-    'en': '<Warning>This API reference has not been updated for the currently available endpoint.</Warning>\n\n',
-    'zh': '<Warning>该接口文档尚未完成更新。</Warning>\n\n',
-}
-HISTORIC_NOTES = {
-    'en': '<Warning>This existing API reference is preserved. Its parameter details have not yet been verified for the currently available endpoint.</Warning>\n\n',
-    'zh': '<Warning>此页面保留原有接口文档，当前可用接口的参数说明尚待核实。</Warning>\n\n',
-}
 
 
 def prune_navigation(node, hidden):
@@ -80,7 +73,7 @@ def preserve_navigation(previous, current):
 
 
 def scope_presentation(candidate, summary):
-    """Preserve reference navigation and mark unverified parameter details."""
+    """Preserve reference navigation and report incomplete catalog coverage."""
     config_path = candidate / 'docs.json'
     config = json.loads(config_path.read_text())
     listed = set(nav_pages(config.get('navigation', {})))
@@ -102,18 +95,12 @@ def scope_presentation(candidate, summary):
             reference = page.relative_to(candidate).with_suffix('').as_posix()
             unlisted = unverified and reference not in listed
             text = update_disabled_indexing(text, unlisted)
-            for note in (*HISTORIC_NOTES.values(), *ARCHIVE_NOTES.values()):
-                text = text.replace(note, '')
+            text = clean_reference_notices(text)
             if unverified:
                 if unlisted:
                     hidden.add(reference)
-                    notice = ARCHIVE_NOTES['zh' if base.startswith('zh/') else 'en']
                 else:
                     preserved.add(reference)
-                    notice = HISTORIC_NOTES['zh' if base.startswith('zh/') else 'en']
-                # Put the notice after frontmatter, preserving endpoint identity.
-                end = text.index('\n---\n', 4) + 5
-                text = text[:end] + notice + text[end:]
             page.write_text(text)
 
     config_path.write_text(json.dumps(config, indent=2, ensure_ascii=False) + '\n')

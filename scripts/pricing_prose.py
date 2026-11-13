@@ -7,6 +7,8 @@ Amounts describing payments, market data, examples or units are not API rates.
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import re
 import yaml
 from customer_price_presentation import pricing_summary, reference_total, usd
@@ -469,4 +471,61 @@ def clean_page(text: str, language: str = 'en') -> str:
     body = ''.join(chunks)
     if (header, body) == original:
         return text
+    return '---\n' + header + '\n---\n' + body
+
+
+DESCRIPTION_HASH = 'x-aisa-generated-description-sha256'
+
+
+def refresh_page_description(text, operation, language='en', translate=None):
+    """Override Mintlify's inherited prose without changing canonical OpenAPI.
+
+    An empty description falls back to the original operation, so billing-only
+    descriptions use the endpoint title. Track only generated values: a manual
+    edit takes ownership, while unchanged generated prose follows source updates.
+    """
+    from runtime_localize_openapi_zh import split_frontmatter, replace_frontmatter_value
+    if not text.startswith('---\n'):
+        return text
+    header, body = split_frontmatter(text)
+    metadata = yaml.safe_load(header) or {}
+    if not metadata.get('openapi'):
+        return text
+    existing = metadata.get('description')
+    def digest(value):
+        return hashlib.sha256(value.encode()).hexdigest()
+    owned = isinstance(existing, str) and metadata.get(DESCRIPTION_HASH) == digest(existing)
+
+    def cleaned(value):
+        if not isinstance(value, str):
+            return ''
+        return clean_text(reconcile_free_claim(strip_price_summary(value),
+                          operation.get('x-aisa-pricing')), language).strip()
+
+    source_description = operation.get('description') or ''
+    if not owned and not existing and cleaned(source_description) == source_description:
+        return text  # Clean inherited descriptions need no presentation override.
+    authored = cleaned(existing) if existing and not owned else ''
+    description = authored
+    if not description:
+        description = cleaned(source_description)
+        if language == 'zh' and translate and description:
+            description = cleaned(translate(description))
+        if not description:
+            # The page title already follows the existing localization policy.
+            description = cleaned(metadata.get('title')) or cleaned(operation.get('summary'))
+        if not description:
+            return text  # No business description or title to project.
+    if 'description' in metadata:
+        header = replace_frontmatter_value(header, 'description', description)
+    else:
+        header += '\ndescription: ' + json.dumps(description, ensure_ascii=False)
+    if not authored:
+        if DESCRIPTION_HASH in metadata:
+            header = replace_frontmatter_value(header, DESCRIPTION_HASH, digest(description))
+        else:
+            header += '\n' + DESCRIPTION_HASH + ': ' + json.dumps(digest(description))
+    elif DESCRIPTION_HASH in metadata:
+        # A user-edited description must not be overwritten on the next run.
+        header = re.sub(r'^' + re.escape(DESCRIPTION_HASH) + r':[^\n]*\n?', '', header, flags=re.M).rstrip('\n')
     return '---\n' + header + '\n---\n' + body

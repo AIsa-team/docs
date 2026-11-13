@@ -8,6 +8,23 @@ import re
 BEGIN = "{/* aisa-contract-details:start */}"
 END = "{/* aisa-contract-details:end */}"
 
+LEGACY_REFERENCE_NOTICES = (
+    'This API reference has not been updated for the currently available endpoint.',
+    '该接口文档尚未完成更新。',
+    'This existing API reference is preserved. Its parameter details have not yet been verified for the currently available endpoint.',
+    '此页面保留原有接口文档，当前可用接口的参数说明尚待核实。',
+)
+
+
+def clean_reference_notices(text):
+    """Keep source-coverage diagnostics in reports, not endpoint instructions."""
+    from pricing_prose import FENCES
+    chunks = FENCES.split(text)
+    pattern = r'<Warning>(?:' + '|'.join(map(re.escape, LEGACY_REFERENCE_NOTICES)) + r')</Warning>[ \t]*\n{0,2}'
+    for index in range(0, len(chunks), 2):
+        chunks[index] = re.sub(pattern, '', chunks[index])
+    return ''.join(chunks)
+
 
 def strip_generated_block(text):
     return re.sub(r"\n\n" + re.escape(BEGIN) + r".*?" + re.escape(END) + r"\n", "", text, flags=re.S)
@@ -130,6 +147,8 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
 
 
 def update_readable_block(text, operation, language="en", translate=None, **context):
+    from pricing_prose import refresh_page_description
+    text = refresh_page_description(clean_reference_notices(text), operation, language, translate)
     block = readable_block(operation, language, translate, **context)
     if not block:
         return strip_generated_block(text)
