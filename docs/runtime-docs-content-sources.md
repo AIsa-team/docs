@@ -12,8 +12,11 @@ reading live response samples or editing generated schemas independently.
 
 Response observations do not establish a complete contract. They contain field
 names and JSON types, no real examples, values, account IDs, request IDs or exact
-customer timestamps. Identifier-looking dynamic keys can be field names; data-like
-keys and oversized dictionaries are omitted. Do not infer required fields, enum
+customer timestamps. Field names themselves may contain user data. Automatic inference therefore
+emits only a reviewed vocabulary of common API field names (including case and
+snake/camel spelling variants); unfamiliar keys and oversized dictionaries stay
+undocumented open objects. Extend the vocabulary through normal source review,
+not by automatically learning names from customer values. Do not infer required fields, enum
 values, formats or numeric bounds from samples. Independent official or owned
 response declarations always win. Docs labels observed structures in both languages
 and preserves the separately declared schema when one exists.
