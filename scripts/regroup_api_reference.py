@@ -119,16 +119,6 @@ def regroup_docs(docs: dict, config: dict, labels: dict[str, str], root: Path | 
     return docs, unmapped
 
 
-def validate_preserved_navigation(docs: dict) -> None:
-    """Dev retains its existing groups, but both languages must cover each page once."""
-    en = api_nav_groups.nav_pages(api_tab(docs, "en"))
-    zh = api_nav_groups.nav_pages(api_tab(docs, "zh"))
-    if len(en) != len(set(en)) or len(zh) != len(set(zh)):
-        raise AssertionError("duplicate API page in preserved navigation")
-    if set(zh) != {"zh/" + page for page in en}:
-        raise AssertionError("Chinese API page set differs from the English mirror")
-
-
 def category_nodes(docs: dict, config: dict) -> list[dict]:
     """The category groups of the English tab, in sidebar order; top-level categories excluded."""
     section = (config.get("section") or {}).get("name")
@@ -293,8 +283,6 @@ def write_index_pages(root: Path) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="fail if docs.json is not already regrouped")
-    parser.add_argument("--preserve-navigation", action="store_true",
-                        help="validate dev's retained navigation and derive indexes without regrouping")
     parser.add_argument("--root", type=Path, default=ROOT)
     args = parser.parse_args()
     docs_path = args.root / "docs.json"
@@ -303,11 +291,7 @@ def main() -> int:
     if config is None:
         raise SystemExit(f"missing {api_nav_groups.CONFIG_PATH}")
     labels = json.loads((args.root / LABELS_PATH).read_text())
-    if args.preserve_navigation:
-        docs, unmapped = json.loads(current), []
-        validate_preserved_navigation(docs)
-    else:
-        docs, unmapped = regroup_docs(json.loads(current), config, labels, args.root)
+    docs, unmapped = regroup_docs(json.loads(current), config, labels, args.root)
     for name in unmapped:
         print(f"warning: unmapped API group: {name}", file=sys.stderr)
     output = json.dumps(docs, indent=2, ensure_ascii=False) + "\n"
@@ -320,8 +304,7 @@ def main() -> int:
             print("docs.json API navigation, the platform index or the Data APIs cards are stale; "
                   "run scripts/regroup_api_reference.py", file=sys.stderr)
             return 1
-        mode = "preserved" if args.preserve_navigation else "regrouped"
-        print(f"API navigation {mode}; pages={pages}")
+        print(f"API navigation regrouped; pages={pages}")
         return 0
     if output != current:
         docs_path.write_text(output)

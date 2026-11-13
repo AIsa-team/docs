@@ -1,58 +1,18 @@
 import copy
 import html
 import json
-import re
 from pathlib import Path
 import sys
 import unittest
 import tempfile
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from readable_contract_notes import readable_block, update_readable_block, strip_generated_block
+from readable_contract_notes import readable_block, update_readable_block, strip_generated_block, formula_text
 import runtime_consolidate_openapi as consolidate
 
 ROOT = Path(__file__).resolve().parents[2]
 
 class ReadableNotesTests(unittest.TestCase):
-
-    def test_absent_pricing_is_explicit_without_guessing_price_or_availability(self):
-        for status in (None, 'enabled', 'disabled'):
-            for value in (None, {}):
-                operation = {'operationId': 'reference'}
-                if status is not None:
-                    operation['x-aisa-status'] = status
-                if value is not None:
-                    operation['x-aisa-pricing'] = value
-                original = copy.deepcopy(operation)
-                for language in ('en', 'zh'):
-                    text = readable_block(operation, language)
-                    if status == 'disabled':
-                        self.assertIn('历史归档接口' if language == 'zh' else 'Historical archive', text)
-                    else:
-                        self.assertIn('计费方式暂不可用' if language == 'zh' else 'Billing method unavailable', text)
-                        self.assertNotIn('disabled', text)
-                        self.assertNotIn('已停用', text)
-                    self.assertNotIn('$', text)
-                    self.assertNotIn('No additional charge', text)
-                self.assertEqual(operation, original)
-
-    def test_disabled_legacy_labels_are_not_a_published_tariff(self):
-        legacy = {'cost_tier': 'low', 'model': 'per_request'}
-        for language, archive, unknown in (
-                ('en', 'Historical archive: disabled, cannot be called, and no price is published.', 'Billing method unavailable.'),
-                ('zh', '历史归档接口：已停用，不可调用，价格未发布。', '计费方式暂不可用。')):
-            operation = {'x-aisa-status': 'disabled', 'x-aisa-pricing': copy.deepcopy(legacy)}
-            before = copy.deepcopy(operation)
-            self.assertIn(archive, readable_block(operation, language))
-            self.assertNotIn(unknown, readable_block(operation, language))
-            self.assertEqual(operation, before)
-            operation['x-aisa-status'] = 'enabled'
-            self.assertIn(unknown, readable_block(operation, language))
-            operation.update({'x-aisa-status': 'disabled', 'x-aisa-pricing': {
-                'kind': 'fixed_request', 'customer_micros_usd': 5000}})
-            self.assertIn('$0.005', readable_block(operation, language))
-            self.assertNotIn(archive, readable_block(operation, language))
-
     def test_safety_idempotence_and_preserve_prose(self):
         op = {'x-aisa-pricing': {'default_request_estimate_usd': .075}, 'x-aisa-constraints': {'notes': ['<script>{danger}</script> `x`\n## forged']}}
         original = copy.deepcopy(op)
@@ -79,20 +39,21 @@ class ReadableNotesTests(unittest.TestCase):
         from pricing_prose import pricing_summary
         from public_surface_checks import request_blocks, compare_llms
         operation = {"operationId": "price", "x-aisa-pricing": {
-            "kind": "metered_result", "default_request_estimate_usd": 0.3, "customer_unit_price_usd": 0.075}}
+            "default_request_estimate_usd": 0.3, "unit_rate_usd": 0.075,
+            "unit": "similarweb_credit"}}
         document = {"paths": {"/price": {"get": operation}}}
         before = copy.deepcopy(document)
         for language in ("en", "zh"):
             context = dict(document=document, method="get", path="/price", spec_path="openapi/p.json")
             block = readable_block(operation, language, **context)
-            self.assertIn(r"\$0.3", block)
-            self.assertIn(r"\$0.075", block)
+            self.assertIn(r"\$0.3 USD", block)
+            self.assertIn(r"\$0.075 USD", block)
             canonical = pricing_summary(operation["x-aisa-pricing"], language)
             self.assertNotIn(r"\$", canonical)
             parsed = request_blocks(block)
             record = next(iter(parsed.values()))[0]
             self.assertEqual(record["price_summary"], canonical)
-            self.assertNotIn("x-aisa-pricing", record["request"])
+            self.assertEqual(record["request"]["x-aisa-pricing"], before["paths"]["/price"]["get"]["x-aisa-pricing"])
             # Mintlify exports either literal or escaped dollars to Markdown.
             self.assertEqual(compare_llms(parsed, request_blocks(block.replace(r"\$", "$"))), [])
             self.assertEqual(update_readable_block(block, operation, language, **context), block)
@@ -103,13 +64,6 @@ class ReadableNotesTests(unittest.TestCase):
                 block = readable_block({"x-aisa-pricing": pricing}, language)
                 self.assertIn(canonical, block)
                 self.assertNotIn(r"\$", block)
-
-    def test_disabled_operation_without_price_gets_archive_copy_without_mutating_contract(self):
-        operation = {'operationId': 'retired', 'x-aisa-status': 'disabled'}
-        before = copy.deepcopy(operation)
-        block = readable_block(operation)
-        self.assertIn('Historical archive: disabled, cannot be called, and no price is published.', block)
-        self.assertEqual(operation, before)
 
     def test_request_url_template_is_literal_code_not_escaped_autolink(self):
         # A bare URL is autolinked by Mintlify, which keeps character references
@@ -127,12 +81,10 @@ class ReadableNotesTests(unittest.TestCase):
         self.assertEqual(code("`a"), "`` `a ``")
         self.assertEqual(code("a\nb"), "`a b`")
 
-    def test_internal_reservation_and_unknown_formula_are_not_public_copy(self):
-        pricing = {'maximum_units': 9007199254740993, 'request_cost_drivers': {'formula': {'input': 'q', 'unknown_operator': 2}}}
-        rendered = readable_block({'x-aisa-pricing': pricing})
-        self.assertIn('Billing method unavailable.', rendered)
-        self.assertNotIn('9007199254740993', rendered)
-        self.assertNotIn('unknown_operator', rendered)
+    def test_exact_large_numbers_and_unknown_formula(self):
+        self.assertIn('9007199254740993', readable_block({'x-aisa-pricing': {'maximum_units': 9007199254740993}}))
+        self.assertIsNone(formula_text({'input': 'q', 'unknown_operator': 2}))
+        self.assertEqual(formula_text({'inputs':['a','b'], 'unit_scale': 3, 'input_multiplier': 2, 'fixed_units': 1}), '1 + (ceil((a × b) / 3)) × 2')
 
     def test_managed_notes_and_internal_reserve_not_public(self):
         spec = json.loads((ROOT/'openapi/similarweb.json').read_text())
@@ -145,25 +97,23 @@ class ReadableNotesTests(unittest.TestCase):
                 self.assertIn('0.', block)
             if route == 'website-top-geographies':
                 block = readable_block(op)
-                self.assertNotIn('Reservation input', block)
+                self.assertIn('Reservation input (public mapping not declared)', block)
                 self.assertNotIn('Public request parameter', block)
 
     def test_public_reservation_and_bilingual_projection(self):
         op = {'parameters':[{'name':'limit','in':'query'}], 'x-aisa-pricing':{'reserve_plan_units':{'input':'limit','input_multiplier':3}}, 'x-aisa-constraints':{'notes':['Source note']}}
-        self.assertNotIn('Public request parameter', readable_block(op))
+        self.assertIn('Public request parameter', readable_block(op))
         zh = readable_block(op, 'zh', lambda _: '来源说明')
-        self.assertNotIn('公开请求参数', zh)
+        self.assertIn('公开请求参数', zh)
         self.assertIn('来源说明', zh)
         self.assertNotIn('Source note', zh)
 
-    def test_real_generic_drivers_do_not_expose_internal_arithmetic(self):
+    def test_real_generic_drivers_show_dates_defaults_and_counting(self):
         spec = json.loads((ROOT/'openapi/similarweb.json').read_text())
         op = spec['paths']['/apis/v1/similarweb/website/traffic-engagement']['get']
         block = readable_block(op)
-        for text in ['metrics × periods', 'Estimator fallback periods', 'unit_scale', 'customer_multiplier']:
-            self.assertNotIn(text, block)
-        for note in op.get('x-aisa-constraints', {}).get('notes', []):
-            self.assertIn(note, html.unescape(block))
+        for text in ['metrics × periods', 'including repeated entries', 'query.start', 'Estimator fallback periods (does not make required dates optional)', 'monthly']:
+            self.assertIn(text, block)
 
     def test_root_server_has_no_universal_mirror_promise(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(consolidate, 'OPENAPI_DIR', directory):
@@ -173,15 +123,18 @@ class ReadableNotesTests(unittest.TestCase):
         self.assertIn('explicitly supported operations only', description)
         self.assertIn('servers and x402 capability declaration', description)
 
-    def test_scaled_reservation_is_not_customer_arithmetic(self):
+    def test_scaled_reservation_does_not_invent_evaluation_order(self):
         plan = {'input':'limit', 'input_multiplier':100000, 'unit_scale':1000000, 'unit_rounding':'ceil'}
-        op = {'x-aisa-pricing':{'cost_contract': 'plan_units', 'default_request_estimate_usd': .25,
-                               'units_per_count':100000, 'reserve_plan_units':plan}}
+        op = {'x-aisa-pricing':{'units_per_count':100000, 'reserve_plan_units':plan}}
         rendered = readable_block(op)
-        self.assertIn('Default request estimate: $0.25 USD.', rendered)
-        for text in ('Count multiplier', 'scaling divisor', '1000000', 'rounding', 'ceil('):
-            self.assertNotIn(text, rendered)
-        self.assertIn('use a request quote where supported', rendered)
+        self.assertNotIn('Units per returned count', rendered)
+        self.assertIn('Count multiplier before declared scaling', rendered)
+        self.assertIn('Declared scaling divisor', rendered)
+        self.assertIn('1000000', rendered)
+        self.assertIn('Declared rounding', rendered)
+        self.assertNotIn('ceil((', rendered)
+        self.assertIn('supporting X-AISA-Cost-Mode: quote', rendered)
+        self.assertEqual(formula_text(dict(plan, fixed_units=1)), '1 + (ceil((limit) / 1000000)) × 100000')
 
     def test_same_facts_new_composer_regenerates_and_then_is_idempotent(self):
         from test_runtime_contracts import PullTests
@@ -229,16 +182,17 @@ class ReadableNotesTests(unittest.TestCase):
         self.assertIn('age_bucket must be provided exactly once', html.unescape(readable_block(published)))
         self.assertNotIn('content', published['responses']['200'])
 
-    def test_real_firecrawl_keeps_request_limits_without_pricing_plans(self):
+    def test_real_firecrawl_json_body_limit_is_public(self):
         spec = json.loads((ROOT/'openapi/firecrawl.json').read_text())
         for operation_id in ['post_firecrawl_search', 'post_firecrawl_map']:
-            path, method, op = next((path, method, op) for path, item in spec['paths'].items() for method, op in item.items()
+            op = next(op for item in spec['paths'].values() for op in item.values()
                       if isinstance(op, dict) and op.get('operationId') == operation_id)
-            rendered = readable_block(op, document=spec, method=method, path=path, spec_path='openapi/firecrawl.json')
-            request = json.loads(re.search(r'```json\n(.*?)\n```', rendered, re.S)[1])
-            self.assertIn('requestBody', request)
-            self.assertNotIn('x-aisa-pricing', request)
+            rendered = readable_block(op)
+            self.assertIn('Public request parameter', rendered)
             self.assertNotIn('public mapping not declared', rendered)
+        unknown = {'requestBody': {'$ref':'#/components/requestBodies/Request'},
+                   'x-aisa-pricing': {'reserve_plan_units': {'input':'limit','input_multiplier':2}}}
+        self.assertIn('public mapping not declared', readable_block(unknown))
 
     def test_guides_distinguish_reference_quote_settlement(self):
         for prefix in ['', 'zh/']:
