@@ -348,8 +348,11 @@ class PullTests(unittest.TestCase):
         self.assertTrue((self.root / "zh/api-reference/similarweb/published_identity.mdx").exists())
         page.write_text(page.read_text() + "\nHandwritten business prose.\n")
         changes, _ = stage(self.root, self.root / "facts", "unused")
-        self.assertEqual(changes, {})
+        self.assertIn(page, changes)
+        self.write(changes)
         self.assertIn("Handwritten business prose.", page.read_text())
+        changes, _ = stage(self.root, self.root / "facts", "unused")
+        self.assertEqual(changes, {})
 
     def test_version_two_notes_are_repaired_once_with_unchanged_inputs(self):
         source = facts()

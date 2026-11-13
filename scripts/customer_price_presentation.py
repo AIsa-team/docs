@@ -264,3 +264,46 @@ def pricing_summary(pricing, language='en'):
         return summary
     return summary + ' ' + t('Your account price may differ; use a request quote where supported.',
                             '账户适用价格可能不同；支持报价的接口可按实际请求获取报价。')
+
+
+def customer_price_card(pricing, language='en'):
+    """Return a concise top-of-page price line when a customer amount exists.
+
+    The detailed pricing summary belongs with the endpoint explanation. The
+    card is only a scan-friendly copy of a published amount (or an explicit
+    no-charge declaration); unknown, unavailable, and model-dependent prices
+    do not get a misleading placeholder at the top of the page.
+    """
+    if not isinstance(pricing, dict) or not pricing:
+        return ''
+    family = price_family(pricing)
+    if family in {'unpriced', 'model_catalog'}:
+        return ''
+    summary = pricing_summary(pricing, language).strip()
+    if not summary:
+        return ''
+    summary = re.sub(
+        r'\s+(?:Your account price may differ; use a request quote where supported\.|'
+        r'账户适用价格可能不同；支持报价的接口可按实际请求获取报价。)\s*$',
+        '', summary).strip()
+    summary = re.sub(
+        r'^(?:Published reference price:\s*|Normal-tier reference price:\s*|'
+        r'公开参考价格：\s*|普通用户参考价格：\s*)', '', summary)
+    if family == 'unknown':
+        summary = re.sub(r'^(?:Billing method unavailable\.\s*|计费方式暂不可用。\s*)', '', summary)
+    sentences = re.split(r'(?<=[.!?。！？])\s+', summary)
+    if family == 'no_customer_charge':
+        return sentences[0]
+    if '$' not in summary:
+        return ''
+    if family == 'fixed_request':
+        return sentences[0]
+    if family in {'request_dependent', 'result_dependent', 'components', 'usage', 'metered_result', 'unknown'}:
+        # Prefer the concise sentence carrying the explicit customer amount;
+        # the detailed section retains the billing mode and settlement rules.
+        for sentence in sentences:
+            if '$' in sentence:
+                return re.sub(
+                    r'^(?:Published reference price:\s*|Normal-tier reference price:\s*|'
+                    r'公开参考价格：\s*|普通用户参考价格：\s*)', '', sentence)
+    return sentences[0]

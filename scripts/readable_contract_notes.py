@@ -7,6 +7,8 @@ import re
 
 BEGIN = "{/* aisa-contract-details:start */}"
 END = "{/* aisa-contract-details:end */}"
+PRICE_CARD_BEGIN = "{/* aisa-price-card:start */}"
+PRICE_CARD_END = "{/* aisa-price-card:end */}"
 
 
 def split_frontmatter(text):
@@ -39,7 +41,10 @@ def clean_reference_notices(text):
 
 
 def strip_generated_block(text):
-    return re.sub(r"\n\n" + re.escape(BEGIN) + r".*?" + re.escape(END) + r"\n", "", text, flags=re.S)
+    text = re.sub(r"^" + re.escape(PRICE_CARD_BEGIN) + r".*?" + re.escape(PRICE_CARD_END) + r"\n*", "\n", text, flags=re.S)
+    text = re.sub(r"^" + re.escape(BEGIN) + r".*?" + re.escape(END) + r"\n*", "\n", text, flags=re.S)
+    text = re.sub(r"\n{1,2}" + re.escape(PRICE_CARD_BEGIN) + r".*?" + re.escape(PRICE_CARD_END) + r"\n", "\n", text, flags=re.S)
+    return re.sub(r"\n{1,2}" + re.escape(BEGIN) + r".*?" + re.escape(END) + r"\n", "\n", text, flags=re.S)
 
 
 def safe(value):
@@ -162,19 +167,33 @@ def update_readable_block(text, operation, language="en", translate=None, **cont
     from pricing_prose import refresh_page_description
     text = refresh_page_description(clean_reference_notices(text), operation, language, translate)
     block = readable_block(operation, language, translate, **context)
-    if not block:
+    from customer_price_presentation import customer_price_card
+    card_summary = customer_price_card(operation.get('x-aisa-pricing') or {}, language)
+    card = ''
+    if card_summary:
+        # Keep the card managed and out of the machine-readable contract.
+        card = '\n'.join((PRICE_CARD_BEGIN, '', '<Info>', card_summary, '</Info>', '', PRICE_CARD_END))
+    if not block and not card:
         return strip_generated_block(text)
-    pattern = re.escape(BEGIN) + r".*?" + re.escape(END)
+    if not text.startswith('---\n') and text.strip() == block.strip():
+        return text
+    text = strip_generated_block(text)
     if not text.startswith('---\n'):
-        if re.search(pattern, text, re.S):
-            return re.sub(pattern, lambda _: block, text, flags=re.S)
-        return text + "\n\n" + block + "\n"
-    if re.search(pattern, text, re.S):
-        text = strip_generated_block(text)
-    # Put the customer-facing price immediately below the page frontmatter.
-    # Mintlify renders the generated block in document order; keeping it first
-    # makes the charge visible before the long request and response details.
+        if not block:
+            return text
+        return text.rstrip() + "\n\n" + block + "\n"
+    # Put only the concise customer price card below frontmatter. Detailed
+    # pricing and the request contract remain after the authored endpoint
+    # explanation, so readers see the overview and examples first.
     header, body = split_frontmatter(text)
-    # Keep three newlines before the marker: strip_generated_block consumes the
-    # latter two and leaves the original blank line after frontmatter intact.
-    return '---\n' + header + '\n---\n\n\n' + block + ('\n' + body if body else '\n')
+    body = body.rstrip()
+    if block:
+        body += ('\n\n' if body else '') + block
+    result = '---\n' + header + '\n---\n'
+    if card:
+        result += '\n' + card + '\n'
+    if body:
+        # Preserve authored leading whitespace exactly; the next generation
+        # must not rewrite a legacy page merely because a managed block moved.
+        result += body + '\n'
+    return result

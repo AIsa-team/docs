@@ -74,12 +74,11 @@ class PublicationSurfaceTests(unittest.TestCase):
         changes = {}
         refresh_legacy_page_blocks(self.root, published_documents(self.root), changes, {'entries': {}})
         for page, text in originals.items():
-            # The generated request/price block is deliberately placed under
-            # frontmatter so the customer sees pricing before long examples;
-            # authored prose remains intact after that block.
+            # A known price gets a compact card under frontmatter. The authored
+            # endpoint prose stays before the detailed pricing/request block.
             self.assertIn('Manual example stays.\n', changes[page])
-            self.assertLess(changes[page].index('aisa-contract-details:start'),
-                            changes[page].index('Manual example stays.'))
+            self.assertLess(changes[page].index('Manual example stays.'),
+                            changes[page].index('aisa-contract-details:start'))
             self.assertIn('"operationId": "accountUsage"', changes[page])
             self.assertNotIn('x-aisa-pricing', changes[page])
             self.assertNotIn('x-aisa-operation-id:', changes[page])

@@ -70,10 +70,37 @@ class ReadableNotesTests(unittest.TestCase):
         changed['x-aisa-pricing']['default_request_estimate_usd'] = .15
         updated = update_readable_block(generated + tail, changed)
         self.assertEqual(strip_generated_block(updated), prose + tail)
-        self.assertTrue(updated.endswith(tail))
-        self.assertLess(updated.index('aisa-contract-details:start'), updated.index('User prose after block.'))
+        self.assertLess(updated.index('User prose after block.'), updated.index('aisa-contract-details:start'))
         self.assertIn('0.15', updated)
         self.assertEqual(update_readable_block(updated, changed), updated)
+
+    def test_price_card_is_only_published_for_known_customer_amounts(self):
+        prose = '---\ntitle: Test\n---\n\nEndpoint overview.\n\n## Example\n\nExample request.\n'
+        known = {'operationId': 'known', 'x-aisa-pricing': {'kind': 'fixed_request', 'customer_micros_usd': 14760,
+                                                            'estimate_source': 'configured_fixed_price'}}
+        context = {'document': {'paths': {'/known': {'get': known}}}, 'method': 'get',
+                   'path': '/known', 'spec_path': 'openapi/test.json'}
+        rendered = update_readable_block(prose, known, **context)
+        self.assertIn('aisa-price-card:start', rendered)
+        self.assertIn('<Info>', rendered)
+        self.assertIn('$0.01476 USD per completed job', rendered)
+        self.assertLess(rendered.index('aisa-price-card:start'), rendered.index('Endpoint overview.'))
+        self.assertLess(rendered.index('Endpoint overview.'), rendered.index('Cost and request rules'))
+        self.assertLess(rendered.index('Cost and request rules'), rendered.index('Request contract'))
+
+        unknown_op = {'operationId': 'unknown'}
+        unknown_context = {'document': {'paths': {'/unknown': {'get': unknown_op}}}, 'method': 'get',
+                           'path': '/unknown', 'spec_path': 'openapi/test.json'}
+        unknown = update_readable_block(prose, unknown_op, **unknown_context)
+        self.assertNotIn('aisa-price-card:', unknown)
+        self.assertNotIn('<Info>', unknown)
+        self.assertLess(unknown.index('Endpoint overview.'), unknown.index('Cost and request rules'))
+
+        estimated_op = {'operationId': 'estimated',
+                        'x-aisa-pricing': {'kind': 'future_tariff', 'default_request_estimate_usd': .1}}
+        estimated = update_readable_block(prose, estimated_op, **unknown_context)
+        self.assertIn('<Info>', estimated)
+        self.assertIn('Default request estimate: $0.1 USD.', estimated)
 
     def test_paired_currency_is_literal_mdx_without_changing_contract_prices(self):
         from pricing_prose import pricing_summary
