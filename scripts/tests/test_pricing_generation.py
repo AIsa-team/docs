@@ -144,6 +144,18 @@ class PricingGenerationTests(unittest.TestCase):
         self.root = self.fixture.root
         seed_old_pages(self.root)
 
+    def test_unknown_rules_preserve_explicit_amounts_without_account_quote_claims(self):
+        from customer_price_presentation import pricing_summary
+        missing = pricing_summary({'kind': 'future_tariff'})
+        self.assertEqual(missing, 'Billing method unavailable. No price estimate is currently available.')
+        self.assertNotIn('account price', missing)
+        estimated = pricing_summary({'kind': 'future_tariff', 'default_request_estimate_usd': .1})
+        self.assertIn('Default request estimate: $0.1 USD.', estimated)
+        self.assertNotIn('account price', estimated)
+        unit = pricing_summary({'kind': 'future_tariff', 'customer_unit_price_usd': .02})
+        self.assertIn('Published reference price: $0.02 USD per billable unit.', unit)
+        self.assertNotIn('account price', unit)
+
     def test_standalone_localization_cleans_old_free_and_archive_page_markers(self):
         import runtime_localize_openapi_zh as localization
         from readable_contract_notes import strip_generated_block

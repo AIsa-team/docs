@@ -249,8 +249,15 @@ def pricing_summary(pricing, language='en'):
                 summary += ' ' + t(f'Default request estimate: {total} USD.', f'默认请求预估费用：{total} USD。')
                 if family != 'unknown':
                     summary += ' ' + t('The final charge depends on actual usage.', '最终费用以实际用量为准。')
-            elif unit_price is None and family != 'fixed_success':
+            elif unit_price is None and family not in {'fixed_success', 'unknown'}:
                 summary += ' ' + t('A price estimate is not currently available.', '当前暂无预估金额。')
+            if family == 'unknown':
+                # An unrecognized rule may still carry an explicit customer
+                # unit or estimate. Preserve that fact, but never append the
+                # account-specific quote caveat used by known tariffs.
+                if total is None and unit_price is None:
+                    summary += ' ' + t('No price estimate is currently available.', '当前暂无预估金额。')
+                return summary
     description = pricing.get('description', '')
     if (family == 'fixed_request' and isinstance(description, str)
             and 'This is the price on every plan;' in description):
