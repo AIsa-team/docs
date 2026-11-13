@@ -18,8 +18,11 @@ Checks, per operation that declares ``x-aisa-pagination``:
 * the 200 ``application/json`` schema has an ``aisa_pagination`` property whose
   ``next_param`` const equals ``request.param``.
 
-Per operation that declares ``x-aisa-latency``: ``timeout_seconds`` is an int in
-[30, 95]. ``x-aisa-latency-class`` (when present) is fast / slow / very_slow.
+Per operation that declares ``x-aisa-latency``: ``timeout_seconds``, when
+present, is an int in [30, 95]. Runtime publishes it only while the gateway
+enforces a synchronous budget (off by default), so an x-aisa-latency carrying
+only a ``basis`` is valid. ``x-aisa-latency-class`` (when present) is fast /
+slow / very_slow.
 
 An operation without ``x-aisa-pagination`` is not a finding: undeclared does not
 block.
@@ -154,7 +157,7 @@ def check_latency(operation: dict) -> list[tuple[str, str]]:
     if not isinstance(latency, dict):
         return problems + [("latency_invalid", "x-aisa-latency must be an object")]
     timeout = latency.get("timeout_seconds")
-    if type(timeout) is not int or not TIMEOUT_MIN_SECONDS <= timeout <= TIMEOUT_MAX_SECONDS:
+    if "timeout_seconds" in latency and (type(timeout) is not int or not TIMEOUT_MIN_SECONDS <= timeout <= TIMEOUT_MAX_SECONDS):
         problems.append(("latency_timeout_invalid", f"timeout_seconds {timeout!r} must be an integer in [{TIMEOUT_MIN_SECONDS}, {TIMEOUT_MAX_SECONDS}]"))
     if "basis" in latency and latency["basis"] not in LATENCY_BASES:
         problems.append(("latency_basis_invalid", f"basis {latency['basis']!r} is not one of {sorted(LATENCY_BASES)}"))

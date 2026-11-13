@@ -120,6 +120,12 @@ class G6Tests(unittest.TestCase):
             document["paths"]["/users/search"]["get"]["x-aisa-latency"]["timeout_seconds"] = value
             self.assertEqual(codes(document), [("users_search", "latency_timeout_invalid")], value)
 
+    def test_timeout_is_optional(self):
+        # Runtime omits timeout_seconds while no synchronous budget is enforced.
+        document = good_document()
+        document["paths"]["/users/search"]["get"]["x-aisa-latency"].pop("timeout_seconds")
+        self.assertEqual(codes(document), [])
+
     def test_bad_enums(self):
         document = good_document()
         op = document["paths"]["/users/search"]["get"]
