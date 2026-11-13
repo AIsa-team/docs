@@ -8,14 +8,28 @@ from jsonschema import Draft202012Validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from compose_openapi import resolve, schema_30_to_31
-from import_dataforseo_filters import normalize_response_echo
+from import_dataforseo_filters import (normalize_nullable_response_refs, normalize_polymorphic_responses,
+                                       normalize_response_echo)
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def imported_source():
+    """The reviewed mirror after the importer's response corrections.
+
+    Applying them is a no-op once the mirror itself carries the corrections,
+    so these tests hold both before and after the source-input change.
+    """
+    document = json.loads((ROOT / 'openapi/upstream/dataforseo-official.json').read_text())
+    normalize_response_echo(document)
+    normalize_polymorphic_responses(document)
+    normalize_nullable_response_refs(document)
+    return document
+
+
 class DataforseoResponseEchoTests(unittest.TestCase):
     def test_complete_live_responses_and_result_constraints(self):
-        document = json.loads((ROOT / 'openapi/upstream/dataforseo-official.json').read_text())
+        document = imported_source()
         fixtures = ROOT / 'scripts/tests/fixtures/dataforseo-live-20261113'
         for name, path in [('anchors', '/v3/backlinks/anchors/live'),
                            ('keyword-overview', '/v3/dataforseo_labs/google/keyword_overview/live')]:
@@ -70,7 +84,7 @@ class DataforseoResponseEchoTests(unittest.TestCase):
             self.assertEqual(document, before)
 
     def test_reviewed_source_retains_nullable_object_with_arbitrary_json_members(self):
-        document = json.loads((ROOT / 'openapi/upstream/dataforseo-official.json').read_text())
+        document = imported_source()
         data = document['components']['schemas']['BaseResponseTaskInfo']['properties']['data']
         validator = Draft202012Validator(schema_30_to_31(data))
         validator.validate({'target': 'example.com', 'limit': 1, 'filters': [['rank', '>', 1]],

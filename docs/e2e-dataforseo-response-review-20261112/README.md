@@ -21,7 +21,8 @@ The correction permits arbitrary JSON values only inside the existing nullable
 object `BaseResponseTaskInfo.data`. Requests, typed result schemas and other
 response constraints remain intact. A strict signature guard avoids overwriting
 future structured upstream definitions. The importer applies the same correction
-on subsequent acquisitions; the reviewed source mirror contains the fix now.
+on subsequent acquisitions. The reviewed mirror itself changes in a separate
+source-input PR (see "Change split" below).
 
 Offline replay of the complete official anchors response fails before this change
 and passes after it. Regression tests also reject a scalar/array `data` envelope,
@@ -59,11 +60,9 @@ The first two complete live response bodies are regression fixtures under
 echo restriction and pass with this source correction. Negative controls still
 reject an array-valued task data envelope and a string-valued task cost.
 
-Google Organic has additional upstream result-contract defects: a closed base
-schema conflicts with derived result fields, and nullable properties with a
-non-nullable referenced oneOf branch still reject null. These remain failures,
-tracked in [AIS-560](https://linear.app/aisateam/issue/AIS-560). This PR does not
-relax those result contracts or claim every historical echo failure is resolved.
+Google Organic exposed two further upstream result-contract defects, tracked in
+[AIS-560](https://linear.app/aisateam/issue/AIS-560) and corrected below. This
+change does not claim every historical DataForSEO failure is resolved.
 
 Per-operation input, response and billing evidence is preserved in
 [Services #1234](https://github.com/AIsa-team/AIsaServices/pull/1234), under
@@ -71,9 +70,74 @@ Per-operation input, response and billing evidence is preserved in
 against fresh live responses, not a deployment receipt. The live Action remains
 red against the still-published contract; post-publication regression is pending.
 
+## Google Organic result contract (AIS-560), 2026-11-14
+
+The same captured Organic response still failed after the echo correction. It
+was minimized to exactly two upstream declaration patterns, both present in the
+pinned revision `702356d7` and unchanged in the latest upstream `8f328672`
+(2026-11-13), so this is not a recent protocol change:
+
+1. **Closed polymorphic bases.** 33 item bases (`BaseSerpApiElementItem`, Labs,
+   Merchant, Knowledge Graph, ...) declare `additionalProperties: false`. These
+   are the only closed schemas in the whole source. 251 subtypes extend them through
+   `allOf`, and 86 response use sites reference only the base, with subtypes listed
+   solely in `discriminator.mapping`. In JSON Schema the closed base rejects every
+   subtype field (`rank_group`, `domain`, nested `items`, ...), and an `items`
+   that references only the base never validates subtype fields at all.
+2. **Nullable references.** `{type: object, nullable: true, oneOf: [{$ref: X}]}`
+   rejects `null` when `X` is an object: OpenAPI 3.0.3 limits `nullable` to the
+   same object's `type`, so the composer's 3.0 to 3.1 conversion is correct and the
+   source declaration is what's wrong. DataForSEO documents these fields as nullable
+   (`refinement_chips`, `rectangle` unless `calculate_rectangles` is set,
+   `about_this_result`, `faq`, `price`, nested `items`).
+
+The importer (`import_dataforseo_filters.py@3`) corrects both, only in the
+response graph (request and response component graphs are disjoint; request
+schemas stay byte-identical), and only for the exact shapes above:
+
+- open each closed base whose mapped subtypes all extend it through `allOf`;
+- pin each subtype's mapped discriminator value (`enum`, `required`);
+- rewrite each base-only use site as a `oneOf` of the mapped subtypes plus null,
+  keeping the discriminator;
+- add an explicit OpenAPI 3.0.3 null-only branch to a nullable single-reference
+  wrapper whose target is an object. Untyped targets already admit null.
+
+Field types, subtype selection, unknown or missing discriminator values, scalar
+items and non-object values for nullable references stay rejected. Subtypes
+remain as open as every other DataForSEO schema. Applying the rules to the pinned
+upstream and to the reviewed mirror gives identical documents; both rules are
+idempotent. On the reviewed source they open 32 bases, tag 248 subtypes, rewrite
+86 use sites and add 3,113 null branches. The 33rd closed base is unreachable
+from any operation. OpenAPI 3.0 validation of the mirror reports the same single
+pre-existing duplicate `operationId` before and after.
+
+The captured Organic response (`fixtures/.../organic-advanced.json`) fails on the
+original source and passes after the correction, with negative controls. A
+candidate composed from the corrected source and the captured Runtime facts
+passes all three replayed operations (Anchors, Keyword Overview, Organic), with
+business, price, ledger and wallet checks unchanged.
+
+Known residual, not changed here: the official full Organic example returns
+`product_considerations` `expanded_element` as an object (as the official field
+table says), but the source declares an array. The live run contained no such
+item; this is recorded on AIS-560 rather than fixed without live evidence.
+
+## Change split
+
+Docs CI admits a reviewed source-input change only when it contains mirrors,
+schema-input receipts, review JSON and top-level tests, and no compiler code.
+Therefore:
+
+1. This change (code only): importer corrections, regression tests, fixtures and
+   this evidence. It does not modify `openapi/upstream/dataforseo-official.json`.
+2. Separate source-input PR, after this one merges: the mirror regenerated by these
+   rules, its review JSON, `merged-source-reviews.json` and `docs/schema-inputs/`
+   receipts, plus a replay test. Services then promotes the new Docs input bundle,
+   and only after publication can the live E2E be rerun as a deployed regression.
+
 Validation:
 
 ```sh
-python -m unittest discover -s scripts/tests -p 'test_dataforseo_response_echo.py' -v
+python -m unittest discover -s scripts/tests -p 'test_dataforseo_*.py' -v
 python -m unittest discover -s scripts/tests -p 'test_provider_request_example_quality.py' -v
 ```
