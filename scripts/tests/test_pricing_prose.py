@@ -9,6 +9,7 @@ from pricing_prose import (clean_text, clean_document, clean_page, pricing_summa
                            strip_price_summary, PRICE_BEGIN, PRICE_END, NOTICE, NOTICE_ZH)
 from compose_openapi import compose
 from test_runtime_contracts import facts, operation, mirror
+from pricing_prose_fixtures import BUSINESS_PRICE_DESCRIPTIONS
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -18,22 +19,22 @@ class PricingProseTests(unittest.TestCase):
         lead = 'Unlike search this works for any tweet\nvisible to the connected account.'
         text = (lead + '\n\nBilled as an X posts read ($0.005). Repeat lookups of the same tweet within the same UTC day\n'
                 'are charged once.\n\nNext paragraph.')
-        result = clean_text(text, add_notice=False)
+        result = clean_text(text)
         self.assertEqual(result, lead + '\n\nNext paragraph.')
-        self.assertEqual(clean_text(result, add_notice=False), result)
-        self.assertEqual(clean_text('Lead. Charged per lookup ($0.005).\nNext.', add_notice=False), 'Lead.\nNext.')
-        self.assertEqual(clean_text('Lead ($0.01/call). Repeat calls are billed once. Then this.', add_notice=False), 'Lead. Then this.')
+        self.assertEqual(clean_text(result), result)
+        self.assertEqual(clean_text('Lead. Charged per lookup ($0.005).\nNext.'), 'Lead.\nNext.')
+        self.assertEqual(clean_text('Lead ($0.01/call). Repeat calls are billed once. Then this.'), 'Lead. Then this.')
         # A parenthetical inside a sentence with other content keeps the sentence.
-        self.assertEqual(clean_text('Returns a JSON error body and is still billed 1 credit ($0.00528).', add_notice=False),
+        self.assertEqual(clean_text('Returns a JSON error body and is still billed 1 credit ($0.00528).'),
                          'Returns a JSON error body and is still billed.')
-        self.assertEqual(clean_text('Gift ID list, recommend 50/call for best value ($0.025), auto-process first 50', add_notice=False),
+        self.assertEqual(clean_text('Gift ID list, recommend 50/call for best value ($0.025), auto-process first 50'),
                          'Gift ID list, recommend 50/call for best value, auto-process first 50')
         # Without a price claim the text is not touched; other charge rules stay.
         self.assertEqual(clean_text('If the connection fails, the request is billed once.'), 'If the connection fails, the request is billed once.')
-        self.assertEqual(clean_text('Billed $0.02 per call. Failed calls are not charged. Each target is charged separately, only once it is published.', add_notice=False),
+        self.assertEqual(clean_text('Billed $0.02 per call. Failed calls are not charged. Each target is charged separately, only once it is published.'),
                          'Failed calls are not charged. Each target is charged separately, only once it is published.')
-        self.assertEqual(clean_text(NOTICE, add_notice=False), '')
-        self.assertEqual(clean_text(NOTICE_ZH, 'zh', add_notice=False), '')
+        self.assertEqual(clean_text(NOTICE), '')
+        self.assertEqual(clean_text(NOTICE_ZH, 'zh'), '')
 
 
     def test_reviewed_response_field_tables_preserve_business_prices(self):
@@ -45,7 +46,7 @@ class PricingProseTests(unittest.TestCase):
         }
         # Freeze reviewed descriptions independently of mutable publication inputs.
         # Source: dcb6397a9, openapi/upstream/alexandria-contract-part-*.json.
-        descriptions = json.loads((ROOT / 'scripts/tests/fixtures/reviewed-business-price-descriptions.json').read_text())
+        descriptions = BUSINESS_PRICE_DESCRIPTIONS
         self.assertEqual(descriptions.keys(), paths)
         for path, text in descriptions.items():
             with self.subTest(path=path):
@@ -200,16 +201,29 @@ class PricingProseTests(unittest.TestCase):
         catalog = {'entries': {key_for(source): {'source': source, 'translation': '查询域名。每次收费 $0.02。'}}}
         self.assertNotIn('$0.02', translation(catalog, source))
 
-    def test_page_notice_never_lands_inside_a_component_or_glued_to_a_fence(self):
+    def test_page_cleanup_leaves_no_pricing_placeholder_and_preserves_examples(self):
         page = ('---\ntitle: Cancel\n---\nLead.\n\nReference price: $0.02 USD per successful request.\n\n'
                 '## Example\n\n<CodeGroup>\n```bash REST\ncurl x\n```\n</CodeGroup>\n')
         result = clean_page(page)
         self.assertNotIn('$0.02', result)
         self.assertIn('\n```bash REST\n', result)
-        self.assertNotIn(NOTICE + '```', result)
-        self.assertLess(result.index(NOTICE), result.index('## Example'))
-        self.assertEqual(result.count(NOTICE), 1)
+        self.assertNotIn(NOTICE, result)
+        self.assertNotIn(NOTICE_ZH, result)
         self.assertEqual(clean_page(result), result)
+
+    def test_existing_notices_are_removed_without_replacement(self):
+        from pricing_prose import LEGACY_NOTICES
+        for language in ('en', 'zh'):
+            for notice in (NOTICE, NOTICE_ZH, *LEGACY_NOTICES):
+                with self.subTest(language=language, notice=notice):
+                    self.assertEqual(clean_text('Search records. Billed $0.02 per call.', language), 'Search records.')
+                    self.assertEqual(clean_text('Search records.\n\n' + notice, language), 'Search records.')
+                    example = '```json\n' + json.dumps({'description': notice}, ensure_ascii=False) + '\n```'
+                    page = '---\ntitle: Search\n---\n\nSearch records.\n\n' + notice + '\n\n## Example\n\n' + example + '\n'
+                    result = clean_page(page, language)
+                    self.assertEqual(result.count(notice), 1)  # Only literal example data remains.
+                    self.assertIn(example, result)
+                    self.assertEqual(clean_page(result, language), result)
 
     def test_runtime_pricing_wins_over_old_prose_without_mutating_inputs(self):
         runtime, upstream = facts('provider'), mirror()

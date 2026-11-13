@@ -8,6 +8,7 @@ import canonical_import
 import test_full_registry
 from test_customer_price_presentation import RESOURCE_PRICING, SOCIAL_PRICING
 from test_runtime_contracts import operation
+from pricing_prose import NOTICE, NOTICE_ZH, LEGACY_NOTICES
 
 
 OLD_SUMMARY = ('<!-- aisa-pricing:start -->\n'
@@ -80,7 +81,7 @@ def seed_old_pages(root):
             page.write_text('---\ntitle: Records\ndescription: ' + json.dumps(OLD_SUMMARY)
                             + '\nopenapi: "openapi/' + prefix + 'prices.json GET /apis/v1/prices/' + name
                             + '"\nx-aisa-operation-id: ' + name + '\n---\n\nManual usage example.\n\n'
-                            + summary + '\n')
+                            + summary + '\n\n' + NOTICE + '\n\n' + NOTICE_ZH + '\n')
 
 
 def assert_customer_pages(test, root):
@@ -94,7 +95,7 @@ def assert_customer_pages(test, root):
                 test.assertIn('Manual usage example.', text)
                 test.assertEqual(text.count(heading), 1)
                 for internal in ('aisa-pricing:', 'provider_credit', 'unit_rate_usd', 'customer_multiplier',
-                                 'micro-USD', '0.000001', 'x-aisa-pricing'):
+                                 'micro-USD', '0.000001', 'x-aisa-pricing', NOTICE, NOTICE_ZH, *LEGACY_NOTICES):
                     test.assertNotIn(internal, text)
 
 

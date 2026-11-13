@@ -88,6 +88,7 @@ LEGACY_NOTICES = (
     'For current API pricing, see the published x-aisa-pricing metadata. Where supported, obtain a quote for your exact request.',
     '当前 API 价格请查看公开的 x-aisa-pricing 信息；接口支持报价时，请针对实际请求获取报价。',
 )
+# Old generated placeholders, recognized for removal only.
 NOTICE = 'See the Cost and request rules section for current pricing. Where supported, obtain a quote for your exact request.'
 NOTICE_ZH = '当前价格请查看费用与请求规则；接口支持报价时，可针对实际请求获取报价。'
 # Examples and code are data, even when they happen to contain billing words.
@@ -251,25 +252,21 @@ def reconcile_free_claim(text, pricing):
                   ' See the published pricing', text)
 
 
-def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
-    """Drop price clauses, retaining separate usage rules and non-price prose."""
+def clean_text(text: str, language: str = 'en') -> str:
+    """Remove obsolete tariffs/notices without inserting replacement price prose."""
     generated_notices = (*LEGACY_NOTICES, NOTICE, NOTICE_ZH)
     if not MONEY.search(text) and not CREDITS.search(text) and not PRICE_DIAL.search(text) and not any(notice in text for notice in generated_notices):
         return text
-    notice = NOTICE_ZH if language == 'zh' else NOTICE
     chunks = FENCES.split(text)
     changed = False
     for index in range(0, len(chunks), 2):
         chunk = chunks[index]
         chunk = strip_credit_prices(chunk)
         changed |= chunk != chunks[index]
-        for previous, current in zip(LEGACY_NOTICES, (NOTICE, NOTICE_ZH)):
-            chunk = chunk.replace(previous, current)
-        # Current notices can already be present in committed generated
-        # OpenAPI output. They are page-level prose, so remove them from
-        # machine declarations whenever this pass is explicitly non-notifying.
-        if not add_notice:
-            chunk = chunk.replace(NOTICE, '').replace(NOTICE_ZH, '')
+        # The Cost section renders the customer price. A removed supplier
+        # tariff must not become another placeholder directing readers there.
+        for notice in generated_notices:
+            chunk = chunk.replace(notice, '')
         changed |= chunk != chunks[index]
         # Keep the model choice while removing its obsolete rate assertion.
         chunk, count = re.subn(r'(`[^`]+`) is billed at \$\d+(?:\.\d+)? per request\.', r'\1 is supported.', chunk)
@@ -331,24 +328,7 @@ def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
     result = re.sub(r'(?m)^[ \t]*[-*][ \t]*$', '', result)
     result = re.sub(r'(?m)^#{1,6} (?:Price|Pricing)[ \t]*\n(?=\s*(?:#|$))', '', result)
     result = re.sub(r'\n{3,}', '\n\n', result).strip()
-    if add_notice and notice not in result:
-        result = (result + '\n\n' + notice).strip()
     return result
-
-
-def place_notice(body: str, notice: str) -> str:
-    """Put the page notice where the removed price line stood: before the first
-    section heading outside code, never inside a component or glued to a fence."""
-    if notice in body:
-        return body
-    chunks = FENCES.split(body)
-    for index in range(0, len(chunks), 2):
-        match = re.search(r'(?m)^#{2,6} ', chunks[index])
-        if match:
-            head, tail = chunks[index][:match.start()], chunks[index][match.start():]
-            chunks[index] = head.rstrip('\n') + '\n\n' + notice + '\n\n' + tail
-            return ''.join(chunks)
-    return body.rstrip('\n') + '\n\n' + notice + '\n'
 
 
 def documented_payload_fields(node: dict) -> bool:
@@ -390,7 +370,7 @@ def clean_document(document: dict) -> dict:
                 # x-aisa-pricing/readable_contract_notes; never append the
                 # page-level pricing notice to a parameter, schema, response,
                 # summary, or title description.
-                result[field] = clean_text(result[field], add_notice=False)
+                result[field] = clean_text(result[field])
         if is_operation:
             remove_price_summary(result)
             # Keep the declaration shape stable when a stale billing-only
@@ -422,11 +402,10 @@ def clean_page(text: str, language: str = 'en') -> str:
     for key in ('description', 'excerpt'):
         value = metadata.get(key)
         if isinstance(value, str) and value:
-            updated = clean_text(strip_price_summary(value), language, add_notice=False)
+            updated = clean_text(strip_price_summary(value), language)
             if updated != value:
                 header = replace_frontmatter_value(header, key, updated)
     # Preserve the useful section/parameter columns of handwritten rate tables.
-    changed_prose = False
     chunks = FENCES.split(body)
     for index in range(0, len(chunks), 2):
         lines = chunks[index].splitlines(keepends=True)
@@ -452,18 +431,15 @@ def clean_page(text: str, language: str = 'en') -> str:
         # unpublished prices with no monetary amount. Remove the whole block
         # before rate cleanup; otherwise that cleanup leaves its markers behind.
         without_summary = strip_price_summary(core)
-        cleaned = clean_text(without_summary, language, add_notice=False) if without_summary else ''
+        cleaned = clean_text(without_summary, language) if without_summary else ''
         # Removing a final tariff sentence can leave one space at a paragraph
         # end. Preserve two-space Markdown hard breaks and fenced examples.
         if cleaned != without_summary:
             cleaned = re.sub(r'(?<=\S)[ \t](?=\n)', '', cleaned)
-        changed_prose |= cleaned != without_summary
         if cleaned != core:
             prose = prose[:len(prose) - len(prose.lstrip())] + cleaned + prose[len(prose.rstrip()):]
         chunks[index] = prose
     body = ''.join(chunks)
-    if changed_prose:
-        body = place_notice(body, NOTICE_ZH if language == 'zh' else NOTICE)
     if (header, body) == original:
         return text
     return '---\n' + header + '\n---\n' + body

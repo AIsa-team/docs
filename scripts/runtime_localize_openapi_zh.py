@@ -348,10 +348,9 @@ def translation(catalog: dict[str, Any], source: str, *, preserve_payload_fields
     if preserve_payload_fields:
         return entry['translation']
     from pricing_prose import clean_text
-    # Pricing notices belong to the generated page Cost section.  Adding one
-    # while localizing a schema or parameter description leaks page prose into
-    # the machine-facing Chinese OpenAPI mirror.
-    return clean_text(entry["translation"], 'zh', add_notice=False)
+    # Clean old tariffs/notices in the translation without inserting a pricing
+    # placeholder into a page, parameter, or schema description.
+    return clean_text(entry["translation"], 'zh')
 
 
 def localize_tree(node: Any, catalog: dict[str, Any], path: tuple[str, ...] = (), *, allow_untranslated: bool = False) -> Any:

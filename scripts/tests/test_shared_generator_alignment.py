@@ -29,9 +29,9 @@ class SharedGeneratorAlignmentTests(unittest.TestCase):
     def test_supplier_charge_once_claim_does_not_survive_rate_cleanup(self):
         source = ('Billed as a posts read ($0.005). '
                   'Repeat lookups within the same UTC day are charged once. Returns posts.')
-        cleaned = clean_text(source, add_notice=False)
+        cleaned = clean_text(source)
         self.assertEqual(cleaned, 'Returns posts.')
-        self.assertEqual(clean_text(cleaned, add_notice=False), cleaned)
+        self.assertEqual(clean_text(cleaned), cleaned)
         self.assertEqual(clean_text('Failed targets are not charged.'), 'Failed targets are not charged.')
 
     def test_retired_price_only_description_keeps_localized_protocol_shape(self):

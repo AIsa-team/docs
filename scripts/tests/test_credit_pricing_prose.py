@@ -1,24 +1,22 @@
 """Supplier credit prices must not compete with the customer tariff."""
 import copy
-import json
-from pathlib import Path
 import unittest
 
 from pricing_prose import NOTICE, clean_document, clean_page, clean_text
 from runtime_localize_openapi_zh import key_for, localize_tree
+from pricing_prose_fixtures import SUPPLIER_CREDIT_DESCRIPTIONS, SUPPLIER_CREDIT_OPERATIONS
 
 
 class CreditPricingProseTests(unittest.TestCase):
     def test_reviewed_catalog_credit_claims_and_transcription_conditions(self):
-        fixture = Path(__file__).parent / 'fixtures/supplier-credit-descriptions.json'
-        cases = json.loads(fixture.read_text())['cases']
+        cases = SUPPLIER_CREDIT_DESCRIPTIONS['cases']
         self.assertEqual(len(cases), 29)
         for row in cases:
             with self.subTest(page=row['page'], text=row['before'][:60]):
-                result = clean_text(row['before'], add_notice=False)
+                result = clean_text(row['before'])
                 self.assertTrue(result.strip())
                 self.assertNotRegex(result.lower(), r'credits?|ceil\(|price dial|cost dial|this is the price')
-                self.assertEqual(clean_text(result, add_notice=False), result)
+                self.assertEqual(clean_text(result), result)
                 if 'Empty AI results and errors cost 0 credits' in row['before']:
                     self.assertIn('Empty AI results and errors incur no charge', result)
                 if row['before'].startswith('Paid opt-in'):
@@ -71,17 +69,17 @@ class CreditPricingProseTests(unittest.TestCase):
         for text, retained in cases:
             for language in ('en', 'zh'):
                 with self.subTest(text=text, language=language):
-                    result = clean_text(text, language, add_notice=False)
+                    result = clean_text(text, language)
                     self.assertNotRegex(result.lower(), r'credits?|积分|ceil\(|price dial|cost dial|this is the price|doubles the price')
                     for value in retained:
                         self.assertIn(value, result)
-                    self.assertEqual(clean_text(result, language, add_notice=False), result)
+                    self.assertEqual(clean_text(result, language), result)
 
     def test_billing_outcomes_survive_without_supplier_units(self):
         text = ('**Billing: per call (1 credit per lookup).** The "not registered" **HTTP 404** result '
                 'returns a valid JSON body and is still billed 1 credit ($0.00528); only 429, 5xx, '
                 'and network errors are not billed. A 400 validation error is a client-side rejection.')
-        result = clean_text(text, add_notice=False)
+        result = clean_text(text)
         for value in ('HTTP 404', 'valid JSON body', 'still billed', 'only 429, 5xx, and network errors are not billed',
                       '400 validation error is a client-side rejection'):
             self.assertIn(value, result)
@@ -143,25 +141,24 @@ class CreditPricingProseTests(unittest.TestCase):
             ('空结果扣除0积分。', '空结果不收费。'),
             ('错误消耗0点数。', '错误不收费。'),
         ):
-            self.assertEqual(clean_text(before, add_notice=False), after)
+            self.assertEqual(clean_text(before), after)
 
     def test_chinese_mixed_clauses_keep_calling_instructions(self):
         for before, keep in (
             ('支持 workforce（每家公司消耗5积分），同时返回职员数据。', ['支持 workforce', '同时返回职员数据']),
             ('接口每次消耗1积分，请传有效公司域名。', ['请传有效公司域名']),
         ):
-            result = clean_text(before, 'zh', add_notice=False)
+            result = clean_text(before, 'zh')
             self.assertNotIn('积分', result)
             for part in keep:
                 self.assertIn(part, result)
 
     def test_operation_credit_tariffs_keep_limits_and_response_shapes(self):
-        fixture = Path(__file__).parent / 'fixtures/supplier-credit-operations.json'
-        for case in json.loads(fixture.read_text())['cases']:
+        for case in SUPPLIER_CREDIT_OPERATIONS['cases']:
             with self.subTest(source=case['source'], path=case['path']):
-                result = clean_text(case['before'], add_notice=False)
+                result = clean_text(case['before'])
                 self.assertNotRegex(result, r'(?i)(?:[0-9]|one|two|five|ten|a)[ -]+(?:search |finder )?credits?\b')
                 self.assertNotRegex(result, r'(?i)variable credit prices|one flat credit|profile \(0\.2\)|raise it to 4|bring one record to 7|same 0\.2 rate|1,000 credits')
                 for part in case['retain']:
                     self.assertIn(part, result)
-                self.assertEqual(clean_text(result, add_notice=False), result)
+                self.assertEqual(clean_text(result), result)
