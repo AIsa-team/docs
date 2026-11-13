@@ -15,7 +15,6 @@ openapi: "openapi/zh/unipile.json POST /apis/v1/unipile/hosted/link"
 - **方法与路径:** POST /apis/v1/unipile/hosted/link
 - **可用状态:** enabled
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/unipile/hosted/link`
-- **Runtime 事实版本:** 00b882f06149b4c72a4dc077c20cc1c4d86d5a8da50fcc725538d6debed194ac
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/unipile.json)
 
@@ -38,34 +37,54 @@ openapi: "openapi/zh/unipile.json POST /apis/v1/unipile/hosted/link"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
         "schema": {
           "anyOf": [
             {
+              "type": "object",
               "properties": {
-                "api_url": {
-                  "description": "The url of your Unipile server  : https://{subdomain}.unipile.com:{port}"
+                "expiresOn": {
+                  "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
+                  "example": "2025-12-31T23:59:59.999Z",
+                  "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
+                },
+                "name": {
+                  "minLength": 1,
+                  "description": "This field will be sent back to you in the notify_url to help match the added account with your user.",
+                  "type": "string"
+                },
+                "success_redirect_url": {
+                  "description": "A url where you might want to redirect the user in case of a successful authentication."
+                },
+                "failure_redirect_url": {
+                  "description": "A url where you might want to redirect the user in case of a failed authentication."
                 },
                 "bypass_success_screen": {
                   "description": "Whether to bypass the hosted auth success screen before accessing the success_redirect_url.",
                   "type": "boolean"
                 },
+                "notify_url": {
+                  "description": "A url where you can be notified about events related to the authentication process."
+                },
                 "disabled_features": {
                   "description": "An array of features that should be disabled in this account. Accepted values : linkedin_recruiter | linkedin_sales_navigator | linkedin_organizations_mailboxes.",
+                  "type": "array",
                   "items": {
+                    "type": "string",
                     "enum": [
                       "linkedin_recruiter",
                       "linkedin_sales_navigator",
                       "linkedin_organizations_mailboxes"
-                    ],
-                    "type": "string"
-                  },
-                  "type": "array"
+                    ]
+                  }
                 },
                 "disabled_options": {
                   "description": "An array of options that should be disabled in hosted auth interface. Accepted values : proxy | autoproxy | cookie_auth | credentials_auth | qrcode_auth | pairing_code_auth | sync_limit | language. `qrcode_auth` and `pairing_code_auth` are currently supported for WhatsApp only.",
+                  "type": "array",
                   "items": {
+                    "type": "string",
                     "enum": [
                       "proxy",
                       "autoproxy",
@@ -75,18 +94,89 @@ openapi: "openapi/zh/unipile.json POST /apis/v1/unipile/hosted/link"
                       "pairing_code_auth",
                       "sync_limit",
                       "language"
-                    ],
-                    "type": "string"
+                    ]
+                  }
+                },
+                "proxy": {
+                  "type": "object",
+                  "properties": {
+                    "protocol": {
+                      "type": "string",
+                      "enum": [
+                        "https",
+                        "http",
+                        "socks5"
+                      ]
+                    },
+                    "port": {
+                      "type": "number"
+                    },
+                    "host": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "description": "Optional username for proxy’s authentication.",
+                      "type": "string"
+                    },
+                    "password": {
+                      "description": "Optional password for proxy’s authentication.",
+                      "type": "string"
+                    }
                   },
-                  "type": "array"
+                  "required": [
+                    "port",
+                    "host"
+                  ]
                 },
-                "expiresOn": {
-                  "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
-                  "example": "2025-12-31T23:59:59.999Z",
-                  "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
+                "api_url": {
+                  "description": "The url of your Unipile server  : https://{subdomain}.unipile.com:{port}"
                 },
-                "failure_redirect_url": {
-                  "description": "A url where you might want to redirect the user in case of a failed authentication."
+                "sync_limit": {
+                  "type": "object",
+                  "properties": {
+                    "MAILING": {
+                      "type": "string",
+                      "enum": [
+                        "NO_HISTORY_SYNC"
+                      ]
+                    },
+                    "MESSAGING": {
+                      "description": "Set a sync limit either for chats, messages or both. Chats limit will apply to each inbox, whereas messages limit will apply to each chat. No value will not apply any limit (default behaviour). Providers partial support.",
+                      "type": "object",
+                      "properties": {
+                        "chats": {
+                          "description": "Either a UTC Datetime to start sync from, or a quantity of data.",
+                          "anyOf": [
+                            {
+                              "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
+                              "example": "2025-12-31T23:59:59.999Z",
+                              "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
+                            },
+                            {
+                              "minimum": 0,
+                              "description": "The quantity of data that should be synced from data history. 0 will not sync history.",
+                              "type": "number"
+                            }
+                          ]
+                        },
+                        "messages": {
+                          "description": "Either a UTC Datetime to start sync from, or a quantity of data.",
+                          "anyOf": [
+                            {
+                              "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
+                              "example": "2025-12-31T23:59:59.999Z",
+                              "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
+                            },
+                            {
+                              "minimum": 0,
+                              "description": "The quantity of data that should be synced from data history. 0 will not sync history.",
+                              "type": "number"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
                 },
                 "google_scopes": {
                   "description": "Optional comma-separated list of scopes to use for GOOGLE_OAUTH accounts",
@@ -98,51 +188,54 @@ openapi: "openapi/zh/unipile.json POST /apis/v1/unipile/hosted/link"
                   "format": "microsoftScopes",
                   "type": "string"
                 },
-                "name": {
-                  "description": "This field will be sent back to you in the notify_url to help match the added account with your user.",
-                  "minLength": 1,
-                  "type": "string"
-                },
-                "notify_url": {
-                  "description": "A url where you can be notified about events related to the authentication process."
+                "type": {
+                  "description": "A litteral value to choose between a connection or a reconnection.",
+                  "type": "string",
+                  "enum": [
+                    "create"
+                  ]
                 },
                 "providers": {
+                  "description": "The providers for whom you want to propose to connect an account.",
                   "anyOf": [
                     {
+                      "title": "Any provider",
                       "description": "Data type: string",
+                      "type": "string",
                       "enum": [
                         "*"
-                      ],
-                      "title": "Any provider",
-                      "type": "string"
+                      ]
                     },
                     {
+                      "title": "Any mailing provider",
                       "description": "Data type: string",
+                      "type": "string",
                       "enum": [
                         "*:MAILING"
-                      ],
-                      "title": "Any mailing provider",
-                      "type": "string"
+                      ]
                     },
                     {
+                      "title": "Any messaging provider",
                       "description": "Data type: string",
+                      "type": "string",
                       "enum": [
                         "*:MESSAGING"
-                      ],
-                      "title": "Any messaging provider",
-                      "type": "string"
+                      ]
                     },
                     {
+                      "title": "Any calendar provider",
                       "description": "Data type: string",
+                      "type": "string",
                       "enum": [
                         "*:CALENDAR"
-                      ],
-                      "title": "Any calendar provider",
-                      "type": "string"
+                      ]
                     },
                     {
+                      "title": "One or more providers",
                       "description": "Data type: Array of strings. Accepted values: LINKEDIN | WHATSAPP | INSTAGRAM | MESSENGER | TELEGRAM | GOOGLE | OUTLOOK | MAIL | TWITTER",
+                      "type": "array",
                       "items": {
+                        "type": "string",
                         "enum": [
                           "LINKEDIN",
                           "WHATSAPP",
@@ -153,106 +246,14 @@ openapi: "openapi/zh/unipile.json POST /apis/v1/unipile/hosted/link"
                           "OUTLOOK",
                           "TWITTER",
                           "MAIL"
-                        ],
-                        "type": "string"
-                      },
-                      "title": "One or more providers",
-                      "type": "array"
+                        ]
+                      }
                     }
-                  ],
-                  "description": "The providers for whom you want to propose to connect an account."
-                },
-                "proxy": {
-                  "properties": {
-                    "host": {
-                      "type": "string"
-                    },
-                    "password": {
-                      "description": "Optional password for proxy’s authentication.",
-                      "type": "string"
-                    },
-                    "port": {
-                      "type": "number"
-                    },
-                    "protocol": {
-                      "enum": [
-                        "https",
-                        "http",
-                        "socks5"
-                      ],
-                      "type": "string"
-                    },
-                    "username": {
-                      "description": "Optional username for proxy’s authentication.",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "port",
-                    "host"
-                  ],
-                  "type": "object"
+                  ]
                 },
                 "single_use": {
                   "description": "Whether the hosted authentication link can be used to connect only one account. Defaults to false.",
                   "type": "boolean"
-                },
-                "success_redirect_url": {
-                  "description": "A url where you might want to redirect the user in case of a successful authentication."
-                },
-                "sync_limit": {
-                  "properties": {
-                    "MAILING": {
-                      "enum": [
-                        "NO_HISTORY_SYNC"
-                      ],
-                      "type": "string"
-                    },
-                    "MESSAGING": {
-                      "description": "Set a sync limit either for chats, messages or both. Chats limit will apply to each inbox, whereas messages limit will apply to each chat. No value will not apply any limit (default behaviour). Providers partial support.",
-                      "properties": {
-                        "chats": {
-                          "anyOf": [
-                            {
-                              "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
-                              "example": "2025-12-31T23:59:59.999Z",
-                              "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
-                            },
-                            {
-                              "description": "The quantity of data that should be synced from data history. 0 will not sync history.",
-                              "minimum": 0,
-                              "type": "number"
-                            }
-                          ],
-                          "description": "Either a UTC Datetime to start sync from, or a quantity of data."
-                        },
-                        "messages": {
-                          "anyOf": [
-                            {
-                              "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
-                              "example": "2025-12-31T23:59:59.999Z",
-                              "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
-                            },
-                            {
-                              "description": "The quantity of data that should be synced from data history. 0 will not sync history.",
-                              "minimum": 0,
-                              "type": "number"
-                            }
-                          ],
-                          "description": "Either a UTC Datetime to start sync from, or a quantity of data."
-                        }
-                      },
-                      "type": "object"
-                    }
-                  },
-                  "type": "object"
-                },
-                "type": {
-                  "description": "A litteral value to choose between a connection or a reconnection.",
-                  "enum": [
-                    "create"
-                  ],
-                  "type": "string"
                 }
               },
               "required": [
@@ -261,33 +262,51 @@ openapi: "openapi/zh/unipile.json POST /apis/v1/unipile/hosted/link"
                 "type",
                 "providers"
               ],
-              "title": "Connection link",
-              "type": "object"
+              "title": "Connection link"
             },
             {
+              "type": "object",
               "properties": {
-                "api_url": {
-                  "description": "The url of your Unipile server  : https://{subdomain}.unipile.com:{port}"
+                "expiresOn": {
+                  "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
+                  "example": "2025-12-31T23:59:59.999Z",
+                  "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
+                },
+                "name": {
+                  "minLength": 1,
+                  "description": "This field will be sent back to you in the notify_url to help match the added account with your user.",
+                  "type": "string"
+                },
+                "success_redirect_url": {
+                  "description": "A url where you might want to redirect the user in case of a successful authentication."
+                },
+                "failure_redirect_url": {
+                  "description": "A url where you might want to redirect the user in case of a failed authentication."
                 },
                 "bypass_success_screen": {
                   "description": "Whether to bypass the hosted auth success screen before accessing the success_redirect_url.",
                   "type": "boolean"
                 },
+                "notify_url": {
+                  "description": "A url where you can be notified about events related to the authentication process."
+                },
                 "disabled_features": {
                   "description": "An array of features that should be disabled in this account. Accepted values : linkedin_recruiter | linkedin_sales_navigator | linkedin_organizations_mailboxes.",
+                  "type": "array",
                   "items": {
+                    "type": "string",
                     "enum": [
                       "linkedin_recruiter",
                       "linkedin_sales_navigator",
                       "linkedin_organizations_mailboxes"
-                    ],
-                    "type": "string"
-                  },
-                  "type": "array"
+                    ]
+                  }
                 },
                 "disabled_options": {
                   "description": "An array of options that should be disabled in hosted auth interface. Accepted values : proxy | autoproxy | cookie_auth | credentials_auth | qrcode_auth | pairing_code_auth | sync_limit | language. `qrcode_auth` and `pairing_code_auth` are currently supported for WhatsApp only.",
+                  "type": "array",
                   "items": {
+                    "type": "string",
                     "enum": [
                       "proxy",
                       "autoproxy",
@@ -297,18 +316,89 @@ openapi: "openapi/zh/unipile.json POST /apis/v1/unipile/hosted/link"
                       "pairing_code_auth",
                       "sync_limit",
                       "language"
-                    ],
-                    "type": "string"
+                    ]
+                  }
+                },
+                "proxy": {
+                  "type": "object",
+                  "properties": {
+                    "protocol": {
+                      "type": "string",
+                      "enum": [
+                        "https",
+                        "http",
+                        "socks5"
+                      ]
+                    },
+                    "port": {
+                      "type": "number"
+                    },
+                    "host": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "description": "Optional username for proxy’s authentication.",
+                      "type": "string"
+                    },
+                    "password": {
+                      "description": "Optional password for proxy’s authentication.",
+                      "type": "string"
+                    }
                   },
-                  "type": "array"
+                  "required": [
+                    "port",
+                    "host"
+                  ]
                 },
-                "expiresOn": {
-                  "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
-                  "example": "2025-12-31T23:59:59.999Z",
-                  "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
+                "api_url": {
+                  "description": "The url of your Unipile server  : https://{subdomain}.unipile.com:{port}"
                 },
-                "failure_redirect_url": {
-                  "description": "A url where you might want to redirect the user in case of a failed authentication."
+                "sync_limit": {
+                  "type": "object",
+                  "properties": {
+                    "MAILING": {
+                      "type": "string",
+                      "enum": [
+                        "NO_HISTORY_SYNC"
+                      ]
+                    },
+                    "MESSAGING": {
+                      "description": "Set a sync limit either for chats, messages or both. Chats limit will apply to each inbox, whereas messages limit will apply to each chat. No value will not apply any limit (default behaviour). Providers partial support.",
+                      "type": "object",
+                      "properties": {
+                        "chats": {
+                          "description": "Either a UTC Datetime to start sync from, or a quantity of data.",
+                          "anyOf": [
+                            {
+                              "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
+                              "example": "2025-12-31T23:59:59.999Z",
+                              "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
+                            },
+                            {
+                              "minimum": 0,
+                              "description": "The quantity of data that should be synced from data history. 0 will not sync history.",
+                              "type": "number"
+                            }
+                          ]
+                        },
+                        "messages": {
+                          "description": "Either a UTC Datetime to start sync from, or a quantity of data.",
+                          "anyOf": [
+                            {
+                              "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
+                              "example": "2025-12-31T23:59:59.999Z",
+                              "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
+                            },
+                            {
+                              "minimum": 0,
+                              "description": "The quantity of data that should be synced from data history. 0 will not sync history.",
+                              "type": "number"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
                 },
                 "google_scopes": {
                   "description": "Optional comma-separated list of scopes to use for GOOGLE_OAUTH accounts",
@@ -320,105 +410,16 @@ openapi: "openapi/zh/unipile.json POST /apis/v1/unipile/hosted/link"
                   "format": "microsoftScopes",
                   "type": "string"
                 },
-                "name": {
-                  "description": "This field will be sent back to you in the notify_url to help match the added account with your user.",
-                  "minLength": 1,
-                  "type": "string"
-                },
-                "notify_url": {
-                  "description": "A url where you can be notified about events related to the authentication process."
-                },
-                "proxy": {
-                  "properties": {
-                    "host": {
-                      "type": "string"
-                    },
-                    "password": {
-                      "description": "Optional password for proxy’s authentication.",
-                      "type": "string"
-                    },
-                    "port": {
-                      "type": "number"
-                    },
-                    "protocol": {
-                      "enum": [
-                        "https",
-                        "http",
-                        "socks5"
-                      ],
-                      "type": "string"
-                    },
-                    "username": {
-                      "description": "Optional username for proxy’s authentication.",
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "port",
-                    "host"
-                  ],
-                  "type": "object"
+                "type": {
+                  "description": "A litteral value to choose between a connection or a reconnection.",
+                  "type": "string",
+                  "enum": [
+                    "reconnect"
+                  ]
                 },
                 "reconnect_account": {
                   "description": "The id of the account to reconnect.",
                   "minLength": 1,
-                  "type": "string"
-                },
-                "success_redirect_url": {
-                  "description": "A url where you might want to redirect the user in case of a successful authentication."
-                },
-                "sync_limit": {
-                  "properties": {
-                    "MAILING": {
-                      "enum": [
-                        "NO_HISTORY_SYNC"
-                      ],
-                      "type": "string"
-                    },
-                    "MESSAGING": {
-                      "description": "Set a sync limit either for chats, messages or both. Chats limit will apply to each inbox, whereas messages limit will apply to each chat. No value will not apply any limit (default behaviour). Providers partial support.",
-                      "properties": {
-                        "chats": {
-                          "anyOf": [
-                            {
-                              "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
-                              "example": "2025-12-31T23:59:59.999Z",
-                              "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
-                            },
-                            {
-                              "description": "The quantity of data that should be synced from data history. 0 will not sync history.",
-                              "minimum": 0,
-                              "type": "number"
-                            }
-                          ],
-                          "description": "Either a UTC Datetime to start sync from, or a quantity of data."
-                        },
-                        "messages": {
-                          "anyOf": [
-                            {
-                              "description": "An ISO 8601 UTC datetime (YYYY-MM-DDTHH:MM:SS.sssZ). ⚠️ All links expire upon daily restart, regardless of their stated expiration date. A new link must be generated each time a user clicks on your app to connect.",
-                              "example": "2025-12-31T23:59:59.999Z",
-                              "pattern": "^[1-2]\\d{3}-[0-1]\\d-[0-3]\\dT\\d{2}:\\d{2}:\\d{2}.\\d{3}Z$"
-                            },
-                            {
-                              "description": "The quantity of data that should be synced from data history. 0 will not sync history.",
-                              "minimum": 0,
-                              "type": "number"
-                            }
-                          ],
-                          "description": "Either a UTC Datetime to start sync from, or a quantity of data."
-                        }
-                      },
-                      "type": "object"
-                    }
-                  },
-                  "type": "object"
-                },
-                "type": {
-                  "description": "A litteral value to choose between a connection or a reconnection.",
-                  "enum": [
-                    "reconnect"
-                  ],
                   "type": "string"
                 }
               },
@@ -428,22 +429,18 @@ openapi: "openapi/zh/unipile.json POST /apis/v1/unipile/hosted/link"
                 "type",
                 "reconnect_account"
               ],
-              "title": "Reconnection link",
-              "type": "object"
+              "title": "Reconnection link"
             }
           ]
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "fixed_success",
     "customer_pricing": "fixed_success",
     "default_request_estimate_usd": 1e-06,
-    "estimate_source": "profile_seed",
-    "evidence_source": "request_snapshot"
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -463,7 +460,5 @@ openapi: "openapi/zh/unipile.json POST /apis/v1/unipile/hosted/link"
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 
 - **默认请求参考估价（USD）:** 1e-06
-- **计费依据:** fixed&#95;success
-- **结算证据来源:** request&#95;snapshot
 
 {/* aisa-contract-details:end */}

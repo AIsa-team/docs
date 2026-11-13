@@ -12,7 +12,6 @@ x-aisa-operation-id: "usaspending-gov.recipients.recipient"
 - **Method and path:** POST /apis/v1/usaspending-gov/recipients/recipient
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/usaspending-gov/recipients/recipient`
-- **Runtime facts:** bd023c3a292175ba2c80967d07c97f1f471561a7f1b5cc9430e15158934aed5b
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/usaspending-gov.json)
 
@@ -35,18 +34,41 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "provider": {
-            "summary": "Official provider example; checked against AIsa request constraints",
-            "value": {
-              "recipient_id": "6cf5fb1b-4988-d087-5dc1-70939d8fc6c4-C"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
+          "properties": {
+            "fiscal_year": {
+              "type": "number",
+              "description": "Period for the headline totals; omitted = latest trailing 12 months.\n\nProvider reference: minimum 2008; maximum 2035.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 2008,
+                "max": 2035
+              }
+            },
+            "fiscal_years": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "description": "Fiscal years to break obligations down by (one upstream request each).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "recipient_id": {
+              "type": "string",
+              "description": "Pattern: ^[0-9a-fA-F-]{36}-[CPRcpr]$."
+            },
+            "uei": {
+              "type": "string",
+              "description": "Resolved through the recipient list endpoint (several seconds upstream); prefer recipient_id when known. Pattern: ^[A-Za-z0-9]{12}$."
+            }
+          },
           "allOf": [
             {
               "anyOf": [
@@ -68,52 +90,24 @@ Effective request and pricing declaration (including authentication and referenc
                 }
               ]
             }
-          ],
-          "properties": {
-            "fiscal_year": {
-              "description": "Period for the headline totals; omitted = latest trailing 12 months.\n\nProvider reference: minimum 2008; maximum 2035.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 2035,
-                "min": 2008
-              }
-            },
-            "fiscal_years": {
-              "description": "Fiscal years to break obligations down by (one upstream request each).",
-              "items": {
-                "type": "number"
-              },
-              "type": "array",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "recipient_id": {
-              "description": "Pattern: ^[0-9a-fA-F-]{36}-[CPRcpr]$.",
-              "type": "string"
-            },
-            "uei": {
-              "description": "Resolved through the recipient list endpoint (several seconds upstream); prefer recipient_id when known. Pattern: ^[A-Za-z0-9]{12}$.",
-              "type": "string"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "recipient_id": "6cf5fb1b-4988-d087-5dc1-70939d8fc6c4-C"
             }
-          },
-          "type": "object"
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -128,15 +122,10 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 
 - **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

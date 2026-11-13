@@ -12,7 +12,6 @@ x-aisa-operation-id: "ebi-ac-uk.activities.list-activities"
 - **方法与路径:** POST /apis/v1/ebi-ac-uk/activities/list-activities
 - **可用状态:** enabled
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/ebi-ac-uk/activities/list-activities`
-- **Runtime 事实版本:** 0693aa656ea5f0e28630b79db494f29423063e1d827d2b56c964886c0f375de3
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/ebi-ac-uk.json)
 
@@ -35,21 +34,93 @@ x-aisa-operation-id: "ebi-ac-uk.activities.list-activities"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "provider": {
-            "summary": "Official provider example; checked against AIsa request constraints",
-            "value": {
-              "limit": 5,
-              "molecule_chembl_id": "CHEMBL941",
-              "standard_type": "IC50",
-              "target_chembl_id": "CHEMBL1862"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
+          "properties": {
+            "assay_type": {
+              "type": "string",
+              "description": "B binding, F functional, A ADME, T toxicity, P physicochemical, U unclassified.\n\nProvider reference: allowed values [\"B\", \"F\", \"A\", \"T\", \"P\", \"U\"].",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "B",
+                  "F",
+                  "A",
+                  "T",
+                  "P",
+                  "U"
+                ]
+              }
+            },
+            "cursor": {
+              "type": "string",
+              "description": "next_cursor from the previous page of the same request. Pattern: ^[0-9]{1,8}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "limit": {
+              "type": "number",
+              "description": "limit\n\nProvider reference: minimum 1; maximum 100; default 20.",
+              "default": 20,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 100
+              }
+            },
+            "min_pchembl": {
+              "type": "number",
+              "description": "Only rows with pchembl_value at least this (6 = 1 uM, 9 = 1 nM).\n\nProvider reference: minimum 0; maximum 20.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0,
+                "max": 20
+              }
+            },
+            "molecule_chembl_id": {
+              "type": "string",
+              "description": "Measurements recorded on exactly this molecule form. Pattern: ^CHEMBL[0-9]{1,12}$."
+            },
+            "parent_molecule_chembl_id": {
+              "type": "string",
+              "description": "Measurements on a parent compound and all its salts and forms (parent_chembl_id from get_molecule). Pattern: ^CHEMBL[0-9]{1,12}$."
+            },
+            "sort": {
+              "type": "string",
+              "description": "activity_id (stable record order) or potency (highest pChEMBL first; rows without one are excluded).\n\nProvider reference: allowed values [\"activity_id\", \"potency\"]; default \"activity_id\".",
+              "default": "activity_id",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "activity_id",
+                  "potency"
+                ]
+              }
+            },
+            "standard_type": {
+              "type": "string",
+              "description": "Endpoint, e.g. IC50, Ki, Kd, EC50, Potency, Inhibition (common ones are case-insensitive). Pattern: ^[A-Za-z0-9][A-Za-z0-9 ()%/._+'-]{0,39}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "target_chembl_id": {
+              "type": "string",
+              "description": "Target ChEMBL ID, e.g. CHEMBL203. Pattern: ^CHEMBL[0-9]{1,12}$."
+            },
+            "target_organism": {
+              "type": "string",
+              "description": "Exact target organism, case-sensitive, e.g. Homo sapiens.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            }
+          },
           "allOf": [
             {
               "anyOf": [
@@ -79,104 +150,27 @@ x-aisa-operation-id: "ebi-ac-uk.activities.list-activities"
                 }
               ]
             }
-          ],
-          "properties": {
-            "assay_type": {
-              "description": "B binding, F functional, A ADME, T toxicity, P physicochemical, U unclassified.\n\nProvider reference: allowed values [\"B\", \"F\", \"A\", \"T\", \"P\", \"U\"].",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "oneOf": [
-                  "B",
-                  "F",
-                  "A",
-                  "T",
-                  "P",
-                  "U"
-                ]
-              }
-            },
-            "cursor": {
-              "description": "next_cursor from the previous page of the same request. Pattern: ^[0-9]{1,8}$.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "limit": {
-              "default": 20,
-              "description": "limit\n\nProvider reference: minimum 1; maximum 100; default 20.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 100,
-                "min": 1
-              }
-            },
-            "min_pchembl": {
-              "description": "Only rows with pchembl_value at least this (6 = 1 uM, 9 = 1 nM).\n\nProvider reference: minimum 0; maximum 20.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 20,
-                "min": 0
-              }
-            },
-            "molecule_chembl_id": {
-              "description": "Measurements recorded on exactly this molecule form. Pattern: ^CHEMBL[0-9]{1,12}$.",
-              "type": "string"
-            },
-            "parent_molecule_chembl_id": {
-              "description": "Measurements on a parent compound and all its salts and forms (parent_chembl_id from get_molecule). Pattern: ^CHEMBL[0-9]{1,12}$.",
-              "type": "string"
-            },
-            "sort": {
-              "default": "activity_id",
-              "description": "activity_id (stable record order) or potency (highest pChEMBL first; rows without one are excluded).\n\nProvider reference: allowed values [\"activity_id\", \"potency\"]; default \"activity_id\".",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "oneOf": [
-                  "activity_id",
-                  "potency"
-                ]
-              }
-            },
-            "standard_type": {
-              "description": "Endpoint, e.g. IC50, Ki, Kd, EC50, Potency, Inhibition (common ones are case-insensitive). Pattern: ^[A-Za-z0-9][A-Za-z0-9 ()%/._+'-]{0,39}$.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "target_chembl_id": {
-              "description": "Target ChEMBL ID, e.g. CHEMBL203. Pattern: ^CHEMBL[0-9]{1,12}$.",
-              "type": "string"
-            },
-            "target_organism": {
-              "description": "Exact target organism, case-sensitive, e.g. Homo sapiens.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "limit": 5,
+              "molecule_chembl_id": "CHEMBL941",
+              "standard_type": "IC50",
+              "target_chembl_id": "CHEMBL1862"
             }
-          },
-          "type": "object"
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -191,15 +185,10 @@ x-aisa-operation-id: "ebi-ac-uk.activities.list-activities"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 
 - **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

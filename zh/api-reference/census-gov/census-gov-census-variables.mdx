@@ -12,7 +12,6 @@ x-aisa-operation-id: "census-gov.census.variables"
 - **方法与路径:** POST /apis/v1/census-gov/census/variables
 - **可用状态:** enabled
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/census-gov/census/variables`
-- **Runtime 事实版本:** eaabe92020e77779a83c21c13467dbc8d97222591a3938cbb52d67ed4a3ca399
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/census-gov.json)
 
@@ -35,20 +34,51 @@ x-aisa-operation-id: "census-gov.census.variables"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "provider": {
-            "summary": "Official provider example; checked against AIsa request constraints",
-            "value": {
-              "dataset": "acs/acs5",
-              "group": "B01003",
-              "vintage": 2023
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
+          "properties": {
+            "cursor": {
+              "type": "string",
+              "description": "cursor",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "dataset": {
+              "type": "string",
+              "description": "Data API dataset path, e.g. acs/acs5, acs/acs5/profile, dec/pl, cbp. Pattern: ^[A-Za-z0-9_/]+$."
+            },
+            "group": {
+              "type": "string",
+              "description": "Table id, e.g. B01003, S0101, DP05, P1. Pattern: ^[A-Za-z0-9_]{1,40}$."
+            },
+            "page_size": {
+              "type": "number",
+              "description": "page_size\n\nProvider reference: minimum 1; maximum 500; default 20.",
+              "default": 20,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 500
+              }
+            },
+            "query": {
+              "type": "string",
+              "description": "Tokens matched against group name/description (when no group is given; the first 5 matching groups are listed) or variable name/label/concept (within a group). Datasets with at most 5 tables (cbp, pep/population) whose descriptions do not match are searched by variable label instead."
+            },
+            "vintage": {
+              "type": "number",
+              "description": "vintage\n\nProvider reference: minimum 2000; maximum 2035."
+            }
+          },
+          "required": [
+            "dataset",
+            "vintage"
+          ],
           "allOf": [
             {
               "anyOf": [
@@ -70,62 +100,26 @@ x-aisa-operation-id: "census-gov.census.variables"
                 }
               ]
             }
-          ],
-          "properties": {
-            "cursor": {
-              "description": "cursor",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "dataset": {
-              "description": "Data API dataset path, e.g. acs/acs5, acs/acs5/profile, dec/pl, cbp. Pattern: ^[A-Za-z0-9_/]+$.",
-              "type": "string"
-            },
-            "group": {
-              "description": "Table id, e.g. B01003, S0101, DP05, P1. Pattern: ^[A-Za-z0-9_]{1,40}$.",
-              "type": "string"
-            },
-            "page_size": {
-              "default": 20,
-              "description": "page_size\n\nProvider reference: minimum 1; maximum 500; default 20.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 500,
-                "min": 1
-              }
-            },
-            "query": {
-              "description": "Tokens matched against group name/description (when no group is given; the first 5 matching groups are listed) or variable name/label/concept (within a group). Datasets with at most 5 tables (cbp, pep/population) whose descriptions do not match are searched by variable label instead.",
-              "type": "string"
-            },
-            "vintage": {
-              "description": "vintage\n\nProvider reference: minimum 2000; maximum 2035.",
-              "type": "number"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "dataset": "acs/acs5",
+              "group": "B01003",
+              "vintage": 2023
             }
-          },
-          "required": [
-            "dataset",
-            "vintage"
-          ],
-          "type": "object"
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -140,15 +134,10 @@ x-aisa-operation-id: "census-gov.census.variables"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 
 - **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

@@ -12,7 +12,6 @@ x-aisa-operation-id: "fema-gov.us-disaster-assistance.nri-list"
 - **方法与路径:** POST /apis/v1/fema-gov/us-disaster-assistance/nri-list
 - **可用状态:** enabled
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/fema-gov/us-disaster-assistance/nri-list`
-- **Runtime 事实版本:** 57ce16342ebaa5cad2eef4733dc2ccf227f63e710b67c7cee358fdf2602551b7
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/fema-gov.json)
 
@@ -35,8 +34,74 @@ x-aisa-operation-id: "fema-gov.us-disaster-assistance.nri-list"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
+        "schema": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "cursor": {
+              "type": "string",
+              "description": "`next_cursor` of the previous page (opaque, pinned to the file MD5).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Optional column selection for `record.fields` (names as in NRIDataDictionary.csv, e.g. RISK_SCORE, WFIR_RISKR, IFLD_EALT); the identity columns are always present at the record's top level. Without it every column of the row is returned (465-476 per row).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "limit": {
+              "type": "number",
+              "description": "Rows per page for the four one-fetch tables.\n\nProvider reference: minimum 1; maximum 1000; default 100.",
+              "default": 100,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 1000
+              }
+            },
+            "page_bytes": {
+              "type": "number",
+              "description": "Tracts only: bytes per Range request (256 KiB to 24 MiB; about 130 rows per MiB).\n\nProvider reference: minimum 262144; maximum 25165824; default 8388608.",
+              "default": 8388608,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 262144,
+                "max": 25165824
+              }
+            },
+            "release": {
+              "type": "string",
+              "description": "Release path segment under /about/reports-and-data/openfema/nri/. FEMA serves only the current release (v120 = NRI v1.20, December 2025; v119 is a 404), so leave the default unless a newer release is published. Pattern: ^v[0-9]{3}$.\n\nProvider reference: default \"v120\".",
+              "default": "v120",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "state": {
+              "type": "string",
+              "description": "Keep only one state or territory: USPS code (`MT`) or STATEFIPS (`30`). Not available on `tracts` (no state index in a byte-range read).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "table": {
+              "type": "string",
+              "description": "Which NRI table: `states` (56 rows), `counties` (3,232), `tribal_counties` (1,232 county x tribal-area rows), `tribal_tracts` (3,364 tract x tribal-area rows) or `tracts` (~85,155 census tracts, 634 MB, read by byte range).\n\nProvider reference: allowed values [\"states\", \"counties\", \"tribal_counties\", \"tribal_tracts\", \"tracts\"]."
+            }
+          },
+          "required": [
+            "table"
+          ]
+        },
         "examples": {
           "provider": {
             "summary": "Official provider example; checked against AIsa request constraints",
@@ -55,86 +120,15 @@ x-aisa-operation-id: "fema-gov.us-disaster-assistance.nri-list"
               "table": "states"
             }
           }
-        },
-        "schema": {
-          "additionalProperties": true,
-          "properties": {
-            "cursor": {
-              "description": "`next_cursor` of the previous page (opaque, pinned to the file MD5).",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "fields": {
-              "description": "Optional column selection for `record.fields` (names as in NRIDataDictionary.csv, e.g. RISK_SCORE, WFIR_RISKR, IFLD_EALT); the identity columns are always present at the record's top level. Without it every column of the row is returned (465-476 per row).",
-              "items": {
-                "type": "string"
-              },
-              "type": "array",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "limit": {
-              "default": 100,
-              "description": "Rows per page for the four one-fetch tables.\n\nProvider reference: minimum 1; maximum 1000; default 100.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 1000,
-                "min": 1
-              }
-            },
-            "page_bytes": {
-              "default": 8388608,
-              "description": "Tracts only: bytes per Range request (256 KiB to 24 MiB; about 130 rows per MiB).\n\nProvider reference: minimum 262144; maximum 25165824; default 8388608.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 25165824,
-                "min": 262144
-              }
-            },
-            "release": {
-              "default": "v120",
-              "description": "Release path segment under /about/reports-and-data/openfema/nri/. FEMA serves only the current release (v120 = NRI v1.20, December 2025; v119 is a 404), so leave the default unless a newer release is published. Pattern: ^v[0-9]{3}$.\n\nProvider reference: default \"v120\".",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "state": {
-              "description": "Keep only one state or territory: USPS code (`MT`) or STATEFIPS (`30`). Not available on `tracts` (no state index in a byte-range read).",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "table": {
-              "description": "Which NRI table: `states` (56 rows), `counties` (3,232), `tribal_counties` (1,232 county x tribal-area rows), `tribal_tracts` (3,364 tract x tribal-area rows) or `tracts` (~85,155 census tracts, 634 MB, read by byte range).\n\nProvider reference: allowed values [\"states\", \"counties\", \"tribal_counties\", \"tribal_tracts\", \"tracts\"].",
-              "type": "string"
-            }
-          },
-          "required": [
-            "table"
-          ],
-          "type": "object"
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -149,15 +143,10 @@ x-aisa-operation-id: "fema-gov.us-disaster-assistance.nri-list"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 
 - **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

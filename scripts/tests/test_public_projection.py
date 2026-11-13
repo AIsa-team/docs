@@ -122,6 +122,27 @@ class ProjectionTests(unittest.TestCase):
                 (root / name).write_bytes(raw)
             self.assertEqual(public_projection.public_surface_changes(root, ['widgets']), {})
 
+    def test_public_aggregate_projects_all_catalogs_and_is_hash_bound(self):
+        from publication_surface import publication_hashes
+        import yaml
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'openapi').mkdir()
+            doc = formal_catalog()
+            op = doc['paths']['/apis/v1/widgets/search']['get']
+            op['x-aisa-revision'] = {'profile_ref': 'private-profile'}
+            op['x-aisa-pricing'] = {'customer_multiplier': 2, 'cost_contract': 'fixed_success', 'price_usd': 0.01}
+            (root / 'openapi/openapi.json').write_text(json.dumps(doc))
+            public_projection.write(root, [])
+            public = json.loads((root / 'openapi-public/openapi.json').read_text())
+            projected = public['paths']['/apis/v1/widgets/search']['get']
+            self.assertNotIn('x-aisa-revision', projected)
+            self.assertNotIn('customer_multiplier', projected['x-aisa-pricing'])
+            self.assertEqual(projected['x-aisa-pricing']['price_usd'], 0.01)
+            self.assertEqual(yaml.safe_load((root / 'openapi-public/openapi.yaml').read_text()), public)
+            self.assertIn('openapi-public/openapi.yaml', publication_hashes(root))
+            self.assertIn('openapi-public/openapi.json', publication_hashes(root))
+
     def test_catalog_list_validation(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'list.json'

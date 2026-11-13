@@ -9,6 +9,11 @@ script writes a public copy of each reviewed catalog with those fields removed:
     openapi/<id>.json     -> openapi-public/<id>.json
     openapi/zh/<id>.json  -> openapi-public/zh/<id>.json
 
+The same projection also writes openapi-public/openapi.json and openapi.yaml
+from the formal aggregate. Publication file hashes bind both; active website
+receivers copy those exact bytes. Formal aggregate hashes remain the publication
+authority and are not substituted with customer projection hashes.
+
 Paths, schemas, examples, customer prices and status retain their declarations.
 Internal price construction and revision references are removed; generated
 pricing prose is rebuilt from the public pricing fields. ``info.x-aisa-document.document_hash`` is recomputed over
@@ -46,6 +51,8 @@ PROJECTION_VERSION = '2'
 # upstream route and selector name the supplier-side endpoint shape.
 STRIPPED_KEYS = frozenset({
     'x-aisa-revision',
+    'upstream_origin_sha256',
+    'upstream_path_sha256',
     'x-aisa-source',
     'x-aisa-source-provenance',
     'x-aisa-response-source',
@@ -171,6 +178,14 @@ def expected_files(root=ROOT, catalogs=None):
             source = root / 'openapi' / (language + name + '.json')
             if source.is_file():
                 files[f'{PUBLIC_DIR}/{language}{name}.json'] = render(project(json.loads(source.read_text()), "zh" if language else "en"))
+    # The active website consumes the same projection, bound by publication
+    # file hashes. Keep the formal aggregate unchanged for replay/validation.
+    aggregate = root / 'openapi/openapi.json'
+    if aggregate.is_file():
+        from runtime_consolidate_openapi import publication_yaml
+        public = project(json.loads(aggregate.read_text()))
+        files[f'{PUBLIC_DIR}/openapi.json'] = (json.dumps(public, ensure_ascii=False, separators=(',', ':'), allow_nan=False) + '\n').encode()
+        files[f'{PUBLIC_DIR}/openapi.yaml'] = publication_yaml(public).encode()
     return files
 
 

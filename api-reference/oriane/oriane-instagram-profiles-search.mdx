@@ -12,7 +12,6 @@ x-aisa-operation-id: "oriane.instagram.profiles-search"
 - **Method and path:** POST /apis/v1/oriane/instagram/profiles-search
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/oriane/instagram/profiles-search`
-- **Runtime facts:** 5223facfdd9e4a0f4c671c7ff6d8fa756b317f01da38e8cde2b288315910d319
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/oriane.json)
 
@@ -35,20 +34,57 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "provider": {
-            "summary": "Official provider example; checked against AIsa request constraints",
-            "value": {
-              "handle": "mrbeast",
-              "limit": 1,
-              "projection": "default"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
+          "properties": {
+            "handle": {
+              "type": "string",
+              "description": "Account username to match exactly, for example mrbeast. A leading @ is optional; usernames are matched without regard to case. Provide this or another search field; multiple fields must all match."
+            },
+            "displayName": {
+              "type": "string",
+              "description": "Text to match in the display name. Provide this or another search field; multiple fields must all match."
+            },
+            "bio": {
+              "type": "string",
+              "description": "Text to match in the bio. Provide this or another search field; multiple fields must all match."
+            },
+            "limit": {
+              "type": "number",
+              "description": "Maximum results, default 20.\n\nProvider reference: minimum 1; maximum 100.",
+              "x-alexandria-option-metadata": {
+                "min": 1,
+                "max": 100
+              }
+            },
+            "offset": {
+              "type": "number",
+              "description": "Result offset, default 0. Exact handle searches return at most one profile and require offset 0; paginate displayName or bio searches instead.\n\nProvider reference: minimum 0.",
+              "x-alexandria-option-metadata": {
+                "min": 0
+              }
+            },
+            "sort": {
+              "type": "string",
+              "description": "Comma-separated sort fields with optional :asc or :desc. Profiles: followersCount, createdAt, updatedAt. Posts: viewsCount, likesCount, sharesCount, commentsCount, interactionsCount, engagementRatePerViews, engagementRatePerFollowers, profileFollowersCount, publishedAt, visualSimilarity, transcriptRelevance."
+            },
+            "projection": {
+              "enum": [
+                "basic",
+                "default",
+                "full"
+              ],
+              "type": "string",
+              "description": "Response detail and fixed price per nonempty call: basic 35 credits, default 50 credits, full 65 credits. Empty results cost zero. Result limit does not change the tier price.\n\nProvider reference: allowed values [\"basic\", \"default\", \"full\"]; default \"default\"."
+            }
+          },
+          "required": [
+            "projection"
+          ],
           "allOf": [
             {
               "anyOf": [
@@ -78,68 +114,26 @@ Effective request and pricing declaration (including authentication and referenc
                 }
               ]
             }
-          ],
-          "properties": {
-            "bio": {
-              "description": "Text to match in the bio. Provide this or another search field; multiple fields must all match.",
-              "type": "string"
-            },
-            "displayName": {
-              "description": "Text to match in the display name. Provide this or another search field; multiple fields must all match.",
-              "type": "string"
-            },
-            "handle": {
-              "description": "Account username to match exactly, for example mrbeast. A leading @ is optional; usernames are matched without regard to case. Provide this or another search field; multiple fields must all match.",
-              "type": "string"
-            },
-            "limit": {
-              "description": "Maximum results, default 20.\n\nProvider reference: minimum 1; maximum 100.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "max": 100,
-                "min": 1
-              }
-            },
-            "offset": {
-              "description": "Result offset, default 0. Exact handle searches return at most one profile and require offset 0; paginate displayName or bio searches instead.\n\nProvider reference: minimum 0.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "min": 0
-              }
-            },
-            "projection": {
-              "description": "Response detail and fixed price per nonempty call: basic 35 credits, default 50 credits, full 65 credits. Empty results cost zero. Result limit does not change the tier price.\n\nProvider reference: allowed values [\"basic\", \"default\", \"full\"]; default \"default\".",
-              "enum": [
-                "basic",
-                "default",
-                "full"
-              ],
-              "type": "string"
-            },
-            "sort": {
-              "description": "Comma-separated sort fields with optional :asc or :desc. Profiles: followersCount, createdAt, updatedAt. Posts: viewsCount, likesCount, sharesCount, commentsCount, interactionsCount, engagementRatePerViews, engagementRatePerFollowers, profileFollowersCount, publishedAt, visualSimilarity, transcriptRelevance.",
-              "type": "string"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "handle": "mrbeast",
+              "limit": 1,
+              "projection": "default"
             }
-          },
-          "required": [
-            "projection"
-          ],
-          "type": "object"
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0035,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -154,15 +148,10 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0035 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based billing; Default request estimate: $0.0035 USD (not a fixed price). Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 
 - **Default request reference estimate (USD):** 0.0035
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

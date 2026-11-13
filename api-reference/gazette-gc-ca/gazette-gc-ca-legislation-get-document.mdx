@@ -12,7 +12,6 @@ x-aisa-operation-id: "gazette-gc-ca.legislation.get-document"
 - **Method and path:** POST /apis/v1/gazette-gc-ca/legislation/get-document
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/gazette-gc-ca/legislation/get-document`
-- **Runtime facts:** 706b6022e265f1fb1aa5d55947e1c58e59556cf79cc5bb5ed990e824ede7fdc1
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/gazette-gc-ca.json)
 
@@ -35,19 +34,31 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "provider": {
-            "summary": "Official provider example; checked against AIsa request constraints",
-            "value": {
-              "max_text_chars": 600,
-              "registration": "SOR/2026-206"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
+          "properties": {
+            "max_text_chars": {
+              "type": "number",
+              "description": "Cap on the returned text (default 20000). 0 returns metadata only.\n\nProvider reference: minimum 0; maximum 200000.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0,
+                "max": 200000
+              }
+            },
+            "registration": {
+              "type": "string",
+              "description": "Part II registration number: SOR/YYYY-N or SI/YYYY-N (DORS/TR and two-digit years accepted). Mutually exclusive with url."
+            },
+            "url": {
+              "type": "string",
+              "description": "A gazette.gc.ca /rp-pr/p1 or /rp-pr/p2 HTML document URL. Mutually exclusive with registration."
+            }
+          },
           "allOf": [
             {
               "anyOf": [
@@ -69,42 +80,25 @@ Effective request and pricing declaration (including authentication and referenc
                 }
               ]
             }
-          ],
-          "properties": {
-            "max_text_chars": {
-              "description": "Cap on the returned text (default 20000). 0 returns metadata only.\n\nProvider reference: minimum 0; maximum 200000.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 200000,
-                "min": 0
-              }
-            },
-            "registration": {
-              "description": "Part II registration number: SOR/YYYY-N or SI/YYYY-N (DORS/TR and two-digit years accepted). Mutually exclusive with url.",
-              "type": "string"
-            },
-            "url": {
-              "description": "A gazette.gc.ca /rp-pr/p1 or /rp-pr/p2 HTML document URL. Mutually exclusive with registration.",
-              "type": "string"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "max_text_chars": 600,
+              "registration": "SOR/2026-206"
             }
-          },
-          "type": "object"
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -119,15 +113,10 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 
 - **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

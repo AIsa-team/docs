@@ -12,7 +12,6 @@ x-aisa-operation-id: "sec.filings.search"
 - **方法与路径:** POST /apis/v1/sec/filings/search
 - **可用状态:** enabled
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/sec/filings/search`
-- **Runtime 事实版本:** 12611625ecc2e576763355a015f7ba0bf5a8f439405669b1e704012a597dafd2
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/sec.json)
 
@@ -35,8 +34,71 @@ x-aisa-operation-id: "sec.filings.search"
     }
   ],
   "requestBody": {
+    "required": false,
     "content": {
       "application/json": {
+        "schema": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "cik": {
+              "type": "number",
+              "description": "SEC Central Index Key, with or without leading zeros.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "forms": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "forms",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "from": {
+              "type": "string",
+              "description": "Earliest filing date. Alone, the range runs to today. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "page": {
+              "type": "number",
+              "description": "page\n\nProvider reference: minimum 1; maximum 100; default 1.",
+              "default": 1,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 100
+              }
+            },
+            "query": {
+              "type": "string",
+              "description": "Full-text query; wrap phrases in double quotes.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "snippets": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Fetch the matched document of the first hits and return the sentences containing the query. Needs `query`. Off when omitted; the search output is then unchanged.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "to": {
+              "type": "string",
+              "description": "Latest filing date. Alone, the range starts on 2001-01-01, the first day full-text search covers. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            }
+          }
+        },
         "examples": {
           "provider": {
             "summary": "Request verified on 2026-11-11",
@@ -50,83 +112,15 @@ x-aisa-operation-id: "sec.filings.search"
               "to": "2025-10-31"
             }
           }
-        },
-        "schema": {
-          "additionalProperties": true,
-          "properties": {
-            "cik": {
-              "description": "SEC Central Index Key, with or without leading zeros.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "forms": {
-              "description": "forms",
-              "items": {
-                "type": "string"
-              },
-              "type": "array",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "from": {
-              "description": "Earliest filing date. Alone, the range runs to today. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "page": {
-              "default": 1,
-              "description": "page\n\nProvider reference: minimum 1; maximum 100; default 1.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 100,
-                "min": 1
-              }
-            },
-            "query": {
-              "description": "Full-text query; wrap phrases in double quotes.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "snippets": {
-              "additionalProperties": true,
-              "description": "Fetch the matched document of the first hits and return the sentences containing the query. Needs `query`. Off when omitted; the search output is then unchanged.",
-              "type": "object",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "to": {
-              "description": "Latest filing date. Alone, the range starts on 2001-01-01, the first day full-text search covers. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            }
-          },
-          "type": "object"
         }
       }
-    },
-    "required": false
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -141,15 +135,10 @@ x-aisa-operation-id: "sec.filings.search"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 
 - **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

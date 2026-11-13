@@ -445,7 +445,7 @@ def refresh_legacy_page_blocks(root, documents, changes, catalog):
                 continue
             header, _ = localization.split_frontmatter(text)
             reference = (yaml.safe_load(header) or {}).get("openapi", "")
-            match = re.fullmatch(r"openapi/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)", reference)
+            match = re.fullmatch(r"openapi(?:-public)?/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)", reference)
             if not match or match[2] not in documents:
                 continue
             document = documents[match[2]]

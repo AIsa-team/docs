@@ -12,7 +12,6 @@ x-aisa-operation-id: "fireround.companies.rounds"
 - **方法与路径:** POST /apis/v1/fireround/companies/rounds
 - **可用状态:** enabled
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/fireround/companies/rounds`
-- **Runtime 事实版本:** 7a70c6aa50880f05ec94d7038a6baae49635a643db9abea1f098587bb64d0971
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/fireround.json)
 
@@ -35,23 +34,20 @@ x-aisa-operation-id: "fireround.companies.rounds"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "provider": {
-            "summary": "Official provider example; checked against AIsa request constraints",
-            "value": {
-              "company": "supabase.com",
-              "limit": 3
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
           "properties": {
-            "certainty": {
-              "description": "Only rounds of this certainty: announced (closed on the record), reported (said to have closed by a publisher citing unnamed sources), expected (still being raised), unconfirmed. Absent means every certainty but unconfirmed.\n\nProvider reference: allowed values [\"announced\", \"reported\", \"expected\", \"unconfirmed\"].",
+            "company": {
               "type": "string",
+              "description": "The company's domain (`supabase.com`, a URL works too) or its name. The domain is exact; a name matches the company's own name."
+            },
+            "certainty": {
+              "type": "string",
+              "description": "Only rounds of this certainty: announced (closed on the record), reported (said to have closed by a publisher citing unnamed sources), expected (still being raised), unconfirmed. Absent means every certainty but unconfirmed.\n\nProvider reference: allowed values [\"announced\", \"reported\", \"expected\", \"unconfirmed\"].",
               "x-alexandria-option-metadata": {
                 "oneOf": [
                   "announced",
@@ -61,42 +57,40 @@ x-aisa-operation-id: "fireround.companies.rounds"
                 ]
               }
             },
-            "company": {
-              "description": "The company's domain (`supabase.com`, a URL works too) or its name. The domain is exact; a name matches the company's own name.",
-              "type": "string"
+            "limit": {
+              "type": "number",
+              "description": "Rounds per page, 1 to 50. Defaults to 20. Each round is a full record of about 1,500 characters, so read more with `cursor` rather than a larger page.\n\nProvider reference: minimum 1; maximum 50.",
+              "x-alexandria-option-metadata": {
+                "min": 1,
+                "max": 50
+              }
             },
             "cursor": {
-              "description": "The `next_cursor` of the previous page, to read the next one under the same filters.",
-              "type": "string"
-            },
-            "limit": {
-              "description": "Rounds per page, 1 to 50. Defaults to 20. Each round is a full record of about 1,500 characters, so read more with `cursor` rather than a larger page.\n\nProvider reference: minimum 1; maximum 50.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "max": 50,
-                "min": 1
-              }
+              "type": "string",
+              "description": "The `next_cursor` of the previous page, to read the next one under the same filters."
             }
           },
           "required": [
             "company"
-          ],
-          "type": "object"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "company": "supabase.com",
+              "limit": 3
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -111,15 +105,10 @@ x-aisa-operation-id: "fireround.companies.rounds"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 
 - **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

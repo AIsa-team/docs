@@ -12,7 +12,6 @@ x-aisa-operation-id: "nevo-online-rivm-nl.foods.search-foods"
 - **方法与路径:** POST /apis/v1/nevo-online-rivm-nl/foods/search-foods
 - **可用状态:** enabled
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/nevo-online-rivm-nl/foods/search-foods`
-- **Runtime 事实版本:** 55d246eb6a035352c1917b0bf3338fc919ebe6dd541e99ff2a641e71f709bbe7
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/nevo-online-rivm-nl.json)
 
@@ -35,18 +34,61 @@ x-aisa-operation-id: "nevo-online-rivm-nl.foods.search-foods"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "provider": {
-            "summary": "Official provider example; checked against AIsa request constraints",
-            "value": {
-              "query": "Goudse"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
+          "properties": {
+            "continuation": {
+              "type": "string",
+              "description": "Cursor from a previous page's meta.page.next_cursor.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "food_group": {
+              "type": "string",
+              "description": "Exact food group name in the requested language, as returned by list_food_groups (for example 'Kaas' in nl, 'Cheese' in en). Case-insensitive."
+            },
+            "lang": {
+              "type": "string",
+              "description": "Label language for food group names and nutrient labels; the data is the same in both.\n\nProvider reference: allowed values [\"nl\", \"en\"]; default \"nl\".",
+              "default": "nl",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "nl",
+                  "en"
+                ]
+              }
+            },
+            "limit": {
+              "type": "number",
+              "description": "Foods per page.\n\nProvider reference: minimum 1; maximum 100; default 25.",
+              "default": 25,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 100
+              }
+            },
+            "nutrients": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Nutrient column tags to return per food instead of the default energy and macronutrient set, for example ['SUGAR_g', 'NA_mg', 'VITC_mg']; see list_nutrients. Matching is case-insensitive and 'ug' may stand for 'µg'.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "query": {
+              "type": "string",
+              "description": "Free text matched case-insensitively against the Dutch name, the English name, the synonym and the NEVO code; every whitespace-separated word must match. Omit it to list a whole food group."
+            }
+          },
           "allOf": [
             {
               "anyOf": [
@@ -68,72 +110,24 @@ x-aisa-operation-id: "nevo-online-rivm-nl.foods.search-foods"
                 }
               ]
             }
-          ],
-          "properties": {
-            "continuation": {
-              "description": "Cursor from a previous page's meta.page.next_cursor.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "food_group": {
-              "description": "Exact food group name in the requested language, as returned by list_food_groups (for example 'Kaas' in nl, 'Cheese' in en). Case-insensitive.",
-              "type": "string"
-            },
-            "lang": {
-              "default": "nl",
-              "description": "Label language for food group names and nutrient labels; the data is the same in both.\n\nProvider reference: allowed values [\"nl\", \"en\"]; default \"nl\".",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "oneOf": [
-                  "nl",
-                  "en"
-                ]
-              }
-            },
-            "limit": {
-              "default": 25,
-              "description": "Foods per page.\n\nProvider reference: minimum 1; maximum 100; default 25.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 100,
-                "min": 1
-              }
-            },
-            "nutrients": {
-              "description": "Nutrient column tags to return per food instead of the default energy and macronutrient set, for example ['SUGAR_g', 'NA_mg', 'VITC_mg']; see list_nutrients. Matching is case-insensitive and 'ug' may stand for 'µg'.",
-              "items": {
-                "type": "string"
-              },
-              "type": "array",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "query": {
-              "description": "Free text matched case-insensitively against the Dutch name, the English name, the synonym and the NEVO code; every whitespace-separated word must match. Omit it to list a whole food group.",
-              "type": "string"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "query": "Goudse"
             }
-          },
-          "type": "object"
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -148,15 +142,10 @@ x-aisa-operation-id: "nevo-online-rivm-nl.foods.search-foods"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 
 - **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

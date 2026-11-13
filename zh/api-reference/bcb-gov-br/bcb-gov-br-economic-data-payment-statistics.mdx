@@ -12,7 +12,6 @@ x-aisa-operation-id: "bcb-gov-br.economic-data.payment-statistics"
 - **方法与路径:** POST /apis/v1/bcb-gov-br/economic-data/payment-statistics
 - **可用状态:** enabled
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/bcb-gov-br/economic-data/payment-statistics`
-- **Runtime 事实版本:** edf117a93e133da791cf67abc30c140208ddd53704a4d60fb611ef7732fc8019
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/bcb-gov-br.json)
 
@@ -35,8 +34,48 @@ x-aisa-operation-id: "bcb-gov-br.economic-data.payment-statistics"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
+        "schema": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "ano_mes": {
+              "type": "string",
+              "description": "First month yyyyMM (inclusive); required by `meios_pagamento_mensal`, which returns that month and the later ones newest first. Pattern: ^[0-9]{6}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "dataset": {
+              "type": "string",
+              "description": "dataset\n\nProvider reference: allowed values [\"spi_pix_liquidados\", \"spi_pix_intradia\", \"spi_disponibilidade\", \"meios_pagamento_mensal\", \"dinheiro_em_circulacao\"]."
+            },
+            "skip": {
+              "type": "number",
+              "description": "Rows to skip; only `dinheiro_em_circulacao` accepts a non-zero value (SPI and MPV answer 500 to $skip).\n\nProvider reference: minimum 0; default 0.",
+              "default": 0,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0
+              }
+            },
+            "top": {
+              "type": "number",
+              "description": "top\n\nProvider reference: minimum 1; maximum 1000; default 100.",
+              "default": 100,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 1000
+              }
+            }
+          },
+          "required": [
+            "dataset"
+          ]
+        },
         "examples": {
           "provider": {
             "summary": "Official provider example; checked against AIsa request constraints",
@@ -45,60 +84,15 @@ x-aisa-operation-id: "bcb-gov-br.economic-data.payment-statistics"
               "top": 2
             }
           }
-        },
-        "schema": {
-          "additionalProperties": true,
-          "properties": {
-            "ano_mes": {
-              "description": "First month yyyyMM (inclusive); required by `meios_pagamento_mensal`, which returns that month and the later ones newest first. Pattern: ^[0-9]{6}$.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "dataset": {
-              "description": "dataset\n\nProvider reference: allowed values [\"spi_pix_liquidados\", \"spi_pix_intradia\", \"spi_disponibilidade\", \"meios_pagamento_mensal\", \"dinheiro_em_circulacao\"].",
-              "type": "string"
-            },
-            "skip": {
-              "default": 0,
-              "description": "Rows to skip; only `dinheiro_em_circulacao` accepts a non-zero value (SPI and MPV answer 500 to $skip).\n\nProvider reference: minimum 0; default 0.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "min": 0
-              }
-            },
-            "top": {
-              "default": 100,
-              "description": "top\n\nProvider reference: minimum 1; maximum 1000; default 100.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 1000,
-                "min": 1
-              }
-            }
-          },
-          "required": [
-            "dataset"
-          ],
-          "type": "object"
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -113,15 +107,10 @@ x-aisa-operation-id: "bcb-gov-br.economic-data.payment-statistics"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 
 - **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

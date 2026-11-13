@@ -23,7 +23,6 @@ Find tickers that match numeric conditions. Body takes `filters` — each a `fie
 - **Method and path:** POST /apis/v1/financial/financials/search/screener
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/financial/financials/search/screener`
-- **Runtime facts:** 694a99fb21efca575a4b8ff0db4c82ec36667c583b6490faf3c0b3ff64e0beaa
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/financial.json)
 
@@ -46,20 +45,37 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
         "schema": {
+          "type": "object",
+          "required": [
+            "filters"
+          ],
           "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 10,
+              "description": "The maximum number of results to return."
+            },
             "filters": {
-              "description": "An array of filter objects to apply to the search.",
+              "type": "array",
               "items": {
+                "type": "object",
+                "required": [
+                  "field",
+                  "operator",
+                  "value"
+                ],
                 "properties": {
                   "field": {
-                    "description": "The criteria to filter on.  For financial metric fields, use 'gt', 'lt', 'gte', 'lte', 'eq' operators.  For 'ticker' and 'cik' fields, use the 'in' operator to filter against multiple values.",
-                    "type": "string"
+                    "type": "string",
+                    "description": "The criteria to filter on.  For financial metric fields, use 'gt', 'lt', 'gte', 'lte', 'eq' operators.  For 'ticker' and 'cik' fields, use the 'in' operator to filter against multiple values."
                   },
                   "operator": {
-                    "description": "The comparison operator. The 'in' operator can only be used with a field value of 'ticker' or 'cik' and lets you filter against multiple values.",
+                    "type": "string",
                     "enum": [
                       "gt",
                       "lt",
@@ -68,58 +84,38 @@ Effective request and pricing declaration (including authentication and referenc
                       "eq",
                       "in"
                     ],
-                    "type": "string"
+                    "description": "The comparison operator. The 'in' operator can only be used with a field value of 'ticker' or 'cik' and lets you filter against multiple values."
                   },
                   "value": {
                     "oneOf": [
                       {
-                        "description": "The value to compare against for single-value operators (gt, lt, gte, lte, eq)",
-                        "type": "number"
+                        "type": "number",
+                        "description": "The value to compare against for single-value operators (gt, lt, gte, lte, eq)"
                       },
                       {
-                        "description": "Array of ticker or cik values to compare against when using the 'in' operator",
+                        "type": "array",
                         "items": {
                           "type": "string"
                         },
-                        "type": "array"
+                        "description": "Array of ticker or cik values to compare against when using the 'in' operator"
                       }
                     ]
                   }
-                },
-                "required": [
-                  "field",
-                  "operator",
-                  "value"
-                ],
-                "type": "object"
+                }
               },
               "minItems": 1,
-              "type": "array"
-            },
-            "limit": {
-              "default": 10,
-              "description": "The maximum number of results to return.",
-              "minimum": 1,
-              "type": "integer"
+              "description": "An array of filter objects to apply to the search."
             }
-          },
-          "required": [
-            "filters"
-          ],
-          "type": "object"
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "fixed_success",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.02,
-    "estimate_source": "profile_seed",
-    "evidence_source": "request_snapshot"
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -134,13 +130,10 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Published reference price: $0.02 USD per successful request. Account-specific pricing and final settlement may differ.
+Usage-based billing; Default request estimate: $0.02 USD (not a fixed price). Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 
 - **Default request reference estimate (USD):** 0.02
-- **Cost contract:** fixed&#95;success
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** request&#95;snapshot
 
 {/* aisa-contract-details:end */}

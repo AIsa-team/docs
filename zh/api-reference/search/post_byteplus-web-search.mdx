@@ -12,7 +12,6 @@ x-aisa-operation-id: "post_byteplus_web_search"
 - **方法与路径:** POST /apis/v1/byteplus/web-search
 - **可用状态:** enabled
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/byteplus/web-search`
-- **Runtime 事实版本:** c6938a2b68dcd4140f77b783866eb27d207badfaf1ccb92415f8f016896bad6f
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/byteplus-search.json)
 
@@ -35,8 +34,71 @@ x-aisa-operation-id: "post_byteplus_web_search"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "Query": {
+              "type": "string",
+              "description": "The search query. Required. Max 400 characters; the upstream engine also effectively caps around 50 words.",
+              "example": "OpenAI news",
+              "maxLength": 400
+            },
+            "Count": {
+              "type": "integer",
+              "description": "Number of results to return. Optional; default 10, maximum 20.",
+              "maximum": 20,
+              "example": 10,
+              "default": 10
+            },
+            "Filter": {
+              "type": "object",
+              "description": "Optional result filter. Both fields are pipe-separated strings of full domains (max 5 each).",
+              "properties": {
+                "Sites": {
+                  "type": "string",
+                  "description": "Restrict results to these full domains. Pipe-separated, max 5, e.g. \"bytedance.com|byteplus.com\". (Sending an array returns 10400 Invalid Parameter.)",
+                  "example": "bytedance.com|byteplus.com"
+                },
+                "BlockHosts": {
+                  "type": "string",
+                  "description": "Exclude results from these full domains. Pipe-separated, max 5, e.g. \"reddit.com|quora.com\".",
+                  "example": "reddit.com|quora.com"
+                }
+              }
+            },
+            "Language": {
+              "type": "string",
+              "description": "Optional language hint in the upstream format, e.g. EN, ZH-HANS, ZH-HANT.",
+              "example": "EN"
+            },
+            "TimeRange": {
+              "description": "Optional recency window. One of the named windows OneDay / OneWeek / OneMonth / OneYear, or a custom range \"YYYY-MM-DD..YYYY-MM-DD\". Omit for no time filter. NOTE: values like \"week\"/\"month\" are silently ignored upstream.",
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "OneDay",
+                    "OneWeek",
+                    "OneMonth",
+                    "OneYear"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}\\.\\.\\d{4}-\\d{2}-\\d{2}$",
+                  "description": "Custom range, e.g. 2026-08-01..2026-09-01."
+                }
+              ],
+              "example": "OneWeek"
+            }
+          },
+          "required": [
+            "Query"
+          ]
+        },
         "examples": {
           "basic": {
             "summary": "Minimal query",
@@ -47,91 +109,25 @@ x-aisa-operation-id: "post_byteplus_web_search"
           "filtered": {
             "summary": "Query with count, domain filter, language and time window",
             "value": {
+              "Query": "OpenAI product launch",
               "Count": 10,
               "Filter": {
-                "BlockHosts": "reddit.com",
-                "Sites": "openai.com|bytedance.com"
+                "Sites": "openai.com|bytedance.com",
+                "BlockHosts": "reddit.com"
               },
               "Language": "EN",
-              "Query": "OpenAI product launch",
               "TimeRange": "OneWeek"
             }
           }
-        },
-        "schema": {
-          "properties": {
-            "Count": {
-              "default": 10,
-              "description": "Number of results to return. Optional; default 10, maximum 20.",
-              "example": 10,
-              "maximum": 20,
-              "type": "integer"
-            },
-            "Filter": {
-              "description": "Optional result filter. Both fields are pipe-separated strings of full domains (max 5 each).",
-              "properties": {
-                "BlockHosts": {
-                  "description": "Exclude results from these full domains. Pipe-separated, max 5, e.g. \"reddit.com|quora.com\".",
-                  "example": "reddit.com|quora.com",
-                  "type": "string"
-                },
-                "Sites": {
-                  "description": "Restrict results to these full domains. Pipe-separated, max 5, e.g. \"bytedance.com|byteplus.com\". (Sending an array returns 10400 Invalid Parameter.)",
-                  "example": "bytedance.com|byteplus.com",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            },
-            "Language": {
-              "description": "Optional language hint in the upstream format, e.g. EN, ZH-HANS, ZH-HANT.",
-              "example": "EN",
-              "type": "string"
-            },
-            "Query": {
-              "description": "The search query. Required. Max 400 characters; the upstream engine also effectively caps around 50 words.",
-              "example": "OpenAI news",
-              "maxLength": 400,
-              "type": "string"
-            },
-            "TimeRange": {
-              "description": "Optional recency window. One of the named windows OneDay / OneWeek / OneMonth / OneYear, or a custom range \"YYYY-MM-DD..YYYY-MM-DD\". Omit for no time filter. NOTE: values like \"week\"/\"month\" are silently ignored upstream.",
-              "example": "OneWeek",
-              "oneOf": [
-                {
-                  "enum": [
-                    "OneDay",
-                    "OneWeek",
-                    "OneMonth",
-                    "OneYear"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "description": "Custom range, e.g. 2026-08-01..2026-09-01.",
-                  "pattern": "^\\d{4}-\\d{2}-\\d{2}\\.\\.\\d{4}-\\d{2}-\\d{2}$",
-                  "type": "string"
-                }
-              ]
-            }
-          },
-          "required": [
-            "Query"
-          ],
-          "type": "object"
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "fixed_success",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0048,
-    "estimate_source": "profile_seed",
-    "evidence_source": "request_snapshot"
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -146,13 +142,10 @@ x-aisa-operation-id: "post_byteplus_web_search"
 
 ## 费用与请求规则
 
-公开参考价格：每次成功请求 $0.0048 USD。 最终费用以账户适用价格及实际结算为准。
+按用量计费；默认请求预估费用：$0.0048 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 
 - **默认请求参考估价（USD）:** 0.0048
-- **计费依据:** fixed&#95;success
-- **公开参考倍率:** 1.0
-- **结算证据来源:** request&#95;snapshot
 
 {/* aisa-contract-details:end */}

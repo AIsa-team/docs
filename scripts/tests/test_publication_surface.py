@@ -32,6 +32,21 @@ class PublicationSurfaceTests(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text)
 
+    def test_public_references_require_current_projection_and_bind_its_bytes(self):
+        import public_projection
+        (self.root / 'scripts').mkdir()
+        (self.root / 'scripts/public_projection.json').write_text(json.dumps({'schema_version': 1, 'catalogs': ['fixture']}))
+        public_projection.write(self.root)
+        self.assertEqual(validate_surfaces(self.root)['status'], 'passed')
+        self.assertIn('openapi-public/fixture.json', publication_hashes(self.root))
+        path = self.root / 'openapi-public/fixture.json'
+        path.write_text(path.read_text().replace('Success', 'Changed'))
+        with self.assertRaisesRegex(ValueError, 'public projection differs'):
+            validate_surfaces(self.root)
+        path.unlink()
+        with self.assertRaisesRegex(ValueError, 'public projection differs'):
+            validate_surfaces(self.root)
+
     def change_json(self, path, mutate):
         file = self.root / path
         data = json.loads(file.read_text())

@@ -12,7 +12,6 @@ x-aisa-operation-id: "fiscal-ai.ownership.insider-holders"
 - **Method and path:** POST /apis/v1/fiscal-ai/ownership/insider-holders
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/fiscal-ai/ownership/insider-holders`
-- **Runtime facts:** cc435b4c038069b368d2f04fa474db4f4a404dd6c83d32875132ed15f851e166
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/fiscal-ai.json)
 
@@ -35,10 +34,64 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
         "schema": {
+          "type": "object",
           "additionalProperties": true,
+          "properties": {
+            "fscl": {
+              "type": "string",
+              "description": "Fiscal.ai's stable company identifier, the `companyFiscalIdentifier` field. The only identifier that survives a ticker change or a relisting, so prefer it when carrying a company between calls."
+            },
+            "companyKey": {
+              "type": "string",
+              "description": "Exchange and ticker joined by an underscore: `NASDAQ_MSFT` for US and Canadian listings, or MIC code and ticker elsewhere, as in `XWAR_PKN`."
+            },
+            "ticker": {
+              "type": "string",
+              "description": "Ticker symbol, for example MSFT. Only unique within an exchange, so pass `exchange` with it."
+            },
+            "exchange": {
+              "type": "string",
+              "description": "Exchange code for `ticker`, for example NASDAQ, or a MIC code for a non-US/CA listing."
+            },
+            "cusip": {
+              "type": "string",
+              "description": "CUSIP of the security. Licensed identifier."
+            },
+            "isin": {
+              "type": "string",
+              "description": "ISIN of the security. Licensed identifier."
+            },
+            "figi": {
+              "type": "string",
+              "description": "OpenFIGI identifier of the security. Licensed identifier."
+            },
+            "cik": {
+              "type": "string",
+              "description": "SEC Central Index Key. Use when a company has no ticker, or after a rename."
+            },
+            "includeInactive": {
+              "type": "boolean",
+              "description": "Include holders marked inactive. Hidden by default; holders removed by an analyst override stay hidden either way.\n\nProvider reference: default \"false\".",
+              "x-alexandria-upstream-default": "false"
+            },
+            "pageNumber": {
+              "type": "number",
+              "description": "Page number, 1-indexed.\n\nProvider reference: default 1.",
+              "default": 1
+            },
+            "pageSize": {
+              "type": "number",
+              "description": "Rows per page, up to 250. Defaults to 250; page for more.\n\nProvider reference: maximum 250; default 250.",
+              "default": 250,
+              "x-alexandria-option-metadata": {
+                "max": 250
+              }
+            }
+          },
           "allOf": [
             {
               "anyOf": [
@@ -100,75 +153,16 @@ Effective request and pricing declaration (including authentication and referenc
                 }
               ]
             }
-          ],
-          "properties": {
-            "cik": {
-              "description": "SEC Central Index Key. Use when a company has no ticker, or after a rename.",
-              "type": "string"
-            },
-            "companyKey": {
-              "description": "Exchange and ticker joined by an underscore: `NASDAQ_MSFT` for US and Canadian listings, or MIC code and ticker elsewhere, as in `XWAR_PKN`.",
-              "type": "string"
-            },
-            "cusip": {
-              "description": "CUSIP of the security. Licensed identifier.",
-              "type": "string"
-            },
-            "exchange": {
-              "description": "Exchange code for `ticker`, for example NASDAQ, or a MIC code for a non-US/CA listing.",
-              "type": "string"
-            },
-            "figi": {
-              "description": "OpenFIGI identifier of the security. Licensed identifier.",
-              "type": "string"
-            },
-            "fscl": {
-              "description": "Fiscal.ai's stable company identifier, the `companyFiscalIdentifier` field. The only identifier that survives a ticker change or a relisting, so prefer it when carrying a company between calls.",
-              "type": "string"
-            },
-            "includeInactive": {
-              "description": "Include holders marked inactive. Hidden by default; holders removed by an analyst override stay hidden either way.\n\nProvider reference: default \"false\".",
-              "type": "boolean",
-              "x-alexandria-upstream-default": "false"
-            },
-            "isin": {
-              "description": "ISIN of the security. Licensed identifier.",
-              "type": "string"
-            },
-            "pageNumber": {
-              "default": 1,
-              "description": "Page number, 1-indexed.\n\nProvider reference: default 1.",
-              "type": "number"
-            },
-            "pageSize": {
-              "default": 250,
-              "description": "Rows per page, up to 250. Defaults to 250; page for more.\n\nProvider reference: maximum 250; default 250.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "max": 250
-              }
-            },
-            "ticker": {
-              "description": "Ticker symbol, for example MSFT. Only unique within an exchange, so pass `exchange` with it.",
-              "type": "string"
-            }
-          },
-          "type": "object"
+          ]
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0015,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -183,15 +177,10 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0015 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based billing; Default request estimate: $0.0015 USD (not a fixed price). Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 
 - **Default request reference estimate (USD):** 0.0015
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

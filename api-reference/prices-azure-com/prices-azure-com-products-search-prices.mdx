@@ -12,7 +12,6 @@ x-aisa-operation-id: "prices-azure-com.products.search-prices"
 - **Method and path:** POST /apis/v1/prices-azure-com/products/search-prices
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/prices-azure-com/products/search-prices`
-- **Runtime facts:** 8552ea0a6ab5011e521a1d2f56c99aaff99a33ae5a246a631612706c9cfe123b
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/prices-azure-com.json)
 
@@ -35,22 +34,90 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "provider": {
-            "summary": "Official provider example; checked against AIsa request constraints",
-            "value": {
-              "arm_region_name": "eastus",
-              "arm_sku_name": "Standard_D2s_v3",
-              "include_savings_plan": true,
-              "price_type": "Consumption",
-              "service_name": "Virtual Machines"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
+          "properties": {
+            "arm_region_name": {
+              "type": "string",
+              "description": "ARM region slug (`armRegionName eq`), e.g. `eastus`, `westeurope`. Unknown regions return an empty result, not an error. Pattern: ^[a-z0-9]{2,40}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "arm_sku_name": {
+              "type": "string",
+              "description": "Exact `armSkuName`, e.g. `Standard_D2s_v3`, `Premium_SSD_Managed_Disks_P30`. Pattern: ^[A-Za-z0-9_.-]{1,120}$."
+            },
+            "continuation": {
+              "type": "string",
+              "description": "`continuation` from the previous page (the API's `$skip` offset). Send the same filters again. Pattern: ^[0-9]{1,9}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "currency_code": {
+              "type": "string",
+              "description": "Billing currency (`currencyCode`), ISO 4217. Default USD; EUR verified. Pattern: ^[A-Z]{3}$.\n\nProvider reference: default \"USD\".",
+              "default": "USD",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "include_savings_plan": {
+              "type": "boolean",
+              "description": "Request api-version 2023-01-01-preview, which adds `savings_plan` (1 Year / 3 Years) to eligible Consumption rows.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "meter_id": {
+              "type": "string",
+              "description": "Billing meter GUID (`meterId eq`). Pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$."
+            },
+            "price_type": {
+              "type": "string",
+              "description": "`priceType eq`: Consumption (pay-as-you-go, spot, low priority), DevTestConsumption or Reservation. Omit for all types. Reservation scans over a whole service are expensive and the API answers them with HTTP 429; combine with a product or SKU filter.\n\nProvider reference: allowed values [\"Consumption\", \"DevTestConsumption\", \"Reservation\"].",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "Consumption",
+                  "DevTestConsumption",
+                  "Reservation"
+                ]
+              }
+            },
+            "primary_meter_region_only": {
+              "type": "boolean",
+              "description": "Send `meterRegion='primary'`: only rows where the region is the meter's primary region.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "product_name": {
+              "type": "string",
+              "description": "Exact `productName`, e.g. `Premium SSD Managed Disks`, `Azure Synapse Analytics Dedicated SQL Pool`. Mutually exclusive with `product_name_contains`."
+            },
+            "product_name_contains": {
+              "type": "string",
+              "description": "Substring of `productName` (OData `contains(productName, ...)`). Mutually exclusive with `product_name`."
+            },
+            "service_family": {
+              "type": "string",
+              "description": "Exact `serviceFamily`, e.g. `Compute`, `Storage`, `Analytics`."
+            },
+            "service_name": {
+              "type": "string",
+              "description": "Exact `serviceName`, e.g. `Virtual Machines`, `Storage`, `Azure Synapse Analytics`."
+            },
+            "sku_name": {
+              "type": "string",
+              "description": "Exact `skuName`, e.g. `D2s v3`, `P30 LRS`, `DW500c`."
+            }
+          },
           "allOf": [
             {
               "anyOf": [
@@ -112,101 +179,28 @@ Effective request and pricing declaration (including authentication and referenc
                 }
               ]
             }
-          ],
-          "properties": {
-            "arm_region_name": {
-              "description": "ARM region slug (`armRegionName eq`), e.g. `eastus`, `westeurope`. Unknown regions return an empty result, not an error. Pattern: ^[a-z0-9]{2,40}$.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "arm_sku_name": {
-              "description": "Exact `armSkuName`, e.g. `Standard_D2s_v3`, `Premium_SSD_Managed_Disks_P30`. Pattern: ^[A-Za-z0-9_.-]{1,120}$.",
-              "type": "string"
-            },
-            "continuation": {
-              "description": "`continuation` from the previous page (the API's `$skip` offset). Send the same filters again. Pattern: ^[0-9]{1,9}$.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "currency_code": {
-              "default": "USD",
-              "description": "Billing currency (`currencyCode`), ISO 4217. Default USD; EUR verified. Pattern: ^[A-Z]{3}$.\n\nProvider reference: default \"USD\".",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "include_savings_plan": {
-              "description": "Request api-version 2023-01-01-preview, which adds `savings_plan` (1 Year / 3 Years) to eligible Consumption rows.",
-              "type": "boolean",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "meter_id": {
-              "description": "Billing meter GUID (`meterId eq`). Pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$.",
-              "type": "string"
-            },
-            "price_type": {
-              "description": "`priceType eq`: Consumption (pay-as-you-go, spot, low priority), DevTestConsumption or Reservation. Omit for all types. Reservation scans over a whole service are expensive and the API answers them with HTTP 429; combine with a product or SKU filter.\n\nProvider reference: allowed values [\"Consumption\", \"DevTestConsumption\", \"Reservation\"].",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "oneOf": [
-                  "Consumption",
-                  "DevTestConsumption",
-                  "Reservation"
-                ]
-              }
-            },
-            "primary_meter_region_only": {
-              "description": "Send `meterRegion='primary'`: only rows where the region is the meter's primary region.",
-              "type": "boolean",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "product_name": {
-              "description": "Exact `productName`, e.g. `Premium SSD Managed Disks`, `Azure Synapse Analytics Dedicated SQL Pool`. Mutually exclusive with `product_name_contains`.",
-              "type": "string"
-            },
-            "product_name_contains": {
-              "description": "Substring of `productName` (OData `contains(productName, ...)`). Mutually exclusive with `product_name`.",
-              "type": "string"
-            },
-            "service_family": {
-              "description": "Exact `serviceFamily`, e.g. `Compute`, `Storage`, `Analytics`.",
-              "type": "string"
-            },
-            "service_name": {
-              "description": "Exact `serviceName`, e.g. `Virtual Machines`, `Storage`, `Azure Synapse Analytics`.",
-              "type": "string"
-            },
-            "sku_name": {
-              "description": "Exact `skuName`, e.g. `D2s v3`, `P30 LRS`, `DW500c`.",
-              "type": "string"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "arm_region_name": "eastus",
+              "arm_sku_name": "Standard_D2s_v3",
+              "include_savings_plan": true,
+              "price_type": "Consumption",
+              "service_name": "Virtual Machines"
             }
-          },
-          "type": "object"
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -221,15 +215,10 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 
 - **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

@@ -12,7 +12,6 @@ x-aisa-operation-id: "alpha-vantage.time-series-intraday"
 - **Method and path:** POST /apis/v1/alpha-vantage/time-series-intraday
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/alpha-vantage/time-series-intraday`
-- **Runtime facts:** 1036de6c0ab36754ec1c89b501ce10968b8978d428608ec2aa1b69562af101bb
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/alpha-vantage.json)
 
@@ -35,39 +34,51 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
         "schema": {
+          "type": "object",
+          "required": [
+            "symbol",
+            "interval"
+          ],
           "properties": {
+            "month": {
+              "type": "string",
+              "examples": [
+                "2022-01"
+              ],
+              "description": "Specific month in 'YYYY-MM' format for historical intraday data; only for intraday intervals Very old dates may return no data; intraday history coverage is limited."
+            },
+            "symbol": {
+              "type": "string",
+              "examples": [
+                "IBM",
+                "AAPL",
+                "MSFT"
+              ],
+              "description": "The stock ticker symbol. For US stocks, use the ticker only (e.g., 'IBM', 'MSFT', 'AAPL'). For international stocks, append the exchange suffix: '.LON' for London Stock Exchange (e.g., 'TSCO.LON'), '.TRT' for Toronto Stock Exchange (e.g., 'SHOP.TRT'), '.DEX' for XETRA Germany (e.g., 'MBG.DEX'), '.BSE' for Bombay Stock Exchange (e.g., 'RELIANCE.BSE'), '.SHH' for Shanghai Stock Exchange (e.g., '600104.SHH'), '.SHZ' for Shenzhen Stock Exchange (e.g., '000002.SHZ'). Do not pass URLs - just the ticker symbol itself."
+            },
             "adjusted": {
-              "default": "true",
-              "description": "Return split/dividend-adjusted values ('true') or raw as-traded values ('false')",
               "enum": [
                 "true",
                 "false"
               ],
-              "type": "string"
+              "type": "string",
+              "default": "true",
+              "description": "Return split/dividend-adjusted values ('true') or raw as-traded values ('false')"
             },
             "datatype": {
-              "default": "json",
-              "description": "Response format: 'json' (default) or 'csv' Response structure differs significantly between 'json' and 'csv' — ensure parsing logic matches the selected format.",
               "enum": [
                 "json",
                 "csv"
               ],
-              "type": "string"
-            },
-            "extended_hours": {
-              "default": "true",
-              "description": "Include pre/post-market data ('true') or only regular hours ('false')",
-              "enum": [
-                "true",
-                "false"
-              ],
-              "type": "string"
+              "type": "string",
+              "default": "json",
+              "description": "Response format: 'json' (default) or 'csv' Response structure differs significantly between 'json' and 'csv' — ensure parsing logic matches the selected format."
             },
             "interval": {
-              "description": "Time interval between data points Accepted values: '1min', '5min', '15min', '30min', '60min' only.",
               "enum": [
                 "1min",
                 "5min",
@@ -75,55 +86,38 @@ Effective request and pricing declaration (including authentication and referenc
                 "30min",
                 "60min"
               ],
-              "type": "string"
-            },
-            "month": {
-              "description": "Specific month in 'YYYY-MM' format for historical intraday data; only for intraday intervals Very old dates may return no data; intraday history coverage is limited.",
-              "examples": [
-                "2022-01"
-              ],
-              "type": "string"
+              "type": "string",
+              "description": "Time interval between data points Accepted values: '1min', '5min', '15min', '30min', '60min' only."
             },
             "outputsize": {
-              "default": "compact",
-              "description": "Return latest 100 points ('compact') or full-length data ('full') Free-tier keys may return an 'Information' block instead of data when 'full' is requested.",
               "enum": [
                 "compact",
                 "full"
               ],
-              "type": "string"
+              "type": "string",
+              "default": "compact",
+              "description": "Return latest 100 points ('compact') or full-length data ('full') Free-tier keys may return an 'Information' block instead of data when 'full' is requested."
             },
-            "symbol": {
-              "description": "The stock ticker symbol. For US stocks, use the ticker only (e.g., 'IBM', 'MSFT', 'AAPL'). For international stocks, append the exchange suffix: '.LON' for London Stock Exchange (e.g., 'TSCO.LON'), '.TRT' for Toronto Stock Exchange (e.g., 'SHOP.TRT'), '.DEX' for XETRA Germany (e.g., 'MBG.DEX'), '.BSE' for Bombay Stock Exchange (e.g., 'RELIANCE.BSE'), '.SHH' for Shanghai Stock Exchange (e.g., '600104.SHH'), '.SHZ' for Shenzhen Stock Exchange (e.g., '000002.SHZ'). Do not pass URLs - just the ticker symbol itself.",
-              "examples": [
-                "IBM",
-                "AAPL",
-                "MSFT"
+            "extended_hours": {
+              "enum": [
+                "true",
+                "false"
               ],
-              "type": "string"
+              "type": "string",
+              "default": "true",
+              "description": "Include pre/post-market data ('true') or only regular hours ('false')"
             }
-          },
-          "required": [
-            "symbol",
-            "interval"
-          ],
-          "type": "object"
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.00036,
     "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "maximum_units": 10000000,
-    "unit": "provider_credit",
-    "unit_rate_usd": 1e-06
+    "maximum_units": 10000000
   },
   "components": {
     "securitySchemes": {
@@ -138,16 +132,11 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.00036 USD (not a fixed price). Declared unit rate: \$0.000001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based billing; Default request estimate: $0.00036 USD (not a fixed price). Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 
 - **Default request reference estimate (USD):** 0.00036
-- **Declared unit rate (USD):** 1e-06
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
 - **Declared maximum count/units:** 10000000
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

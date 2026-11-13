@@ -12,7 +12,6 @@ x-aisa-operation-id: "banks-data-fdic-gov.bank-data.locations"
 - **Method and path:** POST /apis/v1/banks-data-fdic-gov/bank-data/locations
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/banks-data-fdic-gov/bank-data/locations`
-- **Runtime facts:** 1a121af68b256f6f99ec1b240112e9455162fda0e3d6b8a8a579e0146a361279
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/banks-data-fdic-gov.json)
 
@@ -35,8 +34,100 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": false,
     "content": {
       "application/json": {
+        "schema": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "cert": {
+              "type": "number",
+              "description": "FDIC certificate number, the institution id shared by every BankFind dataset (3511 = Wells Fargo Bank, N.A.; 628 = JPMorgan Chase Bank, N.A.). Find it with `institutions`. A number no institution has ever held is not_found.\n\nProvider reference: minimum 1; maximum 9999999.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 9999999
+              }
+            },
+            "city": {
+              "type": "string",
+              "description": "Exact city, matched against `CITY` as BankFind stores it, case included (`Sioux Falls`, not `sioux falls`). Pattern: ^[^\"\\\\]+$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "cursor": {
+              "type": "string",
+              "description": "next_cursor from the previous page of the same query (the record offset).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Projection: column names to return instead of the default set, e.g. [\"ADDRESS\", \"CITY\", \"LATITUDE\", \"LONGITUDE\", \"SERVTYPE_DESC\"]. The identity columns are always added and every record carries `ID`. An unknown name is ignored. The FDIC's column definitions are at https://api.fdic.gov/banks/docs/.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "filters": {
+              "type": "string",
+              "description": "Raw BankFind filter, ANDed with the other inputs. Lucene-style: `FIELD:value`, `FIELD:\"two words\"`, `FIELD:(\"A\",\"B\")` for any of several, `FIELD:[low TO high]` for an inclusive range (`*` open), `!(FIELD:value)` to exclude, `AND`/`OR` between terms. Column names are upper case and values match exactly as stored, case included. An unknown column matches nothing (an empty result, not an error); a syntax error is invalid_input.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "page_size": {
+              "type": "number",
+              "description": "Records per page.\n\nProvider reference: minimum 1; maximum 1000; default 25.",
+              "default": 25,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 1000
+              }
+            },
+            "sort_by": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Columns to sort by, in priority order, e.g. [\"ESTYMD\"]. Defaults to `CERT`, then office number ascending (main office first). Unique tiebreak columns are always appended so offset paging is stable. An unsortable or unknown column is invalid_input.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "sort_order": {
+              "type": "string",
+              "description": "Direction for every sort column. Defaults to the direction of the default sort.\n\nProvider reference: allowed values [\"asc\", \"desc\"].",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "asc",
+                  "desc"
+                ]
+              }
+            },
+            "state": {
+              "type": "string",
+              "description": "Two-letter state or territory code, matched against `STALP`, the office's state. Pattern: ^[A-Za-z]{2,3}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "zip": {
+              "type": "string",
+              "description": "Five-digit ZIP code of the office. Pattern: ^[0-9]{5}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            }
+          }
+        },
         "examples": {
           "provider": {
             "summary": "Official provider example; checked against AIsa request constraints",
@@ -47,112 +138,15 @@ Effective request and pricing declaration (including authentication and referenc
               "state": "SD"
             }
           }
-        },
-        "schema": {
-          "additionalProperties": true,
-          "properties": {
-            "cert": {
-              "description": "FDIC certificate number, the institution id shared by every BankFind dataset (3511 = Wells Fargo Bank, N.A.; 628 = JPMorgan Chase Bank, N.A.). Find it with `institutions`. A number no institution has ever held is not_found.\n\nProvider reference: minimum 1; maximum 9999999.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 9999999,
-                "min": 1
-              }
-            },
-            "city": {
-              "description": "Exact city, matched against `CITY` as BankFind stores it, case included (`Sioux Falls`, not `sioux falls`). Pattern: ^[^\"\\\\]+$.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "cursor": {
-              "description": "next_cursor from the previous page of the same query (the record offset).",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "fields": {
-              "description": "Projection: column names to return instead of the default set, e.g. [\"ADDRESS\", \"CITY\", \"LATITUDE\", \"LONGITUDE\", \"SERVTYPE_DESC\"]. The identity columns are always added and every record carries `ID`. An unknown name is ignored. The FDIC's column definitions are at https://api.fdic.gov/banks/docs/.",
-              "items": {
-                "type": "string"
-              },
-              "type": "array",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "filters": {
-              "description": "Raw BankFind filter, ANDed with the other inputs. Lucene-style: `FIELD:value`, `FIELD:\"two words\"`, `FIELD:(\"A\",\"B\")` for any of several, `FIELD:[low TO high]` for an inclusive range (`*` open), `!(FIELD:value)` to exclude, `AND`/`OR` between terms. Column names are upper case and values match exactly as stored, case included. An unknown column matches nothing (an empty result, not an error); a syntax error is invalid_input.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "page_size": {
-              "default": 25,
-              "description": "Records per page.\n\nProvider reference: minimum 1; maximum 1000; default 25.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 1000,
-                "min": 1
-              }
-            },
-            "sort_by": {
-              "description": "Columns to sort by, in priority order, e.g. [\"ESTYMD\"]. Defaults to `CERT`, then office number ascending (main office first). Unique tiebreak columns are always appended so offset paging is stable. An unsortable or unknown column is invalid_input.",
-              "items": {
-                "type": "string"
-              },
-              "type": "array",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "sort_order": {
-              "description": "Direction for every sort column. Defaults to the direction of the default sort.\n\nProvider reference: allowed values [\"asc\", \"desc\"].",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "oneOf": [
-                  "asc",
-                  "desc"
-                ]
-              }
-            },
-            "state": {
-              "description": "Two-letter state or territory code, matched against `STALP`, the office's state. Pattern: ^[A-Za-z]{2,3}$.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "zip": {
-              "description": "Five-digit ZIP code of the office. Pattern: ^[0-9]{5}$.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            }
-          },
-          "type": "object"
         }
       }
-    },
-    "required": false
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -167,15 +161,10 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based billing; Default request estimate: $0.0005 USD (not a fixed price). Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 
 - **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

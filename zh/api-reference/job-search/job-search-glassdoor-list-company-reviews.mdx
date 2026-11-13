@@ -12,7 +12,6 @@ x-aisa-operation-id: "job-search.glassdoor-list-company-reviews"
 - **方法与路径:** POST /apis/v1/job-search/glassdoor-list-company-reviews
 - **可用状态:** enabled
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/job-search/glassdoor-list-company-reviews`
-- **Runtime 事实版本:** 2cbd8cdfaca853cbc7b36cfc41e2117ec77cb4e678f8c4db401f3e305134f61a
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/job-search.json)
 
@@ -35,18 +34,37 @@ x-aisa-operation-id: "job-search.glassdoor-list-company-reviews"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
         "schema": {
-          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "company_id"
+          ],
           "properties": {
-            "company_id": {
-              "description": "Glassdoor company ID.",
-              "type": "string"
+            "page": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1,
+              "description": "1-based reviews page."
+            },
+            "sort": {
+              "enum": [
+                "POPULAR",
+                "MOST_RECENT",
+                "HIGHEST_RATING",
+                "LOWEST_RATING"
+              ],
+              "type": "string",
+              "default": "POPULAR",
+              "description": "Review ordering."
+            },
+            "query": {
+              "type": "string",
+              "description": "Text to find in reviews."
             },
             "domain": {
-              "default": "www.glassdoor.com",
-              "description": "Glassdoor regional domain.",
               "enum": [
                 "www.glassdoor.com",
                 "www.glassdoor.co.uk",
@@ -70,27 +88,11 @@ x-aisa-operation-id: "job-search.glassdoor-list-company-reviews"
                 "www.glassdoor.sg",
                 "fr.glassdoor.ch"
               ],
-              "type": "string"
-            },
-            "employment_statuses": {
-              "description": "Reviewer employment status.",
-              "enum": [
-                "REGULAR",
-                "INTERN",
-                "PART_TIME",
-                "CONTRACT",
-                "FREELANCE"
-              ],
-              "type": "string"
-            },
-            "extended_rating_data": {
-              "default": false,
-              "description": "Include extended ratings.",
-              "type": "boolean"
+              "type": "string",
+              "default": "www.glassdoor.com",
+              "description": "Glassdoor regional domain."
             },
             "language": {
-              "default": "en",
-              "description": "Review language.",
               "enum": [
                 "en",
                 "fr",
@@ -100,55 +102,47 @@ x-aisa-operation-id: "job-search.glassdoor-list-company-reviews"
                 "es",
                 "it"
               ],
-              "type": "string"
+              "type": "string",
+              "default": "en",
+              "description": "Review language."
+            },
+            "company_id": {
+              "type": "string",
+              "description": "Glassdoor company ID."
+            },
+            "employment_statuses": {
+              "enum": [
+                "REGULAR",
+                "INTERN",
+                "PART_TIME",
+                "CONTRACT",
+                "FREELANCE"
+              ],
+              "type": "string",
+              "description": "Reviewer employment status."
+            },
+            "extended_rating_data": {
+              "type": "boolean",
+              "default": false,
+              "description": "Include extended ratings."
             },
             "only_current_employees": {
+              "type": "boolean",
               "default": false,
-              "description": "Return reviews from current employees only.",
-              "type": "boolean"
-            },
-            "page": {
-              "default": 1,
-              "description": "1-based reviews page.",
-              "minimum": 1,
-              "type": "integer"
-            },
-            "query": {
-              "description": "Text to find in reviews.",
-              "type": "string"
-            },
-            "sort": {
-              "default": "POPULAR",
-              "description": "Review ordering.",
-              "enum": [
-                "POPULAR",
-                "MOST_RECENT",
-                "HIGHEST_RATING",
-                "LOWEST_RATING"
-              ],
-              "type": "string"
+              "description": "Return reviews from current employees only."
             }
           },
-          "required": [
-            "company_id"
-          ],
-          "type": "object"
+          "additionalProperties": false
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0028,
     "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "maximum_units": 10000000,
-    "unit": "provider_credit",
-    "unit_rate_usd": 1e-06
+    "maximum_units": 10000000
   },
   "components": {
     "securitySchemes": {
@@ -163,16 +157,11 @@ x-aisa-operation-id: "job-search.glassdoor-list-company-reviews"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0028 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.000001 USD。 最终费用以账户适用价格及实际结算为准。
+按用量计费；默认请求预估费用：$0.0028 USD（不是固定价格）。 最终费用以账户适用价格及实际结算为准。
 
 公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
 
 - **默认请求参考估价（USD）:** 0.0028
-- **声明的单位费率（USD）:** 1e-06
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
 - **声明的最大计数或单位数:** 10000000
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

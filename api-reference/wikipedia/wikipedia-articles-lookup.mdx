@@ -12,7 +12,6 @@ x-aisa-operation-id: "wikipedia.articles.lookup"
 - **Method and path:** POST /apis/v1/wikipedia/articles/lookup
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/wikipedia/articles/lookup`
-- **Runtime facts:** 090df642b94d9420f01e4fe7b8477e22b4b3b170db7c372d8cd633d00dbca599
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/wikipedia.json)
 
@@ -35,40 +34,45 @@ Effective request and pricing declaration (including authentication and referenc
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "production": {
-            "summary": "Verified production request (2026-11-12)",
-            "value": {
-              "fields": [
-                "name",
-                "identifier"
-              ],
-              "limit": 1,
-              "name": "Marie_Curie",
-              "project": "enwiki"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
-          "not": {
-            "required": [
-              "fields",
-              "body"
-            ]
-          },
           "properties": {
-            "body": {
-              "description": "Article body format when fields is omitted: wikitext (default), html, both, or none. Omit body entirely when using fields, including when no body is needed.",
-              "enum": [
-                "wikitext",
-                "html",
-                "both",
-                "none"
-              ],
+            "name": {
               "type": "string",
+              "description": "Exact article title as on the wiki, for example `Marie_Curie` or `Marie Curie`. Case-sensitive: Wikipedia titles start with a capital letter. From a URL such as https://fr.wikipedia.org/wiki/Marie_Curie, use the part after /wiki/."
+            },
+            "project": {
+              "type": "string",
+              "description": "Wikimedia project identifier: language code plus project code, for example `enwiki` (English Wikipedia), `frwiki`, `dewiki`, `enwiktionary` or `eswikivoyage`. Defaults to `enwiki` when neither project nor language is given. `reference/projects` lists every identifier."
+            },
+            "language": {
+              "type": "string",
+              "description": "Wikimedia language code, for example `en`, `fr` or `zh-yue`. Returns the article from any project in that language; combine with project to pin one wiki."
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Return only the named fields, using dot notation; at most 50 entries. Omit body when using fields. Include article_body.wikitext or article_body.html here to select body content.",
+              "x-alexandria-option-metadata": {
+                "max": 50
+              },
+              "maxItems": 50
+            },
+            "limit": {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer",
+              "description": "Most matching articles to return, 1 to 10. More than one only helps when no project is pinned and the title exists on several wikis.\n\nProvider reference: minimum 1; maximum 10; default 1."
+            },
+            "body": {
+              "type": "string",
+              "description": "Article body format when fields is omitted: wikitext (default), html, both, or none. Omit body entirely when using fields, including when no body is needed.",
               "x-alexandria-option-metadata": {
                 "oneOf": [
                   "wikitext",
@@ -76,58 +80,48 @@ Effective request and pricing declaration (including authentication and referenc
                   "both",
                   "none"
                 ]
-              }
-            },
-            "fields": {
-              "description": "Return only the named fields, using dot notation; at most 50 entries. Omit body when using fields. Include article_body.wikitext or article_body.html here to select body content.",
-              "items": {
-                "type": "string"
               },
-              "maxItems": 50,
-              "type": "array",
-              "x-alexandria-option-metadata": {
-                "max": 50
-              }
-            },
-            "language": {
-              "description": "Wikimedia language code, for example `en`, `fr` or `zh-yue`. Returns the article from any project in that language; combine with project to pin one wiki.",
-              "type": "string"
-            },
-            "limit": {
-              "description": "Most matching articles to return, 1 to 10. More than one only helps when no project is pinned and the title exists on several wikis.\n\nProvider reference: minimum 1; maximum 10; default 1.",
-              "maximum": 10,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "name": {
-              "description": "Exact article title as on the wiki, for example `Marie_Curie` or `Marie Curie`. Case-sensitive: Wikipedia titles start with a capital letter. From a URL such as https://fr.wikipedia.org/wiki/Marie_Curie, use the part after /wiki/.",
-              "type": "string"
-            },
-            "project": {
-              "description": "Wikimedia project identifier: language code plus project code, for example `enwiki` (English Wikipedia), `frwiki`, `dewiki`, `enwiktionary` or `eswikivoyage`. Defaults to `enwiki` when neither project nor language is given. `reference/projects` lists every identifier.",
-              "type": "string"
+              "enum": [
+                "wikitext",
+                "html",
+                "both",
+                "none"
+              ]
             }
           },
           "required": [
             "limit",
             "name"
           ],
-          "type": "object"
+          "not": {
+            "required": [
+              "fields",
+              "body"
+            ]
+          }
+        },
+        "examples": {
+          "production": {
+            "summary": "Verified production request (2026-11-12)",
+            "value": {
+              "name": "Marie_Curie",
+              "project": "enwiki",
+              "limit": 1,
+              "fields": [
+                "name",
+                "identifier"
+              ]
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
+    "customer_pricing": "usage_based",
     "default_request_estimate_usd": 0.0001,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
+    "estimate_source": "profile_seed"
   },
   "components": {
     "securitySchemes": {
@@ -142,15 +136,10 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0001 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based billing; Default request estimate: $0.0001 USD (not a fixed price). Account-specific pricing and final settlement may differ.
 
 Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
 
 - **Default request reference estimate (USD):** 0.0001
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}
