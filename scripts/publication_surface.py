@@ -22,7 +22,7 @@ def publication_files(root):
                         root / 'api-reference.mdx', root / 'zh/api-reference.mdx', root / POLICY_PATH, root / REBINDING_PATH, root / SALES_CATALOG_PATH) if p.is_file()}
     files.update(root / name for name in PAYMENT_FILES if (root / name).is_file())
     for pattern in ('openapi/*.json', 'openapi/upstream/*.json', 'openapi/zh/*.json',
-                    'openapi-public/**/*.json', 'openapi-public/*.yaml',
+                    'openapi-public/**/*.json', 'openapi-public/*.yaml', 'reference-contracts/**/*.json',
                     'api-reference/**/*.mdx', 'zh/api-reference/**/*.mdx'):
         files.update(root.glob(pattern))
     return sorted(files)
@@ -81,6 +81,8 @@ def validate_surfaces(root, published_ref=None):
         problems = check_projection(root)
         if problems:
             raise ValueError('public projection differs from formal graph: ' + repr(problems[:5]))
+    from validate_prod_reference_pages import validate_reference_pages
+    validate_reference_pages(root)
     history = published_history(root, published_ref)
     validate_document_identities(all_documents, history)
     localized_documents = {}
@@ -140,10 +142,12 @@ def validate_surfaces(root, published_ref=None):
             header = yaml.safe_load(parts[1]) or {}
             reference = header.get('openapi')
             if not isinstance(reference, str):
+                if retired_archive(path):
+                    continue  # Disabled archive/navigation closure is checked below.
                 if header.get('x-aisa-operation-id') in identities:
                     raise ValueError('runtime page has no operation reference: ' + str(path))
                 continue
-            match = re.fullmatch(r'openapi(?:-public)?/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)', reference)
+            match = re.fullmatch(r'(?:openapi(?:-public)?|reference-contracts)/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)', reference)
             if not match or match[2] not in all_documents:
                 if header.get('x-aisa-operation-id') in identities:
                     raise ValueError('runtime page references an unknown document: ' + str(path))
@@ -156,6 +160,21 @@ def validate_surfaces(root, published_ref=None):
             source_document = all_documents[provider]
             if language == 'zh':
                 source_document = localized_document(provider)
+            if reference.startswith('reference-contracts/') and header.get('x-aisa-operation-id') not in identities:
+                continue  # Legacy reference pages have their own validated presentation.
+            if reference.startswith('reference-contracts/'):
+                # Existing production reference schemas may add reviewed response
+                # descriptions, but cannot replace runtime requests or billing.
+                from check_contract_candidate import effective_request
+                reference_document = json.loads((root / reference.split()[0]).read_text())
+                reference_operation = reference_document.get('paths', {}).get(route, {}).get(method)
+                runtime_operation = source_document.get('paths', {}).get(route, {}).get(method)
+                if not isinstance(reference_operation, dict) or not isinstance(runtime_operation, dict):
+                    raise ValueError('missing reference operation: ' + str(path))
+                if effective_request(reference_operation, reference_document) != effective_request(runtime_operation, source_document) or any(
+                    reference_operation.get(key) != runtime_operation.get(key)
+                    for key in ('operationId', 'x-aisa-status', 'x-aisa-pricing', 'x-aisa-capabilities')):
+                    raise ValueError('reference schema changed runtime request or pricing: ' + str(path))
             operation = source_document.get('paths', {}).get(route, {}).get(method)
             if method not in METHODS or not isinstance(operation, dict):
                 raise ValueError('page references missing operation: ' + str(path))
