@@ -7,13 +7,34 @@ import unittest
 from jsonschema import Draft202012Validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from compose_openapi import schema_30_to_31
+from compose_openapi import resolve, schema_30_to_31
 from import_dataforseo_filters import normalize_response_echo
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class DataforseoResponseEchoTests(unittest.TestCase):
+    def test_complete_live_responses_and_result_constraints(self):
+        document = json.loads((ROOT / 'openapi/upstream/dataforseo-official.json').read_text())
+        fixtures = ROOT / 'scripts/tests/fixtures/dataforseo-live-20261113'
+        for name, path in [('anchors', '/v3/backlinks/anchors/live'),
+                           ('keyword-overview', '/v3/dataforseo_labs/google/keyword_overview/live')]:
+            with self.subTest(endpoint=path):
+                response = json.loads((fixtures / (name + '.json')).read_text())
+                declaration = document['paths'][path]['post']['responses']['200']['content']['application/json']['schema']
+                validator = Draft202012Validator(schema_30_to_31(resolve(declaration, document)))
+                validator.validate(response)
+                bad = copy.deepcopy(response)
+                bad['tasks'][0]['data'] = ['invalid-envelope']
+                self.assertFalse(validator.is_valid(bad))
+                bad = copy.deepcopy(response)
+                bad['tasks'][0]['cost'] = 'invalid-cost-type'
+                self.assertFalse(validator.is_valid(bad))
+                before = copy.deepcopy(document)
+                before['components']['schemas']['BaseResponseTaskInfo']['properties']['data']['additionalProperties'] = {
+                    'type': 'object', 'nullable': True}
+                self.assertFalse(Draft202012Validator(schema_30_to_31(resolve(declaration, before))).is_valid(response))
+
     def test_official_example_is_accepted_without_relaxing_the_envelope(self):
         # Public data projection from https://docs.dataforseo.com/v3/backlinks/anchors/live/
         official_echo = {'api': 'backlinks', 'function': 'anchors', 'target': 'forbes.com',

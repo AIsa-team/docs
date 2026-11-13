@@ -34,6 +34,43 @@ publication gates remain required. Historical E2E failures are not rewritten as
 passes. Other observed discrepancies, including null `tasks` and task item schemas,
 are separate findings and are not covered by this fix.
 
+## Scoped live regression, 2026-11-13
+
+[Services Action 43443440911](https://github.com/AIsa-team/AIsaServices/actions/runs/43443440911)
+repeated three previously failing requests with explicit, official-example inputs.
+The requests passed request-schema validation before dispatch. All three returned
+successful task statuses, correct request echoes and nonempty results. Response
+cost times the published 1.0 multiplier, settlement headers and read-only ledger
+rows agreed per request; both wallet batches reconciled and quotes debited zero.
+Total settled cost was USD 0.052156.
+
+The same captured responses were replayed against the published contract and a
+candidate made by this repository's composer from the captured Runtime facts and
+the source correction at `fd069ba31a95970594e517b2d06bc80a450bc873`:
+
+| Operation | Published | Candidate | Settled USD |
+| --- | --- | --- | --- |
+| backlinks/anchors/live | FAIL | PASS | 0.024036 |
+| dataforseo_labs/google/keyword_overview/live | FAIL | PASS | 0.024120 |
+| serp/google/organic/live/advanced | FAIL | FAIL | 0.004000 |
+
+The first two complete live response bodies are regression fixtures under
+`scripts/tests/fixtures/dataforseo-live-20261113/`. They fail with the original
+echo restriction and pass with this source correction. Negative controls still
+reject an array-valued task data envelope and a string-valued task cost.
+
+Google Organic has additional upstream result-contract defects: a closed base
+schema conflicts with derived result fields, and nullable properties with a
+non-nullable referenced oneOf branch still reject null. These remain failures,
+tracked in [AIS-560](https://linear.app/aisateam/issue/AIS-560). This PR does not
+relax those result contracts or claim every historical echo failure is resolved.
+
+Per-operation input, response and billing evidence is preserved in
+[Services #1234](https://github.com/AIsa-team/AIsaServices/pull/1234), under
+`scripts/api-e2e/evidence/2026-11-13-dataforseo-recheck/`. This is candidate replay
+against fresh live responses, not a deployment receipt. The live Action remains
+red against the still-published contract; post-publication regression is pending.
+
 Validation:
 
 ```sh
