@@ -271,7 +271,7 @@ def customer_price_card(pricing, language='en'):
 
     The detailed pricing summary belongs with the endpoint explanation. The
     card is only a scan-friendly copy of a published amount (or an explicit
-    no-charge declaration); unknown, unavailable, and model-dependent prices
+    no-charge declaration); missing, unavailable, and model-dependent prices
     do not get a misleading placeholder at the top of the page.
     """
     if not isinstance(pricing, dict) or not pricing:
@@ -297,7 +297,13 @@ def customer_price_card(pricing, language='en'):
     if '$' not in summary:
         return ''
     if family == 'fixed_request':
-        return sentences[0]
+        # A disabled first variant must not become the headline for a later
+        # priced variant. Keep that detail in the full pricing section.
+        return sentences[0] if '$' in sentences[0] else ''
+    if family == 'metered_event':
+        # Only use a complete price-bearing sentence. Retry/waiver sentences
+        # can precede rates; never turn those into the price headline.
+        return next((sentence for sentence in sentences if '$' in sentence), '')
     if family in {'request_dependent', 'result_dependent', 'components', 'usage', 'metered_result', 'unknown'}:
         # Prefer the concise sentence carrying the explicit customer amount;
         # the detailed section retains the billing mode and settlement rules.

@@ -104,6 +104,28 @@ class PublicationSurfaceTests(unittest.TestCase):
                     validate_surfaces(self.root)
                 page.write_text(original)
 
+    def test_missing_or_stale_top_price_card_fails_publication(self):
+        from readable_contract_notes import PRICE_CARD_BEGIN, PRICE_CARD_END
+        import re
+        document = json.loads((self.root / 'openapi/fixture.json').read_text())
+        document['paths']['/one']['get']['x-aisa-pricing'] = {
+            'customer_pricing': 'fixed_success', 'default_request_estimate_usd': .012}
+        changes = {}
+        generate_pages(self.root, 'fixture', document, changes)
+        changes[self.root / 'openapi/fixture.json'] = json.dumps(document)
+        for path, text in changes.items():
+            path.write_text(text)
+        validate_surfaces(self.root)
+        for prefix in ('', 'zh/'):
+            page = self.root / (prefix + 'api-reference/fixture/one.mdx')
+            original = page.read_text()
+            removed = re.sub(re.escape(PRICE_CARD_BEGIN) + r'.*?' + re.escape(PRICE_CARD_END), '', original, flags=re.S)
+            for changed in (original.replace('$0.012', '$0.099', 1), removed):
+                page.write_text(changed)
+                with self.assertRaisesRegex(ValueError, 'price card differs'):
+                    validate_surfaces(self.root)
+                page.write_text(original)
+
     def test_disabled_legacy_pages_leave_navigation_and_search_without_changing_schemas(self):
         from pull_openapi import refresh_legacy_page_blocks
         from publication_surface import navigation_pages

@@ -102,6 +102,17 @@ class ReadableNotesTests(unittest.TestCase):
         self.assertIn('<Info>', estimated)
         self.assertIn('Default request estimate: $0.1 USD.', estimated)
 
+    def test_multi_price_cards_use_literal_dollars_and_hide_disabled_tariffs(self):
+        from readable_contract_notes import price_card_block
+        from test_customer_price_presentation import SOCIAL_PRICING
+        op = {'x-aisa-pricing': copy.deepcopy(SOCIAL_PRICING)}
+        for language in ('en', 'zh'):
+            card = price_card_block(op, language)
+            for amount in (r'\$0.015', r'\$0.200', r'\$0.01'):
+                self.assertIn(amount, card)
+        op['x-aisa-status'] = 'disabled'
+        self.assertEqual(price_card_block(op), '')
+
     def test_paired_currency_is_literal_mdx_without_changing_contract_prices(self):
         from pricing_prose import pricing_summary
         from public_surface_checks import request_blocks, compare_llms

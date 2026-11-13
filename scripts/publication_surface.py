@@ -76,7 +76,7 @@ def validate_surfaces(root, published_ref=None):
     history = published_history(root, published_ref)
     validate_document_identities(all_documents, history)
     localized_documents = {}
-    from readable_contract_notes import BEGIN, END, readable_block
+    from readable_contract_notes import BEGIN, END, readable_block, PRICE_CARD_BEGIN, PRICE_CARD_END, price_card_block
     from runtime_localize_openapi_zh import translation
     catalog_path = root / 'translations/openapi-zh.json'
     catalog = json.loads(catalog_path.read_text()) if catalog_path.is_file() else {'entries': {}}
@@ -162,6 +162,10 @@ def validate_surfaces(root, published_ref=None):
             actual_blocks = re.findall(re.escape(BEGIN) + r".*?" + re.escape(END), text, re.S)
             if actual_blocks != [expected_block]:
                 raise ValueError('page readable contract differs from provider: ' + str(path))
+            expected_card = price_card_block(canonical_operation, language)
+            actual_cards = re.findall(re.escape(PRICE_CARD_BEGIN) + r".*?" + re.escape(PRICE_CARD_END), text, re.S)
+            if actual_cards != ([expected_card] if expected_card else []):
+                raise ValueError('page price card differs from provider: ' + str(path))
             page = path.relative_to(root).with_suffix('').as_posix()
             if canonical_operation.get('x-aisa-status') == 'disabled':
                 if page in nav[language]:

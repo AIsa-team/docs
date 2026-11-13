@@ -163,16 +163,24 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
     return "\n".join(lines)
 
 
+def price_card_block(operation, language="en"):
+    """A managed price card; absent prices never become a headline warning."""
+    from customer_price_presentation import customer_price_card
+    if operation.get('x-aisa-status') == 'disabled':
+        return ''  # Historical prices stay with the explicit archive details.
+    card_summary = customer_price_card(operation.get('x-aisa-pricing') or {}, language)
+    if not card_summary:
+        return ''
+    if card_summary.count('$') >= 2:
+        card_summary = card_summary.replace('$', r'\$')
+    return '\n'.join((PRICE_CARD_BEGIN, '', '<Info>', card_summary, '</Info>', '', PRICE_CARD_END))
+
+
 def update_readable_block(text, operation, language="en", translate=None, **context):
     from pricing_prose import refresh_page_description
     text = refresh_page_description(clean_reference_notices(text), operation, language, translate)
     block = readable_block(operation, language, translate, **context)
-    from customer_price_presentation import customer_price_card
-    card_summary = customer_price_card(operation.get('x-aisa-pricing') or {}, language)
-    card = ''
-    if card_summary:
-        # Keep the card managed and out of the machine-readable contract.
-        card = '\n'.join((PRICE_CARD_BEGIN, '', '<Info>', card_summary, '</Info>', '', PRICE_CARD_END))
+    card = price_card_block(operation, language)
     if not block and not card:
         return strip_generated_block(text)
     if not text.startswith('---\n') and text.strip() == block.strip():
