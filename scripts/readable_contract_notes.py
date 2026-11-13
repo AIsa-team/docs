@@ -136,8 +136,6 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
     if not pricing and not notes and document is None:
         return ""
     lines = [BEGIN, ""]
-    if document is not None:
-        lines += request_details(operation, document, method, path, spec_path, language)
     if pricing or notes:
         lines += ["## " + t("Cost and request rules", "费用与请求规则"), ""]
     if pricing:
@@ -154,6 +152,8 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
                 if zh and translate:
                     note = translate(note)
                 lines.append("- " + safe(note))
+    if document is not None:
+        lines += request_details(operation, document, method, path, spec_path, language)
     lines += ["", END]
     return "\n".join(lines)
 

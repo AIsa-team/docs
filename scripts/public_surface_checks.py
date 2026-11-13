@@ -80,19 +80,25 @@ def same_json(left, right):
 def request_blocks(text):
     """Recover rendered declarations, including arbitrary-length safe fences."""
     result = {}
-    sections = re.split(r'^#{1,6} (?:Request contract|请求规范)\s*$', text, flags=re.M)[1:]
-    for section in sections:
-        match = re.search(r'^(`{3,})json(?:[ \t]+[^\n]*)?\s*\n(.*?)\n\1\s*$', section, re.M | re.S)
-        if not match:
-            continue
-        value = loads(match.group(2))
-        if not isinstance(value, dict) or not all(key in value for key in ('operationId', 'method', 'path', 'parameters')):
-            raise ValueError('Malformed readable request declaration')
-        identity = (value['operationId'], value['method'], value['path'])
-        # Pricing summary is the paragraph immediately below the managed heading.
-        price = re.search(r'^#{1,6} (?:Cost and request rules|费用与请求规则)\s*\n\s*([^\n]+)', section, re.M)
-        record = {'request': value, 'price_summary': re.sub(r'\s+', ' ', re.sub(r'\\([\\`*_{}\[\]()#+.!$>-])', r'\1', html.unescape(price.group(1)))).strip() if price else None}
-        result.setdefault(identity, []).append(record)
+    managed = re.findall(r'{/\* aisa-contract-details:start \*/}.*?{/\* aisa-contract-details:end \*/}', text, re.S)
+    sections = managed or [text]
+    for block in sections:
+        for section in re.split(r'^#{1,6} (?:Request contract|请求规范)\s*$', block, flags=re.M)[1:]:
+            match = re.search(r'^(`{3,})json(?:[ \t]+[^\n]*)?\s*\n(.*?)\n\1\s*', section, re.M | re.S)
+            if not match:
+                continue
+            value = loads(match.group(2))
+            if not isinstance(value, dict) or not all(key in value for key in ('operationId', 'method', 'path', 'parameters')):
+                raise ValueError('Malformed readable request declaration')
+            identity = (value['operationId'], value['method'], value['path'])
+            # A price heading can precede the request heading after the page
+            # generator puts customer pricing first; legacy blocks keep it in
+            # the request section itself.
+            price = re.search(r'^#{1,6} (?:Cost and request rules|费用与请求规则)\s*\n\s*([^\n]+)', section, re.M)
+            if not price:
+                price = re.search(r'^#{1,6} (?:Cost and request rules|费用与请求规则)\s*\n\s*([^\n]+)', block, re.M)
+            record = {'request': value, 'price_summary': re.sub(r'\s+', ' ', re.sub(r'\\([\\`*_{}\[\]()#+.!$>-])', r'\1', html.unescape(price.group(1)))).strip() if price else None}
+            result.setdefault(identity, []).append(record)
     return result
 
 
