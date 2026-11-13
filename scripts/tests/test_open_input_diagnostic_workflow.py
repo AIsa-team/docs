@@ -269,10 +269,11 @@ class OpenInputWorkflowTests(unittest.TestCase):
                 self.assertIn('/tmp/release-gate.json\n', row['with']['path'])
                 row['with']['path'] = row['with']['path'].replace('/tmp/release-gate.json\n', '')
         workflow['jobs']['artifact-contracts']['steps']=original
-        # Only an independently bound exact EKS source head receives the 20m
-        # diagnostic budget; every unselected ordinary assessment keeps 10m.
+        # The full catalog now has a 30m budget; only an independently bound
+        # exact EKS source head receives the additional 10m diagnostic budget.
         self.assertEqual(workflow['jobs']['artifact-contracts']['timeout-minutes'],
-            "${{ github.event_name == 'pull_request' && vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING != '' && fromJSON(vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING).head_revision == github.event.pull_request.head.sha && 20 || 10 }}")
+            "${{ github.event_name == 'pull_request' && vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING != '' && fromJSON(vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING).head_revision == github.event.pull_request.head.sha && 40 || 30 }}")
+        # Normalize the explicit budget-only change to the historical digest.
         workflow['jobs']['artifact-contracts']['timeout-minutes']=10
         # Assert the reviewed PR-scope correction, then normalize only those
         # three fields so the independent original workflow digest still guards
