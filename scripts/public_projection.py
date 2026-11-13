@@ -9,8 +9,9 @@ script writes a public copy of each reviewed catalog with those fields removed:
     openapi/<id>.json     -> openapi-public/<id>.json
     openapi/zh/<id>.json  -> openapi-public/zh/<id>.json
 
-Everything else (paths, schemas, examples, pricing, status) is byte-for-byte
-the same JSON value. ``info.x-aisa-document.document_hash`` is recomputed over
+Paths, schemas, examples, customer prices and status retain their declarations.
+Internal price construction and revision references are removed; generated
+pricing prose is rebuilt from the public pricing fields. ``info.x-aisa-document.document_hash`` is recomputed over
 the projected document; the formal hash it replaces is kept as
 ``info.x-aisa-document.public_projection.source_document_hash`` so a consumer
 can bind the projection to the formal publication.
@@ -38,11 +39,12 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 CATALOGS = ROOT / 'scripts/public_projection.json'
 PUBLIC_DIR = 'openapi-public'
-PROJECTION_VERSION = '1'
+PROJECTION_VERSION = '2'
 
 # Removed at any depth. The first five are the G3 fields of the design; the
 # upstream route and selector name the supplier-side endpoint shape.
 STRIPPED_KEYS = frozenset({
+    'x-aisa-revision',
     'x-aisa-source',
     'x-aisa-source-provenance',
     'x-aisa-response-source',
@@ -74,23 +76,54 @@ def load_catalogs(path=CATALOGS):
     return catalogs
 
 
+def customer_pricing(pricing):
+    """Keep customer prices, excluding the supplier cost used to derive them."""
+    public = copy.deepcopy(pricing)
+    cost_kind = public.get('cost_contract')
+    if cost_kind and 'customer_pricing' not in public:
+        public['customer_pricing'] = 'fixed_success' if cost_kind == 'fixed_success' else 'usage_based'
+    private = ['customer_multiplier', 'cost_contract', 'evidence_source', 'minimum_cost_usd']
+    if cost_kind or public.get('customer_pricing') == 'provider_cost_multiplier':
+        private.append('unit_rate_usd')
+    for key in private:
+        public.pop(key, None)
+    if public.get('customer_pricing') == 'provider_cost_multiplier':
+        public['customer_pricing'] = 'usage_based'
+    if public.get('unit') == 'provider_credit':
+        public.pop('unit')
+    return public
+
+
 def strip(node):
-    """Return a copy of node without the stripped keys (data positions kept as is)."""
+    """Strip declarations, preserving schema property names and JSON instances."""
+    from compose_openapi import NAMED_CONTRACT_MAPS
     if isinstance(node, dict):
         result = {}
         for key, value in node.items():
             if key in STRIPPED_KEYS:
                 continue
-            result[key] = copy.deepcopy(value) if key in DATA_KEYS else strip(value)
+            if key in DATA_KEYS:
+                result[key] = copy.deepcopy(value)
+            elif key == 'x-aisa-pricing' and isinstance(value, dict):
+                result[key] = customer_pricing(value)
+            elif key in NAMED_CONTRACT_MAPS and isinstance(value, dict):
+                result[key] = {name: strip(declaration) for name, declaration in value.items()}
+            else:
+                result[key] = strip(value)
         return result
     if isinstance(node, list):
         return [strip(value) for value in node]
     return node
 
 
-def project(document):
+def project(document, language="en"):
     """Projected catalog document (pure function of the formal document)."""
     projected = strip(document)
+    from pricing_prose import add_price_summary
+    for item in projected.get('paths', {}).values():
+        for method, operation in item.items():
+            if method in {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'} and isinstance(operation, dict) and 'aisa-pricing:start' in operation.get('description', ''):
+                add_price_summary(operation, language)
     info = projected.get('info')
     meta = info.get('x-aisa-document') if isinstance(info, dict) else None
     if isinstance(meta, dict):
@@ -136,7 +169,7 @@ def expected_files(root=ROOT, catalogs=None):
         for language in ('', 'zh/'):
             source = root / 'openapi' / (language + name + '.json')
             if source.is_file():
-                files[f'{PUBLIC_DIR}/{language}{name}.json'] = render(project(json.loads(source.read_text())))
+                files[f'{PUBLIC_DIR}/{language}{name}.json'] = render(project(json.loads(source.read_text()), "zh" if language else "en"))
     return files
 
 

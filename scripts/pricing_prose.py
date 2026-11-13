@@ -39,6 +39,8 @@ def pricing_summary(pricing, language='en'):
     """Render only declared prices; an estimate is never a unit or fixed price."""
     if not isinstance(pricing, dict) or not pricing:
         return ''
+    from public_projection import customer_pricing
+    pricing = customer_pricing(pricing)
     zh = language == 'zh'
     settlement = ' 最终费用以账户适用价格及实际结算为准。' if zh else ' Account-specific pricing and final settlement may differ.'
     kind = pricing.get('kind')
@@ -67,7 +69,7 @@ def pricing_summary(pricing, language='en'):
         summary = f'公开参考价格：每次成功请求 {estimate} USD。' if zh else f'Published reference price: {estimate} USD per successful request.'
     elif estimate is not None:
         summary = f'默认请求预估费用：{estimate} USD（不是固定价格）。' if zh else f'Default request estimate: {estimate} USD (not a fixed price).'
-        if pricing.get('cost_contract') in {'response_usd', 'response_count', 'response_sku', 'response_units', 'request_formula', 'response_components', 'plan_units'}:
+        if pricing.get('customer_pricing') == 'usage_based' or pricing.get('cost_contract') in {'response_usd', 'response_count', 'response_sku', 'response_units', 'request_formula', 'response_components', 'plan_units'}:
             summary = ('按用量计费；' if zh else 'Usage-based billing; ') + summary
     else:
         summary = '当前未提供请求参考价格；请使用接口支持的报价功能确认费用。' if zh else 'A request reference price is not currently available; use a request quote where supported.'

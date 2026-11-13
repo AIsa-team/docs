@@ -75,7 +75,7 @@ class PricingProseTests(unittest.TestCase):
         self.assertIn('$0 USD per successful request', free)
         usage = pricing_summary({'cost_contract': 'response_count', 'default_request_estimate_usd': 1.275, 'unit_rate_usd': .075, 'unit': 'similarweb_credit'})
         self.assertIn('estimate: $1.275 USD (not a fixed price)', usage)
-        self.assertIn('$0.075 USD per similarweb_credit', usage)
+        self.assertNotIn('$0.075', usage)
         self.assertNotIn('per row', usage)
         for value in (None, True, -1, float('inf'), float('nan'), '0.08'):
             self.assertNotIn('$', pricing_summary({'default_request_estimate_usd': value}))

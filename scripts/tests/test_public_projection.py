@@ -57,7 +57,7 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual(operation['responses']['200']['content']['application/json']['schema']['properties'],
                          {'id': {'type': 'string', 'description': 'Widget id.'}})
         meta = projected['info']['x-aisa-document']
-        self.assertEqual(meta['public_projection'], {'version': '1', 'source_document_hash': 'sha256:' + 'b' * 64})
+        self.assertEqual(meta['public_projection'], {'version': '2', 'source_document_hash': 'sha256:' + 'b' * 64})
         unhashed = json.loads(json.dumps(projected))
         unhashed['info']['x-aisa-document'].pop('document_hash')
         self.assertEqual(meta['document_hash'], public_projection.digest(unhashed))
@@ -65,6 +65,24 @@ class ProjectionTests(unittest.TestCase):
         # The formal document is not modified.
         self.assertEqual(source, formal_catalog())
         self.assertEqual(public_projection.project(source), projected)
+
+    def test_price_construction_and_revision_are_private_but_payload_names_survive(self):
+        import copy
+        source = formal_catalog()
+        op = source['paths']['/apis/v1/widgets/search']['get']
+        op['x-aisa-revision'] = {'profile_ref': 'private'}
+        op['x-aisa-pricing'] = {'customer_pricing': 'provider_cost_multiplier',
+                              'customer_multiplier': 2, 'cost_contract': 'response_units',
+                              'unit_rate_usd': .000001, 'unit': 'provider_credit',
+                              'default_request_estimate_usd': .9}
+        schema = op['responses']['200']['content']['application/json']['schema']
+        schema['properties']['x-aisa-revision'] = {'type': 'string'}
+        original = copy.deepcopy(source)
+        public = public_projection.project(source)['paths']['/apis/v1/widgets/search']['get']
+        self.assertNotIn('x-aisa-revision', public)
+        self.assertEqual(public['x-aisa-pricing'], {'customer_pricing': 'usage_based', 'default_request_estimate_usd': .9})
+        self.assertEqual(public['responses']['200']['content']['application/json']['schema']['properties']['x-aisa-revision'], {'type': 'string'})
+        self.assertEqual(source, original)
 
     def test_write_check_and_cli(self):
         with tempfile.TemporaryDirectory() as directory:
