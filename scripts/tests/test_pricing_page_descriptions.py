@@ -65,6 +65,19 @@ class PublishedPricingDescriptionTests(unittest.TestCase):
                 self.assertEqual(first, fixtures.page_snapshot(self.root))
             first = fixtures.page_snapshot(self.root)
 
+    def test_internal_pricing_pointer_is_replaced_by_the_customer_condition(self):
+        pointer = 'Paid: see x-aisa-pricing; charged only when the call succeeds.'
+        self.document['paths']['/apis/v1/prices/free']['get']['description'] = 'Find records. ' + pointer
+        self.raw = json.dumps(self.document).encode()
+        english = self.root / 'api-reference/prices/free.mdx'
+        english.write_text(english.read_text() + '\n' + pointer + '\n\n```text\n' + pointer + '\n```\n')
+        self.project()
+        header, body = split_frontmatter(english.read_text())
+        self.assertNotIn('x-aisa-pricing', yaml.safe_load(header)['description'])
+        self.assertIn('Charged only when the call succeeds.', yaml.safe_load(header)['description'])
+        self.assertEqual(body.count(pointer), 1)  # Literal examples remain intact.
+        self.assertIn('Charged only when the call succeeds.', body)
+
     def test_reference_pages_are_refreshed_in_the_canonical_publisher(self):
         operation = copy.deepcopy(self.document['paths']['/apis/v1/prices/free']['get'])
         operation.update(operationId='sendMessage', summary='Send a message',

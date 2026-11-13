@@ -262,12 +262,14 @@ def reconcile_free_claim(text, pricing):
 def clean_text(text: str, language: str = 'en') -> str:
     """Remove obsolete tariffs/notices without inserting replacement price prose."""
     generated_notices = (*LEGACY_NOTICES, NOTICE, NOTICE_ZH)
-    if not MONEY.search(text) and not CREDITS.search(text) and not PRICE_DIAL.search(text) and not any(notice in text for notice in generated_notices):
+    pricing_pointer = 'Paid: see x-aisa-pricing; charged only when the call succeeds.'
+    if not MONEY.search(text) and not CREDITS.search(text) and not PRICE_DIAL.search(text) and pricing_pointer not in text and not any(notice in text for notice in generated_notices):
         return text
     chunks = FENCES.split(text)
     changed = False
     for index in range(0, len(chunks), 2):
         chunk = chunks[index]
+        chunk = chunk.replace(pricing_pointer, 'Charged only when the call succeeds.')
         chunk = strip_credit_prices(chunk)
         changed |= chunk != chunks[index]
         # The Cost section renders the customer price. A removed supplier
