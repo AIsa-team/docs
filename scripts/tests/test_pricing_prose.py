@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from pricing_prose import (clean_text, clean_document, clean_page, pricing_summary, remove_price_summary,
-                           strip_price_summary, PRICE_BEGIN, PRICE_END, NOTICE)
+                           strip_price_summary, PRICE_BEGIN, PRICE_END, NOTICE, NOTICE_ZH)
 from compose_openapi import compose
 from test_runtime_contracts import facts, operation, mirror
 
@@ -32,6 +32,8 @@ class PricingProseTests(unittest.TestCase):
         self.assertEqual(clean_text('If the connection fails, the request is billed once.'), 'If the connection fails, the request is billed once.')
         self.assertEqual(clean_text('Billed $0.02 per call. Failed calls are not charged. Each target is charged separately, only once it is published.', add_notice=False),
                          'Failed calls are not charged. Each target is charged separately, only once it is published.')
+        self.assertEqual(clean_text(NOTICE, add_notice=False), '')
+        self.assertEqual(clean_text(NOTICE_ZH, 'zh', add_notice=False), '')
 
 
     def test_reviewed_response_field_tables_preserve_business_prices(self):
@@ -88,6 +90,16 @@ class PricingProseTests(unittest.TestCase):
         self.assertIn('$0.12 USD per successful request', readable_block(operation(updated)))
         operation(updated).pop('x-aisa-pricing')
         self.assertNotIn('$0.12', readable_block(operation(updated)))
+
+    def test_cleanup_preserves_openapi_top_level_order(self):
+        source = {
+            'openapi': '3.1.0',
+            'info': {'title': 'Example'},
+            'paths': {'/records': {'get': {'operationId': 'records', 'description': 'Billed $0.02 per call.'}}},
+            'security': [{'bearerAuth': []}],
+            'servers': [{'url': 'https://api.aisa.one'}],
+        }
+        self.assertEqual(list(clean_document(source)), list(source))
 
     def test_localized_price_only_description_keeps_protocol_shape(self):
         from runtime_localize_openapi_zh import localize_tree, strip_translatable

@@ -253,7 +253,8 @@ def reconcile_free_claim(text, pricing):
 
 def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
     """Drop price clauses, retaining separate usage rules and non-price prose."""
-    if not MONEY.search(text) and not CREDITS.search(text) and not PRICE_DIAL.search(text) and not any(notice in text for notice in LEGACY_NOTICES):
+    generated_notices = (*LEGACY_NOTICES, NOTICE, NOTICE_ZH)
+    if not MONEY.search(text) and not CREDITS.search(text) and not PRICE_DIAL.search(text) and not any(notice in text for notice in generated_notices):
         return text
     notice = NOTICE_ZH if language == 'zh' else NOTICE
     chunks = FENCES.split(text)
@@ -264,6 +265,11 @@ def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
         changed |= chunk != chunks[index]
         for previous, current in zip(LEGACY_NOTICES, (NOTICE, NOTICE_ZH)):
             chunk = chunk.replace(previous, current)
+        # Current notices can already be present in committed generated
+        # OpenAPI output. They are page-level prose, so remove them from
+        # machine declarations whenever this pass is explicitly non-notifying.
+        if not add_notice:
+            chunk = chunk.replace(NOTICE, '').replace(NOTICE_ZH, '')
         changed |= chunk != chunks[index]
         # Keep the model choice while removing its obsolete rate assertion.
         chunk, count = re.subn(r'(`[^`]+`) is billed at \$\d+(?:\.\d+)? per request\.', r'\1 is supported.', chunk)
@@ -368,6 +374,7 @@ def clean_document(document: dict) -> dict:
             return copy.deepcopy(node)
         result = map_contract_children(node, walk)
         is_operation = isinstance(result.get('operationId'), str)
+        had_description = 'description' in result
         if is_operation and isinstance(result.get('description'), str):
             result['description'] = strip_price_summary(result['description'])
             result['description'] = reconcile_free_claim(result['description'], result.get('x-aisa-pricing'))
@@ -378,15 +385,30 @@ def clean_document(document: dict) -> dict:
                 # billing claims, even when their descriptions contain dollars.
                 if field == 'description' and documented_payload_fields(result):
                     continue
-                result[field] = clean_text(result[field])
+                # OpenAPI declarations are machine-facing input to the page
+                # and locale generators.  Keep customer pricing in
+                # x-aisa-pricing/readable_contract_notes; never append the
+                # page-level pricing notice to a parameter, schema, response,
+                # summary, or title description.
+                result[field] = clean_text(result[field], add_notice=False)
         if is_operation:
             remove_price_summary(result)
+            # Keep the declaration shape stable when a stale billing-only
+            # operation description is removed. Locale generation relies on
+            # this invariant for protocol parity.
+            if had_description and 'description' not in result:
+                result['description'] = ''
         return result
 
-    # Paths and reusable declaration names are user-controlled map keys.
-    output = walk({k: v for k, v in document.items() if k != 'paths'})
-    if 'paths' in document:
-        output['paths'] = {path: walk(item) for path, item in document['paths'].items()}
+    # Paths and reusable declaration names are user-controlled map keys. Walk
+    # the top-level map in place so presentation cleanup cannot reorder the
+    # generated OpenAPI document and create unrelated mirror churn.
+    output = {}
+    for key, value in document.items():
+        if key == 'paths' and isinstance(value, dict):
+            output[key] = {path: walk(item) for path, item in value.items()}
+        else:
+            output[key] = walk(value)
     return output
 
 

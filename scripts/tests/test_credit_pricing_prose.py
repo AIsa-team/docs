@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import unittest
 
-from pricing_prose import clean_document, clean_page, clean_text
+from pricing_prose import NOTICE, clean_document, clean_page, clean_text
 from runtime_localize_openapi_zh import key_for, localize_tree
 
 
@@ -112,11 +112,13 @@ class CreditPricingProseTests(unittest.TestCase):
         self.assertEqual(actual['example'], op['example'])
         self.assertEqual(actual['parameters'][0]['schema'], op['parameters'][0]['schema'])
         self.assertNotIn('credit', actual['parameters'][0]['description'])
+        self.assertNotIn(NOTICE, actual['parameters'][0]['description'])
         source = actual['parameters'][0]['description']
         catalog = {'entries': {key_for(source): {'source': source,
                     'translation': '返回 1-100 家公司；每家公司消耗 1 credit。'}}}
         localized = localize_tree(cleaned, catalog, allow_untranslated=True)
         self.assertNotIn('credit', localized['paths']['/lookup']['get']['parameters'][0]['description'])
+        self.assertNotIn(NOTICE, localized['paths']['/lookup']['get']['parameters'][0]['description'])
         self.assertEqual(clean_document(cleaned), cleaned)
 
     def test_page_billing_prose_and_price_table_are_cleaned_but_example_is_unchanged(self):
