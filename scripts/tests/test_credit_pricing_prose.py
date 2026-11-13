@@ -63,6 +63,10 @@ class CreditPricingProseTests(unittest.TestCase):
              ['a call with `limit≤50` bills at most 50 items']),
             ('One credit per brand returned. Empty results and errors are not charged.',
              ['Empty results and errors are not charged']),
+            ('max companies to return, default 100, up to 10000 — THIS IS THE PRICE DIAL',
+             ['max companies to return, default 100, up to 10000']),
+            ('1-50, default 25 — this is the cost dial',
+             ['1-50, default 25']),
         ]
         for text, retained in cases:
             for language in ('en', 'zh'):

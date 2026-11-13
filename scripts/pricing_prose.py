@@ -70,13 +70,14 @@ CREDIT_VALUE = r'(?:\d[\d,]*(?:\.\d+)?|ceil\([^()]+\)|zero|one|two|three|four|fi
 CREDIT_AMOUNT = r'(?<![A-Za-z0-9_.])' + CREDIT_VALUE + r'[ -]*(?:(?:more|full|flat|search|finder)\s+)*(?:credits?\b|积分|点数)'
 CREDIT_TARIFF = r'variable credit prices|one flat credit whether'
 CREDITS = re.compile(CREDIT_AMOUNT + '|' + CREDIT_TARIFF, re.I)
+PRICE_DIAL = re.compile(
+    r'\b(?:THIS IS THE PRICE DIAL|THIS IS THE COST DIAL|PRICE DIAL|COST DIAL)\b', re.I)
 # "per" and "cached" alone also describe academic credits and account balances.
 # Require a billing verb, a rate for an API unit, or a specific cache response.
 CREDIT_CONTEXT = re.compile(
     r'\b(?:cost\w*|pric\w*|bill\w*|charg\w*|pay|adds|capped|expensive|cheapest|dearest)\b|'
     r'\bat\s+' + CREDIT_AMOUNT + r'|'
-    + CREDIT_AMOUNT + r'(?:[ -]+per[ -]+(?:returned[ -]+|matched[ -]+|nonempty[ -]+)?'
-    r'(?:call|request|company|record|person|keyword|anchor|domain|row|profile|ad|brand|item|result)\b|[ -]+(?:flat|way|surface)\b)|'
+    + CREDIT_AMOUNT + r'(?:[ -]+per[ -]+(?:(?:returned|found|matched|nonempty)[ -]+)?(?:\d+[ -]+)?(?:call|request|returned|found|matched|nonempty|company|record|person|keyword|anchor|domain|row|profile|ad|brand|item|result)\b|[ -]+(?:flat|way|surface)\b)|'
     r'cached response|one-credit map band|' + CREDIT_TARIFF + r'|收费|计费|消耗|扣除', re.I)
 RATE = re.compile(
     r'\bbill(?:ed|ing|s)?\b|\bcharg(?:e|ed|es|ing)\b|\bpric(?:e|ing)\b|'
@@ -129,7 +130,7 @@ def strip_credit_prices(text):
     credit tariff and billing context enters this transform; examples
     and reviewed payload descriptions are excluded by the callers.
     """
-    if not CREDITS.search(text) or not CREDIT_CONTEXT.search(text):
+    if not (CREDITS.search(text) or PRICE_DIAL.search(text)) or not (CREDIT_CONTEXT.search(text) or PRICE_DIAL.search(text)):
         return text
     unit = r'(?:\s+(?:per\s+(?:(?:returned|found|started|matched)\s+)?[\w-]+(?:\s+returned)?|each|a hit))?'
     # Zero-priced failures/empty results are outcome rules, not positive rates.
@@ -194,7 +195,16 @@ def strip_credit_prices(text):
         return '(' + value + ')' if value else ''
     text = re.sub(r'[（(]([^()（）\n]*)[）)]', parenthetical, text)
     text = re.sub(r'\bCOST DIAL\s*[—:-]\s*', '', text, flags=re.I)
-    text = re.sub(r'\s*[—–]\s*(?:THIS IS THE PRICE|PRICE DIAL|you pay|and DOUBLES the price)[^\n.]*', '', text, flags=re.I)
+    # A supplier sometimes labels a parameter as a price dial without stating
+    # the amount in the same sentence. Keep the request bounds and remove only
+    # that editorial tariff marker.
+    text = re.sub(
+        r'\s*[—–:-]\s*THIS IS THE PRICE DIAL\b\s*:?\s*'
+        r'(?:you\s+pay\s+)?' + CREDIT_AMOUNT + unit,
+        '', text, flags=re.I)
+    text = re.sub(r'\s*[—–:-]\s*THIS IS THE PRICE DIAL\b', '', text, flags=re.I)
+    text = re.sub(r'\s*[—–:-]\s*THIS IS THE COST DIAL\b', '', text, flags=re.I)
+    text = re.sub(r'\s*[—–]\s*(?:THIS IS THE PRICE|THIS IS THE COST|PRICE DIAL|you pay|and DOUBLES the price)[^\n.]*', '', text, flags=re.I)
     text = re.sub(r'\bTHIS IS THE PRICE\s*[—:-][^\n.]*', '', text, flags=re.I)
     # Remove a supplier authorization explanation but retain the actual limit.
     text = re.sub(r'[^.!?\n;]*\bcapped at\s+' + CREDIT_AMOUNT + r',\s*so\s*', ' ', text, flags=re.I)
@@ -243,7 +253,7 @@ def reconcile_free_claim(text, pricing):
 
 def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
     """Drop price clauses, retaining separate usage rules and non-price prose."""
-    if not MONEY.search(text) and not CREDITS.search(text) and not any(notice in text for notice in LEGACY_NOTICES):
+    if not MONEY.search(text) and not CREDITS.search(text) and not PRICE_DIAL.search(text) and not any(notice in text for notice in LEGACY_NOTICES):
         return text
     notice = NOTICE_ZH if language == 'zh' else NOTICE
     chunks = FENCES.split(text)

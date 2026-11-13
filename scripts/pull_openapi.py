@@ -537,6 +537,52 @@ def unindexed_empty_placeholder(previous, catalogs, index, category):
     return bool(catalogs) and not set(catalogs).intersection(advertised)
 
 
+def _document_content_changed(previous: dict, current: dict) -> bool:
+    """Detect meaningful generated changes while ignoring observation time.
+
+    The document hash describes Runtime inputs and intentionally ignores
+    presentation cleanup. A shared prose-generator fix can therefore change a
+    declaration while leaving that hash intact; reusing the old bytes would
+    immediately undo the fix on the next generation. Compare the documents
+    after removing only the observational generation timestamp so those
+    deterministic cleanup changes are persisted without generation-time churn.
+    """
+    def remove_observation_time(value):
+        if isinstance(value, dict):
+            value.pop("generated_at", None)
+            for child in value.values():
+                remove_observation_time(child)
+        elif isinstance(value, list):
+            for child in value:
+                remove_observation_time(child)
+
+    def normalize(document):
+        document = copy.deepcopy(document)
+        remove_observation_time(document)
+        # Retained historical operations are rebuilt from the current
+        # publication graph. Their private component namespace is intentionally
+        # allowed to disappear when no active operation references it; that is
+        # not a source or presentation change worth rewriting an otherwise
+        # stable document for.
+        schemas = document.get("components", {}).get("schemas", {})
+        if isinstance(schemas, dict):
+            for name in list(schemas):
+                if str(name).startswith("RetainedHistory_"):
+                    schemas.pop(name, None)
+        return document
+
+    old = normalize(previous)
+    new = normalize(current)
+    if old == new:
+        return False
+    # A generator cleanup may alter public prose without changing Runtime's
+    # input hash. Persist exactly that cleanup, while leaving arbitrary
+    # hand-edited/tampered output to the existing hash-based reuse behavior.
+    from pricing_prose import clean_document
+    cleaned_old = normalize(clean_document(previous))
+    return cleaned_old != old and cleaned_old == new
+
+
 def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = True,
           readiness_context: dict | None = None, *, identity_history=_AUTO_HISTORY,
           page_link_index=None, reuse_unchanged_documents=True) -> tuple[dict, dict]:
@@ -766,7 +812,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         else:
             if not new_hash:
                 raise ValueError(f"{provider}: generated document has no document_hash")
-            changed = old_hash != new_hash
+            changed = old_hash != new_hash or _document_content_changed(previous, document)
             if changed or not reuse_unchanged_documents:
                 changes[output_path] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
             else:
@@ -801,7 +847,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         new_hash = document.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         if not new_hash:
             raise ValueError(f"{provider}: generated document has no document_hash")
-        changed = old_hash != new_hash
+        changed = old_hash != new_hash or _document_content_changed(previous, document)
         if changed or not reuse_unchanged_documents:
             changes[root / f"openapi/{provider}.json"] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
         elif with_pages:
