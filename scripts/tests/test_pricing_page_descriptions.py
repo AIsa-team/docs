@@ -3,6 +3,7 @@ import copy
 import json
 import re
 import unittest
+from unittest.mock import patch
 
 import yaml
 
@@ -174,6 +175,42 @@ class PublishedPricingDescriptionTests(unittest.TestCase):
         self.assertEqual(result.count(OLD_REFERENCE_NOTE), 1)
         self.assertIn('Currently disabled.', result)
         self.assertIn('This endpoint is disabled and cannot be called.', result)
+
+    def test_standalone_translation_keeps_generated_description_refreshable(self):
+        import runtime_localize_openapi_zh as localization
+        self.project()
+        path = '/apis/v1/prices/free'
+        self.document['paths'] = {path: self.document['paths'][path]}
+        self.raw = json.dumps(self.document).encode()
+        (self.root / 'openapi/prices.json').write_bytes(self.raw)
+        for prefix in ('', 'zh/'):
+            for page in (self.root / f'{prefix}api-reference/prices').glob('*.mdx'):
+                if page.stem != 'free':
+                    page.unlink()
+        strings = {text for _, text in localization.iter_spec_strings(self.document)}
+        english = self.root / 'api-reference/prices/free.mdx'
+        header, body = split_frontmatter(english.read_text())
+        strings.add(localization.strip_generated_block(body))
+        strings.update(str(value) for value in yaml.safe_load(header).values())
+        strings.update(('Find records.', 'Find archived records.'))
+        translations = {'Find records.': '查找记录。', 'Find archived records.': '查找归档记录。'}
+        catalog = {'entries': {localization.key_for(text): {'source': text,
+                              'translation': translations.get(text, text)} for text in strings if text.strip()}}
+        (self.root / 'translations').mkdir(exist_ok=True)
+        (self.root / 'translations/openapi-zh.json').write_text(json.dumps(catalog))
+        with patch.multiple(localization, ROOT=self.root, OPENAPI_DIR=self.root / 'openapi',
+                            ZH_OPENAPI_DIR=self.root / 'openapi/zh', API_DIR=self.root / 'api-reference',
+                            ZH_API_DIR=self.root / 'zh/api-reference'), \
+                patch.object(localization, 'load_catalog', return_value=catalog):
+            localization.generate()
+        zh = self.root / 'zh/api-reference/prices/free.mdx'
+        header, _ = split_frontmatter(zh.read_text())
+        self.assertIn(DESCRIPTION_HASH, yaml.safe_load(header))
+        self.document['paths'][path]['get']['description'] = 'Find archived records.\n\n' + fixtures.OLD_SUMMARY
+        self.raw = json.dumps(self.document).encode()
+        self.project()
+        header, _ = split_frontmatter(zh.read_text())
+        self.assertEqual(yaml.safe_load(header)['description'], '查找归档记录。')
 
 
 if __name__ == '__main__':

@@ -439,7 +439,13 @@ def generate(published_ref=None) -> None:
         if title:
             frontmatter = replace_frontmatter_value(frontmatter, "title", translation(catalog, title))
         if description:
-            frontmatter = replace_frontmatter_value(frontmatter, "description", translation(catalog, description))
+            from pricing_prose import DESCRIPTION_HASH
+            generated = frontmatter_value(frontmatter, DESCRIPTION_HASH) == hashlib.sha256(description.encode()).hexdigest()
+            localized_description = translation(catalog, description)
+            frontmatter = replace_frontmatter_value(frontmatter, "description", localized_description)
+            if generated:
+                frontmatter = replace_frontmatter_value(frontmatter, DESCRIPTION_HASH,
+                    hashlib.sha256(localized_description.encode()).hexdigest())
         if excerpt:
             frontmatter = replace_frontmatter_value(frontmatter, "excerpt", translation(catalog, excerpt))
         frontmatter = re.sub(
