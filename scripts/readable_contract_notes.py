@@ -8,6 +8,18 @@ import re
 BEGIN = "{/* aisa-contract-details:start */}"
 END = "{/* aisa-contract-details:end */}"
 
+
+def split_frontmatter(text):
+    """Split a page without importing the locale generator (avoids a cycle)."""
+    if not text.startswith('---\n'):
+        raise ValueError('MDX is missing frontmatter')
+    match = re.search(r'\n---(?:\n|$)', text[4:])
+    if not match:
+        raise ValueError('MDX frontmatter is not closed')
+    start = 4 + match.start()
+    body_start = 4 + match.end()
+    return text[4:start], text[body_start:]
+
 LEGACY_REFERENCE_NOTICES = (
     'This API reference has not been updated for the currently available endpoint.',
     '该接口文档尚未完成更新。',
@@ -153,6 +165,16 @@ def update_readable_block(text, operation, language="en", translate=None, **cont
     if not block:
         return strip_generated_block(text)
     pattern = re.escape(BEGIN) + r".*?" + re.escape(END)
+    if not text.startswith('---\n'):
+        if re.search(pattern, text, re.S):
+            return re.sub(pattern, lambda _: block, text, flags=re.S)
+        return text + "\n\n" + block + "\n"
     if re.search(pattern, text, re.S):
-        return re.sub(pattern, lambda _: block, text, flags=re.S)
-    return text + "\n\n" + block + "\n"
+        text = strip_generated_block(text)
+    # Put the customer-facing price immediately below the page frontmatter.
+    # Mintlify renders the generated block in document order; keeping it first
+    # makes the charge visible before the long request and response details.
+    header, body = split_frontmatter(text)
+    # Keep three newlines before the marker: strip_generated_block consumes the
+    # latter two and leaves the original blank line after frontmatter intact.
+    return '---\n' + header + '\n---\n\n\n' + block + ('\n' + body if body else '\n')

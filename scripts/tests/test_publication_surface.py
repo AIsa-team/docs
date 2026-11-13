@@ -74,7 +74,12 @@ class PublicationSurfaceTests(unittest.TestCase):
         changes = {}
         refresh_legacy_page_blocks(self.root, published_documents(self.root), changes, {'entries': {}})
         for page, text in originals.items():
-            self.assertTrue(changes[page].startswith(text))
+            # The generated request/price block is deliberately placed under
+            # frontmatter so the customer sees pricing before long examples;
+            # authored prose remains intact after that block.
+            self.assertIn('Manual example stays.\n', changes[page])
+            self.assertLess(changes[page].index('aisa-contract-details:start'),
+                            changes[page].index('Manual example stays.'))
             self.assertIn('"operationId": "accountUsage"', changes[page])
             self.assertNotIn('x-aisa-pricing', changes[page])
             self.assertNotIn('x-aisa-operation-id:', changes[page])

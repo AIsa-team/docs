@@ -61,6 +61,9 @@ class PublishedPricingDescriptionTests(unittest.TestCase):
                         self.assertNotIn('aisa-pricing:', description)
                         self.assertNotIn('provider_credit', description)
                         self.assertIn('Find records.', description)
+                        rendered = page.read_text()
+                        self.assertLess(rendered.index('aisa-contract-details:start'),
+                                        rendered.index('Manual usage example.'))
             if repeat:
                 self.assertEqual(first, fixtures.page_snapshot(self.root))
             first = fixtures.page_snapshot(self.root)
