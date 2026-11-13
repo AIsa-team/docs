@@ -66,9 +66,18 @@ def remove_price_summary(operation):
     return operation
 
 MONEY = re.compile(r'(?:US)?\$\s*\d[\d,]*(?:\.\d+)?(?:\s*USD)?|\b\d[\d,]*(?:\.\d+)?\s*\$|\b\d+(?:\.\d+)?\s*(?:USD|美元|cents?)\b', re.I)
-CREDIT_AMOUNT = r'(?:\d[\d,]*(?:\.\d+)?|ceil\([^()]+\))\s*(?:more\s+)?(?:credits?\b|积分|点数)'
-CREDITS = re.compile(CREDIT_AMOUNT, re.I)
-CREDIT_CONTEXT = re.compile(r'\b(?:cost\w*|pric\w*|bill\w*|charg\w*|pay|adds|capped|cache\w*|per)\b|收费|计费|消耗|扣除', re.I)
+CREDIT_VALUE = r'(?:\d[\d,]*(?:\.\d+)?|ceil\([^()]+\)|zero|one|two|three|four|five|ten|a)'
+CREDIT_AMOUNT = r'(?<![A-Za-z0-9_.])' + CREDIT_VALUE + r'[ -]*(?:(?:more|full|flat|search|finder)\s+)*(?:credits?\b|积分|点数)'
+CREDIT_TARIFF = r'variable credit prices|one flat credit whether'
+CREDITS = re.compile(CREDIT_AMOUNT + '|' + CREDIT_TARIFF, re.I)
+# "per" and "cached" alone also describe academic credits and account balances.
+# Require a billing verb, a rate for an API unit, or a specific cache response.
+CREDIT_CONTEXT = re.compile(
+    r'\b(?:cost\w*|pric\w*|bill\w*|charg\w*|pay|adds|capped|expensive|cheapest|dearest)\b|'
+    r'\bat\s+' + CREDIT_AMOUNT + r'|'
+    + CREDIT_AMOUNT + r'(?:[ -]+per[ -]+(?:returned[ -]+|matched[ -]+|nonempty[ -]+)?'
+    r'(?:call|request|company|record|person|keyword|anchor|domain|row|profile|ad|brand|item|result)\b|[ -]+(?:flat|way|surface)\b)|'
+    r'cached response|one-credit map band|' + CREDIT_TARIFF + r'|收费|计费|消耗|扣除', re.I)
 RATE = re.compile(
     r'\bbill(?:ed|ing|s)?\b|\bcharg(?:e|ed|es|ing)\b|\bpric(?:e|ing)\b|'
     r'\b(?:flat|rate|surcharge|upstream|per\s+(?:call|request|item|row|job|1M\s+tokens))\b|'
@@ -117,12 +126,60 @@ def strip_credit_prices(text):
     """Remove supplier tariff clauses while retaining caller and outcome rules.
 
     A credit balance or a response value is not a tariff. Only prose with a
-    numeric credit amount and billing context enters this transform; examples
+    credit tariff and billing context enters this transform; examples
     and reviewed payload descriptions are excluded by the callers.
     """
     if not CREDITS.search(text) or not CREDIT_CONTEXT.search(text):
         return text
-    unit = r'(?:\s+(?:per\s+(?:(?:returned|found|started)\s+)?[\w-]+(?:\s+returned)?|each))?'
+    unit = r'(?:\s+(?:per\s+(?:(?:returned|found|started|matched)\s+)?[\w-]+(?:\s+returned)?|each|a hit))?'
+    # Zero-priced failures/empty results are outcome rules, not positive rates.
+    zero = r'(?:0(?:\.0+)?|zero)\s*(?:credits?\b|积分|点数)'
+    text = re.sub(r'\b(billed|charged)\s+' + zero, r'not \1', text, flags=re.I)
+    text = re.sub(r'\bcosts\s+' + zero, 'incurs no charge', text, flags=re.I)
+    text = re.sub(r'\bcost\s+' + zero, 'incur no charge', text, flags=re.I)
+    text = re.sub(r'(?:消耗|扣除)\s*' + zero, '不收费', text)
+    # Hyphenated rates are words in prose, not identifiers or response fields.
+    text = re.sub(r'(' + CREDIT_VALUE + r')-credit', r'\1 credit', text, flags=re.I)
+    text = re.sub(r'credit-per-', 'credit per ', text, flags=re.I)
+    text = re.sub(r'credit per ([a-z]+)-', r'credit per \1 ', text, flags=re.I)
+    # Preserve the useful half of mixed price/usage clauses before dropping rates.
+    text = re.sub(r',\s*so a full page is ~?' + CREDIT_AMOUNT, '', text, flags=re.I)
+    text = re.sub(r';\s*(?:[\w-]+ can raise it to|all add-ons can bring one record to)\s+\d+\.', '.', text, flags=re.I)
+    text = re.sub(r'\s+is the cheap one\s+at\s+' + CREDIT_AMOUNT + unit + r',?\s+but(?=\s+returns)', '', text, flags=re.I)
+    text = re.sub(r'\s+at\s+' + CREDIT_AMOUNT + unit + r'(?=,?\s+but\s+returns)', '', text, flags=re.I)
+    text = re.sub(r'\s*—\s*same\s+' + CREDIT_AMOUNT + unit + r'\s+price but\s+', ' — with ', text, flags=re.I)
+    text = re.sub(r'\bthe\s+' + CREDIT_AMOUNT + r'\s+way\b', 'a way', text, flags=re.I)
+    text = re.sub(r'\b' + CREDIT_AMOUNT + r'\s+flat\s*—\s*the cheap way to\s+', 'Use this to ', text, flags=re.I)
+    if re.search(r'in one\s+' + CREDIT_AMOUNT + r'\s+call', text, re.I):
+        text = re.sub(r'([a-z]+)\s+\(\d+(?:\.\d+)?\)(?=(?:\.(?=\d)|[^.!?\n])*tiers return)', r'\1', text, flags=re.I)
+    text = re.sub(r'\s+in one\s+' + CREDIT_AMOUNT + r'\s+call\s*—\s*the same price as calling both',
+                  ' in one call', text, flags=re.I)
+    text = re.sub(r'\bThis is the most expensive endpoint[^.\n]*?\s*—\s*and\s+', '', text, flags=re.I)
+    text = re.sub(r'\b(?:At\s+' + CREDIT_AMOUNT + r'\s+this is the cheapest|The dearest of|THE MOST EXPENSIVE ROUTE HERE|Same\s+' + CREDIT_AMOUNT + r' per hit rate)(?:\.(?=\d)|[^.;\n])*', '', text, flags=re.I)
+    text = re.sub(r'\s+at the same \d+(?:\.\d+)? rate', '', text, flags=re.I)
+    text = re.sub(r'\bThis is the fixed\s+' + CREDIT_AMOUNT + r'\s+surface\.\s*', '', text, flags=re.I)
+    text = re.sub(r'\s+keeps this request inside[^.\n]*?one[ -]credit map band', '', text, flags=re.I)
+    text = re.sub(r'\bThe\s+' + CREDIT_AMOUNT + r'\s+base search is exposed\.\s*', '', text, flags=re.I)
+    text = re.sub(r'\s+because (?:they have separate variable credit prices|it adds one or more scrape credits for every returned page)', '', text, flags=re.I)
+    text = re.sub(r',\s*bounding the search at\s+' + CREDIT_AMOUNT, '', text, flags=re.I)
+    text = re.sub(r'\bOne flat credit whether you\s+', 'You can ', text, flags=re.I)
+    text = re.sub(r'\bAdds\s+' + CREDIT_AMOUNT + r'\s+when true', 'May affect request pricing when true', text, flags=re.I)
+    text = re.sub(r'\s*[,;]\s*(?:one credit per returned [a-z]+|and every returned row costs a credit)', '', text, flags=re.I)
+    text = re.sub(r'(Choose projection:[^.\n]+)', lambda m: re.sub(r'\s+' + CREDIT_AMOUNT + r'(?:\s+per nonempty call)?', '', m[0], flags=re.I), text)
+    text = re.sub(r'\s*;\s*the price follows the type[^.\n]*(?:\.[0-9][^.\n]*)*', '', text, flags=re.I)
+    text = re.sub(r'\bCosts?\s+' + CREDIT_AMOUNT + r'\s+if ([^.\n]+),\s*' + CREDIT_AMOUNT + r'\s+otherwise',
+                  r'This operation is billed if \1, and also otherwise', text, flags=re.I)
+    text = re.sub(r'\bcosts?\s+' + CREDIT_AMOUNT + r'(?=\s+(?:even when|for AI transcription))', 'is billed', text, flags=re.I)
+    text = re.sub(r'\b(verdicts?|results?|errors?)\s+(costs?)\s+' + CREDIT_AMOUNT,
+                  lambda m: m[1] + (' is billed' if m[2].lower() == 'costs' else ' are billed'),
+                  text, flags=re.I)
+    # A provider-priced error may be absorbed by the service. Keep that error
+    # condition and its following settlement explanation together.
+    text = re.sub(r'\bcosts?\s+[A-Z][\w.-]+\s+' + CREDIT_AMOUNT,
+                  'incurs provider usage', text)
+    text = re.sub(r'\s+and still costs?\s+' + CREDIT_AMOUNT, ' and is still billed', text, flags=re.I)
+    text = re.sub(r'\s+and charges\s+' + CREDIT_AMOUNT, '', text, flags=re.I)
+    text = re.sub(r': same credits,', ':', text, flags=re.I)
     # Keep cache metadata and enrichment fields inside mixed parentheses.
     def parenthetical(match):
         value = match[1]
@@ -135,16 +192,16 @@ def strip_credit_prices(text):
         if CREDITS.search(value) and CREDIT_CONTEXT.search(value):
             value = strip_credit_prices(value)
         return '(' + value + ')' if value else ''
-    text = re.sub(r'\(([^()\n]*)\)', parenthetical, text)
+    text = re.sub(r'[（(]([^()（）\n]*)[）)]', parenthetical, text)
     text = re.sub(r'\bCOST DIAL\s*[—:-]\s*', '', text, flags=re.I)
     text = re.sub(r'\s*[—–]\s*(?:THIS IS THE PRICE|PRICE DIAL|you pay|and DOUBLES the price)[^\n.]*', '', text, flags=re.I)
     text = re.sub(r'\bTHIS IS THE PRICE\s*[—:-][^\n.]*', '', text, flags=re.I)
     # Remove a supplier authorization explanation but retain the actual limit.
     text = re.sub(r'[^.!?\n;]*\bcapped at\s+' + CREDIT_AMOUNT + r',\s*so\s*', ' ', text, flags=re.I)
-    text = re.sub(r',\s*which\s+bills\b[^;\n)]*' + CREDIT_AMOUNT + r'[^;\n)]*', '', text, flags=re.I)
-    text = re.sub(r'\s+at\s+' + CREDIT_AMOUNT + r'[^\n.;]*', '', text, flags=re.I)
+    text = re.sub(r',\s*which\s+(?:bills|costs)\b[^.;\n)]*' + CREDIT_AMOUNT + r'[^.;\n)]*', '', text, flags=re.I)
+    text = re.sub(r'\s+at\s+' + CREDIT_AMOUNT + unit + r'(?:\s*=\s*' + CREDIT_AMOUNT + r')?', '', text, flags=re.I)
     text = re.sub(r'\s*[,;]\s*cost(?:ing|s)?\s+' + CREDIT_AMOUNT + unit + r'[^\n.;)]*', '', text, flags=re.I)
-    text = re.sub(r'\s+and\s+(?:may\s+)?costs?\s+' + CREDIT_AMOUNT + unit, '', text, flags=re.I)
+    text = re.sub(r'\s+and\s+(?:may\s+)?costs?\s+' + CREDIT_AMOUNT + unit + r'(?:\s+rather than one)?', '', text, flags=re.I)
     text = re.sub(r'\s+costs?\s+' + CREDIT_AMOUNT + unit + r'\s+and(?=\s+also\s+includes)', '', text, flags=re.I)
     text = re.sub(r'\s+adds\s+' + CREDIT_AMOUNT + r'[^\n.;)]*', '', text, flags=re.I)
     # Retain explicit failure/404 billing conditions without the supplier unit.
@@ -155,7 +212,7 @@ def strip_credit_prices(text):
     text = re.sub(r'Response detail and fixed price[^:.]*:[^.\n]*' + CREDIT_AMOUNT + r'[^.\n]*\.',
                   'Response detail.', text, flags=re.I)
     # Remaining standalone tariff sentences contain no customer price authority.
-    parts = re.split(r'(\n+|(?<=[.!?])\s+(?!\d)|(?<=[。！？])|[;；][ \t]*)', text)
+    parts = re.split(r'(\n+|(?<=[.!?])\s+(?!\d)|(?<=[。！？])|[;；，][ \t]*)', text)
     for i in range(0, len(parts), 2):
         part = parts[i]
         if not part or not CREDITS.search(part):

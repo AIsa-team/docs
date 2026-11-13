@@ -27,8 +27,11 @@ They do not deploy the Runtime producer.
 
 ```sh
 export RUNTIME_FACTS=/tmp/pr-334-runtime
-export PUBLISHED_REF=d27042ab62547c19aacfd75208a50408d5082cf6
+export PUBLISHED_REF=f4acbef48c6ffa3796c2111d14d8f5a0b78a9283
 python scripts/fetch_runtime_release.py --current --output "$RUNTIME_FACTS"
+python scripts/prepare_source_receipts.py \
+  --reviewed docs/schema-inputs/source-receipts.json \
+  --cache .cache/source-reviews.json
 python scripts/prepare_source_receipts.py \
   --reviewed docs/current-source-review-20261009/merged-source-reviews.json \
   --cache .cache/source-reviews.json
@@ -89,3 +92,30 @@ The canonical publisher then authenticates its exact bytes before the normal
 publication path can proceed. The generated PR graph does not substitute for
 that lock or claim that production has deployed it. No CI classification,
 readiness baseline, accepted debt or publication gate is weakened by this fix.
+
+## Verify production after the input promotion
+
+This PR validates a candidate; the following release checks are separate work.
+
+1. After the final Docs commit is merged, export its reviewed input bundle and
+   Composer source manifest reproducibly. Update all four Services lock fields
+   (`docs_ref`, `composer_revision`, `bundle_manifest_sha256`, and
+   `source_manifest_sha256`) and the paired fixture bindings. Verify the package
+   installed in the worker image and replay the authenticated catalog.
+2. After the normal Services rollout, read `/public/api-contract/current` and
+   require the deployed compiler inputs to equal those four reviewed pins.
+   Require `fresh: true`, matching generation/published_generation, and a fully
+   verified immutable canonical release from the strict acquisition reader.
+3. Run the existing publisher in dry-run mode first. Inspect the actual
+   `compose` job: staging, payment discovery, formal assessment and export must
+   pass. A scheduled workflow can report success while `compose` fails because
+   of `continue-on-error`; that is not publication. The subsequent normal
+   publication must actually push the assessed commit and retain matching
+   origin, acquisition and formal readiness evidence.
+4. Confirm the documentation deployment uses that generated commit. Check the
+   English/Chinese pages for each pricing family, the repaired credit examples,
+   free/archive pages and absence of duplicate price markers. Repeat generation
+   with the same inputs and require stable pages, including retired aliases.
+
+No SQL, Runtime deployment, publisher invocation or main merge is performed by
+these candidate-generation commands.

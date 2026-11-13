@@ -20,6 +20,12 @@ arithmetic while retaining parameter bounds, opt-in switches, cache metadata and
 failure/billing conditions. Business credit balances, reviewed payload fields,
 examples and machine pricing metadata remain data. Frozen real descriptions
 and stage/canonical projection regressions cover this distinction.
+Zero-priced error/empty outcomes keep their explicit no-charge condition. A
+zero supplier cost for a successful cached response does not establish that the
+customer's cached read is free: the Runtime customer tariff owns that price.
+Composer version 30 invalidates version 29's cached native descriptions. A
+three-pass upgrade regression verifies unchanged Runtime facts cannot restore
+the old credit prose on a subsequent generation.
 
 Both `pull_openapi.stage` and `canonical_import.project_surfaces` use the shared
 page renderer. The canonical consumer preserves verified native JSON bytes;
@@ -39,6 +45,7 @@ PYTHONPATH=scripts:scripts/tests python -m unittest \
   scripts.tests.test_pricing_generation \
   scripts.tests.test_customer_price_presentation \
   scripts.tests.test_pricing_prose \
+  scripts.tests.test_credit_pricing_prose \
   scripts.tests.test_readable_contract_notes
 ```
 
@@ -47,3 +54,8 @@ declarations, exercise actual composition and canonical projection, regenerate
 twice, and change a source price. They require stable output, updated prices,
 unchanged machine pricing metadata and no legacy pricing markers. Dev also
 tests these families through `sync_dev_runtime.acquire` and `generate`.
+
+When a PR also changes reviewed source inputs, commit a complete regenerated
+candidate graph so artifact CI can inspect the proposed bytes. See
+[PR candidate regeneration](pr-334-candidate-regeneration.md) for the existing
+generator sequence, including the payment discovery refresh and release boundary.

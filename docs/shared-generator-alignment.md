@@ -35,9 +35,16 @@ within GitHub's single-file limit. `pull_openapi.py` also restores the temporary
 operation binding when staging an archived alias, so retirement is reapplied
 before writing and repeated generation cannot add request/pricing blocks back.
 The two rendering/serialization exceptions have regressions. After rebasing
-onto main `d27042ab62547c19aacfd75208a50408d5082cf6`, the Runtime reader also
-retains main's 192 MiB total acquisition limit from #352. JSON values and
-published machine contracts are unchanged:
+onto main `f4acbef48c6ffa3796c2111d14d8f5a0b78a9283`, the Runtime reader also
+retains main's 192 MiB total acquisition limit from #352. The #356 input packet
+retains all 295 main receipts and 105 original observations, plus the three
+already-reviewed example-sanitization receipts. Its context binds their merged
+hash and the actual source assessment time. `pricing_prose.py` additionally
+cleans supplier credit tariffs while preserving caller conditions and payload
+data; real catalog and repeated-generation regressions cover this change.
+Composer version 30 also invalidates version 29's cached native descriptions;
+the upgrade regression covers three successive generations with identical facts.
+Machine pricing metadata and request/response schema constraints are unchanged:
 
 - `scripts/customer_price_presentation.py`
 - `scripts/readable_contract_notes.py`

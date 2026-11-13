@@ -2,6 +2,7 @@
 import copy
 import json
 import unittest
+from unittest.mock import patch
 
 import canonical_import
 import test_full_registry
@@ -108,6 +109,31 @@ class PricingGenerationTests(unittest.TestCase):
         self.addCleanup(self.fixture.tearDown)
         self.root = self.fixture.root
         seed_old_pages(self.root)
+
+    def test_old_composer_credit_descriptions_upgrade_and_stay_upgraded(self):
+        document = pricing_document()
+        op = document['paths']['/apis/v1/prices/response_units']['get']
+        op['parameters'] = [{'in': 'query', 'name': 'pageSize',
+                             'schema': {'type': 'integer', 'minimum': 1, 'maximum': 100},
+                             'description': '1-100. THIS IS THE PRICE — 1 credit per company returned'}]
+        self.fixture.sources({'prices': document})
+        # Simulate the previous compiler's hashed native artifact, not just an
+        # old handwritten page. Unchanged input hashes must not revive it.
+        with patch('compose_openapi.VERSION', '29'), patch('pricing_prose.clean_document', side_effect=copy.deepcopy):
+            self.fixture.publish(self.fixture.pull()[0])
+        native_path = self.root / 'openapi/prices.json'
+        self.assertIn('THIS IS THE PRICE', native_path.read_text())
+        for repeat in range(3):
+            self.fixture.publish(self.fixture.pull()[0])
+            self.assertNotIn('THIS IS THE PRICE', native_path.read_text())
+            assert_customer_pages(self, self.root)
+            for prefix in ('', 'zh/'):
+                page = (self.root / (prefix + 'api-reference/prices/response_units.mdx')).read_text()
+                self.assertNotIn('THIS IS THE PRICE', page)
+                self.assertIn('1-100', page)
+            if repeat:
+                self.assertEqual(first, page_snapshot(self.root))
+            first = page_snapshot(self.root)
 
     def test_real_stage_regenerates_all_families_and_follows_updated_source_prices(self):
         document = pricing_document()
