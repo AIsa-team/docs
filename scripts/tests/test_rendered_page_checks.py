@@ -47,6 +47,14 @@ class RenderedPageChecks(unittest.TestCase):
             raw = self.page(zh=zh, price_first=True) + self.page(zh=zh, price='$0.02', price_first=True)
             self.assertTrue(compare_llms(self.expected, visible_contract(raw.encode())[1]))
 
+    def test_price_typography_may_change_but_amounts_must_not(self):
+        expected = copy.deepcopy(self.expected)
+        expected[self.identity][0]['price_summary'] = "The target's price is $0.08 USD."
+        for price, valid in (("The target’s price is $0.08 USD.", True),
+                             ("The target’s price is $0.02 USD.", False)):
+            actual = visible_contract(self.page(price=price, price_first=True).encode())[1]
+            self.assertEqual(not compare_llms(expected, actual), valid)
+
     def test_visible_bilingual_json_and_first_price_paragraph(self):
         for zh in (False, True):
             with self.subTest(zh=zh):

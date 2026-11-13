@@ -77,6 +77,13 @@ def same_json(left, right):
     return left == right
 
 
+def normalized_price_copy(value):
+    """Mintlify's smart quotes change typography, never the quoted tariff."""
+    if not isinstance(value, str):
+        return value
+    return value.translate(str.maketrans({'\u2018': "'", '\u2019': "'", '\u201c': '"', '\u201d': '"'}))
+
+
 def request_blocks(text):
     """Recover rendered declarations, including arbitrary-length safe fences."""
     result = {}
@@ -222,7 +229,7 @@ def compare_llms(expected, actual):
                 matches = [row for row in target if same_json(row['request'], record['request'])]
                 if not matches:
                     errors.append(label + ':request_declaration_mismatch')
-                elif not any(row['price_summary'] == record['price_summary'] for row in matches):
+                elif not any(normalized_price_copy(row['price_summary']) == normalized_price_copy(record['price_summary']) for row in matches):
                     errors.append(label + ':price_summary_mismatch')
     return sorted(set(errors))
 
