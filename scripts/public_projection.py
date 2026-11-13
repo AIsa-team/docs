@@ -14,7 +14,10 @@ from the formal aggregate. Publication file hashes bind both; active website
 receivers copy those exact bytes. Formal aggregate hashes remain the publication
 authority and are not substituted with customer projection hashes.
 
-Paths, schemas, examples, customer prices and status retain their declarations.
+Paths, schemas, customer prices and status retain their declarations. In-scope
+request examples are public only when their Runtime evidence verifies the exact
+scenario; unverified inputs and generated Reference samples remain in the formal
+source for replay, while public descriptions and response schemas stay available.
 Internal price construction and revision references are removed; generated
 pricing prose is rebuilt from the public pricing fields. ``info.x-aisa-document.document_hash`` is recomputed over
 the projected document; the formal hash it replaces is kept as
@@ -36,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+from functools import lru_cache
 import hashlib
 import json
 import re
@@ -45,7 +49,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 CATALOGS = ROOT / 'scripts/public_projection.json'
 PUBLIC_DIR = 'openapi-public'
-PROJECTION_VERSION = '2'
+PROJECTION_VERSION = '3'
 
 # Removed at any depth. The first five are the G3 fields of the design; the
 # upstream route and selector name the supplier-side endpoint shape.
@@ -124,14 +128,56 @@ def strip(node):
     return node
 
 
+@lru_cache(maxsize=1)
+def evidence_scope():
+    # The same reviewed inventory used by the release gate, including older
+    # Runtime releases which predate the x-aisa-example marker.
+    source = ROOT / 'scripts/release_gate_scope.json'
+    return frozenset(json.loads(source.read_text())['operations'])
+
+
+def withhold_unverified_examples(operation):
+    from playground_examples import apply_example_verification, verification_state
+    state = verification_state(operation)
+    if state is not None and state[0] == 'verified':
+        return
+    if state is None:
+        operation['x-aisa-example'] = {'state': 'pending', 'reason': 'no_evidence'}
+    previous = operation.get('x-aisa-verification', {})
+    apply_example_verification(operation)
+    from playground_examples import PENDING_REASONS
+    if state and state[1] == 'no_evidence' and previous.get('reason') in PENDING_REASONS:
+        operation['x-aisa-verification']['reason'] = previous['reason']
+
+    def remove_examples(node):
+        if isinstance(node, dict):
+            for key in ('example', 'examples'):
+                node.pop(key, None)
+            for key, value in node.items():
+                # Property names and wire defaults are data, not annotations.
+                if key in {'properties', '$defs', 'definitions', 'patternProperties'} and isinstance(value, dict):
+                    for schema in value.values():
+                        remove_examples(schema)
+                elif key not in {'default', 'enum', 'const'}:
+                    remove_examples(value)
+        elif isinstance(node, list):
+            for value in node:
+                remove_examples(value)
+    remove_examples(operation.get('parameters', []))
+    remove_examples(operation.get('requestBody', {}))
+
+
 def project(document, language="en"):
     """Projected catalog document (pure function of the formal document)."""
     projected = strip(document)
     from pricing_prose import add_price_summary
-    for item in projected.get('paths', {}).values():
+    for route, item in projected.get('paths', {}).items():
         for method, operation in item.items():
             if method in {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'} and isinstance(operation, dict) and 'aisa-pricing:start' in operation.get('description', ''):
                 add_price_summary(operation, language)
+            if method in {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'} and isinstance(operation, dict):
+                if 'x-aisa-example' in operation or method.upper() + ' ' + route in evidence_scope():
+                    withhold_unverified_examples(operation)
     info = projected.get('info')
     meta = info.get('x-aisa-document') if isinstance(info, dict) else None
     if isinstance(meta, dict):

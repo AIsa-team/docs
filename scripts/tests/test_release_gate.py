@@ -173,11 +173,22 @@ class ReleaseGateTests(unittest.TestCase):
         for op, reason in [(operation(verified=False), 'reference_example_without_verified_evidence'),
                            (operation(verified=None), 'reference_example_without_verified_evidence')]:
             with self.subTest(reason=reason):
-                g4 = self.tree({'/apis/v1/widgets/search': {'get': op}}).run()['gates']['G4']
+                tree = self.tree({'/apis/v1/widgets/search': {'get': op}})
+                # Simulate leaked unverified bytes in the actual public input.
+                public = tree.root / 'openapi-public/widgets.json'
+                doc = json.loads(public.read_text())
+                doc['paths']['/apis/v1/widgets/search']['get'] = op
+                public.write_text(json.dumps(doc))
+                g4 = tree.run()['gates']['G4']
                 self.assertEqual((g4['status'], g4['violations'][0]['reason']), ('failed', reason))
         op = operation()
         op['parameters'][0]['examples']['default']['value'] = 'other.com'  # sample no longer the verified one
-        g4 = self.tree({'/apis/v1/widgets/search': {'get': op}}).run()['gates']['G4']
+        tree = self.tree({'/apis/v1/widgets/search': {'get': op}})
+        public = tree.root / 'openapi-public/widgets.json'
+        doc = json.loads(public.read_text())
+        doc['paths']['/apis/v1/widgets/search']['get'] = op
+        public.write_text(json.dumps(doc))
+        g4 = tree.run()['gates']['G4']
         self.assertEqual(g4['violations'][0]['reason'], 'example_sha256_mismatch')
 
     def test_g4_missing_examples_are_pending_not_blocking(self):
@@ -202,7 +213,7 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertEqual((g4['status'], g4['scope_operations']), ('passed', 1))
 
     def test_cli_exit_codes_and_rollback_switch(self):
-        tree = self.tree({'/apis/v1/widgets/search': {'get': operation(verified=False)}})
+        tree = self.tree(page_extra='Internal x-aisa-source field must not be published.\n')
         args = ['--root', str(tree.root), '--facts-dir', str(tree.facts), '--scope', str(tree.scope),
                 '--exclusions', str(tree.exclusions), '--drift', str(tree.drift), '--projection', str(tree.projection),
                 '--report', str(tree.root / 'gate.json')]

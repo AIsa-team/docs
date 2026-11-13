@@ -9,7 +9,7 @@ exits 1 and the publication is neither exported nor pushed:
   same document; llms.txt declares sha256(openapi.yaml); the integration
   operation set {(method, path, operationId)} under /apis/v1/ equals the
   Runtime release aggregate, minus reviewed scripts/aggregate_exclusions.json.
-* G2 vocabulary: customer-visible text of in-scope operations, their pages,
+* G2 vocabulary: customer-visible text of in-scope public projections, their pages,
   llms.txt and docs.json contain no supplier term, internal note or upstream
   hash text (vocab_scan.py).
 * G3 forbidden content: no placeholder values in in-scope request examples or
@@ -17,7 +17,7 @@ exits 1 and the publication is neither exported nor pushed:
   the public projection openapi-public/ (public_projection.py) exists for
   every in-scope catalog, equals a fresh projection of openapi/, and holds no
   provenance field.
-* G4 example evidence: every in-scope Reference example joins a Runtime
+* G4 example evidence: every in-scope public Reference example joins a Runtime
   `x-aisa-example` record with state `verified` and the same example SHA256.
 
 A missing example is not a fault: such operations are listed as pending with
@@ -221,6 +221,7 @@ def run(root=ROOT, *, facts_dir=None, scope_path=SCOPE, exclusions_path=EXCLUSIO
     vocab, placeholders, provenance, evidence, pending = [], [], [], [], []
     pages_seen, scoped, unprojected = set(), 0, set()
     pagination_findings, pagination_documents = [], set()
+    public_documents = {}
     for path, document, route, method, operation in in_scope_operations(root, scope, catalogs):
         scoped += 1
         if path not in pagination_documents:
@@ -230,8 +231,16 @@ def run(root=ROOT, *, facts_dir=None, scope_path=SCOPE, exclusions_path=EXCLUSIO
         pointer = operation_pointer(route, method)
         if path.stem not in projected:
             unprojected.add(path.stem)
+        # Inspect the bytes referenced by the deployed pages. The formal
+        # source retains compilation/replay annotations and unverified inputs.
+        public_path = root / public_projection.PUBLIC_DIR / path.name
+        if public_path.is_file():
+            if public_path not in public_documents:
+                public_documents[public_path] = json.loads(public_path.read_text())
+            operation = public_documents[public_path].get('paths', {}).get(route, {}).get(method, {})
+            location = public_path.relative_to(root).as_posix()
         vocab += vocab_scan.scan_json(operation, rules, location, pointer)
-        zh = root / 'openapi/zh' / path.name
+        zh = root / public_projection.PUBLIC_DIR / 'zh' / path.name
         if zh.is_file():
             zh_document = json.loads(zh.read_text())
             zh_operation = (zh_document.get('paths', {}).get(route) or {}).get(method)
