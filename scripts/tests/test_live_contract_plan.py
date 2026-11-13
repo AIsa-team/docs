@@ -126,7 +126,9 @@ class WorkflowTests(unittest.TestCase):
 
     def test_ticks_every_ten_minutes_and_queues_instead_of_cancelling(self):
         self.assertEqual(self.trigger['schedule'], [{'cron': '*/10 * * * *'}])
-        self.assertEqual(self.workflow['concurrency'], {'group': 'pull-openapi', 'cancel-in-progress': False})
+        self.assertEqual(self.workflow['concurrency'], {
+            'group': "${{ github.ref == 'refs/heads/main' && 'pull-openapi' || format('pull-openapi-{0}', github.ref) }}",
+            'cancel-in-progress': False})
 
     def test_no_activation_plan_gate_remains(self):
         text = (ROOT / '.github/workflows/pull-openapi.yml').read_text()

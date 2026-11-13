@@ -146,6 +146,20 @@ its historical acceptance. Canonical mode always requires the payment subgate.
                 all(name in native and digest(value) and native[name] == value
                     for name, value in reviewed_native.items()),
                 'Canonical reviewed native adoption differs')
+    if 'replayed_draft_sha256' in lineage or 'reviewed_native_replay' in lineage:
+        drafts, replay = lineage.get('replayed_draft_sha256'), lineage.get('reviewed_native_replay')
+        require(inputs['schema_version'] == 2 and isinstance(drafts, dict) and drafts and
+                all(name in native and digest(value) and value != native[name] and
+                    name not in lineage.get('reviewed_native_sha256', {})
+                    for name, value in drafts.items()), 'Canonical replayed draft hashes differ')
+        require(isinstance(replay, dict) and set(replay) == {
+                    'status', 'compared_files', 'compiler_revision', 'source_manifest_sha256',
+                    'bundle_manifest_sha256', 'different_drafts'} and replay['status'] == 'passed' and
+                type(replay['compared_files']) is int and replay['compared_files'] == len(native) + 2 and
+                replay['different_drafts'] == sorted(drafts) and
+                replay['compiler_revision'] == pins['composer_revision'] and
+                all(replay[key] == pins[key] for key in ('source_manifest_sha256', 'bundle_manifest_sha256')),
+                'Canonical pinned replay binding differs')
     if receipt is not None:
         require(same(inputs['runtime'], {key: receipt.get(key) for key in
             ('artifact_revision', 'source_digest', 'compiler_revision', 'generation')}),

@@ -146,6 +146,31 @@ class CanonicalShapeTests(unittest.TestCase):
         legacy_adoption['canonical_runtime_import']['registry_lineage']['reviewed_native_sha256'] = lineage['reviewed_native_sha256']
         with self.assertRaisesRegex(ValueError, 'reviewed native adoption differs'):
             shape.validate_formal_assessment(legacy_adoption, self.receipt)
+        replayed = copy.deepcopy(report)
+        replay_lineage = replayed['canonical_runtime_import']['registry_lineage']
+        replay_lineage.pop('reviewed_native_sha256')
+        name = next(iter(imported['native_sha256']))
+        replay_lineage['replayed_draft_sha256'] = {name: '0' * 64}
+        pins = inputs['compiler_inputs']
+        replay_lineage['reviewed_native_replay'] = {
+            'status': 'passed', 'compared_files': len(imported['native_sha256']) + 2,
+            'compiler_revision': pins['composer_revision'],
+            'source_manifest_sha256': pins['source_manifest_sha256'],
+            'bundle_manifest_sha256': pins['bundle_manifest_sha256'], 'different_drafts': [name]}
+        self.assertEqual(shape.validate_formal_assessment(replayed, self.receipt), shape.CANONICAL)
+        for mutate in (lambda row: row.pop('reviewed_native_replay'),
+                       lambda row: row.pop('replayed_draft_sha256'),
+                       lambda row: row['replayed_draft_sha256'].update({name: imported['native_sha256'][name]}),
+                       lambda row: row['reviewed_native_replay'].update(compared_files=True),
+                       lambda row: row['reviewed_native_replay'].update(compared_files=1),
+                       lambda row: row['reviewed_native_replay'].update(compiler_revision='0' * 40),
+                       lambda row: row['reviewed_native_replay'].update(source_manifest_sha256='0' * 64),
+                       lambda row: row['reviewed_native_replay'].update(bundle_manifest_sha256='0' * 64),
+                       lambda row: row['reviewed_native_replay'].update(different_drafts=[])):
+            bad = copy.deepcopy(replayed)
+            mutate(bad['canonical_runtime_import']['registry_lineage'])
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError):
+                shape.validate_formal_assessment(bad, self.receipt)
         mutations = [lambda i: i.update(schema_version=1),
             lambda i: i.update(source_formal_provenance={'expected_docs_ref': 'd' * 40}),
             lambda i: i.update(source_pointer_sha256='1' * 64),
