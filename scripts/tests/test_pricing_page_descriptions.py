@@ -183,11 +183,23 @@ class PublishedPricingDescriptionTests(unittest.TestCase):
         self.assert_standalone_description_refresh('Find "current" records.\nUse \\filters.',
                                                   'Find "archived" records.\nUse \\other-filters.')
 
-    def assert_standalone_description_refresh(self, initial, updated):
+    def test_standalone_extraction_includes_generated_title_fallback(self):
+        self.assert_standalone_description_refresh('Search "records"', 'Find archived records.',
+                                                  title_fallback=True)
+
+    def assert_standalone_description_refresh(self, initial, updated, title_fallback=False):
         import runtime_localize_openapi_zh as localization
-        self.document['paths']['/apis/v1/prices/free']['get']['description'] = initial + '\n\n' + fixtures.OLD_SUMMARY
+        operation = self.document['paths']['/apis/v1/prices/free']['get']
+        operation['description'] = ('' if title_fallback else initial + '\n\n') + fixtures.OLD_SUMMARY
+        if title_fallback:
+            operation.pop('summary', None)
         self.raw = json.dumps(self.document).encode()
         self.project()
+        if title_fallback:
+            english = self.root / 'api-reference/prices/free.mdx'
+            text = re.sub(r'^title:.*$', lambda _: 'title: ' + json.dumps(initial),
+                          english.read_text(), flags=re.M)
+            english.write_text(refresh_page_description(text, operation))
         path = '/apis/v1/prices/free'
         self.document['paths'] = {path: self.document['paths'][path]}
         self.raw = json.dumps(self.document).encode()
@@ -196,22 +208,22 @@ class PublishedPricingDescriptionTests(unittest.TestCase):
             for page in (self.root / f'{prefix}api-reference/prices').glob('*.mdx'):
                 if page.stem != 'free':
                     page.unlink()
-        strings = {text for _, text in localization.iter_spec_strings(self.document)}
-        english = self.root / 'api-reference/prices/free.mdx'
-        header, body = split_frontmatter(english.read_text())
-        strings.add(localization.strip_generated_block(body))
-        strings.update(str(value) for value in yaml.safe_load(header).values())
-        strings.update((initial, updated))
         translations = {initial: '查找记录。\n使用筛选器。', updated: '查找归档记录。\n使用新筛选器。'}
-        catalog = {'entries': {localization.key_for(text): {'source': text,
-                              'translation': translations.get(text, text)} for text in strings if text.strip()}}
-        (self.root / 'translations').mkdir(exist_ok=True)
-        (self.root / 'translations/openapi-zh.json').write_text(json.dumps(catalog))
         with patch.multiple(localization, ROOT=self.root, OPENAPI_DIR=self.root / 'openapi',
                             ZH_OPENAPI_DIR=self.root / 'openapi/zh', API_DIR=self.root / 'api-reference',
-                            ZH_API_DIR=self.root / 'zh/api-reference'), \
-                patch.object(localization, 'load_catalog', return_value=catalog):
+                            ZH_API_DIR=self.root / 'zh/api-reference',
+                            CATALOG_PATH=self.root / 'translations/openapi-zh.json'):
+            localization.extract()
+            catalog = localization.load_catalog()
+            self.assertIn(localization.key_for(initial), catalog['entries'])
+            for entry in catalog['entries'].values():
+                entry['translation'] = translations.get(entry['source'], entry['source'])
+            localization.save_catalog(catalog)
             localization.generate()
+            # The next source revision uses a separately translated new string.
+            localization.add_entry(catalog, updated, 'next-source-revision')
+            catalog['entries'][localization.key_for(updated)]['translation'] = translations[updated]
+            localization.save_catalog(catalog)
         zh = self.root / 'zh/api-reference/prices/free.mdx'
         header, _ = split_frontmatter(zh.read_text())
         self.assertIn(DESCRIPTION_HASH, yaml.safe_load(header))

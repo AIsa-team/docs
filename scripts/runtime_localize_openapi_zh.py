@@ -180,6 +180,18 @@ def frontmatter_value(frontmatter: str, field: str) -> str | None:
     return raw
 
 
+def generated_page_description(frontmatter: str) -> str | None:
+    """Use the same decoded, owned description for extraction and generation."""
+    from pricing_prose import DESCRIPTION_HASH
+
+    metadata = yaml.safe_load(frontmatter) or {}
+    description = metadata.get('description')
+    if (isinstance(description, str) and metadata.get(DESCRIPTION_HASH)
+            == hashlib.sha256(description.encode()).hexdigest()):
+        return description
+    return None
+
+
 def add_entry(catalog: dict[str, Any], source: str, context: str) -> None:
     if not source.strip():
         return
@@ -217,6 +229,10 @@ def extract() -> None:
             continue
         for field in ("title", "description", "excerpt"):
             source = frontmatter_value(frontmatter, field)
+            if field == 'description':
+                generated_description = generated_page_description(frontmatter)
+                if generated_description is not None:
+                    source = generated_description
             if source:
                 add_entry(catalog, source, f"{mdx_path.relative_to(ROOT)}:frontmatter:{field}")
                 active_keys.add(key_for(source))
@@ -442,17 +458,13 @@ def generate(published_ref=None) -> None:
             frontmatter = replace_frontmatter_value(frontmatter, "title", translation(catalog, title))
         if description:
             from pricing_prose import DESCRIPTION_HASH
-            description_metadata = yaml.safe_load(frontmatter) or {}
-            decoded_description = description_metadata.get('description')
-            description_is_generated = (isinstance(decoded_description, str)
-                and description_metadata.get(DESCRIPTION_HASH)
-                == hashlib.sha256(decoded_description.encode()).hexdigest())
-            if description_is_generated:
+            generated_description = generated_page_description(frontmatter)
+            if generated_description is not None:
                 # Hash/translate decoded prose, not JSON-escaped YAML scalars.
-                description = decoded_description
+                description = generated_description
             localized_description = translation(catalog, description)
             frontmatter = replace_frontmatter_value(frontmatter, "description", localized_description)
-            if description_is_generated:
+            if generated_description is not None:
                 frontmatter = replace_frontmatter_value(frontmatter, DESCRIPTION_HASH,
                     hashlib.sha256(localized_description.encode()).hexdigest())
         if excerpt:
