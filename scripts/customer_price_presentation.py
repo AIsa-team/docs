@@ -98,8 +98,11 @@ def fixed_conditions(pricing, zh):
     if not isinstance(description, str):
         return ''
     parts = []
-    if 'Failed or unknown outcomes are not charged.' in description:
+    if ('Failed or unknown outcomes are not charged.' in description or
+            'A run that did not succeed is never charged:' in description):
         parts.append('失败或结果未知时不收费。' if zh else 'Failed or unknown outcomes are not charged.')
+    if 'This is the price on every plan;' in description:
+        parts.append('所有套餐价格相同。' if zh else 'The same price applies on every plan.')
     cache = re.search(r'Repeated identical requests within (\d+) (minutes|hours) are served from cache at no charge', description)
     if cache:
         duration, unit = cache.groups()
@@ -169,7 +172,17 @@ def pricing_summary(pricing, language='en'):
     def t(en, cn): return cn if zh else en
     family = price_family(pricing)
     if family == 'no_customer_charge':
-        return t('No additional charge for this operation.', '此操作不另收费。')
+        summary = t('No additional charge for this operation.', '此操作不另收费。')
+        description = pricing.get('description', '')
+        if isinstance(description, str):
+            if 'Ad spend is billed by the ad platform to the connected ad account, never by AIsa.' in description:
+                summary += ' ' + t('Ad spend is billed separately by the ad platform to your connected ad account.',
+                                   '广告投放费用由广告平台向已连接的广告账户另行收取。')
+            if "cancellation may complete an existing job's settlement" in description:
+                summary += ' ' + t('Cancelling may still settle charges for the existing job.', '取消任务时仍可能结算该任务已产生的费用。')
+            if "the task's charge settles when it ends" in description:
+                summary += ' ' + t("The task's charge is settled when it ends.", '任务本身的费用在任务结束时结算。')
+        return summary
     if family == 'unpriced':
         return t('Historical archive: disabled, cannot be called, and no price is published.',
                  '历史归档接口：已停用，不可调用，价格未发布。')
@@ -217,5 +230,9 @@ def pricing_summary(pricing, language='en'):
                     summary += ' ' + t('The final charge depends on actual usage.', '最终费用以实际用量为准。')
             elif unit_price is None and family != 'fixed_success':
                 summary += ' ' + t('A price estimate is not currently available.', '当前暂无预估金额。')
+    description = pricing.get('description', '')
+    if (family == 'fixed_request' and isinstance(description, str)
+            and 'This is the price on every plan;' in description):
+        return summary
     return summary + ' ' + t('Your account price may differ; use a request quote where supported.',
                             '账户适用价格可能不同；支持报价的接口可按实际请求获取报价。')

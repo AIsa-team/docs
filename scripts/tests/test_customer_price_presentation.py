@@ -207,6 +207,39 @@ class CustomerPricePresentationTests(unittest.TestCase):
                                       ('per second, per request or by tokens', 'per second'), ('', 'selected model')]:
             self.assertIn(expected, pricing_summary({'kind': 'model_catalog', 'description': description}))
 
+    def test_same_plan_action_price_preserves_failure_waiver_without_account_variation(self):
+        pricing = {
+            'kind': 'fixed_request', 'customer_micros_usd': 300,
+            'description': (
+                'This is the price on every plan; no plan multiplier applies. '
+                'A run that did not succeed is never charged: refused before it is sent, '
+                'failed in the app, or with an unknown outcome.'),
+        }
+        for language in ('en', 'zh'):
+            text = pricing_summary(pricing, language)
+            self.assertIn('$0.0003', text)
+            self.assertIn('所有套餐价格相同' if language == 'zh' else 'same price applies on every plan', text)
+            self.assertIn('失败或结果未知时不收费' if language == 'zh' else 'Failed or unknown outcomes are not charged', text)
+            for forbidden in ('may differ', '可能不同', 'multiplier', '倍率'):
+                self.assertNotIn(forbidden, text)
+
+    def test_free_operations_preserve_separate_ad_spend_and_existing_job_settlement(self):
+        cases = [
+            ('Ad spend is billed by the ad platform to the connected ad account, never by AIsa.',
+             'billed separately by the ad platform', '广告平台'),
+            ("No new customer charge is authorized by this lifecycle operation; cancellation may complete an existing job's settlement.",
+             'settle charges for the existing job', '任务已产生的费用'),
+            ("Reading a task is free; the task's charge settles when it ends.",
+             "task's charge is settled when it ends", '任务本身的费用'),
+        ]
+        for description, english, chinese in cases:
+            pricing = {'kind': 'no_customer_charge', 'description': description}
+            self.assertIn(english, pricing_summary(pricing))
+            self.assertIn(chinese, pricing_summary(pricing, 'zh'))
+        for description in ('', None):
+            self.assertEqual(pricing_summary({'kind': 'no_customer_charge', 'description': description}),
+                             'No additional charge for this operation.')
+
     def test_full_generator_replaces_stale_prices_and_remains_idempotent(self):
         from test_runtime_contracts import PullTests
         from pull_openapi import stage
