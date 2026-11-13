@@ -264,6 +264,10 @@ class OpenInputWorkflowTests(unittest.TestCase):
                 row['if']=row['if'].replace(" && steps.open_input_diagnostic.outputs.selected != 'true'",'').replace(" || steps.open_input_diagnostic.outputs.selected == 'true'",'')
                 if row['if']=="steps.open_input_diagnostic.outputs.selected != 'true'": del row['if']
             original.append(row)
+        for row in original:
+            if row.get('name') == 'Retain candidate assessment':
+                self.assertIn('/tmp/release-gate.json\n', row['with']['path'])
+                row['with']['path'] = row['with']['path'].replace('/tmp/release-gate.json\n', '')
         workflow['jobs']['artifact-contracts']['steps']=original
         # Only an independently bound exact EKS source head receives the 20m
         # diagnostic budget; every unselected ordinary assessment keeps 10m.
