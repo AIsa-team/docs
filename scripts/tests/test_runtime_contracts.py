@@ -53,6 +53,48 @@ def operation(document):
 
 
 class CompositionTests(unittest.TestCase):
+    def test_mixed_closed_body_keeps_runtime_boundary_and_source_annotations(self):
+        for nested in (False, True):
+            with self.subTest(nested=nested):
+                runtime, upstream = facts("mixed"), mirror()
+                declared = {"type": "object", "additionalProperties": False,
+                            "properties": {"email": {"type": "string"}}, "required": ["email"]}
+                source = {"type": "object", "additionalProperties": True,
+                          "properties": {"email": {"type": "string", "description": "Provider email."},
+                                         "extra": {"type": "string"}}, "required": ["email"]}
+                if nested:
+                    declared = {"type": "object", "properties": {"options": declared}}
+                    source = {"type": "object", "properties": {"options": source}}
+                operation(runtime)["requestBody"] = {"content": {"application/json": {"schema": declared}}}
+                upstream["components"]["schemas"]["Body"] = source
+                document, pending = compose(runtime, upstream)
+                self.assertFalse(pending)
+                schema = operation(document)["requestBody"]["content"]["application/json"]["schema"]
+                if nested:
+                    schema = schema["properties"]["options"]
+                self.assertIs(schema["additionalProperties"], False)
+                self.assertEqual(set(schema["properties"]), {"email"})
+                self.assertEqual(schema["properties"]["email"]["description"], "Provider email.")
+
+    def test_mixed_closed_empty_body_does_not_publish_provider_inputs(self):
+        runtime, upstream = facts("mixed"), mirror()
+        operation(runtime)["requestBody"] = {"content": {"application/json": {"schema": {
+            "type": "object", "properties": {}, "additionalProperties": False}}}}
+        upstream["components"]["schemas"]["Body"].pop("required")
+        document, pending = compose(runtime, upstream)
+        self.assertFalse(pending)
+        schema = operation(document)["requestBody"]["content"]["application/json"]["schema"]
+        self.assertEqual(schema["properties"], {})
+        self.assertIs(schema["additionalProperties"], False)
+
+    def test_mixed_closed_body_cannot_hide_unforwarded_required_provider_input(self):
+        runtime, upstream = facts("mixed"), mirror()
+        operation(runtime)["requestBody"] = {"content": {"application/json": {"schema": {
+            "type": "object", "properties": {"name": {"type": "string"}}, "additionalProperties": False}}}}
+        document, pending = compose(runtime, upstream)
+        self.assertEqual(document["paths"], {})
+        self.assertEqual(pending[0]["reason"], "source body requires inputs rejected by runtime: email")
+
     def test_provider_header_needs_forwarding_even_when_runtime_declares_its_type(self):
         runtime, upstream = facts("mixed"), mirror()
         header = {"name": "Parallel-Beta", "in": "header", "schema": {"type": "string"}}
@@ -89,8 +131,7 @@ class CompositionTests(unittest.TestCase):
         self.assertEqual(op["x-aisa-runtime-operation"], {"operation_id": "published_identity",
             "method": "POST", "path": "/apis/v1/similarweb/test"})
         self.assertEqual(op["summary"], "Runtime title")
-        self.assertTrue(op["description"].startswith("Editorial\n\n"))
-        self.assertIn('$0.09 USD', op['description'])
+        self.assertEqual(op["description"], "Editorial")
         self.assertEqual(op["x-aisa-pricing"]["default_request_estimate_usd"], 0.09)
         self.assertEqual(op["x-aisa-status"], "disabled")
         self.assertEqual(op["x-aisa-constraints"]["notes"], ["Latest completed month only"])
@@ -477,7 +518,7 @@ class PullTests(unittest.TestCase):
             changes, _ = stage(self.root, None, "http://localhost", False)
         self.assertIn('"sha256:facts"', fetch.call_args.args)
         document = json.loads(changes[self.root / "openapi/similarweb.json"])
-        self.assertTrue(operation(document)["description"].startswith("Changed editorial\n\n"))
+        self.assertEqual(operation(document)["description"], "Changed editorial")
 
 
 class ConsolidationTests(unittest.TestCase):

@@ -16,7 +16,7 @@ x-aisa-operation-id: "eia-gov.energy-data.data"
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/eia-gov.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -38,27 +38,97 @@ x-aisa-operation-id: "eia-gov.energy-data.data"
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
             "value": {
-              "frequency": "example",
-              "route": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "frequency": "example",
-              "route": "example"
+              "facets": {
+                "series": [
+                  "RWTC"
+                ]
+              },
+              "frequency": "daily",
+              "page_size": 3,
+              "route": "petroleum/pri/spt"
             }
           }
         },
         "schema": {
           "additionalProperties": true,
           "properties": {
+            "api_key": {
+              "description": "Registered EIA API key. Omitted, the public data-browser key is discovered live (see `routes`). Pattern: ^[A-Za-z0-9_]+$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "cursor": {
+              "description": "`next_cursor` from the previous page (a row offset). Omit for the first page. Pattern: ^[0-9]{1,12}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "data_columns": {
+              "description": "Data columns to return, from the route's `data_columns`. Defaults to [\"value\"].",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "end": {
+              "description": "Inclusive last period in the frequency's format.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "facets": {
+              "additionalProperties": true,
+              "description": "Facet filters: facet id to list of codes, e.g. {\"series\": [\"RWTC\"]} or {\"stateid\": [\"CA\"], \"sectorid\": [\"RES\"]}.",
+              "type": "object",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "frequency": {
+              "description": "Frequency id from the route metadata: annual, quarterly, monthly, weekly, daily, hourly or local-hourly. Pattern: ^[a-z-]+$.",
               "type": "string"
             },
+            "page_size": {
+              "default": 20,
+              "description": "Rows per page; the API caps a page at 5000 rows.\n\nProvider reference: minimum 1; maximum 5000; default 20.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 5000,
+                "min": 1
+              }
+            },
             "route": {
+              "description": "Route path with data, such as `petroleum/pri/spt` (do not append `/data`). Pattern: ^/?[a-z0-9_-]+(/[a-z0-9_-]+)*/?$.",
               "type": "string"
+            },
+            "sort": {
+              "description": "Sort keys applied by the API. Defaults to newest period first.",
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "start": {
+              "description": "Inclusive first period in the frequency's format.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
           "required": [
@@ -72,16 +142,6 @@ x-aisa-operation-id: "eia-gov.energy-data.data"
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -95,15 +155,7 @@ x-aisa-operation-id: "eia-gov.energy-data.data"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.0005 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

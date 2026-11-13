@@ -16,7 +16,7 @@ x-aisa-operation-id: "banks-data-fdic-gov.bank-data.summary"
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/banks-data-fdic-gov.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -38,15 +38,118 @@ x-aisa-operation-id: "banks-data-fdic-gov.bank-data.summary"
     "content": {
       "application/json": {
         "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "state": "USA",
+              "year": 2020
+            }
           }
         },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "charter_group": {
+              "description": "CB for commercial banks, SI for savings institutions. Omit for both (two records per state and year).\n\nProvider reference: allowed values [\"CB\", \"SI\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "CB",
+                  "SI"
+                ]
+              }
+            },
+            "cursor": {
+              "description": "next_cursor from the previous page of the same query (the record offset).",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "fields": {
+              "description": "Projection: column names to return instead of the default set, e.g. [\"BANKS\", \"ASSET\", \"DEP\", \"NETINC\"]. The identity columns are always added and every record carries `ID`. An unknown name is ignored. The FDIC's column definitions are at https://api.fdic.gov/banks/docs/.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "filters": {
+              "description": "Raw BankFind filter, ANDed with the other inputs. Lucene-style: `FIELD:value`, `FIELD:\"two words\"`, `FIELD:(\"A\",\"B\")` for any of several, `FIELD:[low TO high]` for an inclusive range (`*` open), `!(FIELD:value)` to exclude, `AND`/`OR` between terms. Column names are upper case and values match exactly as stored, case included. An unknown column matches nothing (an empty result, not an error); a syntax error is invalid_input.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "from_year": {
+              "description": "Earliest year to include.\n\nProvider reference: minimum 1934; maximum 2100.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 2100,
+                "min": 1934
+              }
+            },
+            "page_size": {
+              "default": 25,
+              "description": "Records per page.\n\nProvider reference: minimum 1; maximum 1000; default 25.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 1000,
+                "min": 1
+              }
+            },
+            "sort_by": {
+              "description": "Columns to sort by, in priority order, e.g. [\"ASSET\"]. Defaults to `YEAR` descending (latest first). Unique tiebreak columns are always appended so offset paging is stable. An unsortable or unknown column is invalid_input.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "sort_order": {
+              "description": "Direction for every sort column. Defaults to the direction of the default sort.\n\nProvider reference: allowed values [\"asc\", \"desc\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "asc",
+                  "desc"
+                ]
+              }
+            },
+            "state": {
+              "description": "State or territory code matched against `STALP`; `USA` for all states and territories, `US` for the 50 states and DC, `OT` for the territories. Pattern: ^[A-Za-z]{2,3}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "to_year": {
+              "description": "Latest year to include.\n\nProvider reference: minimum 1934; maximum 2100.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 2100,
+                "min": 1934
+              }
+            },
+            "year": {
+              "description": "One year. Not combinable with `from_year` / `to_year`.\n\nProvider reference: minimum 1934; maximum 2100.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 2100,
+                "min": 1934
+              }
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +157,6 @@ x-aisa-operation-id: "banks-data-fdic-gov.bank-data.summary"
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +170,7 @@ x-aisa-operation-id: "banks-data-fdic-gov.bank-data.summary"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.0005 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

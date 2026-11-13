@@ -16,7 +16,7 @@ x-aisa-operation-id: "wikipedia.articles.structured-contents"
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/wikipedia.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -37,29 +37,35 @@ x-aisa-operation-id: "wikipedia.articles.structured-contents"
   "requestBody": {
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "limit": 1,
-              "name": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "limit": 1,
-              "name": "example"
-            }
-          }
-        },
         "schema": {
           "additionalProperties": true,
           "properties": {
+            "fields": {
+              "description": "Return only these fields, in dot notation, for example `name`, `abstract`, `url`, `version.identifier`. Omit for the full record. Wikimedia returns exactly the fields named.\n\nProvider reference: maximum 50.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "max": 50
+              }
+            },
+            "language": {
+              "description": "Wikimedia language code, for example `en`, `fr` or `zh-yue`. Returns the article from any project in that language; combine with project to pin one wiki.",
+              "type": "string"
+            },
             "limit": {
+              "description": "Most matching articles to return, 1 to 10. More than one only helps when no project is pinned and the title exists on several wikis.\n\nProvider reference: minimum 1; maximum 10; default 1.",
               "maximum": 10,
               "minimum": 1,
               "type": "integer"
             },
             "name": {
+              "description": "Exact article title as on the wiki, for example `Marie_Curie` or `Marie Curie`. Case-sensitive: Wikipedia titles start with a capital letter. From a URL such as https://fr.wikipedia.org/wiki/Marie_Curie, use the part after /wiki/.",
+              "type": "string"
+            },
+            "project": {
+              "description": "Wikimedia project identifier: language code plus project code, for example `enwiki` (English Wikipedia), `frwiki`, `dewiki`, `enwiktionary` or `eswikivoyage`. Defaults to `enwiki` when neither project nor language is given. `reference/projects` lists every identifier.",
               "type": "string"
             }
           },
@@ -74,16 +80,6 @@ x-aisa-operation-id: "wikipedia.articles.structured-contents"
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0001,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -97,15 +93,7 @@ x-aisa-operation-id: "wikipedia.articles.structured-contents"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0001 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.0001 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.0001
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

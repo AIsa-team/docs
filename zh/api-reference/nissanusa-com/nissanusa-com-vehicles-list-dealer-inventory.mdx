@@ -16,7 +16,7 @@ x-aisa-operation-id: "nissanusa-com.vehicles.list-dealer-inventory"
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/nissanusa-com.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -38,27 +38,80 @@ x-aisa-operation-id: "nissanusa-com.vehicles.list-dealer-inventory"
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
             "value": {
-              "latitude": 1,
-              "longitude": 1
-            }
-          },
-          "minimal": {
-            "value": {
-              "latitude": 1,
-              "longitude": 1
+              "condition": "new",
+              "dealer_id": "NNA5110",
+              "latitude": 36.1523805,
+              "limit": 3,
+              "longitude": -86.7893889
             }
           }
         },
         "schema": {
           "additionalProperties": true,
           "properties": {
+            "condition": {
+              "default": "new",
+              "description": "new = new vehicles (getInventory); cpo = certified pre-owned (getCpoInventory).\n\nProvider reference: allowed values [\"new\", \"cpo\"]; default \"new\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "new",
+                  "cpo"
+                ]
+              }
+            },
+            "dealer_id": {
+              "description": "Restrict to one dealer (case-insensitive code such as NNA5110). Omit for every dealer the source matches around the coordinates.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "include_filters": {
+              "description": "Also return the source's facet lists (option labels, grades, colours, ...) for this result set. Off by default: the new-vehicle facet list runs to hundreds of values.",
+              "type": "boolean",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "latitude": {
+              "description": "latitude\n\nProvider reference: minimum -90; maximum 90.",
               "type": "number"
             },
+            "limit": {
+              "default": 10,
+              "description": "limit\n\nProvider reference: minimum 1; maximum 50; default 10.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 50,
+                "min": 1
+              }
+            },
             "longitude": {
+              "description": "longitude\n\nProvider reference: minimum -180; maximum 180.",
               "type": "number"
+            },
+            "offset": {
+              "default": 0,
+              "description": "Pass next_offset from the previous page.\n\nProvider reference: minimum 0; maximum 10000; default 0.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 10000,
+                "min": 0
+              }
+            },
+            "postal_code": {
+              "description": "Shopper ZIP code the source uses for regional pricing; optional. Pattern: ^[0-9]{5}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
           "required": [
@@ -72,16 +125,6 @@ x-aisa-operation-id: "nissanusa-com.vehicles.list-dealer-inventory"
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -95,15 +138,7 @@ x-aisa-operation-id: "nissanusa-com.vehicles.list-dealer-inventory"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.0005 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

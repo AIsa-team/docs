@@ -16,7 +16,7 @@ x-aisa-operation-id: "recreation-gov.camping-availability.search"
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/recreation-gov.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -38,15 +38,128 @@ x-aisa-operation-id: "recreation-gov.camping-availability.search"
     "content": {
       "application/json": {
         "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "query": "Yosemite National Park",
+              "size": 3
+            }
           }
         },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "end_date": {
+              "description": "Departure date YYYY-MM-DD, after `start_date`. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "entity_type": {
+              "default": "campground",
+              "description": "Inventory type to return.\n\nProvider reference: allowed values [\"campground\", \"recarea\", \"permit\", \"ticketfacility\", \"tour\", \"timedentry\", \"vehiclepermit\", \"venuereservations\", \"treepermit\", \"activitypass\", \"facility\", \"visitorcenter\"]; default \"campground\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "campground",
+                  "recarea",
+                  "permit",
+                  "ticketfacility",
+                  "tour",
+                  "timedentry",
+                  "vehiclepermit",
+                  "venuereservations",
+                  "treepermit",
+                  "activitypass",
+                  "facility",
+                  "visitorcenter"
+                ]
+              }
+            },
+            "latitude": {
+              "description": "Search centre latitude; requires `longitude`.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "longitude": {
+              "description": "Search centre longitude; requires `latitude`.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "parent_id": {
+              "description": "Restrict to children of this rec area id (e.g. 2991 Yosemite National Park). Pattern: ^[0-9]{1,12}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "query": {
+              "description": "Free text: a park, forest, campground, or place name.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "radius_miles": {
+              "description": "Search radius around the centre, miles (default 50 when coordinates are given).\n\nProvider reference: minimum 1; maximum 2000.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 2000,
+                "min": 1
+              }
+            },
+            "size": {
+              "default": 20,
+              "description": "Results per page (1-50).\n\nProvider reference: minimum 1; maximum 50; default 20.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 50,
+                "min": 1
+              }
+            },
+            "sort": {
+              "description": "`available` puts entities with availability for the dates first (the site's default with dates); `score` is relevance.\n\nProvider reference: allowed values [\"available\", \"score\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "available",
+                  "score"
+                ]
+              }
+            },
+            "start": {
+              "default": 0,
+              "description": "Offset of the first result; use `next_start` from the previous page.\n\nProvider reference: minimum 0; default 0.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0
+              }
+            },
+            "start_date": {
+              "description": "Arrival date YYYY-MM-DD (facility local calendar date). With `end_date` the index reports availability for that stay. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "state": {
+              "description": "US state name as Recreation.gov spells it, e.g. `Utah`, `California`.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +167,6 @@ x-aisa-operation-id: "recreation-gov.camping-availability.search"
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +180,7 @@ x-aisa-operation-id: "recreation-gov.camping-availability.search"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.0005 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

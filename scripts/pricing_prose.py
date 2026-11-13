@@ -8,96 +8,89 @@ from __future__ import annotations
 
 import copy
 import re
-from decimal import Decimal, InvalidOperation
+import yaml
+from customer_price_presentation import pricing_summary, reference_total, usd
 
+# Legacy markers. Mintlify shows an HTML comment in an OpenAPI description as
+# literal text, so new summaries carry no marker; these are only stripped.
 PRICE_BEGIN = '<!-- aisa-pricing:start -->'
 PRICE_END = '<!-- aisa-pricing:end -->'
+# A generated summary is the description's last paragraph. It always opens with
+# one of these leads and closes with the settlement sentence of its language.
+SUMMARY_LEADS = (
+    'Published reference price: ', 'Default request estimate: ',
+    'Request pricing.', 'Usage-based pricing.', 'Charged for the actual billable results.',
+    'Charged for the combined usage', 'Charged for actual usage', 'Price depends on',
+    'Normal-tier reference price:', '请求费用。', '按实际用量收费。', '按实际计费结果数量收费。',
+    '按各计费项目', '任务完成后', '价格取决于', '普通用户参考价格：',
+    'Usage-based billing; Default request estimate: ',
+    'A request reference price is not currently available; ',
+    '公开参考价格：', '默认请求预估费用：', '按用量计费；默认请求预估费用：', '当前未提供请求参考价格；',
+)
+SUMMARY_ENDS = ('Account-specific pricing and final settlement may differ.', '最终费用以账户适用价格及实际结算为准。',
+                'Your account price may differ; use a request quote where supported.',
+                '账户适用价格可能不同；支持报价的接口可按实际请求获取报价。')
+SUMMARY = re.compile(
+    r'(?:\A|\n[ \t]*\n)[ \t]*(?:' + '|'.join(map(re.escape, SUMMARY_LEADS)) + r')[^\n]*?(?:'
+    + '|'.join(map(re.escape, SUMMARY_ENDS)) + r')\s*\Z')
 
 
 def strip_price_summary(text):
-    return re.sub(r'\s*' + re.escape(PRICE_BEGIN) + r'.*?' + re.escape(PRICE_END), '', text, flags=re.S).strip()
+    text = re.sub(r'\s*' + re.escape(PRICE_BEGIN) + r'.*?' + re.escape(PRICE_END), '', text, flags=re.S)
+    while True:
+        stripped = SUMMARY.sub('', text)
+        # These complete legacy generated paragraphs have no settlement suffix.
+        stripped = re.sub(r'(?:\A|\n[ \t]*\n)(?:No charge\.|No additional charge for this operation\.|'
+                          r'Price not yet published; this operation is unavailable\.|'
+                          r'不收费。|此操作不另收费。|价格尚未发布；此操作暂不可用。)\s*\Z', '', stripped)
+        if stripped == text:
+            return text.strip()
+        text = stripped
 
 
-def usd(value):
-    """Format a published JSON number without float arithmetic or guessing."""
-    if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
-        return None
-    try:
-        amount = Decimal(str(value))
-    except InvalidOperation:
-        return None
-    if not amount.is_finite() or amount < 0:
-        return None
-    return '$' + (format(amount, 'f').rstrip('0').rstrip('.') if amount % 1 else format(amount, '.0f'))
+def remove_price_summary(operation):
+    """Keep prices out of the operation description.
 
-
-# A word containing an angle-bracket placeholder, without trailing punctuation.
-PLACEHOLDER_TOKEN = re.compile(r'(?<![`\w])([^\s`<>(]*<[A-Za-z_][\w-]*>(?:[^\s`<>.,;:)]|[.:](?=[^\s`<>]))*)')
-
-
-def pricing_summary(pricing, language='en'):
-    """Render only declared prices; an estimate is never a unit or fixed price."""
-    if not isinstance(pricing, dict) or not pricing:
-        return ''
-    zh = language == 'zh'
-    settlement = ' 最终费用以账户适用价格及实际结算为准。' if zh else ' Account-specific pricing and final settlement may differ.'
-    kind = pricing.get('kind')
-    if kind == 'no_customer_charge':
-        # Runtime declares that the operation settles no customer charge.
-        return '不收费。' if zh else 'No charge.'
-    event = pricing.get('description')
-    if kind == 'metered_event' and isinstance(event, str) and event.strip():
-        # Charged per declared event, not per request. Runtime's published
-        # description is the only place that states the per-event prices. A
-        # placeholder such as social.post.published:<platform> becomes inline
-        # code: bare, MDX reads it as a tag and the page subtitle drops it.
-        return PLACEHOLDER_TOKEN.sub(r'`\1`', event.strip()) + settlement
-    unavailable = pricing.get('reference_unavailable') or pricing.get('estimate_unavailable_reason') or pricing.get('estimate_source') == 'unavailable'
-    estimate = None if unavailable else usd(pricing.get('default_request_estimate_usd'))
-    fixed = pricing.get('customer_pricing') == 'fixed_success' or pricing.get('cost_contract') == 'fixed_success'
-    # A fixed_request with an integer customer price is one price per successful
-    # request. Resource reads (cache_hit_share_bps, charged per delivered read)
-    # and variant-priced operations do not have one request price.
-    micros = pricing.get('customer_micros_usd')
-    if (estimate is None and not unavailable and kind == 'fixed_request' and isinstance(micros, int)
-            and not isinstance(micros, bool) and 'variants' not in pricing and 'cache_hit_share_bps' not in pricing):
-        estimate = usd(Decimal(micros) / 1_000_000)
-        fixed = estimate is not None
-    if estimate is not None and fixed:
-        summary = f'公开参考价格：每次成功请求 {estimate} USD。' if zh else f'Published reference price: {estimate} USD per successful request.'
-    elif estimate is not None:
-        summary = f'默认请求预估费用：{estimate} USD（不是固定价格）。' if zh else f'Default request estimate: {estimate} USD (not a fixed price).'
-        if pricing.get('cost_contract') in {'response_usd', 'response_count', 'response_sku', 'response_units', 'request_formula', 'response_components', 'plan_units'}:
-            summary = ('按用量计费；' if zh else 'Usage-based billing; ') + summary
-    else:
-        summary = '当前未提供请求参考价格；请使用接口支持的报价功能确认费用。' if zh else 'A request reference price is not currently available; use a request quote where supported.'
-    rate = usd(pricing.get('unit_rate_usd'))
-    unit = pricing.get('unit')
-    if rate is not None and isinstance(unit, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,80}', unit):
-        summary += f' 声明的单位费率：每 {unit} {rate} USD。' if zh else f' Declared unit rate: {rate} USD per {unit}.'
-    summary += settlement
-    return summary
-
-
-def add_price_summary(operation, language='en'):
-    """Replace a generated paragraph on each run so price changes cannot stick."""
+    Mintlify shows the description under the page title, so a price there
+    leads the page. The page's cost section shows the price instead
+    (readable_contract_notes.readable_block).
+    """
     description = strip_price_summary(operation.get('description', ''))
-    summary = pricing_summary(operation.get('x-aisa-pricing'), language)
-    if summary:
-        description = description.replace(NOTICE, '').replace(NOTICE_ZH, '').strip()
-        operation['description'] = (description + '\n\n' + PRICE_BEGIN + '\n' + summary + '\n' + PRICE_END).strip()
-    elif 'description' in operation:
+    if pricing_summary(operation.get('x-aisa-pricing')):
+        for notice in (NOTICE, NOTICE_ZH, *LEGACY_NOTICES):
+            description = description.replace(notice, '').strip()
+    if description:
         operation['description'] = description
+    else:
+        operation.pop('description', None)
     return operation
 
 MONEY = re.compile(r'(?:US)?\$\s*\d[\d,]*(?:\.\d+)?(?:\s*USD)?|\b\d[\d,]*(?:\.\d+)?\s*\$|\b\d+(?:\.\d+)?\s*(?:USD|美元|cents?)\b', re.I)
+CREDIT_VALUE = r'(?:\d[\d,]*(?:\.\d+)?|ceil\([^()]+\)|zero|one|two|three|four|five|ten|a)'
+CREDIT_AMOUNT = r'(?<![A-Za-z0-9_.])' + CREDIT_VALUE + r'[ -]*(?:(?:more|full|flat|search|finder)\s+)*(?:credits?\b|积分|点数)'
+CREDIT_TARIFF = r'variable credit prices|one flat credit whether'
+CREDITS = re.compile(CREDIT_AMOUNT + '|' + CREDIT_TARIFF, re.I)
+PRICE_DIAL = re.compile(
+    r'\b(?:THIS IS THE PRICE DIAL|THIS IS THE COST DIAL|PRICE DIAL|COST DIAL)\b', re.I)
+# "per" and "cached" alone also describe academic credits and account balances.
+# Require a billing verb, a rate for an API unit, or a specific cache response.
+CREDIT_CONTEXT = re.compile(
+    r'\b(?:cost\w*|pric\w*|bill\w*|charg\w*|pay|adds|capped|expensive|cheapest|dearest)\b|'
+    r'\bat\s+' + CREDIT_AMOUNT + r'|'
+    + CREDIT_AMOUNT + r'(?:[ -]+per[ -]+(?:(?:returned|found|matched|nonempty)[ -]+)?(?:\d+[ -]+)?(?:call|request|returned|found|matched|nonempty|company|record|person|keyword|anchor|domain|row|profile|ad|brand|item|result)\b|[ -]+(?:flat|way|surface)\b)|'
+    r'cached response|one-credit map band|' + CREDIT_TARIFF + r'|收费|计费|消耗|扣除', re.I)
 RATE = re.compile(
     r'\bbill(?:ed|ing|s)?\b|\bcharg(?:e|ed|es|ing)\b|\bpric(?:e|ing)\b|'
     r'\b(?:flat|rate|surcharge|upstream|per\s+(?:call|request|item|row|job|1M\s+tokens))\b|'
     r'\bat\s+\$|'
     r'/\s*(?:request|call|次)\b|计费|收费|每次|每请求', re.I)
-NOTICE = 'For current API pricing, see the published x-aisa-pricing metadata. Where supported, obtain a quote for your exact request.'
-NOTICE_ZH = '当前 API 价格请查看公开的 x-aisa-pricing 信息；接口支持报价时，请针对实际请求获取报价。'
+LEGACY_NOTICES = (
+    'For current API pricing, see the published x-aisa-pricing metadata. Where supported, obtain a quote for your exact request.',
+    '当前 API 价格请查看公开的 x-aisa-pricing 信息；接口支持报价时，请针对实际请求获取报价。',
+)
+# Old generated placeholders, recognized for removal only.
+NOTICE = 'See the Cost and request rules section for current pricing. Where supported, obtain a quote for your exact request.'
+NOTICE_ZH = '当前价格请查看费用与请求规则；接口支持报价时，可针对实际请求获取报价。'
 # Examples and code are data, even when they happen to contain billing words.
 FENCES = re.compile(r'(```[^\n]*\n.*?```|~~~[^\n]*\n.*?~~~|<pre\b[^>]*>.*?</pre>)', re.S | re.I)
 PARTS = re.compile(r'(\n+|[;；](?![^()]*\))|(?<=[.!?。！？])\s+(?!\d)|<br\s*/?>|</?p\b[^>]*>|(?=\bNote:?)|(?<=false)(?=Note))', re.I)
@@ -131,27 +124,155 @@ CONDITIONAL_SURCHARGE = re.compile(
     r'\byou will be (?:charged|billed) (?:extra\s+)?(?:' + MONEY.pattern + r')(?:\s+extra)?', re.I)
 
 
+def strip_credit_prices(text):
+    """Remove supplier tariff clauses while retaining caller and outcome rules.
+
+    A credit balance or a response value is not a tariff. Only prose with a
+    credit tariff and billing context enters this transform; examples
+    and reviewed payload descriptions are excluded by the callers.
+    """
+    if not (CREDITS.search(text) or PRICE_DIAL.search(text)) or not (CREDIT_CONTEXT.search(text) or PRICE_DIAL.search(text)):
+        return text
+    unit = r'(?:\s+(?:per\s+(?:(?:returned|found|started|matched)\s+)?[\w-]+(?:\s+returned)?|each|a hit))?'
+    # Zero-priced failures/empty results are outcome rules, not positive rates.
+    zero = r'(?:0(?:\.0+)?|zero)\s*(?:credits?\b|积分|点数)'
+    text = re.sub(r'\b(billed|charged)\s+' + zero, r'not \1', text, flags=re.I)
+    text = re.sub(r'\bcosts\s+' + zero, 'incurs no charge', text, flags=re.I)
+    text = re.sub(r'\bcost\s+' + zero, 'incur no charge', text, flags=re.I)
+    text = re.sub(r'(?:消耗|扣除)\s*' + zero, '不收费', text)
+    # Hyphenated rates are words in prose, not identifiers or response fields.
+    text = re.sub(r'(' + CREDIT_VALUE + r')-credit', r'\1 credit', text, flags=re.I)
+    text = re.sub(r'credit-per-', 'credit per ', text, flags=re.I)
+    text = re.sub(r'credit per ([a-z]+)-', r'credit per \1 ', text, flags=re.I)
+    # Preserve the useful half of mixed price/usage clauses before dropping rates.
+    text = re.sub(r',\s*so a full page is ~?' + CREDIT_AMOUNT, '', text, flags=re.I)
+    text = re.sub(r';\s*(?:[\w-]+ can raise it to|all add-ons can bring one record to)\s+\d+\.', '.', text, flags=re.I)
+    text = re.sub(r'\s+is the cheap one\s+at\s+' + CREDIT_AMOUNT + unit + r',?\s+but(?=\s+returns)', '', text, flags=re.I)
+    text = re.sub(r'\s+at\s+' + CREDIT_AMOUNT + unit + r'(?=,?\s+but\s+returns)', '', text, flags=re.I)
+    text = re.sub(r'\s*—\s*same\s+' + CREDIT_AMOUNT + unit + r'\s+price but\s+', ' — with ', text, flags=re.I)
+    text = re.sub(r'\bthe\s+' + CREDIT_AMOUNT + r'\s+way\b', 'a way', text, flags=re.I)
+    text = re.sub(r'\b' + CREDIT_AMOUNT + r'\s+flat\s*—\s*the cheap way to\s+', 'Use this to ', text, flags=re.I)
+    if re.search(r'in one\s+' + CREDIT_AMOUNT + r'\s+call', text, re.I):
+        text = re.sub(r'([a-z]+)\s+\(\d+(?:\.\d+)?\)(?=(?:\.(?=\d)|[^.!?\n])*tiers return)', r'\1', text, flags=re.I)
+    text = re.sub(r'\s+in one\s+' + CREDIT_AMOUNT + r'\s+call\s*—\s*the same price as calling both',
+                  ' in one call', text, flags=re.I)
+    text = re.sub(r'\bThis is the most expensive endpoint[^.\n]*?\s*—\s*and\s+', '', text, flags=re.I)
+    text = re.sub(r'\b(?:At\s+' + CREDIT_AMOUNT + r'\s+this is the cheapest|The dearest of|THE MOST EXPENSIVE ROUTE HERE|Same\s+' + CREDIT_AMOUNT + r' per hit rate)(?:\.(?=\d)|[^.;\n])*', '', text, flags=re.I)
+    text = re.sub(r'\s+at the same \d+(?:\.\d+)? rate', '', text, flags=re.I)
+    text = re.sub(r'\bThis is the fixed\s+' + CREDIT_AMOUNT + r'\s+surface\.\s*', '', text, flags=re.I)
+    text = re.sub(r'\s+keeps this request inside[^.\n]*?one[ -]credit map band', '', text, flags=re.I)
+    text = re.sub(r'\bThe\s+' + CREDIT_AMOUNT + r'\s+base search is exposed\.\s*', '', text, flags=re.I)
+    text = re.sub(r'\s+because (?:they have separate variable credit prices|it adds one or more scrape credits for every returned page)', '', text, flags=re.I)
+    text = re.sub(r',\s*bounding the search at\s+' + CREDIT_AMOUNT, '', text, flags=re.I)
+    text = re.sub(r'\bOne flat credit whether you\s+', 'You can ', text, flags=re.I)
+    text = re.sub(r'\bAdds\s+' + CREDIT_AMOUNT + r'\s+when true', 'May affect request pricing when true', text, flags=re.I)
+    text = re.sub(r'\s*[,;]\s*(?:one credit per returned [a-z]+|and every returned row costs a credit)', '', text, flags=re.I)
+    text = re.sub(r'(Choose projection:[^.\n]+)', lambda m: re.sub(r'\s+' + CREDIT_AMOUNT + r'(?:\s+per nonempty call)?', '', m[0], flags=re.I), text)
+    text = re.sub(r'\s*;\s*the price follows the type[^.\n]*(?:\.[0-9][^.\n]*)*', '', text, flags=re.I)
+    text = re.sub(r'\bCosts?\s+' + CREDIT_AMOUNT + r'\s+if ([^.\n]+),\s*' + CREDIT_AMOUNT + r'\s+otherwise',
+                  r'This operation is billed if \1, and also otherwise', text, flags=re.I)
+    text = re.sub(r'\bcosts?\s+' + CREDIT_AMOUNT + r'(?=\s+(?:even when|for AI transcription))', 'is billed', text, flags=re.I)
+    text = re.sub(r'\b(verdicts?|results?|errors?)\s+(costs?)\s+' + CREDIT_AMOUNT,
+                  lambda m: m[1] + (' is billed' if m[2].lower() == 'costs' else ' are billed'),
+                  text, flags=re.I)
+    # A provider-priced error may be absorbed by the service. Keep that error
+    # condition and its following settlement explanation together.
+    text = re.sub(r'\bcosts?\s+[A-Z][\w.-]+\s+' + CREDIT_AMOUNT,
+                  'incurs provider usage', text)
+    text = re.sub(r'\s+and still costs?\s+' + CREDIT_AMOUNT, ' and is still billed', text, flags=re.I)
+    text = re.sub(r'\s+and charges\s+' + CREDIT_AMOUNT, '', text, flags=re.I)
+    text = re.sub(r': same credits,', ':', text, flags=re.I)
+    # Keep cache metadata and enrichment fields inside mixed parentheses.
+    def parenthetical(match):
+        value = match[1]
+        if not CREDITS.search(value):
+            return match[0]
+        value = re.sub(r'^' + CREDIT_AMOUNT + r'\s*,\s*', '', value, flags=re.I)
+        value = re.sub(r';\s*costs?\s+' + CREDIT_AMOUNT + unit + r'.*$', '', value, flags=re.I)
+        if re.fullmatch(CREDIT_AMOUNT + unit, value, re.I):
+            return ''
+        if CREDITS.search(value) and CREDIT_CONTEXT.search(value):
+            value = strip_credit_prices(value)
+        return '(' + value + ')' if value else ''
+    text = re.sub(r'[（(]([^()（）\n]*)[）)]', parenthetical, text)
+    text = re.sub(r'\bCOST DIAL\s*[—:-]\s*', '', text, flags=re.I)
+    # A supplier sometimes labels a parameter as a price dial without stating
+    # the amount in the same sentence. Keep the request bounds and remove only
+    # that editorial tariff marker.
+    text = re.sub(
+        r'\s*[—–:-]\s*THIS IS THE PRICE DIAL\b\s*:?\s*'
+        r'(?:you\s+pay\s+)?' + CREDIT_AMOUNT + unit,
+        '', text, flags=re.I)
+    text = re.sub(r'\s*[—–:-]\s*THIS IS THE PRICE DIAL\b', '', text, flags=re.I)
+    text = re.sub(r'\s*[—–:-]\s*THIS IS THE COST DIAL\b', '', text, flags=re.I)
+    text = re.sub(r'\s*[—–]\s*(?:THIS IS THE PRICE|THIS IS THE COST|PRICE DIAL|you pay|and DOUBLES the price)[^\n.]*', '', text, flags=re.I)
+    text = re.sub(r'\bTHIS IS THE PRICE\s*[—:-][^\n.]*', '', text, flags=re.I)
+    # Remove a supplier authorization explanation but retain the actual limit.
+    text = re.sub(r'[^.!?\n;]*\bcapped at\s+' + CREDIT_AMOUNT + r',\s*so\s*', ' ', text, flags=re.I)
+    text = re.sub(r',\s*which\s+(?:bills|costs)\b[^.;\n)]*' + CREDIT_AMOUNT + r'[^.;\n)]*', '', text, flags=re.I)
+    text = re.sub(r'\s+at\s+' + CREDIT_AMOUNT + unit + r'(?:\s*=\s*' + CREDIT_AMOUNT + r')?', '', text, flags=re.I)
+    text = re.sub(r'\s*[,;]\s*cost(?:ing|s)?\s+' + CREDIT_AMOUNT + unit + r'[^\n.;)]*', '', text, flags=re.I)
+    text = re.sub(r'\s+and\s+(?:may\s+)?costs?\s+' + CREDIT_AMOUNT + unit + r'(?:\s+rather than one)?', '', text, flags=re.I)
+    text = re.sub(r'\s+costs?\s+' + CREDIT_AMOUNT + unit + r'\s+and(?=\s+also\s+includes)', '', text, flags=re.I)
+    text = re.sub(r'\s+adds\s+' + CREDIT_AMOUNT + r'[^\n.;)]*', '', text, flags=re.I)
+    # Retain explicit failure/404 billing conditions without the supplier unit.
+    text = re.sub(r'\b(billed|charged)\s+' + CREDIT_AMOUNT + r'(?:\s*\(\$[\d.]+\))?', r'\1', text, flags=re.I)
+    # A trailing pricing clause must not swallow an opt-in instruction or limit.
+    text = re.sub(r':\s*[^.!?\n;]*\b(?:costs?|bills)\s+(?:a flat\s+)?' + CREDIT_AMOUNT + r'[^.!?\n;]*', '', text, flags=re.I)
+    text = re.sub(r';\s*on [^.;\n]*\b(?:base|tier) price unchanged', '', text, flags=re.I)
+    text = re.sub(r'Response detail and fixed price[^:.]*:[^.\n]*' + CREDIT_AMOUNT + r'[^.\n]*\.',
+                  'Response detail.', text, flags=re.I)
+    # Remaining standalone tariff sentences contain no customer price authority.
+    parts = re.split(r'(\n+|(?<=[.!?])\s+(?!\d)|(?<=[。！？])|[;；，][ \t]*)', text)
+    for i in range(0, len(parts), 2):
+        part = parts[i]
+        if not part or not CREDITS.search(part):
+            continue
+        if CREDIT_CONTEXT.search(part):
+            parts[i] = ''
+            if i + 1 < len(parts) and '\n' not in parts[i + 1]:
+                parts[i + 1] = ''
+    result = ''.join(parts)
+    result = re.sub(r'[ \t]+([.;；。)])', r'\1', result)
+    result = re.sub(r'([;；])[ \t]*(?=[.;；。]|$)', '', result)
+    result = re.sub(r'([.!?。！？])[ \t]*[;；][ \t]*', r'\1 ', result)
+    result = re.sub(r'\s*\(\s*\)', '', result)
+    return result.strip()
+
+
 def reconcile_free_claim(text, pricing):
     """A positive customer success price contradicts an unqualified Free claim."""
     if not isinstance(pricing, dict) or pricing.get('customer_pricing') != 'fixed_success':
         return text
-    amount = usd(pricing.get('default_request_estimate_usd'))
+    amount = reference_total(pricing)
     if amount is None or amount == '$0' or pricing.get('reference_unavailable'):
         return text
-    # A standalone billing sentence/clause, never descriptions such as free text.
-    return re.sub(r'(?:(?<=\.)|^)\s*Free(?=[.,;]|$)',
-                  ' See the published pricing', text)
+    # A standalone billing sentence/clause, never descriptions such as free text
+    # or quoted example data. Remove it without creating a pricing placeholder.
+    chunks = FENCES.split(text)
+    for index in range(0, len(chunks), 2):
+        chunks[index] = re.sub(r'(^|(?<=[.!?])\s+)Free[,;]\s*([a-z])',
+                               lambda m: m[1] + m[2].upper(), chunks[index])
+        chunks[index] = re.sub(r'(^|(?<=[.!?])\s+)Free(?:\.(?=\s|$)|$)', r'\1', chunks[index])
+    return ''.join(chunks).strip()
 
 
-def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
-    """Drop price clauses, retaining separate usage rules and non-price prose."""
-    if not MONEY.search(text):
+def clean_text(text: str, language: str = 'en') -> str:
+    """Remove obsolete tariffs/notices without inserting replacement price prose."""
+    generated_notices = (*LEGACY_NOTICES, NOTICE, NOTICE_ZH)
+    if not MONEY.search(text) and not CREDITS.search(text) and not PRICE_DIAL.search(text) and not any(notice in text for notice in generated_notices):
         return text
-    notice = NOTICE_ZH if language == 'zh' else NOTICE
     chunks = FENCES.split(text)
     changed = False
     for index in range(0, len(chunks), 2):
         chunk = chunks[index]
+        chunk = strip_credit_prices(chunk)
+        changed |= chunk != chunks[index]
+        # The Cost section renders the customer price. A removed supplier
+        # tariff must not become another placeholder directing readers there.
+        for notice in generated_notices:
+            chunk = chunk.replace(notice, '')
+        changed |= chunk != chunks[index]
         # Keep the model choice while removing its obsolete rate assertion.
         chunk, count = re.subn(r'(`[^`]+`) is billed at \$\d+(?:\.\d+)? per request\.', r'\1 is supported.', chunk)
         changed |= bool(count)
@@ -212,24 +333,19 @@ def clean_text(text: str, language: str = 'en', add_notice: bool = True) -> str:
     result = re.sub(r'(?m)^[ \t]*[-*][ \t]*$', '', result)
     result = re.sub(r'(?m)^#{1,6} (?:Price|Pricing)[ \t]*\n(?=\s*(?:#|$))', '', result)
     result = re.sub(r'\n{3,}', '\n\n', result).strip()
-    if add_notice and notice not in result:
-        result = (result + '\n\n' + notice).strip()
     return result
 
 
-def place_notice(body: str, notice: str) -> str:
-    """Put the page notice where the removed price line stood: before the first
-    section heading outside code, never inside a component or glued to a fence."""
-    if notice in body:
-        return body
-    chunks = FENCES.split(body)
-    for index in range(0, len(chunks), 2):
-        match = re.search(r'(?m)^#{2,6} ', chunks[index])
-        if match:
-            head, tail = chunks[index][:match.start()], chunks[index][match.start():]
-            chunks[index] = head.rstrip('\n') + '\n\n' + notice + '\n\n' + tail
-            return ''.join(chunks)
-    return body.rstrip('\n') + '\n\n' + notice + '\n'
+def documented_payload_fields(node: dict) -> bool:
+    """Reviewed field prose describes payload values, including business prices."""
+    if node.get('x-aisa-schema-completeness') == 'documented-fields-only':
+        return True
+    content = node.get('content')
+    return isinstance(content, dict) and any(
+        isinstance(media, dict) and isinstance(media.get('schema'), dict)
+        and media['schema'].get('x-aisa-schema-completeness') == 'documented-fields-only'
+        for media in content.values())
+
 
 
 def clean_document(document: dict) -> dict:
@@ -243,66 +359,114 @@ def clean_document(document: dict) -> dict:
             return copy.deepcopy(node)
         result = map_contract_children(node, walk)
         is_operation = isinstance(result.get('operationId'), str)
+        had_description = 'description' in result
         if is_operation and isinstance(result.get('description'), str):
             result['description'] = strip_price_summary(result['description'])
             result['description'] = reconcile_free_claim(result['description'], result.get('x-aisa-pricing'))
         for field in ('description', 'summary', 'title'):
             if isinstance(result.get(field), str):
+                # A response field table is part of the data contract. Product
+                # prices, delivery fees and subscription prices are not API
+                # billing claims, even when their descriptions contain dollars.
+                if field == 'description' and documented_payload_fields(result):
+                    continue
+                # OpenAPI declarations are machine-facing input to the page
+                # and locale generators.  Keep customer pricing in
+                # x-aisa-pricing/readable_contract_notes; never append the
+                # page-level pricing notice to a parameter, schema, response,
+                # summary, or title description.
                 result[field] = clean_text(result[field])
         if is_operation:
-            add_price_summary(result)
+            remove_price_summary(result)
+            # Keep the declaration shape stable when a stale billing-only
+            # operation description is removed. Locale generation relies on
+            # this invariant for protocol parity.
+            if had_description and 'description' not in result:
+                result['description'] = ''
         return result
 
-    # Paths and reusable declaration names are user-controlled map keys.
-    output = walk({k: v for k, v in document.items() if k != 'paths'})
-    if 'paths' in document:
-        output['paths'] = {path: walk(item) for path, item in document['paths'].items()}
+    # Paths and reusable declaration names are user-controlled map keys. Walk
+    # the top-level map in place so presentation cleanup cannot reorder the
+    # generated OpenAPI document and create unrelated mirror churn.
+    output = {}
+    for key, value in document.items():
+        if key == 'paths' and isinstance(value, dict):
+            output[key] = {path: walk(item) for path, item in value.items()}
+        else:
+            output[key] = walk(value)
     return output
+
+
+def strip_tariff_columns(text):
+    """Keep the business columns of API rate tables, without supplier tariffs."""
+    lines = text.splitlines(keepends=True)
+    price_names = {'price', 'pricing', 'cost', 'usd', '价格', '费用', '计费'}
+    credit_names = {'credit', 'credits', '积分', '点数'}
+    api_names = {'section', 'endpoint', 'api', 'operation', 'request', 'plan', '接口', '操作', '请求', '套餐'}
+    index = 0
+    while index + 1 < len(lines):
+        if not lines[index].lstrip().startswith('|'):
+            index += 1
+            continue
+        end = index + 1
+        while end < len(lines) and lines[end].lstrip().startswith('|'):
+            end += 1
+        endings = [line[len(line.rstrip('\r\n')):] for line in lines[index:end]]
+        rows = [re.split(r'(?<!\\)\|', line.rstrip('\r\n')) for line in lines[index:end]]
+        if len(rows) < 2 or not all(re.fullmatch(r'\s*:?-+:?\s*', cell)
+                                    for cell in rows[1][1:] if cell.strip()):
+            index = end
+            continue
+        names = [cell.strip().strip('*`').lower() for cell in rows[0]]
+        credit_columns = {i for i, name in enumerate(names) if name in credit_names}
+        price_columns = {i for i, name in enumerate(names) if name in price_names}
+        placeholders = any(re.search(r'See current pricing|See the published pricing|见当前定价', cell, re.I)
+                           for row in rows[2:] for i, cell in enumerate(row) if i in price_columns)
+        tariff = credit_columns or placeholders or set(names) & api_names
+        removed = price_columns | credit_columns if tariff else set()
+        if removed:
+            for row_index, row in enumerate(rows):
+                if not any(name for i, name in enumerate(names) if i not in removed):
+                    lines[index + row_index] = ''
+                else:
+                    lines[index + row_index] = '|'.join(cell for i, cell in enumerate(row) if i not in removed) + endings[row_index]
+        index = end
+    return ''.join(lines)
 
 
 def clean_page(text: str, language: str = 'en') -> str:
     """Clean handwritten API-page prose before adding Runtime's managed block."""
-    from runtime_localize_openapi_zh import split_frontmatter, frontmatter_value, replace_frontmatter_value
+    from runtime_localize_openapi_zh import split_frontmatter, replace_frontmatter_value
     from readable_contract_notes import strip_generated_block
     header, body = split_frontmatter(strip_generated_block(text))
     original = (header, body)
+    metadata = yaml.safe_load(header) or {}
     for key in ('description', 'excerpt'):
-        value = frontmatter_value(header, key)
-        if value:
-            updated = clean_text(value, language)
+        value = metadata.get(key)
+        if isinstance(value, str) and value:
+            updated = clean_text(strip_price_summary(value), language)
             if updated != value:
                 header = replace_frontmatter_value(header, key, updated)
-    # Preserve the useful section/parameter columns of handwritten rate tables.
-    changed_prose = False
+    # Preserve business columns, never replace supplier prices with placeholders.
     chunks = FENCES.split(body)
     for index in range(0, len(chunks), 2):
-        lines = chunks[index].splitlines(keepends=True)
-        price_columns = []
-        for i, line in enumerate(lines):
-            if not line.lstrip().startswith('|'):
-                price_columns = []
-                continue
-            cells = line.split('|')
-            columns = [j for j, cell in enumerate(cells) if cell.strip().lower() in ('price', 'pricing', '计费', '价格')]
-            if columns:
-                price_columns = columns
-            elif price_columns and MONEY.search(line):
-                for j in price_columns:
-                    if j < len(cells) and MONEY.search(cells[j]):
-                        cells[j] = ' 见当前定价 ' if language == 'zh' else ' See current pricing '
-                lines[i] = '|'.join(cells)
-        prose = ''.join(lines)
+        prose = strip_tariff_columns(chunks[index])
         core = prose.strip()
         # A chunk sits between fences (for example `<CodeGroup>` before its
         # first block); keep its surrounding newlines so a fence stays on its own line.
-        cleaned = clean_text(core, language, add_notice=False) if core else core
+        # Legacy summaries also appeared in the MDX body, including free and
+        # unpublished prices with no monetary amount. Remove the whole block
+        # before rate cleanup; otherwise that cleanup leaves its markers behind.
+        without_summary = strip_price_summary(core)
+        cleaned = clean_text(without_summary, language) if without_summary else ''
+        # Removing a final tariff sentence can leave one space at a paragraph
+        # end. Preserve two-space Markdown hard breaks and fenced examples.
+        if cleaned != without_summary:
+            cleaned = re.sub(r'(?<=\S)[ \t](?=\n)', '', cleaned)
         if cleaned != core:
-            changed_prose = True
             prose = prose[:len(prose) - len(prose.lstrip())] + cleaned + prose[len(prose.rstrip()):]
         chunks[index] = prose
     body = ''.join(chunks)
-    if changed_prose:
-        body = place_notice(body, NOTICE_ZH if language == 'zh' else NOTICE)
     if (header, body) == original:
         return text
     return '---\n' + header + '\n---\n' + body

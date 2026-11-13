@@ -341,17 +341,21 @@ def translate(batch_size: int, limit: int | None, workers: int, worker: int) -> 
     print(f"worker={worker}/{workers} translated this run={completed}")
 
 
-def translation(catalog: dict[str, Any], source: str) -> str:
+def translation(catalog: dict[str, Any], source: str, *, preserve_payload_fields: bool = False) -> str:
     entry = catalog["entries"].get(key_for(source))
     if not entry or entry.get("source") != source or not entry.get("translation"):
         raise KeyError(f"missing translation: {source[:100]!r}")
+    if preserve_payload_fields:
+        return entry['translation']
     from pricing_prose import clean_text
+    # Clean old tariffs/notices in the translation without inserting a pricing
+    # placeholder into a page, parameter, or schema description.
     return clean_text(entry["translation"], 'zh')
 
 
 def localize_tree(node: Any, catalog: dict[str, Any], path: tuple[str, ...] = (), *, allow_untranslated: bool = False) -> Any:
     if isinstance(node, dict):
-        from pricing_prose import strip_price_summary, add_price_summary
+        from pricing_prose import strip_price_summary, remove_price_summary, documented_payload_fields
         is_operation = isinstance(node.get('operationId'), str) and 'x-aisa-pricing' in node
         result = {}
         for key, value in node.items():
@@ -360,7 +364,8 @@ def localize_tree(node: Any, catalog: dict[str, Any], path: tuple[str, ...] = ()
                     if is_operation and key == 'description':
                         value = strip_price_summary(value)
                     try:
-                        result[key] = translation(catalog, value) if value else ''
+                        result[key] = translation(catalog, value, preserve_payload_fields=(
+                            key == 'description' and documented_payload_fields(node))) if value else ''
                     except KeyError:
                         if not allow_untranslated:
                             raise
@@ -368,7 +373,15 @@ def localize_tree(node: Any, catalog: dict[str, Any], path: tuple[str, ...] = ()
                     continue
             result[key] = localize_tree(value, catalog, path + (str(key),), allow_untranslated=allow_untranslated)
         if is_operation:
-            add_price_summary(result, 'zh')
+            had_description = 'description' in result
+            remove_price_summary(result)
+            # The protocol check ignores the content of translatable fields,
+            # but it still requires their presence to remain stable.  A
+            # description containing only a retired price paragraph is removed
+            # from the public prose; keep an empty field in the localized
+            # contract so the machine shape does not change.
+            if had_description and 'description' not in result:
+                result['description'] = ''
         return result
     if isinstance(node, list):
         return [localize_tree(value, catalog, path + (str(index),), allow_untranslated=allow_untranslated) for index, value in enumerate(node)]
@@ -461,12 +474,14 @@ def generate(published_ref=None) -> None:
             # editorial prose translate. The page header retains proven aliases.
             spec = sources[OPENAPI_DIR / reference[1]]
             operation = spec.get('paths', {}).get(reference[3], {}).get(reference[2].lower(), {})
-        localized_body = update_readable_block(localized_body, operation, "zh", translated_note,
+        from pricing_prose import clean_page
+        localized_page = clean_page(f"---\n{frontmatter}\n---\n{localized_body}", "zh")
+        localized_page = update_readable_block(localized_page, operation, "zh", translated_note,
             **({"document": spec, "method": reference[2], "path": reference[3],
                 "spec_path": "openapi/zh/" + reference[1]} if reference else {}))
         target = ZH_API_DIR / mdx_path.relative_to(API_DIR)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(f"---\n{frontmatter}\n---\n{localized_body}")
+        target.write_text(localized_page)
         generated += 1
     print(f"generated specs={len(list(ZH_OPENAPI_DIR.glob('*.json')))} mdx={generated}")
 

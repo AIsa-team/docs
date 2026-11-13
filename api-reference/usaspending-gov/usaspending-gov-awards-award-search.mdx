@@ -16,7 +16,7 @@ x-aisa-operation-id: "usaspending-gov.awards.award-search"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/usaspending-gov.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,25 +38,152 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
             "value": {
-              "award_type_codes": []
-            }
-          },
-          "minimal": {
-            "value": {
-              "award_type_codes": []
+              "award_type_codes": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ],
+              "page_size": 2,
+              "recipient_search_text": "LOCKHEED MARTIN",
+              "time_period": [
+                {
+                  "end_date": "2025-09-30",
+                  "start_date": "2024-10-01"
+                }
+              ]
             }
           }
         },
         "schema": {
           "additionalProperties": true,
           "properties": {
+            "agencies": {
+              "description": "agencies",
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "award_amounts": {
+              "description": "USD ranges (OR) on the award total; at least one bound each.",
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "award_type_codes": {
+              "description": "Required. One family only: contracts A (BPA call), B (purchase order), C (delivery order), D (definitive contract); IDVs IDV_A..IDV_E; grants 02 block, 03 formula, 04 project, 05 cooperative agreement; direct payments 06, 10; loans 07 direct, 08 guaranteed; other 09 insurance, 11 other, -1.",
               "items": {
                 "type": "string"
               },
               "type": "array"
+            },
+            "cursor": {
+              "description": "next_cursor from the previous page; bound to identical filters, sort and page_size. Depth is capped at 500 pages.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "keywords": {
+              "description": "Free-text terms matched against award descriptions, recipient names and ids (OR).",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "naics_codes": {
+              "description": "Contracts/IDVs only; 2, 4 or 6 digit NAICS codes (sector, industry group or national industry). USAspending rejects other lengths.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "page_size": {
+              "default": 20,
+              "description": "page_size\n\nProvider reference: minimum 1; maximum 100; default 20.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 100,
+                "min": 1
+              }
+            },
+            "place_of_performance": {
+              "additionalProperties": true,
+              "description": "place_of_performance",
+              "type": "object",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "psc_codes": {
+              "description": "Contracts/IDVs only.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "recipient_search_text": {
+              "description": "Recipient name, UEI or DUNS text.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "sort": {
+              "default": "amount_desc",
+              "description": "Result order. For loans amount_* sorts by Loan Value and start_date_* by Issued Date; end_date_* is rejected for loans.\n\nProvider reference: allowed values [\"amount_desc\", \"amount_asc\", \"start_date_desc\", \"start_date_asc\", \"end_date_desc\", \"end_date_asc\", \"last_modified_desc\", \"last_modified_asc\", \"recipient_name_asc\", \"recipient_name_desc\", \"award_id_asc\", \"award_id_desc\"]; default \"amount_desc\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "amount_desc",
+                  "amount_asc",
+                  "start_date_desc",
+                  "start_date_asc",
+                  "end_date_desc",
+                  "end_date_asc",
+                  "last_modified_desc",
+                  "last_modified_asc",
+                  "recipient_name_asc",
+                  "recipient_name_desc",
+                  "award_id_asc",
+                  "award_id_desc"
+                ]
+              }
+            },
+            "time_period": {
+              "description": "Action-date windows (OR). start_date >= 2007-10-01. Omitted = 2007-10-01 to 2030-09-30. FY2025 is 2024-10-01..2025-09-30.",
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
           "required": [
@@ -69,16 +196,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -92,15 +209,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0005 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

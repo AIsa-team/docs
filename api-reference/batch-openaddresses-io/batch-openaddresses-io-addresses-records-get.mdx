@@ -16,7 +16,7 @@ x-aisa-operation-id: "batch-openaddresses-io.addresses.records-get"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/batch-openaddresses-io.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,16 +38,11 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
             "value": {
-              "hash": "example",
-              "source": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "hash": "example",
-              "source": "example"
+              "hash": "96dff2f15d2c8079",
+              "source": "us/ak/bristol_bay_borough"
             }
           }
         },
@@ -55,9 +50,49 @@ Effective request and pricing declaration (including authentication and referenc
           "additionalProperties": true,
           "properties": {
             "hash": {
+              "description": "16-hex row hash. Pattern: ^[0-9a-f]{16}$.",
               "type": "string"
             },
+            "job_id": {
+              "description": "Read this job's output instead of the latest successful one (old jobs stay readable).\n\nProvider reference: minimum 1.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1
+              }
+            },
+            "layer": {
+              "default": "addresses",
+              "description": "OpenAddresses layer of the source. This program shapes `addresses` rows; other layers are listed and status-checked but their records are not decoded.\n\nProvider reference: allowed values [\"addresses\", \"buildings\", \"parcels\", \"centerlines\"]; default \"addresses\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "addresses",
+                  "buildings",
+                  "parcels",
+                  "centerlines"
+                ]
+              }
+            },
+            "name": {
+              "description": "Coverage name when a source has more than one data entry per layer (e.g. `us/mn/statewide` addresses has `default` and `state`); the function says so when it is needed.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "occurrence": {
+              "default": 0,
+              "description": "0-based index among rows sharing the hash.\n\nProvider reference: minimum 0; default 0.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0
+              }
+            },
             "source": {
+              "description": "OpenAddresses source path, e.g. `us/ak/bristol_bay_borough` or `us/me/statewide` (lowercase `<country>/<region>/<name>`, no `.json`). Pattern: ^[a-z]{2}(/[a-z0-9_.-]+){1,3}$.",
               "type": "string"
             }
           },
@@ -72,16 +107,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -95,15 +120,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0005 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

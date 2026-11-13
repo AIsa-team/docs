@@ -4,7 +4,6 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 from unittest.mock import Mock, MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -22,9 +21,39 @@ def native():
 
 
 class CanonicalArtifactTests(unittest.TestCase):
+
+    def test_complete_production_sized_catalog_exceeds_old_inner_manifest_limit(self):
+        providers = []
+        aggregate = native()
+        aggregate['paths'] = {}
+        self.contents = {contract.READINESS: self.contents[contract.READINESS]}
+        for number in range(568):
+            provider = f'provider-{number:04d}'
+            document = native()
+            operation = document['paths'].pop('/request')['get']
+            operation['operationId'] = provider
+            document['paths']['/request/' + provider] = {'get': operation}
+            aggregate['paths'].update(document['paths'])
+            self.contents['contracts/native/' + provider + '.json'] = encoded(document)
+            self.contents['providers/' + provider + '.json'] = encoded({
+                'info': {'x-aisa-document': {'facts_hash': 'c' * 64}}, 'paths': {}})
+            providers.append({'id': provider, 'facts_hash': 'c' * 64})
+        self.contents['index.json'] = encoded({'pending_endpoints': [], 'pending_providers': [],
+            'providers': providers, 'coverage': {'selected_endpoint_count': 568,
+                'projected_endpoint_count': 568, 'pending_endpoint_count': 0, 'inventory_endpoint_count': 568}})
+        self.contents[contract.AGGREGATE] = encoded(aggregate)
+        self.seal()
+        result = self.acquire()
+        self.assertEqual(result[-1]['provider_count'], 568)
+        self.assertEqual(result[-1]['canonical_validation']['operation_identity_count'], 568)
+        self.manifest['files'] = (self.manifest['files'] * 2)[:1025]
+        self.contents[contract.MANIFEST] = encoded(self.manifest)
+        with self.assertRaisesRegex(ValueError, 'Invalid canonical member count'):
+            contract.validate_canonical_files(self.contents, self.current)
+
     def test_large_native_graph_round_trips_and_rejects_count_overflow(self):
         aggregate = native()
-        for number in range(1020):
+        for number in range(1021):
             path, identity = f'/operation/{number}', f'operation_{number}'
             document = native()
             operation = document['paths'].pop('/request')
@@ -34,7 +63,7 @@ class CanonicalArtifactTests(unittest.TestCase):
             self.contents[f'contracts/native/p{number:04}.json'] = encoded(document)
         self.contents[contract.AGGREGATE] = encoded(aggregate)
         self.seal()
-        self.assertEqual(len(self.manifest['files']), 1023)
+        self.assertEqual(len(self.manifest['files']), 1024)
         self.acquire()
         self.contents['contracts/native/overflow.json'] = encoded({'openapi': '3.1.0', 'info': {'title': 'Overflow', 'version': '1'}, 'paths': {}})
         self.seal()

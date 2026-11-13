@@ -16,7 +16,7 @@ x-aisa-operation-id: "basketball-fantasysports-yahoo-com.fantasy-basketball-play
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/basketball-fantasysports-yahoo-com.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -38,14 +38,14 @@ x-aisa-operation-id: "basketball-fantasysports-yahoo-com.fantasy-basketball-play
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
             "value": {
-              "league_id": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "league_id": "example"
+              "league_id": "10000",
+              "nba_team": "ET_2",
+              "position": "C",
+              "stat_period": "S_AS_2025",
+              "status": "ALL"
             }
           }
         },
@@ -74,11 +74,99 @@ x-aisa-operation-id: "basketball-fantasysports-yahoo-com.fantasy-basketball-play
             }
           ],
           "properties": {
+            "fantasy_team_id": {
+              "description": "Fantasy team id in this league (fteam filter). Pattern: ^[0-9]{1,3}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "league_id": {
+              "description": "Public league id, the number after /nba/ in a league URL (e.g. 10000). Pattern: ^[0-9]{1,9}$.",
               "type": "string"
             },
             "league_url": {
+              "description": "A league page URL; the league id is taken from its /nba/{league_id} segment. Alternative to league_id. Pattern: ^https?://(www\\.)?basketball\\.fantasysports\\.yahoo\\.com/nba/[0-9]{1,9}(/.*)?$.",
               "type": "string"
+            },
+            "nba_team": {
+              "description": "NBA team filter code from the page's team dropdown (ET_2 = Boston, ET_13 = LA Lakers). Pattern: ^ET_[0-9]{1,2}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "offset": {
+              "default": 0,
+              "description": "Row offset; the page serves 25 rows. Use next_offset from the previous page.\n\nProvider reference: minimum 0; default 0.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0
+              }
+            },
+            "position": {
+              "default": "P",
+              "description": "Position filter: P (all players), PG, SG, G, SF, PF, F, C, Util.\n\nProvider reference: allowed values [\"P\", \"PG\", \"SG\", \"G\", \"SF\", \"PF\", \"F\", \"C\", \"Util\"]; default \"P\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "P",
+                  "PG",
+                  "SG",
+                  "G",
+                  "SF",
+                  "PF",
+                  "F",
+                  "C",
+                  "Util"
+                ]
+              }
+            },
+            "sdir": {
+              "default": "1",
+              "description": "Sort direction as the site encodes it (sdir).\n\nProvider reference: allowed values [\"0\", \"1\"]; default \"1\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "0",
+                  "1"
+                ]
+              }
+            },
+            "sort": {
+              "default": "OR",
+              "description": "Sort column as the site encodes it: OR (pre-season rank), AR (current rank), R_PO (% rostered), MPG, NAME, 0 (games played) or a stat id (5 FG%, 8 FT%, 10 3PTM, 12 PTS, 15 REB, 16 AST, 17 ST, 18 BLK, 19 TO; 4/3 FGM/FGA, 7/6 FTM/FTA). Must be one of the page's column sort keys (see columns[].sort_key). Pattern: ^([A-Z][A-Z0-9_]{0,11}|[0-9]{1,7})$.\n\nProvider reference: default \"OR\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "stat_period": {
+              "description": "Stat window code from the page's dropdown. Projected: S_PS7, S_PS14, S_PSR (remaining games). Totals: S_L (today), S_L7, S_L14, S_L30, S_S_{season}. Averages: S_AL7, S_AL14, S_AL30, S_AS_{season}. Standard deviation: S_SDL7, S_SDL14, S_SDL30, S_SD_{season}. {season} is the starting year (2025 = 2025-26). Omitted: the page's default (reported in stat_period). Pattern: ^S_(PS7|PS14|PSR|L|L7|L14|L30|S_[0-9]{4}|AL7|AL14|AL30|AS_[0-9]{4}|SDL7|SDL14|SDL30|SD_[0-9]{4})$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "status": {
+              "default": "ALL",
+              "description": "Availability in this league: ALL, A (available), FA (free agents), W (waivers), T (taken), K (keepers), STATE_IL (available, IL eligible). Watch list (WL) needs a login and is not supported.\n\nProvider reference: allowed values [\"ALL\", \"A\", \"FA\", \"W\", \"T\", \"K\", \"STATE_IL\"]; default \"ALL\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "ALL",
+                  "A",
+                  "FA",
+                  "W",
+                  "T",
+                  "K",
+                  "STATE_IL"
+                ]
+              }
             }
           },
           "type": "object"
@@ -88,16 +176,6 @@ x-aisa-operation-id: "basketball-fantasysports-yahoo-com.fantasy-basketball-play
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -111,15 +189,7 @@ x-aisa-operation-id: "basketball-fantasysports-yahoo-com.fantasy-basketball-play
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.0005 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

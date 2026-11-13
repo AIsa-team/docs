@@ -16,7 +16,7 @@ x-aisa-operation-id: "data-nifc-opendata-arcgis-com.wildfire-incidents-perimeter
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/data-nifc-opendata-arcgis-com.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -38,14 +38,17 @@ x-aisa-operation-id: "data-nifc-opendata-arcgis-com.wildfire-incidents-perimeter
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
             "value": {
-              "geometry": {}
-            }
-          },
-          "minimal": {
-            "value": {
-              "geometry": {}
+              "geometry": {
+                "coordinates": [
+                  -120.5,
+                  38.9
+                ],
+                "type": "Point"
+              },
+              "radius_km": 100
             }
           }
         },
@@ -54,7 +57,25 @@ x-aisa-operation-id: "data-nifc-opendata-arcgis-com.wildfire-incidents-perimeter
           "properties": {
             "geometry": {
               "additionalProperties": true,
+              "description": "GeoJSON (RFC 7946, WGS84, [lon, lat]) Point, Polygon, MultiPolygon, or a Feature wrapping one. Foreign members (properties, id, bbox, crs) pass through unused. FeatureCollection, GeometryCollection, lines and antimeridian-crossing shapes are refused as invalid_input with a JSON pointer and a stable code (ring_not_closed, latitude, longitude, too_large, antimeridian, feature_collection, outside_coverage).",
               "type": "object"
+            },
+            "include_rx": {
+              "description": "Include prescribed fires (IncidentTypeCategory RX). Default true.",
+              "type": "boolean",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "radius_km": {
+              "default": 25,
+              "description": "Search radius around the geometry in kilometres (default 25, max 200).\n\nProvider reference: minimum 0; maximum 200; default 25.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 200,
+                "min": 0
+              }
             }
           },
           "required": [
@@ -67,16 +88,6 @@ x-aisa-operation-id: "data-nifc-opendata-arcgis-com.wildfire-incidents-perimeter
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -90,15 +101,7 @@ x-aisa-operation-id: "data-nifc-opendata-arcgis-com.wildfire-incidents-perimeter
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.0005 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

@@ -16,7 +16,7 @@ x-aisa-operation-id: "data-inpi-fr.intellectual-property-registers.search-tradem
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/data-inpi-fr.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -38,15 +38,121 @@ x-aisa-operation-id: "data-inpi-fr.intellectual-property-registers.search-tradem
     "content": {
       "application/json": {
         "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "nice_classes": [
+                "3"
+              ],
+              "offices": [
+                "FR"
+              ],
+              "per_page": 2,
+              "q": "chanel"
+            }
           }
         },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "mark_features": {
+              "description": "markFeature values (Word, Figurative, 3-D, Sound, ...).",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "mark_name": {
+              "description": "Mark-name-only match (advanced search 'Nom de la marque'). Give `q` or `mark_name`.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "nice_classes": {
+              "description": "Nice classes 1-45; each is sent in every spelling the offices use (3, 03, 003).",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "offices": {
+              "description": "Restrict to offices; default all three.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "order": {
+              "description": "Sort direction; defaults to desc for date sorts and asc otherwise.\n\nProvider reference: allowed values [\"asc\", \"desc\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "asc",
+                  "desc"
+                ]
+              }
+            },
+            "page": {
+              "default": 1,
+              "description": "1-based page; page * per_page must stay within the source's 10000-hit window.\n\nProvider reference: minimum 1; default 1.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1
+              }
+            },
+            "per_page": {
+              "default": 20,
+              "description": "Hits per page (the site's own choices are 20, 50, 100).\n\nProvider reference: minimum 1; maximum 100; default 20.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 100,
+                "min": 1
+              }
+            },
+            "q": {
+              "description": "Full-text query over mark name, applicants and representatives (the site's search box). Give `q` or `mark_name`.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "sort": {
+              "default": "relevance",
+              "description": "sort\n\nProvider reference: allowed values [\"relevance\", \"application_date\", \"mark_name\"]; default \"relevance\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "relevance",
+                  "application_date",
+                  "mark_name"
+                ]
+              }
+            },
+            "statuses": {
+              "description": "markCurrentStatusCode values exactly as the office labels them (e.g. 'Marque enregistrée', 'Registered').",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +160,6 @@ x-aisa-operation-id: "data-inpi-fr.intellectual-property-registers.search-tradem
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +173,7 @@ x-aisa-operation-id: "data-inpi-fr.intellectual-property-registers.search-tradem
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.0005 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

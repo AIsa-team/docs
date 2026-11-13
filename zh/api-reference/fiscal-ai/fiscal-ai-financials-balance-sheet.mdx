@@ -16,7 +16,7 @@ x-aisa-operation-id: "fiscal-ai.financials.balance-sheet"
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/fiscal-ai.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -37,18 +37,6 @@ x-aisa-operation-id: "fiscal-ai.financials.balance-sheet"
   "requestBody": {
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {
-              "cik": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "cik": "example"
-            }
-          }
-        },
         "schema": {
           "additionalProperties": true,
           "allOf": [
@@ -115,24 +103,52 @@ x-aisa-operation-id: "fiscal-ai.financials.balance-sheet"
           ],
           "properties": {
             "cik": {
+              "description": "SEC Central Index Key. Use when a company has no ticker, or after a rename.",
               "type": "string"
             },
             "companyKey": {
+              "description": "Exchange and ticker joined by an underscore: `NASDAQ_MSFT` for US and Canadian listings, or MIC code and ticker elsewhere, as in `XWAR_PKN`.",
+              "type": "string"
+            },
+            "currency": {
+              "description": "ISO 4217 code to convert into, for example USD or EUR. Defaults to the company's own reporting currency, and the response carries the rate that was applied.",
               "type": "string"
             },
             "cusip": {
+              "description": "CUSIP of the security. Licensed identifier.",
+              "type": "string"
+            },
+            "exchange": {
+              "description": "Exchange code for `ticker`, for example NASDAQ, or a MIC code for a non-US/CA listing.",
               "type": "string"
             },
             "figi": {
+              "description": "OpenFIGI identifier of the security. Licensed identifier.",
               "type": "string"
             },
             "fscl": {
+              "description": "Fiscal.ai's stable company identifier, the `companyFiscalIdentifier` field. The only identifier that survives a ticker change or a relisting, so prefer it when carrying a company between calls.",
               "type": "string"
             },
+            "includeMappingAlternatives": {
+              "description": "Include the alternative as-reported line items that could have mapped to each standardized metric, which is how a mapping decision is audited.",
+              "type": "boolean"
+            },
+            "includeReportingTemplates": {
+              "description": "Include which reporting templates each standardized metric belongs to.",
+              "type": "boolean"
+            },
             "isin": {
+              "description": "ISIN of the security. Licensed identifier.",
+              "type": "string"
+            },
+            "periodType": {
+              "default": "annual",
+              "description": "Comma-separated period filter: annual, quarterly, semi-annual, ltm, ytd, latest. Defaults to annual.\n\nProvider reference: default \"annual\".",
               "type": "string"
             },
             "ticker": {
+              "description": "Ticker symbol, for example MSFT. Only unique within an exchange, so pass `exchange` with it.",
               "type": "string"
             }
           },
@@ -143,16 +159,6 @@ x-aisa-operation-id: "fiscal-ai.financials.balance-sheet"
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0015,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -166,15 +172,7 @@ x-aisa-operation-id: "fiscal-ai.financials.balance-sheet"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0015 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.0015 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.0015
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

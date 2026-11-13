@@ -16,7 +16,7 @@ x-aisa-operation-id: "benzinga.calendar.ratings-analysts"
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/benzinga.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -37,16 +37,47 @@ x-aisa-operation-id: "benzinga.calendar.ratings-analysts"
   "requestBody": {
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
-          }
-        },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "analyst": {
+              "description": "Analyst identifier to look up. Set this when you already have an analyst_id from a ratings record and want that analyst's profile and accuracy.",
+              "type": "string"
+            },
+            "analyst_name": {
+              "description": "Analyst name to match. Set this when the caller names a person rather than supplying an id; the reference does not say whether matching is exact, so try the full name first.",
+              "type": "string"
+            },
+            "fields": {
+              "description": "Comma-separated list of response fields to return. Set it to trim the payload when you only need names and ids and not the ratings_accuracy block.",
+              "type": "string"
+            },
+            "firm": {
+              "description": "Firm identifier to restrict to. Set this to list only the analysts working at one research firm.",
+              "type": "string"
+            },
+            "firm_name": {
+              "description": "Firm name to match. Use it when the caller names the bank, for example Morgan Stanley, instead of supplying a firm id.",
+              "type": "string"
+            },
+            "page": {
+              "default": 0,
+              "description": "Page offset, limited to 0-100000. Set this only when walking past the first page of the analyst roster.\n\nProvider reference: default 0.",
+              "type": "number"
+            },
+            "pageSize": {
+              "default": 100,
+              "description": "Number of analysts to return, limit 1000. Raise it when you want the roster in one call rather than paging.\n\nProvider reference: maximum 1000; default 100.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "max": 1000
+              }
+            },
+            "updated": {
+              "description": "Unix timestamp (UTC); only records updated at or after this are returned, and the sort order follows it. Set this to poll for roster changes since your last sync.",
+              "type": "number"
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +85,6 @@ x-aisa-operation-id: "benzinga.calendar.ratings-analysts"
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.003,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +98,7 @@ x-aisa-operation-id: "benzinga.calendar.ratings-analysts"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.003 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.003 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.003
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

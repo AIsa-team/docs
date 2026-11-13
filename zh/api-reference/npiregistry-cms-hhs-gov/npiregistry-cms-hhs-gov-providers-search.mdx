@@ -16,7 +16,7 @@ x-aisa-operation-id: "npiregistry-cms-hhs-gov.providers.search"
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/npiregistry-cms-hhs-gov.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -38,15 +38,127 @@ x-aisa-operation-id: "npiregistry-cms-hhs-gov.providers.search"
     "content": {
       "application/json": {
         "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "city": "New York",
+              "limit": 3,
+              "state": "NY",
+              "taxonomy_description": "Dermatology"
+            }
           }
         },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "address_purpose": {
+              "description": "Which address the city/state/postal_code filters apply to. Default: any.\n\nProvider reference: allowed values [\"location\", \"mailing\", \"primary\", \"secondary\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "location",
+                  "mailing",
+                  "primary",
+                  "secondary"
+                ]
+              }
+            },
+            "city": {
+              "description": "City of the mailing or practice address. Up to 100 ASCII characters (NPPES rejects accented letters; O'Brien, Smith-Jones and St. John are fine); one trailing `*` wildcard is allowed after at least two characters.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "country_code": {
+              "description": "Two-letter country code; US is the default in NPPES. Pattern: ^[A-Za-z]{2}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "enumeration_type": {
+              "description": "individual (NPI-1) or organization (NPI-2). Omit for both.\n\nProvider reference: allowed values [\"individual\", \"organization\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "individual",
+                  "organization"
+                ]
+              }
+            },
+            "first_name": {
+              "description": "Individual provider first name (NPI-1 only). Up to 100 ASCII characters (NPPES rejects accented letters; O'Brien, Smith-Jones and St. John are fine); one trailing `*` wildcard is allowed after at least two characters.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "last_name": {
+              "description": "Individual provider last name (NPI-1 only). Up to 100 ASCII characters (NPPES rejects accented letters; O'Brien, Smith-Jones and St. John are fine); one trailing `*` wildcard is allowed after at least two characters.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "limit": {
+              "default": 10,
+              "description": "Records per page.\n\nProvider reference: minimum 1; maximum 200; default 10.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 200,
+                "min": 1
+              }
+            },
+            "organization_name": {
+              "description": "Organization legal name or other name (NPI-2 only); also matches Doing Business As names. Up to 100 ASCII characters (NPPES rejects accented letters; O'Brien, Smith-Jones and St. John are fine); one trailing `*` wildcard is allowed after at least two characters.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "postal_code": {
+              "description": "5- or 9-digit ZIP, or a prefix followed by `*` (e.g. 941*).",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "skip": {
+              "default": 0,
+              "description": "Records to skip; pass next_skip from the previous page. NPPES allows at most 1200.\n\nProvider reference: minimum 0; maximum 1200; default 0.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 1200,
+                "min": 0
+              }
+            },
+            "state": {
+              "description": "Two-letter US state/territory code. Needs another criterion. Pattern: ^[A-Za-z]{2}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "taxonomy_description": {
+              "description": "Specialty / taxonomy description such as Cardiology, Dermatology, Family Medicine, Hospice Care, Community Based, or a taxonomy code like 208800000X. Up to 100 ASCII characters (NPPES rejects accented letters; O'Brien, Smith-Jones and St. John are fine); one trailing `*` wildcard is allowed after at least two characters.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "use_first_name_alias": {
+              "description": "Also match common first-name aliases (Bob for Robert). Requires first_name. NPPES default is true.",
+              "type": "boolean",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +166,6 @@ x-aisa-operation-id: "npiregistry-cms-hhs-gov.providers.search"
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +179,7 @@ x-aisa-operation-id: "npiregistry-cms-hhs-gov.providers.search"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.0005 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

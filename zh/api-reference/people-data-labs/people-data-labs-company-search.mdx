@@ -16,7 +16,7 @@ x-aisa-operation-id: "people-data-labs.company.search"
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/people-data-labs.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -38,16 +38,11 @@ x-aisa-operation-id: "people-data-labs.company.search"
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
             "value": {
-              "query": {},
-              "size": 1
-            }
-          },
-          "minimal": {
-            "value": {
-              "query": {},
-              "size": 1
+              "size": 1,
+              "sql": "SELECT * FROM company WHERE industry = 'computer software'"
             }
           }
         },
@@ -78,15 +73,33 @@ x-aisa-operation-id: "people-data-labs.company.search"
           "properties": {
             "query": {
               "additionalProperties": true,
+              "description": "Elasticsearch 7.7 query object over the company schema. Only term, terms, exists, bool, match, range, match_phrase, wildcard, prefix and match_all are accepted. Any array inside it is capped at 100 elements - a tenth of what the person endpoints allow, so a filter list carried over from there will fail. Send this or sql, never both.",
               "type": "object"
             },
+            "scroll_token": {
+              "description": "The scroll_token from the previous response, replayed with the identical query, for the next page. A 404 while scrolling means the results are exhausted, not that the query broke.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "size": {
+              "description": "Request 1-2 companies per call, costing 50 credits per returned company. PDL supports 1-100 upstream, but Exchange authorization is capped at 100 credits, so callers must use size 1 or 2.\n\nProvider reference: minimum 1; maximum 100; default 1.",
               "maximum": 2,
               "minimum": 1,
               "type": "integer"
             },
             "sql": {
+              "description": "`SELECT * FROM company WHERE ...`. Column selection and LIMIT are ignored, and at most 20 LIKE '%...%' terms are allowed. Send this or query, never both.",
               "type": "string"
+            },
+            "titlecase": {
+              "default": false,
+              "description": "Return titlecased values. Responses are lowercase otherwise, which matters when the output is shown to a person rather than matched on.\n\nProvider reference: default false.",
+              "type": "boolean",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
           "required": [
@@ -99,16 +112,6 @@ x-aisa-operation-id: "people-data-labs.company.search"
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -122,15 +125,7 @@ x-aisa-operation-id: "people-data-labs.company.search"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.005 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

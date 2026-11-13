@@ -16,7 +16,7 @@ x-aisa-operation-id: "us-forums-blizzard-com.forum-discussions.get-topic"
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/us-forums-blizzard-com.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -38,15 +38,74 @@ x-aisa-operation-id: "us-forums-blizzard-com.forum-discussions.get-topic"
     "content": {
       "application/json": {
         "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "locale": "en",
+              "page_size": 1,
+              "site": "wow",
+              "topic_id": 2347166
+            }
           }
         },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "locale": {
+              "default": "en",
+              "description": "Locale path prefix: en, es or pt. Default `en`. Locales are separate forums, not translations.\n\nProvider reference: allowed values [\"en\", \"es\", \"pt\"]; default \"en\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "en",
+                  "es",
+                  "pt"
+                ]
+              }
+            },
+            "page": {
+              "description": "1-based page of posts (default 1).\n\nProvider reference: minimum 1; maximum 100000.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 100000,
+                "min": 1
+              }
+            },
+            "page_size": {
+              "description": "Posts per page, 1-20 (default 20, the site's chunk size).\n\nProvider reference: minimum 1; maximum 20.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 20,
+                "min": 1
+              }
+            },
+            "site": {
+              "default": "wow",
+              "description": "Forum site prefix on us.forums.blizzard.com. Known prefixes (robots.txt, 2026-09-22): wow, blizzard, blizzcon, d2r, d3, d4, diablo-immortal, hearthstone, heroes, overwatch, sc2, starcraft, warcraft3, warcraftrumble (en); d3, hearthstone, heroes, overwatch, sc2, warcraftrumble, wow (es); blizzard, d3, hearthstone, heroes, overwatch, sc2, warcraftrumble, wow (pt). Each locale/site pair is a separate Discourse forum with its own category, topic, post and user ids. Default `wow`. Pattern: ^[a-z0-9-]{1,32}$.\n\nProvider reference: default \"wow\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "topic_id": {
+              "description": "Topic id, site-scoped.\n\nProvider reference: minimum 1.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1
+              }
+            },
+            "url": {
+              "description": "A pasted https://us.forums.blizzard.com/{locale}/{site}/t/{slug}/{topic_id} URL; alternative to topic_id (and to site/locale).",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +113,6 @@ x-aisa-operation-id: "us-forums-blizzard-com.forum-discussions.get-topic"
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +126,7 @@ x-aisa-operation-id: "us-forums-blizzard-com.forum-discussions.get-topic"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.0005 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

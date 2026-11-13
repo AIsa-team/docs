@@ -16,7 +16,7 @@ x-aisa-operation-id: "russelcoinc-com.products.search-products"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/russelcoinc-com.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,15 +38,70 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "query": "advil",
+              "sort": "price_asc"
+            }
           }
         },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "category_id": {
+              "description": "Category public id (uuid) as returned by list_categories (`id`) or seen in the site's `/products?category=` links. Includes the category's descendants. Pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "page": {
+              "default": 1,
+              "description": "1-based page of 42 products; pass the returned next_cursor to continue.\n\nProvider reference: minimum 1; maximum 1000; default 1.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 1000,
+                "min": 1
+              }
+            },
+            "query": {
+              "default": "",
+              "description": "Free-text search (product description or brand, e.g. `advil`). Empty or omitted lists the catalogue.\n\nProvider reference: default \"\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "sort": {
+              "default": "description",
+              "description": "Sort order; the site's own values.\n\nProvider reference: allowed values [\"description\", \"price_asc\", \"price_desc\"]; default \"description\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "description",
+                  "price_asc",
+                  "price_desc"
+                ]
+              }
+            },
+            "special_offers_only": {
+              "description": "Only products in the site's 'On Sale' view (`/products?special=true`); their `price_override` carries the sale price.",
+              "type": "boolean",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "wholesale_prices": {
+              "description": "Return wholesale unit prices instead of retail ones, as the public 'Wholesale Prices' toggle on the site does (no login involved).",
+              "type": "boolean",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +109,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +122,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0005 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

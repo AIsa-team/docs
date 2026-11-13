@@ -16,7 +16,7 @@ x-aisa-operation-id: "dataprivacyframework-gov.companies.search-participants"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/dataprivacyframework-gov.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,15 +38,138 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "query": "Microsoft",
+              "status": "active"
+            }
           }
         },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "data_covered": {
+              "description": "Restrict to certifications covering human-resources data (`HR`) and/or non-HR data (`NonHR`). The site accepts other strings silently, so only these two are allowed.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "frameworks": {
+              "description": "Framework ids: 1 = EU-U.S. DPF, 2 = Swiss-U.S. DPF, 3 = UK Extension to the EU-U.S. DPF.",
+              "items": {
+                "type": "number"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "industry_ids": {
+              "description": "Industry row ids from list_reference_data(kind=industries). Several ids share one industry name; pass every id you want to match.",
+              "items": {
+                "type": "number"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "page": {
+              "default": 1,
+              "description": "1-based page number; `next_page` of the previous result.\n\nProvider reference: minimum 1; default 1.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1
+              }
+            },
+            "page_size": {
+              "default": 50,
+              "description": "Rows per page; the three sizes the site's own list offers.\n\nProvider reference: allowed values [\"10\", \"50\", \"100\"]; default 50.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "10",
+                  "50",
+                  "100"
+                ]
+              }
+            },
+            "query": {
+              "description": "Text matched against the organization's public display name (substring, case-insensitive on the site). Omit for the full list.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "recourse_mechanisms": {
+              "description": "Recourse mechanism provider names exactly as listed by list_reference_data(kind=recourse_mechanisms), e.g. `JAMS`.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "start_letter": {
+              "description": "Only organizations whose display name starts with this letter or digit. Pattern: ^[A-Za-z0-9]$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "states": {
+              "description": "Two-letter U.S. state or territory codes (e.g. CA, NY, DC, PR).",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "status": {
+              "default": "active",
+              "description": "Participation status bucket: `active` (includes 'Active - Re-certification under Review'), `inactive` (lapsed or withdrawn), or `all`.\n\nProvider reference: allowed values [\"active\", \"inactive\", \"all\"]; default \"active\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "active",
+                  "inactive",
+                  "all"
+                ]
+              }
+            },
+            "statutory_bodies": {
+              "description": "The U.S. statutory body with jurisdiction over the participant.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "verification_method": {
+              "description": "How the organization verified its compliance.\n\nProvider reference: allowed values [\"Self-Assessment\", \"Outside Compliance Review\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "Self-Assessment",
+                  "Outside Compliance Review"
+                ]
+              }
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +177,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +190,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0005 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

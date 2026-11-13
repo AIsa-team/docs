@@ -16,7 +16,7 @@ x-aisa-operation-id: "open-alberta-ca.open-data.search-catalogue"
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/open-alberta-ca.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -38,15 +38,134 @@ x-aisa-operation-id: "open-alberta-ca.open-data.search-catalogue"
     "content": {
       "application/json": {
         "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "q": "registry agent product catalogue",
+              "rows": 5,
+              "type": "publications"
+            }
           }
         },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "cursor": {
+              "description": "Result offset to resume from: the next_cursor of the previous page. Pattern: ^[0-9]{1,9}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "issued_from": {
+              "description": "Earliest publication (issue) date, YYYY-MM-DD. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "issued_to": {
+              "description": "Latest publication (issue) date, YYYY-MM-DD. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "license_id": {
+              "description": "Licence id: OGLA (Open Government Licence - Alberta), KPTU (King's Printer Terms of Use), OGNL (no licence).",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "modified_since": {
+              "description": "Only records whose catalogue entry changed on or after this date (YYYY-MM-DD); use with sort updated to poll for new and updated records. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "organization": {
+              "description": "Ministry or agency slug, e.g. health, energy-and-minerals, service-alberta-and-red-tape-reduction. Pattern: ^[A-Za-z0-9_.-]+$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "pubtype": {
+              "description": "Publication type, e.g. Report, Fact Sheet, Guide, Orders and Directives, Legislation and Regulations, Media Release, Statistics (facets.pubtype[].name).",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "q": {
+              "description": "Full-text query (Solr syntax allowed: quotes, AND/OR). Omit to list everything.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "res_format": {
+              "description": "Resource format a record must offer, e.g. PDF, CSV, XLSX, XML.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "rows": {
+              "default": 20,
+              "description": "Records per page.\n\nProvider reference: minimum 1; maximum 100; default 20.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 100,
+                "min": 1
+              }
+            },
+            "sort": {
+              "description": "relevance (default with q), modified (content date, default without q), issued (newest publication date), updated (catalogue entry change), title (A-Z).\n\nProvider reference: allowed values [\"relevance\", \"modified\", \"issued\", \"updated\", \"title\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "relevance",
+                  "modified",
+                  "issued",
+                  "updated",
+                  "title"
+                ]
+              }
+            },
+            "tag": {
+              "description": "Keyword tag, exact as stored (e.g. registry agents).",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "topic": {
+              "description": "Topic, e.g. Environment, Health and Wellness, Laws and Justice (facets.topic[].name).",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "type": {
+              "default": "any",
+              "description": "Record type: publications (documents), opendata (data sets), documentation (portal help), or any.\n\nProvider reference: allowed values [\"publications\", \"opendata\", \"documentation\", \"any\"]; default \"any\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "publications",
+                  "opendata",
+                  "documentation",
+                  "any"
+                ]
+              }
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +173,6 @@ x-aisa-operation-id: "open-alberta-ca.open-data.search-catalogue"
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +186,7 @@ x-aisa-operation-id: "open-alberta-ca.open-data.search-catalogue"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.0005 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

@@ -16,7 +16,7 @@ x-aisa-operation-id: "courtlistener-com.dockets.search-dockets"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/courtlistener-com.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,14 +38,13 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
             "value": {
-              "attorney_name": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "attorney_name": "example"
+              "court": [
+                "nysd"
+              ],
+              "docket_number": "1:20-cv-03010"
             }
           }
         },
@@ -139,36 +138,87 @@ Effective request and pricing declaration (including authentication and referenc
           ],
           "properties": {
             "attorney_name": {
+              "description": "attorney_name",
               "type": "string"
             },
             "case_name": {
+              "description": "case_name",
               "type": "string"
             },
             "cause": {
+              "description": "cause",
               "type": "string"
             },
             "court": {
+              "description": "CourtListener court ids (not jurisdiction or state names) to restrict the search to, e.g. scotus, ca9, nysd, cal, calctapp, ny, nyappdiv, tex, texapp, fla. An unknown id such as texas, tx or ca matches nothing and returns zero results. List every court you need: ny does not include nyappdiv. Use the courts function to find ids (jurisdiction S / SA are state supreme and appellate courts).",
               "items": {
                 "type": "string"
               },
               "type": "array"
             },
+            "cursor": {
+              "description": "Not served keyless: the feeds have no further pages, so any cursor fails with a non-retryable upstream_blocked error.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "docket_id": {
+              "description": "CourtListener docket id for a single-docket lookup.\n\nProvider reference: minimum 1.",
               "type": "number"
             },
             "docket_number": {
+              "description": "PACER docket number, e.g. 1:20-cv-03010. Combine with court for an exact match.",
               "type": "string"
             },
+            "filed_after": {
+              "description": "Earliest filing date, inclusive (YYYY-MM-DD). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "filed_before": {
+              "description": "Latest filing date, inclusive (YYYY-MM-DD). Use the same date as filed_after for a single day. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "judge": {
+              "description": "Assigned judge name.",
               "type": "string"
             },
             "nature_of_suit": {
+              "description": "nature_of_suit",
               "type": "string"
+            },
+            "order_by": {
+              "default": "score desc",
+              "description": "Keyless feeds always return the newest matches first. score desc (default) and dateFiled desc are accepted; other orders need a CourtListener API token and fail with a non-retryable upstream_blocked error.\n\nProvider reference: allowed values [\"score desc\", \"dateFiled desc\", \"dateFiled asc\"]; default \"score desc\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "score desc",
+                  "dateFiled desc",
+                  "dateFiled asc"
+                ]
+              }
             },
             "party_name": {
+              "description": "Party name. CourtListener stems and tokenizes it, so Bakers also matches Baker; set party_name_exact for an exact phrase.",
               "type": "string"
             },
+            "party_name_exact": {
+              "description": "Match party_name as an exact quoted phrase without stemming, so Bakers no longer matches Baker or Bake. Requires party_name.",
+              "type": "boolean",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "query": {
+              "description": "Full-text query over docket metadata; supports fielded clauses such as party:(Google) or docketNumber:\"1:20-cv-03010\".",
               "type": "string"
             }
           },
@@ -179,16 +229,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -202,15 +242,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0005 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

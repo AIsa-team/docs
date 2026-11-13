@@ -16,7 +16,7 @@ x-aisa-operation-id: "vivino-com.products.explore"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/vivino-com.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,15 +38,134 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "countries": [
+                "IT"
+              ],
+              "grapes": [
+                "Pinot Noir"
+              ],
+              "min_rating": 4,
+              "price_max": 40,
+              "price_min": 10,
+              "wine_types": [
+                "red"
+              ]
+            }
           }
         },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "countries": {
+              "description": "Countries of origin as ISO 3166-1 alpha-2 codes, for example IT, FR, ES.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "grapes": {
+              "description": "Grape names as Vivino lists them, for example `Pinot Noir`, `Nebbiolo`, `Syrah`. Unknown names are rejected.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "min_rating": {
+              "description": "Minimum average rating, for example 4 or 4.2.\n\nProvider reference: minimum 1; maximum 5.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 5,
+                "min": 1
+              }
+            },
+            "page": {
+              "default": 1,
+              "description": "1-based page of 24 vintages.\n\nProvider reference: minimum 1; maximum 100; default 1.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 100,
+                "min": 1
+              }
+            },
+            "price_max": {
+              "description": "Maximum bottle price in the ship-to market's currency.\n\nProvider reference: minimum 0; maximum 100000.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 100000,
+                "min": 0
+              }
+            },
+            "price_min": {
+              "description": "Minimum bottle price in the ship-to market's currency.\n\nProvider reference: minimum 0; maximum 100000.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 100000,
+                "min": 0
+              }
+            },
+            "ship_to": {
+              "default": "US",
+              "description": "Ship-to market whose offers and prices are shown, as Vivino's market switch supports it. Default US (prices in USD). Currencies: USD for US; EUR for NL, BE, DE, FR, IT, ES and AT; DKK, SEK, CHF, GBP, CAD and AUD for DK, SE, CH, GB, CA and AU.\n\nProvider reference: allowed values [\"NL\", \"BE\", \"DE\", \"FR\", \"IT\", \"ES\", \"AT\", \"DK\", \"SE\", \"CH\", \"GB\", \"US\", \"CA\", \"AU\"]; default \"US\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "NL",
+                  "BE",
+                  "DE",
+                  "FR",
+                  "IT",
+                  "ES",
+                  "AT",
+                  "DK",
+                  "SE",
+                  "CH",
+                  "GB",
+                  "US",
+                  "CA",
+                  "AU"
+                ]
+              }
+            },
+            "sort": {
+              "default": "rating",
+              "description": "`rating` (highest average first), `popularity` (most ratings), `price_asc`, `price_desc` or `discount` (largest discount first).\n\nProvider reference: allowed values [\"rating\", \"popularity\", \"price_asc\", \"price_desc\", \"discount\"]; default \"rating\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "rating",
+                  "popularity",
+                  "price_asc",
+                  "price_desc",
+                  "discount"
+                ]
+              }
+            },
+            "wine_types": {
+              "description": "Any of these wine types.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +173,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +186,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0005 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

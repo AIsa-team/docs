@@ -16,7 +16,7 @@ x-aisa-operation-id: "uswitch-com.products.search-deals"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/uswitch-com.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,15 +38,146 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "limit": 5,
+              "postcode": "E17 4LN",
+              "uprn": "10095407016"
+            }
           }
         },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "connection_types": {
+              "description": "connection_types",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "contract_lengths": {
+              "description": "Only these contract lengths in months, e.g. [12, 24].",
+              "items": {
+                "type": "number"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "cursor": {
+              "description": "next_cursor from the previous page; keep the same filters and sort.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "deal_types": {
+              "description": "deal_types",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "include_filters": {
+              "description": "Include available_filters facet counts (default true).",
+              "type": "boolean",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "limit": {
+              "description": "Deals per page, 1-50 (default 20).\n\nProvider reference: minimum 1; maximum 50.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 50,
+                "min": 1
+              }
+            },
+            "max_monthly_cost": {
+              "description": "Only deals whose monthly price is at most this many pounds.\n\nProvider reference: minimum 0.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0
+              }
+            },
+            "min_download_speed_mbps": {
+              "description": "Only deals with at least this advertised download speed.\n\nProvider reference: minimum 0.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0
+              }
+            },
+            "postcode": {
+              "description": "Full UK postcode, e.g. 'E17 4LN' (case and inner space are normalised). Pattern: ^[A-Za-z]{1,2}[0-9][0-9A-Za-z]?\\s*[0-9][A-Za-z]{2}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "provider_ids": {
+              "description": "Only these providers (ids from list_providers or available_filters.providers).",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "sort": {
+              "description": "Uswitch SORT_BY (default RANK_ASC, Uswitch's own ranking).\n\nProvider reference: allowed values [\"RANK_ASC\", \"COST_ASC\", \"COST_DESC\", \"EFFECTIVE_COST_ASC\", \"SPEED_ASC\", \"SPEED_DESC\", \"CONTRACT_LENGTH_ASC\", \"CALLS_ASC\", \"CALLS_DESC\", \"BAND_SPEED_ASC\", \"BAND_SPEED_DESC\", \"REAL_SPEED_MIN_ASC\", \"REAL_SPEED_MIN_DESC\", \"REAL_SPEED_MAX_ASC\", \"REAL_SPEED_MAX_DESC\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "RANK_ASC",
+                  "COST_ASC",
+                  "COST_DESC",
+                  "EFFECTIVE_COST_ASC",
+                  "SPEED_ASC",
+                  "SPEED_DESC",
+                  "CONTRACT_LENGTH_ASC",
+                  "CALLS_ASC",
+                  "CALLS_DESC",
+                  "BAND_SPEED_ASC",
+                  "BAND_SPEED_DESC",
+                  "REAL_SPEED_MIN_ASC",
+                  "REAL_SPEED_MIN_DESC",
+                  "REAL_SPEED_MAX_ASC",
+                  "REAL_SPEED_MAX_DESC"
+                ]
+              }
+            },
+            "speed_categories": {
+              "description": "speed_categories",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "uprn": {
+              "description": "UPRN of the address, from lookup_addresses. Requires postcode. Pattern: ^[0-9]{1,14}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +185,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +198,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0005 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

@@ -16,7 +16,7 @@ x-aisa-operation-id: "wikipedia.articles.lookup"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/wikipedia.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,28 +38,73 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "production": {
+            "summary": "Verified production request (2026-11-12)",
             "value": {
+              "fields": [
+                "name",
+                "identifier"
+              ],
               "limit": 1,
-              "name": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "limit": 1,
-              "name": "example"
+              "name": "Marie_Curie",
+              "project": "enwiki"
             }
           }
         },
         "schema": {
           "additionalProperties": true,
+          "not": {
+            "required": [
+              "fields",
+              "body"
+            ]
+          },
           "properties": {
+            "body": {
+              "description": "Article body format when fields is omitted: wikitext (default), html, both, or none. Omit body entirely when using fields, including when no body is needed.",
+              "enum": [
+                "wikitext",
+                "html",
+                "both",
+                "none"
+              ],
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "oneOf": [
+                  "wikitext",
+                  "html",
+                  "both",
+                  "none"
+                ]
+              }
+            },
+            "fields": {
+              "description": "Return only the named fields, using dot notation; at most 50 entries. Omit body when using fields. Include article_body.wikitext or article_body.html here to select body content.",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 50,
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "max": 50
+              }
+            },
+            "language": {
+              "description": "Wikimedia language code, for example `en`, `fr` or `zh-yue`. Returns the article from any project in that language; combine with project to pin one wiki.",
+              "type": "string"
+            },
             "limit": {
+              "description": "Most matching articles to return, 1 to 10. More than one only helps when no project is pinned and the title exists on several wikis.\n\nProvider reference: minimum 1; maximum 10; default 1.",
               "maximum": 10,
               "minimum": 1,
               "type": "integer"
             },
             "name": {
+              "description": "Exact article title as on the wiki, for example `Marie_Curie` or `Marie Curie`. Case-sensitive: Wikipedia titles start with a capital letter. From a URL such as https://fr.wikipedia.org/wiki/Marie_Curie, use the part after /wiki/.",
+              "type": "string"
+            },
+            "project": {
+              "description": "Wikimedia project identifier: language code plus project code, for example `enwiki` (English Wikipedia), `frwiki`, `dewiki`, `enwiktionary` or `eswikivoyage`. Defaults to `enwiki` when neither project nor language is given. `reference/projects` lists every identifier.",
               "type": "string"
             }
           },
@@ -74,16 +119,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0001,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -97,15 +132,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0001 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0001 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0001
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

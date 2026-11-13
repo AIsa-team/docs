@@ -16,7 +16,7 @@ x-aisa-operation-id: "eia-gov.energy-data.data"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/eia-gov.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,27 +38,97 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
             "value": {
-              "frequency": "example",
-              "route": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "frequency": "example",
-              "route": "example"
+              "facets": {
+                "series": [
+                  "RWTC"
+                ]
+              },
+              "frequency": "daily",
+              "page_size": 3,
+              "route": "petroleum/pri/spt"
             }
           }
         },
         "schema": {
           "additionalProperties": true,
           "properties": {
+            "api_key": {
+              "description": "Registered EIA API key. Omitted, the public data-browser key is discovered live (see `routes`). Pattern: ^[A-Za-z0-9_]+$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "cursor": {
+              "description": "`next_cursor` from the previous page (a row offset). Omit for the first page. Pattern: ^[0-9]{1,12}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "data_columns": {
+              "description": "Data columns to return, from the route's `data_columns`. Defaults to [\"value\"].",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "end": {
+              "description": "Inclusive last period in the frequency's format.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "facets": {
+              "additionalProperties": true,
+              "description": "Facet filters: facet id to list of codes, e.g. {\"series\": [\"RWTC\"]} or {\"stateid\": [\"CA\"], \"sectorid\": [\"RES\"]}.",
+              "type": "object",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "frequency": {
+              "description": "Frequency id from the route metadata: annual, quarterly, monthly, weekly, daily, hourly or local-hourly. Pattern: ^[a-z-]+$.",
               "type": "string"
             },
+            "page_size": {
+              "default": 20,
+              "description": "Rows per page; the API caps a page at 5000 rows.\n\nProvider reference: minimum 1; maximum 5000; default 20.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 5000,
+                "min": 1
+              }
+            },
             "route": {
+              "description": "Route path with data, such as `petroleum/pri/spt` (do not append `/data`). Pattern: ^/?[a-z0-9_-]+(/[a-z0-9_-]+)*/?$.",
               "type": "string"
+            },
+            "sort": {
+              "description": "Sort keys applied by the API. Defaults to newest period first.",
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "start": {
+              "description": "Inclusive first period in the frequency's format.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
           "required": [
@@ -72,16 +142,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -95,15 +155,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0005 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

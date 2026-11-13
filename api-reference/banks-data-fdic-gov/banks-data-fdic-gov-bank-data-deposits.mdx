@@ -16,7 +16,7 @@ x-aisa-operation-id: "banks-data-fdic-gov.bank-data.deposits"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/banks-data-fdic-gov.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,15 +38,124 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "cert": 3511,
+              "page_size": 2,
+              "year": 2025
+            }
           }
         },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "cert": {
+              "description": "FDIC certificate number, the institution id shared by every BankFind dataset (3511 = Wells Fargo Bank, N.A.; 628 = JPMorgan Chase Bank, N.A.). Find it with `institutions`. A number no institution has ever held is not_found.\n\nProvider reference: minimum 1; maximum 9999999.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 9999999,
+                "min": 1
+              }
+            },
+            "city": {
+              "description": "Exact city, matched against `CITYBR` as BankFind stores it, case included (`Sioux Falls`, not `sioux falls`). Pattern: ^[^\"\\\\]+$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "cursor": {
+              "description": "next_cursor from the previous page of the same query (the record offset).",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "fields": {
+              "description": "Projection: column names to return instead of the default set, e.g. [\"NAMEBR\", \"CITYBR\", \"DEPSUMBR\", \"ASSET\"]. The identity columns are always added and every record carries `ID`. An unknown name is ignored. The FDIC's column definitions are at https://api.fdic.gov/banks/docs/.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "filters": {
+              "description": "Raw BankFind filter, ANDed with the other inputs. Lucene-style: `FIELD:value`, `FIELD:\"two words\"`, `FIELD:(\"A\",\"B\")` for any of several, `FIELD:[low TO high]` for an inclusive range (`*` open), `!(FIELD:value)` to exclude, `AND`/`OR` between terms. Column names are upper case and values match exactly as stored, case included. An unknown column matches nothing (an empty result, not an error); a syntax error is invalid_input.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "from_year": {
+              "description": "Earliest survey year to include.\n\nProvider reference: minimum 1934; maximum 2100.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 2100,
+                "min": 1934
+              }
+            },
+            "page_size": {
+              "default": 25,
+              "description": "Records per page.\n\nProvider reference: minimum 1; maximum 1000; default 25.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 1000,
+                "min": 1
+              }
+            },
+            "sort_by": {
+              "description": "Columns to sort by, in priority order, e.g. [\"DEPSUMBR\"]. Defaults to `YEAR` then `DEPSUMBR`, descending. Unique tiebreak columns are always appended so offset paging is stable. An unsortable or unknown column is invalid_input.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "sort_order": {
+              "description": "Direction for every sort column. Defaults to the direction of the default sort.\n\nProvider reference: allowed values [\"asc\", \"desc\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "asc",
+                  "desc"
+                ]
+              }
+            },
+            "state": {
+              "description": "Two-letter state or territory code, matched against `STALPBR`, the branch's state. Pattern: ^[A-Za-z]{2,3}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "to_year": {
+              "description": "Latest survey year to include.\n\nProvider reference: minimum 1934; maximum 2100.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 2100,
+                "min": 1934
+              }
+            },
+            "year": {
+              "description": "One survey year (deposits as of June 30), 1994 onward. Not combinable with `from_year` / `to_year`.\n\nProvider reference: minimum 1934; maximum 2100.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 2100,
+                "min": 1934
+              }
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +163,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +176,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0005 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

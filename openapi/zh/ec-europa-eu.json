@@ -1,5 +1,14 @@
 {
   "components": {
+    "callbacks": {},
+    "examples": {},
+    "headers": {},
+    "links": {},
+    "parameters": {},
+    "pathItems": {},
+    "requestBodies": {},
+    "responses": {},
+    "schemas": {},
     "securitySchemes": {
       "bearerAuth": {
         "scheme": "bearer",
@@ -55,8 +64,8 @@
       "/apis/v1/ec-europa-eu/indicators/search-datasets"
     ],
     "x-aisa-document": {
-      "composer_version": "28",
-      "document_hash": "sha256:f949f717f92f22354c38c7ffade6cfd2b2bb46f8f8340e6308b59a68780229f9",
+      "composer_version": "29",
+      "document_hash": "sha256:c43bf954e23fe3c8e26aadd9795a975af18e365105aed4e7cd580cc4909ebc2f",
       "facts_hash": "ac8b93b2765ad4fee36c2cf3733835e64d818366713ce491af5a35e8c3a27154",
       "generator_version": "3",
       "protocol_version": "1",
@@ -78,21 +87,63 @@
   "paths": {
     "/apis/v1/ec-europa-eu/indicators/city-price-parities": {
       "post": {
-        "description": "<!-- aisa-pricing:start -->\n按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit $0.0001 USD。 最终费用以账户适用价格及实际结算为准。\n<!-- aisa-pricing:end -->",
+        "description": "The 'how expensive is EU city X relative to Brussels' question at half-year granularity. Omit cities for all 33; use since/until for a period range.",
         "operationId": "ec-europa-eu.indicators.city-price-parities",
         "requestBody": {
           "content": {
             "application/json": {
               "examples": {
-                "default": {
-                  "value": {}
-                },
-                "minimal": {
-                  "value": {}
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "cities": [
+                      "DE_CAP",
+                      "FR_CAP"
+                    ],
+                    "since": "2025-S1"
+                  }
                 }
               },
               "schema": {
                 "additionalProperties": true,
+                "properties": {
+                  "cities": {
+                    "description": "geo codes of the dataset (BE_CAP, DE_CAP, FR_CAP, ...). Omit for all cities.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "coicop": {
+                    "default": "TOTAL",
+                    "description": "TOTAL or TOT_X_CP041_042 (total except actual rents).\n\nProvider reference: allowed values [\"TOTAL\", \"TOT_X_CP041_042\"]; default \"TOTAL\".",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "TOTAL",
+                        "TOT_X_CP041_042"
+                      ]
+                    }
+                  },
+                  "since": {
+                    "description": "First half-year period to include (2025-S1). Pattern: ^[0-9]{4}-S[12]$.",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "until": {
+                    "description": "Pattern: ^[0-9]{4}-S[12]$.",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                },
                 "type": "object"
               }
             }
@@ -103,10 +154,48 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "examples": {
+                  "provider": {
+                    "description": "Published by the provider on 2026-09-24.",
+                    "summary": "Official provider example",
+                    "value": {
+                      "coicop": "TOTAL",
+                      "coicop_label": "Total",
+                      "count": 2,
+                      "dataset": "prc_colc_ppptot",
+                      "observed_at_ms": 1790272641302,
+                      "rows": [
+                        {
+                          "city_code": "DE_CAP",
+                          "city_label": "Berlin",
+                          "index_brussels_1": 1.027,
+                          "period": "2025-S2",
+                          "status": null
+                        },
+                        {
+                          "city_code": "FR_CAP",
+                          "city_label": "Paris",
+                          "index_brussels_1": 1.136,
+                          "period": "2025-S2",
+                          "status": null
+                        }
+                      ],
+                      "source_url": "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/prc_colc_ppptot?coicop=TOTAL&geo=DE_CAP&geo=FR_CAP&sinceTimePeriod=2025-S1&lang=en",
+                      "title": "Purchasing Power Parities in the European Union (Duty stations) - index (Brussels = 1)",
+                      "updated": "2026-06-17T23:00:00+0200",
+                      "url": "https://ec.europa.eu/eurostat/databrowser/view/prc_colc_ppptot/default/table?lang=en"
+                    }
+                  }
+                },
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                }
               }
             },
-            "description": "Successful response. The payload schema has not been reviewed yet."
+            "description": "Semi-annual purchasing power parities for 33 EU/UK capital and duty-station cities relative to Brussels (= 1) from dataset prc_colc_ppptot: the only city-level price comparison Eurostat publishes. It is the staff-remuneration correction-coefficient dataset (COICOP TOTAL or TOTAL except actual rents), not a general consumer price level index. City codes are Eurostat geo codes such as BE_CAP (Brussels), DE_CAP (Berlin), DE_DEL2 (Munich), FR_CAP (Paris), IT_DEL (Varese), NL_DEL (Den Haag).\n\nThe response contains the tool result directly.\n\nThe provider identifies `rows` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `city_code` | string |  |\n| `city_label` | string |  |\n| `index_brussels_1` | number | Purchasing power parity, Brussels = 1. Values far from 1 (e.g. 20.45 for Praha) are expressed in the national currency unit per Brussels euro, as published. |\n| `period` | string | Half-year period as stated (YYYY-S1 or YYYY-S2). |\n| `status` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
           },
           "default": {
             "content": {
@@ -150,10 +239,33 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-review": {
-          "request": "runtime_binding",
-          "response": "generic",
-          "status": "unreviewed"
+        "x-aisa-response-source": {
+          "content_hash": "sha256:fdf0e06e7d510e581e238039cadc0cea3a85ef80076783d0e51ac6a55e4a3533",
+          "kind": "upstream_success_contract",
+          "source": {
+            "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "kind": "manual",
+            "owner": "AIsa-team/docs",
+            "path_space": "public",
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "paths": [
+                "/apis/v1/datalegion/companies/enrich-base",
+                "/apis/v1/datalegion/people/enrich-base-no-contact"
+              ],
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+            },
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "review_period_days": 30,
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "url": "https://api.firecrawl.dev/v2/scrape"
+          }
         },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
@@ -165,33 +277,46 @@
           "operation_id": "ec-europa-eu.indicators.city-price-parities",
           "path": "/apis/v1/ec-europa-eu/indicators/city-price-parities"
         },
+        "x-aisa-source": {
+          "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "kind": "manual",
+          "owner": "AIsa-team/docs",
+          "path_space": "public",
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "paths": [
+              "/apis/v1/datalegion/companies/enrich-base",
+              "/apis/v1/datalegion/people/enrich-base-no-contact"
+            ],
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+          },
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "review_period_days": 30,
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "url": "https://api.firecrawl.dev/v2/scrape"
+        },
         "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed",
-        "x-codeSamples": [
-          {
-            "label": "Reference example",
-            "lang": "text",
-            "source": "# Fixed reference example. Playground inputs do not update this sample.\ncurl --request POST \\\n  --url https://api.aisa.one/apis/v1/ec-europa-eu/indicators/city-price-parities \\\n  --header 'Authorization: Bearer <token>' \\\n  --header 'Content-Type: application/json' \\\n  --data '{}'"
-          }
-        ]
+        "x-aisa-validation": "mixed"
       }
     },
     "/apis/v1/ec-europa-eu/indicators/get-dataset": {
       "post": {
-        "description": "<!-- aisa-pricing:start -->\n按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit $0.0001 USD。 最终费用以账户适用价格及实际结算为准。\n<!-- aisa-pricing:end -->",
+        "description": "After search_datasets, to learn which dimensions and codes a dataset accepts before calling query_data.",
         "operationId": "ec-europa-eu.indicators.get-dataset",
         "requestBody": {
           "content": {
             "application/json": {
               "examples": {
-                "default": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
                   "value": {
-                    "code": "example"
-                  }
-                },
-                "minimal": {
-                  "value": {
-                    "code": "example"
+                    "code": "prc_colc_ppptot"
                   }
                 }
               },
@@ -199,7 +324,31 @@
                 "additionalProperties": true,
                 "properties": {
                   "code": {
+                    "description": "Dataset or table code such as prc_ppp_ind_1, tec00120, prc_colc_ppptot (case-insensitive). Pattern: ^[A-Za-z0-9_]{1,64}$.",
                     "type": "string"
+                  },
+                  "lang": {
+                    "default": "en",
+                    "description": "lang\n\nProvider reference: allowed values [\"en\", \"fr\", \"de\"]; default \"en\".",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "en",
+                        "fr",
+                        "de"
+                      ]
+                    }
+                  },
+                  "max_codes": {
+                    "default": 200,
+                    "description": "Cap on codes listed per dimension; codes_truncated says when a dimension has more.\n\nProvider reference: minimum 1; maximum 5000; default 200.",
+                    "type": "number",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "max": 5000,
+                      "min": 1
+                    }
                   }
                 },
                 "required": [
@@ -215,10 +364,335 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "examples": {
+                  "provider": {
+                    "description": "Published by the provider on 2026-09-24.",
+                    "summary": "Official provider example",
+                    "value": {
+                      "code": "prc_colc_ppptot",
+                      "created": "2017-05-15T16:47:53+0200",
+                      "data_structure": {
+                        "id": "PRC_COLC_PPPTOT",
+                        "version": "34.0"
+                      },
+                      "dimensions": [
+                        {
+                          "codes": [
+                            {
+                              "code": "S",
+                              "label": "Half-yearly, semesterly"
+                            }
+                          ],
+                          "codes_truncated": false,
+                          "count": 1,
+                          "id": "freq",
+                          "label": "Time frequency"
+                        },
+                        {
+                          "codes": [
+                            {
+                              "code": "INX",
+                              "label": "Index"
+                            }
+                          ],
+                          "codes_truncated": false,
+                          "count": 1,
+                          "id": "unit",
+                          "label": "Unit of measure"
+                        },
+                        {
+                          "codes": [
+                            {
+                              "code": "TOTAL",
+                              "label": "Total"
+                            },
+                            {
+                              "code": "TOT_X_CP041_042",
+                              "label": "Total except actual rents"
+                            }
+                          ],
+                          "codes_truncated": false,
+                          "count": 2,
+                          "id": "coicop",
+                          "label": "Classification of individual consumption by purpose (COICOP)"
+                        },
+                        {
+                          "codes": [
+                            {
+                              "code": "BE_CAP",
+                              "label": "Bruxelles/Brussel"
+                            },
+                            {
+                              "code": "BG_CAP",
+                              "label": "Sofia"
+                            },
+                            {
+                              "code": "CZ_CAP",
+                              "label": "Praha"
+                            },
+                            {
+                              "code": "DK_CAP",
+                              "label": "København"
+                            },
+                            {
+                              "code": "DE_CAP",
+                              "label": "Berlin"
+                            },
+                            {
+                              "code": "DE_DEL1",
+                              "label": "Karlsruhe"
+                            },
+                            {
+                              "code": "DE_DEL2",
+                              "label": "München"
+                            },
+                            {
+                              "code": "DE_DEL3",
+                              "label": "Bonn"
+                            },
+                            {
+                              "code": "EE_CAP",
+                              "label": "Tallinn"
+                            },
+                            {
+                              "code": "IE_CAP",
+                              "label": "Dublin"
+                            },
+                            {
+                              "code": "EL_CAP",
+                              "label": "Athina"
+                            },
+                            {
+                              "code": "ES_CAP",
+                              "label": "Madrid"
+                            },
+                            {
+                              "code": "FR_CAP",
+                              "label": "Paris"
+                            },
+                            {
+                              "code": "HR_CAP",
+                              "label": "Zagreb"
+                            },
+                            {
+                              "code": "IT_CAP",
+                              "label": "Roma"
+                            },
+                            {
+                              "code": "IT_DEL",
+                              "label": "Varese"
+                            },
+                            {
+                              "code": "CY_CAP",
+                              "label": "Lefkosia"
+                            },
+                            {
+                              "code": "LV_CAP",
+                              "label": "Riga"
+                            },
+                            {
+                              "code": "LT_CAP",
+                              "label": "Vilnius"
+                            },
+                            {
+                              "code": "LU_CAP",
+                              "label": "Luxembourg"
+                            },
+                            {
+                              "code": "HU_CAP",
+                              "label": "Budapest"
+                            },
+                            {
+                              "code": "MT_CAP",
+                              "label": "Valletta"
+                            },
+                            {
+                              "code": "NL_DEL",
+                              "label": "Den Haag"
+                            },
+                            {
+                              "code": "AT_CAP",
+                              "label": "Wien"
+                            },
+                            {
+                              "code": "PL_CAP",
+                              "label": "Warszawa"
+                            },
+                            {
+                              "code": "PT_CAP",
+                              "label": "Lisboa"
+                            },
+                            {
+                              "code": "RO_CAP",
+                              "label": "Bucuresti"
+                            },
+                            {
+                              "code": "SI_CAP",
+                              "label": "Ljubljana"
+                            },
+                            {
+                              "code": "SK_CAP",
+                              "label": "Bratislava"
+                            },
+                            {
+                              "code": "FI_CAP",
+                              "label": "Helsinki"
+                            },
+                            {
+                              "code": "SE_CAP",
+                              "label": "Stockholm"
+                            },
+                            {
+                              "code": "UK_CAP",
+                              "label": "London"
+                            },
+                            {
+                              "code": "UK_DEL",
+                              "label": "Culham"
+                            }
+                          ],
+                          "codes_truncated": false,
+                          "count": 33,
+                          "id": "geo",
+                          "label": "Geopolitical entity (reporting)"
+                        },
+                        {
+                          "codes": [
+                            {
+                              "code": "2010-S2",
+                              "label": "2010-S2"
+                            },
+                            {
+                              "code": "2011-S1",
+                              "label": "2011-S1"
+                            },
+                            {
+                              "code": "2011-S2",
+                              "label": "2011-S2"
+                            },
+                            {
+                              "code": "2012-S1",
+                              "label": "2012-S1"
+                            },
+                            {
+                              "code": "2012-S2",
+                              "label": "2012-S2"
+                            },
+                            {
+                              "code": "2013-S2",
+                              "label": "2013-S2"
+                            },
+                            {
+                              "code": "2014-S1",
+                              "label": "2014-S1"
+                            },
+                            {
+                              "code": "2014-S2",
+                              "label": "2014-S2"
+                            },
+                            {
+                              "code": "2015-S1",
+                              "label": "2015-S1"
+                            },
+                            {
+                              "code": "2015-S2",
+                              "label": "2015-S2"
+                            },
+                            {
+                              "code": "2016-S2",
+                              "label": "2016-S2"
+                            },
+                            {
+                              "code": "2017-S2",
+                              "label": "2017-S2"
+                            },
+                            {
+                              "code": "2018-S2",
+                              "label": "2018-S2"
+                            },
+                            {
+                              "code": "2019-S2",
+                              "label": "2019-S2"
+                            },
+                            {
+                              "code": "2020-S1",
+                              "label": "2020-S1"
+                            },
+                            {
+                              "code": "2020-S2",
+                              "label": "2020-S2"
+                            },
+                            {
+                              "code": "2021-S2",
+                              "label": "2021-S2"
+                            },
+                            {
+                              "code": "2022-S1",
+                              "label": "2022-S1"
+                            },
+                            {
+                              "code": "2022-S2",
+                              "label": "2022-S2"
+                            },
+                            {
+                              "code": "2023-S1",
+                              "label": "2023-S1"
+                            },
+                            {
+                              "code": "2023-S2",
+                              "label": "2023-S2"
+                            },
+                            {
+                              "code": "2024-S1",
+                              "label": "2024-S1"
+                            },
+                            {
+                              "code": "2024-S2",
+                              "label": "2024-S2"
+                            },
+                            {
+                              "code": "2025-S2",
+                              "label": "2025-S2"
+                            },
+                            {
+                              "code": "2026-S1",
+                              "label": "2026-S1"
+                            }
+                          ],
+                          "codes_truncated": false,
+                          "count": 25,
+                          "id": "time",
+                          "label": "Time"
+                        }
+                      ],
+                      "doi": "10.2908/PRC_COLC_PPPTOT",
+                      "lang": "en",
+                      "metadata_url": "https://ec.europa.eu/eurostat/cache/metadata/en/prc_colc_tot_esms.htm",
+                      "object_type": "DATASET",
+                      "obs_count": 1204,
+                      "observed_at_ms": 1790272628965,
+                      "period_latest": "2026-S1",
+                      "period_oldest": "2010-S2",
+                      "source_urls": {
+                        "card": "https://ec.europa.eu/eurostat/api/dissemination/sdmx/2.1/dataflow/ESTAT/prc_colc_ppptot?format=JSON&lang=en",
+                        "dimensions": "https://ec.europa.eu/eurostat/databrowser-backend/api/card/1.0/LIVE/json/en/prc_colc_ppptot/dimensions?stub=false&filtered=true"
+                      },
+                      "title": "Purchasing Power Parities in the European Union (Duty stations) - index (Brussels = 1)",
+                      "update_data": "2026-06-17T23:00:00+0200",
+                      "update_structure": "2026-06-17T23:00:00+0200",
+                      "url": "https://ec.europa.eu/eurostat/databrowser/view/prc_colc_ppptot/default/table?lang=en"
+                    }
+                  }
+                },
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                }
               }
             },
-            "description": "Successful response. The payload schema has not been reviewed yet."
+            "description": "Metadata card and dimension code lists for one dataset or table code: title, observation count, period range, data and structure update timestamps, DOI, ESMS metadata URL, data structure id/version, and every dimension with its codes and labels (from the Data Browser backend).\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `code` | string | Lower-case dataset code as requested. |\n| `created` | string |  |\n| `data_structure` | object |  |\n| `dimensions` | object[] |  |\n| `doi` | string | Dataset DOI (10.2908/<CODE>) when the card carries one. |\n| `lang` | string |  |\n| `metadata_url` | string | ESMS_HTML explanatory metadata page. |\n| `object_type` | string | DISSEMINATION_OBJECT_TYPE annotation: DATASET or TABLE. |\n| `obs_count` | number |  |\n| `observed_at_ms` | number |  |\n| `period_latest` | string |  |\n| `period_oldest` | string |  |\n| `source_urls` | object |  |\n| `title` | string |  |\n| `update_data` | string | UPDATE_DATA annotation timestamp as stated (ISO 8601 with offset). |\n| `update_structure` | string |  |\n| `url` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
           },
           "default": {
             "content": {
@@ -262,10 +736,33 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-review": {
-          "request": "runtime_binding",
-          "response": "generic",
-          "status": "unreviewed"
+        "x-aisa-response-source": {
+          "content_hash": "sha256:968b2b73fbf4e603399ca68ab83f81a353cf81d89ac45ce82f77237110af72a2",
+          "kind": "upstream_success_contract",
+          "source": {
+            "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "kind": "manual",
+            "owner": "AIsa-team/docs",
+            "path_space": "public",
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "paths": [
+                "/apis/v1/datalegion/companies/enrich-base",
+                "/apis/v1/datalegion/people/enrich-base-no-contact"
+              ],
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+            },
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "review_period_days": 30,
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "url": "https://api.firecrawl.dev/v2/scrape"
+          }
         },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
@@ -277,34 +774,98 @@
           "operation_id": "ec-europa-eu.indicators.get-dataset",
           "path": "/apis/v1/ec-europa-eu/indicators/get-dataset"
         },
+        "x-aisa-source": {
+          "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "kind": "manual",
+          "owner": "AIsa-team/docs",
+          "path_space": "public",
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "paths": [
+              "/apis/v1/datalegion/companies/enrich-base",
+              "/apis/v1/datalegion/people/enrich-base-no-contact"
+            ],
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+          },
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "review_period_days": 30,
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "url": "https://api.firecrawl.dev/v2/scrape"
+        },
         "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed",
-        "x-codeSamples": [
-          {
-            "label": "Reference example",
-            "lang": "text",
-            "source": "# Fixed reference example. Playground inputs do not update this sample.\ncurl --request POST \\\n  --url https://api.aisa.one/apis/v1/ec-europa-eu/indicators/get-dataset \\\n  --header 'Authorization: Bearer <token>' \\\n  --header 'Content-Type: application/json' \\\n  --data '{\n  \"code\": \"example\"\n}'"
-          }
-        ]
+        "x-aisa-validation": "mixed"
       }
     },
     "/apis/v1/ec-europa-eu/indicators/price-level-indices": {
       "post": {
-        "description": "<!-- aisa-pricing:start -->\n按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit $0.0001 USD。 最终费用以账户适用价格及实际结算为准。\n<!-- aisa-pricing:end -->",
+        "description": "The 'how expensive is country X relative to the EU' question. Pass geo codes to restrict; omit year for the whole series.",
         "operationId": "ec-europa-eu.indicators.price-level-indices",
         "requestBody": {
           "content": {
             "application/json": {
               "examples": {
-                "default": {
-                  "value": {}
-                },
-                "minimal": {
-                  "value": {}
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "geo": [
+                      "DE",
+                      "FR"
+                    ],
+                    "year": 2024
+                  }
                 }
               },
               "schema": {
                 "additionalProperties": true,
+                "properties": {
+                  "category": {
+                    "default": "A01",
+                    "description": "PPP_CAT18 analytical category code (A01 actual individual consumption, GDP, A0101 food and non-alcoholic beverages, ...). Pattern: ^[A-Za-z0-9_]{1,32}$.\n\nProvider reference: default \"A01\".",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "geo": {
+                    "description": "Eurostat geo codes (DE, FR, EU27_2020, EA20, US, JP, ...). Omit for every reporting country.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "since": {
+                    "description": "Pattern: ^[0-9]{4}$.",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "until": {
+                    "description": "Pattern: ^[0-9]{4}$.",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "year": {
+                    "description": "One reference year. Omit (with since/until) for a time range.\n\nProvider reference: minimum 1995; maximum 2100.",
+                    "type": "number",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "max": 2100,
+                      "min": 1995
+                    }
+                  }
+                },
                 "type": "object"
               }
             }
@@ -315,10 +876,50 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "examples": {
+                  "provider": {
+                    "description": "Published by the provider on 2026-09-24.",
+                    "summary": "Official provider example",
+                    "value": {
+                      "category": "A01",
+                      "category_label": "Actual individual consumption",
+                      "count": 2,
+                      "dataset": "prc_ppp_ind_1",
+                      "indicator": "PLI_EU27_2020",
+                      "indicator_label": "Price level indices (EU27_2020=100)",
+                      "observed_at_ms": 1790272637246,
+                      "rows": [
+                        {
+                          "geo": "DE",
+                          "geo_label": "Germany",
+                          "price_level_index": 109.3,
+                          "status": null,
+                          "year": "2024"
+                        },
+                        {
+                          "geo": "FR",
+                          "geo_label": "France",
+                          "price_level_index": 107.6,
+                          "status": null,
+                          "year": "2024"
+                        }
+                      ],
+                      "source_url": "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/prc_ppp_ind_1?indic_ppp=PLI_EU27_2020&ppp_cat18=A01&geo=DE&geo=FR&time=2024&lang=en",
+                      "title": "Purchasing power parities, price level indices, nominal and real expenditures by analytical categories - based on COICOP 2018",
+                      "updated": "2026-07-09T23:00:00+0200",
+                      "url": "https://ec.europa.eu/eurostat/databrowser/view/prc_ppp_ind_1/default/table?lang=en"
+                    }
+                  }
+                },
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                }
               }
             },
-            "description": "Successful response. The payload schema has not been reviewed yet."
+            "description": "Comparative price level indices for countries (EU27_2020 = 100) from dataset prc_ppp_ind_1 (indicator PLI_EU27_2020), by analytical category (A01 actual individual consumption, GDP, A0101 food, ... from codelist PPP_CAT18) and year. Covers EU members, EFTA, UK, candidate countries, US and Japan. Eurostat publishes no city- or region-level price level index; see city_price_parities for the city-level purchasing power parities it does publish.\n\nThe response contains the tool result directly.\n\nThe provider identifies `rows` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `geo` | string |  |\n| `geo_label` | string |  |\n| `price_level_index` | number | EU27_2020 = 100. |\n| `status` | string |  |\n| `year` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
           },
           "default": {
             "content": {
@@ -362,10 +963,33 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-review": {
-          "request": "runtime_binding",
-          "response": "generic",
-          "status": "unreviewed"
+        "x-aisa-response-source": {
+          "content_hash": "sha256:fbf8e256145a519175e31311957306442d885b6c20ba47ee4ed0e3d1560cb70d",
+          "kind": "upstream_success_contract",
+          "source": {
+            "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "kind": "manual",
+            "owner": "AIsa-team/docs",
+            "path_space": "public",
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "paths": [
+                "/apis/v1/datalegion/companies/enrich-base",
+                "/apis/v1/datalegion/people/enrich-base-no-contact"
+              ],
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+            },
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "review_period_days": 30,
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "url": "https://api.firecrawl.dev/v2/scrape"
+          }
         },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
@@ -377,33 +1001,61 @@
           "operation_id": "ec-europa-eu.indicators.price-level-indices",
           "path": "/apis/v1/ec-europa-eu/indicators/price-level-indices"
         },
+        "x-aisa-source": {
+          "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "kind": "manual",
+          "owner": "AIsa-team/docs",
+          "path_space": "public",
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "paths": [
+              "/apis/v1/datalegion/companies/enrich-base",
+              "/apis/v1/datalegion/people/enrich-base-no-contact"
+            ],
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+          },
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "review_period_days": 30,
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "url": "https://api.firecrawl.dev/v2/scrape"
+        },
         "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed",
-        "x-codeSamples": [
-          {
-            "label": "Reference example",
-            "lang": "text",
-            "source": "# Fixed reference example. Playground inputs do not update this sample.\ncurl --request POST \\\n  --url https://api.aisa.one/apis/v1/ec-europa-eu/indicators/price-level-indices \\\n  --header 'Authorization: Bearer <token>' \\\n  --header 'Content-Type: application/json' \\\n  --data '{}'"
-          }
-        ]
+        "x-aisa-validation": "mixed"
       }
     },
     "/apis/v1/ec-europa-eu/indicators/query-data": {
       "post": {
-        "description": "<!-- aisa-pricing:start -->\n按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit $0.0001 USD。 最终费用以账户适用价格及实际结算为准。\n<!-- aisa-pricing:end -->",
+        "description": "Any dataset code from search_datasets once get_dataset has shown its dimensions and codes. For country price level indices or city purchasing power parities the typed wrappers are simpler.",
         "operationId": "ec-europa-eu.indicators.query-data",
         "requestBody": {
           "content": {
             "application/json": {
               "examples": {
-                "default": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
                   "value": {
-                    "code": "example"
-                  }
-                },
-                "minimal": {
-                  "value": {
-                    "code": "example"
+                    "code": "prc_ppp_ind_1",
+                    "filters": {
+                      "geo": [
+                        "DE",
+                        "FR"
+                      ],
+                      "indic_ppp": [
+                        "PLI_EU27_2020"
+                      ],
+                      "ppp_cat18": [
+                        "A01"
+                      ]
+                    },
+                    "time": [
+                      "2024"
+                    ]
                   }
                 }
               },
@@ -411,7 +1063,53 @@
                 "additionalProperties": true,
                 "properties": {
                   "code": {
+                    "description": "Dataset or table code (prc_ppp_ind_1, tec00120, urb_cecfi). Pattern: ^[A-Za-z0-9_]{1,64}$.",
                     "type": "string"
+                  },
+                  "filters": {
+                    "additionalProperties": true,
+                    "description": "Dimension id (as listed by get_dataset, e.g. geo, indic_ppp, ppp_cat18, cities) -> codes to keep. An unknown dimension id is rejected upstream (400) and reported as invalid_input; an unknown code yields not_found.",
+                    "type": "object",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "lang": {
+                    "default": "en",
+                    "description": "lang\n\nProvider reference: allowed values [\"en\", \"fr\", \"de\"]; default \"en\".",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "en",
+                        "fr",
+                        "de"
+                      ]
+                    }
+                  },
+                  "since": {
+                    "description": "sinceTimePeriod: first period to include. Pattern: ^[0-9]{4}(-(S[12]|Q[1-4]|[0-9]{2}))?$.",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "time": {
+                    "description": "Exact periods to keep (2024, 2025-S1, 2026-Q1, 2026-07).",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "until": {
+                    "description": "untilTimePeriod: last period to include. Pattern: ^[0-9]{4}(-(S[12]|Q[1-4]|[0-9]{2}))?$.",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
                   }
                 },
                 "required": [
@@ -427,10 +1125,110 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "examples": {
+                  "provider": {
+                    "description": "Published by the provider on 2026-09-24.",
+                    "summary": "Official provider example",
+                    "value": {
+                      "code": "prc_ppp_ind_1",
+                      "dimensions": [
+                        {
+                          "codes": [
+                            {
+                              "code": "A",
+                              "label": "Annual"
+                            }
+                          ],
+                          "id": "freq",
+                          "label": "Time frequency"
+                        },
+                        {
+                          "codes": [
+                            {
+                              "code": "PLI_EU27_2020",
+                              "label": "Price level indices (EU27_2020=100)"
+                            }
+                          ],
+                          "id": "indic_ppp",
+                          "label": "Purchasing power parities indicator"
+                        },
+                        {
+                          "codes": [
+                            {
+                              "code": "A01",
+                              "label": "Actual individual consumption"
+                            }
+                          ],
+                          "id": "ppp_cat18",
+                          "label": "Analytical categories for purchasing power parities (PPPs) calculation (based on COICOP18)"
+                        },
+                        {
+                          "codes": [
+                            {
+                              "code": "DE",
+                              "label": "Germany"
+                            },
+                            {
+                              "code": "FR",
+                              "label": "France"
+                            }
+                          ],
+                          "id": "geo",
+                          "label": "Geopolitical entity (reporting)"
+                        },
+                        {
+                          "codes": [
+                            {
+                              "code": "2024",
+                              "label": "2024"
+                            }
+                          ],
+                          "id": "time",
+                          "label": "Time"
+                        }
+                      ],
+                      "lang": "en",
+                      "observation_count": 2,
+                      "observations": [
+                        {
+                          "key": {
+                            "freq": "A",
+                            "geo": "DE",
+                            "indic_ppp": "PLI_EU27_2020",
+                            "ppp_cat18": "A01"
+                          },
+                          "status": null,
+                          "time": "2024",
+                          "value": 109.3
+                        },
+                        {
+                          "key": {
+                            "freq": "A",
+                            "geo": "FR",
+                            "indic_ppp": "PLI_EU27_2020",
+                            "ppp_cat18": "A01"
+                          },
+                          "status": null,
+                          "time": "2024",
+                          "value": 107.6
+                        }
+                      ],
+                      "observed_at_ms": 1790272633140,
+                      "source_url": "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/prc_ppp_ind_1?geo=DE&geo=FR&indic_ppp=PLI_EU27_2020&ppp_cat18=A01&time=2024&lang=en",
+                      "title": "Purchasing power parities, price level indices, nominal and real expenditures by analytical categories - based on COICOP 2018",
+                      "updated": "2026-07-09T23:00:00+0200"
+                    }
+                  }
+                },
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                }
               }
             },
-            "description": "Successful response. The payload schema has not been reviewed yet."
+            "description": "Filtered data query on any Eurostat dataset through the statistics/1.0 JSON-stat endpoint. Filters are dimension id -> list of codes (OR within a dimension); time is sliced with time, since and until. The sparse JSON-stat cube is flattened into one observation per cell with the codes of every dimension, the value and the Eurostat status flag. Requests that are too large for a synchronous answer fail with upstream_error (413 ASYNCHRONOUS_RESPONSE): narrow the filters.\n\nThe response contains the tool result directly.\n\nThe provider identifies `observations` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `key` | object | Dimension id -> code for every non-time dimension of the dataset (freq, geo, unit, ...). Keys are the dataset's own dimension ids. |\n| `status` | string | Eurostat flag as stated (e = estimated, p = provisional, b = break in series, ...). |\n| `time` | string |  |\n| `value` | number | Null when Eurostat publishes only a status flag (e.g. ':' not available) for the cell. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
           },
           "default": {
             "content": {
@@ -474,10 +1272,33 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-review": {
-          "request": "runtime_binding",
-          "response": "generic",
-          "status": "unreviewed"
+        "x-aisa-response-source": {
+          "content_hash": "sha256:99bc9c96281abd0600e6c43a358d0d941052c7991fc2c0543dbd184503a8f798",
+          "kind": "upstream_success_contract",
+          "source": {
+            "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "kind": "manual",
+            "owner": "AIsa-team/docs",
+            "path_space": "public",
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "paths": [
+                "/apis/v1/datalegion/companies/enrich-base",
+                "/apis/v1/datalegion/people/enrich-base-no-contact"
+              ],
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+            },
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "review_period_days": 30,
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "url": "https://api.firecrawl.dev/v2/scrape"
+          }
         },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
@@ -489,40 +1310,85 @@
           "operation_id": "ec-europa-eu.indicators.query-data",
           "path": "/apis/v1/ec-europa-eu/indicators/query-data"
         },
+        "x-aisa-source": {
+          "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "kind": "manual",
+          "owner": "AIsa-team/docs",
+          "path_space": "public",
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "paths": [
+              "/apis/v1/datalegion/companies/enrich-base",
+              "/apis/v1/datalegion/people/enrich-base-no-contact"
+            ],
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+          },
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "review_period_days": 30,
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "url": "https://api.firecrawl.dev/v2/scrape"
+        },
         "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed",
-        "x-codeSamples": [
-          {
-            "label": "Reference example",
-            "lang": "text",
-            "source": "# Fixed reference example. Playground inputs do not update this sample.\ncurl --request POST \\\n  --url https://api.aisa.one/apis/v1/ec-europa-eu/indicators/query-data \\\n  --header 'Authorization: Bearer <token>' \\\n  --header 'Content-Type: application/json' \\\n  --data '{\n  \"code\": \"example\"\n}'"
-          }
-        ]
+        "x-aisa-validation": "mixed"
       }
     },
     "/apis/v1/ec-europa-eu/indicators/search-datasets": {
       "post": {
-        "description": "<!-- aisa-pricing:start -->\n按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit $0.0001 USD。 最终费用以账户适用价格及实际结算为准。\n<!-- aisa-pricing:end -->",
+        "description": "Start here to find a dataset code (for example 'price level indices' -> prc_ppp_ind_1, tec00120) before calling get_dataset or query_data.",
         "operationId": "ec-europa-eu.indicators.search-datasets",
         "requestBody": {
           "content": {
             "application/json": {
               "examples": {
-                "default": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
                   "value": {
-                    "query": "nike"
-                  }
-                },
-                "minimal": {
-                  "value": {
-                    "query": "nike"
+                    "limit": 5,
+                    "query": "price level indices"
                   }
                 }
               },
               "schema": {
                 "additionalProperties": true,
                 "properties": {
+                  "continuation": {
+                    "description": "Cursor from a previous page's meta.page.next_cursor.",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "lang": {
+                    "default": "en",
+                    "description": "Language of the titles.\n\nProvider reference: allowed values [\"en\", \"fr\", \"de\"]; default \"en\".",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "en",
+                        "fr",
+                        "de"
+                      ]
+                    }
+                  },
+                  "limit": {
+                    "default": 20,
+                    "description": "limit\n\nProvider reference: minimum 1; maximum 100; default 20.",
+                    "type": "number",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "max": 100,
+                      "min": 1
+                    }
+                  },
                   "query": {
+                    "description": "Keywords; every whitespace-separated term must appear (case-insensitive) in the title or the code.",
                     "type": "string"
                   }
                 },
@@ -539,10 +1405,81 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "examples": {
+                  "provider": {
+                    "description": "Published by the provider on 2026-09-24.",
+                    "summary": "Official provider example",
+                    "value": {
+                      "datasets": [
+                        {
+                          "code": "prc_ppp_ind_1",
+                          "data_end": "2025",
+                          "data_start": "1995",
+                          "last_structure_change": "2026-03-25",
+                          "last_update": "2026-07-09",
+                          "theme_path": [
+                            "Database by themes",
+                            "Economy and finance",
+                            "Prices",
+                            "Purchasing power parities"
+                          ],
+                          "title": "Purchasing power parities, price level indices, nominal and real expenditures by analytical categories - based on COICOP 2018",
+                          "type": "dataset",
+                          "url": "https://ec.europa.eu/eurostat/databrowser/view/prc_ppp_ind_1/default/table?lang=en",
+                          "values": 154743
+                        },
+                        {
+                          "code": "tec00120",
+                          "data_end": "2025",
+                          "data_start": "2014",
+                          "last_structure_change": "2026-03-25",
+                          "last_update": "2026-07-09",
+                          "theme_path": [
+                            "Database by themes",
+                            "Economy and finance",
+                            "Prices",
+                            "Purchasing power parities"
+                          ],
+                          "title": "Price level indices",
+                          "type": "table",
+                          "url": "https://ec.europa.eu/eurostat/databrowser/view/tec00120/default/table?lang=en",
+                          "values": 516
+                        },
+                        {
+                          "code": "prc_ppp_ind",
+                          "data_end": "2024",
+                          "data_start": "1995",
+                          "last_structure_change": "2025-03-27",
+                          "last_update": "2025-07-10",
+                          "theme_path": [
+                            "Database by themes",
+                            "Economy and finance",
+                            "Prices",
+                            "Purchasing power parities"
+                          ],
+                          "title": "Purchasing power parities, price level indices, nominal and real expenditures by analytical categories - based on COICOP 1999",
+                          "type": "dataset",
+                          "url": "https://ec.europa.eu/eurostat/databrowser/view/prc_ppp_ind/default/table?lang=en",
+                          "values": 1401572
+                        }
+                      ],
+                      "lang": "en",
+                      "observed_at_ms": 1790272619363,
+                      "query": "price level indices",
+                      "source_url": "https://ec.europa.eu/eurostat/api/dissemination/catalogue/toc/txt?lang=en",
+                      "total_matches": 3
+                    }
+                  }
+                },
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                }
               }
             },
-            "description": "Successful response. The payload schema has not been reviewed yet."
+            "description": "Search Eurostat's catalogue table of contents (~8,000 datasets and tables) by keywords in the title or dataset code. Client-side filtering of the catalogue listing; results carry the dataset code, type, last update, period range, folder path and Data Browser URL.\n\nThe response contains the tool result directly.\n\nThe provider identifies `datasets` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `code` | string |  |\n| `data_end` | string |  |\n| `data_start` | string | First period as stated (1995, 2004-S2, 1991-Q1, 1996-01). |\n| `last_structure_change` | string | Last table structure change, ISO date. |\n| `last_update` | string | Last update of data, ISO date (YYYY-MM-DD). |\n| `theme_path` | string[] | Folder titles from the catalogue root to the dataset (first occurrence in the catalogue). |\n| `title` | string |  |\n| `type` | string | Catalogue type as stated by Eurostat: 'dataset' (full multi-dimensional cube) or 'table' (predefined headline table). |\n| `url` | string | Data Browser table view for the code. |\n| `values` | number | Number of values in the dataset as stated in the catalogue. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
           },
           "default": {
             "content": {
@@ -586,10 +1523,33 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-review": {
-          "request": "runtime_binding",
-          "response": "generic",
-          "status": "unreviewed"
+        "x-aisa-response-source": {
+          "content_hash": "sha256:f300ffb50a506cc402b3aaf2ed8c22904c00e4814e4f939a445358a441c8210b",
+          "kind": "upstream_success_contract",
+          "source": {
+            "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "kind": "manual",
+            "owner": "AIsa-team/docs",
+            "path_space": "public",
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "paths": [
+                "/apis/v1/datalegion/companies/enrich-base",
+                "/apis/v1/datalegion/people/enrich-base-no-contact"
+              ],
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+            },
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "review_period_days": 30,
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "url": "https://api.firecrawl.dev/v2/scrape"
+          }
         },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
@@ -601,15 +1561,32 @@
           "operation_id": "ec-europa-eu.indicators.search-datasets",
           "path": "/apis/v1/ec-europa-eu/indicators/search-datasets"
         },
+        "x-aisa-source": {
+          "content_hash": "sha256:6689e1474469419b20ac9c27e869bfba10860c36ab61bbdc9cfedb3b75f66344",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "kind": "manual",
+          "owner": "AIsa-team/docs",
+          "path_space": "public",
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "paths": [
+              "/apis/v1/datalegion/companies/enrich-base",
+              "/apis/v1/datalegion/people/enrich-base-no-contact"
+            ],
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+          },
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "review_period_days": 30,
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "url": "https://api.firecrawl.dev/v2/scrape"
+        },
         "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed",
-        "x-codeSamples": [
-          {
-            "label": "Reference example",
-            "lang": "text",
-            "source": "# Fixed reference example. Playground inputs do not update this sample.\ncurl --request POST \\\n  --url https://api.aisa.one/apis/v1/ec-europa-eu/indicators/search-datasets \\\n  --header 'Authorization: Bearer <token>' \\\n  --header 'Content-Type: application/json' \\\n  --data '{\n  \"query\": \"nike\"\n}'"
-          }
-        ]
+        "x-aisa-validation": "mixed"
       }
     }
   },

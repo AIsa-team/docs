@@ -16,7 +16,7 @@ x-aisa-operation-id: "littlecaesars-com.restaurants.get-menu"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/littlecaesars-com.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,22 +38,51 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
             "value": {
-              "location_number": 1
-            }
-          },
-          "minimal": {
-            "value": {
-              "location_number": 1
+              "category": "large-round-pizzas",
+              "location_number": 40
             }
           }
         },
         "schema": {
           "additionalProperties": true,
           "properties": {
+            "category": {
+              "description": "Optional category filter: a displayGroupId (e.g. `84`), the category name, or its slug (e.g. `large-round-pizzas`); case-insensitive. Unknown category -> not_found.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "language": {
+              "default": "en",
+              "description": "Menu language: `en` sends cultureCode en-US, `es` sends es-US (Spanish names and descriptions, same prices).\n\nProvider reference: allowed values [\"en\", \"es\"]; default \"en\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "en",
+                  "es"
+                ]
+              }
+            },
             "location_number": {
+              "description": "Little Caesars store number (`locationNumber`), as returned by `search_stores` and used in the public store page URL.\n\nProvider reference: minimum 1.",
               "type": "number"
+            },
+            "service_method": {
+              "default": "pickup",
+              "description": "Service method the menu is priced for: `pickup` is the BFF's serviceMethod 1 (In-Store), `delivery` is 4 (Deliver Now).\n\nProvider reference: allowed values [\"pickup\", \"delivery\"]; default \"pickup\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "pickup",
+                  "delivery"
+                ]
+              }
             }
           },
           "required": [
@@ -66,16 +95,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -89,15 +108,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0005 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

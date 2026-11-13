@@ -16,7 +16,7 @@ x-aisa-operation-id: "clerk-house-gov.legislative-votes.vote"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/clerk-house-gov.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,15 +38,88 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "congress": 119,
+              "roll": 145,
+              "session": 1,
+              "state": "NY"
+            }
           }
         },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "congress": {
+              "description": "Congress number (101 = 1989-1990, 119 = 2025-2026). Required unless `url` is given.\n\nProvider reference: minimum 101; maximum 200.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 200,
+                "min": 101
+              }
+            },
+            "party": {
+              "description": "Keep only members of this party as coded by the Clerk (D, R, I).\n\nProvider reference: allowed values [\"D\", \"R\", \"I\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "D",
+                  "R",
+                  "I"
+                ]
+              }
+            },
+            "position": {
+              "description": "Keep only members who voted this way. Yea-and-nay votes use Yea/Nay; recorded votes use Aye/No; the value is matched exactly as the Clerk records it.\n\nProvider reference: allowed values [\"Yea\", \"Nay\", \"Aye\", \"No\", \"Present\", \"Not Voting\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "Yea",
+                  "Nay",
+                  "Aye",
+                  "No",
+                  "Present",
+                  "Not Voting"
+                ]
+              }
+            },
+            "roll": {
+              "description": "Roll call number within the session. Required unless `url` is given.\n\nProvider reference: minimum 1; maximum 9999.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 9999,
+                "min": 1
+              }
+            },
+            "session": {
+              "description": "Session of the congress: 1 (odd year) or 2 (even year). Required unless `url` is given.\n\nProvider reference: minimum 1; maximum 2.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 2,
+                "min": 1
+              }
+            },
+            "state": {
+              "description": "Keep only members from this two-letter state or territory postal code (e.g. NY). Pattern: ^[A-Za-z]{2}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "url": {
+              "description": "Alternative to congress/session/roll: a clerk.house.gov vote URL such as https://clerk.house.gov/Votes/2025145 or https://clerk.house.gov/evs/2025/roll145.xml ({year}{roll} or {year}/roll{roll}).",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +127,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +140,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0005 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

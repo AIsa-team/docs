@@ -68,6 +68,12 @@ class RetainPendingHistoryTests(unittest.TestCase):
         self.assertEqual(op['x-aisa-contract-pending'], self.pending[0]['reason'])
         self.assertNotEqual(self.document['info']['x-aisa-document']['document_hash'], 'sha256:composed')
 
+    def test_missing_customer_price_stays_out_of_runtime_archive_contract(self):
+        self.history['paths']['/apis/v1/alpha/test']['get'].pop('x-aisa-pricing')
+        retain_pending_history(self.document, self.facts, self.history, self.pending)
+        op = self.document['paths']['/apis/v1/alpha/test']['get']
+        self.assertNotIn('x-aisa-pricing', op)
+
     def test_route_filter_composed_route_and_absent_runtime_path_are_not_retained(self):
         self.assertEqual(retain_pending_history(copy.deepcopy(self.document), self.facts, self.history,
                                                 self.pending, set()), [])

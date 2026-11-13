@@ -16,7 +16,7 @@ x-aisa-operation-id: "globalcatalog-cloud-ibm-com.cloud-pricing.records-list"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/globalcatalog-cloud-ibm-com.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,15 +38,93 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "countries": [
+                "USA"
+              ],
+              "entry_id": "is.instance",
+              "metrics": [
+                "INSTANCE_HOURS_MULTI_TENANT",
+                "INSTANCE_HOURS_DEDICATED_HOST",
+                "RHEL_INSTANCE_HOURS"
+              ],
+              "plans_per_page": 1,
+              "regions": [
+                "us-south"
+              ]
+            }
           }
         },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "continuation": {
+              "description": "`next_cursor` from the previous page. Not with `entry_id` or `kinds`.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "countries": {
+              "description": "Keep only `amounts[].country` codes listed (as published: `USA`, `GBR`, `EURO`, ...). Default: all 29.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "entry_id": {
+              "description": "Restrict the walk to one catalog entry (segment), e.g. `is.instance` or `containers-kubernetes`. Not with `continuation`. Pattern: ^[A-Za-z0-9._:-]+$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "kinds": {
+              "description": "Entry kinds to walk, in this order. Default `service, iaas, platform_service, composite`. Not with `continuation` or `entry_id`.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "metrics": {
+              "description": "Keep only metrics whose `metric_id` or `charge_unit_name` is listed (case-insensitive), e.g. `[\"INSTANCE_HOURS_MULTI_TENANT\"]`. Default: all metrics.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "plans_per_page": {
+              "default": 2,
+              "description": "Plans priced per page (1..5, default 2). A VPC plan with 13 regions yields ~9,600 records unfiltered.\n\nProvider reference: minimum 1; maximum 5; default 2.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 5,
+                "min": 1
+              }
+            },
+            "regions": {
+              "description": "Keep only deployments whose `deployment_region` is listed (case-insensitive), e.g. `[\"us-south\"]`. Default: all regions.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +132,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +145,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0005 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

@@ -16,7 +16,7 @@ x-aisa-operation-id: "benzinga.news.press-releases"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/benzinga.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -37,16 +37,128 @@ Effective request and pricing declaration (including authentication and referenc
   "requestBody": {
     "content": {
       "application/json": {
-        "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
-          }
-        },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "authors": {
+              "description": "Comma-separated distributing wires, spelled as Benzinga does: PRNewswire, Globe Newswire, Business Wire, ACCESS Newswire, Newsfile. Set it to restrict to one wire.",
+              "type": "string"
+            },
+            "cusips": {
+              "description": "Comma-separated CUSIPs, maximum 50; requires a license agreement. Use only when the caller supplies CUSIPs.",
+              "type": "string"
+            },
+            "date": {
+              "description": "A single day to query, yyyy-mm-dd. Use it instead of dateFrom and dateTo when the caller names one date.",
+              "type": "string"
+            },
+            "dateFrom": {
+              "description": "Earliest publication date, yyyy-mm-dd. Set it whenever the caller asks about a period rather than a single day.",
+              "type": "string"
+            },
+            "dateTo": {
+              "description": "Latest publication date, yyyy-mm-dd. Pair it with dateFrom to bound a period.",
+              "type": "string"
+            },
+            "displayOutput": {
+              "default": "headline",
+              "description": "How much of each release to return: headline only, abstract (headline plus teaser) or full body text. Set full only when you need to quote the release.\n\nProvider reference: allowed values [\"full\", \"abstract\", \"headline\"]; default \"headline\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "oneOf": [
+                  "full",
+                  "abstract",
+                  "headline"
+                ]
+              }
+            },
+            "format": {
+              "description": "Desired response format. Set text only when you want plain text rather than the default JSON structures.\n\nProvider reference: allowed values [\"text\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "oneOf": [
+                  "text"
+                ]
+              }
+            },
+            "importance": {
+              "description": "Importance level of the release. Set high when the caller only wants the market-moving releases.\n\nProvider reference: allowed values [\"low\", \"medium\", \"high\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "oneOf": [
+                  "low",
+                  "medium",
+                  "high"
+                ]
+              }
+            },
+            "isin": {
+              "description": "Comma-separated ISINs, maximum 50. Use it when the caller identifies companies by ISIN rather than ticker.",
+              "type": "string"
+            },
+            "page": {
+              "default": 0,
+              "description": "Page offset, limited to 0-100000. Increase it to page past the first batch rather than widening the date range.\n\nProvider reference: default 0.",
+              "type": "number"
+            },
+            "pageSize": {
+              "default": 15,
+              "description": "Number of releases returned, maximum 100. Raise it when you want a full day of a company's releases in one call.\n\nProvider reference: maximum 100; default 15.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "max": 100
+              }
+            },
+            "primaryTickers": {
+              "description": "Comma-separated primary ticker symbols. Use it instead of tickers when you want only releases whose primary subject is that company.",
+              "type": "string"
+            },
+            "publishedSince": {
+              "description": "Unix timestamp in UTC; set it to pull and sort by releases published since that moment.",
+              "type": "number"
+            },
+            "region": {
+              "description": "Region filter, for example 'ca' or 'canada' for Canadian content. Set it when the caller scopes the question to a market.",
+              "type": "string"
+            },
+            "sort": {
+              "description": "Sort order as field:direction. Use created:asc to read a period forwards, or updated:desc when tracking edits.\n\nProvider reference: allowed values [\"id:asc\", \"id:desc\", \"created:asc\", \"created:desc\", \"updated:asc\", \"updated:desc\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "oneOf": [
+                  "id:asc",
+                  "id:desc",
+                  "created:asc",
+                  "created:desc",
+                  "updated:asc",
+                  "updated:desc"
+                ]
+              }
+            },
+            "tickers": {
+              "description": "Comma-separated ticker symbols, maximum 50. Set this whenever the caller names a company.",
+              "type": "string"
+            },
+            "topic_group_by": {
+              "default": "or",
+              "description": "Logical operator for the topics query. Set and when every topic must appear, or leave as or to match any.\n\nProvider reference: allowed values [\"and\", \"or\"]; default \"or\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "oneOf": [
+                  "and",
+                  "or"
+                ]
+              }
+            },
+            "topics": {
+              "description": "Comma-separated words or phrases matched against title, tags and body in that order of priority. Use it when the caller asks about a subject rather than a company.",
+              "type": "string"
+            },
+            "updatedSince": {
+              "description": "Unix timestamp in UTC; set it to your last sync time to pull only releases updated since then.",
+              "type": "number"
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +166,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0015,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +179,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0015 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0015 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0015
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

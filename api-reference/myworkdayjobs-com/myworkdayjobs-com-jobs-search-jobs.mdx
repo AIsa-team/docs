@@ -16,7 +16,7 @@ x-aisa-operation-id: "myworkdayjobs-com.jobs.search-jobs"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/myworkdayjobs-com.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,14 +38,11 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
             "value": {
-              "career_site": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "career_site": "example"
+              "career_site": "https://nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite",
+              "limit": 5
             }
           }
         },
@@ -53,7 +50,46 @@ Effective request and pricing declaration (including authentication and referenc
           "additionalProperties": true,
           "properties": {
             "career_site": {
+              "description": "Any URL of a Workday career site: https://{tenant}.wd{N}.myworkdayjobs.com/{site} (an /en-US/-style locale segment, a search-results URL with ?q= and facet parameters, or a posting URL are fine) or https://wd{N}.myworkdaysite.com/recruiting/{tenant}/{site}.",
               "type": "string"
+            },
+            "facets": {
+              "description": "Filters as Workday exposes them: each {parameter, ids} uses a facet parameter and value ids from a previous search_jobs `facets`. Values within one parameter are ORed, parameters are ANDed. When omitted, facet parameters in a pasted search-results URL apply.",
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "limit": {
+              "default": 20,
+              "description": "Results per page; Workday serves at most 20.\n\nProvider reference: minimum 1; maximum 20; default 20.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 20,
+                "min": 1
+              }
+            },
+            "offset": {
+              "default": 0,
+              "description": "Result offset: 0 for the first page, then the previous page's next_offset. Workday serves only the first 2000 results of a query.\n\nProvider reference: minimum 0; maximum 1999; default 0.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 1999,
+                "min": 0
+              }
+            },
+            "query": {
+              "description": "Keyword search over the site's postings (Workday searchText). Omit to list everything. When omitted, a pasted URL's ?q= applies.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
             }
           },
           "required": [
@@ -66,16 +102,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -89,15 +115,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0005 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

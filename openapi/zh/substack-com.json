@@ -1,5 +1,14 @@
 {
   "components": {
+    "callbacks": {},
+    "examples": {},
+    "headers": {},
+    "links": {},
+    "parameters": {},
+    "pathItems": {},
+    "requestBodies": {},
+    "responses": {},
+    "schemas": {},
     "securitySchemes": {
       "bearerAuth": {
         "scheme": "bearer",
@@ -53,8 +62,8 @@
       "/apis/v1/substack-com/newsletters/search"
     ],
     "x-aisa-document": {
-      "composer_version": "28",
-      "document_hash": "sha256:59076cd818c7fa572fd73faad721b2a3fb352c77cefaf00f3fc4306eb7a4233d",
+      "composer_version": "29",
+      "document_hash": "sha256:9d636513e488513b9f953b2bb720418b847b64ad0b7429bf4444e4ed1edf765e",
       "facts_hash": "89c1207f996a9015efbff38e590a58a7adc6a2acfa9c4de3e70ac962dba23a83",
       "generator_version": "3",
       "protocol_version": "1",
@@ -76,28 +85,66 @@
   "paths": {
     "/apis/v1/substack-com/newsletters/archive": {
       "post": {
-        "description": "<!-- aisa-pricing:start -->\n按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit $0.0001 USD。 最终费用以账户适用价格及实际结算为准。\n<!-- aisa-pricing:end -->",
+        "description": "One page of a Substack publication's archive, newest or top first, or only its pinned posts. Each entry carries title, subtitle, URL, publish time, audience (free or paid), word count, engagement counts, section, tags and bylines. Page with cursor (or offset) and limit.",
         "operationId": "substack-com.newsletters.archive",
         "requestBody": {
           "content": {
             "application/json": {
               "examples": {
-                "default": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
                   "value": {
-                    "publication": "example"
-                  }
-                },
-                "minimal": {
-                  "value": {
-                    "publication": "example"
+                    "limit": 1,
+                    "publication": "www.astralcodexten.com"
                   }
                 }
               },
               "schema": {
                 "additionalProperties": true,
                 "properties": {
+                  "cursor": {
+                    "description": "next_cursor from the previous page of the same publication, sort and query. Takes precedence over offset.",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "limit": {
+                    "default": 12,
+                    "description": "Posts to return. Substack serves 25 per request, so larger pages take two requests.\n\nProvider reference: minimum 1; maximum 50; default 12.",
+                    "type": "number",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "max": 50,
+                      "min": 1
+                    }
+                  },
+                  "offset": {
+                    "default": 0,
+                    "description": "Posts to skip. new listings reach at most 250 by offset; follow next_cursor for deeper pages. Ignored when cursor is set.\n\nProvider reference: minimum 0; maximum 10000; default 0.",
+                    "type": "number",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "max": 10000,
+                      "min": 0
+                    }
+                  },
                   "publication": {
+                    "description": "Substack slug or a declared custom publication host (www.astralcodexten.com, www.lennysnewsletter.com, www.noahpinion.blog). Other custom domains are not supported by this program.",
                     "type": "string"
+                  },
+                  "sort": {
+                    "default": "new",
+                    "description": "new = newest first, top = most popular, pinned = the publication's pinned posts only (usually one, a single page).\n\nProvider reference: allowed values [\"new\", \"top\", \"pinned\"]; default \"new\".",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "new",
+                        "top",
+                        "pinned"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -113,10 +160,73 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "examples": {
+                  "provider": {
+                    "description": "Published by the provider on 2026-11-06T14:46:21.785210+00:00.",
+                    "summary": "Official provider example",
+                    "value": {
+                      "count": 1,
+                      "has_more": true,
+                      "limit": 1,
+                      "next_cursor": "1@2026-11-05T02:01:33.734Z",
+                      "next_offset": 1,
+                      "observed_at_ms": 1789435777564,
+                      "offset": 0,
+                      "paywalled_count": 0,
+                      "posts": [
+                        {
+                          "audience": "everyone",
+                          "authors": [
+                            {
+                              "bio": null,
+                              "handle": "astralcodexten",
+                              "id": "12009663",
+                              "name": "Scott Alexander",
+                              "photo_url": "https://substackcdn.com/image/fetch/f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2F7b500d22-1176-42ad-afaa-5d72bc36a809_44x44.png"
+                            }
+                          ],
+                          "comments": 348,
+                          "cover_image": "https://substack-post-media.s3.amazonaws.com/public/images/81b326b9-f8ad-41e1-b28f-f9c6499a1a27_800x533.jpeg",
+                          "description": "...",
+                          "free_preview_sent": false,
+                          "id": "222262321",
+                          "paywalled": false,
+                          "podcast_duration_seconds": null,
+                          "podcast_url": null,
+                          "preview_text": null,
+                          "publication_id": "89120",
+                          "published_at": "2026-11-05T02:01:33.734Z",
+                          "reactions": 182,
+                          "restacks": 19,
+                          "section": null,
+                          "slug": "links-for-november-2026",
+                          "subtitle": "...",
+                          "tags": [],
+                          "title": "Links For November 2026",
+                          "type": "newsletter",
+                          "url": "https://www.astralcodexten.com/p/links-for-november-2026",
+                          "wordcount": 3370
+                        }
+                      ],
+                      "publication": {
+                        "host": "www.astralcodexten.com",
+                        "url": "https://www.astralcodexten.com"
+                      },
+                      "query": null,
+                      "sort": "new",
+                      "source": "https://www.astralcodexten.com/api/v1/archive?sort=new&limit=1"
+                    }
+                  }
+                },
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                }
               }
             },
-            "description": "Successful response. The payload schema has not been reviewed yet."
+            "description": "One page of a Substack publication's archive, newest or top first, or only its pinned posts. Each entry carries title, subtitle, URL, publish time, audience (free or paid), word count, engagement counts, section, tags and bylines. Page with cursor (or offset) and limit. Custom domains are limited to the declared publications; paid text remains the anonymous preview.\n\nThe response contains the tool result directly.\n\nThe provider identifies `posts` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `audience` | string |  |\n| `authors` | object[] |  |\n| `comments` | number |  |\n| `cover_image` | string |  |\n| `description` | string |  |\n| `free_preview_sent` | boolean |  |\n| `id` | string |  |\n| `paywalled` | boolean |  |\n| `podcast_duration_seconds` | number |  |\n| `podcast_url` | string |  |\n| `preview_text` | string |  |\n| `publication_id` | string |  |\n| `published_at` | string |  |\n| `reactions` | number |  |\n| `restacks` | number |  |\n| `section` | object |  |\n| `slug` | string |  |\n| `subtitle` | string |  |\n| `tags` | object[] |  |\n| `title` | string |  |\n| `type` | string |  |\n| `url` | string |  |\n| `wordcount` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
           },
           "default": {
             "content": {
@@ -160,10 +270,32 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-review": {
-          "request": "runtime_binding",
-          "response": "generic",
-          "status": "unreviewed"
+        "x-aisa-response-source": {
+          "content_hash": "sha256:9540a4c2ed3e7ea3f380b3ff9c8517fe6e7529c01dfabc25bf350d60d2abec33",
+          "kind": "upstream_success_contract",
+          "source": {
+            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "kind": "manual",
+            "owner": "AIsa-team/docs",
+            "path_space": "public",
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "paths": [
+                "/apis/v1/web-archive-org/captures/history"
+              ],
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+            },
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "review_period_days": 30,
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "url": "https://api.firecrawl.dev/v2/scrape"
+          }
         },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
@@ -175,33 +307,45 @@
           "operation_id": "substack-com.newsletters.archive",
           "path": "/apis/v1/substack-com/newsletters/archive"
         },
+        "x-aisa-source": {
+          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "kind": "manual",
+          "owner": "AIsa-team/docs",
+          "path_space": "public",
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "paths": [
+              "/apis/v1/web-archive-org/captures/history"
+            ],
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+          },
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "review_period_days": 30,
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "url": "https://api.firecrawl.dev/v2/scrape"
+        },
         "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed",
-        "x-codeSamples": [
-          {
-            "label": "Reference example",
-            "lang": "text",
-            "source": "# Fixed reference example. Playground inputs do not update this sample.\ncurl --request POST \\\n  --url https://api.aisa.one/apis/v1/substack-com/newsletters/archive \\\n  --header 'Authorization: Bearer <token>' \\\n  --header 'Content-Type: application/json' \\\n  --data '{\n  \"publication\": \"example\"\n}'"
-          }
-        ]
+        "x-aisa-validation": "mixed"
       }
     },
     "/apis/v1/substack-com/newsletters/post": {
       "post": {
-        "description": "<!-- aisa-pricing:start -->\n按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit $0.0001 USD。 最终费用以账户适用价格及实际结算为准。\n<!-- aisa-pricing:end -->",
+        "description": "One Substack post by URL, or by publication and slug: metadata plus body_html and body_text. Free posts (audience everyone) are complete; paid posts return the publicly served preview with paywalled true, full_text_available false and text_coverage showing how much of the author's word count is visible.",
         "operationId": "substack-com.newsletters.post",
         "requestBody": {
           "content": {
             "application/json": {
               "examples": {
-                "default": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
                   "value": {
-                    "publication": "example"
-                  }
-                },
-                "minimal": {
-                  "value": {
-                    "publication": "example"
+                    "url": "https://www.astralcodexten.com/p/metaculus-monday-2821"
                   }
                 }
               },
@@ -239,12 +383,15 @@
                 ],
                 "properties": {
                   "publication": {
+                    "description": "Substack slug or a declared custom publication host (www.astralcodexten.com, www.lennysnewsletter.com, www.noahpinion.blog). Other custom domains are not supported by this program.",
                     "type": "string"
                   },
                   "slug": {
+                    "description": "Pattern: ^[A-Za-z0-9._-]+$.",
                     "type": "string"
                   },
                   "url": {
+                    "description": "https://<publication host>/p/<slug> or https://open.substack.com/pub/<slug>/p/<slug>. Provide url, or publication and slug. Pattern: ^https?://.",
                     "type": "string"
                   }
                 },
@@ -258,10 +405,72 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "examples": {
+                  "provider": {
+                    "description": "Published by the provider on 2026-09-15T01:29:38.194472+00:00.",
+                    "summary": "Official provider example",
+                    "value": {
+                      "access_note": "Free post: body_text is the complete public article.",
+                      "audience": "everyone",
+                      "authors": [
+                        {
+                          "bio": null,
+                          "handle": "astralcodexten",
+                          "id": "12009663",
+                          "name": "Scott Alexander",
+                          "photo_url": "https://substackcdn.com/image/fetch/f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2F7b500d22-1176-42ad-afaa-5d72bc36a809_44x44.png"
+                        }
+                      ],
+                      "body_html": "<p>Thanks to everyone who commented last week with prediction markets I missed. Two of them seemed to be especially interesting.</p><p><strong><a href=\"https://polymarket.com/\">Polymarket</a></strong> is another cryptocurrency-based prediction market. It's got about two dozen contracts open, and some of them are pretty big - $5 million plus! With that kind of money, we ought to be seeing some really good predicting! We're...not. Either there's a 6% chance that Donald Trump will be president again by March 31, or something's gone wrong. </p><p>Probably it's the second one. I tried to bet against Trump, but getting money into the market was pretty hard. You need USDCoins, a stablecoin related to Ethereum. Polymarket tries to let you buy them directly, but their app wanted me to give them a security code which never showed up, so I gave up on this. Instead I bought some USDC at Coinbase and tried to send them over. But along with the usual Ethereum gas fees, they have something called a relayer, which is supposed to collect my money and put it in my account. And it's apparently heavily backed up, and after two days my money is nowhere to be seen (though I believe them <a href=\"https://polymarket.medium.com/polymarket-relayer-community-announcement-31ac3b64c09d\">when they say</a> that they're trying their hardest and it will probably percolate through the Ethereum network someday). Maybe everyone's having these kinds of issues and this is why the Trump contract hasn't adjusted? I'm not sure. I will keep you updated if my money ever materializes.</p><p><strong><a href=\"https://kalshi.com/\">Kalshi </a></strong>is \"the first regulated futures exchange dedicated to trading on event outcomes\". As far as I can tell they actually did it. They got the government to agree to let them run a prediction market, regulated as investing rather than gambling. There will be a $25,000 max on contracts, so it might not be enough for the real whales, but that's still thirty times higher than existing prediction markets and enough to probably be a sea change. I talked to a representative who said they'll be \"focused on creating markets in a few key categories such as climate, economics, geopolitics, energy, education, government, space, COVID, and technology\", but that they remain open to potentially expanding to all sorts of other areas (<a href=\"https://en.wikipedia.org/wiki/Onion_Futures_Act\">except onions,</a> which apparently have a very specific carve-out as something which it is illegal to have futures markets about, somebody please write a cyberpunk novel revolving around this). So far they're still setting things up, but they describe themselves as \"ramping quickly towards launch\". I am super psyched about this and will keep you all updated.</p><p>Getting back to <strong><a href=\"https://www.metaculus.com/questions/\">Metaculus</a></strong>, let’s look at what they’ve got on AI:</p><div class=\"captioned-image-container\"><figure><a class=\"image-link image2\" target=\"_blank\" href=\"https://substackcdn.com/image/fetch/$s_!ZlWn!,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2F29d3cefe-10fa-400d-accb-e8a417313844_1043x214.png\" data-component-name=\"Image2ToDOM\"><div class=\"image2-inset\"><picture><source type=\"image/webp\" srcset=\"https://substackcdn.com/image/fetch/$s_!ZlWn!,w_424,c_limit,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2F29d3cefe-10fa-400d-accb-e8a417313844_1043x214.png 424w, https://substackcdn.com/image/fetch/$s_!ZlWn!,w_848,c_limit,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2F29d3cefe-10fa-400d-accb-e8a417313844_1043x214.png 848w, https://substackcdn.com/image/fetch/$s_!ZlWn!,w_1272,c_limit,f_webp,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3",
+                      "body_text": "Thanks to everyone who commented last week with prediction markets I missed. Two of them seemed to be especially interesting.\nPolymarket is another cryptocurrency-based prediction market. It's got about two dozen contracts open, and some of them are pretty big - $5 million plus! With that kind of money, we ought to be seeing some really good predicting! We're...not. Either there's a 6% chance that Donald Trump will be president again by March 31, or something's gone wrong.\nProbably it's the second one. I tried to bet against Trump, but getting money into the market was pretty hard. You need USDCoins, a stablecoin related to Ethereum. Polymarket tries to let you buy them directly, but their app wanted me to give them a security code which never showed up, so I gave up on this. Instead I bought some USDC at Coinbase and tried to send them over. But along with the usual Ethereum gas fees, they have something called a relayer, which is supposed to collect my money and put it in my account. And it's apparently heavily backed up, and after two days my money is nowhere to be seen (though I believe them when they say that they're trying their hardest and it will probably percolate through the Ethereum network someday). Maybe everyone's having these kinds of issues and this is why the Trump contract hasn't adjusted? I'm not sure. I will keep you updated if my money ever materializes.\nKalshi is \"the first regulated futures exchange dedicated to trading on event outcomes\". As far as I can tell they actually did it. They got the government to agree to let them run a prediction market, regulated as investing rather than gambling. There will be a $25,000 max on contracts, so it might not be enough for the real whales, but that's still thirty times higher than existing prediction markets and enough to probably be a sea change. I talked to a representative who said they'll be \"focused on creating markets in a few key categories such as climate, economics, geopolitics, energy, education, government, space, COVID, and technology\", but that they remain open to potentially expanding to all sorts of other areas (except onions, which apparently have a very specific carve-out as something which it is illegal to have futures markets about, somebody please write a cyberpunk novel revolving around this). So far they're still setting things up, but they describe themselves as \"ramping quickly towards launch\". I am super psyched about this and will keep you all updated.\nGetting back to Metaculus, let’s look at what they’ve got on AI:\nFirst, some history. In 2016, DeepMind’s AlphaGo beat first Fan Hui, a medium-level professional Go player, and then Lee Sedol, a top professional Go player. This was one of the more unexpected events in AI history; everyone thought it would be a few more years before Go AIs were ready for prime time. We can see this on Metaculus; their prediction that a Go program would beat a professional went from 30% before the Fan Hui match to 90% afterwards (there was some debate on whether the Fan Hui match was official enough to count, so it wasn’t 100, but everyone agreed that beating Fan Hui meant the program could probably beat other people in more official settings.\n\nAfter that people thought it was moderately likely AlphaGo could beat Lee Sedol too, and they were right.\nPrediction markets clearly aren’t magic; they didn’t expect AlphaGo’s victory over Hui any more than anyone else did (maybe a little more than some other people? they did give it 30%). But it’s interesting being able to quantify the exact degree to which people thought it was unlikely at the time, and when exactly that changed.\nImagine how great this sort of thing will one day be for historians. With enough skill, you can sort of wring prediction markets out of history - the price of Confederate bonds in early 1863 implied that investors thought the South had a 42% chance of winning the Civil War. But future historians will be spoiled; the numbers will be right t",
+                      "comments": 104,
+                      "cover_image": "https://bucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com/public/images/64c0705b-004a-4b01-861b-a00c1513fb5e_248x248.png",
+                      "description": "Two more prediction markets, plus AI",
+                      "free_preview_sent": false,
+                      "full_text_available": true,
+                      "id": "32257019",
+                      "language": "en",
+                      "next_post_slug": "book-review-why-were-polarized",
+                      "observed_at_ms": 1789435777564,
+                      "paywalled": false,
+                      "podcast_duration_seconds": null,
+                      "podcast_url": null,
+                      "preview_text": null,
+                      "previous_post_slug": "open-thread-159",
+                      "publication": {
+                        "host": "www.astralcodexten.com",
+                        "url": "https://www.astralcodexten.com"
+                      },
+                      "publication_id": "89120",
+                      "published_at": "2021-02-08T20:46:22.180Z",
+                      "reactions": 63,
+                      "restacks": 0,
+                      "search_engine_description": null,
+                      "search_engine_title": null,
+                      "section": null,
+                      "slug": "metaculus-monday-2821",
+                      "source": "https://www.astralcodexten.com/api/v1/posts/metaculus-monday-2821",
+                      "subtitle": "Two more prediction markets, plus AI",
+                      "tags": [],
+                      "text_coverage": 0.992,
+                      "title": "Metaculus Monday 2/8/21",
+                      "type": "newsletter",
+                      "updated_at": "2023-02-08T08:49:29.855Z",
+                      "url": "https://www.astralcodexten.com/p/metaculus-monday-2821",
+                      "visible_wordcount": 1636,
+                      "wordcount": 1650
+                    }
+                  }
+                },
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                }
               }
             },
-            "description": "Successful response. The payload schema has not been reviewed yet."
+            "description": "One Substack post by URL, or by publication and slug: metadata plus body_html and body_text. Free posts (audience everyone) are complete; paid posts return the publicly served preview with paywalled true, full_text_available false and text_coverage showing how much of the author's word count is visible. Custom domains are limited to the declared publications; paid text remains the anonymous preview.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `access_note` | string |  |\n| `audience` | string |  |\n| `authors` | object[] |  |\n| `body_html` | string |  |\n| `body_text` | string |  |\n| `comments` | number |  |\n| `cover_image` | string |  |\n| `description` | string |  |\n| `free_preview_sent` | boolean |  |\n| `full_text_available` | boolean |  |\n| `id` | string |  |\n| `language` | string |  |\n| `next_post_slug` | string |  |\n| `observed_at_ms` | number |  |\n| `paywalled` | boolean |  |\n| `podcast_duration_seconds` | number |  |\n| `podcast_url` | string |  |\n| `preview_text` | string |  |\n| `previous_post_slug` | string |  |\n| `publication` | object |  |\n| `publication_id` | string |  |\n| `published_at` | string |  |\n| `reactions` | number |  |\n| `restacks` | number |  |\n| `search_engine_description` | string |  |\n| `search_engine_title` | string |  |\n| `section` | object |  |\n| `slug` | string |  |\n| `source` | string |  |\n| `subtitle` | string |  |\n| `tags` | object[] |  |\n| `text_coverage` | number | visible_wordcount / wordcount, rounded to 3 decimals. About 1 for free posts, below 1 for paid posts. |\n| `title` | string |  |\n| `type` | string |  |\n| `updated_at` | string |  |\n| `url` | string |  |\n| `visible_wordcount` | number | Words in body_text as served to an anonymous reader. |\n| `wordcount` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
           },
           "default": {
             "content": {
@@ -326,10 +535,32 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-review": {
-          "request": "runtime_binding",
-          "response": "generic",
-          "status": "unreviewed"
+        "x-aisa-response-source": {
+          "content_hash": "sha256:ad62797c7b9214836595c3aef770f28ab361ec85dfa96bbcee646cfb3fd4d619",
+          "kind": "upstream_success_contract",
+          "source": {
+            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "kind": "manual",
+            "owner": "AIsa-team/docs",
+            "path_space": "public",
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "paths": [
+                "/apis/v1/web-archive-org/captures/history"
+              ],
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+            },
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "review_period_days": 30,
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "url": "https://api.firecrawl.dev/v2/scrape"
+          }
         },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
@@ -341,46 +572,100 @@
           "operation_id": "substack-com.newsletters.post",
           "path": "/apis/v1/substack-com/newsletters/post"
         },
+        "x-aisa-source": {
+          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "kind": "manual",
+          "owner": "AIsa-team/docs",
+          "path_space": "public",
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "paths": [
+              "/apis/v1/web-archive-org/captures/history"
+            ],
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+          },
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "review_period_days": 30,
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "url": "https://api.firecrawl.dev/v2/scrape"
+        },
         "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed",
-        "x-codeSamples": [
-          {
-            "label": "Reference example",
-            "lang": "text",
-            "source": "# Fixed reference example. Playground inputs do not update this sample.\ncurl --request POST \\\n  --url https://api.aisa.one/apis/v1/substack-com/newsletters/post \\\n  --header 'Authorization: Bearer <token>' \\\n  --header 'Content-Type: application/json' \\\n  --data '{\n  \"publication\": \"example\"\n}'"
-          }
-        ]
+        "x-aisa-validation": "mixed"
       }
     },
     "/apis/v1/substack-com/newsletters/search": {
       "post": {
-        "description": "<!-- aisa-pricing:start -->\n按用量计费；默认请求预估费用：$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit $0.0001 USD。 最终费用以账户适用价格及实际结算为准。\n<!-- aisa-pricing:end -->",
+        "description": "Search a Substack publication's archive for posts matching a query, using Substack's own archive search. Returns the same post entries as archive, with the query echoed.",
         "operationId": "substack-com.newsletters.search",
         "requestBody": {
           "content": {
             "application/json": {
               "examples": {
-                "default": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
                   "value": {
-                    "publication": "example",
-                    "query": "nike"
-                  }
-                },
-                "minimal": {
-                  "value": {
-                    "publication": "example",
-                    "query": "nike"
+                    "limit": 1,
+                    "publication": "www.astralcodexten.com",
+                    "query": "prediction"
                   }
                 }
               },
               "schema": {
                 "additionalProperties": true,
                 "properties": {
+                  "cursor": {
+                    "description": "next_cursor from the previous page of the same publication, sort and query. Takes precedence over offset.",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "limit": {
+                    "default": 12,
+                    "description": "Posts to return. Substack serves 25 per request, so larger pages take two requests.\n\nProvider reference: minimum 1; maximum 50; default 12.",
+                    "type": "number",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "max": 50,
+                      "min": 1
+                    }
+                  },
+                  "offset": {
+                    "default": 0,
+                    "description": "Posts to skip. new listings reach at most 250 by offset; follow next_cursor for deeper pages. Ignored when cursor is set.\n\nProvider reference: minimum 0; maximum 10000; default 0.",
+                    "type": "number",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "max": 10000,
+                      "min": 0
+                    }
+                  },
                   "publication": {
+                    "description": "Substack slug or a declared custom publication host (www.astralcodexten.com, www.lennysnewsletter.com, www.noahpinion.blog). Other custom domains are not supported by this program.",
                     "type": "string"
                   },
                   "query": {
+                    "description": "query",
                     "type": "string"
+                  },
+                  "sort": {
+                    "default": "new",
+                    "description": "new = newest first, top = most popular, pinned = the publication's pinned posts only (usually one, a single page).\n\nProvider reference: allowed values [\"new\", \"top\", \"pinned\"]; default \"new\".",
+                    "type": "string",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "oneOf": [
+                        "new",
+                        "top",
+                        "pinned"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -397,10 +682,73 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "examples": {
+                  "provider": {
+                    "description": "Published by the provider on 2026-11-06T14:46:21.968964+00:00.",
+                    "summary": "Official provider example",
+                    "value": {
+                      "count": 1,
+                      "has_more": true,
+                      "limit": 1,
+                      "next_cursor": "1",
+                      "next_offset": 1,
+                      "observed_at_ms": 1789435777564,
+                      "offset": 0,
+                      "paywalled_count": 0,
+                      "posts": [
+                        {
+                          "audience": "everyone",
+                          "authors": [
+                            {
+                              "bio": null,
+                              "handle": "astralcodexten",
+                              "id": "12009663",
+                              "name": "Scott Alexander",
+                              "photo_url": "https://substackcdn.com/image/fetch/f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2F7b500d22-1176-42ad-afaa-5d72bc36a809_44x44.png"
+                            }
+                          ],
+                          "comments": 104,
+                          "cover_image": "https://bucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com/public/images/64c0705b-004a-4b01-861b-a00c1513fb5e_248x248.png",
+                          "description": "Two more prediction markets, plus AI",
+                          "free_preview_sent": false,
+                          "id": "32257019",
+                          "paywalled": false,
+                          "podcast_duration_seconds": null,
+                          "podcast_url": null,
+                          "preview_text": null,
+                          "publication_id": "89120",
+                          "published_at": "2021-02-08T20:46:22.180Z",
+                          "reactions": 63,
+                          "restacks": 0,
+                          "section": null,
+                          "slug": "metaculus-monday-2821",
+                          "subtitle": "Two more prediction markets, plus AI",
+                          "tags": [],
+                          "title": "Metaculus Monday 2/8/21",
+                          "type": "newsletter",
+                          "url": "https://www.astralcodexten.com/p/metaculus-monday-2821",
+                          "wordcount": 1650
+                        }
+                      ],
+                      "publication": {
+                        "host": "www.astralcodexten.com",
+                        "url": "https://www.astralcodexten.com"
+                      },
+                      "query": "prediction",
+                      "sort": "new",
+                      "source": "https://www.astralcodexten.com/api/v1/archive?sort=new&search=prediction&limit=1"
+                    }
+                  }
+                },
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                }
               }
             },
-            "description": "Successful response. The payload schema has not been reviewed yet."
+            "description": "Search a Substack publication's archive for posts matching a query, using Substack's own archive search. Returns the same post entries as archive, with the query echoed. Custom domains are limited to the declared publications; paid text remains the anonymous preview.\n\nThe response contains the tool result directly.\n\nThe provider identifies `posts` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `audience` | string |  |\n| `authors` | object[] |  |\n| `comments` | number |  |\n| `cover_image` | string |  |\n| `description` | string |  |\n| `free_preview_sent` | boolean |  |\n| `id` | string |  |\n| `paywalled` | boolean |  |\n| `podcast_duration_seconds` | number |  |\n| `podcast_url` | string |  |\n| `preview_text` | string |  |\n| `publication_id` | string |  |\n| `published_at` | string |  |\n| `reactions` | number |  |\n| `restacks` | number |  |\n| `section` | object |  |\n| `slug` | string |  |\n| `subtitle` | string |  |\n| `tags` | object[] |  |\n| `title` | string |  |\n| `type` | string |  |\n| `url` | string |  |\n| `wordcount` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
           },
           "default": {
             "content": {
@@ -444,10 +792,32 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-review": {
-          "request": "runtime_binding",
-          "response": "generic",
-          "status": "unreviewed"
+        "x-aisa-response-source": {
+          "content_hash": "sha256:795b26bd84d4451b9096e5b3feba35c7731ba9daddb0e166863c88916a5f8de3",
+          "kind": "upstream_success_contract",
+          "source": {
+            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "kind": "manual",
+            "owner": "AIsa-team/docs",
+            "path_space": "public",
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "paths": [
+                "/apis/v1/web-archive-org/captures/history"
+              ],
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+            },
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "review_period_days": 30,
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "url": "https://api.firecrawl.dev/v2/scrape"
+          }
         },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
@@ -459,15 +829,31 @@
           "operation_id": "substack-com.newsletters.search",
           "path": "/apis/v1/substack-com/newsletters/search"
         },
+        "x-aisa-source": {
+          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "kind": "manual",
+          "owner": "AIsa-team/docs",
+          "path_space": "public",
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "production_schema_review": {
+            "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "paths": [
+              "/apis/v1/web-archive-org/captures/history"
+            ],
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
+          },
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "review_period_days": 30,
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "url": "https://api.firecrawl.dev/v2/scrape"
+        },
         "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed",
-        "x-codeSamples": [
-          {
-            "label": "Reference example",
-            "lang": "text",
-            "source": "# Fixed reference example. Playground inputs do not update this sample.\ncurl --request POST \\\n  --url https://api.aisa.one/apis/v1/substack-com/newsletters/search \\\n  --header 'Authorization: Bearer <token>' \\\n  --header 'Content-Type: application/json' \\\n  --data '{\n  \"publication\": \"example\",\n  \"query\": \"nike\"\n}'"
-          }
-        ]
+        "x-aisa-validation": "mixed"
       }
     }
   },

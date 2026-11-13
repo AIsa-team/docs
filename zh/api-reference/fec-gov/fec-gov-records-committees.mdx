@@ -16,7 +16,7 @@ x-aisa-operation-id: "fec-gov.records.committees"
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/fec-gov.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -38,15 +38,121 @@ x-aisa-operation-id: "fec-gov.records.committees"
     "content": {
       "application/json": {
         "examples": {
-          "default": {
-            "value": {}
-          },
-          "minimal": {
-            "value": {}
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "committee_id": "C00500843"
+            }
           }
         },
         "schema": {
           "additionalProperties": true,
+          "properties": {
+            "candidate_id": {
+              "description": "FEC candidate ID, e.g. S2MA00170 (H House, S Senate, P President). Pattern: ^[HSPhsp][0-9A-Za-z]{8}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "committee_id": {
+              "description": "FEC committee ID, e.g. C00500843. Pattern: ^[Cc][0-9]{8}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "committee_type": {
+              "description": "P presidential, H House, S Senate, N PAC (nonqualified), Q PAC (qualified), O super PAC, V/W hybrid PAC, X/Y party, Z national party nonfederal, I independent expenditor, C communication cost, D delegate, E electioneering, U single-candidate IE.\n\nProvider reference: allowed values [\"C\", \"D\", \"E\", \"H\", \"I\", \"N\", \"O\", \"P\", \"Q\", \"S\", \"U\", \"V\", \"W\", \"X\", \"Y\", \"Z\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "C",
+                  "D",
+                  "E",
+                  "H",
+                  "I",
+                  "N",
+                  "O",
+                  "P",
+                  "Q",
+                  "S",
+                  "U",
+                  "V",
+                  "W",
+                  "X",
+                  "Y",
+                  "Z"
+                ]
+              }
+            },
+            "cycle": {
+              "description": "Cycle in which the committee was active, named by its even year: 2024 covers 2023-2024.\n\nProvider reference: minimum 1976; maximum 2100.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 2100,
+                "min": 1976
+              }
+            },
+            "designation": {
+              "description": "A authorized by a candidate, P principal campaign committee, J joint fundraiser, U unauthorized, B lobbyist/registrant PAC, D leadership PAC.\n\nProvider reference: allowed values [\"A\", \"J\", \"P\", \"U\", \"B\", \"D\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "A",
+                  "J",
+                  "P",
+                  "U",
+                  "B",
+                  "D"
+                ]
+              }
+            },
+            "page": {
+              "default": 1,
+              "description": "1-based page; pass the previous next_page with the same filters.\n\nProvider reference: minimum 1; maximum 100000; default 1.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 100000,
+                "min": 1
+              }
+            },
+            "party": {
+              "description": "Three-letter FEC party code, e.g. DEM, REP, LIB, GRE, IND. Pattern: ^[A-Za-z0-9]{3}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "per_page": {
+              "default": 10,
+              "description": "Rows per page, 1 to 100.\n\nProvider reference: minimum 1; maximum 100; default 10.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 100,
+                "min": 1
+              }
+            },
+            "query": {
+              "description": "Name search, e.g. actblue. Pattern: \\S.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "state": {
+              "description": "Two-letter US state or territory code, e.g. MA. Pattern: ^[A-Za-z]{2}$.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            }
+          },
           "type": "object"
         }
       }
@@ -54,16 +160,6 @@ x-aisa-operation-id: "fec-gov.records.committees"
     "required": false
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -77,15 +173,7 @@ x-aisa-operation-id: "fec-gov.records.committees"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.0005 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

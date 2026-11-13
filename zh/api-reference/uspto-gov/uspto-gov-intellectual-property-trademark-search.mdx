@@ -16,7 +16,7 @@ x-aisa-operation-id: "uspto-gov.intellectual-property.trademark-search"
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/uspto-gov.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -38,21 +38,94 @@ x-aisa-operation-id: "uspto-gov.intellectual-property.trademark-search"
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
             "value": {
-              "text": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "text": "example"
+              "classes": [
+                42
+              ],
+              "match": "phrase",
+              "size": 10,
+              "status": "registered",
+              "text": "firecrawl"
             }
           }
         },
         "schema": {
           "additionalProperties": true,
           "properties": {
+            "alive": {
+              "description": "Older live/dead filter: true is `status: live`, false is `status: dead`. Prefer `status`; when both are given they must agree.",
+              "type": "boolean",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "classes": {
+              "description": "Nice international classes; a mark matches when it lists any of them, e.g. `[41]` (education and entertainment) or `[9, 16, 41]` (books and publishing). Classes the registration has since deleted, shown as `(CANCELLED) IC 041`, still match, as on the site.",
+              "items": {
+                "type": "number"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "from": {
+              "default": 0,
+              "description": "Zero-based offset; pass the previous page's `next_from`.\n\nProvider reference: minimum 0; maximum 9900; default 0.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 9900,
+                "min": 0
+              }
+            },
+            "match": {
+              "description": "`basic`: the site's basic word-mark search (phrase or any word in the mark, phrase in the pseudo mark). `phrase`: only marks whose word mark or pseudo mark contains the text as a phrase, e.g. `galaxy sports` finds GALAXY SPORTS but not SPORTS GALAXY. Default: `phrase` for a quoted text, else `basic`.\n\nProvider reference: allowed values [\"basic\", \"phrase\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "basic",
+                  "phrase"
+                ]
+              }
+            },
+            "owner": {
+              "description": "Owner (applicant or registrant) name phrase, matched with up to two words between terms as the site's owner search does, e.g. `samsung electronics`.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "size": {
+              "default": 25,
+              "description": "size\n\nProvider reference: minimum 1; maximum 100; default 25.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 100,
+                "min": 1
+              }
+            },
+            "status": {
+              "description": "Status filter as the site defines it: `live` (registered or pending), `registered` (live with a registration number), `pending` (live application without one), `dead` (cancelled or abandoned), `cancelled` (dead with a cancellation date), `abandoned` (dead with an abandonment date). Omitted: all.\n\nProvider reference: allowed values [\"live\", \"registered\", \"pending\", \"dead\", \"cancelled\", \"abandoned\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "live",
+                  "registered",
+                  "pending",
+                  "dead",
+                  "cancelled",
+                  "abandoned"
+                ]
+              }
+            },
             "text": {
+              "description": "Word mark text to search, e.g. `firecrawl`. Wrapping it in double quotes (`\"night hand\"`) defaults `match` to `phrase`; the quotes are not sent.",
               "type": "string"
             }
           },
@@ -66,16 +139,6 @@ x-aisa-operation-id: "uspto-gov.intellectual-property.trademark-search"
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -89,15 +152,7 @@ x-aisa-operation-id: "uspto-gov.intellectual-property.trademark-search"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.0005 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

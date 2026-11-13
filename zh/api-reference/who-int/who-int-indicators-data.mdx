@@ -16,7 +16,7 @@ x-aisa-operation-id: "who-int.indicators.data"
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/who-int.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -38,22 +38,112 @@ x-aisa-operation-id: "who-int.indicators.data"
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
             "value": {
-              "indicator_code": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "indicator_code": "example"
+              "indicator_code": "WHOSIS_000001",
+              "page_size": 5,
+              "spatial_dims": [
+                "BRA"
+              ]
             }
           }
         },
         "schema": {
           "additionalProperties": true,
           "properties": {
+            "cursor": {
+              "description": "next_cursor from the previous page of the same filters and page_size.",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "dim1": {
+              "description": "Dim1 value codes, e.g. SEX_FMLE or AGEGROUP_YEARS0-4.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "dim2": {
+              "description": "dim2",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "dim3": {
+              "description": "dim3",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
             "indicator_code": {
+              "description": "GHO indicator code, e.g. WHOSIS_000001 (life expectancy at birth) or MDG_0000000001 (infant mortality rate). Pattern: ^[A-Za-z0-9_.+-]{1,64}$.",
               "type": "string"
+            },
+            "page_size": {
+              "default": 100,
+              "description": "Rows per page; the GHO server caps $top at 1000.\n\nProvider reference: minimum 1; maximum 1000; default 100.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 1000,
+                "min": 1
+              }
+            },
+            "spatial_dim_type": {
+              "description": "Restrict to one spatial level. Omit for all levels; spatial_dim_type on each record says which.\n\nProvider reference: allowed values [\"COUNTRY\", \"REGION\", \"WORLDBANKINCOMEGROUP\", \"GLOBAL\", \"null\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "COUNTRY",
+                  "REGION",
+                  "WORLDBANKINCOMEGROUP",
+                  "GLOBAL",
+                  "null"
+                ]
+              }
+            },
+            "spatial_dims": {
+              "description": "ISO3 country codes (BRA), WHO region codes (AFR), income-group codes (WB_HI) or GLOBAL.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "time_from": {
+              "description": "Inclusive first year (TimeDim ge).\n\nProvider reference: minimum 1000; maximum 9999.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 9999,
+                "min": 1000
+              }
+            },
+            "time_to": {
+              "description": "Inclusive last year (TimeDim le).\n\nProvider reference: minimum 1000; maximum 9999.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 9999,
+                "min": 1000
+              }
             }
           },
           "required": [
@@ -66,16 +156,6 @@ x-aisa-operation-id: "who-int.indicators.data"
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -89,15 +169,7 @@ x-aisa-operation-id: "who-int.indicators.data"
 
 ## 费用与请求规则
 
-按用量计费；默认请求预估费用：\$0.0005 USD（不是固定价格）。 声明的单位费率：每 provider_credit \$0.0001 USD。 最终费用以账户适用价格及实际结算为准。
+按实际用量收费。 默认请求预估费用：$0.0005 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
-
-- **默认请求参考估价（USD）:** 0.0005
-- **声明的单位费率（USD）:** 0.0001
-- **计费单位:** provider&#95;credit
-- **计费依据:** response&#95;units
-- **公开参考倍率:** 1.0
-- **结算证据来源:** response&#95;body
 
 {/* aisa-contract-details:end */}

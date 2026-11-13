@@ -16,7 +16,7 @@ x-aisa-operation-id: "cbssports-com.fantasy-sports-rankings.projections"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/cbssports-com.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,22 +38,72 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
             "value": {
-              "position": "example"
-            }
-          },
-          "minimal": {
-            "value": {
-              "position": "example"
+              "limit": 20,
+              "position": "K"
             }
           }
         },
         "schema": {
           "additionalProperties": true,
           "properties": {
+            "limit": {
+              "description": "Return only the top N rows. Omit for the whole table.\n\nProvider reference: minimum 1; maximum 200.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 200,
+                "min": 1
+              }
+            },
             "position": {
+              "description": "Football: QB, RB, WR, TE, K or DST (team defense and special teams). Basketball: PG, SG, SF, PF, C, or G (guards) and F (forwards).\n\nProvider reference: allowed values [\"QB\", \"RB\", \"WR\", \"TE\", \"K\", \"DST\", \"PG\", \"SG\", \"SF\", \"PF\", \"C\", \"G\", \"F\"].",
               "type": "string"
+            },
+            "scoring": {
+              "description": "Football only: PPR (a point per reception, the default) or STD (non-PPR). The site publishes no half-PPR tables. Omit for basketball, whose tables use CBS points scoring.\n\nProvider reference: allowed values [\"PPR\", \"STD\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "PPR",
+                  "STD"
+                ]
+              }
+            },
+            "sport": {
+              "default": "football",
+              "description": "football (default, NFL) or basketball (NBA). Positions, scoring and periods differ by sport; an option of the other sport is invalid_input.\n\nProvider reference: allowed values [\"football\", \"basketball\"]; default \"football\".",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "football",
+                  "basketball"
+                ]
+              }
+            },
+            "type": {
+              "description": "weekly or ros (rest of season). Defaults to weekly for football and ros for basketball.\n\nProvider reference: allowed values [\"weekly\", \"ros\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "weekly",
+                  "ros"
+                ]
+              }
+            },
+            "week": {
+              "description": "Weekly type only. Football: NFL week 1-18; omit for the current week. The site publishes the current and the next week; any other week is not_found. Basketball: a scoring period; the site publishes the next two; omit for the rest of the current period.\n\nProvider reference: minimum 1; maximum 30.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "max": 30,
+                "min": 1
+              }
             }
           },
           "required": [
@@ -66,16 +116,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -89,15 +129,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0005 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}

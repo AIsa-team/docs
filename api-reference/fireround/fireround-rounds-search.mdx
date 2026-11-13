@@ -16,7 +16,7 @@ x-aisa-operation-id: "fireround.rounds.search"
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/fireround.json)
 
-Effective request and pricing declaration (including authentication and referenced schemas):
+Effective request declaration (including authentication and referenced schemas):
 
 ```json
 {
@@ -38,24 +38,70 @@ Effective request and pricing declaration (including authentication and referenc
     "content": {
       "application/json": {
         "examples": {
-          "default": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
             "value": {
-              "limit": 1
-            }
-          },
-          "minimal": {
-            "value": {
-              "limit": 1
+              "limit": 2,
+              "q": "Firecrawl"
             }
           }
         },
         "schema": {
           "additionalProperties": true,
           "properties": {
+            "certainty": {
+              "description": "Only rounds of this certainty: announced (closed on the record), reported (said to have closed by a publisher citing unnamed sources), expected (still being raised), unconfirmed. Absent means every certainty but unconfirmed.\n\nProvider reference: allowed values [\"announced\", \"reported\", \"expected\", \"unconfirmed\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "oneOf": [
+                  "announced",
+                  "reported",
+                  "expected",
+                  "unconfirmed"
+                ]
+              }
+            },
+            "cursor": {
+              "description": "The `next_cursor` of the previous page, to read the next one under the same filters.",
+              "type": "string"
+            },
             "limit": {
+              "description": "Rounds per page, 1 to 50. Defaults to 20. Each round is a full record of about 1,500 characters, so read more with `cursor` rather than a larger page.\n\nProvider reference: minimum 1; maximum 50.",
               "maximum": 50,
               "minimum": 1,
               "type": "integer"
+            },
+            "min_usd": {
+              "description": "Rounds of at least this many million US dollars.\n\nProvider reference: minimum 0.",
+              "type": "number",
+              "x-alexandria-option-metadata": {
+                "min": 0
+              }
+            },
+            "q": {
+              "description": "Free text over company names, descriptions and investor names, for example `Sequoia` or `vector database`.",
+              "type": "string"
+            },
+            "sector": {
+              "description": "The company's sector, as fireround classifies it: ai, ai infrastructure, developer tools, data and analytics, cybersecurity, enterprise software, fintech, payments, insurtech, crypto, healthtech, biotech, medtech, climate, energy, mobility, robotics, hardware, semiconductors, quantum, space, defense, consumer, ecommerce, marketplace, media and gaming, edtech, hr tech, legal tech, proptech, logistics, agtech and food, manufacturing, other. Case and dashes don't matter and common other names work (`ai-infra`, `healthcare`, `dev tools`). A broad sector takes in its narrower ones, so one call covers them: `ai` includes ai infrastructure; `fintech` includes payments, insurtech and crypto; `climate` includes energy. The narrower word alone reads only that sector.",
+              "type": "string"
+            },
+            "since": {
+              "description": "Rounds announced on or after this day: a date (YYYY-MM-DD), a month (YYYY-MM, from its first day), today, yesterday, or a number of days back such as 7d or 30d. A date window also lists companies' earlier rounds (`history: true`).",
+              "type": "string"
+            },
+            "sort": {
+              "description": "amount: announced rounds first, then reported and expected (with provisional rounds) as one group; each group largest first, undisclosed amounts last. So a large reported round can sit below every announced one: for the biggest rounds of any certainty, read every page or filter by certainty. Absent is newest announced first.\n\nProvider reference: allowed values [\"amount\"].",
+              "type": "string",
+              "x-alexandria-option-metadata": {
+                "oneOf": [
+                  "amount"
+                ]
+              }
+            },
+            "stage": {
+              "description": "Comma-separated stages, any of: pre_seed, seed, pre_a, series_a, series_b, series_c, series_d_plus, growth, bridge, debt, grant, convertible, secondary, undisclosed, other, or the words for them. For example `series_a,series_b` or `Series A`.",
+              "type": "string"
             }
           },
           "required": [
@@ -68,16 +114,6 @@ Effective request and pricing declaration (including authentication and referenc
     "required": true
   },
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "cost_contract": "response_units",
-    "customer_multiplier": 1.0,
-    "customer_pricing": "provider_cost_multiplier",
-    "default_request_estimate_usd": 0.0005,
-    "estimate_source": "profile_seed",
-    "evidence_source": "response_body",
-    "unit": "provider_credit",
-    "unit_rate_usd": 0.0001
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -91,15 +127,7 @@ Effective request and pricing declaration (including authentication and referenc
 
 ## Cost and request rules
 
-Usage-based billing; Default request estimate: \$0.0005 USD (not a fixed price). Declared unit rate: \$0.0001 USD per provider_credit. Account-specific pricing and final settlement may differ.
+Usage-based pricing. Default request estimate: $0.0005 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
-Published reference values are not an account-specific quote or a settled charge. For endpoints supporting X-AISA-Cost-Mode: quote, obtain a free quote for your exact request before execution; reconcile the settled cost with response metadata and Usage Logs. USD amounts use 1,000,000 integer micro-USD per dollar.
-
-- **Default request reference estimate (USD):** 0.0005
-- **Declared unit rate (USD):** 0.0001
-- **Billing unit:** provider&#95;credit
-- **Cost contract:** response&#95;units
-- **Published reference multiplier:** 1.0
-- **Settlement evidence source:** response&#95;body
 
 {/* aisa-contract-details:end */}
