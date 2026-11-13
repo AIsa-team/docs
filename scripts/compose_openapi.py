@@ -88,6 +88,9 @@ def validate_payment_capabilities(operation: dict) -> None:
     if "x-aisa-capabilities" not in operation:
         return
     capabilities = operation["x-aisa-capabilities"]
+    # Go code-owned descriptors with no capabilities serialize a nil map.
+    if capabilities is None and operation.get("x-aisa-contract-source") == "handler":
+        return
     # Code-owned handlers publish scope/shape identity in this same Runtime
     # envelope. Preserve it without interpreting it as payment enablement.
     text_fields = {"max_price", "idempotency", "capability", "required_scope",
@@ -1177,7 +1180,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         # Runtime adds only the envelope; the payload comes from reviewed sources.
                         operation["responses"]["200"] = without_pagination_payload(operation["responses"]["200"])
                         runtime_responses = {**runtime_responses, "200": operation["responses"]["200"]}
-                    capabilities = operation.get("x-aisa-capabilities", {})
+                    capabilities = operation.get("x-aisa-capabilities") or {}
                     for payment in ("mpp", "x402"):
                         if payment + "_methods" in capabilities:
                             capabilities[payment] = (capabilities.get(payment) is True
@@ -1288,13 +1291,52 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     # Runtime explicitly attests unchanged response transport.
                     # This authority is independent from request validation and
                     # never discovers methods or contributes request fields.
-                    descriptor_present = any(k in runtime for k in ("x-aisa-response-passthrough", "x-aisa-response-upstream-path-sha256", "x-aisa-response-upstream-origin-sha256"))
+                    descriptor_present = any(k in runtime for k in ("x-aisa-response-passthrough", "x-aisa-response-upstream-path-sha256", "x-aisa-response-upstream-origin-sha256", "x-aisa-response-contract-hash", "x-aisa-response-contract-hashes"))
                     if descriptor_present:
                         response_operation, response_document = {}, {}
                         transport = runtime.get("x-aisa-response-passthrough")
                         path_hash = runtime.get("x-aisa-response-upstream-path-sha256")
                         origin_hash = runtime.get("x-aisa-response-upstream-origin-sha256")
-                        if type(transport) is not bool:
+                        commitments = runtime.get("x-aisa-response-contract-hashes", {})
+                        if not isinstance(commitments, dict):
+                            raise ValueError("invalid public response contract fingerprint map")
+                        commitment = commitments.get(actual_method.upper(), runtime.get("x-aisa-response-contract-hash"))
+                        if commitments and commitment is None:
+                            raise ValueError("missing method-specific public response contract fingerprint")
+                        if commitment is not None:
+                            operation.pop("x-aisa-response-contract-hashes", None)
+                            operation["x-aisa-response-contract-hash"] = commitment
+                        if commitment is not None:
+                            # Public replay binds the already selected response *content*,
+                            # never an enumerable supplier host/path hash. The first
+                            # internal pass still validates the private transport binding.
+                            selected = public_mirrors.get((public_path, actual_method), {})
+                            choices = selected.get("independent_response_candidates", [])
+                            if not choices and selected.get("source", {}).get("upstream_path_sha256"):
+                                choices = [selected]
+                            matches = []
+                            if not isinstance(commitment, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", commitment):
+                                response_error = "invalid public response contract fingerprint"
+                            else:
+                                for choice in ([] if commitment == digest({}) else choices):
+                                    candidate_source = choice["source"]
+                                    candidate_document = {"openapi": choice.get("openapi", "3.1.0"),
+                                                          "components": choice.get("response_components", {})}
+                                    candidate = source_success_responses(choice.get("response_operation", {}),
+                                        candidate_document, copy.deepcopy(output),
+                                        "response_" + digest(candidate_source)[7:19] + ".json", runtime_responses)
+                                    if digest(candidate) == commitment:
+                                        matches.append(choice)
+                                if len(matches) == 1:
+                                    selected_response = matches[0]
+                                    response_operation = selected_response.get("response_operation", {})
+                                    response_document = {"openapi": selected_response.get("openapi", "3.1.0"),
+                                                         "components": selected_response.get("response_components", {})}
+                                    response_source = selected_response["source"]
+                                    used_mirrors[f"response {actual_method} {public_path}"] = selected_response
+                                elif commitment != digest({}):
+                                    response_error = "public response contract fingerprint is missing or ambiguous in reviewed inputs"
+                        elif type(transport) is not bool:
                             response_error = "runtime response transport flag is missing or invalid"
                         elif transport is True:
                             selected = public_mirrors.get((public_path, actual_method), {})
@@ -1319,12 +1361,14 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         fresh = source_success_responses(response_operation, response_document, output, "response_" + digest(response_source)[7:19] + ".json", runtime_responses)
                     except (ValueError, KeyError, TypeError) as exc:
                         response_error = str(exc)
+                    if "x-aisa-response-passthrough" in runtime:
+                        operation["x-aisa-response-contract-hash"] = digest(fresh)
                     source_payloads = {}
                     if not editorial.get("description") and not mirror.get("description") and response_operation.get("description"):
                         operation["description"] = descriptive_text(editorial, runtime, response_operation)
                     response_identity = (facts_prefix + path, actual_method, operation_id)
                     old_responses = {} if descriptor_present else published_responses.get(response_identity, {})
-                    if fresh and "200" not in fresh and (runtime.get("x-aisa-passthrough") is True or runtime.get("x-aisa-response-passthrough") is True) and not has_response_payload(operation.get("responses", {}).get("200", {})):
+                    if fresh and "200" not in fresh and (runtime.get("x-aisa-passthrough") is True or runtime.get("x-aisa-response-passthrough") is True or operation.get("x-aisa-response-contract-hash")) and not has_response_payload(operation.get("responses", {}).get("200", {})):
                         operation.get("responses", {}).pop("200", None)
                         old_responses = {status: response for status, response in old_responses.items() if status != "200"}
                     for status in sorted(set(old_responses) | set(fresh)):

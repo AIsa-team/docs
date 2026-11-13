@@ -48,6 +48,14 @@ Public pages and their OpenAPI downloads use the customer projection. Internal
 formal files remain build inputs and are excluded from Mintlify for projected
 catalogs. Both generation and localization understand the projected page references.
 
+The publisher first matches private transport bindings against reviewed response
+sources. It then replaces those bindings with per-method fingerprints of the
+selected public response content and compiles again using these final public
+inputs. Consumers replay exactly those released inputs. Missing or changed
+response content cannot silently select another source, and an explicit empty
+selection cannot inherit an obsolete schema. This preserves byte-for-byte
+verification without publishing supplier host/path hashes.
+
 Rollout requires the Docs Composer code pin to be on main before the Services
 build can consume it. The reviewed input bundle and review receipt clocks are not
 renewed by this feature. New observations appear only after the updated API/worker
