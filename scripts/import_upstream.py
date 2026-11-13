@@ -19,7 +19,7 @@ from wrapper_twitter_reference import REFERENCE_URL as TWITTER_REFERENCE_URL, im
 from wrapper_cloudsway_reference import REFERENCE_URL as CLOUDSWAY_REFERENCE_URL, import_reference as import_cloudsway_reference
 from wrapper_cloudsway_full_reference import REFERENCE_URL as CLOUDSWAY_FULL_URL, import_reference as import_cloudsway_full_reference
 from source_governance import initial_policy
-from import_dataforseo_filters import SOURCE_URL as DATAFORSEO_URL, VERSION as DATAFORSEO_VERSION, normalize_filters, remove_duplicate_batch_examples
+from import_dataforseo_filters import SOURCE_URL as DATAFORSEO_URL, VERSION as DATAFORSEO_VERSION, normalize_filters, remove_duplicate_batch_examples, normalize_response_echo, normalize_polymorphic_responses, normalize_nullable_response_refs
 from source_json import loads as source_json_loads, checked_float, UnsupportedNumericPrecision
 
 
@@ -181,9 +181,18 @@ def import_source(provider, url):
             original_hash = digest(document)
             document, changed = normalize_filters(document)
             examples = remove_duplicate_batch_examples(document)
+            echoes = normalize_response_echo(document)
+            # Unions first: the null branch below would otherwise hide use sites.
+            polymorphic = normalize_polymorphic_responses(document)
+            nullable_refs = normalize_nullable_response_refs(document)
             metadata = {'converter': DATAFORSEO_VERSION, 'upstream_content_hash': original_hash,
                         'filter_json_fields_normalized': len(changed),
-                        'duplicate_batch_examples_removed': len(examples)}
+                        'duplicate_batch_examples_removed': len(examples),
+                        'response_echo_fields_normalized': len(echoes),
+                        'polymorphic_response_bases_opened': sum(kind == 'open_base' for kind, _ in polymorphic),
+                        'polymorphic_response_subtypes_tagged': sum(kind == 'tag_subtype' for kind, _ in polymorphic),
+                        'polymorphic_response_sites_normalized': sum(kind == 'union_site' for kind, _ in polymorphic),
+                        'nullable_response_refs_normalized': len(nullable_refs)}
         elif url == 'https://docs.polymarket.com/api-spec/relayer-openapi.yaml':
             # An ellipsis is not a usable EVM-address example. Keep the header,
             # pattern and all other declarations; never manufacture an address.
