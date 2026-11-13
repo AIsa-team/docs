@@ -6,6 +6,7 @@ import sys
 import unittest
 
 from jsonschema import Draft202012Validator
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
@@ -56,6 +57,28 @@ class KeepaResponseSourceTests(unittest.TestCase):
                 for suffix in ('path', 'origin'):
                     self.assertEqual(source[f'upstream_{suffix}_sha256'],
                                      operation[f'x-aisa-response-upstream-{suffix}-sha256'])
+
+    def test_bilingual_pages_resolve_to_reviewed_success_payloads(self):
+        documents = {}
+        for prefix in ('', 'zh/'):
+            pages = sorted((ROOT / prefix / 'api-reference/keepa').glob('*.mdx'))
+            self.assertEqual(len(pages), 13)
+            identities = set()
+            for page in pages:
+                with self.subTest(page=page.relative_to(ROOT).as_posix()):
+                    header = yaml.safe_load(page.read_text().split('---', 2)[1])
+                    name, method, path = header['openapi'].split()
+                    if name not in documents:
+                        documents[name] = json.loads((ROOT / name).read_text())
+                    operation = documents[name]['paths'][path][method.lower()]
+                    self.assertEqual(operation['operationId'], header['x-aisa-operation-id'])
+                    identities.add(operation['operationId'])
+                    schema = operation['responses']['200']['content']['application/json']['schema']
+                    self.assertEqual(schema.get('type'), 'object', 'The actual page still points at an empty response')
+                    self.assertIn('tokensConsumed', schema['properties'])
+                    self.assertIn('x-aisa-response-source', operation)
+                    Draft202012Validator.check_schema(schema)
+            self.assertEqual(len(identities), 13)
 
     def test_changed_transport_or_transformed_response_does_not_reuse_schema(self):
         for field, value in [('x-aisa-response-upstream-path-sha256', '0' * 64),
