@@ -165,16 +165,8 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
 
 
 def price_card_block(operation, language="en"):
-    """A managed price card; absent prices never become a headline warning."""
-    from customer_price_presentation import customer_price_card
-    if operation.get('x-aisa-status') == 'disabled':
-        return ''  # Historical prices stay with the explicit archive details.
-    card_summary = customer_price_card(operation.get('x-aisa-pricing') or {}, language)
-    if not card_summary:
-        return ''
-    if card_summary.count('$') >= 2:
-        card_summary = card_summary.replace('$', r'\$')
-    return '\n'.join((PRICE_CARD_BEGIN, '', '<Info>', card_summary, '</Info>', '', PRICE_CARD_END))
+    """Top-of-page price cards are retired; cost rules stay in the detail block."""
+    return ''
 
 
 def update_readable_block(text, operation, language="en", translate=None, **context):
@@ -192,8 +184,8 @@ def update_readable_block(text, operation, language="en", translate=None, **cont
             return text
         return text.rstrip() + "\n\n" + block + "\n"
     # Keep the authored endpoint explanation first. The managed request
-    # contract and detailed cost rules follow it; estimate-only cards are
-    # omitted to avoid repeating a non-fixed request estimate above the page.
+    # contract and detailed cost rules follow it; top price cards are retired
+    # so every billing rule has one detailed presentation location.
     header, body = split_frontmatter(text)
     body = body.rstrip()
     if block:

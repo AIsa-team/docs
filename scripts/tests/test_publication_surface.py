@@ -104,9 +104,8 @@ class PublicationSurfaceTests(unittest.TestCase):
                     validate_surfaces(self.root)
                 page.write_text(original)
 
-    def test_missing_or_stale_top_price_card_fails_publication(self):
+    def test_top_price_cards_are_rejected_from_publication(self):
         from readable_contract_notes import PRICE_CARD_BEGIN, PRICE_CARD_END
-        import re
         document = json.loads((self.root / 'openapi/fixture.json').read_text())
         document['paths']['/one']['get']['x-aisa-pricing'] = {
             'customer_pricing': 'fixed_success', 'default_request_estimate_usd': .012}
@@ -119,12 +118,14 @@ class PublicationSurfaceTests(unittest.TestCase):
         for prefix in ('', 'zh/'):
             page = self.root / (prefix + 'api-reference/fixture/one.mdx')
             original = page.read_text()
-            removed = re.sub(re.escape(PRICE_CARD_BEGIN) + r'.*?' + re.escape(PRICE_CARD_END), '', original, flags=re.S)
-            for changed in (original.replace('$0.012', '$0.099', 1), removed):
-                page.write_text(changed)
-                with self.assertRaisesRegex(ValueError, 'price card differs'):
-                    validate_surfaces(self.root)
-                page.write_text(original)
+            injected = original.replace(
+                '{/* aisa-contract-details:start */}',
+                PRICE_CARD_BEGIN + '\n\n<Info>Legacy card</Info>\n\n' + PRICE_CARD_END
+                + '\n{/* aisa-contract-details:start */}', 1)
+            page.write_text(injected)
+            with self.assertRaisesRegex(ValueError, 'price card differs'):
+                validate_surfaces(self.root)
+            page.write_text(original)
 
     def test_disabled_legacy_pages_leave_navigation_and_search_without_changing_schemas(self):
         from pull_openapi import refresh_legacy_page_blocks

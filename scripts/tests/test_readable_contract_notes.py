@@ -85,15 +85,15 @@ class ReadableNotesTests(unittest.TestCase):
         self.assertIn('0.15', updated)
         self.assertEqual(update_readable_block(updated, changed), updated)
 
-    def test_price_card_is_only_published_for_known_customer_amounts(self):
+    def test_top_price_cards_are_not_published(self):
         prose = '---\ntitle: Test\n---\n\nEndpoint overview.\n\n## Example\n\nExample request.\n'
         known = {'operationId': 'known', 'x-aisa-pricing': {'kind': 'fixed_request', 'customer_micros_usd': 14760,
                                                             'estimate_source': 'configured_fixed_price'}}
         context = {'document': {'paths': {'/known': {'get': known}}}, 'method': 'get',
                    'path': '/known', 'spec_path': 'openapi/test.json'}
         rendered = update_readable_block(prose, known, **context)
-        self.assertIn('aisa-price-card:start', rendered)
-        self.assertIn('<Info>', rendered)
+        self.assertNotIn('aisa-price-card:start', rendered)
+        self.assertNotIn('<Info>', rendered)
         self.assertIn('$0.01476 USD per completed job', rendered)
         self.assertLess(rendered.index('Endpoint overview.'), rendered.index('Cost and request rules'))
         self.assertLess(rendered.index('Request contract'), rendered.index('Cost and request rules'))
@@ -125,14 +125,13 @@ class ReadableNotesTests(unittest.TestCase):
         self.assertEqual(rendered.count('No additional charge for this operation.'), 1)
         self.assertIn('## Cost and request rules', rendered)
 
-    def test_multi_price_cards_use_literal_dollars_and_hide_disabled_tariffs(self):
+    def test_top_price_cards_are_removed_for_multi_price_and_disabled_tariffs(self):
         from readable_contract_notes import price_card_block
         from test_customer_price_presentation import SOCIAL_PRICING
         op = {'x-aisa-pricing': copy.deepcopy(SOCIAL_PRICING)}
         for language in ('en', 'zh'):
             card = price_card_block(op, language)
-            for amount in (r'\$0.015', r'\$0.200', r'\$0.01'):
-                self.assertIn(amount, card)
+            self.assertEqual(card, '')
         op['x-aisa-status'] = 'disabled'
         self.assertEqual(price_card_block(op), '')
 
