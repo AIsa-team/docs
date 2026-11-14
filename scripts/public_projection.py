@@ -15,9 +15,9 @@ receivers copy those exact bytes. Formal aggregate hashes remain the publication
 authority and are not substituted with customer projection hashes.
 
 Paths, schemas, customer prices and status retain their declarations. In-scope
-request examples are public only when their Runtime evidence verifies the exact
-scenario; unverified inputs and generated Reference samples remain in the formal
-source for replay, while public descriptions and response schemas stay available.
+request examples remain available as static documentation. Runtime evidence marks
+whether a scenario has been verified; only generated Reference samples require
+that verification. Public descriptions and response schemas stay available.
 Internal price construction and revision references are removed; generated
 pricing prose is rebuilt from the public pricing fields. ``info.x-aisa-document.document_hash`` is recomputed over
 the projected document; the formal hash it replaces is kept as
@@ -49,7 +49,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 CATALOGS = ROOT / 'scripts/public_projection.json'
 PUBLIC_DIR = 'openapi-public'
-PROJECTION_VERSION = '3'
+PROJECTION_VERSION = '4'
 
 # Removed at any depth. The first five are the G3 fields of the design; the
 # upstream route and selector name the supplier-side endpoint shape.
@@ -136,35 +136,28 @@ def evidence_scope():
     return frozenset(json.loads(source.read_text())['operations'])
 
 
-def withhold_unverified_examples(operation):
+def mark_example_verification(operation, language="en"):
     from playground_examples import apply_example_verification, verification_state
     state = verification_state(operation)
     if state is not None and state[0] == 'verified':
         return
     if state is None:
         operation['x-aisa-example'] = {'state': 'pending', 'reason': 'no_evidence'}
+    elif operation['x-aisa-example'].get('state') == 'verified':
+        operation['x-aisa-example'] = {'state': 'pending', 'reason': state[1]}
     previous = operation.get('x-aisa-verification', {})
     apply_example_verification(operation)
     from playground_examples import PENDING_REASONS
     if state and state[1] == 'no_evidence' and previous.get('reason') in PENDING_REASONS:
         operation['x-aisa-verification']['reason'] = previous['reason']
 
-    def remove_examples(node):
-        if isinstance(node, dict):
-            for key in ('example', 'examples'):
-                node.pop(key, None)
-            for key, value in node.items():
-                # Property names and wire defaults are data, not annotations.
-                if key in {'properties', '$defs', 'definitions', 'patternProperties'} and isinstance(value, dict):
-                    for schema in value.values():
-                        remove_examples(schema)
-                elif key not in {'default', 'enum', 'const'}:
-                    remove_examples(value)
-        elif isinstance(node, list):
-            for value in node:
-                remove_examples(value)
-    remove_examples(operation.get('parameters', []))
-    remove_examples(operation.get('requestBody', {}))
+    # Mintlify renders the operation description, not arbitrary extensions.
+    # Keep the evidence label visible beside the retained static examples.
+    from readable_contract_notes import PENDING_NOTICE_EN, PENDING_NOTICE_ZH
+    notice = PENDING_NOTICE_ZH if language == 'zh' else PENDING_NOTICE_EN
+    description = operation.get('description', '')
+    if notice not in description:
+        operation['description'] = (description.rstrip() + '\n\n' + notice).lstrip()
 
 
 def project(document, language="en"):
@@ -177,7 +170,7 @@ def project(document, language="en"):
                 add_price_summary(operation, language)
             if method in {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'} and isinstance(operation, dict):
                 if 'x-aisa-example' in operation or method.upper() + ' ' + route in evidence_scope():
-                    withhold_unverified_examples(operation)
+                    mark_example_verification(operation, language)
     info = projected.get('info')
     meta = info.get('x-aisa-document') if isinstance(info, dict) else None
     if isinstance(meta, dict):

@@ -10,10 +10,10 @@ END = "{/* aisa-contract-details:end */}"
 # Spec #1285 R1: shown when Runtime has no current production evidence for
 # this operation's request example (x-aisa-verification.state == pending).
 PENDING_NOTICE_EN = ("> **Request example pending verification.** The request example for this endpoint has not yet "
-                     "been verified in production, so no reference example is shown. Confirm your parameters with a "
+                     "been verified in production. Static examples describe the request format; replace sample values with your own. Check the estimated price with a "
                      "free quote request (`X-AISA-Cost-Mode: quote`) before running it.")
-PENDING_NOTICE_ZH = ("> **请求示例待验证。** 此接口的请求示例尚未在生产环境验证，因此不显示参考示例。"
-                     "请先用免费的报价模式（`X-AISA-Cost-Mode: quote`）确认参数，再正式调用。")
+PENDING_NOTICE_ZH = ("> **请求示例待验证。** 此接口的请求示例尚未在生产环境验证。静态示例用于说明请求格式，请替换为自己的参数。"
+                     "正式调用前，可用免费的报价模式（`X-AISA-Cost-Mode: quote`）查看预估费用。")
 
 
 def strip_generated_block(text):

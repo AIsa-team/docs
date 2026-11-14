@@ -148,6 +148,17 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertEqual((g3['status'], g3['public_projection']), ('failed', 'checked'))
         self.assertIn('PV02', {row['rule'] for row in g3['provenance']})
 
+    def test_static_examples_do_not_require_production_evidence(self):
+        tree = self.tree({'/apis/v1/widgets/search': {'get': operation(value='example.com', verified=False)}})
+        report = tree.run()
+        self.assertEqual(report['gates']['G3']['status'], 'passed')
+        self.assertEqual(report['gates']['G4']['status'], 'passed')
+        public = json.loads((tree.root / 'openapi-public/widgets.json').read_text())
+        op = public['paths']['/apis/v1/widgets/search']['get']
+        self.assertEqual(op['parameters'][0]['examples']['default']['value'], 'example.com')
+        self.assertEqual(op['x-aisa-verification']['state'], 'pending')
+        self.assertNotIn('x-codeSamples', op)
+
     def test_g3_projection_must_cover_scope_and_be_current(self):
         tree = self.tree()
         g3 = tree.run()['gates']['G3']

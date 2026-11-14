@@ -57,7 +57,7 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual(operation['responses']['200']['content']['application/json']['schema']['properties'],
                          {'id': {'type': 'string', 'description': 'Widget id.'}})
         meta = projected['info']['x-aisa-document']
-        self.assertEqual(meta['public_projection'], {'version': '3', 'source_document_hash': 'sha256:' + 'b' * 64})
+        self.assertEqual(meta['public_projection'], {'version': '4', 'source_document_hash': 'sha256:' + 'b' * 64})
         unhashed = json.loads(json.dumps(projected))
         unhashed['info']['x-aisa-document'].pop('document_hash')
         self.assertEqual(meta['document_hash'], public_projection.digest(unhashed))
@@ -143,23 +143,48 @@ class ProjectionTests(unittest.TestCase):
             self.assertIn('openapi-public/openapi.yaml', publication_hashes(root))
             self.assertIn('openapi-public/openapi.json', publication_hashes(root))
 
-    def test_pending_public_examples_preserve_static_schema_and_response(self):
+    def test_pending_public_examples_preserve_static_inputs_schema_and_response(self):
         import copy
         source = formal_catalog()
         op = source['paths']['/apis/v1/widgets/search']['get']
         op['x-aisa-example'] = {'state': 'pending', 'reason': 'no_evidence'}
         op['description'] = 'Reviewed static explanation.'
         op['parameters'][0]['schema']['default'] = 'wire-default'
+        op['requestBody'] = {'content': {'application/json': {
+            'example': {'query': 'example.com'},
+            'schema': {'type': 'object', 'properties': {'query': {'type': 'string', 'example': 'example.com'}}}}}}
         op['x-codeSamples'] = [{'lang': 'text', 'label': 'Reference example', 'source': 'unverified request'}]
         original = copy.deepcopy(source)
         public = public_projection.project(source)['paths']['/apis/v1/widgets/search']['get']
         self.assertNotIn('x-codeSamples', public)
-        self.assertNotIn('examples', public['parameters'][0])
+        self.assertEqual(public['parameters'], op['parameters'])
+        self.assertEqual(public['requestBody'], op['requestBody'])
         self.assertEqual(public['parameters'][0]['schema']['default'], 'wire-default')
-        self.assertEqual(public['description'], 'Reviewed static explanation.')
+        self.assertTrue(public['description'].startswith('Reviewed static explanation.\n\n'))
+        self.assertIn('Static examples describe the request format', public['description'])
         self.assertEqual(public['x-aisa-verification']['reason'], 'no_evidence')
         self.assertIn('200', public['responses'])
         self.assertEqual(source, original)
+
+    def test_changed_verified_input_is_retained_but_not_presented_as_verified(self):
+        from playground_examples import example_scenario, example_sha256
+        source = formal_catalog()
+        op = source['paths']['/apis/v1/widgets/search']['get']
+        op['x-aisa-example'] = {'state': 'verified', 'sha256': example_sha256(example_scenario(op))}
+        op['parameters'][0]['examples']['default']['value'] = 'changed.example.com'
+        op['x-codeSamples'] = [{'lang': 'text', 'label': 'Reference example', 'source': 'old request'}]
+        public = public_projection.project(source)['paths']['/apis/v1/widgets/search']['get']
+        self.assertEqual(public['parameters'], op['parameters'])
+        self.assertEqual(public['x-aisa-verification'], {'state': 'pending', 'reason': 'contract_changed'})
+        self.assertEqual(public['x-aisa-example']['state'], 'pending')
+        self.assertNotIn('x-codeSamples', public)
+
+    def test_static_example_verification_notice_is_localized(self):
+        source = formal_catalog()
+        source['paths']['/apis/v1/widgets/search']['get']['x-aisa-example'] = {'state': 'pending', 'reason': 'no_evidence'}
+        public = public_projection.project(source, 'zh')['paths']['/apis/v1/widgets/search']['get']
+        self.assertIn('静态示例用于说明请求格式', public['description'])
+        self.assertNotIn('Static examples', public['description'])
 
     def test_catalog_list_validation(self):
         with tempfile.TemporaryDirectory() as directory:

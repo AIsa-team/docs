@@ -12,7 +12,7 @@ exits 1 and the publication is neither exported nor pushed:
 * G2 vocabulary: customer-visible text of in-scope public projections, their pages,
   llms.txt and docs.json contain no supplier term, internal note or upstream
   hash text (vocab_scan.py).
-* G3 forbidden content: no placeholder values in in-scope request examples or
+* G3 forbidden content: no placeholder values in verified request examples or
   Reference examples; no provenance field names in rendered pages or llms.txt;
   the public projection openapi-public/ (public_projection.py) exists for
   every in-scope catalog, equals a fresh projection of openapi/, and holds no
@@ -21,7 +21,8 @@ exits 1 and the publication is neither exported nor pushed:
   `x-aisa-example` record with state `verified` and the same example SHA256.
 
 A missing example is not a fault: such operations are listed as pending with
-a reason and still published (Runtime/composer withhold their examples).
+a reason and still published. Static request examples do not need production
+evidence; only generated Reference examples are withheld while pending.
 
 In scope are the operations Runtime marks with `x-aisa-example` plus the
 reviewed inventory in scripts/release_gate_scope.json.
@@ -260,14 +261,17 @@ def run(root=ROOT, *, facts_dir=None, scope_path=SCOPE, exclusions_path=EXCLUSIO
         for index, source in enumerate(sources):
             for rule in placeholder_hits(strip_reference_header(source)):
                 placeholders.append({'location': f'{location}#{pointer}/x-codeSamples/{index}', 'rule': rule})
-        for where, value in example_values(operation):
-            text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
-            for rule in placeholder_hits(text):
-                placeholders.append({'location': f'{location}#{pointer}/{where}', 'rule': rule})
         marker = operation.get('x-aisa-example') if isinstance(operation.get('x-aisa-example'), dict) else None
         operation_id = operation.get('operationId')
         verified = (marker is not None and marker.get('state') == 'verified'
                     and marker.get('sha256') == example_sha256(example_scenario(operation)))
+        # Static request examples may use illustrative values. A claim of
+        # production verification still requires real, matching evidence.
+        if marker and marker.get('state') == 'verified':
+            for where, value in example_values(operation):
+                text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+                for rule in placeholder_hits(text):
+                    placeholders.append({'location': f'{location}#{pointer}/{where}', 'rule': rule})
         if sources and not verified:
             evidence.append({'location': f'{location}#{pointer}', 'operation_id': operation_id,
                              'reason': 'reference_example_without_verified_evidence' if marker is None or marker.get('state') != 'verified'
