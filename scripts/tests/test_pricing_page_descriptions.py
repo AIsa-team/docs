@@ -88,6 +88,7 @@ class PublishedPricingDescriptionTests(unittest.TestCase):
         operation['x-aisa-pricing'] = {'kind': 'fixed_request', 'customer_micros_usd': 100,
                                       'variants': {'twitter': {'kind': 'fixed_request',
                                                                'customer_micros_usd': 15000}}}
+        operation['x-aisa-status'] = 'disabled'
         operation.pop('x-aisa-docs-url', None)
         account = {'operationId': 'accountUsage', 'summary': 'Account usage',
                    'responses': {'200': {'description': 'Usage records'}}}
@@ -108,8 +109,12 @@ class PublishedPricingDescriptionTests(unittest.TestCase):
             for prefix, unavailable in (('', 'Billing method unavailable.'), ('zh/', '计费方式暂不可用。')):
                 self.assertEqual((self.root / f'reference-contracts/{prefix}reference.json').read_bytes(), raw)
                 page = (self.root / f'{prefix}api-reference/messages.mdx').read_text()
-                self.assertIn('$0.0001', page)
-                self.assertIn('$0.015', page)
+                self.assertIn('Historical archive: disabled, cannot be called, and no price is published.'
+                              if not prefix else '历史归档接口：已停用，不可调用，价格未发布。', page)
+                self.assertNotIn('$0.0001', page)
+                self.assertNotIn('$0.015', page)
+                self.assertNotIn('aisa-pricing:start', page)
+                self.assertNotIn('aisa-pricing:end', page)
                 self.assertNotIn(OLD_REFERENCE_NOTE, page)
                 self.assertIn('Manual usage instructions.', page)
                 header, _ = split_frontmatter(page)

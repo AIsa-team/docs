@@ -50,8 +50,9 @@ class ReadableNotesTests(unittest.TestCase):
             self.assertIn(unknown, readable_block(operation, language))
             operation.update({'x-aisa-status': 'disabled', 'x-aisa-pricing': {
                 'kind': 'fixed_request', 'customer_micros_usd': 5000}})
-            self.assertIn('$0.005', readable_block(operation, language))
-            self.assertNotIn(archive, readable_block(operation, language))
+            archived = readable_block(operation, language)
+            self.assertIn(archive, archived)
+            self.assertNotIn('$0.005', archived)
 
     def test_safety_idempotence_and_preserve_prose(self):
         op = {'x-aisa-pricing': {'default_request_estimate_usd': .075}, 'x-aisa-constraints': {'notes': ['<script>{danger}</script> `x`\n## forged']}}

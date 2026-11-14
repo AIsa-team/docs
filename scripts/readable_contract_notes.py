@@ -99,8 +99,8 @@ def request_details(operation, document, method, path, spec_path, language="en")
     if "x-aisa-status" in operation:
         lines.append("- **" + t("Availability", "可用状态") + ":** " + safe(operation["x-aisa-status"]))
     if operation.get("x-aisa-status") == "disabled":
-        lines += ["", t("**This endpoint is disabled and cannot be called. Its historical request, schema and pricing declarations are retained for reference.**",
-                        "**此接口已停用，无法调用。历史请求、schema 和价格声明仅保留供参考。**"), ""]
+        lines += ["", t("**This endpoint is disabled and cannot be called. Its historical request and schema details are retained for reference; pricing is not published.**",
+                        "**此接口已停用，无法调用。历史请求和 schema 仅保留供参考，当前未发布价格。**"), ""]
     for limitation in request.get("x-aisa-documentation-limitations", []):
         lines.append("- **" + t("Incomplete historical declaration (disabled)", "未启用的历史声明不完整") + ":** " + safe(limitation))
     for server in request["servers"]:
@@ -124,13 +124,12 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
     zh = language == "zh"
     def t(en, cn): return cn if zh else en
     pricing = operation.get("x-aisa-pricing") or {}
-    # Historical disabled operations may legitimately have no runtime tariff.
-    # Keep that absence out of the machine contract while still giving the
-    # archive page an explicit customer-facing unavailable-price explanation.
-    # Legacy labels describe a cost tier, not a published price or billing rule.
-    # Keep unknown modern declarations distinct from this known historical shape.
-    legacy_labels = isinstance(pricing, dict) and set(pricing) <= {"cost_tier", "model"}
-    if operation.get("x-aisa-status") == "disabled" and (not pricing or legacy_labels):
+    # A disabled operation is an archive regardless of whether an old
+    # x-aisa-pricing object survived in the historical contract.  That object
+    # is provenance for internal review, not a current customer tariff.
+    # Always replace it in the presentation layer so archived pages cannot
+    # publish stale amounts after regeneration.
+    if operation.get("x-aisa-status") == "disabled":
         pricing = {"kind": "unpriced"}
     elif not pricing and (document is not None or operation.get("operationId") or "x-aisa-status" in operation):
         # Preserved references can have no Runtime tariff at all. Say so in
