@@ -41,7 +41,7 @@ def git_changed_paths(root, base, head='HEAD', merge_base=False):
 
 
 def requires_artifact_check(paths):
-    return any(path.startswith(('openapi/', 'api-reference/', 'zh/api-reference/',
+    return any(path.startswith(('openapi/', 'openapi-public/', 'api-reference/', 'zh/api-reference/',
                                'docs/publication/',
                                'docs/current-source-review-20261009/', 'docs/schema-inputs/'))
                or path in ('llms.txt', 'discovery/openapi.json', 'openapi.yaml', 'docs.json', 'api-reference.mdx',

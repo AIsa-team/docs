@@ -273,3 +273,79 @@ def compare_contracts(previous, updated):
             if report['status'] == 'declarations_unchanged':
                 report['status'] = 'uncertain'
     return report
+
+
+# Spec #1285 R1: classify request-surface drift of an upstream declaration.
+# Only public operation ids and public field names are reported; never a
+# source URL, revision or declaration text.
+DRIFT_KINDS = ('required_added', 'type_changed', 'any_of_added', 'field_removed')
+# Drift kinds that make an operation's published example unsafe until reviewed.
+BLOCKING_DRIFT = frozenset({'required_added', 'type_changed'})
+
+
+def _request_fields(view):
+    """{field name: (required, type, has_any_of)} of the public request view."""
+    fields = {}
+    for parameter in view['request']['parameters']:
+        schema = parameter.get('schema') or {}
+        fields[parameter['name']] = (parameter.get('required') is True, schema.get('type'),
+                                     bool(schema.get('anyOf') or schema.get('oneOf')))
+    body = view['request']['body'] or {}
+    for media in (body.get('content') or {}).values():
+        schema = (media or {}).get('schema') or {}
+        required = set(schema.get('required') or []) if isinstance(schema.get('required'), list) else set()
+        for name, child in (schema.get('properties') or {}).items():
+            child = child if isinstance(child, dict) else {}
+            fields[name] = (name in required, child.get('type'), bool(child.get('anyOf') or child.get('oneOf')))
+        if schema.get('anyOf') or schema.get('oneOf'):
+            fields['(body)'] = (True, schema.get('type'), True)
+    return fields
+
+
+def classify_drift(previous, updated):
+    """Return sorted drift rows [{operation_id, path, method, kind, field}] for shared operations."""
+    before, _ = operations(previous)
+    after, _ = operations(updated)
+    rows = []
+    for key in sorted(before.keys() & after.keys()):
+        path, method = key
+        old, new = _request_fields(before[key]), _request_fields(after[key])
+        operation_id = after[key]['identity'].get('operationId') or before[key]['identity'].get('operationId')
+        def add(kind, field):
+            rows.append({'operation_id': operation_id, 'path': path, 'method': method.upper(),
+                         'kind': kind, 'field': field})
+        for name in sorted(new.keys() | old.keys()):
+            if name not in new:
+                add('field_removed', name)
+                continue
+            required, kind, any_of = new[name]
+            if name not in old:
+                if required:
+                    add('required_added', name)
+                if any_of:
+                    add('any_of_added', name)
+                continue
+            was_required, old_kind, had_any_of = old[name]
+            if required and not was_required:
+                add('required_added', name)
+            if kind != old_kind and old_kind is not None and kind is not None:
+                add('type_changed', name)
+            if any_of and not had_any_of:
+                add('any_of_added', name)
+    return rows
+
+
+def drift_document(rows, previous_drift=None, *, now):
+    """Merge drift rows into upstream-drift.json, keeping first_seen_at for unresolved rows."""
+    seen = {}
+    for row in (previous_drift or {}).get('operations', []):
+        seen[(row.get('operation_id'), row.get('kind'), row.get('field'))] = row.get('first_seen_at')
+    operations_out = []
+    for row in rows:
+        catalog = row['path'].split('/')[3] if row['path'].startswith('/apis/v1/') and row['path'].count('/') >= 3 else None
+        key = (row['operation_id'], row['kind'], row['field'])
+        operations_out.append({'operation_id': row['operation_id'], 'catalog': catalog, 'method': row['method'],
+                               'path': row['path'], 'kind': row['kind'], 'field': row['field'],
+                               'first_seen_at': seen.get(key) or now})
+    operations_out.sort(key=lambda r: (r['catalog'] or '', r['operation_id'] or '', r['kind'], r['field']))
+    return {'schema_version': 1, 'generated_at': now, 'operations': operations_out}

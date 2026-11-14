@@ -82,7 +82,7 @@ def localize(node, labels: dict[str, str]):
 
 
 OPENAPI_LINE = re.compile(
-    r"^openapi:\s*['\"]?(?:openapi|reference-contracts)/([^\s'\"]+)\.json\s+\w+\s+([^\s'\"]+)", re.M
+    r"^openapi:\s*['\"]?(?:openapi(?:-public)?|reference-contracts)/([^\s'\"]+)\.json\s+\w+\s+([^\s'\"]+)", re.M
 )
 
 

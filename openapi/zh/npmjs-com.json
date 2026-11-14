@@ -1,20 +1,20 @@
 {
   "components": {
-    "callbacks": {},
-    "examples": {},
-    "headers": {},
-    "links": {},
-    "parameters": {},
-    "pathItems": {},
-    "requestBodies": {},
-    "responses": {},
-    "schemas": {},
     "securitySchemes": {
       "bearerAuth": {
         "scheme": "bearer",
         "type": "http"
       }
-    }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
   },
   "info": {
     "description": "",
@@ -26,34 +26,6 @@
       "quote": {
         "header": "X-AISA-Cost-Mode",
         "value": "quote"
-      }
-    },
-    "x-aisa-catalogs": {
-      "npmjs-com": {
-        "description": "",
-        "title": "npm",
-        "x-aisa-capabilities": {
-          "idempotency": "Idempotency-Key",
-          "max_price": "X-AISA-Max-Price-USD",
-          "quote": {
-            "header": "X-AISA-Cost-Mode",
-            "value": "quote"
-          }
-        },
-        "x-aisa-document": {
-          "facts_hash": "090e10b87f0146362150a48edba4e83663def219679f4c26de799d96828541c9",
-          "generator_version": "3",
-          "protocol_version": "1",
-          "schema_version": "1"
-        },
-        "x-aisa-plans": {
-          "builder": 1.0,
-          "display_plan": "payg",
-          "payg": 1.0,
-          "similarweb_payg": 1.0,
-          "team": 1.0,
-          "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
-        }
       }
     },
     "x-aisa-configured-paths": [
@@ -68,13 +40,13 @@
       "/apis/v1/npmjs-com/packages/suggest-packages"
     ],
     "x-aisa-document": {
-      "composer_version": "29",
-      "document_hash": "sha256:3ab898bd1992243fd9cd43143d7d9b627d47ba382b39d3ecde1ea8a7b20503fe",
       "facts_hash": "090e10b87f0146362150a48edba4e83663def219679f4c26de799d96828541c9",
       "generator_version": "3",
       "protocol_version": "1",
+      "schema_version": "1",
+      "composer_version": "31",
       "response_pending": [],
-      "schema_version": "1"
+      "document_hash": "sha256:00891aa48c4718c5d2bff71030155c91f8739226a9889b7614ddd52148afda98"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -84,7 +56,35 @@
       "team": 1.0,
       "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
     },
-    "x-aisa-provider": "npmjs-com"
+    "x-aisa-provider": "npmjs-com",
+    "x-aisa-catalogs": {
+      "npmjs-com": {
+        "title": "npm",
+        "description": "",
+        "x-aisa-document": {
+          "facts_hash": "090e10b87f0146362150a48edba4e83663def219679f4c26de799d96828541c9",
+          "generator_version": "3",
+          "protocol_version": "1",
+          "schema_version": "1"
+        },
+        "x-aisa-plans": {
+          "builder": 1.0,
+          "display_plan": "payg",
+          "payg": 1.0,
+          "similarweb_payg": 1.0,
+          "team": 1.0,
+          "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
+        },
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          }
+        }
+      }
+    }
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",
@@ -94,8 +94,30 @@
         "description": "Chart or trend a package's downloads day by day; periods up to 18 months per request.",
         "operationId": "npmjs-com.packages.get-download-range",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "package": {
+                    "type": "string",
+                    "description": "Package name as on npm, e.g. `express` or `@types/node` (scoped names unencoded). Pattern: ^(@[A-Za-z0-9~-][A-Za-z0-9._~-]*/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*$."
+                  },
+                  "period": {
+                    "type": "string",
+                    "description": "`last-day`, `last-week`, `last-month`, `last-year`, a single `YYYY-MM-DD` or a `YYYY-MM-DD:YYYY-MM-DD` range (npm caps ranges at 18 months). Counts lag the current day by 1-3 days. Pattern: ^(last-day|last-week|last-month|last-year|[0-9]{4}-[0-9]{2}-[0-9]{2}(:[0-9]{4}-[0-9]{2}-[0-9]{2})?)$.\n\nProvider reference: default \"last-month\".",
+                    "default": "last-month",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                },
+                "required": [
+                  "package"
+                ]
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -104,40 +126,25 @@
                     "period": "last-week"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "package": {
-                    "description": "Package name as on npm, e.g. `express` or `@types/node` (scoped names unencoded). Pattern: ^(@[A-Za-z0-9~-][A-Za-z0-9._~-]*/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*$.",
-                    "type": "string"
-                  },
-                  "period": {
-                    "default": "last-month",
-                    "description": "`last-day`, `last-week`, `last-month`, `last-year`, a single `YYYY-MM-DD` or a `YYYY-MM-DD:YYYY-MM-DD` range (npm caps ranges at 18 months). Counts lag the current day by 1-3 days. Pattern: ^(last-day|last-week|last-month|last-year|[0-9]{4}-[0-9]{2}-[0-9]{2}(:[0-9]{4}-[0-9]{2}-[0-9]{2})?)$.\n\nProvider reference: default \"last-month\".",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  }
-                },
-                "required": [
-                  "package"
-                ],
-                "type": "object"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "Daily download counts for one package over a period (`api.npmjs.org/downloads/range/{period}/{name}`): one row per day plus the period total.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `days` | object[] | In date order as the API returns them. |\n| `end` | string |  |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `package` | string |  |\n| `period` | string |  |\n| `source_url` | string |  |\n| `start` | string |  |\n| `total` | number | Sum of the daily counts. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "days": [
                         {
@@ -178,16 +185,9 @@
                       "total": 101489586
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Daily download counts for one package over a period (`api.npmjs.org/downloads/range/{period}/{name}`): one row per day plus the period total.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `days` | object[] | In date order as the API returns them. |\n| `end` | string |  |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `package` | string |  |\n| `period` | string |  |\n| `source_url` | string |  |\n| `start` | string |  |\n| `total` | number | Sum of the daily counts. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -205,17 +205,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-get-download-range",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -231,54 +229,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:3d2162835ab114d198048ffa3af891d5bd6e270faa6be2e57e5a4070ee0278f5",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "3955bced4f9c"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "npmjs-com.packages.get-download-range",
+          "method": "POST",
           "path": "/apis/v1/npmjs-com/packages/get-download-range"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:3d2162835ab114d198048ffa3af891d5bd6e270faa6be2e57e5a4070ee0278f5"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-get-download-range"
       }
     },
     "/apis/v1/npmjs-com/packages/get-downloads": {
@@ -286,8 +286,33 @@
         "description": "Compare popularity of a few packages or get the weekly/monthly/yearly download total of one; use `get_download_range` for a daily series.",
         "operationId": "npmjs-com.packages.get-downloads",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "packages": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array",
+                    "description": "1-128 package names."
+                  },
+                  "period": {
+                    "type": "string",
+                    "description": "`last-day`, `last-week`, `last-month`, `last-year`, a single `YYYY-MM-DD` or a `YYYY-MM-DD:YYYY-MM-DD` range (npm caps ranges at 18 months). Counts lag the current day by 1-3 days. Pattern: ^(last-day|last-week|last-month|last-year|[0-9]{4}-[0-9]{2}-[0-9]{2}(:[0-9]{4}-[0-9]{2}-[0-9]{2})?)$.\n\nProvider reference: default \"last-week\".",
+                    "default": "last-week",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                },
+                "required": [
+                  "packages"
+                ]
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -299,43 +324,25 @@
                     "period": "last-week"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "packages": {
-                    "description": "1-128 package names.",
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": "array"
-                  },
-                  "period": {
-                    "default": "last-week",
-                    "description": "`last-day`, `last-week`, `last-month`, `last-year`, a single `YYYY-MM-DD` or a `YYYY-MM-DD:YYYY-MM-DD` range (npm caps ranges at 18 months). Counts lag the current day by 1-3 days. Pattern: ^(last-day|last-week|last-month|last-year|[0-9]{4}-[0-9]{2}-[0-9]{2}(:[0-9]{4}-[0-9]{2}-[0-9]{2})?)$.\n\nProvider reference: default \"last-week\".",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  }
-                },
-                "required": [
-                  "packages"
-                ],
-                "type": "object"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "Download counts for one or more packages over a period from npm's downloads API (`api.npmjs.org/downloads/point/{period}/{names}`). Unscoped names are fetched in one bulk request; scoped names (`@scope/name`) one request each, as the API requires. A package the API does not know is reported with null counts when several are asked, and as `not_found` when it is the only one.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `period` | string |  |\n| `results` | object[] | One entry per requested package, in request order. |\n| `source_urls` | string[] |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "observed_at_ms": 1790282745703,
                       "period": "last-week",
@@ -358,16 +365,9 @@
                       ]
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Download counts for one or more packages over a period from npm's downloads API (`api.npmjs.org/downloads/point/{period}/{names}`). Unscoped names are fetched in one bulk request; scoped names (`@scope/name`) one request each, as the API requires. A package the API does not know is reported with null counts when several are asked, and as `not_found` when it is the only one.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `period` | string |  |\n| `results` | object[] | One entry per requested package, in request order. |\n| `source_urls` | string[] |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -385,17 +385,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-get-downloads",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -411,54 +409,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:2920ab70c6edde9d31e16f9e03b2ba45504285acafd4d51f867571f4b1f96e41",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "dd206250dc2a"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "npmjs-com.packages.get-downloads",
+          "method": "POST",
           "path": "/apis/v1/npmjs-com/packages/get-downloads"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:2920ab70c6edde9d31e16f9e03b2ba45504285acafd4d51f867571f4b1f96e41"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-get-downloads"
       }
     },
     "/apis/v1/npmjs-com/packages/get-package": {
@@ -466,8 +466,43 @@
         "description": "Look up an npm package by name or pasted npmjs.com URL: what it is, who maintains it, which versions exist and which tag points where. Use `get_package_version` for one version's dependencies and tarball.",
         "operationId": "npmjs-com.packages.get-package",
         "requestBody": {
+          "required": false,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "include_readme": {
+                    "type": "boolean",
+                    "description": "Also return the README markdown (often tens of KB).",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "include_versions": {
+                    "type": "boolean",
+                    "description": "Also return `versions[]` (one entry per published version; thousands for long-lived packages).",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Package name as on npm, e.g. `express` or `@types/node` (scoped names unencoded). Pattern: ^(@[A-Za-z0-9~-][A-Za-z0-9._~-]*/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "A pasted https://www.npmjs.com/package/{name} URL; alternative to `name`.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                }
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -475,53 +510,25 @@
                     "name": "express"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "include_readme": {
-                    "description": "Also return the README markdown (often tens of KB).",
-                    "type": "boolean",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  },
-                  "include_versions": {
-                    "description": "Also return `versions[]` (one entry per published version; thousands for long-lived packages).",
-                    "type": "boolean",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  },
-                  "name": {
-                    "description": "Package name as on npm, e.g. `express` or `@types/node` (scoped names unencoded). Pattern: ^(@[A-Za-z0-9~-][A-Za-z0-9._~-]*/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*$.",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  },
-                  "url": {
-                    "description": "A pasted https://www.npmjs.com/package/{name} URL; alternative to `name`.",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  }
-                },
-                "type": "object"
               }
             }
-          },
-          "required": false
+          }
         },
         "responses": {
           "200": {
+            "description": "One package's registry document (`registry.npmjs.org/{name}`): identity, description, license, homepage, repository and bug tracker, keywords, author and maintainers, every dist-tag, the latest version and its publish time, creation and last-modified times, the version count and how many versions are deprecated. Optionally every version with publish time, license and deprecation notice, and the README.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `author` | string | Author name as published. |\n| `bugs_url` | string |  |\n| `created` | string |  |\n| `deprecated_version_count` | number |  |\n| `description` | string |  |\n| `dist_tags` | object[] | npm dist-tags (`latest`, `next`, ...) and the version each points at. |\n| `homepage` | string |  |\n| `keywords` | string[] |  |\n| `latest_published_at` | string | ISO 8601 time the `latest` version was published. |\n| `latest_version` | string |  |\n| `license` | string | SPDX expression or license name as published for the latest version. |\n| `maintainers` | string[] |  |\n| `modified` | string |  |\n| `name` | string |  |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `package_url` | string |  |\n| `readme` | string | Only with `include_readme`. |\n| `repository_url` | string | Repository URL exactly as published (often `git+https://...`). |\n| `scope` | string | `@scope` for scoped packages, null otherwise. |\n| `source_url` | string |  |\n| `version_count` | number |  |\n| `versions` | object[] | Only with `include_versions`; in the registry's order. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "author": "TJ Holowaychuk",
                       "bugs_url": "https://github.com/expressjs/express/issues",
@@ -571,16 +578,9 @@
                       "version_count": 289
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "One package's registry document (`registry.npmjs.org/{name}`): identity, description, license, homepage, repository and bug tracker, keywords, author and maintainers, every dist-tag, the latest version and its publish time, creation and last-modified times, the version count and how many versions are deprecated. Optionally every version with publish time, license and deprecation notice, and the README.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `author` | string | Author name as published. |\n| `bugs_url` | string |  |\n| `created` | string |  |\n| `deprecated_version_count` | number |  |\n| `description` | string |  |\n| `dist_tags` | object[] | npm dist-tags (`latest`, `next`, ...) and the version each points at. |\n| `homepage` | string |  |\n| `keywords` | string[] |  |\n| `latest_published_at` | string | ISO 8601 time the `latest` version was published. |\n| `latest_version` | string |  |\n| `license` | string | SPDX expression or license name as published for the latest version. |\n| `maintainers` | string[] |  |\n| `modified` | string |  |\n| `name` | string |  |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `package_url` | string |  |\n| `readme` | string | Only with `include_readme`. |\n| `repository_url` | string | Repository URL exactly as published (often `git+https://...`). |\n| `scope` | string | `@scope` for scoped packages, null otherwise. |\n| `source_url` | string |  |\n| `version_count` | number |  |\n| `versions` | object[] | Only with `include_versions`; in the registry's order. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -598,17 +598,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-get-package",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -624,54 +622,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:07431eea9b9f10742f112016627d709ccd8fb0ae98118e8330d22e9b77094fd7",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "b5caaabcc8fa"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "npmjs-com.packages.get-package",
+          "method": "POST",
           "path": "/apis/v1/npmjs-com/packages/get-package"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:07431eea9b9f10742f112016627d709ccd8fb0ae98118e8330d22e9b77094fd7"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-get-package"
       }
     },
     "/apis/v1/npmjs-com/packages/get-package-version": {
@@ -679,8 +679,37 @@
         "description": "Resolve exactly what `name@version` (or `name@latest`, `name@next`) installs: its dependencies, engines, tarball and integrity hash.",
         "operationId": "npmjs-com.packages.get-package-version",
         "requestBody": {
+          "required": false,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Package name as on npm, e.g. `express` or `@types/node` (scoped names unencoded). Pattern: ^(@[A-Za-z0-9~-][A-Za-z0-9._~-]*/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "A pasted https://www.npmjs.com/package/{name}/v/{version} URL; alternative to `name` + `version`.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "version": {
+                    "type": "string",
+                    "description": "A version (`4.18.2`) or dist-tag (`latest`, `next`). Default `latest`. Pattern: ^[A-Za-z0-9][A-Za-z0-9.+_-]*$.\n\nProvider reference: default \"latest\".",
+                    "default": "latest",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                }
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -689,47 +718,25 @@
                     "version": "4.18.2"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "name": {
-                    "description": "Package name as on npm, e.g. `express` or `@types/node` (scoped names unencoded). Pattern: ^(@[A-Za-z0-9~-][A-Za-z0-9._~-]*/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*$.",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  },
-                  "url": {
-                    "description": "A pasted https://www.npmjs.com/package/{name}/v/{version} URL; alternative to `name` + `version`.",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  },
-                  "version": {
-                    "default": "latest",
-                    "description": "A version (`4.18.2`) or dist-tag (`latest`, `next`). Default `latest`. Pattern: ^[A-Za-z0-9][A-Za-z0-9.+_-]*$.\n\nProvider reference: default \"latest\".",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  }
-                },
-                "type": "object"
               }
             }
-          },
-          "required": false
+          }
         },
         "responses": {
           "200": {
+            "description": "One published version (or dist-tag) of a package from the registry (`registry.npmjs.org/{name}/{version}`): description, license, deprecation notice, entry points, engines, runtime/dev/peer/optional dependencies with their ranges, install-script flag, tarball URL with shasum, integrity, file count and unpacked size, publisher and git commit.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `bugs_url` | string |  |\n| `dependencies` | object[] |  |\n| `deprecated` | string | Deprecation notice, or null. |\n| `description` | string |  |\n| `dev_dependencies` | object[] |  |\n| `dist` | object |  |\n| `engines` | object[] |  |\n| `git_head` | string |  |\n| `has_install_script` | boolean | The registry's `hasInstallScript` flag (false when absent). |\n| `homepage` | string |  |\n| `keywords` | string[] |  |\n| `license` | string |  |\n| `main` | string | `main` entry point as published. |\n| `name` | string |  |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `optional_dependencies` | object[] |  |\n| `package_url` | string | https://www.npmjs.com/package/{name}/v/{version} |\n| `peer_dependencies` | object[] |  |\n| `published_by` | string | npm username that published this version. |\n| `repository_url` | string |  |\n| `source_url` | string |  |\n| `types` | string | `types`/`typings` entry as published. |\n| `version` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "bugs_url": "https://github.com/expressjs/express/issues",
                       "dependencies": [
@@ -972,16 +979,9 @@
                       "version": "4.18.2"
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "One published version (or dist-tag) of a package from the registry (`registry.npmjs.org/{name}/{version}`): description, license, deprecation notice, entry points, engines, runtime/dev/peer/optional dependencies with their ranges, install-script flag, tarball URL with shasum, integrity, file count and unpacked size, publisher and git commit.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `bugs_url` | string |  |\n| `dependencies` | object[] |  |\n| `deprecated` | string | Deprecation notice, or null. |\n| `description` | string |  |\n| `dev_dependencies` | object[] |  |\n| `dist` | object |  |\n| `engines` | object[] |  |\n| `git_head` | string |  |\n| `has_install_script` | boolean | The registry's `hasInstallScript` flag (false when absent). |\n| `homepage` | string |  |\n| `keywords` | string[] |  |\n| `license` | string |  |\n| `main` | string | `main` entry point as published. |\n| `name` | string |  |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `optional_dependencies` | object[] |  |\n| `package_url` | string | https://www.npmjs.com/package/{name}/v/{version} |\n| `peer_dependencies` | object[] |  |\n| `published_by` | string | npm username that published this version. |\n| `repository_url` | string |  |\n| `source_url` | string |  |\n| `types` | string | `types`/`typings` entry as published. |\n| `version` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -999,17 +999,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-get-package-version",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -1025,54 +1023,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:3cb1ae351ad2dbebacef30366695da0e2b3453edecf1bdc2fa446fc7c49693b1",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "dbba826179f0"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "npmjs-com.packages.get-package-version",
+          "method": "POST",
           "path": "/apis/v1/npmjs-com/packages/get-package-version"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:3cb1ae351ad2dbebacef30366695da0e2b3453edecf1bdc2fa446fc7c49693b1"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-get-package-version"
       }
     },
     "/apis/v1/npmjs-com/packages/get-version-downloads": {
@@ -1080,8 +1080,22 @@
         "description": "See which versions of a package are actually installed this week (major-version adoption, whether a deprecated line is still in use).",
         "operationId": "npmjs-com.packages.get-version-downloads",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "package": {
+                    "type": "string",
+                    "description": "Package name as on npm, e.g. `express` or `@types/node` (scoped names unencoded). Pattern: ^(@[A-Za-z0-9~-][A-Za-z0-9._~-]*/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*$."
+                  }
+                },
+                "required": [
+                  "package"
+                ]
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -1089,32 +1103,25 @@
                     "package": "express"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "package": {
-                    "description": "Package name as on npm, e.g. `express` or `@types/node` (scoped names unencoded). Pattern: ^(@[A-Za-z0-9~-][A-Za-z0-9._~-]*/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*$.",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "package"
-                ],
-                "type": "object"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "Last-week download counts per published version of one package (`api.npmjs.org/versions/{name}/last-week`, the only period npm serves), sorted by downloads descending, with the total. An unknown package is `not_found` (checked against the registry, because the API answers an empty map for both unknown packages and packages with no downloads).\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `package` | string |  |\n| `period` | string |  |\n| `source_url` | string |  |\n| `total` | number |  |\n| `versions` | object[] | Descending by downloads, then by version string; empty when npm counted no downloads. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "observed_at_ms": 1790282768052,
                       "package": "express",
@@ -2281,16 +2288,9 @@
                       ]
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Last-week download counts per published version of one package (`api.npmjs.org/versions/{name}/last-week`, the only period npm serves), sorted by downloads descending, with the total. An unknown package is `not_found` (checked against the registry, because the API answers an empty map for both unknown packages and packages with no downloads).\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `package` | string |  |\n| `period` | string |  |\n| `source_url` | string |  |\n| `total` | number |  |\n| `versions` | object[] | Descending by downloads, then by version string; empty when npm counted no downloads. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -2308,17 +2308,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-get-version-downloads",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -2334,54 +2332,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:cd7d6e419b8a6c6818910e4e1bb6c584e5eb538f673908148cbc165874a729a2",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "a7f602bc2a89"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "npmjs-com.packages.get-version-downloads",
+          "method": "POST",
           "path": "/apis/v1/npmjs-com/packages/get-version-downloads"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:cd7d6e419b8a6c6818910e4e1bb6c584e5eb538f673908148cbc165874a729a2"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-get-version-downloads"
       }
     },
     "/apis/v1/npmjs-com/packages/list-dependents": {
@@ -2389,8 +2389,29 @@
         "description": "Find who uses a package (recent adopters, plugins, wrappers); the total dependents count is in `search_packages` results.",
         "operationId": "npmjs-com.packages.list-dependents",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "cursor": {
+                    "type": "string",
+                    "description": "`next_cursor` from a previous page (offset in items). Pattern: ^[0-9]+$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "package": {
+                    "type": "string",
+                    "description": "Package name as on npm, e.g. `express` or `@types/node` (scoped names unencoded). Pattern: ^(@[A-Za-z0-9~-][A-Za-z0-9._~-]*/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*$."
+                  }
+                },
+                "required": [
+                  "package"
+                ]
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -2398,39 +2419,25 @@
                     "package": "express"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "cursor": {
-                    "description": "`next_cursor` from a previous page (offset in items). Pattern: ^[0-9]+$.",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  },
-                  "package": {
-                    "description": "Package name as on npm, e.g. `express` or `@types/node` (scoped names unencoded). Pattern: ^(@[A-Za-z0-9~-][A-Za-z0-9._~-]*/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*$.",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "package"
-                ],
-                "type": "object"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "Packages that depend on a package, most recently published first, from npmjs.com's dependents listing (`/browse/depended/{name}?offset=`): 36 per page with latest version, description, publisher, maintainers, dist-tags and publish time. `cursor` is the offset of the next page. An unknown package is `not_found` (checked against the registry, because the listing answers an empty page for both unknown packages and packages without dependents). Served from a public cache of up to 4 hours.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `dependents` | object[] |  |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `offset` | number |  |\n| `package` | string |  |\n| `page_size` | number | Items per page as the site paginates (36 observed). |\n| `source_url` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "dependents": [
                         {
@@ -3093,16 +3100,9 @@
                       "source_url": "https://www.npmjs.com/browse/depended/express?offset=0"
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Packages that depend on a package, most recently published first, from npmjs.com's dependents listing (`/browse/depended/{name}?offset=`): 36 per page with latest version, description, publisher, maintainers, dist-tags and publish time. `cursor` is the offset of the next page. An unknown package is `not_found` (checked against the registry, because the listing answers an empty page for both unknown packages and packages without dependents). Served from a public cache of up to 4 hours.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `dependents` | object[] |  |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `offset` | number |  |\n| `package` | string |  |\n| `page_size` | number | Items per page as the site paginates (36 observed). |\n| `source_url` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -3120,17 +3120,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-list-dependents",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -3146,54 +3144,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:143a49696b891fceb4c2df0ff9d6d1c929265eb51b64f0daa24bb242618edacf",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "a7aebf7f7b76"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "npmjs-com.packages.list-dependents",
+          "method": "POST",
           "path": "/apis/v1/npmjs-com/packages/list-dependents"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:143a49696b891fceb4c2df0ff9d6d1c929265eb51b64f0daa24bb242618edacf"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-list-dependents"
       }
     },
     "/apis/v1/npmjs-com/packages/list-owner-packages": {
@@ -3201,8 +3201,38 @@
         "description": "List everything a maintainer or an organization publishes; provide exactly one of `user` or `org`.",
         "operationId": "npmjs-com.packages.list-owner-packages",
         "requestBody": {
+          "required": false,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "org": {
+                    "type": "string",
+                    "description": "npm organization (scope without `@`), as in `https://www.npmjs.com/org/{org}`. Pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "page": {
+                    "type": "number",
+                    "description": "0-based page of 25 packages.\n\nProvider reference: minimum 0; default 0.",
+                    "default": 0,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 0
+                    }
+                  },
+                  "user": {
+                    "type": "string",
+                    "description": "npm username, as in `https://www.npmjs.com/~{user}`. Pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                }
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -3210,48 +3240,25 @@
                     "org": "expressjs"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "org": {
-                    "description": "npm organization (scope without `@`), as in `https://www.npmjs.com/org/{org}`. Pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$.",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  },
-                  "page": {
-                    "default": 0,
-                    "description": "0-based page of 25 packages.\n\nProvider reference: minimum 0; default 0.",
-                    "type": "number",
-                    "x-alexandria-option-metadata": {
-                      "in": "body",
-                      "min": 0
-                    }
-                  },
-                  "user": {
-                    "description": "npm username, as in `https://www.npmjs.com/~{user}`. Pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$.",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  }
-                },
-                "type": "object"
               }
             }
-          },
-          "required": false
+          }
         },
         "responses": {
           "200": {
+            "description": "Packages maintained by a user (`npmjs.com/~{user}`) or owned by an organization (`npmjs.com/org/{org}`): the owner record (type, name, full name or GitHub handle, creation time), the total and one page of 25 packages with latest version, description, publisher, maintainers, dist-tags, publish, creation and update times and npm's high-impact flag. `page` is 0-based; the site's pagination reports whether a next page exists. Served from a public cache of up to 4 hours.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `owner` | object |  |\n| `packages` | object[] |  |\n| `page` | number |  |\n| `per_page` | number |  |\n| `source_url` | string |  |\n| `total` | number | Packages the owner has, across pages. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "observed_at_ms": 1790282776644,
                       "owner": {
@@ -3885,16 +3892,9 @@
                       "total": 72
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Packages maintained by a user (`npmjs.com/~{user}`) or owned by an organization (`npmjs.com/org/{org}`): the owner record (type, name, full name or GitHub handle, creation time), the total and one page of 25 packages with latest version, description, publisher, maintainers, dist-tags, publish, creation and update times and npm's high-impact flag. `page` is 0-based; the site's pagination reports whether a next page exists. Served from a public cache of up to 4 hours.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `owner` | object |  |\n| `packages` | object[] |  |\n| `page` | number |  |\n| `per_page` | number |  |\n| `source_url` | string |  |\n| `total` | number | Packages the owner has, across pages. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -3912,17 +3912,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-list-owner-packages",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -3938,54 +3936,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:c9e384512f50d7f19d21b4aa0f2f76ae14c1679c29216983f719e7362bfe046b",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "da566deb0dc0"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "npmjs-com.packages.list-owner-packages",
+          "method": "POST",
           "path": "/apis/v1/npmjs-com/packages/list-owner-packages"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:c9e384512f50d7f19d21b4aa0f2f76ae14c1679c29216983f719e7362bfe046b"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-list-owner-packages"
       }
     },
     "/apis/v1/npmjs-com/packages/search-packages": {
@@ -3993,8 +3993,39 @@
         "description": "Find npm packages by words, keyword, author or scope before looking one up by name; the registry returns up to 250 hits per page and reports the total.",
         "operationId": "npmjs-com.packages.search-packages",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "cursor": {
+                    "type": "string",
+                    "description": "`next_cursor` from a previous page (the registry `from` offset). Pattern: ^[0-9]+$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "Search text; qualifiers such as `keywords:cli author:sindresorhus` are passed through unchanged."
+                  },
+                  "size": {
+                    "type": "number",
+                    "description": "Hits per page (registry maximum 250).\n\nProvider reference: minimum 1; maximum 250; default 20.",
+                    "default": 20,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 250
+                    }
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -4003,49 +4034,25 @@
                     "size": 5
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "cursor": {
-                    "description": "`next_cursor` from a previous page (the registry `from` offset). Pattern: ^[0-9]+$.",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  },
-                  "query": {
-                    "description": "Search text; qualifiers such as `keywords:cli author:sindresorhus` are passed through unchanged.",
-                    "type": "string"
-                  },
-                  "size": {
-                    "default": 20,
-                    "description": "Hits per page (registry maximum 250).\n\nProvider reference: minimum 1; maximum 250; default 20.",
-                    "type": "number",
-                    "x-alexandria-option-metadata": {
-                      "in": "body",
-                      "max": 250,
-                      "min": 1
-                    }
-                  }
-                },
-                "required": [
-                  "query"
-                ],
-                "type": "object"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "Full-text package search on the npm registry (`registry.npmjs.org/-/v1/search`): every hit with its latest version, description, keywords, license, publisher and maintainers, publish date, links, weekly and monthly downloads, dependents count and npm's quality/popularity/maintenance score. Supports the registry's query qualifiers (`keywords:cli`, `author:sindresorhus`, `scope:types`, `not:deprecated`, `is:unstable`). Pages of `size` hits; `cursor` is the offset of the next page.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `query` | string |  |\n| `results` | object[] |  |\n| `source_url` | string |  |\n| `total` | number | Total hits the registry reports for the query. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "observed_at_ms": 1790282701720,
                       "query": "express",
@@ -4238,16 +4245,9 @@
                       "total": 75961
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Full-text package search on the npm registry (`registry.npmjs.org/-/v1/search`): every hit with its latest version, description, keywords, license, publisher and maintainers, publish date, links, weekly and monthly downloads, dependents count and npm's quality/popularity/maintenance score. Supports the registry's query qualifiers (`keywords:cli`, `author:sindresorhus`, `scope:types`, `not:deprecated`, `is:unstable`). Pages of `size` hits; `cursor` is the offset of the next page.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `query` | string |  |\n| `results` | object[] |  |\n| `source_url` | string |  |\n| `total` | number | Total hits the registry reports for the query. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -4265,17 +4265,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-search-packages",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -4291,54 +4289,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:506691f5938c0c139111c5ccab5aec03ef713a9c0917d48bd08f849cad680f53",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "5286d2c043ca"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "npmjs-com.packages.search-packages",
+          "method": "POST",
           "path": "/apis/v1/npmjs-com/packages/search-packages"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:506691f5938c0c139111c5ccab5aec03ef713a9c0917d48bd08f849cad680f53"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-search-packages"
       }
     },
     "/apis/v1/npmjs-com/packages/suggest-packages": {
@@ -4346,8 +4346,22 @@
         "description": "Resolve a partial or misspelled package name to real package names quickly; use `search_packages` for full result pages.",
         "operationId": "npmjs-com.packages.suggest-packages",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "Prefix or words typed so far, e.g. `react-rout`."
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -4355,32 +4369,25 @@
                     "query": "react-rout"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "query": {
-                    "description": "Prefix or words typed so far, e.g. `react-rout`.",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "query"
-                ],
-                "type": "object"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "Typeahead suggestions from npmjs.com (`/search/suggestions?q=`): the handful of packages the site proposes for a prefix, each with latest version, description, publisher, publish date, weekly/monthly downloads and dependents count.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `query` | string |  |\n| `source_url` | string |  |\n| `suggestions` | object[] | Empty when npm has no suggestion for the text. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "observed_at_ms": 1790282711039,
                       "query": "react-rout",
@@ -4454,16 +4461,9 @@
                       ]
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Typeahead suggestions from npmjs.com (`/search/suggestions?q=`): the handful of packages the site proposes for a prefix, each with latest version, description, publisher, publish date, weekly/monthly downloads and dependents count.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `observed_at_ms` | number | Milliseconds since the Unix epoch when the source answered. |\n| `query` | string |  |\n| `source_url` | string |  |\n| `suggestions` | object[] | Empty when npm has no suggestion for the text. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -4481,17 +4481,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-suggest-packages",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -4507,54 +4505,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:026172a82cc72e657d0064272beddf0175f442890d837783808057e907c97fab",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "7fd4a62f4a82"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "npmjs-com",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "npmjs-com.packages.suggest-packages",
+          "method": "POST",
           "path": "/apis/v1/npmjs-com/packages/suggest-packages"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:026172a82cc72e657d0064272beddf0175f442890d837783808057e907c97fab"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/npmjs-com/npmjs-com-packages-suggest-packages"
       }
     }
   },

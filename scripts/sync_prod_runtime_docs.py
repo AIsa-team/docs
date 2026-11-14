@@ -90,7 +90,7 @@ def scope_presentation(candidate, summary):
     for base in ('api-reference', 'zh/api-reference'):
         for page in (candidate / base).rglob('*.mdx'):
             text = page.read_text()
-            match = re.search(r"^openapi:\s*['\"]?(openapi/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", text, re.M)
+            match = re.search(r"^openapi:\s*['\"]?(openapi(?:-public)?/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", text, re.M)
             if not match:
                 continue
             name, method, path = match.groups()

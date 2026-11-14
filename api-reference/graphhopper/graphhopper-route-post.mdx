@@ -12,7 +12,6 @@ x-aisa-operation-id: "graphhopper.route-post"
 - **Method and path:** POST /apis/v1/graphhopper/route-post
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/graphhopper/route-post`
-- **Runtime facts:** 6a72f8e2fa7fb1c29379e3b24b3a247c8428a3b6ed621b3f84f84e75cb0de2bc
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/graphhopper.json)
 
@@ -35,56 +34,72 @@ Effective request declaration (including authentication and referenced schemas):
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
         "schema": {
+          "type": "object",
           "properties": {
+            "debug": {
+              "type": "boolean",
+              "default": false,
+              "description": "Enable formatted debug output"
+            },
+            "locale": {
+              "type": "string",
+              "default": "en",
+              "description": "Locale for turn instructions"
+            },
+            "points": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "maxItems": 10,
+              "minItems": 2,
+              "type": "array",
+              "description": "Ordered list of [lon, lat] pairs for route waypoints; at least two points required"
+            },
+            "details": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "List of path detail keys (e.g., 'street_name','surface','max_speed')"
+            },
+            "profile": {
+              "enum": [
+                "car"
+              ],
+              "type": "string",
+              "description": "Vehicle profile (e.g., 'car', 'bike', 'foot')"
+            },
+            "headings": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "description": "Preferred headings in degrees; requires ch.disable=true"
+            },
+            "optimize": {
+              "enum": [
+                false
+              ],
+              "type": "boolean",
+              "description": "Reorder points to minimize travel time"
+            },
             "algorithm": {
-              "description": "Special routing mode; requires ch.disable=true",
               "enum": [
                 "round_trip",
                 "alternative_route"
               ],
-              "type": "string"
-            },
-            "alternative_route": {
-              "additionalProperties": false,
-              "description": "Parameters for alternative routes; requires algorithm='alternative_route'",
-              "properties": {
-                "max_paths": {
-                  "default": 2,
-                  "description": "Max number of alternatives; requires algorithm='alternative_route'",
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "max_share_factor": {
-                  "default": 0.6,
-                  "description": "Max share factor vs optimal; requires algorithm='alternative_route'",
-                  "maximum": 1,
-                  "minimum": 0,
-                  "type": "number"
-                },
-                "max_weight_factor": {
-                  "default": 1.4,
-                  "description": "Max weight factor vs optimal; requires algorithm='alternative_route'",
-                  "minimum": 0,
-                  "type": "number"
-                }
-              },
-              "type": "object"
-            },
-            "calc_points": {
-              "default": true,
-              "description": "Include full route geometry",
-              "type": "boolean"
-            },
-            "ch.disable": {
-              "default": false,
-              "description": "Enable flexible mode for custom_model and advanced options",
-              "type": "boolean"
+              "type": "string",
+              "description": "Special routing mode; requires ch.disable=true"
             },
             "curbsides": {
-              "description": "Curbside to approach/leave each point",
+              "type": "array",
               "items": {
                 "enum": [
                   "any",
@@ -93,142 +108,102 @@ Effective request declaration (including authentication and referenced schemas):
                 ],
                 "type": "string"
               },
-              "type": "array"
-            },
-            "custom_model": {
-              "additionalProperties": false,
-              "description": "Custom routing rules; requires ch.disable=true",
-              "properties": {
-                "areas": {
-                  "additionalProperties": true,
-                  "description": "GeoJSON FeatureCollection for custom areas; requires ch.disable=true",
-                  "type": "object"
-                },
-                "distance_influence": {
-                  "description": "Influence of distance on custom cost; requires ch.disable=true",
-                  "type": "number"
-                },
-                "priority": {
-                  "description": "Customize priorities per model rule; requires ch.disable=true",
-                  "items": {
-                    "additionalProperties": true,
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "speed": {
-                  "description": "Customize speeds per model rule; requires ch.disable=true",
-                  "items": {
-                    "additionalProperties": true,
-                    "type": "object"
-                  },
-                  "type": "array"
-                }
-              },
-              "type": "object"
-            },
-            "debug": {
-              "default": false,
-              "description": "Enable formatted debug output",
-              "type": "boolean"
-            },
-            "details": {
-              "description": "List of path detail keys (e.g., 'street_name','surface','max_speed')",
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
+              "description": "Curbside to approach/leave each point"
             },
             "elevation": {
+              "type": "boolean",
               "default": false,
-              "description": "Include altitude in geometry",
-              "type": "boolean"
+              "description": "Include altitude in geometry"
             },
-            "heading_penalty": {
-              "default": 300,
-              "description": "Penalty (s) for deviating from heading; requires ch.disable=true",
-              "minimum": 0,
-              "type": "integer"
+            "ch.disable": {
+              "type": "boolean",
+              "default": false,
+              "description": "Enable flexible mode for custom_model and advanced options"
             },
-            "headings": {
-              "description": "Preferred headings in degrees; requires ch.disable=true",
-              "items": {
-                "type": "integer"
+            "round_trip": {
+              "type": "object",
+              "properties": {
+                "seed": {
+                  "type": "integer",
+                  "description": "Random seed for deterministic round trip; requires algorithm='round_trip'"
+                },
+                "distance": {
+                  "type": "integer",
+                  "default": 10000,
+                  "minimum": 0,
+                  "description": "Approximate round-trip length in meters; requires algorithm='round_trip'"
+                }
               },
-              "type": "array"
+              "description": "Parameters for round trip; requires algorithm='round_trip'",
+              "additionalProperties": false
             },
-            "instructions": {
+            "calc_points": {
+              "type": "boolean",
               "default": true,
-              "description": "Include turn-by-turn instructions",
-              "type": "boolean"
-            },
-            "locale": {
-              "default": "en",
-              "description": "Locale for turn instructions",
-              "type": "string"
-            },
-            "optimize": {
-              "description": "Reorder points to minimize travel time",
-              "enum": [
-                false
-              ],
-              "type": "boolean"
-            },
-            "pass_through": {
-              "default": false,
-              "description": "Avoid u-turns at via points; requires ch.disable=true",
-              "type": "boolean"
+              "description": "Include full route geometry"
             },
             "point_hints": {
-              "description": "Optional street hints; one per point",
+              "type": "array",
               "items": {
                 "type": "string"
               },
-              "type": "array"
+              "description": "Optional street hints; one per point"
             },
-            "points": {
-              "description": "Ordered list of [lon, lat] pairs for route waypoints; at least two points required",
-              "items": {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              "maxItems": 10,
-              "minItems": 2,
-              "type": "array"
-            },
-            "points_encoded": {
-              "default": true,
-              "description": "Use polyline encoding for geometry",
-              "type": "boolean"
-            },
-            "profile": {
-              "description": "Vehicle profile (e.g., 'car', 'bike', 'foot')",
-              "enum": [
-                "car"
-              ],
-              "type": "string"
-            },
-            "round_trip": {
-              "additionalProperties": false,
-              "description": "Parameters for round trip; requires algorithm='round_trip'",
+            "custom_model": {
+              "type": "object",
               "properties": {
-                "distance": {
-                  "default": 10000,
-                  "description": "Approximate round-trip length in meters; requires algorithm='round_trip'",
-                  "minimum": 0,
-                  "type": "integer"
+                "areas": {
+                  "type": "object",
+                  "description": "GeoJSON FeatureCollection for custom areas; requires ch.disable=true",
+                  "additionalProperties": true
                 },
-                "seed": {
-                  "description": "Random seed for deterministic round trip; requires algorithm='round_trip'",
-                  "type": "integer"
+                "speed": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "description": "Customize speeds per model rule; requires ch.disable=true"
+                },
+                "priority": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "description": "Customize priorities per model rule; requires ch.disable=true"
+                },
+                "distance_influence": {
+                  "type": "number",
+                  "description": "Influence of distance on custom cost; requires ch.disable=true"
                 }
               },
-              "type": "object"
+              "description": "Custom routing rules; requires ch.disable=true",
+              "additionalProperties": false
+            },
+            "instructions": {
+              "type": "boolean",
+              "default": true,
+              "description": "Include turn-by-turn instructions"
+            },
+            "pass_through": {
+              "type": "boolean",
+              "default": false,
+              "description": "Avoid u-turns at via points; requires ch.disable=true"
+            },
+            "points_encoded": {
+              "type": "boolean",
+              "default": true,
+              "description": "Use polyline encoding for geometry"
+            },
+            "heading_penalty": {
+              "type": "integer",
+              "default": 300,
+              "minimum": 0,
+              "description": "Penalty (s) for deviating from heading; requires ch.disable=true"
             },
             "snap_preventions": {
-              "description": "Road types to avoid during snapping",
+              "type": "array",
               "items": {
                 "enum": [
                   "motorway",
@@ -240,19 +215,43 @@ Effective request declaration (including authentication and referenced schemas):
                 ],
                 "type": "string"
               },
-              "type": "array"
+              "description": "Road types to avoid during snapping"
+            },
+            "alternative_route": {
+              "type": "object",
+              "properties": {
+                "max_paths": {
+                  "type": "integer",
+                  "default": 2,
+                  "minimum": 1,
+                  "description": "Max number of alternatives; requires algorithm='alternative_route'"
+                },
+                "max_share_factor": {
+                  "type": "number",
+                  "default": 0.6,
+                  "maximum": 1,
+                  "minimum": 0,
+                  "description": "Max share factor vs optimal; requires algorithm='alternative_route'"
+                },
+                "max_weight_factor": {
+                  "type": "number",
+                  "default": 1.4,
+                  "minimum": 0,
+                  "description": "Max weight factor vs optimal; requires algorithm='alternative_route'"
+                }
+              },
+              "description": "Parameters for alternative routes; requires algorithm='alternative_route'",
+              "additionalProperties": false
             }
           },
           "required": [
             "optimize",
             "points",
             "profile"
-          ],
-          "type": "object"
+          ]
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "components": {

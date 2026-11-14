@@ -226,7 +226,7 @@ def existing_page_references(root: Path):
     from urllib.parse import urlsplit
     prefixes, references = {}, []
     for mdx in (root / 'api-reference').rglob('*.mdx'):
-        match = re.search(r"^openapi:\s*['\"]?((?:openapi|reference-contracts)/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", mdx.read_text(), re.M)
+        match = re.search(r"^openapi:\s*['\"]?((?:openapi(?:-public)?|reference-contracts)/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", mdx.read_text(), re.M)
         if not match:
             continue
         # Production reference pages bind the same provider document under
@@ -453,7 +453,7 @@ def refresh_legacy_page_blocks(root, documents, changes, catalog):
                 continue
             header, _ = localization.split_frontmatter(text)
             reference = (yaml.safe_load(header) or {}).get("openapi", "")
-            match = re.fullmatch(r"openapi/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)", reference)
+            match = re.fullmatch(r"openapi(?:-public)?/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)", reference)
             if not match or match[2] not in documents:
                 continue
             document = documents[match[2]]

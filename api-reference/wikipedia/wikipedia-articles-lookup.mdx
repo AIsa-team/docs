@@ -12,7 +12,6 @@ x-aisa-operation-id: "wikipedia.articles.lookup"
 - **Method and path:** POST /apis/v1/wikipedia/articles/lookup
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/wikipedia/articles/lookup`
-- **Runtime facts:** 090df642b94d9420f01e4fe7b8477e22b4b3b170db7c372d8cd633d00dbca599
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/wikipedia.json)
 
@@ -35,40 +34,45 @@ Effective request declaration (including authentication and referenced schemas):
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "production": {
-            "summary": "Verified production request (2026-11-12)",
-            "value": {
-              "fields": [
-                "name",
-                "identifier"
-              ],
-              "limit": 1,
-              "name": "Marie_Curie",
-              "project": "enwiki"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
-          "not": {
-            "required": [
-              "fields",
-              "body"
-            ]
-          },
           "properties": {
-            "body": {
-              "description": "Article body format when fields is omitted: wikitext (default), html, both, or none. Omit body entirely when using fields, including when no body is needed.",
-              "enum": [
-                "wikitext",
-                "html",
-                "both",
-                "none"
-              ],
+            "name": {
               "type": "string",
+              "description": "Exact article title as on the wiki, for example `Marie_Curie` or `Marie Curie`. Case-sensitive: Wikipedia titles start with a capital letter. From a URL such as https://fr.wikipedia.org/wiki/Marie_Curie, use the part after /wiki/."
+            },
+            "project": {
+              "type": "string",
+              "description": "Wikimedia project identifier: language code plus project code, for example `enwiki` (English Wikipedia), `frwiki`, `dewiki`, `enwiktionary` or `eswikivoyage`. Defaults to `enwiki` when neither project nor language is given. `reference/projects` lists every identifier."
+            },
+            "language": {
+              "type": "string",
+              "description": "Wikimedia language code, for example `en`, `fr` or `zh-yue`. Returns the article from any project in that language; combine with project to pin one wiki."
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Return only the named fields, using dot notation; at most 50 entries. Omit body when using fields. Include article_body.wikitext or article_body.html here to select body content.",
+              "x-alexandria-option-metadata": {
+                "max": 50
+              },
+              "maxItems": 50
+            },
+            "limit": {
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer",
+              "description": "Most matching articles to return, 1 to 10. More than one only helps when no project is pinned and the title exists on several wikis.\n\nProvider reference: minimum 1; maximum 10; default 1."
+            },
+            "body": {
+              "type": "string",
+              "description": "Article body format when fields is omitted: wikitext (default), html, both, or none. Omit body entirely when using fields, including when no body is needed.",
               "x-alexandria-option-metadata": {
                 "oneOf": [
                   "wikitext",
@@ -76,47 +80,42 @@ Effective request declaration (including authentication and referenced schemas):
                   "both",
                   "none"
                 ]
-              }
-            },
-            "fields": {
-              "description": "Return only the named fields, using dot notation; at most 50 entries. Omit body when using fields. Include article_body.wikitext or article_body.html here to select body content.",
-              "items": {
-                "type": "string"
               },
-              "maxItems": 50,
-              "type": "array",
-              "x-alexandria-option-metadata": {
-                "max": 50
-              }
-            },
-            "language": {
-              "description": "Wikimedia language code, for example `en`, `fr` or `zh-yue`. Returns the article from any project in that language; combine with project to pin one wiki.",
-              "type": "string"
-            },
-            "limit": {
-              "description": "Most matching articles to return, 1 to 10. More than one only helps when no project is pinned and the title exists on several wikis.\n\nProvider reference: minimum 1; maximum 10; default 1.",
-              "maximum": 10,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "name": {
-              "description": "Exact article title as on the wiki, for example `Marie_Curie` or `Marie Curie`. Case-sensitive: Wikipedia titles start with a capital letter. From a URL such as https://fr.wikipedia.org/wiki/Marie_Curie, use the part after /wiki/.",
-              "type": "string"
-            },
-            "project": {
-              "description": "Wikimedia project identifier: language code plus project code, for example `enwiki` (English Wikipedia), `frwiki`, `dewiki`, `enwiktionary` or `eswikivoyage`. Defaults to `enwiki` when neither project nor language is given. `reference/projects` lists every identifier.",
-              "type": "string"
+              "enum": [
+                "wikitext",
+                "html",
+                "both",
+                "none"
+              ]
             }
           },
           "required": [
             "limit",
             "name"
           ],
-          "type": "object"
+          "not": {
+            "required": [
+              "fields",
+              "body"
+            ]
+          }
+        },
+        "examples": {
+          "production": {
+            "summary": "Verified production request (2026-11-12)",
+            "value": {
+              "name": "Marie_Curie",
+              "project": "enwiki",
+              "limit": 1,
+              "fields": [
+                "name",
+                "identifier"
+              ]
+            }
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "components": {

@@ -1,6 +1,6 @@
 ---
 title: "Autocomplete Place Predictions"
-openapi: "openapi/zh/google-maps.json POST /apis/v1/google-maps/autocomplete"
+openapi: "openapi-public/zh/google-maps.json POST /apis/v1/google-maps/autocomplete"
 x-aisa-operation-id: "google-maps.autocomplete"
 ---
 
@@ -12,9 +12,8 @@ x-aisa-operation-id: "google-maps.autocomplete"
 - **方法与路径:** POST /apis/v1/google-maps/autocomplete
 - **可用状态:** enabled
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/google-maps/autocomplete`
-- **Runtime 事实版本:** 3b5a2acec503471a11eb19f2556b4dd51989d71bc63d22f67f55218e55b002ef
 
-[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/google-maps.json)
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi-public/zh/google-maps.json)
 
 有效请求声明（包括认证和引用的 schema）：
 
@@ -35,36 +34,168 @@ x-aisa-operation-id: "google-maps.autocomplete"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
         "schema": {
+          "type": "object",
           "properties": {
-            "includePureServiceAreaBusinesses": {
-              "description": "Includes businesses without physical locations (default: false).",
-              "type": "boolean"
-            },
-            "includeQueryPredictions": {
-              "description": "Includes query predictions in response for text searches (default: false).",
-              "type": "boolean"
-            },
-            "includedPrimaryTypes": {
-              "description": "Restricts results to up to five specified primary types (e.g., 'restaurant', 'cafe').",
+            "input": {
+              "type": "string",
+              "description": "Text string to search for place predictions. Can be full words, substrings, place names, addresses, or plus codes. Must be non-empty.",
               "examples": [
-                [
-                  "restaurant"
-                ],
-                [
-                  "cafe",
-                  "bakery"
-                ]
+                "pizza",
+                "123 Main",
+                "Eiffel"
+              ]
+            },
+            "origin": {
+              "type": "object",
+              "required": [
+                "latitude",
+                "longitude"
               ],
+              "properties": {
+                "latitude": {
+                  "type": "number",
+                  "maximum": 90,
+                  "minimum": -90,
+                  "examples": [
+                    37.7749
+                  ],
+                  "description": "Latitude coordinate."
+                },
+                "longitude": {
+                  "type": "number",
+                  "maximum": 180,
+                  "minimum": -180,
+                  "examples": [
+                    -122.4194
+                  ],
+                  "description": "Longitude coordinate."
+                }
+              },
+              "description": "Latitude/longitude point for distance calculations.",
+              "additionalProperties": false
+            },
+            "regionCode": {
+              "type": "string",
+              "examples": [
+                "us",
+                "gb",
+                "fr"
+              ],
+              "description": "Region code in ccTLD format for formatting responses (e.g., 'us', 'br')."
+            },
+            "inputOffset": {
+              "type": "integer",
+              "minimum": 0,
+              "examples": [
+                5,
+                10
+              ],
+              "description": "Zero-based Unicode character offset of cursor position in the input string."
+            },
+            "languageCode": {
+              "type": "string",
+              "examples": [
+                "en-US",
+                "es-ES",
+                "fr-FR"
+              ],
+              "description": "Preferred language for results using IETF BCP-47 language codes (e.g., 'en-US', 'es-ES')."
+            },
+            "locationBias": {
+              "type": "object",
+              "properties": {
+                "circle": {
+                  "type": "object",
+                  "required": [
+                    "center",
+                    "radius"
+                  ],
+                  "properties": {
+                    "center": {
+                      "type": "object",
+                      "examples": [
+                        {
+                          "latitude": 37.7749,
+                          "longitude": -122.4194
+                        }
+                      ],
+                      "description": "Center point with latitude and longitude coordinates.",
+                      "additionalProperties": {
+                        "type": "number"
+                      }
+                    },
+                    "radius": {
+                      "type": "number",
+                      "maximum": 50000,
+                      "minimum": 0,
+                      "examples": [
+                        1000,
+                        5000
+                      ],
+                      "description": "Radius in meters (0.0-50000.0 for bias, must exceed 0.0 for restriction)."
+                    }
+                  },
+                  "description": "Circular area for location bias or restriction.",
+                  "additionalProperties": false
+                },
+                "rectangle": {
+                  "type": "object",
+                  "required": [
+                    "low",
+                    "high"
+                  ],
+                  "properties": {
+                    "low": {
+                      "type": "object",
+                      "examples": [
+                        {
+                          "latitude": 37.7,
+                          "longitude": -122.5
+                        }
+                      ],
+                      "description": "Southwest corner with latitude and longitude coordinates.",
+                      "additionalProperties": {
+                        "type": "number"
+                      }
+                    },
+                    "high": {
+                      "type": "object",
+                      "examples": [
+                        {
+                          "latitude": 37.8,
+                          "longitude": -122.4
+                        }
+                      ],
+                      "description": "Northeast corner with latitude and longitude coordinates.",
+                      "additionalProperties": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "description": "Rectangular area for location bias or restriction.",
+                  "additionalProperties": false
+                }
+              },
+              "description": "Area to bias search results toward.",
+              "additionalProperties": false
+            },
+            "sessionToken": {
+              "type": "string",
+              "examples": [
+                "session_123",
+                "user_abc_session"
+              ],
+              "description": "User-generated string grouping calls into sessions for billing purposes."
+            },
+            "includedRegionCodes": {
+              "type": "array",
               "items": {
                 "type": "string"
               },
-              "type": "array"
-            },
-            "includedRegionCodes": {
-              "description": "Up to 15 two-character country codes (ISO 3166-1 Alpha-2) to restrict results. Query predictions unavailable when this is set.",
               "examples": [
                 [
                   "US"
@@ -75,249 +206,117 @@ x-aisa-operation-id: "google-maps.autocomplete"
                   "MX"
                 ]
               ],
+              "description": "Up to 15 two-character country codes (ISO 3166-1 Alpha-2) to restrict results. Query predictions unavailable when this is set."
+            },
+            "locationRestriction": {
+              "type": "object",
+              "properties": {
+                "circle": {
+                  "type": "object",
+                  "required": [
+                    "center",
+                    "radius"
+                  ],
+                  "properties": {
+                    "center": {
+                      "type": "object",
+                      "examples": [
+                        {
+                          "latitude": 37.7749,
+                          "longitude": -122.4194
+                        }
+                      ],
+                      "description": "Center point with latitude and longitude coordinates.",
+                      "additionalProperties": {
+                        "type": "number"
+                      }
+                    },
+                    "radius": {
+                      "type": "number",
+                      "maximum": 50000,
+                      "minimum": 0,
+                      "examples": [
+                        1000,
+                        5000
+                      ],
+                      "description": "Radius in meters (0.0-50000.0 for bias, must exceed 0.0 for restriction)."
+                    }
+                  },
+                  "description": "Circular area for location bias or restriction.",
+                  "additionalProperties": false
+                },
+                "rectangle": {
+                  "type": "object",
+                  "required": [
+                    "low",
+                    "high"
+                  ],
+                  "properties": {
+                    "low": {
+                      "type": "object",
+                      "examples": [
+                        {
+                          "latitude": 37.7,
+                          "longitude": -122.5
+                        }
+                      ],
+                      "description": "Southwest corner with latitude and longitude coordinates.",
+                      "additionalProperties": {
+                        "type": "number"
+                      }
+                    },
+                    "high": {
+                      "type": "object",
+                      "examples": [
+                        {
+                          "latitude": 37.8,
+                          "longitude": -122.4
+                        }
+                      ],
+                      "description": "Northeast corner with latitude and longitude coordinates.",
+                      "additionalProperties": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "description": "Rectangular area for location bias or restriction.",
+                  "additionalProperties": false
+                }
+              },
+              "description": "Area to restrict search results within.",
+              "additionalProperties": false
+            },
+            "includedPrimaryTypes": {
+              "type": "array",
               "items": {
                 "type": "string"
               },
-              "type": "array"
-            },
-            "input": {
-              "description": "Text string to search for place predictions. Can be full words, substrings, place names, addresses, or plus codes. Must be non-empty.",
               "examples": [
-                "pizza",
-                "123 Main",
-                "Eiffel"
+                [
+                  "restaurant"
+                ],
+                [
+                  "cafe",
+                  "bakery"
+                ]
               ],
-              "type": "string"
+              "description": "Restricts results to up to five specified primary types (e.g., 'restaurant', 'cafe')."
             },
-            "inputOffset": {
-              "description": "Zero-based Unicode character offset of cursor position in the input string.",
-              "examples": [
-                5,
-                10
-              ],
-              "minimum": 0,
-              "type": "integer"
+            "includeQueryPredictions": {
+              "type": "boolean",
+              "description": "Includes query predictions in response for text searches (default: false)."
             },
-            "languageCode": {
-              "description": "Preferred language for results using IETF BCP-47 language codes (e.g., 'en-US', 'es-ES').",
-              "examples": [
-                "en-US",
-                "es-ES",
-                "fr-FR"
-              ],
-              "type": "string"
-            },
-            "locationBias": {
-              "additionalProperties": false,
-              "description": "Area to bias search results toward.",
-              "properties": {
-                "circle": {
-                  "additionalProperties": false,
-                  "description": "Circular area for location bias or restriction.",
-                  "properties": {
-                    "center": {
-                      "additionalProperties": {
-                        "type": "number"
-                      },
-                      "description": "Center point with latitude and longitude coordinates.",
-                      "examples": [
-                        {
-                          "latitude": 37.7749,
-                          "longitude": -122.4194
-                        }
-                      ],
-                      "type": "object"
-                    },
-                    "radius": {
-                      "description": "Radius in meters (0.0-50000.0 for bias, must exceed 0.0 for restriction).",
-                      "examples": [
-                        1000,
-                        5000
-                      ],
-                      "maximum": 50000,
-                      "minimum": 0,
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "center",
-                    "radius"
-                  ],
-                  "type": "object"
-                },
-                "rectangle": {
-                  "additionalProperties": false,
-                  "description": "Rectangular area for location bias or restriction.",
-                  "properties": {
-                    "high": {
-                      "additionalProperties": {
-                        "type": "number"
-                      },
-                      "description": "Northeast corner with latitude and longitude coordinates.",
-                      "examples": [
-                        {
-                          "latitude": 37.8,
-                          "longitude": -122.4
-                        }
-                      ],
-                      "type": "object"
-                    },
-                    "low": {
-                      "additionalProperties": {
-                        "type": "number"
-                      },
-                      "description": "Southwest corner with latitude and longitude coordinates.",
-                      "examples": [
-                        {
-                          "latitude": 37.7,
-                          "longitude": -122.5
-                        }
-                      ],
-                      "type": "object"
-                    }
-                  },
-                  "required": [
-                    "low",
-                    "high"
-                  ],
-                  "type": "object"
-                }
-              },
-              "type": "object"
-            },
-            "locationRestriction": {
-              "additionalProperties": false,
-              "description": "Area to restrict search results within.",
-              "properties": {
-                "circle": {
-                  "additionalProperties": false,
-                  "description": "Circular area for location bias or restriction.",
-                  "properties": {
-                    "center": {
-                      "additionalProperties": {
-                        "type": "number"
-                      },
-                      "description": "Center point with latitude and longitude coordinates.",
-                      "examples": [
-                        {
-                          "latitude": 37.7749,
-                          "longitude": -122.4194
-                        }
-                      ],
-                      "type": "object"
-                    },
-                    "radius": {
-                      "description": "Radius in meters (0.0-50000.0 for bias, must exceed 0.0 for restriction).",
-                      "examples": [
-                        1000,
-                        5000
-                      ],
-                      "maximum": 50000,
-                      "minimum": 0,
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "center",
-                    "radius"
-                  ],
-                  "type": "object"
-                },
-                "rectangle": {
-                  "additionalProperties": false,
-                  "description": "Rectangular area for location bias or restriction.",
-                  "properties": {
-                    "high": {
-                      "additionalProperties": {
-                        "type": "number"
-                      },
-                      "description": "Northeast corner with latitude and longitude coordinates.",
-                      "examples": [
-                        {
-                          "latitude": 37.8,
-                          "longitude": -122.4
-                        }
-                      ],
-                      "type": "object"
-                    },
-                    "low": {
-                      "additionalProperties": {
-                        "type": "number"
-                      },
-                      "description": "Southwest corner with latitude and longitude coordinates.",
-                      "examples": [
-                        {
-                          "latitude": 37.7,
-                          "longitude": -122.5
-                        }
-                      ],
-                      "type": "object"
-                    }
-                  },
-                  "required": [
-                    "low",
-                    "high"
-                  ],
-                  "type": "object"
-                }
-              },
-              "type": "object"
-            },
-            "origin": {
-              "additionalProperties": false,
-              "description": "Latitude/longitude point for distance calculations.",
-              "properties": {
-                "latitude": {
-                  "description": "Latitude coordinate.",
-                  "examples": [
-                    37.7749
-                  ],
-                  "maximum": 90,
-                  "minimum": -90,
-                  "type": "number"
-                },
-                "longitude": {
-                  "description": "Longitude coordinate.",
-                  "examples": [
-                    -122.4194
-                  ],
-                  "maximum": 180,
-                  "minimum": -180,
-                  "type": "number"
-                }
-              },
-              "required": [
-                "latitude",
-                "longitude"
-              ],
-              "type": "object"
-            },
-            "regionCode": {
-              "description": "Region code in ccTLD format for formatting responses (e.g., 'us', 'br').",
-              "examples": [
-                "us",
-                "gb",
-                "fr"
-              ],
-              "type": "string"
-            },
-            "sessionToken": {
-              "description": "User-generated string grouping calls into sessions for billing purposes.",
-              "examples": [
-                "session_123",
-                "user_abc_session"
-              ],
-              "type": "string"
+            "includePureServiceAreaBusinesses": {
+              "type": "boolean",
+              "description": "Includes businesses without physical locations (default: false)."
             }
           },
           "required": [
             "input"
-          ],
-          "type": "object"
+          ]
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "components": {

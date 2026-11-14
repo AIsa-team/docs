@@ -133,6 +133,12 @@ def normalize_relayer_address_example(document):
 def import_source(provider, url):
     if not KEY.fullmatch(provider) or not url.startswith('https://'):
         raise ValueError('provider id and HTTPS source URL are required')
+    from prepare_treg_public_reference import TREG_CATALOG_URL
+    if provider == 'treg-public' and url == TREG_CATALOG_URL:
+        # Spec #1285 R1: unpinned gateway declarations follow upstream main;
+        # changes reach main only through the reviewed refresh PR.
+        from prepare_treg_public_reference import import_treg_public
+        return import_treg_public()
     if url == FRED_INDEX_URL:
         # The registry may name the mirror fred-official.json; the canonical
         # authority URL fixes the converter's provider independently of filename.

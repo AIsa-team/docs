@@ -12,7 +12,6 @@ x-aisa-operation-id: "iea-org.energy.data"
 - **Method and path:** POST /apis/v1/iea-org/energy/data
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/iea-org/energy/data`
-- **Runtime facts:** c89b45dc0a801f6fc88f64fec78b6e5ee465c225d405596df8b414f20033aef1
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/iea-org.json)
 
@@ -35,8 +34,106 @@ Effective request declaration (including authentication and referenced schemas):
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
+        "schema": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "countries": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "description": "Required in practice: ISO3 codes (FRA), ISO2, IEA names (France, People's Republic of China), stats codes (FRANCE, WORLD, OECDTOT, CHINAREG) or aggregate short names (EU27, OECD, IEA, World)."
+            },
+            "cursor": {
+              "type": "string",
+              "description": "next_cursor from the previous page of the same query; maximum offset 200000.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "dataset_id": {
+              "type": "string",
+              "description": "Pattern: ^[a-z0-9-]+$."
+            },
+            "flows": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Stats flow codes (TES, TFC, INDPROD, IMPORTS, EXPORTS, TOTIND, TOTTRANS, RESIDENT, ...; CO2: CO2FUEL, ELECHEAT, TOTTRANS, TOTIND, RESIDENT, ...) or price sectors (RESID, IND, TRANS, COMM, ELGEN). Not for MES.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "frequency": {
+              "type": "string",
+              "description": "Must match the dataset (annual highlights: A; monthly electricity statistics and monthly oil prices: M).\n\nProvider reference: allowed values [\"A\", \"M\"].",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "A",
+                  "M"
+                ]
+              }
+            },
+            "indicators": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Data-browser indicators per dataset (see `dataset`.indicators): TESbySource, TFCbySource, TFCbySector, ElecGenByFuel, ElecConsBySector, CO2BySector, CO2Intensity; prices: PRICE, PRICE CONVERTED, HEATHOUSE, COOKING, SHOWER, CARS, PRICEMONTHLY. Cannot be combined with products/flows for stats datasets.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "page_size": {
+              "type": "number",
+              "description": "page_size\n\nProvider reference: minimum 1; maximum 1000; default 20.",
+              "default": 20,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 1000
+              }
+            },
+            "products": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Stats product codes (TOTAL, COAL, NATGAS, ELECTR, MTOTOIL, COMRENEW, GEOTHERM, HEAT, TOTPRODS; CO2: COAL, OIL, GAS, OTHER, TOTAL), MES product names (Wind, Solar, Nuclear, Hydro, Coal, Natural gas, Net electricity production, ...) or price product codes (ELECTR, NATGAS, GASOLINE, DIESEL, LPG, KEROSENE, RESFUEL, COAL).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "year_from": {
+              "type": "number",
+              "description": "year_from\n\nProvider reference: minimum 1960; maximum 2100.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1960,
+                "max": 2100
+              }
+            },
+            "year_to": {
+              "type": "number",
+              "description": "year_to\n\nProvider reference: minimum 1960; maximum 2100.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1960,
+                "max": 2100
+              }
+            }
+          },
+          "required": [
+            "countries",
+            "dataset_id"
+          ]
+        },
         "examples": {
           "provider": {
             "summary": "Official provider example; checked against AIsa request constraints",
@@ -55,107 +152,9 @@ Effective request declaration (including authentication and referenced schemas):
               "year_to": 2023
             }
           }
-        },
-        "schema": {
-          "additionalProperties": true,
-          "properties": {
-            "countries": {
-              "description": "Required in practice: ISO3 codes (FRA), ISO2, IEA names (France, People's Republic of China), stats codes (FRANCE, WORLD, OECDTOT, CHINAREG) or aggregate short names (EU27, OECD, IEA, World).",
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "cursor": {
-              "description": "next_cursor from the previous page of the same query; maximum offset 200000.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "dataset_id": {
-              "description": "Pattern: ^[a-z0-9-]+$.",
-              "type": "string"
-            },
-            "flows": {
-              "description": "Stats flow codes (TES, TFC, INDPROD, IMPORTS, EXPORTS, TOTIND, TOTTRANS, RESIDENT, ...; CO2: CO2FUEL, ELECHEAT, TOTTRANS, TOTIND, RESIDENT, ...) or price sectors (RESID, IND, TRANS, COMM, ELGEN). Not for MES.",
-              "items": {
-                "type": "string"
-              },
-              "type": "array",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "frequency": {
-              "description": "Must match the dataset (annual highlights: A; monthly electricity statistics and monthly oil prices: M).\n\nProvider reference: allowed values [\"A\", \"M\"].",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "oneOf": [
-                  "A",
-                  "M"
-                ]
-              }
-            },
-            "indicators": {
-              "description": "Data-browser indicators per dataset (see `dataset`.indicators): TESbySource, TFCbySource, TFCbySector, ElecGenByFuel, ElecConsBySector, CO2BySector, CO2Intensity; prices: PRICE, PRICE CONVERTED, HEATHOUSE, COOKING, SHOWER, CARS, PRICEMONTHLY. Cannot be combined with products/flows for stats datasets.",
-              "items": {
-                "type": "string"
-              },
-              "type": "array",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "page_size": {
-              "default": 20,
-              "description": "page_size\n\nProvider reference: minimum 1; maximum 1000; default 20.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 1000,
-                "min": 1
-              }
-            },
-            "products": {
-              "description": "Stats product codes (TOTAL, COAL, NATGAS, ELECTR, MTOTOIL, COMRENEW, GEOTHERM, HEAT, TOTPRODS; CO2: COAL, OIL, GAS, OTHER, TOTAL), MES product names (Wind, Solar, Nuclear, Hydro, Coal, Natural gas, Net electricity production, ...) or price product codes (ELECTR, NATGAS, GASOLINE, DIESEL, LPG, KEROSENE, RESFUEL, COAL).",
-              "items": {
-                "type": "string"
-              },
-              "type": "array",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "year_from": {
-              "description": "year_from\n\nProvider reference: minimum 1960; maximum 2100.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 2100,
-                "min": 1960
-              }
-            },
-            "year_to": {
-              "description": "year_to\n\nProvider reference: minimum 1960; maximum 2100.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 2100,
-                "min": 1960
-              }
-            }
-          },
-          "required": [
-            "countries",
-            "dataset_id"
-          ],
-          "type": "object"
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "components": {

@@ -75,7 +75,7 @@ class AktaResponseBindingsTests(unittest.TestCase):
                 self.assertEqual(after['info']['x-aisa-document']['response_pending'], [])
                 op = after['paths'][path]['get']
                 self.assertTrue(op['responses']['200']['content']['application/json']['schema'])
-                excluded = {'responses', 'x-aisa-response-pending', 'x-aisa-response-source'}
+                excluded = {'responses', 'x-aisa-response-pending', 'x-aisa-response-source', 'x-aisa-response-contract-hash'}
                 self.assertEqual({k:v for k,v in before['paths'][path]['get'].items() if k not in excluded},
                                  {k:v for k,v in op.items() if k not in excluded})
 

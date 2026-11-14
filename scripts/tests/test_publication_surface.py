@@ -32,6 +32,51 @@ class PublicationSurfaceTests(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text)
 
+    def test_public_references_require_current_projection_and_bind_its_bytes(self):
+        import public_projection
+        (self.root / 'scripts').mkdir()
+        (self.root / 'scripts/public_projection.json').write_text(json.dumps({'schema_version': 1, 'catalogs': ['fixture']}))
+        public_projection.write(self.root)
+        self.assertEqual(validate_surfaces(self.root)['status'], 'passed')
+        self.assertIn('openapi-public/fixture.json', publication_hashes(self.root))
+        path = self.root / 'openapi-public/fixture.json'
+        path.write_text(path.read_text().replace('Success', 'Changed'))
+        with self.assertRaisesRegex(ValueError, 'public projection differs'):
+            validate_surfaces(self.root)
+        path.unlink()
+        with self.assertRaisesRegex(ValueError, 'public projection differs'):
+            validate_surfaces(self.root)
+
+    def test_reference_response_schema_cannot_override_runtime_requests_or_price(self):
+        for prefix in ('', 'zh/'):
+            source = self.root / ('openapi/' + prefix + 'fixture.json')
+            target = self.root / ('reference-contracts/' + prefix + 'fixture.json')
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(source.read_bytes())
+            page = self.root / (prefix + 'api-reference/fixture/one.mdx')
+            page.write_text(page.read_text().replace('openapi/' + prefix + 'fixture.json GET', 'reference-contracts/' + prefix + 'fixture.json GET'))
+        self.assertEqual(validate_surfaces(self.root)['status'], 'passed')
+        self.assertIn('reference-contracts/fixture.json', publication_hashes(self.root))
+        self.change_json('reference-contracts/fixture.json', lambda d: d['paths']['/one']['get'].update({'x-aisa-pricing': {'price_usd': 99}}))
+        with self.assertRaisesRegex(ValueError, 'changed runtime request or pricing'):
+            validate_surfaces(self.root)
+
+    def test_retired_disabled_page_may_retain_identity_without_schema_binding(self):
+        (self.root / 'docs').mkdir()
+        (self.root / 'docs/human-api-retirements.json').write_text(json.dumps({
+            'scope': 'human_presentation_only', 'formal_publication': False,
+            'operations': [{'method': 'GET', 'path': '/one', 'page': 'api-reference/fixture/one'}]}))
+        for prefix in ('', 'zh/'):
+            self.change_json('openapi/' + prefix + 'fixture.json', lambda d: d['paths']['/one']['get'].update({'x-aisa-status': 'disabled'}))
+            (self.root / (prefix + 'api-reference/fixture/one.mdx')).write_text(
+                '---\nx-aisa-operation-id: one\nnoindex: true\nx-aisa-human-retirement: true\n---\nRetired.\n')
+        self.change_json('docs.json', lambda d: [tab.update({'groups': []}) for lang in d['navigation']['languages'] for tab in lang['tabs']])
+        self.assertEqual(validate_surfaces(self.root)['status'], 'passed')
+        for prefix in ('', 'zh/'):
+            self.change_json('openapi/' + prefix + 'fixture.json', lambda d: d['paths']['/one']['get'].update({'x-aisa-status': 'enabled'}))
+        with self.assertRaisesRegex(ValueError, 'missing matching bilingual navigation'):
+            validate_surfaces(self.root)
+
     def change_json(self, path, mutate):
         file = self.root / path
         data = json.loads(file.read_text())
@@ -367,9 +412,9 @@ class PublicationSurfaceTests(unittest.TestCase):
         self.assertEqual(result.returncode, 3)
         self.assertIn(b'pull-openapi', result.stderr)
         self.assertEqual(before, publication_hashes(self.root))
-        workflow = (script.parents[1] / '.github/workflows/sync-openapi.yml').read_text()
-        self.assertLess(workflow.index('publication_surface.py --legacy-write'), workflow.index('Copy spec to docs repo root'))
-        self.assertLess(workflow.index('publication_surface.py --legacy-write'), workflow.index('Commit and push'))
+        # The legacy sync-openapi.yml writer was removed; pull-openapi is the
+        # only workflow that publishes the consolidated contract.
+        self.assertFalse((script.parents[1] / '.github/workflows/sync-openapi.yml').exists())
 
     def test_published_identity_reuses_all_old_alias_urls_after_path_migration(self):
         root = self.root

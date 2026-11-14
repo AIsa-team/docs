@@ -1,6 +1,6 @@
 ---
 title: "Company search"
-openapi: "openapi/zh/people-data-labs.json POST /apis/v1/people-data-labs/company/search"
+openapi: "openapi-public/zh/people-data-labs.json POST /apis/v1/people-data-labs/company/search"
 x-aisa-operation-id: "people-data-labs.company.search"
 ---
 
@@ -12,9 +12,8 @@ x-aisa-operation-id: "people-data-labs.company.search"
 - **方法与路径:** POST /apis/v1/people-data-labs/company/search
 - **可用状态:** enabled
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/people-data-labs/company/search`
-- **Runtime 事实版本:** d9aafd76ae02b9bcd98e168c52eb69aba6e12890a1eed8da421910f394e8200a
 
-[完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/people-data-labs.json)
+[完整 OpenAPI 定义](https://aisa.one/docs/openapi-public/zh/people-data-labs.json)
 
 有效请求声明（包括认证和引用的 schema）：
 
@@ -35,19 +34,47 @@ x-aisa-operation-id: "people-data-labs.company.search"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "provider": {
-            "summary": "Official provider example; checked against AIsa request constraints",
-            "value": {
-              "size": 1,
-              "sql": "SELECT * FROM company WHERE industry = 'computer software'"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
+          "properties": {
+            "query": {
+              "additionalProperties": true,
+              "type": "object",
+              "description": "Elasticsearch 7.7 query object over the company schema. Only term, terms, exists, bool, match, range, match_phrase, wildcard, prefix and match_all are accepted. Any array inside it is capped at 100 elements - a tenth of what the person endpoints allow, so a filter list carried over from there will fail. Send this or sql, never both."
+            },
+            "sql": {
+              "type": "string",
+              "description": "`SELECT * FROM company WHERE ...`. Column selection and LIMIT are ignored, and at most 20 LIKE '%...%' terms are allowed. Send this or query, never both."
+            },
+            "size": {
+              "maximum": 2,
+              "minimum": 1,
+              "type": "integer",
+              "description": "Request 1-2 companies per call. callers must use size 1 or 2.\n\nProvider reference: minimum 1; maximum 100; default 1."
+            },
+            "scroll_token": {
+              "type": "string",
+              "description": "The scroll_token from the previous response, replayed with the identical query, for the next page. A 404 while scrolling means the results are exhausted, not that the query broke.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "titlecase": {
+              "type": "boolean",
+              "description": "Return titlecased values. Responses are lowercase otherwise, which matters when the output is shown to a person rather than matched on.\n\nProvider reference: default false.",
+              "default": false,
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            }
+          },
+          "required": [
+            "size"
+          ],
           "allOf": [
             {
               "anyOf": [
@@ -69,47 +96,19 @@ x-aisa-operation-id: "people-data-labs.company.search"
                 }
               ]
             }
-          ],
-          "properties": {
-            "query": {
-              "additionalProperties": true,
-              "description": "Elasticsearch 7.7 query object over the company schema. Only term, terms, exists, bool, match, range, match_phrase, wildcard, prefix and match_all are accepted. Any array inside it is capped at 100 elements - a tenth of what the person endpoints allow, so a filter list carried over from there will fail. Send this or sql, never both.",
-              "type": "object"
-            },
-            "scroll_token": {
-              "description": "The scroll_token from the previous response, replayed with the identical query, for the next page. A 404 while scrolling means the results are exhausted, not that the query broke.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "size": {
-              "description": "Request 1-2 companies per call, costing 50 credits per returned company. PDL supports 1-100 upstream, but Exchange authorization is capped at 100 credits, so callers must use size 1 or 2.\n\nProvider reference: minimum 1; maximum 100; default 1.",
-              "maximum": 2,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "sql": {
-              "description": "`SELECT * FROM company WHERE ...`. Column selection and LIMIT are ignored, and at most 20 LIKE '%...%' terms are allowed. Send this or query, never both.",
-              "type": "string"
-            },
-            "titlecase": {
-              "default": false,
-              "description": "Return titlecased values. Responses are lowercase otherwise, which matters when the output is shown to a person rather than matched on.\n\nProvider reference: default false.",
-              "type": "boolean",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "size": 1,
+              "sql": "SELECT * FROM company WHERE industry = 'computer software'"
             }
-          },
-          "required": [
-            "size"
-          ],
-          "type": "object"
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "components": {

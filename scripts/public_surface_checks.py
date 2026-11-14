@@ -606,3 +606,105 @@ def check_website_surfaces(spec, accepted_refs, *, read_bytes, read_page, expect
         missing.append('docs-discovery-page:unavailable:' + type(exc).__name__)
     return {'scope': 'website provider pages (200 and not the soft 404, or one same-origin 307/308 to such a page; unknown and retired slugs not 200); MCP page headline counts versus /servers (toolCount is the duplicate-inclusive per-server sum) and exact example prices versus sales quotes; sales catalog revision, release and per-provider counts; Agent Discovery page rules',
             'observations': observations, 'missing_inputs': sorted(set(missing)), 'mismatches': sorted(set(mismatches))}
+
+
+MAX_SURFACE_BYTES = 256 * 1024 * 1024
+USER_AGENT = 'AIsa-public-surface-check'
+
+
+def http_read_bytes(name, url, timeout=60):
+    """One public GET; no credentials, no redirects followed beyond urllib's default."""
+    from urllib.request import Request, urlopen
+    with urlopen(Request(url, headers={'User-Agent': USER_AGENT}), timeout=timeout) as response:
+        raw = response.read(MAX_SURFACE_BYTES + 1)
+    if len(raw) > MAX_SURFACE_BYTES:
+        raise ValueError(name + ' exceeds the surface size limit')
+    return raw
+
+
+def http_read_page(name, url, timeout=30):
+    """(status, body, location) for one request without following redirects."""
+    from urllib.error import HTTPError
+    from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+    class NoRedirect(HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None
+    try:
+        with build_opener(NoRedirect).open(Request(url, headers={'User-Agent': USER_AGENT}), timeout=timeout) as response:
+            return response.status, response.read(MAX_SURFACE_BYTES), None
+    except HTTPError as error:
+        return error.code, error.read(MAX_SURFACE_BYTES), error.headers.get('Location')
+
+
+def formal_ref(root):
+    """The Docs commit that last changed the formal publication pointer."""
+    ref = subprocess.check_output(['git', 'log', '-1', '--format=%H', 'HEAD', '--', 'docs/publication/current.json'],
+                                  cwd=root, text=True).strip()
+    if not re.fullmatch(r'[0-9a-f]{40}', ref):
+        raise ValueError('No formal publication commit found')
+    return ref
+
+
+def expected_publication(root, ref):
+    """Formal spec and expected values from one hash-bound Docs commit."""
+    pointer = loads(subprocess.check_output(['git', 'show', ref + ':docs/publication/current.json'], cwd=root))
+    if pointer.get('status') != 'passed':
+        raise ValueError('Expected publication is not formal')
+    raw = subprocess.check_output(['git', 'show', ref + ':openapi/openapi.json'], cwd=root)
+    if hashlib.sha256(raw).hexdigest() != pointer.get('files_sha256', {}).get('openapi/openapi.json'):
+        raise ValueError('Expected aggregate is not formally bound')
+    return loads(raw), pointer['openapi']['sha256']
+
+
+def run_checks(root, ref, *, read_bytes=http_read_bytes, read_page=http_read_page, website=False):
+    spec, expected_hash = expected_publication(root, ref)
+    accepted = {ref}
+    report = check_surfaces(spec, expected_hash, accepted, read_bytes=read_bytes,
+                            expected_requests=fixed_request_blocks(root, ref),
+                            expected_payment=fixed_payment_bytes(root, ref),
+                            expected_mcp_sources=fixed_mcp_sources(root, ref, spec))
+    report = {'docs_ref': ref, 'expected_openapi_sha256': expected_hash, 'surfaces': report}
+    if website:
+        report['website'] = check_website_surfaces(spec, accepted, read_bytes=read_bytes, read_page=read_page,
+                                                   expected_sales=fixed_sales_catalog(root, ref))
+    sections = [report['surfaces']] + ([report['website']] if website else [])
+    mismatches = sorted({item for section in sections for item in section.get('mismatches', [])})
+    missing = sorted({item for section in sections for item in section.get('missing_inputs', [])})
+    report['status'] = 'mismatch' if mismatches else ('not_assessed' if missing else 'passed')
+    return report
+
+
+def main(argv=None):
+    """Manual entry (Spec #1285 R1): compare the public surfaces with the formal publication.
+
+    Exit 0 when every surface matches, 1 on any mismatch, 3 when a surface
+    could not be read. The worker `contractsurface` runs the scheduled check;
+    this is the on-demand equivalent for an operator.
+    """
+    import argparse
+    from pathlib import Path
+    import sys
+    parser = argparse.ArgumentParser(description=main.__doc__)
+    parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument('--ref', help='Formal Docs commit (default: last commit changing docs/publication/current.json)')
+    parser.add_argument('--website', action='store_true', help='Also check website provider pages, MCP page and sales catalog')
+    parser.add_argument('--report', type=Path)
+    args = parser.parse_args(argv)
+    ref = args.ref or formal_ref(args.root)
+    report = run_checks(args.root, ref, website=args.website)
+    rendered = json.dumps(report, indent=2, ensure_ascii=False) + '\n'
+    if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(rendered)
+    for section in ('surfaces', 'website'):
+        for item in report.get(section, {}).get('mismatches', []):
+            print('mismatch ' + item, file=sys.stderr)
+        for item in report.get(section, {}).get('missing_inputs', []):
+            print('missing ' + item, file=sys.stderr)
+    print(json.dumps({'status': report['status'], 'docs_ref': ref}))
+    return {'passed': 0, 'mismatch': 1}.get(report['status'], 3)
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

@@ -12,7 +12,6 @@ x-aisa-operation-id: "firms-modaps-eosdis-nasa-gov.wildfire-detections.fires-are
 - **Method and path:** POST /apis/v1/firms-modaps-eosdis-nasa-gov/wildfire-detections/fires-area
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/firms-modaps-eosdis-nasa-gov/wildfire-detections/fires-area`
-- **Runtime facts:** 20ba041a0d7ecb4ffc9028c58851aa27d4d79e6ff5b3724dbc765658c984aaa4
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/firms-modaps-eosdis-nasa-gov.json)
 
@@ -35,8 +34,61 @@ Effective request declaration (including authentication and referenced schemas):
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
+        "schema": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "area": {
+              "type": "string",
+              "description": "`world` or `west,south,east,north` in decimal degrees (longitude -180..180, latitude -90..90, west < east, south < north). Pattern: ^(world|-?\\d{1,3}(\\.\\d+)?,-?\\d{1,2}(\\.\\d+)?,-?\\d{1,3}(\\.\\d+)?,-?\\d{1,2}(\\.\\d+)?)$."
+            },
+            "date": {
+              "type": "string",
+              "description": "Last day of the range, UTC. Keyed mode passes it to the API; keyless mode only accepts dates covered by the 7-day files. Pattern: ^\\d{4}-\\d{2}-\\d{2}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "day_range": {
+              "type": "number",
+              "description": "Days of data ending at `date` (or now). Each day counts as one transaction against the key's 5000 per 10 minutes.\n\nProvider reference: minimum 1; maximum 5; default 1.",
+              "default": 1,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 5
+              }
+            },
+            "limit": {
+              "type": "number",
+              "description": "Maximum records returned; `truncated` says when more matched.\n\nProvider reference: minimum 1; maximum 50000; default 5000.",
+              "default": 5000,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 50000
+              }
+            },
+            "map_key": {
+              "type": "string",
+              "description": "FIRMS MAP_KEY (32 lowercase hex characters, free by email at /api/map_key/). Omit to use the keyless files. Pattern: ^[0-9a-f]{32}$.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "source": {
+              "type": "string",
+              "description": "FIRMS source product name as used by /api/area. Keyless mode maps the NRT products to the file families; the `_SP` archives need `map_key`.\n\nProvider reference: allowed values [\"VIIRS_SNPP_NRT\", \"VIIRS_SNPP_SP\", \"VIIRS_NOAA20_NRT\", \"VIIRS_NOAA20_SP\", \"VIIRS_NOAA21_NRT\", \"MODIS_NRT\", \"MODIS_SP\", \"LANDSAT_NRT\"]."
+            }
+          },
+          "required": [
+            "area",
+            "source"
+          ]
+        },
         "examples": {
           "provider": {
             "summary": "Official provider example; checked against AIsa request constraints",
@@ -47,62 +99,9 @@ Effective request declaration (including authentication and referenced schemas):
               "source": "VIIRS_NOAA20_NRT"
             }
           }
-        },
-        "schema": {
-          "additionalProperties": true,
-          "properties": {
-            "area": {
-              "description": "`world` or `west,south,east,north` in decimal degrees (longitude -180..180, latitude -90..90, west < east, south < north). Pattern: ^(world|-?\\d{1,3}(\\.\\d+)?,-?\\d{1,2}(\\.\\d+)?,-?\\d{1,3}(\\.\\d+)?,-?\\d{1,2}(\\.\\d+)?)$.",
-              "type": "string"
-            },
-            "date": {
-              "description": "Last day of the range, UTC. Keyed mode passes it to the API; keyless mode only accepts dates covered by the 7-day files. Pattern: ^\\d{4}-\\d{2}-\\d{2}$.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "day_range": {
-              "default": 1,
-              "description": "Days of data ending at `date` (or now). Each day counts as one transaction against the key's 5000 per 10 minutes.\n\nProvider reference: minimum 1; maximum 5; default 1.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 5,
-                "min": 1
-              }
-            },
-            "limit": {
-              "default": 5000,
-              "description": "Maximum records returned; `truncated` says when more matched.\n\nProvider reference: minimum 1; maximum 50000; default 5000.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 50000,
-                "min": 1
-              }
-            },
-            "map_key": {
-              "description": "FIRMS MAP_KEY (32 lowercase hex characters, free by email at /api/map_key/). Omit to use the keyless files. Pattern: ^[0-9a-f]{32}$.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "source": {
-              "description": "FIRMS source product name as used by /api/area. Keyless mode maps the NRT products to the file families; the `_SP` archives need `map_key`.\n\nProvider reference: allowed values [\"VIIRS_SNPP_NRT\", \"VIIRS_SNPP_SP\", \"VIIRS_NOAA20_NRT\", \"VIIRS_NOAA20_SP\", \"VIIRS_NOAA21_NRT\", \"MODIS_NRT\", \"MODIS_SP\", \"LANDSAT_NRT\"].",
-              "type": "string"
-            }
-          },
-          "required": [
-            "area",
-            "source"
-          ],
-          "type": "object"
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "components": {

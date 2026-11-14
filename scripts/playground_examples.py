@@ -3,11 +3,82 @@
 Never synthesize values from type/enum/bounds or change wire `default` semantics.
 Named `default` examples are a single scenario, shared across request parameters.
 """
+import hashlib
 import json
 import shlex
 from urllib.parse import urlencode, quote
 
 _MISSING = object()
+REFERENCE_LABEL = 'Reference example'
+# Spec #1285 R1: Runtime marks operations whose examples need production
+# evidence with `x-aisa-example`. Only state `verified` may publish a
+# Reference example; every other state publishes the pending marker instead.
+EXAMPLE_STATES = frozenset({'verified', 'pending', 'expired', 'failed'})
+PENDING_REASONS = frozenset({'no_fixture', 'no_evidence', 'expired', 'contract_changed',
+                             'upstream_drift', 'inputs_undeclared', 'probe_failed'})
+
+
+def example_scenario(operation):
+    """The published `default` scenario in the canonical form Runtime hashes."""
+    parameters = {}
+    for param in operation.get('parameters', []):
+        if param.get('in') not in {'query', 'path'}:
+            continue
+        examples = param.get('examples')
+        if isinstance(examples, dict) and isinstance(examples.get('default'), dict) and 'value' in examples['default']:
+            parameters[param['in'] + ':' + param['name']] = examples['default']['value']
+    body = None
+    media = operation.get('requestBody', {}).get('content', {}).get('application/json', {})
+    examples = media.get('examples')
+    if isinstance(examples, dict) and isinstance(examples.get('default'), dict) and 'value' in examples['default']:
+        body = examples['default']['value']
+    return {'body': body, 'parameters': parameters}
+
+
+def example_sha256(scenario):
+    raw = json.dumps(scenario, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def verification_state(operation):
+    """Return (state, reason) for an evidence-scoped operation, or None if unscoped."""
+    marker = operation.get('x-aisa-example')
+    if marker is None:
+        return None
+    if not isinstance(marker, dict) or marker.get('state') not in EXAMPLE_STATES:
+        return 'pending', 'no_evidence'
+    state = marker['state']
+    if state == 'verified':
+        # The published scenario must be byte-for-byte the verified one.
+        if marker.get('sha256') == example_sha256(example_scenario(operation)):
+            return 'verified', None
+        return 'pending', 'contract_changed'
+    reason = marker.get('reason')
+    if state == 'expired':
+        reason = 'expired'
+    return 'pending', reason if reason in PENDING_REASONS else 'no_evidence'
+
+
+def apply_example_verification(operation):
+    """Withhold Reference examples without production evidence.
+
+    Returns True when code samples may be generated for the operation.
+    Unscoped operations keep the existing behavior.
+    """
+    state = verification_state(operation)
+    if state is None:
+        return True
+    status, reason = state
+    if status == 'verified':
+        operation.pop('x-aisa-verification', None)
+        return True
+    operation['x-aisa-verification'] = {'state': 'pending', 'reason': reason}
+    samples = operation.get('x-codeSamples')
+    if isinstance(samples, list):
+        samples[:] = [s for s in samples if not (s.get('lang') == 'text' and s.get('label') == REFERENCE_LABEL)]
+        if not samples:
+            operation.pop('x-codeSamples')
+    return False
 
 
 def example_value(node):

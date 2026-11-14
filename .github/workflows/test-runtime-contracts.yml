@@ -112,7 +112,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.artifacts == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ github.event_name == 'pull_request' && vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING != '' && fromJSON(vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING).head_revision == github.event.pull_request.head.sha && 20 || 10 }}
+    timeout-minutes: ${{ github.event_name == 'pull_request' && vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING != '' && fromJSON(vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING).head_revision == github.event.pull_request.head.sha && 40 || 30 }}
     permissions:
       contents: read
       actions: read
@@ -446,6 +446,16 @@ jobs:
             --baseline-ref "$REVIEWED_BASELINE" \
             --published-ref "$PUBLISHED_REF" \
             --report /tmp/contract-readiness.json
+      - name: Release gate on the candidate (same mode as publication)
+        if: needs.changes.outputs.input_candidate != 'true' && steps.input_recovery.outputs.selected != 'true' && steps.open_input_diagnostic.outputs.selected != 'true' && steps.eks_input.outputs.selected != 'true'
+        env:
+          # Fork PRs receive no secret and run the public rules only.
+          SUPPLIER_VOCAB_JSON: ${{ secrets.SUPPLIER_VOCAB_JSON }}
+          RELEASE_GATE_ENFORCE: ${{ vars.RELEASE_GATE_ENFORCE }}
+        run: >-
+          python scripts/release_gate.py
+          --facts-dir /tmp/runtime-contract-evidence
+          --report /tmp/release-gate.json
       - name: Check explicit reviewed source-only input without claiming formal output
         if: needs.changes.outputs.input_candidate == 'true' && steps.input_recovery.outputs.selected != 'true' && steps.open_input_diagnostic.outputs.selected != 'true' && steps.eks_input.outputs.selected != 'true'
         env:
@@ -462,6 +472,7 @@ jobs:
           name: candidate-contract-readiness
           path: |
             /tmp/contract-readiness.json
+            /tmp/release-gate.json
             /tmp/runtime-contract-evidence/acquisition-receipt.json
             /tmp/reviewed-input-candidate/receipt.json
           if-no-files-found: ignore

@@ -12,7 +12,6 @@ x-aisa-operation-id: "stackexchange-com.questions.question"
 - **方法与路径:** POST /apis/v1/stackexchange-com/questions/question
 - **可用状态:** enabled
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/stackexchange-com/questions/question`
-- **Runtime 事实版本:** 5bc97b6e49cd2980b95f225d7763c2c1917cc4efdfd41fb9e7e3dfd2260a12e8
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/stackexchange-com.json)
 
@@ -35,19 +34,70 @@ x-aisa-operation-id: "stackexchange-com.questions.question"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "provider": {
-            "summary": "Official provider example; checked against AIsa request constraints",
-            "value": {
-              "answers_pagesize": 2,
-              "question_id": 3940128
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
+          "properties": {
+            "answers_page": {
+              "type": "number",
+              "description": "Pages above 25 need `key`: Stack Exchange serves deeper pages only with an application key (`access_denied` otherwise). Without one the last page reports partial coverage.\n\nProvider reference: minimum 1; maximum 10000; default 1.",
+              "default": 1,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 10000
+              }
+            },
+            "answers_pagesize": {
+              "type": "number",
+              "description": "0 returns the question only.\n\nProvider reference: minimum 0; maximum 100; default 30.",
+              "default": 30,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0,
+                "max": 100
+              }
+            },
+            "answers_sort": {
+              "type": "string",
+              "description": "answers_sort\n\nProvider reference: allowed values [\"votes\", \"activity\", \"creation\"]; default \"votes\".",
+              "default": "votes",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "votes",
+                  "activity",
+                  "creation"
+                ]
+              }
+            },
+            "key": {
+              "type": "string",
+              "description": "Optional Stack Exchange application key. Raises the per-IP quota from 300 to 10,000 requests per day and unlocks pages above 25, which the API refuses anonymously. Keys are public identifiers, not secrets.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "question_id": {
+              "type": "number",
+              "description": "question_id"
+            },
+            "site": {
+              "type": "string",
+              "description": "Stack Exchange site API parameter, e.g. stackoverflow, superuser, math, askubuntu, english, physics. Use `sites` to list them. Pattern: ^[a-z0-9]+(\\.[a-z0-9]+)*$.\n\nProvider reference: default \"stackoverflow\".",
+              "default": "stackoverflow",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "url": {
+              "type": "string",
+              "description": "HTTPS question URL on any Stack Exchange site, e.g. https://stackoverflow.com/questions/3940128/..., https://ru.stackoverflow.com/questions/1624500/... or https://math.stackexchange.com/q/11. Answer links of the form /questions/<question_id>/<slug>/<answer_id> resolve to their question. The site is derived from the host; an explicit `site` must match it. Question feed URLs (/feeds/question/<id>) are accepted too."
+            }
+          },
           "allOf": [
             {
               "anyOf": [
@@ -69,70 +119,19 @@ x-aisa-operation-id: "stackexchange-com.questions.question"
                 }
               ]
             }
-          ],
-          "properties": {
-            "answers_page": {
-              "default": 1,
-              "description": "Pages above 25 need `key`: Stack Exchange serves deeper pages only with an application key (`access_denied` otherwise). Without one the last page reports partial coverage.\n\nProvider reference: minimum 1; maximum 10000; default 1.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 10000,
-                "min": 1
-              }
-            },
-            "answers_pagesize": {
-              "default": 30,
-              "description": "0 returns the question only.\n\nProvider reference: minimum 0; maximum 100; default 30.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 100,
-                "min": 0
-              }
-            },
-            "answers_sort": {
-              "default": "votes",
-              "description": "answers_sort\n\nProvider reference: allowed values [\"votes\", \"activity\", \"creation\"]; default \"votes\".",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "oneOf": [
-                  "votes",
-                  "activity",
-                  "creation"
-                ]
-              }
-            },
-            "key": {
-              "description": "Optional Stack Exchange application key. Raises the per-IP quota from 300 to 10,000 requests per day and unlocks pages above 25, which the API refuses anonymously. Keys are public identifiers, not secrets.",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "question_id": {
-              "description": "question_id",
-              "type": "number"
-            },
-            "site": {
-              "default": "stackoverflow",
-              "description": "Stack Exchange site API parameter, e.g. stackoverflow, superuser, math, askubuntu, english, physics. Use `sites` to list them. Pattern: ^[a-z0-9]+(\\.[a-z0-9]+)*$.\n\nProvider reference: default \"stackoverflow\".",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "url": {
-              "description": "HTTPS question URL on any Stack Exchange site, e.g. https://stackoverflow.com/questions/3940128/..., https://ru.stackoverflow.com/questions/1624500/... or https://math.stackexchange.com/q/11. Answer links of the form /questions/<question_id>/<slug>/<answer_id> resolve to their question. The site is derived from the host; an explicit `site` must match it. Question feed URLs (/feeds/question/<id>) are accepted too.",
-              "type": "string"
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "answers_pagesize": 2,
+              "question_id": 3940128
             }
-          },
-          "type": "object"
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "components": {

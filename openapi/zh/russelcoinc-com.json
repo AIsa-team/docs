@@ -1,20 +1,20 @@
 {
   "components": {
-    "callbacks": {},
-    "examples": {},
-    "headers": {},
-    "links": {},
-    "parameters": {},
-    "pathItems": {},
-    "requestBodies": {},
-    "responses": {},
-    "schemas": {},
     "securitySchemes": {
       "bearerAuth": {
         "scheme": "bearer",
         "type": "http"
       }
-    }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
   },
   "info": {
     "description": "",
@@ -28,18 +28,33 @@
         "value": "quote"
       }
     },
+    "x-aisa-configured-paths": [
+      "/apis/v1/russelcoinc-com/products/get-product",
+      "/apis/v1/russelcoinc-com/products/list-categories",
+      "/apis/v1/russelcoinc-com/products/search-products"
+    ],
+    "x-aisa-document": {
+      "facts_hash": "9830c61507379ff71eb97314d699d86b949eac37368bf95b53491e234b22df86",
+      "generator_version": "3",
+      "protocol_version": "1",
+      "schema_version": "1",
+      "composer_version": "31",
+      "response_pending": [],
+      "document_hash": "sha256:ca0ff6656f71df9d629978bf31b76fb555ac4dcbd5b758e6d4262ef591ac2d1b"
+    },
+    "x-aisa-plans": {
+      "builder": 1.0,
+      "display_plan": "payg",
+      "payg": 1.0,
+      "similarweb_payg": 1.0,
+      "team": 1.0,
+      "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
+    },
+    "x-aisa-provider": "russelcoinc-com",
     "x-aisa-catalogs": {
       "russelcoinc-com": {
-        "description": "",
         "title": "Russelco Inc",
-        "x-aisa-capabilities": {
-          "idempotency": "Idempotency-Key",
-          "max_price": "X-AISA-Max-Price-USD",
-          "quote": {
-            "header": "X-AISA-Cost-Mode",
-            "value": "quote"
-          }
-        },
+        "description": "",
         "x-aisa-document": {
           "facts_hash": "9830c61507379ff71eb97314d699d86b949eac37368bf95b53491e234b22df86",
           "generator_version": "3",
@@ -53,32 +68,17 @@
           "similarweb_payg": 1.0,
           "team": 1.0,
           "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
+        },
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          }
         }
       }
-    },
-    "x-aisa-configured-paths": [
-      "/apis/v1/russelcoinc-com/products/get-product",
-      "/apis/v1/russelcoinc-com/products/list-categories",
-      "/apis/v1/russelcoinc-com/products/search-products"
-    ],
-    "x-aisa-document": {
-      "composer_version": "29",
-      "document_hash": "sha256:278556fec310042ed9ed36a940208c35c2b01120d99360b666a08432d26649eb",
-      "facts_hash": "9830c61507379ff71eb97314d699d86b949eac37368bf95b53491e234b22df86",
-      "generator_version": "3",
-      "protocol_version": "1",
-      "response_pending": [],
-      "schema_version": "1"
-    },
-    "x-aisa-plans": {
-      "builder": 1.0,
-      "display_plan": "payg",
-      "payg": 1.0,
-      "similarweb_payg": 1.0,
-      "team": 1.0,
-      "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
-    },
-    "x-aisa-provider": "russelcoinc-com"
+    }
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",
@@ -88,8 +88,22 @@
         "description": "After search_products, to read one product record and discover related items; or directly for a pasted product URL.",
         "operationId": "russelcoinc-com.products.get-product",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "upc": {
+                    "type": "string",
+                    "description": "Product key as the site uses it (`305730150200`, `079656031867:12/26`) or a product page URL."
+                  }
+                },
+                "required": [
+                  "upc"
+                ]
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -97,32 +111,25 @@
                     "upc": "079656031867"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "upc": {
-                    "description": "Product key as the site uses it (`305730150200`, `079656031867:12/26`) or a product page URL.",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "upc"
-                ],
-                "type": "object"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "One product by UPC from its storefront page (/product/{upc}, read as the Next.js RSC flight payload): description, retail unit price and sale price (price_override), case pack, quantity on hand, status, image URL, plus the page's three 'you may also like' products. Accepts a plain UPC, a lot-suffixed key such as `079656031867:12/26`, or a pasted https://russelcoinc.com/product/... URL. An unknown UPC is `not_found` (the site answers HTTP 200 with its 'Product Not Found' page).\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `case_pack` | number |  |\n| `currency` | string |  |\n| `description` | string |  |\n| `image_url` | string |  |\n| `is_featured` | boolean |  |\n| `observed_at_ms` | number |  |\n| `price` | number | Retail unit price in USD (the product page shows retail prices). |\n| `price_override` | number | The site's `price_override`: the active sale unit price, 0 when there is none. |\n| `qty_on_hand` | number |  |\n| `related_products` | object[] | The page's 'you may also like' items (three on every observed page; may be empty). |\n| `sale_price` | number |  |\n| `source_url` | string |  |\n| `status` | number |  |\n| `upc` | string |  |\n| `url` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-10-10.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-10.",
                     "value": {
                       "case_pack": 6,
                       "currency": "USD",
@@ -184,16 +191,9 @@
                       "url": "https://russelcoinc.com/product/079656031867"
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "One product by UPC from its storefront page (/product/{upc}, read as the Next.js RSC flight payload): description, retail unit price and sale price (price_override), case pack, quantity on hand, status, image URL, plus the page's three 'you may also like' products. Accepts a plain UPC, a lot-suffixed key such as `079656031867:12/26`, or a pasted https://russelcoinc.com/product/... URL. An unknown UPC is `not_found` (the site answers HTTP 200 with its 'Product Not Found' page).\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `case_pack` | number |  |\n| `currency` | string |  |\n| `description` | string |  |\n| `image_url` | string |  |\n| `is_featured` | boolean |  |\n| `observed_at_ms` | number |  |\n| `price` | number | Retail unit price in USD (the product page shows retail prices). |\n| `price_override` | number | The site's `price_override`: the active sale unit price, 0 when there is none. |\n| `qty_on_hand` | number |  |\n| `related_products` | object[] | The page's 'you may also like' items (three on every observed page; may be empty). |\n| `sale_price` | number |  |\n| `source_url` | string |  |\n| `status` | number |  |\n| `upc` | string |  |\n| `url` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -211,17 +211,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "russelcoinc-com",
         "x-aisa-category": "commerce",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/russelcoinc-com/russelcoinc-com-products-get-product",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -237,54 +235,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:f3fc891ac4404099fea33b097da1ba402ebfb15d3df002225eb2a8f832787f70",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "0c23d16090a6"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "russelcoinc-com",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "russelcoinc-com.products.get-product",
+          "method": "POST",
           "path": "/apis/v1/russelcoinc-com/products/get-product"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:f3fc891ac4404099fea33b097da1ba402ebfb15d3df002225eb2a8f832787f70"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/russelcoinc-com/russelcoinc-com-products-get-product"
       }
     },
     "/apis/v1/russelcoinc-com/products/list-categories": {
@@ -292,39 +292,46 @@
         "description": "To discover category ids for search_products, or to walk the catalogue by department, product type and brand.",
         "operationId": "russelcoinc-com.products.list-categories",
         "requestBody": {
+          "required": false,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "parent_id": {
+                    "type": "string",
+                    "description": "Public id of the category whose children to list; omit for the top-level departments. Pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                }
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
                   "value": {}
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "parent_id": {
-                    "description": "Public id of the category whose children to list; omit for the top-level departments. Pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$.",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  }
-                },
-                "type": "object"
               }
             }
-          },
-          "required": false
+          }
         },
         "responses": {
           "200": {
+            "description": "The storefront's category tree from /api/categories/menu (about 500 nodes, three levels: department, e.g. Baby; type, e.g. Diapers; brand, e.g. Huggies). Returns the direct children of `parent_id` (the eight top-level departments when omitted), each with its own children one level down and a child count, as the stable public ids that search_products takes in `category_id`. An unknown parent_id is `not_found`.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `categories` | object[] |  |\n| `observed_at_ms` | number |  |\n| `parent` | object | The category whose children are listed; null for the top level. |\n| `source_url` | string |  |\n| `total_categories` | number | Nodes in the whole menu. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-10-10.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-10.",
                     "value": {
                       "categories": [
                         {
@@ -896,16 +903,9 @@
                       "total_categories": 507
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "The storefront's category tree from /api/categories/menu (about 500 nodes, three levels: department, e.g. Baby; type, e.g. Diapers; brand, e.g. Huggies). Returns the direct children of `parent_id` (the eight top-level departments when omitted), each with its own children one level down and a child count, as the stable public ids that search_products takes in `category_id`. An unknown parent_id is `not_found`.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `categories` | object[] |  |\n| `observed_at_ms` | number |  |\n| `parent` | object | The category whose children are listed; null for the top level. |\n| `source_url` | string |  |\n| `total_categories` | number | Nodes in the whole menu. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -923,17 +923,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "russelcoinc-com",
         "x-aisa-category": "commerce",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/russelcoinc-com/russelcoinc-com-products-list-categories",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -949,54 +947,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:7fc416ad6d37aa66d12f4cc5534c5df12be137917a43c69d20b8e0d1565aecac",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "1d8fcda8fff5"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "russelcoinc-com",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "russelcoinc-com.products.list-categories",
+          "method": "POST",
           "path": "/apis/v1/russelcoinc-com/products/list-categories"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:7fc416ad6d37aa66d12f4cc5534c5df12be137917a43c69d20b8e0d1565aecac"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/russelcoinc-com/russelcoinc-com-products-list-categories"
       }
     },
     "/apis/v1/russelcoinc-com/products/search-products": {
@@ -1004,49 +1004,42 @@
         "description": "Start here to find products by name or brand, to list a category, or to enumerate the catalogue page by page; then call get_product with a returned upc for the record with its related items.",
         "operationId": "russelcoinc-com.products.search-products",
         "requestBody": {
+          "required": false,
           "content": {
             "application/json": {
-              "examples": {
-                "provider": {
-                  "summary": "Official provider example; checked against AIsa request constraints",
-                  "value": {
-                    "query": "advil",
-                    "sort": "price_asc"
-                  }
-                }
-              },
               "schema": {
+                "type": "object",
                 "additionalProperties": true,
                 "properties": {
                   "category_id": {
-                    "description": "Category public id (uuid) as returned by list_categories (`id`) or seen in the site's `/products?category=` links. Includes the category's descendants. Pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$.",
                     "type": "string",
+                    "description": "Category public id (uuid) as returned by list_categories (`id`) or seen in the site's `/products?category=` links. Includes the category's descendants. Pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "page": {
-                    "default": 1,
-                    "description": "1-based page of 42 products; pass the returned next_cursor to continue.\n\nProvider reference: minimum 1; maximum 1000; default 1.",
                     "type": "number",
+                    "description": "1-based page of 42 products; pass the returned next_cursor to continue.\n\nProvider reference: minimum 1; maximum 1000; default 1.",
+                    "default": 1,
                     "x-alexandria-option-metadata": {
                       "in": "body",
-                      "max": 1000,
-                      "min": 1
+                      "min": 1,
+                      "max": 1000
                     }
                   },
                   "query": {
-                    "default": "",
-                    "description": "Free-text search (product description or brand, e.g. `advil`). Empty or omitted lists the catalogue.\n\nProvider reference: default \"\".",
                     "type": "string",
+                    "description": "Free-text search (product description or brand, e.g. `advil`). Empty or omitted lists the catalogue.\n\nProvider reference: default \"\".",
+                    "default": "",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "sort": {
-                    "default": "description",
-                    "description": "Sort order; the site's own values.\n\nProvider reference: allowed values [\"description\", \"price_asc\", \"price_desc\"]; default \"description\".",
                     "type": "string",
+                    "description": "Sort order; the site's own values.\n\nProvider reference: allowed values [\"description\", \"price_asc\", \"price_desc\"]; default \"description\".",
+                    "default": "description",
                     "x-alexandria-option-metadata": {
                       "in": "body",
                       "oneOf": [
@@ -1057,34 +1050,48 @@
                     }
                   },
                   "special_offers_only": {
-                    "description": "Only products in the site's 'On Sale' view (`/products?special=true`); their `price_override` carries the sale price.",
                     "type": "boolean",
+                    "description": "Only products in the site's 'On Sale' view (`/products?special=true`); their `price_override` carries the sale price.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "wholesale_prices": {
-                    "description": "Return wholesale unit prices instead of retail ones, as the public 'Wholesale Prices' toggle on the site does (no login involved).",
                     "type": "boolean",
+                    "description": "Return wholesale unit prices instead of retail ones, as the public 'Wholesale Prices' toggle on the site does (no login involved).",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   }
-                },
-                "type": "object"
+                }
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "query": "advil",
+                    "sort": "price_asc"
+                  }
+                }
               }
             }
-          },
-          "required": false
+          }
         },
         "responses": {
           "200": {
+            "description": "Search or browse the Russelco catalogue through the storefront's own listing server action (POST /products, Next.js `loadMoreProducts`): free-text query, category filter (category public id from list_categories), sort (description | price_asc | price_desc), the 'On Sale' view (special_offers_only) and the public 'Wholesale Prices' toggle (wholesale_prices). Returns one page of up to 42 products with UPC, description, unit price, sale price (price_override), case pack, quantity on hand, status and image URL, plus the site's total count and page count. With no query and no filters it pages through the whole catalogue (sorted by description). A query with no matches is a successful empty page.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `category_id` | string | The category public id filtered on, null when none. |\n| `observed_at_ms` | number |  |\n| `paging` | object |  |\n| `products` | object[] |  |\n| `query` | string | The query as sent (trimmed). |\n| `sort` | string |  |\n| `source_url` | string | The public listing or search page for these filters (the page number is not part of the site's URLs). |\n| `special_offers_only` | boolean |  |\n| `wholesale_prices` | boolean | True when `price` and `price_override` are the site's wholesale unit prices. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-10-10.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-10.",
                     "value": {
                       "category_id": null,
                       "observed_at_ms": 1791604304296,
@@ -1693,16 +1700,9 @@
                       "wholesale_prices": false
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Search or browse the Russelco catalogue through the storefront's own listing server action (POST /products, Next.js `loadMoreProducts`): free-text query, category filter (category public id from list_categories), sort (description | price_asc | price_desc), the 'On Sale' view (special_offers_only) and the public 'Wholesale Prices' toggle (wholesale_prices). Returns one page of up to 42 products with UPC, description, unit price, sale price (price_override), case pack, quantity on hand, status and image URL, plus the site's total count and page count. With no query and no filters it pages through the whole catalogue (sorted by description). A query with no matches is a successful empty page.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `category_id` | string | The category public id filtered on, null when none. |\n| `observed_at_ms` | number |  |\n| `paging` | object |  |\n| `products` | object[] |  |\n| `query` | string | The query as sent (trimmed). |\n| `sort` | string |  |\n| `source_url` | string | The public listing or search page for these filters (the page number is not part of the site's URLs). |\n| `special_offers_only` | boolean |  |\n| `wholesale_prices` | boolean | True when `price` and `price_override` are the site's wholesale unit prices. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -1720,17 +1720,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "russelcoinc-com",
         "x-aisa-category": "commerce",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/russelcoinc-com/russelcoinc-com-products-search-products",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -1746,54 +1744,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:c9f67a251e0f9520bb5cd112a5506d7e7aa0fa2a272999820de1166cf6998cb5",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "51bf8764c421"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "russelcoinc-com",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "russelcoinc-com.products.search-products",
+          "method": "POST",
           "path": "/apis/v1/russelcoinc-com/products/search-products"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:618a5d15113aec62b621efa6b966158fa337b2f5ef6b008717f6f6dfa44bc7d8",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:c9f67a251e0f9520bb5cd112a5506d7e7aa0fa2a272999820de1166cf6998cb5"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/russelcoinc-com/russelcoinc-com-products-search-products"
       }
     }
   },

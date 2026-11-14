@@ -12,7 +12,6 @@ x-aisa-operation-id: "htmlcss-to-image.create-image"
 - **方法与路径:** POST /apis/v1/htmlcss-to-image/create-image
 - **可用状态:** enabled
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/htmlcss-to-image/create-image`
-- **Runtime 事实版本:** ecf7b25fc395f7aff68b9e1c0588b3d9a8bb0e613a7bdfd59ede194deb499492
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/htmlcss-to-image.json)
 
@@ -35,161 +34,163 @@ x-aisa-operation-id: "htmlcss-to-image.create-image"
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
         "schema": {
+          "type": "object",
           "properties": {
-            "additional_header_origins": {
-              "description": "Up to 20 unique exact HTTP(S) origins that may also receive headers.",
+            "css": {
+              "type": "string",
               "examples": [
-                [
-                  "https://assets.example.com"
-                ]
+                ".card { padding: 24px; }"
               ],
-              "items": {
-                "type": "string"
-              },
-              "maxItems": 20,
-              "type": "array"
+              "description": "CSS applied to supplied HTML or injected into a captured webpage."
             },
-            "block_consent_banners": {
+            "url": {
+              "type": "string",
+              "examples": [
+                "https://example.com"
+              ],
+              "description": "Absolute, internet-reachable HTTP(S) webpage URL to capture. Set this or html, but not both; use headers for authenticated pages."
+            },
+            "html": {
+              "minLength": 1,
+              "type": "string",
+              "description": "HTML to render. Set this or url, but not both.",
+              "examples": [
+                "<div class='card'>Hello</div>"
+              ]
+            },
+            "headers": {
+              "type": "object",
+              "examples": [
+                {
+                  "X-Preview-Mode": "true"
+                }
+              ],
+              "description": "HTTP headers sent to the captured page, with at most 20 case-insensitive names.",
+              "maxProperties": 20,
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "ms_delay": {
+              "maximum": 10000,
+              "minimum": 1,
+              "type": "integer",
+              "description": "Extra render delay in milliseconds, from 0 to 10000. Zero omits the explicit delay."
+            },
+            "selector": {
+              "type": "string",
+              "examples": [
+                "#invoice"
+              ],
+              "description": "CSS selector for the element to capture."
+            },
+            "timezone": {
+              "type": "string",
+              "examples": [
+                "America/New_York"
+              ],
+              "description": "IANA timezone exposed to the rendered page."
+            },
+            "media_type": {
+              "enum": [
+                "screen"
+              ],
+              "type": "string",
+              "description": "CSS media type used while rendering: screen or print."
+            },
+            "full_screen": {
+              "type": "boolean",
               "default": false,
-              "description": "Attempt to block common consent banners.",
-              "type": "boolean"
+              "description": "Capture the full scrollable page instead of only the viewport."
+            },
+            "max_wait_ms": {
+              "type": "integer",
+              "maximum": 10000,
+              "minimum": 500,
+              "description": "Maximum wait from 500 to 10000 milliseconds for page loading."
             },
             "color_scheme": {
-              "description": "Preferred browser color scheme: light or dark.",
               "enum": [
                 "light",
                 "dark"
               ],
-              "type": "string"
-            },
-            "css": {
-              "description": "CSS applied to supplied HTML or injected into a captured webpage.",
-              "examples": [
-                ".card { padding: 24px; }"
-              ],
-              "type": "string"
-            },
-            "dedupe_duration_s": {
-              "description": "Reuse a matching recent render for this many seconds. Allowed durations depend on the account plan; free accounts accept 0 or 2592000 (30 days).",
-              "minimum": 0,
-              "type": "integer"
+              "type": "string",
+              "description": "Preferred browser color scheme: light or dark."
             },
             "device_scale": {
+              "type": "number",
               "default": 2,
-              "description": "Device scale factor from 0.1 to 3.",
               "maximum": 3,
               "minimum": 0.1,
-              "type": "number"
-            },
-            "full_screen": {
-              "default": false,
-              "description": "Capture the full scrollable page instead of only the viewport.",
-              "type": "boolean"
+              "description": "Device scale factor from 0.1 to 3."
             },
             "google_fonts": {
-              "description": "Google Font family names to load while rendering.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
               "examples": [
                 [
                   "Inter",
                   "Roboto"
                 ]
               ],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
+              "description": "Google Font family names to load while rendering."
             },
-            "headers": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "description": "HTTP headers sent to the captured page, with at most 20 case-insensitive names.",
-              "examples": [
-                {
-                  "X-Preview-Mode": "true"
-                }
-              ],
-              "maxProperties": 20,
-              "type": "object"
-            },
-            "html": {
-              "description": "HTML to render. Set this or url, but not both.",
-              "examples": [
-                "<div class='card'>Hello</div>"
-              ],
-              "minLength": 1,
-              "type": "string"
-            },
-            "include_headers_on_subrequests": {
-              "default": false,
-              "description": "Also include supplied headers on page subrequests.",
-              "type": "boolean"
-            },
-            "max_wait_ms": {
-              "description": "Maximum wait from 500 to 10000 milliseconds for page loading.",
-              "maximum": 10000,
-              "minimum": 500,
-              "type": "integer"
-            },
-            "media_type": {
-              "description": "CSS media type used while rendering: screen or print.",
-              "enum": [
-                "screen"
-              ],
-              "type": "string"
-            },
-            "ms_delay": {
-              "description": "Extra render delay in milliseconds, from 0 to 10000. Zero omits the explicit delay.",
-              "maximum": 10000,
+            "viewport_width": {
+              "type": "integer",
+              "maximum": 6000,
               "minimum": 1,
-              "type": "integer"
+              "description": "Viewport width in pixels, from 1 to 6000. Requires viewport_height."
+            },
+            "viewport_height": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Viewport height in pixels. Requires viewport_width."
+            },
+            "dedupe_duration_s": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Reuse a matching recent render for this many seconds. Allowed durations depend on the account plan; free accounts accept 0 or 2592000 (30 days)."
             },
             "render_when_ready": {
-              "description": "Wait until the page signals that rendering is ready.",
               "enum": [
                 false
               ],
-              "type": "boolean"
+              "type": "boolean",
+              "description": "Wait until the page signals that rendering is ready."
             },
-            "selector": {
-              "description": "CSS selector for the element to capture.",
-              "examples": [
-                "#invoice"
-              ],
-              "type": "string"
-            },
-            "timezone": {
-              "description": "IANA timezone exposed to the rendered page.",
-              "examples": [
-                "America/New_York"
-              ],
-              "type": "string"
+            "block_consent_banners": {
+              "type": "boolean",
+              "default": false,
+              "description": "Attempt to block common consent banners."
             },
             "transparent_background": {
+              "type": "boolean",
               "default": false,
-              "description": "Render a transparent background where supported.",
-              "type": "boolean"
+              "description": "Render a transparent background where supported."
             },
-            "url": {
-              "description": "Absolute, internet-reachable HTTP(S) webpage URL to capture. Set this or html, but not both; use headers for authenticated pages.",
+            "additional_header_origins": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
               "examples": [
-                "https://example.com"
+                [
+                  "https://assets.example.com"
+                ]
               ],
-              "type": "string"
+              "maxItems": 20,
+              "description": "Up to 20 unique exact HTTP(S) origins that may also receive headers."
             },
-            "viewport_height": {
-              "description": "Viewport height in pixels. Requires viewport_width.",
-              "minimum": 1,
-              "type": "integer"
-            },
-            "viewport_width": {
-              "description": "Viewport width in pixels, from 1 to 6000. Requires viewport_height.",
-              "maximum": 6000,
-              "minimum": 1,
-              "type": "integer"
+            "include_headers_on_subrequests": {
+              "type": "boolean",
+              "default": false,
+              "description": "Also include supplied headers on page subrequests."
             }
           },
           "required": [
@@ -197,12 +198,10 @@ x-aisa-operation-id: "htmlcss-to-image.create-image"
             "media_type",
             "ms_delay",
             "render_when_ready"
-          ],
-          "type": "object"
+          ]
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "components": {

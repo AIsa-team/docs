@@ -12,7 +12,6 @@ x-aisa-operation-id: "tweakers-net.products.search"
 - **Method and path:** POST /apis/v1/tweakers-net/products/search
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/tweakers-net/products/search`
-- **Runtime facts:** 81c8f2260900e737de4c01bb681e3320216548fb640571448340636bc88d3fbe
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/tweakers-net.json)
 
@@ -35,21 +34,73 @@ Effective request declaration (including authentication and referenced schemas):
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
-        "examples": {
-          "provider": {
-            "summary": "Official provider example; checked against AIsa request constraints",
-            "value": {
-              "filters": {
-                "c": "215"
-              },
-              "query": "iphone 15"
-            }
-          }
-        },
         "schema": {
+          "type": "object",
           "additionalProperties": true,
+          "properties": {
+            "category_id": {
+              "type": "number",
+              "description": "Pricewatch category id from `categories` (or a category filter value). Reads that category's listing, which offers its specification filters.\n\nProvider reference: minimum 1."
+            },
+            "filters": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Chosen filters as Tweakers query parameters, passed through untouched: keys are a returned filter's `param`, `min_param` or `max_param`, values one of its `values[].value` (or an array of them for checkbox filters; for range filters any value on the filter's scale). Example: {\"b\": [\"122\", \"1006\"], \"f764\": \"13263\", \"i763\": \"6.1\"}.",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "max_price": {
+              "type": "number",
+              "description": "Highest price in whole euros (Tweakers' `pa`).\n\nProvider reference: minimum 0; maximum 100000.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0,
+                "max": 100000
+              }
+            },
+            "min_price": {
+              "type": "number",
+              "description": "Lowest price in whole euros (Tweakers' `pi`).\n\nProvider reference: minimum 0; maximum 100000.",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 0,
+                "max": 100000
+              }
+            },
+            "page": {
+              "type": "number",
+              "description": "Result page, 40 products per page.\n\nProvider reference: minimum 1; maximum 50; default 1.",
+              "default": 1,
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "min": 1,
+                "max": 50
+              }
+            },
+            "query": {
+              "type": "string",
+              "description": "Search keywords as typed in the Pricewatch search box, e.g. 'iphone 15' or 'rtx 5070'. Optional when category_id is given."
+            },
+            "sort": {
+              "type": "string",
+              "description": "Result order (Tweakers' sort menu): most viewed, price low to high, price high to low, user score, newest or oldest available. Default is Tweakers' own order.\n\nProvider reference: allowed values [\"popularity\", \"price_asc\", \"price_desc\", \"rating\", \"newest\", \"oldest\"].",
+              "x-alexandria-option-metadata": {
+                "in": "body",
+                "oneOf": [
+                  "popularity",
+                  "price_asc",
+                  "price_desc",
+                  "rating",
+                  "newest",
+                  "oldest"
+                ]
+              }
+            }
+          },
           "allOf": [
             {
               "anyOf": [
@@ -71,73 +122,21 @@ Effective request declaration (including authentication and referenced schemas):
                 }
               ]
             }
-          ],
-          "properties": {
-            "category_id": {
-              "description": "Pricewatch category id from `categories` (or a category filter value). Reads that category's listing, which offers its specification filters.\n\nProvider reference: minimum 1.",
-              "type": "number"
-            },
-            "filters": {
-              "additionalProperties": true,
-              "description": "Chosen filters as Tweakers query parameters, passed through untouched: keys are a returned filter's `param`, `min_param` or `max_param`, values one of its `values[].value` (or an array of them for checkbox filters; for range filters any value on the filter's scale). Example: {\"b\": [\"122\", \"1006\"], \"f764\": \"13263\", \"i763\": \"6.1\"}.",
-              "type": "object",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "max_price": {
-              "description": "Highest price in whole euros (Tweakers' `pa`).\n\nProvider reference: minimum 0; maximum 100000.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 100000,
-                "min": 0
-              }
-            },
-            "min_price": {
-              "description": "Lowest price in whole euros (Tweakers' `pi`).\n\nProvider reference: minimum 0; maximum 100000.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 100000,
-                "min": 0
-              }
-            },
-            "page": {
-              "default": 1,
-              "description": "Result page, 40 products per page.\n\nProvider reference: minimum 1; maximum 50; default 1.",
-              "type": "number",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "max": 50,
-                "min": 1
-              }
-            },
-            "query": {
-              "description": "Search keywords as typed in the Pricewatch search box, e.g. 'iphone 15' or 'rtx 5070'. Optional when category_id is given.",
-              "type": "string"
-            },
-            "sort": {
-              "description": "Result order (Tweakers' sort menu): most viewed, price low to high, price high to low, user score, newest or oldest available. Default is Tweakers' own order.\n\nProvider reference: allowed values [\"popularity\", \"price_asc\", \"price_desc\", \"rating\", \"newest\", \"oldest\"].",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body",
-                "oneOf": [
-                  "popularity",
-                  "price_asc",
-                  "price_desc",
-                  "rating",
-                  "newest",
-                  "oldest"
-                ]
-              }
+          ]
+        },
+        "examples": {
+          "provider": {
+            "summary": "Official provider example; checked against AIsa request constraints",
+            "value": {
+              "filters": {
+                "c": "215"
+              },
+              "query": "iphone 15"
             }
-          },
-          "type": "object"
+          }
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "components": {

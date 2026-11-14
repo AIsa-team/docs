@@ -1,20 +1,20 @@
 {
   "components": {
-    "callbacks": {},
-    "examples": {},
-    "headers": {},
-    "links": {},
-    "parameters": {},
-    "pathItems": {},
-    "requestBodies": {},
-    "responses": {},
-    "schemas": {},
     "securitySchemes": {
       "bearerAuth": {
         "scheme": "bearer",
         "type": "http"
       }
-    }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
   },
   "info": {
     "description": "",
@@ -26,34 +26,6 @@
       "quote": {
         "header": "X-AISA-Cost-Mode",
         "value": "quote"
-      }
-    },
-    "x-aisa-catalogs": {
-      "faa-gov": {
-        "description": "",
-        "title": "FAA public records",
-        "x-aisa-capabilities": {
-          "idempotency": "Idempotency-Key",
-          "max_price": "X-AISA-Max-Price-USD",
-          "quote": {
-            "header": "X-AISA-Cost-Mode",
-            "value": "quote"
-          }
-        },
-        "x-aisa-document": {
-          "facts_hash": "56498b38eaf3522c0d7e34bfe7b9a8cd8eb255f53bd08d78536217eafac522fb",
-          "generator_version": "3",
-          "protocol_version": "1",
-          "schema_version": "1"
-        },
-        "x-aisa-plans": {
-          "builder": 1.0,
-          "display_plan": "payg",
-          "payg": 1.0,
-          "similarweb_payg": 1.0,
-          "team": 1.0,
-          "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
-        }
       }
     },
     "x-aisa-configured-paths": [
@@ -68,13 +40,13 @@
       "/apis/v1/faa-gov/aviation-records/n-number-availability"
     ],
     "x-aisa-document": {
-      "composer_version": "29",
-      "document_hash": "sha256:e8bf75dd67117a301e5159c3d3fa2fef1336a6d069f220ac6db5f5ec07e1656e",
       "facts_hash": "56498b38eaf3522c0d7e34bfe7b9a8cd8eb255f53bd08d78536217eafac522fb",
       "generator_version": "3",
       "protocol_version": "1",
+      "schema_version": "1",
+      "composer_version": "31",
       "response_pending": [],
-      "schema_version": "1"
+      "document_hash": "sha256:bff6b36918026f102bc98044dfe5bb40f4df1e964fc9569043de370463be2a59"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -84,7 +56,35 @@
       "team": 1.0,
       "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
     },
-    "x-aisa-provider": "faa-gov"
+    "x-aisa-provider": "faa-gov",
+    "x-aisa-catalogs": {
+      "faa-gov": {
+        "title": "FAA public records",
+        "description": "",
+        "x-aisa-document": {
+          "facts_hash": "56498b38eaf3522c0d7e34bfe7b9a8cd8eb255f53bd08d78536217eafac522fb",
+          "generator_version": "3",
+          "protocol_version": "1",
+          "schema_version": "1"
+        },
+        "x-aisa-plans": {
+          "builder": 1.0,
+          "display_plan": "payg",
+          "payg": 1.0,
+          "similarweb_payg": 1.0,
+          "team": 1.0,
+          "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
+        },
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          }
+        }
+      }
+    }
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",
@@ -94,8 +94,22 @@
         "description": "Look up who owns a US-registered aircraft or what a tail number is. Unassigned numbers are not_found; malformed numbers are invalid_input.",
         "operationId": "faa-gov.aviation-records.aircraft",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "n_number": {
+                    "type": "string",
+                    "description": "US registration (tail number) with or without the N prefix, e.g. N637JB or 637jb."
+                  }
+                },
+                "required": [
+                  "n_number"
+                ]
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -103,32 +117,25 @@
                     "n_number": "N637JB"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "n_number": {
-                    "description": "US registration (tail number) with or without the N prefix, e.g. N637JB or 637jb.",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "n_number"
-                ],
-                "type": "object"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "FAA registry record for one N-number: registration status, aircraft description (serial, make, model, year, Mode S code), registered owner, airworthiness certificate data, temporary certificates and reservation data. Deregistered numbers return the status only.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `airworthiness` | object | Airworthiness table; null unless status is assigned. Not a basis for an airworthiness determination (registry disclaimer). |\n| `description` | object | Aircraft Description table; null unless status is assigned. |\n| `fuel_modifications` | object[] |  |\n| `multiple_records` | boolean | True when the registry flags Multiple Records; only the displayed record is returned. |\n| `n_number` | string | Canonical N-number with the N prefix. |\n| `observed_at_ms` | number |  |\n| `other_owner_names` | object[] | Rows of the Other Owner Names table (co-owners); empty when the registry shows None. |\n| `owner` | object | Registered Owner table; null unless status is assigned. |\n| `reservation` | object | Reserved N-Number table; null unless status is reserved. Dates are YYYY-MM-DD; the registry's 99/99/9999 sentinel passes through. |\n| `source_url` | string |  |\n| `status` | string |  |\n| `status_text` | string | The registry's status sentence, e.g. `N637JB is Assigned`. |\n| `temporary_certificates` | object[] |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "airworthiness": {
                         "airworthiness_date": "2006-05-24",
@@ -186,16 +193,9 @@
                       ]
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "FAA registry record for one N-number: registration status, aircraft description (serial, make, model, year, Mode S code), registered owner, airworthiness certificate data, temporary certificates and reservation data. Deregistered numbers return the status only.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `airworthiness` | object | Airworthiness table; null unless status is assigned. Not a basis for an airworthiness determination (registry disclaimer). |\n| `description` | object | Aircraft Description table; null unless status is assigned. |\n| `fuel_modifications` | object[] |  |\n| `multiple_records` | boolean | True when the registry flags Multiple Records; only the displayed record is returned. |\n| `n_number` | string | Canonical N-number with the N prefix. |\n| `observed_at_ms` | number |  |\n| `other_owner_names` | object[] | Rows of the Other Owner Names table (co-owners); empty when the registry shows None. |\n| `owner` | object | Registered Owner table; null unless status is assigned. |\n| `reservation` | object | Reserved N-Number table; null unless status is reserved. Dates are YYYY-MM-DD; the registry's 99/99/9999 sentinel passes through. |\n| `source_url` | string |  |\n| `status` | string |  |\n| `status_text` | string | The registry's status sentence, e.g. `N637JB is Assigned`. |\n| `temporary_certificates` | object[] |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -213,17 +213,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-aircraft",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -239,68 +237,70 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:5b028a92058f7b3a9407f2d6fde61a4c81d3224b9cf62909daca022f1f2d4031",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "production_schema_review": {
-              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
-              "paths": [
-                "/apis/v1/web-archive-org/captures/history"
-              ],
-              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-            },
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "ca47a8d32682"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "faa-gov.aviation-records.aircraft",
+          "method": "POST",
           "path": "/apis/v1/faa-gov/aviation-records/aircraft"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
           "path_space": "public",
+          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
           "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
           "production_schema_review": {
             "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
             "paths": [
               "/apis/v1/web-archive-org/captures/history"
-            ],
-            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-          },
-          "refresh_policy": "pinned",
-          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
-          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+            ]
+          }
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/web-archive-org/captures/history"
+              ]
+            }
+          },
+          "content_hash": "sha256:5b028a92058f7b3a9407f2d6fde61a4c81d3224b9cf62909daca022f1f2d4031"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-aircraft"
       }
     },
     "/apis/v1/faa-gov/aviation-records/aircraft-documents": {
@@ -308,27 +308,21 @@
         "description": "Check recorded liens, security agreements or bills of sale on an aircraft. Most current aircraft have none; an empty page is a valid answer. Malformed N-numbers are invalid_input.",
         "operationId": "faa-gov.aviation-records.aircraft-documents",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
-              "examples": {
-                "provider": {
-                  "summary": "Official provider example; checked against AIsa request constraints",
-                  "value": {
-                    "n_number": "N637JB"
-                  }
-                }
-              },
               "schema": {
+                "type": "object",
                 "additionalProperties": true,
                 "properties": {
                   "n_number": {
-                    "description": "US registration with or without the N prefix, e.g. N637JB.",
-                    "type": "string"
+                    "type": "string",
+                    "description": "US registration with or without the N prefix, e.g. N637JB."
                   },
                   "page": {
-                    "default": 1,
-                    "description": "page\n\nProvider reference: minimum 1; default 1.",
                     "type": "number",
+                    "description": "page\n\nProvider reference: minimum 1; default 1.",
+                    "default": 1,
                     "x-alexandria-option-metadata": {
                       "in": "body",
                       "min": 1
@@ -337,21 +331,34 @@
                 },
                 "required": [
                   "n_number"
-                ],
-                "type": "object"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "n_number": "N637JB"
+                  }
+                }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "FAA registry document index for one N-number: conveyance and lien documents recorded against the aircraft (collateral type, document type, party and receipt date). One page of up to 50 rows.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `documents` | object[] |  |\n| `n_number` | string | Canonical N-number with the N prefix. |\n| `observed_at_ms` | number |  |\n| `page` | number |  |\n| `pages` | number |  |\n| `showing_from` | number |  |\n| `showing_to` | number |  |\n| `source_url` | string |  |\n| `total` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "count": 0,
                       "documents": [],
@@ -365,16 +372,9 @@
                       "total": 0
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "FAA registry document index for one N-number: conveyance and lien documents recorded against the aircraft (collateral type, document type, party and receipt date). One page of up to 50 rows.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `documents` | object[] |  |\n| `n_number` | string | Canonical N-number with the N prefix. |\n| `observed_at_ms` | number |  |\n| `page` | number |  |\n| `pages` | number |  |\n| `showing_from` | number |  |\n| `showing_to` | number |  |\n| `source_url` | string |  |\n| `total` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -392,17 +392,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-aircraft-documents",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -418,68 +416,70 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:e797b7a307a7855cda16002ed16b6b960345d4edfcbf268768584f260f812c54",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "production_schema_review": {
-              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
-              "paths": [
-                "/apis/v1/web-archive-org/captures/history"
-              ],
-              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-            },
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "4c19cf8dd131"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "faa-gov.aviation-records.aircraft-documents",
+          "method": "POST",
           "path": "/apis/v1/faa-gov/aviation-records/aircraft-documents"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
           "path_space": "public",
+          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
           "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
           "production_schema_review": {
             "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
             "paths": [
               "/apis/v1/web-archive-org/captures/history"
-            ],
-            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-          },
-          "refresh_policy": "pinned",
-          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
-          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+            ]
+          }
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/web-archive-org/captures/history"
+              ]
+            }
+          },
+          "content_hash": "sha256:e797b7a307a7855cda16002ed16b6b960345d4edfcbf268768584f260f812c54"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-aircraft-documents"
       }
     },
     "/apis/v1/faa-gov/aviation-records/aircraft-search": {
@@ -487,18 +487,41 @@
         "description": "Find the tail numbers an operator owns or every aircraft with a given serial number, then call `aircraft` for the detail record. Owner names match as a prefix on the registry's upper-case name. For dealer certificates use `dealer_search`.",
         "operationId": "faa-gov.aviation-records.aircraft-search",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
-              "examples": {
-                "provider": {
-                  "summary": "Official provider example; checked against AIsa request constraints",
-                  "value": {
-                    "serial_number": "2781"
-                  }
-                }
-              },
               "schema": {
+                "type": "object",
                 "additionalProperties": true,
+                "properties": {
+                  "owner_name": {
+                    "type": "string",
+                    "description": "Registered owner name or its beginning, e.g. JETBLUE."
+                  },
+                  "page": {
+                    "type": "number",
+                    "description": "Result page (50 rows each); the continuation cursor is the next page number.\n\nProvider reference: minimum 1; default 1.",
+                    "default": 1,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1
+                    }
+                  },
+                  "serial_number": {
+                    "type": "string",
+                    "description": "Manufacturer serial number, e.g. 2781."
+                  },
+                  "sort_option": {
+                    "type": "number",
+                    "description": "Registry sort option: 1 N-number (default), 2 serial number, 3 manufacturer/model, 4 owner name; 5 (owner state) is accepted by the name search only.\n\nProvider reference: minimum 1; maximum 5; default 1.",
+                    "default": 1,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1,
+                      "max": 5
+                    }
+                  }
+                },
                 "allOf": [
                   {
                     "anyOf": [
@@ -520,50 +543,34 @@
                       }
                     ]
                   }
-                ],
-                "properties": {
-                  "owner_name": {
-                    "description": "Registered owner name or its beginning, e.g. JETBLUE.",
-                    "type": "string"
-                  },
-                  "page": {
-                    "default": 1,
-                    "description": "Result page (50 rows each); the continuation cursor is the next page number.\n\nProvider reference: minimum 1; default 1.",
-                    "type": "number",
-                    "x-alexandria-option-metadata": {
-                      "in": "body",
-                      "min": 1
-                    }
-                  },
-                  "serial_number": {
-                    "description": "Manufacturer serial number, e.g. 2781.",
-                    "type": "string"
-                  },
-                  "sort_option": {
-                    "default": 1,
-                    "description": "Registry sort option: 1 N-number (default), 2 serial number, 3 manufacturer/model, 4 owner name; 5 (owner state) is accepted by the name search only.\n\nProvider reference: minimum 1; maximum 5; default 1.",
-                    "type": "number",
-                    "x-alexandria-option-metadata": {
-                      "in": "body",
-                      "max": 5,
-                      "min": 1
-                    }
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "serial_number": "2781"
                   }
-                },
-                "type": "object"
+                }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "Search the FAA registry by registered owner name or aircraft serial number. One result page of up to 50 aircraft (N-number, serial, make, model, owner name and address) with the registry's total and page count; each row links to the `aircraft` record.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `aircraft` | object[] |  |\n| `count` | number | Rows on this page. |\n| `observed_at_ms` | number |  |\n| `page` | number |  |\n| `pages` | number | Total pages; 0 when nothing matched. |\n| `query` | object |  |\n| `showing_from` | number |  |\n| `showing_to` | number |  |\n| `source_url` | string |  |\n| `total` | number | Total matching aircraft as the registry counts them. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "aircraft": [
                         {
@@ -716,16 +723,9 @@
                       "total": 15
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Search the FAA registry by registered owner name or aircraft serial number. One result page of up to 50 aircraft (N-number, serial, make, model, owner name and address) with the registry's total and page count; each row links to the `aircraft` record.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `aircraft` | object[] |  |\n| `count` | number | Rows on this page. |\n| `observed_at_ms` | number |  |\n| `page` | number |  |\n| `pages` | number | Total pages; 0 when nothing matched. |\n| `query` | object |  |\n| `showing_from` | number |  |\n| `showing_to` | number |  |\n| `source_url` | string |  |\n| `total` | number | Total matching aircraft as the registry counts them. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -743,15 +743,14 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-category": "data",
         "x-aisa-constraints": {
           "required_any_of": [
@@ -769,7 +768,6 @@
             ]
           ]
         },
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-aircraft-search",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -785,68 +783,70 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:d4e6aa89cdc10acd2d7a90a6c105769b0146d0e693da4af8d21e6172ad40e81e",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "production_schema_review": {
-              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
-              "paths": [
-                "/apis/v1/web-archive-org/captures/history"
-              ],
-              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-            },
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "20d63fc9d3f4"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "faa-gov.aviation-records.aircraft-search",
+          "method": "POST",
           "path": "/apis/v1/faa-gov/aviation-records/aircraft-search"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
           "path_space": "public",
+          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
           "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
           "production_schema_review": {
             "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
             "paths": [
               "/apis/v1/web-archive-org/captures/history"
-            ],
-            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-          },
-          "refresh_policy": "pinned",
-          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
-          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+            ]
+          }
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/web-archive-org/captures/history"
+              ]
+            }
+          },
+          "content_hash": "sha256:d4e6aa89cdc10acd2d7a90a6c105769b0146d0e693da4af8d21e6172ad40e81e"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-aircraft-search"
       }
     },
     "/apis/v1/faa-gov/aviation-records/airport-delays": {
@@ -854,8 +854,22 @@
         "description": "Check whether an airport has an active delay program or closure right now. Only airports with an event are listed; `found: false` for a requested airport means no active event, not an unknown airport.",
         "operationId": "faa-gov.aviation-records.airport-delays",
         "requestBody": {
+          "required": false,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "airport": {
+                    "type": "string",
+                    "description": "FAA/IATA airport identifier, e.g. EWR, BOS, SFO. Omit for every airport with an event.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                }
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -863,32 +877,25 @@
                     "airport": "EWR"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "airport": {
-                    "description": "FAA/IATA airport identifier, e.g. EWR, BOS, SFO. Omit for every airport with an event.",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  }
-                },
-                "type": "object"
               }
             }
-          },
-          "required": false
+          }
         },
         "responses": {
           "200": {
+            "description": "Current FAA NAS status airport events: ground stops, ground delay programs, arrival and departure delays, closures, free-form NOTAM notices and runway configuration, for every airport with an active event or for one airport.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `airport` | string |  |\n| `airports` | object[] |  |\n| `count` | number |  |\n| `found` | boolean | When an airport was requested: whether it has an active event. Null otherwise. |\n| `observed_at_ms` | number |  |\n| `source_url` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "airport": "EWR",
                       "airports": [
@@ -961,16 +968,9 @@
                       "source_url": "https://nasstatus.faa.gov/api/airport-events"
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Current FAA NAS status airport events: ground stops, ground delay programs, arrival and departure delays, closures, free-form NOTAM notices and runway configuration, for every airport with an active event or for one airport.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `airport` | string |  |\n| `airports` | object[] |  |\n| `count` | number |  |\n| `found` | boolean | When an airport was requested: whether it has an active event. Null otherwise. |\n| `observed_at_ms` | number |  |\n| `source_url` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -988,17 +988,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-airport-delays",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -1014,68 +1012,70 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:90372a00408fd21580e92696b2c7d17691303c03c7d2a5c646710936c9ace2ca",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "production_schema_review": {
-              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
-              "paths": [
-                "/apis/v1/web-archive-org/captures/history"
-              ],
-              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-            },
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "41dd7e506f3c"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "faa-gov.aviation-records.airport-delays",
+          "method": "POST",
           "path": "/apis/v1/faa-gov/aviation-records/airport-delays"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
           "path_space": "public",
+          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
           "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
           "production_schema_review": {
             "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
             "paths": [
               "/apis/v1/web-archive-org/captures/history"
-            ],
-            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-          },
-          "refresh_policy": "pinned",
-          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
-          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+            ]
+          }
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/web-archive-org/captures/history"
+              ]
+            }
+          },
+          "content_hash": "sha256:90372a00408fd21580e92696b2c7d17691303c03c7d2a5c646710936c9ace2ca"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-airport-delays"
       }
     },
     "/apis/v1/faa-gov/aviation-records/airworthiness-directive": {
@@ -1083,8 +1083,22 @@
         "description": "Read the details of an airworthiness directive (or any DRS document) found with `airworthiness_directive_search`. Unknown keys are not_found.",
         "operationId": "faa-gov.aviation-records.airworthiness-directive",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "doc_unique_id": {
+                    "type": "string",
+                    "description": "DRS document key from a search result, e.g. 786C84F8D7DD093C862573A200557D95.0001 or FR-ADFRAWD-2026-19171-0000000000.0001."
+                  }
+                },
+                "required": [
+                  "doc_unique_id"
+                ]
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -1092,32 +1106,25 @@
                     "doc_unique_id": "786C84F8D7DD093C862573A200557D95.0001"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "doc_unique_id": {
-                    "description": "DRS document key from a search result, e.g. 786C84F8D7DD093C862573A200557D95.0001 or FR-ADFRAWD-2026-19171-0000000000.0001.",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "doc_unique_id"
-                ],
-                "type": "object"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "One DRS document by its document key: AD number, docket, subject, make, model, product type, status, citation, effective date, supersession links, the full metadata map, the file list and the content URL of the PDF or HTML.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `ad_number` | string |  |\n| `affected_ad` | string |  |\n| `affected_by` | string |  |\n| `cfr_part_reference` | string |  |\n| `citation` | string |  |\n| `citation_publish_date` | string | YYYY-MM-DD. |\n| `content_url` | string | Binary content endpoint (needs the DRS guest cookies). |\n| `doc_name` | string |  |\n| `doc_type_label` | string | DRS doc type URL label, e.g. ADFRAWD. |\n| `doc_unique_id` | string |  |\n| `docket_number` | string |  |\n| `document_type` | string | e.g. `AD Final Rules`. |\n| `effective_date` | string | YYYY-MM-DD. |\n| `files` | object[] |  |\n| `has_inline_html` | boolean | True when DRS ships the document body inline (Federal Register directives). |\n| `make` | string |  |\n| `metadata` | object | Every non-blank DRS metadata field under its DRS label (varies by document type template). |\n| `mime_type` | string |  |\n| `model` | string |  |\n| `observed_at_ms` | number |  |\n| `office` | string |  |\n| `product_subtype` | string |  |\n| `product_type` | string |  |\n| `size_bytes` | number |  |\n| `source_url` | string |  |\n| `status` | string |  |\n| `subject` | string |  |\n| `subject_heading` | string |  |\n| `superseded_ad` | string |  |\n| `superseded_by` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "ad_number": "2007-24-13",
                       "affected_ad": null,
@@ -1181,16 +1188,9 @@
                       "superseded_by": null
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "One DRS document by its document key: AD number, docket, subject, make, model, product type, status, citation, effective date, supersession links, the full metadata map, the file list and the content URL of the PDF or HTML.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `ad_number` | string |  |\n| `affected_ad` | string |  |\n| `affected_by` | string |  |\n| `cfr_part_reference` | string |  |\n| `citation` | string |  |\n| `citation_publish_date` | string | YYYY-MM-DD. |\n| `content_url` | string | Binary content endpoint (needs the DRS guest cookies). |\n| `doc_name` | string |  |\n| `doc_type_label` | string | DRS doc type URL label, e.g. ADFRAWD. |\n| `doc_unique_id` | string |  |\n| `docket_number` | string |  |\n| `document_type` | string | e.g. `AD Final Rules`. |\n| `effective_date` | string | YYYY-MM-DD. |\n| `files` | object[] |  |\n| `has_inline_html` | boolean | True when DRS ships the document body inline (Federal Register directives). |\n| `make` | string |  |\n| `metadata` | object | Every non-blank DRS metadata field under its DRS label (varies by document type template). |\n| `mime_type` | string |  |\n| `model` | string |  |\n| `observed_at_ms` | number |  |\n| `office` | string |  |\n| `product_subtype` | string |  |\n| `product_type` | string |  |\n| `size_bytes` | number |  |\n| `source_url` | string |  |\n| `status` | string |  |\n| `subject` | string |  |\n| `subject_heading` | string |  |\n| `superseded_ad` | string |  |\n| `superseded_by` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -1208,17 +1208,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-airworthiness-directive",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -1234,68 +1232,70 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:9bb6dbfe27e7694b71c5e227a6077579c948c8670d6bc08e60a097c727d7b146",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "production_schema_review": {
-              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
-              "paths": [
-                "/apis/v1/web-archive-org/captures/history"
-              ],
-              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-            },
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "b78755b6c560"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "faa-gov.aviation-records.airworthiness-directive",
+          "method": "POST",
           "path": "/apis/v1/faa-gov/aviation-records/airworthiness-directive"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
           "path_space": "public",
+          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
           "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
           "production_schema_review": {
             "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
             "paths": [
               "/apis/v1/web-archive-org/captures/history"
-            ],
-            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-          },
-          "refresh_policy": "pinned",
-          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
-          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+            ]
+          }
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/web-archive-org/captures/history"
+              ]
+            }
+          },
+          "content_hash": "sha256:9bb6dbfe27e7694b71c5e227a6077579c948c8670d6bc08e60a097c727d7b146"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-airworthiness-directive"
       }
     },
     "/apis/v1/faa-gov/aviation-records/airworthiness-directive-search": {
@@ -1303,47 +1303,39 @@
         "description": "Find the ADs and related documents for an aircraft make or model, a part or a topic. Filter with `status: Current` for in-force documents; page with `offset`.",
         "operationId": "faa-gov.aviation-records.airworthiness-directive-search",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
-              "examples": {
-                "provider": {
-                  "summary": "Official provider example; checked against AIsa request constraints",
-                  "value": {
-                    "query": "SR22",
-                    "rows": 3,
-                    "status": "Current"
-                  }
-                }
-              },
               "schema": {
+                "type": "object",
                 "additionalProperties": true,
                 "properties": {
                   "offset": {
-                    "default": 0,
-                    "description": "Zero-based offset of the first result; the continuation cursor is the next offset.\n\nProvider reference: minimum 0; default 0.",
                     "type": "number",
+                    "description": "Zero-based offset of the first result; the continuation cursor is the next offset.\n\nProvider reference: minimum 0; default 0.",
+                    "default": 0,
                     "x-alexandria-option-metadata": {
                       "in": "body",
                       "min": 0
                     }
                   },
                   "query": {
-                    "description": "Search text, e.g. `SR22` or `Cirrus Design Corporation`.",
-                    "type": "string"
+                    "type": "string",
+                    "description": "Search text, e.g. `SR22` or `Cirrus Design Corporation`."
                   },
                   "rows": {
-                    "default": 25,
-                    "description": "rows\n\nProvider reference: minimum 1; maximum 100; default 25.",
                     "type": "number",
+                    "description": "rows\n\nProvider reference: minimum 1; maximum 100; default 25.",
+                    "default": 25,
                     "x-alexandria-option-metadata": {
                       "in": "body",
-                      "max": 100,
-                      "min": 1
+                      "min": 1,
+                      "max": 100
                     }
                   },
                   "status": {
-                    "description": "Restrict to documents with this DRS status.\n\nProvider reference: allowed values [\"Current\", \"Historical\"].",
                     "type": "string",
+                    "description": "Restrict to documents with this DRS status.\n\nProvider reference: allowed values [\"Current\", \"Historical\"].",
                     "x-alexandria-option-metadata": {
                       "in": "body",
                       "oneOf": [
@@ -1355,21 +1347,36 @@
                 },
                 "required": [
                   "query"
-                ],
-                "type": "object"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "query": "SR22",
+                    "rows": 3,
+                    "status": "Current"
+                  }
+                }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "Full-text search of the FAA Dynamic Regulatory System (DRS): airworthiness directives, advisory circulars, special airworthiness information bulletins, regulations and other FAA documents. One page of results with document number, title, type, status, published and effective dates and the DRS document key for `airworthiness_directive`.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `document_types` | string[] | DRS document type labels present in the full result set (e.g. ADFRAWD for AD final rules, SAIB). |\n| `documents` | object[] |  |\n| `next_offset` | number |  |\n| `observed_at_ms` | number |  |\n| `offset` | number |  |\n| `query` | string |  |\n| `rows` | number | Page size DRS applied. |\n| `source_url` | string |  |\n| `status_filter` | string |  |\n| `total_hits` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "count": 3,
                       "document_types": [
@@ -1432,16 +1439,9 @@
                       "total_hits": 65949
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Full-text search of the FAA Dynamic Regulatory System (DRS): airworthiness directives, advisory circulars, special airworthiness information bulletins, regulations and other FAA documents. One page of results with document number, title, type, status, published and effective dates and the DRS document key for `airworthiness_directive`.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `document_types` | string[] | DRS document type labels present in the full result set (e.g. ADFRAWD for AD final rules, SAIB). |\n| `documents` | object[] |  |\n| `next_offset` | number |  |\n| `observed_at_ms` | number |  |\n| `offset` | number |  |\n| `query` | string |  |\n| `rows` | number | Page size DRS applied. |\n| `source_url` | string |  |\n| `status_filter` | string |  |\n| `total_hits` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -1459,17 +1459,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-airworthiness-directive-search",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -1485,68 +1483,70 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:650387297f5682c6bdde4c3a4225fec668a54ab76fe337f1d892fe9c21cd8428",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "production_schema_review": {
-              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
-              "paths": [
-                "/apis/v1/web-archive-org/captures/history"
-              ],
-              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-            },
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "67959d9f7540"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "faa-gov.aviation-records.airworthiness-directive-search",
+          "method": "POST",
           "path": "/apis/v1/faa-gov/aviation-records/airworthiness-directive-search"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
           "path_space": "public",
+          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
           "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
           "production_schema_review": {
             "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
             "paths": [
               "/apis/v1/web-archive-org/captures/history"
-            ],
-            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-          },
-          "refresh_policy": "pinned",
-          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
-          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+            ]
+          }
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/web-archive-org/captures/history"
+              ]
+            }
+          },
+          "content_hash": "sha256:650387297f5682c6bdde4c3a4225fec668a54ab76fe337f1d892fe9c21cd8428"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-airworthiness-directive-search"
       }
     },
     "/apis/v1/faa-gov/aviation-records/dealer-search": {
@@ -1554,27 +1554,21 @@
         "description": "Find whether a company holds (or held) an FAA dealer aircraft registration certificate. Names match as a prefix on the registry's upper-case name; expired certificates are listed too.",
         "operationId": "faa-gov.aviation-records.dealer-search",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
-              "examples": {
-                "provider": {
-                  "summary": "Official provider example; checked against AIsa request constraints",
-                  "value": {
-                    "dealer_name": "CIRRUS"
-                  }
-                }
-              },
               "schema": {
+                "type": "object",
                 "additionalProperties": true,
                 "properties": {
                   "dealer_name": {
-                    "description": "Dealer name or its beginning, e.g. CIRRUS.",
-                    "type": "string"
+                    "type": "string",
+                    "description": "Dealer name or its beginning, e.g. CIRRUS."
                   },
                   "page": {
-                    "default": 1,
-                    "description": "page\n\nProvider reference: minimum 1; default 1.",
                     "type": "number",
+                    "description": "page\n\nProvider reference: minimum 1; default 1.",
+                    "default": 1,
                     "x-alexandria-option-metadata": {
                       "in": "body",
                       "min": 1
@@ -1583,21 +1577,34 @@
                 },
                 "required": [
                   "dealer_name"
-                ],
-                "type": "object"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "dealer_name": "CIRRUS"
+                  }
+                }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "Search FAA aircraft dealer certificates by dealer name: certificate number, dealer name, address, ownership type, certificate issue and expiration dates. One page of up to 50 certificates.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `dealer_name` | string | The value as sent to the registry (upper-cased). |\n| `dealers` | object[] |  |\n| `observed_at_ms` | number |  |\n| `page` | number |  |\n| `pages` | number |  |\n| `showing_from` | number |  |\n| `showing_to` | number |  |\n| `source_url` | string |  |\n| `total` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "count": 6,
                       "dealer_name": "CIRRUS",
@@ -1660,16 +1667,9 @@
                       "total": 6
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Search FAA aircraft dealer certificates by dealer name: certificate number, dealer name, address, ownership type, certificate issue and expiration dates. One page of up to 50 certificates.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `dealer_name` | string | The value as sent to the registry (upper-cased). |\n| `dealers` | object[] |  |\n| `observed_at_ms` | number |  |\n| `page` | number |  |\n| `pages` | number |  |\n| `showing_from` | number |  |\n| `showing_to` | number |  |\n| `source_url` | string |  |\n| `total` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -1687,17 +1687,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-dealer-search",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -1713,68 +1711,70 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:7ec79d9abd177e2899d78f2de301fac6f20b861fbb63d90b6c7c06c5a53612bb",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "production_schema_review": {
-              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
-              "paths": [
-                "/apis/v1/web-archive-org/captures/history"
-              ],
-              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-            },
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "a0780168a646"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "faa-gov.aviation-records.dealer-search",
+          "method": "POST",
           "path": "/apis/v1/faa-gov/aviation-records/dealer-search"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
           "path_space": "public",
+          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
           "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
           "production_schema_review": {
             "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
             "paths": [
               "/apis/v1/web-archive-org/captures/history"
-            ],
-            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-          },
-          "refresh_policy": "pinned",
-          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
-          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+            ]
+          }
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/web-archive-org/captures/history"
+              ]
+            }
+          },
+          "content_hash": "sha256:7ec79d9abd177e2899d78f2de301fac6f20b861fbb63d90b6c7c06c5a53612bb"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-dealer-search"
       }
     },
     "/apis/v1/faa-gov/aviation-records/make-model-lookup": {
@@ -1782,35 +1782,28 @@
         "description": "Fleet-size questions (`how many SR22s are registered in Florida?`), or to find the canonical registry manufacturer/model spelling and MMS code before other lookups. Manufacturer and model match as prefixes.",
         "operationId": "faa-gov.aviation-records.make-model-lookup",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
-              "examples": {
-                "provider": {
-                  "summary": "Official provider example; checked against AIsa request constraints",
-                  "value": {
-                    "manufacturer": "CIRRUS",
-                    "model": "SR22"
-                  }
-                }
-              },
               "schema": {
+                "type": "object",
                 "additionalProperties": true,
                 "properties": {
                   "manufacturer": {
-                    "description": "Manufacturer name or prefix, e.g. CIRRUS.",
-                    "type": "string"
+                    "type": "string",
+                    "description": "Manufacturer name or prefix, e.g. CIRRUS."
                   },
                   "model": {
-                    "description": "Model name or prefix, e.g. SR22. Omit to list every model of the manufacturer.",
                     "type": "string",
+                    "description": "Model name or prefix, e.g. SR22. Omit to list every model of the manufacturer.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "page": {
-                    "default": 1,
-                    "description": "page\n\nProvider reference: minimum 1; default 1.",
                     "type": "number",
+                    "description": "page\n\nProvider reference: minimum 1; default 1.",
+                    "default": 1,
                     "x-alexandria-option-metadata": {
                       "in": "body",
                       "min": 1
@@ -1819,21 +1812,35 @@
                 },
                 "required": [
                   "manufacturer"
-                ],
-                "type": "object"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "manufacturer": "CIRRUS",
+                    "model": "SR22"
+                  }
+                }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "Resolve a manufacturer (and optional model) to the FAA registry's Mfr/Mdl codes: each code's manufacturer, model, aircraft type, engine type, category, certification basis, engines, seats, weight class, and the number of aircraft currently assigned per US state or country.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `codes` | object[] |  |\n| `count` | number |  |\n| `manufacturer` | string |  |\n| `model` | string |  |\n| `observed_at_ms` | number |  |\n| `page` | number |  |\n| `pages` | number |  |\n| `showing_from` | number |  |\n| `showing_to` | number |  |\n| `source_url` | string |  |\n| `total` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "codes": [
                         {
@@ -2571,16 +2578,9 @@
                       "total": 2
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Resolve a manufacturer (and optional model) to the FAA registry's Mfr/Mdl codes: each code's manufacturer, model, aircraft type, engine type, category, certification basis, engines, seats, weight class, and the number of aircraft currently assigned per US state or country.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `codes` | object[] |  |\n| `count` | number |  |\n| `manufacturer` | string |  |\n| `model` | string |  |\n| `observed_at_ms` | number |  |\n| `page` | number |  |\n| `pages` | number |  |\n| `showing_from` | number |  |\n| `showing_to` | number |  |\n| `source_url` | string |  |\n| `total` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -2598,17 +2598,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-make-model-lookup",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -2624,68 +2622,70 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:29ac1bbf80e6c7d4642f622a2d01a2acf53780632fa1f579fcaf2a4f75125c03",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "production_schema_review": {
-              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
-              "paths": [
-                "/apis/v1/web-archive-org/captures/history"
-              ],
-              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-            },
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "0962fe8c8f55"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "faa-gov.aviation-records.make-model-lookup",
+          "method": "POST",
           "path": "/apis/v1/faa-gov/aviation-records/make-model-lookup"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
           "path_space": "public",
+          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
           "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
           "production_schema_review": {
             "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
             "paths": [
               "/apis/v1/web-archive-org/captures/history"
-            ],
-            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-          },
-          "refresh_policy": "pinned",
-          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
-          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+            ]
+          }
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/web-archive-org/captures/history"
+              ]
+            }
+          },
+          "content_hash": "sha256:29ac1bbf80e6c7d4642f622a2d01a2acf53780632fa1f579fcaf2a4f75125c03"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-make-model-lookup"
       }
     },
     "/apis/v1/faa-gov/aviation-records/n-number-availability": {
@@ -2693,8 +2693,43 @@
         "description": "Pick a tail number for a new registration or reservation, or check which numbers in a vanity pattern are free. Numbers listed are available at the registry's nightly refresh; confirm with `aircraft` before filing.",
         "operationId": "faa-gov.aviation-records.n-number-availability",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "end": {
+                    "type": "number",
+                    "description": "Last number of the range (inclusive). Digits + suffix letters must fit in 5 characters.\n\nProvider reference: minimum 1; maximum 99999."
+                  },
+                  "page": {
+                    "type": "number",
+                    "description": "page\n\nProvider reference: minimum 1; default 1.",
+                    "default": 1,
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 1
+                    }
+                  },
+                  "start": {
+                    "type": "number",
+                    "description": "First number of the range.\n\nProvider reference: minimum 1; maximum 99999."
+                  },
+                  "suffix": {
+                    "type": "string",
+                    "description": "0-2 trailing letters (no I or O), e.g. JB. Omit for all-numeric N-numbers.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                },
+                "required": [
+                  "end",
+                  "start"
+                ]
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -2704,53 +2739,25 @@
                     "suffix": "JB"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "end": {
-                    "description": "Last number of the range (inclusive). Digits + suffix letters must fit in 5 characters.\n\nProvider reference: minimum 1; maximum 99999.",
-                    "type": "number"
-                  },
-                  "page": {
-                    "default": 1,
-                    "description": "page\n\nProvider reference: minimum 1; default 1.",
-                    "type": "number",
-                    "x-alexandria-option-metadata": {
-                      "in": "body",
-                      "min": 1
-                    }
-                  },
-                  "start": {
-                    "description": "First number of the range.\n\nProvider reference: minimum 1; maximum 99999.",
-                    "type": "number"
-                  },
-                  "suffix": {
-                    "description": "0-2 trailing letters (no I or O), e.g. JB. Omit for all-numeric N-numbers.",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  }
-                },
-                "required": [
-                  "end",
-                  "start"
-                ],
-                "type": "object"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "List the unassigned, unreserved N-numbers in a numeric range with an optional 1-2 letter suffix (e.g. 600JB-699JB), straight from the FAA registry's N-Number Availability search. One page of up to 50 numbers.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `available` | string[] | Available N-numbers with the N prefix, ascending. |\n| `count` | number |  |\n| `end` | string |  |\n| `observed_at_ms` | number |  |\n| `page` | number |  |\n| `pages` | number |  |\n| `range` | string | Human-readable range, e.g. `N600JB to N699JB`. |\n| `showing_from` | number |  |\n| `showing_to` | number |  |\n| `source_url` | string |  |\n| `start` | string | Zero-padded to the width of `end`, as sent to the registry. |\n| `suffix` | string |  |\n| `total` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-24.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-24.",
                     "value": {
                       "available": [
                         "N628JB",
@@ -2786,16 +2793,9 @@
                       "total": 18
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "List the unassigned, unreserved N-numbers in a numeric range with an optional 1-2 letter suffix (e.g. 600JB-699JB), straight from the FAA registry's N-Number Availability search. One page of up to 50 numbers.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `available` | string[] | Available N-numbers with the N prefix, ascending. |\n| `count` | number |  |\n| `end` | string |  |\n| `observed_at_ms` | number |  |\n| `page` | number |  |\n| `pages` | number |  |\n| `range` | string | Human-readable range, e.g. `N600JB to N699JB`. |\n| `showing_from` | number |  |\n| `showing_to` | number |  |\n| `source_url` | string |  |\n| `start` | string | Zero-padded to the width of `end`, as sent to the registry. |\n| `suffix` | string |  |\n| `total` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -2813,17 +2813,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-n-number-availability",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -2839,68 +2837,70 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:5c8c4147fe69dc04bf3156ceeb427a36e3bf7bdc2e41c5c590b945b7ac1cfbbc",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "production_schema_review": {
-              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
-              "paths": [
-                "/apis/v1/web-archive-org/captures/history"
-              ],
-              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-            },
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "0240b4f5220d"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "faa-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "faa-gov.aviation-records.n-number-availability",
+          "method": "POST",
           "path": "/apis/v1/faa-gov/aviation-records/n-number-availability"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
+          "refresh_policy": "pinned",
+          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
           "path_space": "public",
+          "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
           "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
           "production_schema_review": {
             "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
             "paths": [
               "/apis/v1/web-archive-org/captures/history"
-            ],
-            "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e"
-          },
-          "refresh_policy": "pinned",
-          "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
-          "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+            ]
+          }
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:d30b9b3fa092d619543498da4656380caaa73cd77f31c884eb69228e5772b2c3",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. The original catalog review uses official response descriptors without inferring requiredness or nesting. Subsequent scoped production observations and schema amendments are recorded in production_schema_review. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+            "production_schema_review": {
+              "evidence_file": "docs/current-source-review-20261112/alexandria-live-schema-review.json",
+              "review_ref": "71b2d406ddd3b315a24bbae9be7f1ffc4d1ed11e",
+              "paths": [
+                "/apis/v1/web-archive-org/captures/history"
+              ]
+            }
+          },
+          "content_hash": "sha256:5c8c4147fe69dc04bf3156ceeb427a36e3bf7bdc2e41c5c590b945b7ac1cfbbc"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/faa-gov/faa-gov-aviation-records-n-number-availability"
       }
     }
   },

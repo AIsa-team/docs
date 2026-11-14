@@ -80,7 +80,7 @@ def referenced_spec_paths() -> list[Path]:
     names: set[str] = set()
     for mdx_path in API_DIR.rglob("*.mdx"):
         text = mdx_path.read_text(errors="ignore")
-        match = re.search(r'^openapi:\s*["\']?openapi/([^"\'\s]+)', text, re.M)
+        match = re.search(r'^openapi:\s*["\']?openapi(?:-public)?/([^"\'\s]+)', text, re.M)
         if match:
             names.add(match.group(1))
     return [OPENAPI_DIR / name for name in sorted(names)]
@@ -443,14 +443,14 @@ def generate(published_ref=None) -> None:
         if excerpt:
             frontmatter = replace_frontmatter_value(frontmatter, "excerpt", translation(catalog, excerpt))
         frontmatter = re.sub(
-            r'^(openapi:\s*["\']?)openapi/',
-            r'\1openapi/zh/',
+            r'^(openapi:\s*["\']?)(openapi(?:-public)?)/',
+            r'\1\2/zh/',
             frontmatter,
             count=1,
             flags=re.M,
         )
         operation = {}
-        reference = re.search(r'^openapi:\s*["\']?openapi/zh/([^"\'\s]+)\s+(\w+)\s+([^"\'\s]+)', frontmatter, re.M)
+        reference = re.search(r'^openapi:\s*["\']?openapi(?:-public)?/zh/([^"\'\s]+)\s+(\w+)\s+([^"\'\s]+)', frontmatter, re.M)
         if reference:
             spec = json.loads((ZH_OPENAPI_DIR / reference[1]).read_text())
             operation = spec.get('paths', {}).get(reference[3], {}).get(reference[2].lower(), {})

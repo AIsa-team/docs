@@ -52,7 +52,7 @@ class UnifiedSurfacesTests(unittest.TestCase):
             self.assertEqual(request['components'], document['components'])
             self.assertEqual(request['requestBody'], operation['requestBody'])
             self.assertIn('**target:** query; ' + ('required' if language == 'en' else '必填'), block)
-            self.assertIn('f' * 64, block)
+            self.assertNotIn('f' * 64, block)
             self.assertIn('9007199254740993', block)
         self.assertEqual(document, before)
 

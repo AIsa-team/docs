@@ -247,7 +247,9 @@ def main():
             finally:
                 consolidate.OPENAPI_DIR = previous_root
             raw = aggregate_path.read_bytes()
-            actual_yaml = yaml.safe_load(raw)
+            # The aggregate is about 100 MB; use PyYAML's equivalent safe C
+            # loader when available, matching the release gate.
+            actual_yaml = yaml.load(raw, Loader=getattr(yaml, 'CSafeLoader', yaml.SafeLoader))
             try:
                 consolidate.validate_reference_closure(actual_yaml)
             except (KeyError, TypeError, ValueError) as exc:

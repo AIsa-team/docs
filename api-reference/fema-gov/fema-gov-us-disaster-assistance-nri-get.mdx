@@ -12,7 +12,6 @@ x-aisa-operation-id: "fema-gov.us-disaster-assistance.nri-get"
 - **Method and path:** POST /apis/v1/fema-gov/us-disaster-assistance/nri-get
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/fema-gov/us-disaster-assistance/nri-get`
-- **Runtime facts:** 57ce16342ebaa5cad2eef4733dc2ccf227f63e710b67c7cee358fdf2602551b7
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi/fema-gov.json)
 
@@ -35,8 +34,45 @@ Effective request declaration (including authentication and referenced schemas):
     }
   ],
   "requestBody": {
+    "required": true,
     "content": {
       "application/json": {
+        "schema": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Optional column selection for `record.fields` (names as in NRIDataDictionary.csv, e.g. RISK_SCORE, WFIR_RISKR, IFLD_EALT); the identity columns are always present at the record's top level. Without it every column of the row is returned (465-476 per row).",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "id": {
+              "type": "string",
+              "description": "NRI_ID (C30031, T30031000100, S30), the bare FIPS (30031, 30031000100, 30), a USPS state code (MT) for states, or the OID_ row number for tribal tables. Pattern: ^[A-Za-z0-9]+$."
+            },
+            "release": {
+              "type": "string",
+              "description": "Release path segment under /about/reports-and-data/openfema/nri/. FEMA serves only the current release (v120 = NRI v1.20, December 2025; v119 is a 404), so leave the default unless a newer release is published. Pattern: ^v[0-9]{3}$.\n\nProvider reference: default \"v120\".",
+              "default": "v120",
+              "x-alexandria-option-metadata": {
+                "in": "body"
+              }
+            },
+            "table": {
+              "type": "string",
+              "description": "Which NRI table: `states` (56 rows), `counties` (3,232), `tribal_counties` (1,232 county x tribal-area rows), `tribal_tracts` (3,364 tract x tribal-area rows) or `tracts` (~85,155 census tracts, 634 MB, read by byte range).\n\nProvider reference: allowed values [\"states\", \"counties\", \"tribal_counties\", \"tribal_tracts\", \"tracts\"]."
+            }
+          },
+          "required": [
+            "id",
+            "table"
+          ]
+        },
         "examples": {
           "provider": {
             "summary": "Official provider example; checked against AIsa request constraints",
@@ -55,46 +91,9 @@ Effective request declaration (including authentication and referenced schemas):
               "table": "counties"
             }
           }
-        },
-        "schema": {
-          "additionalProperties": true,
-          "properties": {
-            "fields": {
-              "description": "Optional column selection for `record.fields` (names as in NRIDataDictionary.csv, e.g. RISK_SCORE, WFIR_RISKR, IFLD_EALT); the identity columns are always present at the record's top level. Without it every column of the row is returned (465-476 per row).",
-              "items": {
-                "type": "string"
-              },
-              "type": "array",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "id": {
-              "description": "NRI_ID (C30031, T30031000100, S30), the bare FIPS (30031, 30031000100, 30), a USPS state code (MT) for states, or the OID_ row number for tribal tables. Pattern: ^[A-Za-z0-9]+$.",
-              "type": "string"
-            },
-            "release": {
-              "default": "v120",
-              "description": "Release path segment under /about/reports-and-data/openfema/nri/. FEMA serves only the current release (v120 = NRI v1.20, December 2025; v119 is a 404), so leave the default unless a newer release is published. Pattern: ^v[0-9]{3}$.\n\nProvider reference: default \"v120\".",
-              "type": "string",
-              "x-alexandria-option-metadata": {
-                "in": "body"
-              }
-            },
-            "table": {
-              "description": "Which NRI table: `states` (56 rows), `counties` (3,232), `tribal_counties` (1,232 county x tribal-area rows), `tribal_tracts` (3,364 tract x tribal-area rows) or `tracts` (~85,155 census tracts, 634 MB, read by byte range).\n\nProvider reference: allowed values [\"states\", \"counties\", \"tribal_counties\", \"tribal_tracts\", \"tracts\"].",
-              "type": "string"
-            }
-          },
-          "required": [
-            "id",
-            "table"
-          ],
-          "type": "object"
         }
       }
-    },
-    "required": true
+    }
   },
   "x-aisa-status": "enabled",
   "components": {
