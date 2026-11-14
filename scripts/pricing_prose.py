@@ -50,6 +50,20 @@ def strip_price_summary(text):
         text = stripped
 
 
+DISABLED_BILLING_SENTENCE = re.compile(
+    r'(^|(?<=[.!?。！？])\s+)'
+    r'(?:Paid:\s*see\s+x-aisa-pricing;\s*)?'
+    r'(?:Charged|Billed|Priced)\b[^.!?\n]*(?:[.!?]|$)', re.I)
+
+
+def strip_disabled_billing_claims(text):
+    """Remove stale billing sentences from descriptions of archived operations."""
+    chunks = FENCES.split(text)
+    for index in range(0, len(chunks), 2):
+        chunks[index] = DISABLED_BILLING_SENTENCE.sub(r'\1', chunks[index])
+    return ''.join(chunks).strip()
+
+
 def remove_price_summary(operation):
     """Keep prices out of the operation description.
 
@@ -501,8 +515,11 @@ def refresh_page_description(text, operation, language='en', translate=None):
     def cleaned(value):
         if not isinstance(value, str):
             return ''
-        return clean_text(reconcile_free_claim(strip_price_summary(value),
-                          operation.get('x-aisa-pricing')), language).strip()
+        cleaned_value = clean_text(reconcile_free_claim(strip_price_summary(value),
+                                                        operation.get('x-aisa-pricing')), language).strip()
+        if operation.get('x-aisa-status') == 'disabled':
+            cleaned_value = strip_disabled_billing_claims(cleaned_value)
+        return cleaned_value
 
     source_description = operation.get('description') or ''
     if not owned and not existing and cleaned(source_description) == source_description:

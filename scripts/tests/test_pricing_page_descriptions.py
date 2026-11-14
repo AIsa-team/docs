@@ -84,7 +84,8 @@ class PublishedPricingDescriptionTests(unittest.TestCase):
     def test_reference_pages_are_refreshed_in_the_canonical_publisher(self):
         operation = copy.deepcopy(self.document['paths']['/apis/v1/prices/free']['get'])
         operation.update(operationId='sendMessage', summary='Send a message',
-                         description='Send a message.\n\n' + fixtures.OLD_SUMMARY)
+                         description='Send a message. Paid: see x-aisa-pricing; charged only when the call succeeds.\n\n'
+                                     + fixtures.OLD_SUMMARY)
         operation['x-aisa-pricing'] = {'kind': 'fixed_request', 'customer_micros_usd': 100,
                                       'variants': {'twitter': {'kind': 'fixed_request',
                                                                'customer_micros_usd': 15000}}}
@@ -115,6 +116,7 @@ class PublishedPricingDescriptionTests(unittest.TestCase):
                 self.assertNotIn('$0.015', page)
                 self.assertNotIn('aisa-pricing:start', page)
                 self.assertNotIn('aisa-pricing:end', page)
+                self.assertNotIn('Charged only when the call succeeds.', page)
                 self.assertNotIn(OLD_REFERENCE_NOTE, page)
                 self.assertIn('Manual usage instructions.', page)
                 header, _ = split_frontmatter(page)
