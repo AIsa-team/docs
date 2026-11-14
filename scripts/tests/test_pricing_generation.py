@@ -216,10 +216,11 @@ class PricingGenerationTests(unittest.TestCase):
             for repeat in range(2):
                 outputs, _ = prod.generate(root, files)
                 pages = {}
-                for prefix, expected in (('', 'Billing method unavailable.'), ('zh/', '计费方式暂不可用。')):
+                for prefix in ('', 'zh/'):
                     key = prefix + 'api-reference/account-usage.mdx'
                     text = outputs[key].decode()
-                    self.assertIn(expected, text)
+                    self.assertNotIn('Billing method unavailable', text)
+                    self.assertNotIn('计费方式暂不可用', text)
                     self.assertNotIn('No additional charge', text)
                     self.assertNotIn('历史归档接口', text)
                     self.assertNotIn('aisa-pricing:', text)

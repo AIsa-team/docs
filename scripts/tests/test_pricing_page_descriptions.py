@@ -107,7 +107,7 @@ class PublishedPricingDescriptionTests(unittest.TestCase):
                                 + OLD_REFERENCE_NOTE + '\n\nManual usage instructions.\n')
         for repeat in range(2):
             self.project()
-            for prefix, unavailable in (('', 'Billing method unavailable.'), ('zh/', '计费方式暂不可用。')):
+            for prefix in ('', 'zh/'):
                 self.assertEqual((self.root / f'reference-contracts/{prefix}reference.json').read_bytes(), raw)
                 page = (self.root / f'{prefix}api-reference/messages.mdx').read_text()
                 self.assertIn('Historical archive: disabled, cannot be called, and no price is published.'
@@ -121,7 +121,9 @@ class PublishedPricingDescriptionTests(unittest.TestCase):
                 self.assertIn('Manual usage instructions.', page)
                 header, _ = split_frontmatter(page)
                 self.assertEqual(yaml.safe_load(header)['description'], 'Send a message.')
-                self.assertIn(unavailable, (self.root / f'{prefix}api-reference/usage.mdx').read_text())
+                usage = (self.root / f'{prefix}api-reference/usage.mdx').read_text()
+                self.assertNotIn('Billing method unavailable', usage)
+                self.assertNotIn('计费方式暂不可用', usage)
             if repeat:
                 self.assertEqual(first, fixtures.page_snapshot(self.root))
             first = fixtures.page_snapshot(self.root)

@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class ReadableNotesTests(unittest.TestCase):
 
-    def test_absent_pricing_is_explicit_without_guessing_price_or_availability(self):
+    def test_absent_pricing_preserves_page_without_inventing_cost_rules(self):
         for status in (None, 'enabled', 'disabled'):
             for value in (None, {}):
                 operation = {'operationId': 'reference'}
@@ -28,6 +28,10 @@ class ReadableNotesTests(unittest.TestCase):
                     text = readable_block(operation, language)
                     if status == 'disabled':
                         self.assertIn('历史归档接口' if language == 'zh' else 'Historical archive', text)
+                    elif value is None:
+                        self.assertEqual(text, '')
+                        self.assertNotIn('disabled', text)
+                        self.assertNotIn('已停用', text)
                     else:
                         self.assertIn('计费方式暂不可用' if language == 'zh' else 'Billing method unavailable', text)
                         self.assertNotIn('disabled', text)
@@ -35,6 +39,12 @@ class ReadableNotesTests(unittest.TestCase):
                     self.assertNotIn('$', text)
                     self.assertNotIn('No additional charge', text)
                 self.assertEqual(operation, original)
+
+    def test_explicit_empty_pricing_is_still_an_unknown_rule(self):
+        for language, unavailable in (('en', 'Billing method unavailable.'),
+                                      ('zh', '计费方式暂不可用。')):
+            text = readable_block({'operationId': 'reference', 'x-aisa-pricing': {}}, language)
+            self.assertIn(unavailable, text)
 
     def test_disabled_legacy_labels_are_not_a_published_tariff(self):
         legacy = {'cost_tier': 'low', 'model': 'per_request'}
@@ -94,7 +104,8 @@ class ReadableNotesTests(unittest.TestCase):
         unknown = update_readable_block(prose, unknown_op, **unknown_context)
         self.assertNotIn('aisa-price-card:', unknown)
         self.assertNotIn('<Info>', unknown)
-        self.assertLess(unknown.index('Endpoint overview.'), unknown.index('Cost and request rules'))
+        self.assertNotIn('Cost and request rules', unknown)
+        self.assertNotIn('Billing method unavailable', unknown)
 
         estimated_op = {'operationId': 'estimated',
                         'x-aisa-pricing': {'kind': 'future_tariff', 'default_request_estimate_usd': .1}}

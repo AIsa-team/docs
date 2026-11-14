@@ -123,6 +123,7 @@ def request_details(operation, document, method, path, spec_path, language="en")
 def readable_block(operation, language="en", translate=None, *, document=None, method=None, path=None, spec_path=None):
     zh = language == "zh"
     def t(en, cn): return cn if zh else en
+    pricing_declared = "x-aisa-pricing" in operation
     pricing = operation.get("x-aisa-pricing") or {}
     # A disabled operation is an archive regardless of whether an old
     # x-aisa-pricing object survived in the historical contract.  That object
@@ -131,9 +132,10 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
     # publish stale amounts after regeneration.
     if operation.get("x-aisa-status") == "disabled":
         pricing = {"kind": "unpriced"}
-    elif not pricing and (document is not None or operation.get("operationId") or "x-aisa-status" in operation):
-        # Preserved references can have no Runtime tariff at all. Say so in
-        # the page without inventing a price, free access, or disabled status.
+    elif pricing_declared and not pricing:
+        # An explicitly empty pricing declaration is an unknown rule. A
+        # missing declaration means this operation predates Runtime pricing;
+        # preserve its authored page instead of adding a new warning section.
         pricing = {"kind": "unknown"}
     constraints = operation.get("x-aisa-constraints") or {}
     notes = constraints.get("notes") or []
