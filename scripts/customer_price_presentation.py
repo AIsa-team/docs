@@ -289,6 +289,10 @@ def customer_price_card(pricing, language='en'):
     summary = re.sub(
         r'^(?:Published reference price:\s*|Normal-tier reference price:\s*|'
         r'公开参考价格：\s*|普通用户参考价格：\s*)', '', summary)
+    # Request estimates belong in the detailed rules section. Keep the small
+    # headline card for published unit prices only.
+    if re.search(r'(?:Default request estimate|默认请求预估费用)', summary):
+        return ''
     if family == 'unknown':
         summary = re.sub(r'^(?:Billing method unavailable\.\s*|计费方式暂不可用。\s*)', '', summary)
     sentences = re.split(r'(?<=[.!?。！？])\s+', summary)

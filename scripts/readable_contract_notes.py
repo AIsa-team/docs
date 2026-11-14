@@ -140,6 +140,8 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
     if not pricing and not notes and document is None:
         return ""
     lines = [BEGIN, ""]
+    if document is not None:
+        lines += request_details(operation, document, method, path, spec_path, language)
     if pricing or notes:
         lines += ["## " + t("Cost and request rules", "费用与请求规则"), ""]
     if pricing:
@@ -156,8 +158,6 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
                 if zh and translate:
                     note = translate(note)
                 lines.append("- " + safe(note))
-    if document is not None:
-        lines += request_details(operation, document, method, path, spec_path, language)
     lines += ["", END]
     return "\n".join(lines)
 
@@ -189,9 +189,9 @@ def update_readable_block(text, operation, language="en", translate=None, **cont
         if not block:
             return text
         return text.rstrip() + "\n\n" + block + "\n"
-    # Put only the concise customer price card below frontmatter. Detailed
-    # pricing and the request contract remain after the authored endpoint
-    # explanation, so readers see the overview and examples first.
+    # Keep the authored endpoint explanation first. The managed request
+    # contract and detailed cost rules follow it; estimate-only cards are
+    # omitted to avoid repeating a non-fixed request estimate above the page.
     header, body = split_frontmatter(text)
     body = body.rstrip()
     if block:

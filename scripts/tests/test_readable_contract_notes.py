@@ -85,9 +85,8 @@ class ReadableNotesTests(unittest.TestCase):
         self.assertIn('aisa-price-card:start', rendered)
         self.assertIn('<Info>', rendered)
         self.assertIn('$0.01476 USD per completed job', rendered)
-        self.assertLess(rendered.index('aisa-price-card:start'), rendered.index('Endpoint overview.'))
         self.assertLess(rendered.index('Endpoint overview.'), rendered.index('Cost and request rules'))
-        self.assertLess(rendered.index('Cost and request rules'), rendered.index('Request contract'))
+        self.assertLess(rendered.index('Request contract'), rendered.index('Cost and request rules'))
 
         unknown_op = {'operationId': 'unknown'}
         unknown_context = {'document': {'paths': {'/unknown': {'get': unknown_op}}}, 'method': 'get',
@@ -100,7 +99,8 @@ class ReadableNotesTests(unittest.TestCase):
         estimated_op = {'operationId': 'estimated',
                         'x-aisa-pricing': {'kind': 'future_tariff', 'default_request_estimate_usd': .1}}
         estimated = update_readable_block(prose, estimated_op, **unknown_context)
-        self.assertIn('<Info>', estimated)
+        self.assertNotIn('<Info>', estimated)
+        self.assertNotIn('aisa-price-card:start', estimated)
         self.assertIn('Default request estimate: $0.1 USD.', estimated)
 
     def test_multi_price_cards_use_literal_dollars_and_hide_disabled_tariffs(self):
