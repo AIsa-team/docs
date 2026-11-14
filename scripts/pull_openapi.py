@@ -441,6 +441,7 @@ def refresh_legacy_page_blocks(root, documents, changes, catalog):
     """Refresh bound legacy pages and hide disabled ones without adding links."""
     import runtime_localize_openapi_zh as localization
     disabled_pages = set()
+    reference_documents = {}
     def translated_note(note):
         try:
             return localization.translation(catalog, note)
@@ -453,23 +454,34 @@ def refresh_legacy_page_blocks(root, documents, changes, catalog):
                 continue
             header, _ = localization.split_frontmatter(text)
             reference = (yaml.safe_load(header) or {}).get("openapi", "")
-            match = re.fullmatch(r"openapi/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)", reference)
-            if not match or match[2] not in documents:
+            match = re.fullmatch(r"(openapi|reference-contracts)/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)", reference)
+            if not match:
                 continue
-            document = documents[match[2]]
-            if document.get("info", {}).get("x-aisa-document", {}).get("document_hash"):
-                continue  # Runtime page generation owns these pages.
-            method, path = match[3].lower(), match[4]
+            spec_path = reference.split()[0]
+            is_reference = match[1] == 'reference-contracts'
+            if is_reference:
+                if spec_path not in reference_documents:
+                    source = root / spec_path
+                    raw = changes[source] if source in changes else source.read_text()
+                    reference_documents[spec_path] = source_json_loads(raw)
+                document = reference_documents[spec_path]
+            else:
+                if match[3] not in documents:
+                    continue
+                document = documents[match[3]]
+                if document.get("info", {}).get("x-aisa-document", {}).get("document_hash"):
+                    continue  # Runtime page generation owns these pages.
+            method, path = match[4].lower(), match[5]
             operation = document.get("paths", {}).get(path, {}).get(method)
             if method not in METHODS or not isinstance(operation, dict):
                 raise ValueError("legacy page references missing operation: " + str(page))
-            if bool(match[1]) != (language == "zh"):
+            if bool(match[2]) != (language == "zh"):
                 raise ValueError("legacy page references wrong language: " + str(page))
             disabled = operation.get('x-aisa-status') == 'disabled'
             if disabled:
                 disabled_pages.add(page.relative_to(root).with_suffix('').as_posix())
             text = update_disabled_indexing(text, disabled)
-            if language == "zh":
+            if language == "zh" and not is_reference:
                 localized_path = root / reference.split()[0]
                 if not localized_path.exists() and localized_path not in changes:
                     localized = localize_identities(localization.localize_tree(document, catalog, allow_untranslated=True))

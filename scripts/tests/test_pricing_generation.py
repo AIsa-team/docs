@@ -64,7 +64,8 @@ def pricing_cases():
         'archive_missing': ({}, 'Historical archive: disabled, cannot be called, and no price is published.',
                             '历史归档接口：已停用，不可调用，价格未发布。'),
         'disabled_priced': ({'customer_pricing': 'fixed_success', 'default_request_estimate_usd': .012},
-                            '$0.012 USD per successful request', '每次成功请求 $0.012 USD'),
+                            'Historical archive: disabled, cannot be called, and no price is published.',
+                            '历史归档接口：已停用，不可调用，价格未发布。'),
         'missing': ({}, 'Billing method unavailable.', '计费方式暂不可用。'),
         'unknown': ({'kind': 'future_tariff'}, 'Billing method unavailable.', '计费方式暂不可用。'),
         'adyntel': ({'cost_contract': 'response_units', 'estimate_source': 'unavailable',
@@ -144,6 +145,18 @@ class PricingGenerationTests(unittest.TestCase):
         self.root = self.fixture.root
         seed_old_pages(self.root)
 
+    def test_unknown_rules_preserve_explicit_amounts_without_account_quote_claims(self):
+        from customer_price_presentation import pricing_summary
+        missing = pricing_summary({'kind': 'future_tariff'})
+        self.assertEqual(missing, 'Billing method unavailable. No price estimate is currently available.')
+        self.assertNotIn('account price', missing)
+        estimated = pricing_summary({'kind': 'future_tariff', 'default_request_estimate_usd': .1})
+        self.assertIn('Default request estimate: $0.1 USD.', estimated)
+        self.assertNotIn('account price', estimated)
+        unit = pricing_summary({'kind': 'future_tariff', 'customer_unit_price_usd': .02})
+        self.assertIn('Published reference price: $0.02 USD per billable unit.', unit)
+        self.assertNotIn('account price', unit)
+
     def test_standalone_localization_cleans_old_free_and_archive_page_markers(self):
         import runtime_localize_openapi_zh as localization
         from readable_contract_notes import strip_generated_block
@@ -203,10 +216,11 @@ class PricingGenerationTests(unittest.TestCase):
             for repeat in range(2):
                 outputs, _ = prod.generate(root, files)
                 pages = {}
-                for prefix, expected in (('', 'Billing method unavailable.'), ('zh/', '计费方式暂不可用。')):
+                for prefix in ('', 'zh/'):
                     key = prefix + 'api-reference/account-usage.mdx'
                     text = outputs[key].decode()
-                    self.assertIn(expected, text)
+                    self.assertNotIn('Billing method unavailable', text)
+                    self.assertNotIn('计费方式暂不可用', text)
                     self.assertNotIn('No additional charge', text)
                     self.assertNotIn('历史归档接口', text)
                     self.assertNotIn('aisa-pricing:', text)

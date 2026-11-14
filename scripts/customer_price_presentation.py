@@ -249,11 +249,71 @@ def pricing_summary(pricing, language='en'):
                 summary += ' ' + t(f'Default request estimate: {total} USD.', f'默认请求预估费用：{total} USD。')
                 if family != 'unknown':
                     summary += ' ' + t('The final charge depends on actual usage.', '最终费用以实际用量为准。')
-            elif unit_price is None and family != 'fixed_success':
+            elif unit_price is None and family not in {'fixed_success', 'unknown'}:
                 summary += ' ' + t('A price estimate is not currently available.', '当前暂无预估金额。')
+            if family == 'unknown':
+                # An unrecognized rule may still carry an explicit customer
+                # unit or estimate. Preserve that fact, but never append the
+                # account-specific quote caveat used by known tariffs.
+                if total is None and unit_price is None:
+                    summary += ' ' + t('No price estimate is currently available.', '当前暂无预估金额。')
+                return summary
     description = pricing.get('description', '')
     if (family == 'fixed_request' and isinstance(description, str)
             and 'This is the price on every plan;' in description):
         return summary
     return summary + ' ' + t('Your account price may differ; use a request quote where supported.',
                             '账户适用价格可能不同；支持报价的接口可按实际请求获取报价。')
+
+
+def customer_price_card(pricing, language='en'):
+    """Return a concise top-of-page price line when a customer amount exists.
+
+    The detailed pricing summary belongs with the endpoint explanation. The
+    card is only a scan-friendly copy of a published customer amount; missing,
+    unavailable, model-dependent, and no-charge declarations stay in the
+    detailed cost rules instead of becoming a duplicate top tip.
+    """
+    if not isinstance(pricing, dict) or not pricing:
+        return ''
+    family = price_family(pricing)
+    if family in {'unpriced', 'model_catalog', 'no_customer_charge'}:
+        return ''
+    summary = pricing_summary(pricing, language).strip()
+    if not summary:
+        return ''
+    summary = re.sub(
+        r'\s+(?:Your account price may differ; use a request quote where supported\.|'
+        r'账户适用价格可能不同；支持报价的接口可按实际请求获取报价。)\s*$',
+        '', summary).strip()
+    summary = re.sub(
+        r'^(?:Published reference price:\s*|Normal-tier reference price:\s*|'
+        r'公开参考价格：\s*|普通用户参考价格：\s*)', '', summary)
+    # Request estimates belong in the detailed rules section. Keep the small
+    # headline card for published unit prices only.
+    if re.search(r'(?:Default request estimate|默认请求预估费用)', summary):
+        return ''
+    if family == 'unknown':
+        summary = re.sub(r'^(?:Billing method unavailable\.\s*|计费方式暂不可用。\s*)', '', summary)
+    sentences = re.split(r'(?<=[.!?。！？])\s+', summary)
+    if family == 'no_customer_charge':
+        return sentences[0]
+    if '$' not in summary:
+        return ''
+    if family == 'fixed_request':
+        # A disabled first variant must not become the headline for a later
+        # priced variant. Keep that detail in the full pricing section.
+        return sentences[0] if '$' in sentences[0] else ''
+    if family == 'metered_event':
+        # Only use a complete price-bearing sentence. Retry/waiver sentences
+        # can precede rates; never turn those into the price headline.
+        return next((sentence for sentence in sentences if '$' in sentence), '')
+    if family in {'request_dependent', 'result_dependent', 'components', 'usage', 'metered_result', 'unknown'}:
+        # Prefer the concise sentence carrying the explicit customer amount;
+        # the detailed section retains the billing mode and settlement rules.
+        for sentence in sentences:
+            if '$' in sentence:
+                return re.sub(
+                    r'^(?:Published reference price:\s*|Normal-tier reference price:\s*|'
+                    r'公开参考价格：\s*|普通用户参考价格：\s*)', '', sentence)
+    return sentences[0]

@@ -7,10 +7,44 @@ import re
 
 BEGIN = "{/* aisa-contract-details:start */}"
 END = "{/* aisa-contract-details:end */}"
+PRICE_CARD_BEGIN = "{/* aisa-price-card:start */}"
+PRICE_CARD_END = "{/* aisa-price-card:end */}"
+
+
+def split_frontmatter(text):
+    """Split a page without importing the locale generator (avoids a cycle)."""
+    if not text.startswith('---\n'):
+        raise ValueError('MDX is missing frontmatter')
+    match = re.search(r'\n---(?:\n|$)', text[4:])
+    if not match:
+        raise ValueError('MDX frontmatter is not closed')
+    start = 4 + match.start()
+    body_start = 4 + match.end()
+    return text[4:start], text[body_start:]
+
+LEGACY_REFERENCE_NOTICES = (
+    'This API reference has not been updated for the currently available endpoint.',
+    '该接口文档尚未完成更新。',
+    'This existing API reference is preserved. Its parameter details have not yet been verified for the currently available endpoint.',
+    '此页面保留原有接口文档，当前可用接口的参数说明尚待核实。',
+)
+
+
+def clean_reference_notices(text):
+    """Keep source-coverage diagnostics in reports, not endpoint instructions."""
+    from pricing_prose import FENCES
+    chunks = FENCES.split(text)
+    pattern = r'<Warning>(?:' + '|'.join(map(re.escape, LEGACY_REFERENCE_NOTICES)) + r')</Warning>[ \t]*\n{0,2}'
+    for index in range(0, len(chunks), 2):
+        chunks[index] = re.sub(pattern, '', chunks[index])
+    return ''.join(chunks)
 
 
 def strip_generated_block(text):
-    return re.sub(r"\n\n" + re.escape(BEGIN) + r".*?" + re.escape(END) + r"\n", "", text, flags=re.S)
+    text = re.sub(r"^" + re.escape(PRICE_CARD_BEGIN) + r".*?" + re.escape(PRICE_CARD_END) + r"\n*", "\n", text, flags=re.S)
+    text = re.sub(r"^" + re.escape(BEGIN) + r".*?" + re.escape(END) + r"\n*", "\n", text, flags=re.S)
+    text = re.sub(r"\n{1,2}" + re.escape(PRICE_CARD_BEGIN) + r".*?" + re.escape(PRICE_CARD_END) + r"\n", "\n", text, flags=re.S)
+    return re.sub(r"\n{1,2}" + re.escape(BEGIN) + r".*?" + re.escape(END) + r"\n", "\n", text, flags=re.S)
 
 
 def safe(value):
@@ -65,8 +99,8 @@ def request_details(operation, document, method, path, spec_path, language="en")
     if "x-aisa-status" in operation:
         lines.append("- **" + t("Availability", "可用状态") + ":** " + safe(operation["x-aisa-status"]))
     if operation.get("x-aisa-status") == "disabled":
-        lines += ["", t("**This endpoint is disabled and cannot be called. Its historical request, schema and pricing declarations are retained for reference.**",
-                        "**此接口已停用，无法调用。历史请求、schema 和价格声明仅保留供参考。**"), ""]
+        lines += ["", t("**This endpoint is disabled and cannot be called. Its historical request and schema details are retained for reference; pricing is not published.**",
+                        "**此接口已停用，无法调用。历史请求和 schema 仅保留供参考，当前未发布价格。**"), ""]
     for limitation in request.get("x-aisa-documentation-limitations", []):
         lines.append("- **" + t("Incomplete historical declaration (disabled)", "未启用的历史声明不完整") + ":** " + safe(limitation))
     for server in request["servers"]:
@@ -89,18 +123,19 @@ def request_details(operation, document, method, path, spec_path, language="en")
 def readable_block(operation, language="en", translate=None, *, document=None, method=None, path=None, spec_path=None):
     zh = language == "zh"
     def t(en, cn): return cn if zh else en
+    pricing_declared = "x-aisa-pricing" in operation
     pricing = operation.get("x-aisa-pricing") or {}
-    # Historical disabled operations may legitimately have no runtime tariff.
-    # Keep that absence out of the machine contract while still giving the
-    # archive page an explicit customer-facing unavailable-price explanation.
-    # Legacy labels describe a cost tier, not a published price or billing rule.
-    # Keep unknown modern declarations distinct from this known historical shape.
-    legacy_labels = isinstance(pricing, dict) and set(pricing) <= {"cost_tier", "model"}
-    if operation.get("x-aisa-status") == "disabled" and (not pricing or legacy_labels):
+    # A disabled operation is an archive regardless of whether an old
+    # x-aisa-pricing object survived in the historical contract.  That object
+    # is provenance for internal review, not a current customer tariff.
+    # Always replace it in the presentation layer so archived pages cannot
+    # publish stale amounts after regeneration.
+    if operation.get("x-aisa-status") == "disabled":
         pricing = {"kind": "unpriced"}
-    elif not pricing and (document is not None or operation.get("operationId") or "x-aisa-status" in operation):
-        # Preserved references can have no Runtime tariff at all. Say so in
-        # the page without inventing a price, free access, or disabled status.
+    elif pricing_declared and not pricing:
+        # An explicitly empty pricing declaration is an unknown rule. A
+        # missing declaration means this operation predates Runtime pricing;
+        # preserve its authored page instead of adding a new warning section.
         pricing = {"kind": "unknown"}
     constraints = operation.get("x-aisa-constraints") or {}
     notes = constraints.get("notes") or []
@@ -129,11 +164,37 @@ def readable_block(operation, language="en", translate=None, *, document=None, m
     return "\n".join(lines)
 
 
+def price_card_block(operation, language="en"):
+    """Top-of-page price cards are retired; cost rules stay in the detail block."""
+    return ''
+
+
 def update_readable_block(text, operation, language="en", translate=None, **context):
+    from pricing_prose import refresh_page_description
+    text = refresh_page_description(clean_reference_notices(text), operation, language, translate)
     block = readable_block(operation, language, translate, **context)
-    if not block:
+    card = price_card_block(operation, language)
+    if not block and not card:
         return strip_generated_block(text)
-    pattern = re.escape(BEGIN) + r".*?" + re.escape(END)
-    if re.search(pattern, text, re.S):
-        return re.sub(pattern, lambda _: block, text, flags=re.S)
-    return text + "\n\n" + block + "\n"
+    if not text.startswith('---\n') and text.strip() == block.strip():
+        return text
+    text = strip_generated_block(text)
+    if not text.startswith('---\n'):
+        if not block:
+            return text
+        return text.rstrip() + "\n\n" + block + "\n"
+    # Keep the authored endpoint explanation first. The managed request
+    # contract and detailed cost rules follow it; top price cards are retired
+    # so every billing rule has one detailed presentation location.
+    header, body = split_frontmatter(text)
+    body = body.rstrip()
+    if block:
+        body += ('\n\n' if body else '') + block
+    result = '---\n' + header + '\n---\n'
+    if card:
+        result += '\n' + card + '\n'
+    if body:
+        # Preserve authored leading whitespace exactly; the next generation
+        # must not rewrite a legacy page merely because a managed block moved.
+        result += body + '\n'
+    return result

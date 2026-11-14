@@ -22,18 +22,38 @@ class RenderedPageChecks(unittest.TestCase):
         self.identity = ('get_example', 'GET', '/example')
         self.expected = {self.identity: [{'request': self.request, 'price_summary': 'Reference: $0.08 USD.'}]}
 
-    def page(self, request=None, *, zh=False, notice=True, price='Reference: $0.08 USD.'):
+    def page(self, request=None, *, zh=False, notice=True, price='Reference: $0.08 USD.', price_first=False):
         request = self.request if request is None else request
         heading = '请求规范' if zh else 'Request contract'
         cost = '费用与请求规则' if zh else 'Cost and request rules'
         warning = '此接口已停用，无法调用' if zh else 'This endpoint is disabled and cannot be called'
         # Actual Mintlify shape: an anchor adds a zero-width character to the
         # heading, Shiki spans wrap JSON, and paragraphs use span[data-as=p].
-        return ('<h2><a>\u200b</a><span>' + heading + '</span></h2>' +
+        request_section = ('<h2><a>\u200b</a><span>' + heading + '</span></h2>' +
                 ('<strong>' + warning + '</strong>' if notice else '') +
-                '<pre><code><span>' + html.escape(json.dumps(request)) + '</span></code></pre>' +
-                '<h2><span>' + cost + '</span></h2><span data-as="p"><span>' +
+                '<pre><code><span>' + html.escape(json.dumps(request)) + '</span></code></pre>')
+        price_section = ('<h2><span>' + cost + '</span></h2><span data-as="p"><span>' +
                 price + '</span></span><span data-as="p">Later explanatory paragraph.</span>')
+        return price_section + request_section if price_first else request_section + price_section
+
+    def test_price_before_request_and_card_do_not_hide_price_drift(self):
+        card = '<aside><span data-as="p">Request estimate: $9 USD.</span></aside>'
+        for zh in (False, True):
+            for price, valid in (('Reference: $0.08 USD.', True), ('$0.02', False)):
+                raw = card + self.page(zh=zh, price=price, price_first=True)
+                _, actual = visible_contract(raw.encode())
+                self.assertEqual(not compare_llms(self.expected, actual), valid)
+            # Repeated declarations must all retain their own cost paragraph.
+            raw = self.page(zh=zh, price_first=True) + self.page(zh=zh, price='$0.02', price_first=True)
+            self.assertTrue(compare_llms(self.expected, visible_contract(raw.encode())[1]))
+
+    def test_price_typography_may_change_but_amounts_must_not(self):
+        expected = copy.deepcopy(self.expected)
+        expected[self.identity][0]['price_summary'] = "The target's price is $0.08 USD."
+        for price, valid in (("The target’s price is $0.08 USD.", True),
+                             ("The target’s price is $0.02 USD.", False)):
+            actual = visible_contract(self.page(price=price, price_first=True).encode())[1]
+            self.assertEqual(not compare_llms(expected, actual), valid)
 
     def test_visible_bilingual_json_and_first_price_paragraph(self):
         for zh in (False, True):

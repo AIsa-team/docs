@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class ReadableNotesTests(unittest.TestCase):
 
-    def test_absent_pricing_is_explicit_without_guessing_price_or_availability(self):
+    def test_absent_pricing_preserves_page_without_inventing_cost_rules(self):
         for status in (None, 'enabled', 'disabled'):
             for value in (None, {}):
                 operation = {'operationId': 'reference'}
@@ -28,6 +28,10 @@ class ReadableNotesTests(unittest.TestCase):
                     text = readable_block(operation, language)
                     if status == 'disabled':
                         self.assertIn('历史归档接口' if language == 'zh' else 'Historical archive', text)
+                    elif value is None:
+                        self.assertEqual(text, '')
+                        self.assertNotIn('disabled', text)
+                        self.assertNotIn('已停用', text)
                     else:
                         self.assertIn('计费方式暂不可用' if language == 'zh' else 'Billing method unavailable', text)
                         self.assertNotIn('disabled', text)
@@ -35,6 +39,12 @@ class ReadableNotesTests(unittest.TestCase):
                     self.assertNotIn('$', text)
                     self.assertNotIn('No additional charge', text)
                 self.assertEqual(operation, original)
+
+    def test_explicit_empty_pricing_is_still_an_unknown_rule(self):
+        for language, unavailable in (('en', 'Billing method unavailable.'),
+                                      ('zh', '计费方式暂不可用。')):
+            text = readable_block({'operationId': 'reference', 'x-aisa-pricing': {}}, language)
+            self.assertIn(unavailable, text)
 
     def test_disabled_legacy_labels_are_not_a_published_tariff(self):
         legacy = {'cost_tier': 'low', 'model': 'per_request'}
@@ -50,8 +60,9 @@ class ReadableNotesTests(unittest.TestCase):
             self.assertIn(unknown, readable_block(operation, language))
             operation.update({'x-aisa-status': 'disabled', 'x-aisa-pricing': {
                 'kind': 'fixed_request', 'customer_micros_usd': 5000}})
-            self.assertIn('$0.005', readable_block(operation, language))
-            self.assertNotIn(archive, readable_block(operation, language))
+            archived = readable_block(operation, language)
+            self.assertIn(archive, archived)
+            self.assertNotIn('$0.005', archived)
 
     def test_safety_idempotence_and_preserve_prose(self):
         op = {'x-aisa-pricing': {'default_request_estimate_usd': .075}, 'x-aisa-constraints': {'notes': ['<script>{danger}</script> `x`\n## forged']}}
@@ -70,10 +81,59 @@ class ReadableNotesTests(unittest.TestCase):
         changed['x-aisa-pricing']['default_request_estimate_usd'] = .15
         updated = update_readable_block(generated + tail, changed)
         self.assertEqual(strip_generated_block(updated), prose + tail)
-        self.assertTrue(updated.endswith(tail))
-        self.assertLess(updated.index('aisa-contract-details:start'), updated.index('User prose after block.'))
+        self.assertLess(updated.index('User prose after block.'), updated.index('aisa-contract-details:start'))
         self.assertIn('0.15', updated)
         self.assertEqual(update_readable_block(updated, changed), updated)
+
+    def test_top_price_cards_are_not_published(self):
+        prose = '---\ntitle: Test\n---\n\nEndpoint overview.\n\n## Example\n\nExample request.\n'
+        known = {'operationId': 'known', 'x-aisa-pricing': {'kind': 'fixed_request', 'customer_micros_usd': 14760,
+                                                            'estimate_source': 'configured_fixed_price'}}
+        context = {'document': {'paths': {'/known': {'get': known}}}, 'method': 'get',
+                   'path': '/known', 'spec_path': 'openapi/test.json'}
+        rendered = update_readable_block(prose, known, **context)
+        self.assertNotIn('aisa-price-card:start', rendered)
+        self.assertNotIn('<Info>', rendered)
+        self.assertIn('$0.01476 USD per completed job', rendered)
+        self.assertLess(rendered.index('Endpoint overview.'), rendered.index('Cost and request rules'))
+        self.assertLess(rendered.index('Request contract'), rendered.index('Cost and request rules'))
+
+        unknown_op = {'operationId': 'unknown'}
+        unknown_context = {'document': {'paths': {'/unknown': {'get': unknown_op}}}, 'method': 'get',
+                           'path': '/unknown', 'spec_path': 'openapi/test.json'}
+        unknown = update_readable_block(prose, unknown_op, **unknown_context)
+        self.assertNotIn('aisa-price-card:', unknown)
+        self.assertNotIn('<Info>', unknown)
+        self.assertNotIn('Cost and request rules', unknown)
+        self.assertNotIn('Billing method unavailable', unknown)
+
+        estimated_op = {'operationId': 'estimated',
+                        'x-aisa-pricing': {'kind': 'future_tariff', 'default_request_estimate_usd': .1}}
+        estimated = update_readable_block(prose, estimated_op, **unknown_context)
+        self.assertNotIn('<Info>', estimated)
+        self.assertNotIn('aisa-price-card:start', estimated)
+        self.assertIn('Default request estimate: $0.1 USD.', estimated)
+
+    def test_no_charge_is_detailed_only_without_a_duplicate_top_tip(self):
+        prose = '---\ntitle: Test\n---\n\nEndpoint overview.\n'
+        operation = {'operationId': 'free', 'x-aisa-pricing': {'kind': 'no_customer_charge'}}
+        context = {'document': {'paths': {'/free': {'get': operation}}}, 'method': 'get',
+                   'path': '/free', 'spec_path': 'openapi/test.json'}
+        rendered = update_readable_block(prose, operation, **context)
+        self.assertNotIn('aisa-price-card:start', rendered)
+        self.assertNotIn('<Info>', rendered)
+        self.assertEqual(rendered.count('No additional charge for this operation.'), 1)
+        self.assertIn('## Cost and request rules', rendered)
+
+    def test_top_price_cards_are_removed_for_multi_price_and_disabled_tariffs(self):
+        from readable_contract_notes import price_card_block
+        from test_customer_price_presentation import SOCIAL_PRICING
+        op = {'x-aisa-pricing': copy.deepcopy(SOCIAL_PRICING)}
+        for language in ('en', 'zh'):
+            card = price_card_block(op, language)
+            self.assertEqual(card, '')
+        op['x-aisa-status'] = 'disabled'
+        self.assertEqual(price_card_block(op), '')
 
     def test_paired_currency_is_literal_mdx_without_changing_contract_prices(self):
         from pricing_prose import pricing_summary
