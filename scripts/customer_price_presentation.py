@@ -270,14 +270,14 @@ def customer_price_card(pricing, language='en'):
     """Return a concise top-of-page price line when a customer amount exists.
 
     The detailed pricing summary belongs with the endpoint explanation. The
-    card is only a scan-friendly copy of a published amount (or an explicit
-    no-charge declaration); missing, unavailable, and model-dependent prices
-    do not get a misleading placeholder at the top of the page.
+    card is only a scan-friendly copy of a published customer amount; missing,
+    unavailable, model-dependent, and no-charge declarations stay in the
+    detailed cost rules instead of becoming a duplicate top tip.
     """
     if not isinstance(pricing, dict) or not pricing:
         return ''
     family = price_family(pricing)
-    if family in {'unpriced', 'model_catalog'}:
+    if family in {'unpriced', 'model_catalog', 'no_customer_charge'}:
         return ''
     summary = pricing_summary(pricing, language).strip()
     if not summary:

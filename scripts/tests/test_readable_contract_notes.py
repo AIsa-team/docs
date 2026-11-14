@@ -114,6 +114,17 @@ class ReadableNotesTests(unittest.TestCase):
         self.assertNotIn('aisa-price-card:start', estimated)
         self.assertIn('Default request estimate: $0.1 USD.', estimated)
 
+    def test_no_charge_is_detailed_only_without_a_duplicate_top_tip(self):
+        prose = '---\ntitle: Test\n---\n\nEndpoint overview.\n'
+        operation = {'operationId': 'free', 'x-aisa-pricing': {'kind': 'no_customer_charge'}}
+        context = {'document': {'paths': {'/free': {'get': operation}}}, 'method': 'get',
+                   'path': '/free', 'spec_path': 'openapi/test.json'}
+        rendered = update_readable_block(prose, operation, **context)
+        self.assertNotIn('aisa-price-card:start', rendered)
+        self.assertNotIn('<Info>', rendered)
+        self.assertEqual(rendered.count('No additional charge for this operation.'), 1)
+        self.assertIn('## Cost and request rules', rendered)
+
     def test_multi_price_cards_use_literal_dollars_and_hide_disabled_tariffs(self):
         from readable_contract_notes import price_card_block
         from test_customer_price_presentation import SOCIAL_PRICING
