@@ -3,13 +3,12 @@ title: "Send message"
 openapi: "reference-contracts/zh/aisa-social.json POST /apis/v1/social/inbox/conversations/{conversationId}/messages"
 x-aisa-operation-id: "post_aisa_social_apis_v1_social_inbox_conversatio_3ceefe"
 noindex: "true" # aisa-contract-status
+description: "Inbox. Acts in public on your connected account; needs social:publish. Audited. Ids are yours: accounts acc_..., profiles prf_..., posts pst_...; every other object id is checked against your accounts before the call. \n\nSend a message in a conversation. Supports text, attachments, quick replies, buttons, templates, and message tags. Attachment and interactive message support varies by platform.\n\n### Email threads (Google / Microsoft accounts)\n\nThe text is sent as a reply to the latest mail of the thread, in either direction, with its recipients and a \"Re:\" subject. `cc` adds recipients. `message` is required.\n\n- 400: attachments and `replyTo` are rejected here (use POST /apis/v1/social/email/messages/{messageId}/reply for a reply with attachments)\n- 412 `account_scope_missing`: the account was connected without the `email` area\n- 409: the account is disconnected\n- 402: a Gmail account without a card on file\n\nMail sends count toward the mailbox's daily cap, never toward managed messages.\n\n### WhatsApp per-recipient rate limit\n\nWhatsApp caps how many messages you may send to the same recipient in a short window. It rejects the excess with error code `131056` (\"Too many messages sent to this recipient\").\n\nPace sends to a single recipient at roughly 10 per minute; bursts above that return a `400` with code `131056`. Sends to other recipients are unaffected, so parallelise across recipients rather than flooding one.\n\n### iMessage pacing\n\nMessages to contacts who have not written to the sender in the last 24 hours must be at least 2 minutes apart per sender.\n\nA send inside that window returns `429` with code `new_contact_limit` and the time to retry. Replies to contacts who wrote within the last day are not paced.\n\nA thread opened with `POST /apis/v1/social/inbox/conversations` takes at most two follow-ups before the contact replies, at least 24 hours apart:\n\n- `429 new_contact_limit`: a follow-up sent sooner\n- `409 recipient_must_message_first`: a fourth message\n\nEach such follow-up counts as a new conversation:\n\n- No links, emails, phone numbers, prices or attachments (`400 invalid_content`).\n- It uses the sender's 15-minute spacing and daily warm-up (`429 new_contact_limit`).\n\nText must be shorter than 10,000 characters.\n\n### WhatsApp template messages\n\nTo send an approved template into this conversation (required when the 24-hour customer-service window is closed), use the `template` field with a single element carrying the template reference: `{ \"elements\": [{ \"name\": ..., \"language\": ..., \"components\": [...] }] }`. See the `template` field below for the exact shape.\n\nTo send a template to a phone number you have no conversation with yet, use the create-conversation endpoint (POST /apis/v1/social/inbox/conversations) instead.\n\n#### Template lookup\n\nAIsa resolves the exact APPROVED template name and language before any WhatsApp template send. A failed lookup or missing exact definition sends no message and returns code `platform_api_error`, type `platform_error`, and platform `whatsapp`.\n\nSanitized Meta code, message, and `error_data.details` are returned in `platformError`. `details` identifies `phase: template_lookup`, the query-free endpoint, upstream status, and only safe provider usage or retry headers.\n\n### WhatsApp interactive messages\n\nRich interactive messages (list, CTA URL, Flow, location request) are available via the `interactive` field. Tap events are delivered through the `message.received` webhook with WhatsApp-specific `metadata` fields (`interactiveType`, `interactiveId`, `flowResponseJson`, `flowResponseData`).\n\n### Idempotency\n\nSend an `Idempotency-Key` header to make retries safe (e.g. after a client-side timeout where delivery is unknown). Works for JSON and multipart (file upload) requests alike. Keys are retained for 24 hours.\n\n- Same key + same body: replays the original response (with `Idempotent-Replayed: true`) instead of sending the message a second time.\n- Same key + different body: returns 422.\n- A key still in flight: returns 409.\n\nOnly successful (2xx) responses are stored for replay. If the request throws or returns a non-2xx status, the key is released so the same key can be retried once the problem is fixed."
+x-aisa-generated-description-sha256: "e882b8b14395f7b5f7cbd48b61a260b780cd59acbf4e495ba56de569ed5cfd4c"
 ---
-<Warning>该接口文档尚未完成更新。</Warning>
-
 {/* aisa-contract-status:start */}
 当前未启用。
 {/* aisa-contract-status:end */}
-
 
 {/* aisa-contract-details:start */}
 
@@ -18,7 +17,7 @@ noindex: "true" # aisa-contract-status
 - **方法与路径:** POST /apis/v1/social/inbox/conversations/&#123;conversationId&#125;/messages
 - **可用状态:** disabled
 
-**此接口已停用，无法调用。历史请求、schema 和价格声明仅保留供参考。**
+**此接口已停用，无法调用。历史请求和 schema 仅保留供参考，当前未发布价格。**
 
 - **请求 URL 模板:** `https://api.aisa.one/apis/v1/social/inbox/conversations/{conversationId}/messages`
 - **conversationId:** path; 必填
@@ -27,7 +26,7 @@ noindex: "true" # aisa-contract-status
 
 [完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/aisa-social.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -1013,17 +1012,6 @@ noindex: "true" # aisa-contract-status
     "required": true
   },
   "x-aisa-status": "disabled",
-  "x-aisa-pricing": {
-    "customer_micros_usd": 100,
-    "description": "Charged once per successful call. The base price is AIsa's own cost for the call: $0.015 on X accounts (one X direct message sent, at X's API rate), $0.0001 on every other platform (one message delivered to a recipient). This is the price on every plan; no plan multiplier applies. A refused or failed call, or one whose outcome is unknown, is not charged.",
-    "kind": "fixed_request",
-    "variants": {
-      "twitter": {
-        "customer_micros_usd": 15000,
-        "kind": "fixed_request"
-      }
-    }
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -1037,9 +1025,7 @@ noindex: "true" # aisa-contract-status
 
 ## 费用与请求规则
 
-当前未提供请求参考价格；请使用接口支持的报价功能确认费用。 最终费用以账户适用价格及实际结算为准。
-
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
+历史归档接口：已停用，不可调用，价格未发布。
 
 
 {/* aisa-contract-details:end */}
