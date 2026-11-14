@@ -10,6 +10,37 @@ from sync_prod_runtime_docs import preserve_navigation
 
 
 class RetirementTests(unittest.TestCase):
+    def test_generated_alias_stays_archived_across_repeated_full_generation(self):
+        from test_full_registry import FullRegistryTests, contract
+        fixture = FullRegistryTests()
+        fixture.setUp()
+        self.addCleanup(fixture.tearDown)
+        root = fixture.root
+        document = contract('aisa-twitter', method='post')
+        operation = next(iter(document['paths'].values()))['post']
+        operation['operationId'] = 'postTwitter'
+        route = '/apis/v1/twitter/post_twitter'
+        document['paths'] = {route: {'post': operation}}
+        fixture.sources({'aisa-twitter': document})
+        (root / 'docs').mkdir()
+        policy = {'scope': 'human_presentation_only', 'formal_publication': False,
+                  'guide': 'resources/twitter-migration', 'operations': [{
+                      'method': 'POST', 'path': route,
+                      'page': 'api-reference/twitter/legacy-post', 'title': 'Post'}]}
+        (root / 'docs/human-api-retirements.json').write_text(json.dumps(policy))
+        for iteration in range(3):
+            fixture.publish(fixture.pull()[0])
+            snapshot = {p.relative_to(root).as_posix(): p.read_text()
+                        for p in root.rglob('*.mdx')}
+            for prefix in ('', 'zh/'):
+                alias = snapshot[prefix + 'api-reference/aisa-twitter/postTwitter.mdx']
+                self.assertIn('x-aisa-human-retirement: true', alias)
+                self.assertNotIn('openapi:', alias)
+                self.assertNotIn('aisa-contract-details', alias)
+            if iteration:
+                self.assertEqual(snapshot, first)
+            first = snapshot
+
     def test_regenerated_legacy_pages_and_preserved_navigation_cannot_reactivate(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td)

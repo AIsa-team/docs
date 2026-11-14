@@ -97,6 +97,8 @@ def _retain_history_operation(document: dict, facts: dict, history: dict, path: 
     operation["x-aisa-status"] = "disabled"
     operation["x-aisa-contract-state"] = state
     operation["x-aisa-contract-pending"] = reason
+    from pricing_prose import remove_price_summary
+    remove_price_summary(operation)
     document["paths"].setdefault(path, {})[method] = operation
     return operation
 
@@ -344,7 +346,13 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                     frontmatter, prose = localization.split_frontmatter(text)
                     frontmatter = localization.replace_frontmatter_value(frontmatter, "title", localized_title)
                     text = "---\n" + frontmatter + "\n---\n" + prose
-                    text = re.sub(r"^openapi:.*$", lambda _: f"openapi: {reference}", text, count=1, flags=re.M)
+                    if re.search(r"^openapi:", text, re.M):
+                        text = re.sub(r"^openapi:.*$", lambda _: f"openapi: {reference}", text, count=1, flags=re.M)
+                    else:
+                        # Archived aliases have no OpenAPI frontmatter. Restore
+                        # the binding while staging so apply_retirements can
+                        # identify their route and archive them again before write.
+                        text = text.replace("---\n", f"---\nopenapi: {reference}\n", 1)
                     if "x-aisa-operation-id:" not in text:
                         text = text.replace("---\n", "---\n" + identity + "\n", 1)
                     else:
@@ -466,6 +474,8 @@ def refresh_legacy_page_blocks(root, documents, changes, catalog):
                 if not localized_path.exists() and localized_path not in changes:
                     localized = localize_identities(localization.localize_tree(document, catalog, allow_untranslated=True))
                     changes[localized_path] = json.dumps(localized, indent=2, ensure_ascii=False) + "\n"
+            from pricing_prose import clean_page
+            text = clean_page(text, language)
             changes[page] = update_readable_block(text, operation, language, translated_note,
                 document=document, method=method, path=path, spec_path=reference.split()[0])
     docs_path = root / 'docs.json'
@@ -525,6 +535,52 @@ def unindexed_empty_placeholder(previous, catalogs, index, category):
             return False
         advertised.update(row[field] for row in rows)
     return bool(catalogs) and not set(catalogs).intersection(advertised)
+
+
+def _document_content_changed(previous: dict, current: dict) -> bool:
+    """Detect meaningful generated changes while ignoring observation time.
+
+    The document hash describes Runtime inputs and intentionally ignores
+    presentation cleanup. A shared prose-generator fix can therefore change a
+    declaration while leaving that hash intact; reusing the old bytes would
+    immediately undo the fix on the next generation. Compare the documents
+    after removing only the observational generation timestamp so those
+    deterministic cleanup changes are persisted without generation-time churn.
+    """
+    def remove_observation_time(value):
+        if isinstance(value, dict):
+            value.pop("generated_at", None)
+            for child in value.values():
+                remove_observation_time(child)
+        elif isinstance(value, list):
+            for child in value:
+                remove_observation_time(child)
+
+    def normalize(document):
+        document = copy.deepcopy(document)
+        remove_observation_time(document)
+        # Retained historical operations are rebuilt from the current
+        # publication graph. Their private component namespace is intentionally
+        # allowed to disappear when no active operation references it; that is
+        # not a source or presentation change worth rewriting an otherwise
+        # stable document for.
+        schemas = document.get("components", {}).get("schemas", {})
+        if isinstance(schemas, dict):
+            for name in list(schemas):
+                if str(name).startswith("RetainedHistory_"):
+                    schemas.pop(name, None)
+        return document
+
+    old = normalize(previous)
+    new = normalize(current)
+    if old == new:
+        return False
+    # A generator cleanup may alter public prose without changing Runtime's
+    # input hash. Persist exactly that cleanup, while leaving arbitrary
+    # hand-edited/tampered output to the existing hash-based reuse behavior.
+    from pricing_prose import clean_document
+    cleaned_old = normalize(clean_document(previous))
+    return cleaned_old != old and cleaned_old == new
 
 
 def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = True,
@@ -756,7 +812,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         else:
             if not new_hash:
                 raise ValueError(f"{provider}: generated document has no document_hash")
-            changed = old_hash != new_hash
+            changed = old_hash != new_hash or _document_content_changed(previous, document)
             if changed or not reuse_unchanged_documents:
                 changes[output_path] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
             else:
@@ -791,7 +847,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
         new_hash = document.get("info", {}).get("x-aisa-document", {}).get("document_hash")
         if not new_hash:
             raise ValueError(f"{provider}: generated document has no document_hash")
-        changed = old_hash != new_hash
+        changed = old_hash != new_hash or _document_content_changed(previous, document)
         if changed or not reuse_unchanged_documents:
             changes[root / f"openapi/{provider}.json"] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
         elif with_pages:

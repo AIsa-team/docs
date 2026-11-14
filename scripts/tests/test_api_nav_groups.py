@@ -4,9 +4,11 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import api_nav_groups
+import regroup_api_reference
 from api_nav_groups import nav_pages, regroup
 from pull_openapi import generate_pages
 from regroup_api_reference import (regroup_docs, platform_rows, platform_index, index_pages, INDEX_PAGE,
@@ -63,6 +65,42 @@ def api_groups(docs, language):
 
 
 class RegroupTests(unittest.TestCase):
+
+    def test_preserved_dev_navigation_checks_indexes_without_regrouping(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'openapi').mkdir()
+            (root / 'translations').mkdir()
+            (root / 'openapi/nav-groups.json').write_text(json.dumps(CONFIG))
+            (root / 'translations/openapi-nav-zh.json').write_text(json.dumps(LABELS))
+            docs = docs_for([{'group': 'Overview', 'pages': [INDEX_PAGE]},
+                             {'group': 'New provider', 'pages': ['api-reference/new/lookup']}])
+            original = json.dumps(docs, indent=2, ensure_ascii=False) + '\n'
+            (root / 'docs.json').write_text(original)
+            for name, text in index_pages(docs, CONFIG, LABELS, root).items():
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text)
+            args = ['regroup_api_reference.py', '--root', str(root), '--check', '--preserve-navigation']
+            with patch.object(sys, 'argv', args):
+                self.assertEqual(regroup_api_reference.main(), 0)
+                self.assertEqual((root / 'docs.json').read_text(), original)
+                (root / (INDEX_PAGE + '.mdx')).write_text('stale index')
+                self.assertEqual(regroup_api_reference.main(), 1)
+            with patch.object(sys, 'argv', args[:-1]):
+                with self.assertRaisesRegex(KeyError, 'New provider'):
+                    regroup_api_reference.main()
+
+
+    def test_preserved_navigation_rejects_missing_or_duplicate_language_pages(self):
+        docs = docs_for([{'group': 'New provider', 'pages': ['api-reference/new/lookup']}])
+        for missing in (False, True):
+            changed = copy.deepcopy(docs)
+            zh = api_groups(changed, 'zh')[0]['pages']
+            zh.clear() if missing else zh.append(zh[0])
+            with self.subTest(missing=missing), self.assertRaises(AssertionError):
+                regroup_api_reference.validate_preserved_navigation(changed)
+
     def test_builds_categories_merges_vendors_and_keeps_unmapped_last(self):
         groups, unmapped = regroup(copy.deepcopy(LEGACY), CONFIG)
         self.assertEqual(unmapped, ['Brand New'])

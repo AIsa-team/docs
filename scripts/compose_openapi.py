@@ -14,7 +14,7 @@ from typing import Any
 from upstream_auth_transports import server_auth_headers, request_auth_headers
 from urllib.parse import urlsplit, unquote
 
-VERSION = "30"
+VERSION = "31"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}

@@ -18,8 +18,8 @@ Paths, schemas, customer prices and status retain their declarations. In-scope
 request examples remain available as static documentation. Runtime evidence marks
 whether a scenario has been verified; only generated Reference samples require
 that verification. Public descriptions and response schemas stay available.
-Internal price construction and revision references are removed; generated
-pricing prose is rebuilt from the public pricing fields. ``info.x-aisa-document.document_hash`` is recomputed over
+Internal price construction and revision references are removed; legacy
+pricing summaries are removed in favor of the current pricing section. ``info.x-aisa-document.document_hash`` is recomputed over
 the projected document; the formal hash it replaces is kept as
 ``info.x-aisa-document.public_projection.source_document_hash`` so a consumer
 can bind the projection to the formal publication.
@@ -163,11 +163,11 @@ def mark_example_verification(operation, language="en"):
 def project(document, language="en"):
     """Projected catalog document (pure function of the formal document)."""
     projected = strip(document)
-    from pricing_prose import add_price_summary
+    from pricing_prose import remove_price_summary
     for route, item in projected.get('paths', {}).items():
         for method, operation in item.items():
             if method in {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'} and isinstance(operation, dict) and 'aisa-pricing:start' in operation.get('description', ''):
-                add_price_summary(operation, language)
+                remove_price_summary(operation)
             if method in {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'} and isinstance(operation, dict):
                 if 'x-aisa-example' in operation or method.upper() + ' ' + route in evidence_scope():
                     mark_example_verification(operation, language)
