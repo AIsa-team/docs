@@ -45,6 +45,11 @@ Provider sources and source review receipts remain unchanged. JSON examples,
 defaults, enums, extension metadata, monetary units, product-price filters, and
 financial transaction amounts are not rate claims and remain intact.
 
+An operation with no `x-aisa-pricing` declaration is an older reference without
+a published Runtime tariff. It keeps its authored page without a generated cost
+section. An explicit empty pricing declaration remains an unknown rule and is
+shown as unavailable, so missing metadata is not confused with an unknown rule.
+
 Existing endpoint pages are cleaned before their managed cost block is rendered
 from the same Runtime operation. Handwritten price columns retain their useful
 section/parameter columns and refer readers to the current pricing block.

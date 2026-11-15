@@ -7,6 +7,8 @@ Amounts describing payments, market data, examples or units are not API rates.
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import re
 import yaml
 from customer_price_presentation import pricing_summary, reference_total, usd
@@ -46,6 +48,20 @@ def strip_price_summary(text):
         if stripped == text:
             return text.strip()
         text = stripped
+
+
+DISABLED_BILLING_SENTENCE = re.compile(
+    r'(^|(?<=[.!?。！？])\s+)'
+    r'(?:Paid:\s*see\s+x-aisa-pricing;\s*)?'
+    r'(?:Charged|Billed|Priced)\b[^.!?\n]*(?:[.!?]|$)', re.I)
+
+
+def strip_disabled_billing_claims(text):
+    """Remove stale billing sentences from descriptions of archived operations."""
+    chunks = FENCES.split(text)
+    for index in range(0, len(chunks), 2):
+        chunks[index] = DISABLED_BILLING_SENTENCE.sub(r'\1', chunks[index])
+    return ''.join(chunks).strip()
 
 
 def remove_price_summary(operation):
@@ -260,12 +276,14 @@ def reconcile_free_claim(text, pricing):
 def clean_text(text: str, language: str = 'en') -> str:
     """Remove obsolete tariffs/notices without inserting replacement price prose."""
     generated_notices = (*LEGACY_NOTICES, NOTICE, NOTICE_ZH)
-    if not MONEY.search(text) and not CREDITS.search(text) and not PRICE_DIAL.search(text) and not any(notice in text for notice in generated_notices):
+    pricing_pointer = 'Paid: see x-aisa-pricing; charged only when the call succeeds.'
+    if not MONEY.search(text) and not CREDITS.search(text) and not PRICE_DIAL.search(text) and pricing_pointer not in text and not any(notice in text for notice in generated_notices):
         return text
     chunks = FENCES.split(text)
     changed = False
     for index in range(0, len(chunks), 2):
         chunk = chunks[index]
+        chunk = chunk.replace(pricing_pointer, 'Charged only when the call succeeds.')
         chunk = strip_credit_prices(chunk)
         changed |= chunk != chunks[index]
         # The Cost section renders the customer price. A removed supplier
@@ -469,4 +487,64 @@ def clean_page(text: str, language: str = 'en') -> str:
     body = ''.join(chunks)
     if (header, body) == original:
         return text
+    return '---\n' + header + '\n---\n' + body
+
+
+DESCRIPTION_HASH = 'x-aisa-generated-description-sha256'
+
+
+def refresh_page_description(text, operation, language='en', translate=None):
+    """Override Mintlify's inherited prose without changing canonical OpenAPI.
+
+    An empty description falls back to the original operation, so billing-only
+    descriptions use the endpoint title. Track only generated values: a manual
+    edit takes ownership, while unchanged generated prose follows source updates.
+    """
+    from runtime_localize_openapi_zh import split_frontmatter, replace_frontmatter_value
+    if not text.startswith('---\n'):
+        return text
+    header, body = split_frontmatter(text)
+    metadata = yaml.safe_load(header) or {}
+    if not metadata.get('openapi'):
+        return text
+    existing = metadata.get('description')
+    def digest(value):
+        return hashlib.sha256(value.encode()).hexdigest()
+    owned = isinstance(existing, str) and metadata.get(DESCRIPTION_HASH) == digest(existing)
+
+    def cleaned(value):
+        if not isinstance(value, str):
+            return ''
+        cleaned_value = clean_text(reconcile_free_claim(strip_price_summary(value),
+                                                        operation.get('x-aisa-pricing')), language).strip()
+        if operation.get('x-aisa-status') == 'disabled':
+            cleaned_value = strip_disabled_billing_claims(cleaned_value)
+        return cleaned_value
+
+    source_description = operation.get('description') or ''
+    if not owned and not existing and cleaned(source_description) == source_description:
+        return text  # Clean inherited descriptions need no presentation override.
+    authored = cleaned(existing) if existing and not owned else ''
+    description = authored
+    if not description:
+        description = cleaned(source_description)
+        if language == 'zh' and translate and description:
+            description = cleaned(translate(description))
+        if not description:
+            # The page title already follows the existing localization policy.
+            description = cleaned(metadata.get('title')) or cleaned(operation.get('summary'))
+        if not description:
+            return text  # No business description or title to project.
+    if 'description' in metadata:
+        header = replace_frontmatter_value(header, 'description', description)
+    else:
+        header += '\ndescription: ' + json.dumps(description, ensure_ascii=False)
+    if not authored:
+        if DESCRIPTION_HASH in metadata:
+            header = replace_frontmatter_value(header, DESCRIPTION_HASH, digest(description))
+        else:
+            header += '\n' + DESCRIPTION_HASH + ': ' + json.dumps(digest(description))
+    elif DESCRIPTION_HASH in metadata:
+        # A user-edited description must not be overwritten on the next run.
+        header = re.sub(r'^' + re.escape(DESCRIPTION_HASH) + r':[^\n]*\n?', '', header, flags=re.M).rstrip('\n')
     return '---\n' + header + '\n---\n' + body

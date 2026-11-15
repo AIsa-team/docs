@@ -2,9 +2,9 @@
 title: "Resolve message attachment"
 openapi: "reference-contracts/zh/aisa-social.json GET /apis/v1/social/inbox/conversations/{conversationId}/messages/{messageId}/attachments/{index}"
 x-aisa-operation-id: "get_aisa_social_apis_v1_social_inbox_conversation_54bd26"
+description: "Inbox. Read only; needs social:read. Ids are yours: accounts acc_..., profiles prf_..., posts pst_...; every other object id is checked against your accounts before the call.\n\nResolve one attachment on a message to a media url that works right now.\n\n### Why it exists\n\nInstagram and Facebook sign DM media urls per request and expire them. So the `url` on a message is a snapshot: it works when you read the message and stops working later.\n\nThis endpoint checks the stored url and, when it has gone stale, re-mints the message's media from Meta and persists it before answering.\n\nThe message id never expires, so this URL is the one to store. It is returned ready-made on each attachment as `refreshUrl` when you read a message over REST.\n\n### Building the URL from a webhook\n\n**Webhook payloads do not carry `refreshUrl`**, so a webhook-driven integration builds this URL itself. Every piece is in the event:\n\n- `message.conversationId`\n- `message.platformMessageId`\n- the attachment's zero-based position\n- `account.accountId`\n\n**`accountId` is a required query parameter**. Omitting it returns `400` `missing_required_field`, which is the same requirement `GET /apis/v1/social/whatsapp/media/{mediaId}` has.\n\n### Response format\n\n- By default it responds `302` to the live media url, so it can be used directly as an `<img src>` on a browser session.\n- API-key integrators should pass `?format=json` and read `url` off the body, since a browser cannot attach an Authorization header to an image request.\n\n### Other platforms\n\nOnly Instagram and Facebook media can be re-minted. On other platforms the stored url is returned as-is when it still resolves, and `404` otherwise."
+x-aisa-generated-description-sha256: "e8d4d69c0d465058c4cfe42f188f17654a0ff72b099b5146df9222ed46a6c51c"
 ---
-
-
 {/* aisa-contract-details:start */}
 
 ## 请求规范
@@ -21,7 +21,7 @@ x-aisa-operation-id: "get_aisa_social_apis_v1_social_inbox_conversation_54bd26"
 
 [完整 OpenAPI 定义](https://aisa.one/docs/reference-contracts/zh/aisa-social.json)
 
-有效请求与价格声明（包括认证和引用的 schema）：
+有效请求声明（包括认证和引用的 schema）：
 
 ```json
 {
@@ -93,10 +93,6 @@ x-aisa-operation-id: "get_aisa_social_apis_v1_social_inbox_conversation_54bd26"
     }
   ],
   "x-aisa-status": "enabled",
-  "x-aisa-pricing": {
-    "description": "Included with your connected social accounts: AIsa does not charge per call.",
-    "kind": "no_customer_charge"
-  },
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -110,9 +106,7 @@ x-aisa-operation-id: "get_aisa_social_apis_v1_social_inbox_conversation_54bd26"
 
 ## 费用与请求规则
 
-当前未提供请求参考价格；请使用接口支持的报价功能确认费用。 最终费用以账户适用价格及实际结算为准。
-
-公开参考值不是你的账户报价或最终扣费。对于支持 X-AISA-Cost-Mode: quote 的接口，执行前请针对完整请求获取免费报价；执行后通过响应费用元数据和 Usage Logs 核对结算费用。1 USD 等于 1,000,000 个整数 micro-USD。
+此操作不另收费。
 
 
 {/* aisa-contract-details:end */}

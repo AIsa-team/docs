@@ -119,7 +119,11 @@ class PublicationSurfaceTests(unittest.TestCase):
         changes = {}
         refresh_legacy_page_blocks(self.root, published_documents(self.root), changes, {'entries': {}})
         for page, text in originals.items():
-            self.assertTrue(changes[page].startswith(text))
+            # A known price gets a compact card under frontmatter. The authored
+            # endpoint prose stays before the detailed pricing/request block.
+            self.assertIn('Manual example stays.\n', changes[page])
+            self.assertLess(changes[page].index('Manual example stays.'),
+                            changes[page].index('aisa-contract-details:start'))
             self.assertIn('"operationId": "accountUsage"', changes[page])
             self.assertNotIn('x-aisa-pricing', changes[page])
             self.assertNotIn('x-aisa-operation-id:', changes[page])
@@ -131,6 +135,29 @@ class PublicationSurfaceTests(unittest.TestCase):
         page.write_text(page.read_text().replace('"method": "GET"', '"method": "POST"'))
         with self.assertRaisesRegex(ValueError, 'readable contract differs'):
             validate_surfaces(self.root)
+
+    def test_legacy_refresh_accepts_public_and_reference_contract_paths(self):
+        from pull_openapi import refresh_legacy_page_blocks
+        document = {'openapi': '3.1.0', 'info': {'title': 'Legacy'},
+                    'paths': {'/usage': {'get': {'operationId': 'legacyUsage',
+                              'responses': {'200': {'description': 'Usage'}}}}}}
+        pages = []
+        for directory in ('openapi-public', 'reference-contracts'):
+            for language in ('en', 'zh'):
+                prefix = 'zh/' if language == 'zh' else ''
+                spec = directory + '/' + prefix + 'legacy.json'
+                target = self.root / spec
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(json.dumps(document))
+                page = self.root / (prefix + 'api-reference/' + directory + '.mdx')
+                page.write_text('---\ntitle: Usage\nopenapi: "' + spec +
+                                ' GET /usage"\n---\nAuthored example stays.\n')
+                pages.append(page)
+        changes = {}
+        refresh_legacy_page_blocks(self.root, {'legacy': document}, changes, {'entries': {}})
+        for page in pages:
+            self.assertIn('Authored example stays.', changes[page])
+            self.assertIn('"operationId": "legacyUsage"', changes[page])
 
     def test_missing_or_tampered_readable_request_cannot_pass_formal_surface_check(self):
         from readable_contract_notes import strip_generated_block
@@ -144,6 +171,29 @@ class PublicationSurfaceTests(unittest.TestCase):
                 with self.subTest(prefix=prefix), self.assertRaisesRegex(ValueError, 'readable contract differs'):
                     validate_surfaces(self.root)
                 page.write_text(original)
+
+    def test_top_price_cards_are_rejected_from_publication(self):
+        from readable_contract_notes import PRICE_CARD_BEGIN, PRICE_CARD_END
+        document = json.loads((self.root / 'openapi/fixture.json').read_text())
+        document['paths']['/one']['get']['x-aisa-pricing'] = {
+            'customer_pricing': 'fixed_success', 'default_request_estimate_usd': .012}
+        changes = {}
+        generate_pages(self.root, 'fixture', document, changes)
+        changes[self.root / 'openapi/fixture.json'] = json.dumps(document)
+        for path, text in changes.items():
+            path.write_text(text)
+        validate_surfaces(self.root)
+        for prefix in ('', 'zh/'):
+            page = self.root / (prefix + 'api-reference/fixture/one.mdx')
+            original = page.read_text()
+            injected = original.replace(
+                '{/* aisa-contract-details:start */}',
+                PRICE_CARD_BEGIN + '\n\n<Info>Legacy card</Info>\n\n' + PRICE_CARD_END
+                + '\n{/* aisa-contract-details:start */}', 1)
+            page.write_text(injected)
+            with self.assertRaisesRegex(ValueError, 'price card differs'):
+                validate_surfaces(self.root)
+            page.write_text(original)
 
     def test_disabled_legacy_pages_leave_navigation_and_search_without_changing_schemas(self):
         from pull_openapi import refresh_legacy_page_blocks

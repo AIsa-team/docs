@@ -35,6 +35,8 @@ class RenderedRequestParser(HTMLParser):
         self.paragraph_text = []
         self.pending = []
         self.records = {}
+        self.preceding_price = None
+        self.price_captured = False
 
     def handle_starttag(self, tag, attrs):
         attributes = dict(attrs)
@@ -60,7 +62,7 @@ class RenderedRequestParser(HTMLParser):
                 self.code_text = []
         if self.paragraph and tag == self.paragraph:
             self.paragraph_depth += 1
-        elif (tag == 'p' or dict(attrs).get('data-as') == 'p') and self.section == 'pricing' and self.pending:
+        elif (tag == 'p' or dict(attrs).get('data-as') == 'p') and self.section == 'pricing' and not self.price_captured:
             self.paragraph = tag
             self.paragraph_depth = 1
             self.paragraph_text = []
@@ -90,6 +92,12 @@ class RenderedRequestParser(HTMLParser):
             self.section = 'request' if heading in ('Request contract', '请求规范') else 'pricing' if heading in ('Cost and request rules', '费用与请求规则') else None
             if self.section == 'request':
                 self.pending = []
+            elif self.section == 'pricing':
+                self.price_captured = False
+                self.preceding_price = None
+            elif tag in ('h1', 'h2'):
+                self.preceding_price = None
+                self.pending = []
             self.heading = None
         if tag == 'code' and self.code_depth:
             self.code_depth -= 1
@@ -98,9 +106,10 @@ class RenderedRequestParser(HTMLParser):
                 if not isinstance(value, dict) or not all(k in value for k in ('operationId', 'method', 'path', 'parameters')):
                     raise ValueError('Malformed visible request declaration')
                 identity = (value['operationId'], value['method'], value['path'])
-                record = {'request': value, 'price_summary': None}
+                record = {'request': value, 'price_summary': self.preceding_price}
                 self.records.setdefault(identity, []).append(record)
-                self.pending.append(record)
+                if self.preceding_price is None:
+                    self.pending.append(record)
         if tag == 'pre' and self.pre_depth:
             self.pre_depth -= 1
         if self.paragraph and tag == self.paragraph:
@@ -109,6 +118,8 @@ class RenderedRequestParser(HTMLParser):
             summary = re.sub(r'\s+', ' ', html.unescape(''.join(self.paragraph_text))).strip()
             for record in self.pending:
                 record['price_summary'] = summary
+            self.preceding_price = summary if not self.pending else None
+            self.price_captured = True
             self.pending = []
             self.paragraph = None
 
