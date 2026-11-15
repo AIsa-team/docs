@@ -94,8 +94,12 @@ Runtime response bindings and facts hashes. Only an exact path/method/ID moved
 to another current owner removes a historical copy. The canonical importer
 independently reconstructs and compares this projection; missing facts for any
 advertised catalog, incomplete inventory, and changed IDs still fail. Retained
-providers have no fresh-composition or current-facts claim. This does not change
-the reviewed source bundle or its review dates.
+providers have no fresh-composition or current-facts claim. Whole-document
+retention preserves original shared component and path-parameter references;
+it does not re-import or expand each operation into the same document. Shadow
+compilation checks the existing publication file-role size limits before
+reporting success, and the Go publisher still enforces all final artifact
+limits. This does not change the reviewed source bundle or its review dates.
 
 This reader verifies graph integrity and operation identities. It does **not**
 recompile aggregate transformations or claim complete native/aggregate field

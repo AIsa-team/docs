@@ -26,6 +26,22 @@ def document(identity='stable', path='/old', url=None):
             'servers': [{'url': 'https://api.aisa.one'}], 'paths': {path: {'get': operation}}}
 
 
+class OutputSizeTests(unittest.TestCase):
+    def test_compiled_files_obey_production_role_limits_before_output(self):
+        from shadow_compile_bundle import validate_output_sizes
+        limits = {'contracts/native/provider.json': 8, 'contracts/openapi.json': 64,
+                  'contracts/readiness.json': 1, 'contracts/manifest.json': 1}
+        payload = {'native/provider.json': b'x' * 8, 'aggregate/openapi.json': b'x' * 64,
+                   'readiness.json': b'x', 'manifest.json': b'x'}
+        with patch('shadow_compile_bundle.file_limit', side_effect=lambda name, _: limits[name]):
+            validate_output_sizes(payload)
+            for name, raw in payload.items():
+                with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'publication role limit'):
+                    validate_output_sizes({**payload, name: raw + b'x'})
+        with patch('shadow_compile_bundle.MAX_TOTAL', 2), self.assertRaisesRegex(ValueError, 'total limit'):
+            validate_output_sizes({'native/provider.json': b'xxx'})
+
+
 class LinkProjectionTests(unittest.TestCase):
     def test_new_operation_uses_existing_slug_rule_and_recomputes_hash(self):
         doc = document('new.operation')

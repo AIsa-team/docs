@@ -589,14 +589,18 @@ def retain_unindexed_provider(provider, previous):
                     retained_from_sha256=digest(previous),
                     availability='not_in_runtime_inventory',
                     document_hash=digest({'historical_document': previous, 'availability': 'not_in_runtime_inventory'}))
-    document['paths'] = {}
     retained = []
     for path, method, old in operations(previous):
-        operation = _retain_history_operation(document, previous, previous, path, method, old,
-                                              'retained_legacy', 'provider_not_in_runtime_inventory')
-        # These are old links at the same old routes, not newly generated pages.
-        if 'x-aisa-docs-url' in old:
-            operation['x-aisa-docs-url'] = old['x-aisa-docs-url']
+        # The complete historical document already owns its paths, components,
+        # authentication and links. Keep those references intact: importing an
+        # operation into this same document duplicates shared schemas and
+        # inherited parameters and can exceed the bounded publication limits.
+        operation = document['paths'][path][method]
+        operation['x-aisa-status'] = 'disabled'
+        operation['x-aisa-contract-state'] = 'retained_legacy'
+        operation['x-aisa-contract-pending'] = 'provider_not_in_runtime_inventory'
+        from pricing_prose import remove_price_summary
+        remove_price_summary(operation)
         for key in ('x-aisa-runtime-operation', 'x-aisa-response-contract-hash', 'x-aisa-response-contract-hashes'):
             operation.pop(key, None)
         retained.append({'path': path, 'method': method.upper(), 'operation_id': old['operationId']})

@@ -83,6 +83,24 @@ class CandidateReadinessTests(unittest.TestCase):
                 else: catalogs.append('alpha')
                 self.assertFalse(pull_openapi.unindexed_historical_provider(historical, catalogs, index, {'apis': []}))
 
+    def test_retained_provider_preserves_shared_components_and_path_parameters(self):
+        historical = copy.deepcopy(self.fact)
+        historical['components'] = {'schemas': {'Result': {'type': 'object',
+            'properties': {'value': {'type': 'string'}}}},
+            'parameters': {'Limit': {'name': 'limit', 'in': 'query', 'schema': {'type': 'integer'}}}}
+        item = historical['paths']['/apis/v1/alpha/read']
+        item['parameters'] = [{'$ref': '#/components/parameters/Limit'}]
+        item['get']['responses']['200']['content']['application/json']['schema'] = {'$ref': '#/components/schemas/Result'}
+        before = copy.deepcopy(historical)
+        retained = pull_openapi.retain_unindexed_provider('alpha', historical)
+        self.assertEqual(historical, before)
+        self.assertEqual(retained['components'], historical['components'])
+        result = retained['paths']['/apis/v1/alpha/read']
+        self.assertEqual(result['parameters'], item['parameters'])
+        self.assertNotIn('parameters', result['get'])
+        self.assertEqual(result['get']['responses'], item['get']['responses'])
+        self.assertEqual(result['get']['x-aisa-status'], 'disabled')
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
