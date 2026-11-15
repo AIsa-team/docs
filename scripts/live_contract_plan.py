@@ -113,7 +113,11 @@ def main(argv=None):
     parser.add_argument('--github-output', type=Path, help='append key=value outputs for GitHub Actions')
     args = parser.parse_args(argv)
     try:
-        result = plan(fetch(args.base_url, CURRENT), fetch(args.base_url, CATEGORY), docs_inputs(args.root))
+        index = fetch(args.base_url, CURRENT)
+        if not isinstance(index, dict) or index.get('fresh') is not True:
+            # Runtime is recompiling; wait for the next tick instead of failing.
+            raise Unavailable(CURRENT + ' is not fresh')
+        result = plan(index, fetch(args.base_url, CATEGORY), docs_inputs(args.root))
     except Unavailable as exc:
         print(json.dumps({'available': False, 'reason': str(exc)}))
         return 2
