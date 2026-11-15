@@ -2,8 +2,8 @@
 title: "Create Hold Flight Order"
 openapi: "openapi/zh/duffel-flights.json POST /apis/v1/duffel/flights/orders/hold-create"
 x-aisa-operation-id: "post_duffel_orders_hold_create"
-description: "Hold the selected order without paying (body type:hold)"
-x-aisa-generated-description-sha256: "b7002822d833578fb137f3757f75b1785dde088bb3a1faf8cfef898012e99178"
+description: "Creates a booking with an airline based on an offer.\n\nOrders are usually paid at the time of creation, but can be held,\nand paid for at a later date if the offer supports it (see\n`offer.payment_requirements.requires_instant_payment`).\n\nTo create an order and pay for it at the same time, specify a\n`payments` key with an appropriate value. Also, specify the `type`\nkey with a value of `\"instant\"`.\n\nTo hold the order and pay for it later, specify the type as\n`\"hold\"`, omit the `payments` key. You'll then need to\ncomplete payment after creating the order through the [Create a payment\nendpoint](/docs/api/payments/create-payment).\n\nAirlines limit the number of passengers in a single order to ≤ 9.\n\nWhen presenting an order confirmation to your customers (e.g. on screen or in an email), you should include\nthe `booking_reference` and details of the full itinerary and show the full name of the operating carrier\nof each segment (`slices[].segments[].operating_carrier.name`) in order to comply\nwith [US regulations](https://www.ecfr.gov/cgi-bin/text-idx?SID=8e736a5c813a737a5c2f6700a4c9006d&mc=true&node=pt14.4.257&rgn=div5).\n\nPlease see the [Order creation response handling](/docs/api/overview/response-handling/order-and-booking-creation) documentation for more information on possible responses and how to handle them.\n\n### Validation errors\n\n| Field      | Code                                             | Description                                                                                                                                |\n| ---------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |\n| `payments` | `payments_not_allowed_for_order_type`            | You’ve included a `payments` key for a `hold` order, but the key should be omitted.                                                        |\n| `services` | `services_not_allowed_for_order_type`            | You’ve included `services` for a `hold` order, but they’re not currently supported.                                                        |\n| `services` | `intended_services_conflict`                     | The `services` you’ve included don’t match the `intended_services` the offer was priced with.                                              |\n| `type`     | `not_valid_with_selected_offer`                  | The type is not valid with selected offer because either `requires_instant_payment` is `true` or the `payment_required_by` is in the past. |\n\n### Fraud rejections\n\n**Note**: fraud rejections are an opt-in preview feature. This error is only returned to\norganisations that have opted in while the feature is in preview. If you would like it\nenabled, get in touch with the Duffel support team.\n\nWhen enabled, a request assessed as high risk for fraud is rejected with a `422` status and\nan error with a `type` of `fraud_error` and a `code` of `high_fraud_risk`. This rejection is\nfinal: do not retry the request.\n\nWe recommend handling this error whether or not you have opted in, so that your integration\nis ready when the feature is enabled more widely.\n\nHold the selected order without paying (body type:hold)"
+x-aisa-generated-description-sha256: "f75bf3c7c7f3c98d31bdab5a4c7e5ab05cf2957254010258a50b5fcc836fe530"
 ---
 {/* aisa-contract-details:start */}
 
@@ -34,14 +34,9 @@ x-aisa-generated-description-sha256: "b7002822d833578fb137f3757f75b1785dde088bb3
     }
   ],
   "requestBody": {
-    "required": true,
     "content": {
       "application/json": {
         "schema": {
-          "type": "object",
-          "required": [
-            "data"
-          ],
           "properties": {
             "data": {
               "properties": {
@@ -277,13 +272,18 @@ x-aisa-generated-description-sha256: "b7002822d833578fb137f3757f75b1785dde088bb3
                 "passengers",
                 "payments"
               ],
-              "type": "object",
-              "title": "Body parameters"
+              "title": "Body parameters",
+              "type": "object"
             }
-          }
+          },
+          "required": [
+            "data"
+          ],
+          "type": "object"
         }
       }
-    }
+    },
+    "required": true
   },
   "x-aisa-status": "enabled",
   "components": {

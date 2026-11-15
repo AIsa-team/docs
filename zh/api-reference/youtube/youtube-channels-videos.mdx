@@ -2,10 +2,12 @@
 title: "List YouTube channel videos"
 openapi: "openapi-public/zh/youtube.json GET /apis/v1/youtube/channels/videos"
 x-aisa-operation-id: "youtube.channels.videos"
-description: "List YouTube channel videos"
-x-aisa-generated-description-sha256: "4180123a667450539c678e439c76708442fc7b8a6766bbdabecf894e99883c02"
+description: "Lists long-form videos from a YouTube channel (Shorts are listed by the channel Shorts operation). Provide `channelId` or `handle`. Results are paged: while `data.page.hasMore` is true, send `data.page.nextCursor` as `cursor` to get the next page."
+x-aisa-generated-description-sha256: "72770fc68ef51ff5c60a79c51e4e690eb647ed80e92854f67cee09f0859dfec5"
 ---
 {/* aisa-contract-details:start */}
+
+> **请求示例待验证。** 此接口的请求示例尚未在生产环境验证。静态示例用于说明请求格式，请替换为自己的参数。正式调用前，可用免费的报价模式（`X-AISA-Cost-Mode: quote`）查看预估费用。
 
 ## 请求规范
 
@@ -38,6 +40,7 @@ x-aisa-generated-description-sha256: "4180123a667450539c678e439c76708442fc7b8a67
       "name": "channelId",
       "required": false,
       "schema": {
+        "description": "Optional YouTube channel id for the request.",
         "maxLength": 4096,
         "minLength": 1,
         "type": "string"
@@ -48,6 +51,7 @@ x-aisa-generated-description-sha256: "4180123a667450539c678e439c76708442fc7b8a67
       "name": "cursor",
       "required": false,
       "schema": {
+        "description": "Opaque pagination cursor returned by a previous response.",
         "maxLength": 16384,
         "minLength": 1,
         "type": "string"
@@ -58,6 +62,7 @@ x-aisa-generated-description-sha256: "4180123a667450539c678e439c76708442fc7b8a67
       "name": "handle",
       "required": false,
       "schema": {
+        "description": "Optional YouTube channel handle for the request.",
         "maxLength": 4096,
         "minLength": 1,
         "type": "string"
@@ -68,6 +73,7 @@ x-aisa-generated-description-sha256: "4180123a667450539c678e439c76708442fc7b8a67
       "name": "includeExtras",
       "required": false,
       "schema": {
+        "description": "Optional flag to include richer per-video metadata when available.",
         "type": "boolean"
       }
     },
@@ -76,6 +82,7 @@ x-aisa-generated-description-sha256: "4180123a667450539c678e439c76708442fc7b8a67
       "name": "sortBy",
       "required": false,
       "schema": {
+        "description": "Optional sort order for the returned YouTube videos.",
         "enum": [
           "latest",
           "popular"
@@ -103,9 +110,106 @@ x-aisa-generated-description-sha256: "4180123a667450539c678e439c76708442fc7b8a67
 }
 ```
 
+## 已观察到的响应结构
+
+以下结构来自探针或抽样请求的成功结果，只反映已观察到的部分：字段和类型可能变化，不保证每次都有。已有正式响应定义优先；这里不发布真实响应值。
+
+- **HTTP 状态 / 最近观察日期:** 200 / 2026-11-15
+
+```json
+{
+  "additionalProperties": true,
+  "properties": {
+    "aisa_pagination": {
+      "additionalProperties": true,
+      "properties": {
+        "has_more": {
+          "type": "boolean"
+        },
+        "next_cursor": {
+          "type": "null"
+        },
+        "next_param": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "data": {
+      "additionalProperties": true,
+      "properties": {
+        "page": {
+          "additionalProperties": true,
+          "properties": {
+            "hasMore": {
+              "type": "boolean"
+            },
+            "nextCursor": {
+              "type": "null"
+            }
+          },
+          "type": "object"
+        },
+        "videos": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "likeCount": {
+                "type": "integer"
+              },
+              "publishedAt": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "thumbnailUrl": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "viewCount": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "meta": {
+      "additionalProperties": true,
+      "properties": {
+        "version": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "type": "object"
+}
+```
+
 ## 费用与请求规则
 
 按实际用量收费。 默认请求预估费用：$0.014 USD。 最终费用以实际用量为准。 账户适用价格可能不同；支持报价的接口可按实际请求获取报价。
 
+## 翻页
+
+- 把 `aisa_pagination.next_cursor` 作为 `cursor`（查询参数）传入即可获取下一页；`aisa_pagination.has_more` 为 false 时停止。
+- 响应头 `X-AISA-Has-More` 与 `X-AISA-Next-Cursor` 返回相同的值。
 
 {/* aisa-contract-details:end */}

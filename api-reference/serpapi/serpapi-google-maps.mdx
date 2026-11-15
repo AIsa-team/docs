@@ -7,6 +7,8 @@ x-aisa-generated-description-sha256: "5858f7e3ecc70aedfed0a2b3c3eade639569690430
 ---
 {/* aisa-contract-details:start */}
 
+> **Request example pending verification.** The request example for this endpoint has not yet been verified in production. Static examples describe the request format; replace sample values with your own. Check the estimated price with a free quote request (`X-AISA-Cost-Mode: quote`) before running it.
+
 ## Request contract
 
 - **Method and path:** GET /apis/v1/serpapi/google-maps
@@ -35,14 +37,6 @@ Effective request declaration (including authentication and referenced schemas):
   ],
   "parameters": [
     {
-      "examples": {
-        "default": {
-          "value": "google_maps"
-        },
-        "minimal": {
-          "value": "google_maps"
-        }
-      },
       "in": "query",
       "name": "engine",
       "required": true,
@@ -55,58 +49,63 @@ Effective request declaration (including authentication and referenced schemas):
       }
     },
     {
-      "name": "ll",
       "in": "query",
+      "name": "ll",
       "required": false,
       "schema": {
-        "type": "string",
+        "description": "@latitude,longitude,zoom — alternative to location+z or lat/lon+z",
         "examples": [
           "@40.7455096,-74.0083012,14z"
-        ]
+        ],
+        "type": "string"
       }
     },
     {
-      "name": "place_id",
       "in": "query",
+      "name": "place_id",
       "required": false,
       "schema": {
-        "type": "string",
+        "description": "Google place_id for a single-place lookup / NAP (name, address, phone, website). Prefer with type=place. Upstream accepts place_id without other optional params (https://serpapi.com/google-maps-api); Treg still requires type and q, so send type=place and a q (place name, or place_id as q) alongside place_id.",
         "examples": [
           "ChIJifIePKtZwokRVZ-UdRGkZzs"
-        ]
+        ],
+        "type": "string"
       }
     },
     {
-      "name": "q",
       "in": "query",
+      "name": "q",
       "required": true,
       "schema": {
-        "type": "string",
+        "description": "required for type=search (keyword). For a place_id lookup, Treg still requires q — send the place name, or the same place_id as q, alongside place_id.",
         "examples": [
           "pizza"
-        ]
+        ],
+        "type": "string"
       }
     },
     {
-      "name": "start",
+      "description": "Next page: the aisa_pagination.next_cursor of the previous response.",
       "in": "query",
+      "name": "start",
       "required": false,
       "schema": {
-        "type": "integer",
-        "examples": [
-          0
-        ]
+        "description": "pagination offset, increments of 20",
+        "maxLength": 4096,
+        "minLength": 1,
+        "type": "string"
       }
     },
     {
-      "name": "type",
       "in": "query",
+      "name": "type",
       "required": true,
       "schema": {
-        "type": "string",
+        "description": "search (keyword list) or place (single-place lookup via place_id). Prefer type=place with place_id. Upstream does not require type when place_id is set (https://serpapi.com/google-maps-api); Treg still requires type — send type=place for a place_id lookup.",
         "examples": [
           "search"
-        ]
+        ],
+        "type": "string"
       }
     }
   ],
@@ -131,5 +130,10 @@ Effective request declaration (including authentication and referenced schemas):
 
 Usage-based pricing. Default request estimate: $0.015 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
 
+## Pagination
+
+- Pass `aisa_pagination.next_cursor` as `start` (query parameter) to fetch the next page; stop when `aisa_pagination.has_more` is false.
+- The same values are returned in the `X-AISA-Has-More` and `X-AISA-Next-Cursor` response headers.
+- Results may repeat across pages; de-duplicate by a stable id.
 
 {/* aisa-contract-details:end */}
