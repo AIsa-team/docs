@@ -160,7 +160,7 @@ class IndependentResponseTests(unittest.TestCase):
             doc,pending=compose(runtime,public_mirrors=index(*docs))
             self.assertEqual(pending,[])
             for key,value in operation(baseline).items():
-                if key not in {'responses','x-aisa-response-pending','x-aisa-response-source'}:
+                if key not in {'responses','x-aisa-response-pending','x-aisa-response-source','x-aisa-response-contract-hash'}:
                     self.assertEqual(operation(doc)[key],value)
             self.assertNotIn('x-aisa-response-pending',operation(doc))
             self.assertEqual(operation(doc)['x-aisa-response-source']['source']['content_hash'],'sha256:response-fixture')

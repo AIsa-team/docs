@@ -20,7 +20,7 @@ class TwitterBindingTests(unittest.TestCase):
   self.assertFalse(baseline[(PATH,'post')].get('response_only'));self.assertTrue(baseline[(PATH,'post')]['operation'].get('requestBody'))
   before,bp=compose(facts(),public_mirrors=baseline);after,ap=compose(facts(),public_mirrors=mirrors)
   self.assertEqual(bp,ap);self.assertEqual(ap,[]);self.assertEqual(len(before['info']['x-aisa-document']['response_pending']),1);self.assertEqual(after['info']['x-aisa-document']['response_pending'],[])
-  excluded={'responses','x-aisa-response-pending','x-aisa-response-source'}
+  excluded={'responses','x-aisa-response-pending','x-aisa-response-source','x-aisa-response-contract-hash'}
   self.assertEqual({k:v for k,v in before['paths'][PATH]['post'].items() if k not in excluded},{k:v for k,v in after['paths'][PATH]['post'].items() if k not in excluded})
  def test_response_source_alone_cannot_choose_any_method(self):
   with tempfile.TemporaryDirectory() as tmp:

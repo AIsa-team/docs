@@ -85,6 +85,22 @@ has three Agentmail historical operations with an unresolved `Bearer` name,
 appearing in both native and aggregate documents (six declaration findings).
 Receipt replay recomputes this result. Fact-only receipts gain no such field.
 
+For a canonical offline snapshot, an unpinned historical provider that the
+complete Runtime inventory no longer advertises is retained as unavailable
+history. Inventory accounting must close, and none of its grouped catalogs may
+appear in current, pending, excluded or category entries. Its operations keep
+their published IDs and links, become disabled `retained_legacy`, and lose old
+Runtime response bindings and facts hashes. Only an exact path/method/ID moved
+to another current owner removes a historical copy. The canonical importer
+independently reconstructs and compares this projection; missing facts for any
+advertised catalog, incomplete inventory, and changed IDs still fail. Retained
+providers have no fresh-composition or current-facts claim. Whole-document
+retention preserves original shared component and path-parameter references;
+it does not re-import or expand each operation into the same document. Shadow
+compilation checks the existing publication file-role size limits before
+reporting success, and the Go publisher still enforces all final artifact
+limits. This does not change the reviewed source bundle or its review dates.
+
 This reader verifies graph integrity and operation identities. It does **not**
 recompile aggregate transformations or claim complete native/aggregate field
 equivalence. The producer must validate that they came from the same compile.

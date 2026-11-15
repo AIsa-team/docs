@@ -39,7 +39,8 @@ class KeepaResponseSourceTests(unittest.TestCase):
                     Draft202012Validator.check_schema(schema)
                     self.assertIn('x-aisa-response-source', operation)
                     original = before['paths'][path][method]
-                    excluded = {'responses', 'x-aisa-response-source', 'x-aisa-response-pending'}
+                    excluded = {'responses', 'x-aisa-response-source', 'x-aisa-response-pending', 'x-aisa-response-contract-hash'}
+                    self.assertNotEqual(operation['x-aisa-response-contract-hash'], original['x-aisa-response-contract-hash'])
                     self.assertEqual({k: v for k, v in operation.items() if k not in excluded},
                                      {k: v for k, v in original.items() if k not in excluded})
                     self.assertEqual(operation['responses']['default'], original['responses']['default'])

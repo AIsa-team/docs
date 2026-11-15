@@ -1,20 +1,20 @@
 {
   "components": {
-    "callbacks": {},
-    "examples": {},
-    "headers": {},
-    "links": {},
-    "parameters": {},
-    "pathItems": {},
-    "requestBodies": {},
-    "responses": {},
-    "schemas": {},
     "securitySchemes": {
       "bearerAuth": {
         "scheme": "bearer",
         "type": "http"
       }
-    }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
   },
   "info": {
     "description": "",
@@ -28,18 +28,35 @@
         "value": "quote"
       }
     },
+    "x-aisa-configured-paths": [
+      "/apis/v1/gazette-gc-ca/legislation/get-document",
+      "/apis/v1/gazette-gc-ca/legislation/get-issue",
+      "/apis/v1/gazette-gc-ca/legislation/list-consultations",
+      "/apis/v1/gazette-gc-ca/legislation/list-issues"
+    ],
+    "x-aisa-document": {
+      "facts_hash": "706b6022e265f1fb1aa5d55947e1c58e59556cf79cc5bb5ed990e824ede7fdc1",
+      "generator_version": "3",
+      "protocol_version": "1",
+      "schema_version": "1",
+      "seed_month": "2026-10",
+      "composer_version": "31",
+      "response_pending": [],
+      "document_hash": "sha256:07d18820976a9c72d231735735f89a42251058f7d6fb91dbff8eba38d43c77ef"
+    },
+    "x-aisa-plans": {
+      "builder": 1.0,
+      "display_plan": "payg",
+      "payg": 1.0,
+      "similarweb_payg": 1.0,
+      "team": 1.0,
+      "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
+    },
+    "x-aisa-provider": "gazette-gc-ca",
     "x-aisa-catalogs": {
       "gazette-gc-ca": {
-        "description": "",
         "title": "Canada Gazette",
-        "x-aisa-capabilities": {
-          "idempotency": "Idempotency-Key",
-          "max_price": "X-AISA-Max-Price-USD",
-          "quote": {
-            "header": "X-AISA-Cost-Mode",
-            "value": "quote"
-          }
-        },
+        "description": "",
         "x-aisa-document": {
           "facts_hash": "706b6022e265f1fb1aa5d55947e1c58e59556cf79cc5bb5ed990e824ede7fdc1",
           "generator_version": "3",
@@ -54,34 +71,17 @@
           "similarweb_payg": 1.0,
           "team": 1.0,
           "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
+        },
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          }
         }
       }
-    },
-    "x-aisa-configured-paths": [
-      "/apis/v1/gazette-gc-ca/legislation/get-document",
-      "/apis/v1/gazette-gc-ca/legislation/get-issue",
-      "/apis/v1/gazette-gc-ca/legislation/list-consultations",
-      "/apis/v1/gazette-gc-ca/legislation/list-issues"
-    ],
-    "x-aisa-document": {
-      "composer_version": "29",
-      "document_hash": "sha256:49c85780120e99a13aeef303192cc3ff05306331bca8de82a72311e565ef9c04",
-      "facts_hash": "706b6022e265f1fb1aa5d55947e1c58e59556cf79cc5bb5ed990e824ede7fdc1",
-      "generator_version": "3",
-      "protocol_version": "1",
-      "response_pending": [],
-      "schema_version": "1",
-      "seed_month": "2026-10"
-    },
-    "x-aisa-plans": {
-      "builder": 1.0,
-      "display_plan": "payg",
-      "payg": 1.0,
-      "similarweb_payg": 1.0,
-      "team": 1.0,
-      "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
-    },
-    "x-aisa-provider": "gazette-gc-ca"
+    }
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",
@@ -91,19 +91,31 @@
         "description": "Use for regulation detail. 'registration' finds the edition from the year page, then the issue index (three requests); 'url' reads a page from get_issue, list_issues or list_consultations directly (French -fra URLs are read in English). Part I notice pages hold every notice of one section of the issue.",
         "operationId": "gazette-gc-ca.legislation.get-document",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
-              "examples": {
-                "provider": {
-                  "summary": "Official provider example; checked against AIsa request constraints",
-                  "value": {
-                    "max_text_chars": 600,
-                    "registration": "SOR/2026-206"
-                  }
-                }
-              },
               "schema": {
+                "type": "object",
                 "additionalProperties": true,
+                "properties": {
+                  "max_text_chars": {
+                    "type": "number",
+                    "description": "Cap on the returned text (default 20000). 0 returns metadata only.\n\nProvider reference: minimum 0; maximum 200000.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body",
+                      "min": 0,
+                      "max": 200000
+                    }
+                  },
+                  "registration": {
+                    "type": "string",
+                    "description": "Part II registration number: SOR/YYYY-N or SI/YYYY-N (DORS/TR and two-digit years accepted). Mutually exclusive with url."
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "A gazette.gc.ca /rp-pr/p1 or /rp-pr/p2 HTML document URL. Mutually exclusive with registration."
+                  }
+                },
                 "allOf": [
                   {
                     "anyOf": [
@@ -125,40 +137,35 @@
                       }
                     ]
                   }
-                ],
-                "properties": {
-                  "max_text_chars": {
-                    "description": "Cap on the returned text (default 20000). 0 returns metadata only.\n\nProvider reference: minimum 0; maximum 200000.",
-                    "type": "number",
-                    "x-alexandria-option-metadata": {
-                      "in": "body",
-                      "max": 200000,
-                      "min": 0
-                    }
-                  },
-                  "registration": {
-                    "description": "Part II registration number: SOR/YYYY-N or SI/YYYY-N (DORS/TR and two-digit years accepted). Mutually exclusive with url.",
-                    "type": "string"
-                  },
-                  "url": {
-                    "description": "A gazette.gc.ca /rp-pr/p1 or /rp-pr/p2 HTML document URL. Mutually exclusive with registration.",
-                    "type": "string"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "max_text_chars": 600,
+                    "registration": "SOR/2026-206"
                   }
-                },
-                "type": "object"
+                }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "Read one Canada Gazette document: a Part II regulation or statutory instrument by registration number (SOR/2026-206, SI/2026-58) or any Part I or Part II page by URL. Returns title, issue, registration date, enabling act, Privy Council number, the Part I prepublication statement and date from the impact analysis (proposal-to-final link), for Part I proposed regulations the statutory authorities, sponsoring department and comment period (ORCS id, closing date), and the plain text.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `consultation` | object | Part I proposed regulations open to online comment. |\n| `enabling_act` | string | Part II: enabling statute line as printed (upper case), e.g. 'EXPLOSIVES ACT'. |\n| `issue` | object |  |\n| `kind` | string | regulation = SOR, statutory_instrument = SI (Part II); proposed_regulation = a Part I regN page; notice = any other Part I page. |\n| `license` | object |  |\n| `observed_at_ms` | number |  |\n| `part` | string |  |\n| `prepublication` | object | Part II: the impact analysis sentence on prepublication in Part I; null when the page has none. |\n| `privy_council_number` | string | Order in Council number, e.g. 'P.C. 2026-960', when the instrument was made by the Governor in Council. |\n| `registration` | string | Part II: SOR/YYYY-N or SI/YYYY-N. |\n| `registration_date` | string | Part II: YYYY-MM-DD. |\n| `source_url` | string |  |\n| `sponsoring_department` | string |  |\n| `statutory_authorities` | string[] | Part I proposed regulations: enabling statutes. |\n| `text` | string | Plain text, one line per block, cut at max_text_chars. |\n| `text_chars` | number |  |\n| `text_truncated` | boolean |  |\n| `title` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-10-25.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-25.",
                     "value": {
                       "consultation": null,
                       "enabling_act": "EXPLOSIVES ACT",
@@ -193,16 +200,9 @@
                       "title": "Regulations Amending the Explosives Regulations, 2013"
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Read one Canada Gazette document: a Part II regulation or statutory instrument by registration number (SOR/2026-206, SI/2026-58) or any Part I or Part II page by URL. Returns title, issue, registration date, enabling act, Privy Council number, the Part I prepublication statement and date from the impact analysis (proposal-to-final link), for Part I proposed regulations the statutory authorities, sponsoring department and comment period (ORCS id, closing date), and the plain text.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `consultation` | object | Part I proposed regulations open to online comment. |\n| `enabling_act` | string | Part II: enabling statute line as printed (upper case), e.g. 'EXPLOSIVES ACT'. |\n| `issue` | object |  |\n| `kind` | string | regulation = SOR, statutory_instrument = SI (Part II); proposed_regulation = a Part I regN page; notice = any other Part I page. |\n| `license` | object |  |\n| `observed_at_ms` | number |  |\n| `part` | string |  |\n| `prepublication` | object | Part II: the impact analysis sentence on prepublication in Part I; null when the page has none. |\n| `privy_council_number` | string | Order in Council number, e.g. 'P.C. 2026-960', when the instrument was made by the Governor in Council. |\n| `registration` | string | Part II: SOR/YYYY-N or SI/YYYY-N. |\n| `registration_date` | string | Part II: YYYY-MM-DD. |\n| `source_url` | string |  |\n| `sponsoring_department` | string |  |\n| `statutory_authorities` | string[] | Part I proposed regulations: enabling statutes. |\n| `text` | string | Plain text, one line per block, cut at max_text_chars. |\n| `text_chars` | number |  |\n| `text_truncated` | boolean |  |\n| `title` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -220,15 +220,14 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "gazette-gc-ca",
         "x-aisa-category": "data",
         "x-aisa-constraints": {
           "required_any_of": [
@@ -246,7 +245,6 @@
             ]
           ]
         },
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/gazette-gc-ca/gazette-gc-ca-legislation-get-document",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -262,54 +260,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:02b845f54d55ef023cc0b531883d581e301590bfc2e53ad3b2b7c9ae3778af06",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "960f1156833f"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "gazette-gc-ca",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "gazette-gc-ca.legislation.get-document",
+          "method": "POST",
           "path": "/apis/v1/gazette-gc-ca/legislation/get-document"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:02b845f54d55ef023cc0b531883d581e301590bfc2e53ad3b2b7c9ae3778af06"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/gazette-gc-ca/gazette-gc-ca-legislation-get-document"
       }
     },
     "/apis/v1/gazette-gc-ca/legislation/get-issue": {
@@ -317,8 +317,27 @@
         "description": "Use after list_issues, or when you know the issue date (Part I Saturdays, Part II Wednesdays). Extra editions have no index; open their html_url with get_document.",
         "operationId": "gazette-gc-ca.legislation.get-issue",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "date": {
+                    "type": "string",
+                    "description": "Issue date, YYYY-MM-DD, e.g. 2026-10-21. Pattern: ^\\d{4}-\\d{2}-\\d{2}$."
+                  },
+                  "part": {
+                    "type": "string",
+                    "description": "part\n\nProvider reference: allowed values [\"I\", \"II\"]."
+                  }
+                },
+                "required": [
+                  "date",
+                  "part"
+                ]
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -327,37 +346,25 @@
                     "part": "II"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "date": {
-                    "description": "Issue date, YYYY-MM-DD, e.g. 2026-10-21. Pattern: ^\\d{4}-\\d{2}-\\d{2}$.",
-                    "type": "string"
-                  },
-                  "part": {
-                    "description": "part\n\nProvider reference: allowed values [\"I\", \"II\"].",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "date",
-                  "part"
-                ],
-                "type": "object"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "Table of contents of one regular Canada Gazette issue. Part I: every notice and proposed regulation with its section, organization and heading. Part II: every regulation and statutory instrument with its registration number (SOR/SI), registration date and enabling act. Each item links to its document.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `date` | string |  |\n| `entries` | object[] |  |\n| `license` | object |  |\n| `number` | number |  |\n| `observed_at_ms` | number |  |\n| `part` | string |  |\n| `source_url` | string |  |\n| `volume` | number | From the index heading; null on older indexes headed only 'INDEX'. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-10-25.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-25.",
                     "value": {
                       "count": 7,
                       "date": "2026-10-21",
@@ -451,16 +458,9 @@
                       "volume": 160
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Table of contents of one regular Canada Gazette issue. Part I: every notice and proposed regulation with its section, organization and heading. Part II: every regulation and statutory instrument with its registration number (SOR/SI), registration date and enabling act. Each item links to its document.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `date` | string |  |\n| `entries` | object[] |  |\n| `license` | object |  |\n| `number` | number |  |\n| `observed_at_ms` | number |  |\n| `part` | string |  |\n| `source_url` | string |  |\n| `volume` | number | From the index heading; null on older indexes headed only 'INDEX'. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -478,17 +478,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "gazette-gc-ca",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/gazette-gc-ca/gazette-gc-ca-legislation-get-issue",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -504,54 +502,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:28e4de3a587ace19806fa4d9ba4626cc724a43faff5e46434f73ec261da136e1",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "aa91cd3a889c"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "gazette-gc-ca",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "gazette-gc-ca.legislation.get-issue",
+          "method": "POST",
           "path": "/apis/v1/gazette-gc-ca/legislation/get-issue"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:28e4de3a587ace19806fa4d9ba4626cc724a43faff5e46434f73ec261da136e1"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/gazette-gc-ca/gazette-gc-ca-legislation-get-issue"
       }
     },
     "/apis/v1/gazette-gc-ca/legislation/list-consultations": {
@@ -559,30 +559,23 @@
         "description": "Use to find current consultations or a proposal by name before reading it with get_document; the closed list spans past consultations whose comments are published.",
         "operationId": "gazette-gc-ca.legislation.list-consultations",
         "requestBody": {
+          "required": false,
           "content": {
             "application/json": {
-              "examples": {
-                "provider": {
-                  "summary": "Official provider example; checked against AIsa request constraints",
-                  "value": {
-                    "query": "Foreign Influence Transparency",
-                    "status": "closed"
-                  }
-                }
-              },
               "schema": {
+                "type": "object",
                 "additionalProperties": true,
                 "properties": {
                   "query": {
-                    "description": "Words that must all appear in the title (case-insensitive).",
                     "type": "string",
+                    "description": "Words that must all appear in the title (case-insensitive).",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "status": {
-                    "description": "Default open.\n\nProvider reference: allowed values [\"open\", \"closed\"].",
                     "type": "string",
+                    "description": "Default open.\n\nProvider reference: allowed values [\"open\", \"closed\"].",
                     "x-alexandria-option-metadata": {
                       "in": "body",
                       "oneOf": [
@@ -591,21 +584,35 @@
                       ]
                     }
                   }
-                },
-                "type": "object"
+                }
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "query": "Foreign Influence Transparency",
+                    "status": "closed"
+                  }
+                }
               }
             }
-          },
-          "required": false
+          }
         },
         "responses": {
           "200": {
+            "description": "Proposed regulations from Canada Gazette Part I that are open for comment (with closing dates) or closed with published comments, optionally filtered by title words.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `consultations` | object[] |  |\n| `count` | number |  |\n| `license` | object |  |\n| `observed_at_ms` | number |  |\n| `query` | string |  |\n| `source_url` | string |  |\n| `status` | string |  |\n| `total` | number | Rows on the page before filtering. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-10-25.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-25.",
                     "value": {
                       "consultations": [
                         {
@@ -628,16 +635,9 @@
                       "total": 250
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Proposed regulations from Canada Gazette Part I that are open for comment (with closing dates) or closed with published comments, optionally filtered by title words.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `consultations` | object[] |  |\n| `count` | number |  |\n| `license` | object |  |\n| `observed_at_ms` | number |  |\n| `query` | string |  |\n| `source_url` | string |  |\n| `status` | string |  |\n| `total` | number | Rows on the page before filtering. |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -655,17 +655,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "gazette-gc-ca",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/gazette-gc-ca/gazette-gc-ca-legislation-list-consultations",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -681,54 +679,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:b874048d6e9ac92dec4c18861b607e78440db2422be046e6ea21c27d74490b61",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "f1f72169babb"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "gazette-gc-ca",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "gazette-gc-ca.legislation.list-consultations",
+          "method": "POST",
           "path": "/apis/v1/gazette-gc-ca/legislation/list-consultations"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:b874048d6e9ac92dec4c18861b607e78440db2422be046e6ea21c27d74490b61"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/gazette-gc-ca/gazette-gc-ca-legislation-list-consultations"
       }
     },
     "/apis/v1/gazette-gc-ca/legislation/list-issues": {
@@ -736,8 +736,27 @@
         "description": "Start here to find an issue date or the edition that carries a regulation. Part I is weekly (Saturdays: notices and proposed regulations), Part II every second Wednesday (registered regulations and statutory instruments), Part III when Acts receive royal assent. Years from 1998.",
         "operationId": "gazette-gc-ca.legislation.list-issues",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "part": {
+                    "type": "string",
+                    "description": "Gazette part.\n\nProvider reference: allowed values [\"I\", \"II\", \"III\"]."
+                  },
+                  "year": {
+                    "type": "number",
+                    "description": "Calendar year, e.g. 2026.\n\nProvider reference: minimum 1998; maximum 2100."
+                  }
+                },
+                "required": [
+                  "part",
+                  "year"
+                ]
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -746,37 +765,25 @@
                     "year": 2025
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "part": {
-                    "description": "Gazette part.\n\nProvider reference: allowed values [\"I\", \"II\", \"III\"].",
-                    "type": "string"
-                  },
-                  "year": {
-                    "description": "Calendar year, e.g. 2026.\n\nProvider reference: minimum 1998; maximum 2100.",
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "part",
-                  "year"
-                ],
-                "type": "object"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "List the editions of one Canada Gazette part for one year: date, regular or extra, volume and number, HTML and PDF links, the SOR and SI registration ranges of each Part II edition, and the Acts of each Part III volume.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `issues` | object[] |  |\n| `license` | object |  |\n| `observed_at_ms` | number |  |\n| `part` | string |  |\n| `source_url` | string |  |\n| `volume` | number | Volume printed in the page heading. |\n| `year` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-10-25.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-25.",
                     "value": {
                       "count": 32,
                       "issues": [
@@ -1176,16 +1183,9 @@
                       "year": 2025
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "List the editions of one Canada Gazette part for one year: date, regular or extra, volume and number, HTML and PDF links, the SOR and SI registration ranges of each Part II edition, and the Acts of each Part III volume.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `count` | number |  |\n| `issues` | object[] |  |\n| `license` | object |  |\n| `observed_at_ms` | number |  |\n| `part` | string |  |\n| `source_url` | string |  |\n| `volume` | number | Volume printed in the page heading. |\n| `year` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -1203,17 +1203,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "gazette-gc-ca",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/gazette-gc-ca/gazette-gc-ca-legislation-list-issues",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -1229,54 +1227,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:c6eef70a32241b90530d298107c2799488fe4bdefca35cf264bcf2124cdc5d99",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "81dee00a3921"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "gazette-gc-ca",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "gazette-gc-ca.legislation.list-issues",
+          "method": "POST",
           "path": "/apis/v1/gazette-gc-ca/legislation/list-issues"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:c6eef70a32241b90530d298107c2799488fe4bdefca35cf264bcf2124cdc5d99"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/gazette-gc-ca/gazette-gc-ca-legislation-list-issues"
       }
     }
   },

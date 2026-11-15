@@ -128,6 +128,46 @@ class MetadataTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'provider scope differs'):
             self.project()
 
+    def test_unindexed_history_requires_exact_projection_and_complete_absence(self):
+        from pull_openapi import retain_unindexed_provider
+        old = document('gone')
+        old['paths'] = {'/historic': {'get': {**old['paths']['/request']['get'], 'operationId': 'historic'}}}
+        old['paths']['/historic']['get']['x-aisa-docs-url'] = 'https://docs.aisa.one/old'
+        self.registry['providers']['gone'] = {'display_name': 'Original', 'description': ''}
+        self.write_registry()
+        (self.root / 'openapi/gone.json').write_bytes(canonical(old))
+        self.native['gone'] = retain_unindexed_provider('gone', old)
+        self.index = {'schema_version': '1', 'providers': [{'id': 'one'}], 'pending_providers': [],
+            'pending_endpoints': [], 'coverage': {'scope': 'integration', 'inventory_endpoint_count': 1,
+            'selected_endpoint_count': 1, 'projected_endpoint_count': 1, 'pending_endpoint_count': 0,
+            'projected_endpoints': [{'provider': 'one'}], 'excluded_endpoints': []}}
+        result = self.project()
+        self.assertEqual(result['retained_unindexed_providers'], ['gone'])
+        self.assertNotIn('gone', result['facts_by_provider'])
+        self.assertEqual(importer.validate_derived_registry(self.registry, result['registry'],
+                         {'one': document(), 'gone': old}, self.native), self.registry)
+        for field, value in [('x-aisa-status', 'enabled'), ('operationId', 'renamed'),
+                             ('x-aisa-docs-url', 'https://docs.aisa.one/forged')]:
+            with self.subTest(field=field):
+                self.native['gone'] = retain_unindexed_provider('gone', old)
+                self.native['gone']['paths']['/historic']['get'][field] = value
+                with self.assertRaisesRegex(ValueError, 'historical projection'):
+                    self.project()
+        self.native['gone'] = retain_unindexed_provider('gone', old)
+        # Exact ownership migration removes only the historical copy. A
+        # renamed current identity must not qualify as the same operation.
+        self.native['one']['paths']['/historic'] = {'get': copy.deepcopy(old['paths']['/historic']['get'])}
+        self.native['gone']['paths'] = {}
+        self.assertEqual(self.project()['retained_unindexed_providers'], ['gone'])
+        self.native['one']['paths']['/historic']['get']['operationId'] = 'renamed'
+        with self.assertRaisesRegex(ValueError, 'historical projection'):
+            self.project()
+        del self.native['one']['paths']['/historic']
+        self.native['gone'] = retain_unindexed_provider('gone', old)
+        self.index['pending_providers'].append({'id': 'gone'})
+        with self.assertRaisesRegex(ValueError, 'provider scope differs'):
+            self.project()
+
     def test_retained_pending_comes_from_new_native_and_ordinary_pending_fails(self):
         operation = self.native['one']['paths']['/request']['get']
         operation.update({'x-aisa-status': 'disabled', 'x-aisa-contract-state': 'retained_legacy',

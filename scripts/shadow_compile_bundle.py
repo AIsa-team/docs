@@ -80,6 +80,18 @@ def compile_shadow(bundle_root, runtime_root, *, bundle_sha256, docs_ref,
     return compile_verified_inputs(bundle, facts, runtime, output=output)
 
 
+def validate_output_sizes(payload):
+    """Apply the publication file-role bounds before declaring compile success."""
+    total = 0
+    for name, raw in payload.items():
+        production_name = ('contracts/openapi.json' if name == 'aggregate/openapi.json'
+                           else 'contracts/' + name)
+        require(0 < len(raw) <= file_limit(production_name, MAX_FILE),
+                'Compiled member exceeds publication role limit: ' + name)
+        total += len(raw)
+        require(total <= MAX_TOTAL, 'Compiled graph exceeds publication total limit')
+
+
 def compile_verified_inputs(bundle, facts, runtime, *, output, input_kind='public_historical_acquisition'):
     """Single composition core; callers must first verify all original input bytes.
 
@@ -155,6 +167,7 @@ def compile_verified_inputs(bundle, facts, runtime, *, output, input_kind='publi
             'files': [{'path': name, 'sha256': sha(raw), 'bytes': len(raw)}
                       for name, raw in sorted(payload.items())]}
         payload['manifest.json'] = canonical(manifest)
+        validate_output_sizes(payload)
         temporary = Path(tempfile.mkdtemp(prefix='.shadow-output-', dir=output.parent))
         try:
             for name, raw in payload.items():

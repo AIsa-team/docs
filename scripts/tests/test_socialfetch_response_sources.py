@@ -68,7 +68,7 @@ class SocialFetchResponseSourceTests(unittest.TestCase):
                         self.assertNotIn('x-aisa-response-pending', operation)
                         self.assertNotIn('x-aisa-review', operation)
                         self.assertEqual(operation['responses']['default'], original['responses']['default'])
-                        exclude = {'responses', 'x-aisa-response-source', 'x-aisa-review'}
+                        exclude = {'responses', 'x-aisa-response-source', 'x-aisa-review', 'x-aisa-response-contract-hash'}
                         self.assertEqual({k: v for k, v in operation.items() if k not in exclude},
                                          {k: v for k, v in original.items() if k not in exclude})
                         media = operation['responses']['200']['content']['application/json']

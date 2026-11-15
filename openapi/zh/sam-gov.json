@@ -1,20 +1,20 @@
 {
   "components": {
-    "callbacks": {},
-    "examples": {},
-    "headers": {},
-    "links": {},
-    "parameters": {},
-    "pathItems": {},
-    "requestBodies": {},
-    "responses": {},
-    "schemas": {},
     "securitySchemes": {
       "bearerAuth": {
         "scheme": "bearer",
         "type": "http"
       }
-    }
+    },
+    "schemas": {},
+    "responses": {},
+    "parameters": {},
+    "examples": {},
+    "requestBodies": {},
+    "headers": {},
+    "links": {},
+    "callbacks": {},
+    "pathItems": {}
   },
   "info": {
     "description": "",
@@ -26,35 +26,6 @@
       "quote": {
         "header": "X-AISA-Cost-Mode",
         "value": "quote"
-      }
-    },
-    "x-aisa-catalogs": {
-      "sam-gov": {
-        "description": "",
-        "title": "SAM.gov",
-        "x-aisa-capabilities": {
-          "idempotency": "Idempotency-Key",
-          "max_price": "X-AISA-Max-Price-USD",
-          "quote": {
-            "header": "X-AISA-Cost-Mode",
-            "value": "quote"
-          }
-        },
-        "x-aisa-document": {
-          "facts_hash": "6afb59b1b1976ca6604a41edfa9dc1c17c5fb2d43858ea29b9cb2e476266ac32",
-          "generator_version": "3",
-          "protocol_version": "1",
-          "schema_version": "1",
-          "seed_month": "2026-10"
-        },
-        "x-aisa-plans": {
-          "builder": 1.0,
-          "display_plan": "payg",
-          "payg": 1.0,
-          "similarweb_payg": 1.0,
-          "team": 1.0,
-          "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
-        }
       }
     },
     "x-aisa-configured-paths": [
@@ -69,14 +40,14 @@
       "/apis/v1/sam-gov/opportunities/search"
     ],
     "x-aisa-document": {
-      "composer_version": "29",
-      "document_hash": "sha256:2b8c2dcb893f790bdd717cf58c687dbfa198b0b6efcdcc2278f4bd3081f37794",
       "facts_hash": "6afb59b1b1976ca6604a41edfa9dc1c17c5fb2d43858ea29b9cb2e476266ac32",
       "generator_version": "3",
       "protocol_version": "1",
-      "response_pending": [],
       "schema_version": "1",
-      "seed_month": "2026-10"
+      "seed_month": "2026-10",
+      "composer_version": "31",
+      "response_pending": [],
+      "document_hash": "sha256:c982950758c4269bbfbb3dc50d6e8c810f57a755b580abc02a3eb0f8d5f0fc2c"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -86,7 +57,36 @@
       "team": 1.0,
       "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
     },
-    "x-aisa-provider": "sam-gov"
+    "x-aisa-provider": "sam-gov",
+    "x-aisa-catalogs": {
+      "sam-gov": {
+        "title": "SAM.gov",
+        "description": "",
+        "x-aisa-document": {
+          "facts_hash": "6afb59b1b1976ca6604a41edfa9dc1c17c5fb2d43858ea29b9cb2e476266ac32",
+          "generator_version": "3",
+          "protocol_version": "1",
+          "schema_version": "1",
+          "seed_month": "2026-10"
+        },
+        "x-aisa-plans": {
+          "builder": 1.0,
+          "display_plan": "payg",
+          "payg": 1.0,
+          "similarweb_payg": 1.0,
+          "team": 1.0,
+          "version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb"
+        },
+        "x-aisa-capabilities": {
+          "idempotency": "Idempotency-Key",
+          "max_price": "X-AISA-Max-Price-USD",
+          "quote": {
+            "header": "X-AISA-Cost-Mode",
+            "value": "quote"
+          }
+        }
+      }
+    }
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",
@@ -96,8 +96,43 @@
         "description": "Fetch one SAM.gov contract opportunity by its 32-character notice id (the id in https://sam.gov/opp/{id}/view): full description, deadlines, NAICS, set-aside, place of performance, points of contact, award data, attachments (titles and download URLs only) and optionally the amendment history.",
         "operationId": "sam-gov.opportunities.detail",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "fresh": {
+                    "type": "boolean",
+                    "description": "Always true in practice: every call goes to SAM.gov live with a cache-busting parameter; the workflow keeps no cache.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "include_attachments": {
+                    "type": "boolean",
+                    "description": "List attachments (title, download URL, size, type). Contents are never fetched.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "include_history": {
+                    "type": "boolean",
+                    "description": "Include the version history (original notice and every amendment) as record.history.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "opportunity_id": {
+                    "type": "string",
+                    "description": "SAM.gov notice id. Each published version (original or amendment) has its own id; is_latest/latest_opportunity_id in the record point at the current version. Pattern: ^[0-9a-fA-F]{32}$."
+                  }
+                },
+                "required": [
+                  "opportunity_id"
+                ]
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -106,53 +141,25 @@
                     "opportunity_id": "a9da8c51e84a4b72a9897a6f483845e3"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "fresh": {
-                    "description": "Always true in practice: every call goes to SAM.gov live with a cache-busting parameter; the workflow keeps no cache.",
-                    "type": "boolean",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  },
-                  "include_attachments": {
-                    "description": "List attachments (title, download URL, size, type). Contents are never fetched.",
-                    "type": "boolean",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  },
-                  "include_history": {
-                    "description": "Include the version history (original notice and every amendment) as record.history.",
-                    "type": "boolean",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  },
-                  "opportunity_id": {
-                    "description": "SAM.gov notice id. Each published version (original or amendment) has its own id; is_latest/latest_opportunity_id in the record point at the current version. Pattern: ^[0-9a-fA-F]{32}$.",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "opportunity_id"
-                ],
-                "type": "object"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "Fetch one SAM.gov contract opportunity by its 32-character notice id (the id in https://sam.gov/opp/{id}/view): full description, deadlines, NAICS, set-aside, place of performance, points of contact, award data, attachments (titles and download URLs only) and optionally the amendment history.\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `agency` | object | Top-level department (hierarchy level 1). |\n| `archive` | object | When SAM.gov will/did archive the notice (auto15 = 15 days after the deadline, autocustom = the given date, manual). |\n| `attachments` | object[] |  |\n| `attachments_retrieved` | boolean | false means the attachment list was not requested; an empty list with true means the notice has none. |\n| `award` | object |  |\n| `classification_code` | string | Product/service code (PSC). |\n| `description` | string | Plain text (HTML stripped). An excerpt on summary records. |\n| `description_is_excerpt` | boolean |  |\n| `detail_level` | string |  |\n| `history` | object[] | Only with detail include_history=true; newest version first. |\n| `is_active` | boolean |  |\n| `is_amendment` | boolean |  |\n| `is_archived` | boolean | null on summary records (the search index does not expose it). |\n| `is_cancelled` | boolean |  |\n| `is_latest` | boolean | false when a newer amendment supersedes this version; see latest_opportunity_id. |\n| `latest_opportunity_id` | string |  |\n| `modification_count` | number |  |\n| `naics_codes` | string[] | Empty on summary records (see detail_level) or when the notice lists none. |\n| `notice_type` | string |  |\n| `notice_type_code` | string | SAM.gov single-letter code (p,o,k,a,r,s,i,g,u,f,l). |\n| `notice_type_label` | string |  |\n| `office` | object | Deepest contracting office in the hierarchy. |\n| `opportunity_id` | string | SAM.gov notice id; stable for this published version. Amendments publish a new id whose parent_opportunity_id is the original. |\n| `organization_hierarchy` | object[] |  |\n| `parent_opportunity_id` | string | Original notice id when this record is an amendment. |\n| `place_of_performance` | object |  |\n| `points_of_contact` | object[] |  |\n| `previous_opportunity_id` | string |  |\n| `published_at` | string | When this version was published (UTC). |\n| `response_deadline` | string | Response due date-time in UTC. null when the notice has none (awards, many special notices) or when SAM.gov gives only a date or a time without an offset (then `response_deadline_local` and `response_deadline_date` still carry it) — not a zero or an empty string. |\n| `response_deadline_date` | string | Calendar date of the deadline in the notice's own timezone (the date shown on the SAM.gov page). |\n| `response_deadline_local` | string | The deadline exactly as SAM.gov stores it, with its own offset. |\n| `response_timezone` | string |  |\n| `set_aside` | string | SAM.gov set-aside code, null when none. |\n| `set_aside_label` | string |  |\n| `solicitation_number` | string |  |\n| `source_status` | string | Raw source state: search index gives active\\|inactive[,canceled]; the notice API gives its status code (published) plus ,archived / ,cancelled flags. |\n| `source_url` | string |  |\n| `status` | string | Normalized: cancelled if the notice was cancelled; open while SAM.gov lists it active/not archived (even past the deadline until the archive date); closed once inactive/archived. |\n| `title` | string |  |\n| `updated_at` | string |  |\n| `version` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-09.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-09.",
                     "value": {
                       "complete": true,
                       "fresh": true,
@@ -250,16 +257,9 @@
                       ]
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Fetch one SAM.gov contract opportunity by its 32-character notice id (the id in https://sam.gov/opp/{id}/view): full description, deadlines, NAICS, set-aside, place of performance, points of contact, award data, attachments (titles and download URLs only) and optionally the amendment history.\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `agency` | object | Top-level department (hierarchy level 1). |\n| `archive` | object | When SAM.gov will/did archive the notice (auto15 = 15 days after the deadline, autocustom = the given date, manual). |\n| `attachments` | object[] |  |\n| `attachments_retrieved` | boolean | false means the attachment list was not requested; an empty list with true means the notice has none. |\n| `award` | object |  |\n| `classification_code` | string | Product/service code (PSC). |\n| `description` | string | Plain text (HTML stripped). An excerpt on summary records. |\n| `description_is_excerpt` | boolean |  |\n| `detail_level` | string |  |\n| `history` | object[] | Only with detail include_history=true; newest version first. |\n| `is_active` | boolean |  |\n| `is_amendment` | boolean |  |\n| `is_archived` | boolean | null on summary records (the search index does not expose it). |\n| `is_cancelled` | boolean |  |\n| `is_latest` | boolean | false when a newer amendment supersedes this version; see latest_opportunity_id. |\n| `latest_opportunity_id` | string |  |\n| `modification_count` | number |  |\n| `naics_codes` | string[] | Empty on summary records (see detail_level) or when the notice lists none. |\n| `notice_type` | string |  |\n| `notice_type_code` | string | SAM.gov single-letter code (p,o,k,a,r,s,i,g,u,f,l). |\n| `notice_type_label` | string |  |\n| `office` | object | Deepest contracting office in the hierarchy. |\n| `opportunity_id` | string | SAM.gov notice id; stable for this published version. Amendments publish a new id whose parent_opportunity_id is the original. |\n| `organization_hierarchy` | object[] |  |\n| `parent_opportunity_id` | string | Original notice id when this record is an amendment. |\n| `place_of_performance` | object |  |\n| `points_of_contact` | object[] |  |\n| `previous_opportunity_id` | string |  |\n| `published_at` | string | When this version was published (UTC). |\n| `response_deadline` | string | Response due date-time in UTC. null when the notice has none (awards, many special notices) or when SAM.gov gives only a date or a time without an offset (then `response_deadline_local` and `response_deadline_date` still carry it) — not a zero or an empty string. |\n| `response_deadline_date` | string | Calendar date of the deadline in the notice's own timezone (the date shown on the SAM.gov page). |\n| `response_deadline_local` | string | The deadline exactly as SAM.gov stores it, with its own offset. |\n| `response_timezone` | string |  |\n| `set_aside` | string | SAM.gov set-aside code, null when none. |\n| `set_aside_label` | string |  |\n| `solicitation_number` | string |  |\n| `source_status` | string | Raw source state: search index gives active\\|inactive[,canceled]; the notice API gives its status code (published) plus ,archived / ,cancelled flags. |\n| `source_url` | string |  |\n| `status` | string | Normalized: cancelled if the notice was cancelled; open while SAM.gov lists it active/not archived (even past the deadline until the archive date); closed once inactive/archived. |\n| `title` | string |  |\n| `updated_at` | string |  |\n| `version` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -277,17 +277,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-detail",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -303,54 +301,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:0c4afe56e1847a412cd08e2e1975e3dd63d16632f7ada5ca8223cb43a87bb04f",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "d70e28fbf055"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "sam-gov.opportunities.detail",
+          "method": "POST",
           "path": "/apis/v1/sam-gov/opportunities/detail"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:0c4afe56e1847a412cd08e2e1975e3dd63d16632f7ada5ca8223cb43a87bb04f"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-detail"
       }
     },
     "/apis/v1/sam-gov/opportunities/entities-changes": {
@@ -358,33 +358,25 @@
         "description": "Collect registrations updated since the last run.",
         "operationId": "sam-gov.opportunities.entities-changes",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
-              "examples": {
-                "provider": {
-                  "summary": "Official provider example; checked against AIsa request constraints",
-                  "value": {
-                    "size": 2,
-                    "updated_from": "2026-10-15",
-                    "updated_to": "2026-10-16"
-                  }
-                }
-              },
               "schema": {
+                "type": "object",
                 "additionalProperties": true,
                 "properties": {
                   "page": {
-                    "description": "0-based page (default 0); page * size may not exceed 10,000.\n\nProvider reference: minimum 0; maximum 9999.",
                     "type": "number",
+                    "description": "0-based page (default 0); page * size may not exceed 10,000.\n\nProvider reference: minimum 0; maximum 9999.",
                     "x-alexandria-option-metadata": {
                       "in": "body",
-                      "max": 9999,
-                      "min": 0
+                      "min": 0,
+                      "max": 9999
                     }
                   },
                   "registration_status": {
-                    "description": "A (active) or E (expired); default both.\n\nProvider reference: allowed values [\"A\", \"E\", \"a\", \"e\"].",
                     "type": "string",
+                    "description": "A (active) or E (expired); default both.\n\nProvider reference: allowed values [\"A\", \"E\", \"a\", \"e\"].",
                     "x-alexandria-option-metadata": {
                       "in": "body",
                       "oneOf": [
@@ -396,48 +388,63 @@
                     }
                   },
                   "size": {
-                    "description": "Records per page, 1 to 10 (SAM.gov's hard limit; default 10).\n\nProvider reference: minimum 1; maximum 10.",
                     "type": "number",
+                    "description": "Records per page, 1 to 10 (SAM.gov's hard limit; default 10).\n\nProvider reference: minimum 1; maximum 10.",
                     "x-alexandria-option-metadata": {
                       "in": "body",
-                      "max": 10,
-                      "min": 1
+                      "min": 1,
+                      "max": 10
                     }
                   },
                   "state": {
-                    "description": "Physical-address state code, to split a window above 10,000 records. Pattern: ^[A-Za-z]{2}$.",
                     "type": "string",
+                    "description": "Physical-address state code, to split a window above 10,000 records. Pattern: ^[A-Za-z]{2}$.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "updated_from": {
-                    "description": "First day of the window, YYYY-MM-DD (inclusive). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
-                    "type": "string"
+                    "type": "string",
+                    "description": "First day of the window, YYYY-MM-DD (inclusive). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
                   },
                   "updated_to": {
-                    "description": "Last day of the window, YYYY-MM-DD (inclusive). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
-                    "type": "string"
+                    "type": "string",
+                    "description": "Last day of the window, YYYY-MM-DD (inclusive). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
                   }
                 },
                 "required": [
                   "updated_from",
                   "updated_to"
-                ],
-                "type": "object"
+                ]
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "size": 2,
+                    "updated_from": "2026-10-15",
+                    "updated_to": "2026-10-16"
+                  }
+                }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "Entity registrations whose SAM.gov record changed in a date window (the Entity Management API's updateDate filter, the publisher's own modified-since feed), same record shape as entities_search, pages of at most 10. A one-day window holds about 9,700 updates against the 10,000-record query window; split larger windows by registration_status or state.\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `activation_date` | string |  |\n| `business_types` | object[] |  |\n| `cage_code` | string |  |\n| `congressional_district` | string |  |\n| `country_of_incorporation_code` | string |  |\n| `dba_name` | string |  |\n| `electronic_business_poc` | object | Public tier: name, title and address only; SAM.gov publishes no POC email or phone. |\n| `entity_division_name` | string |  |\n| `entity_start_date` | string |  |\n| `entity_structure_code` | string |  |\n| `entity_structure_desc` | string |  |\n| `entity_type_desc` | string |  |\n| `entity_url` | string |  |\n| `exclusion_status_flag` | string | Y when an active exclusion exists, else N. |\n| `exclusion_url` | string |  |\n| `fiscal_year_end_close_date` | string |  |\n| `government_business_poc` | object | Public tier: name, title and address only; SAM.gov publishes no POC email or phone. |\n| `last_update_date` | string |  |\n| `legal_business_name` | string |  |\n| `mailing_address` | object | Null when the coreData section is not public for this registration. |\n| `naics_list` | object[] |  |\n| `organization_structure_desc` | string |  |\n| `physical_address` | object | Null when the coreData section is not public for this registration. |\n| `primary_naics` | string |  |\n| `profit_structure_desc` | string |  |\n| `psc_list` | object[] |  |\n| `publication_id` | string | `entity-information/v4:<retrieval date>`: the live API has no publication version. |\n| `purpose_of_registration_code` | string |  |\n| `purpose_of_registration_desc` | string |  |\n| `registration_date` | string | YYYY-MM-DD as SAM.gov states it. |\n| `registration_expiration_date` | string |  |\n| `registration_status` | string | Active or Expired, as SAM.gov states it. |\n| `retrieved_at` | string |  |\n| `sba_business_types` | object[] |  |\n| `sections_present` | object |  |\n| `source_record_id` | string | The UEI. |\n| `source_url` | string |  |\n| `state_of_incorporation_code` | string |  |\n| `submission_date` | string |  |\n| `uei_sam` | string |  |\n| `uei_status` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-10-18.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-18.",
                     "value": {
                       "count": 2,
                       "has_more": true,
@@ -722,16 +729,9 @@
                       "total_records": 9743
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Entity registrations whose SAM.gov record changed in a date window (the Entity Management API's updateDate filter, the publisher's own modified-since feed), same record shape as entities_search, pages of at most 10. A one-day window holds about 9,700 updates against the 10,000-record query window; split larger windows by registration_status or state.\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `activation_date` | string |  |\n| `business_types` | object[] |  |\n| `cage_code` | string |  |\n| `congressional_district` | string |  |\n| `country_of_incorporation_code` | string |  |\n| `dba_name` | string |  |\n| `electronic_business_poc` | object | Public tier: name, title and address only; SAM.gov publishes no POC email or phone. |\n| `entity_division_name` | string |  |\n| `entity_start_date` | string |  |\n| `entity_structure_code` | string |  |\n| `entity_structure_desc` | string |  |\n| `entity_type_desc` | string |  |\n| `entity_url` | string |  |\n| `exclusion_status_flag` | string | Y when an active exclusion exists, else N. |\n| `exclusion_url` | string |  |\n| `fiscal_year_end_close_date` | string |  |\n| `government_business_poc` | object | Public tier: name, title and address only; SAM.gov publishes no POC email or phone. |\n| `last_update_date` | string |  |\n| `legal_business_name` | string |  |\n| `mailing_address` | object | Null when the coreData section is not public for this registration. |\n| `naics_list` | object[] |  |\n| `organization_structure_desc` | string |  |\n| `physical_address` | object | Null when the coreData section is not public for this registration. |\n| `primary_naics` | string |  |\n| `profit_structure_desc` | string |  |\n| `psc_list` | object[] |  |\n| `publication_id` | string | `entity-information/v4:<retrieval date>`: the live API has no publication version. |\n| `purpose_of_registration_code` | string |  |\n| `purpose_of_registration_desc` | string |  |\n| `registration_date` | string | YYYY-MM-DD as SAM.gov states it. |\n| `registration_expiration_date` | string |  |\n| `registration_status` | string | Active or Expired, as SAM.gov states it. |\n| `retrieved_at` | string |  |\n| `sba_business_types` | object[] |  |\n| `sections_present` | object |  |\n| `source_record_id` | string | The UEI. |\n| `source_url` | string |  |\n| `state_of_incorporation_code` | string |  |\n| `submission_date` | string |  |\n| `uei_sam` | string |  |\n| `uei_status` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -749,17 +749,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-entities-changes",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -775,54 +773,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:e9e42d3a3d7ed0f535a406e92e9d4e45fd37f6395a1012437b903498c66a009e",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "fa81febc6a5f"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "sam-gov.opportunities.entities-changes",
+          "method": "POST",
           "path": "/apis/v1/sam-gov/opportunities/entities-changes"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:e9e42d3a3d7ed0f535a406e92e9d4e45fd37f6395a1012437b903498c66a009e"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-entities-changes"
       }
     },
     "/apis/v1/sam-gov/opportunities/entities-get": {
@@ -830,8 +830,35 @@
         "description": "You have UEIs or CAGE codes and want the registration records.",
         "operationId": "sam-gov.opportunities.entities-get",
         "requestBody": {
+          "required": false,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "cage_code": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "One to ten CAGE codes.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "uei_sam": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "One to ten UEIs.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                }
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -841,45 +868,25 @@
                     ]
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "cage_code": {
-                    "description": "One to ten CAGE codes.",
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": "array",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  },
-                  "uei_sam": {
-                    "description": "One to ten UEIs.",
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": "array",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  }
-                },
-                "type": "object"
               }
             }
-          },
-          "required": false
+          }
         },
         "responses": {
           "200": {
+            "description": "One to ten SAM.gov entity registrations by UEI or by CAGE code (the public Entity Management API, sections entityRegistration, coreData, assertions and pointsOfContact). Identifiers with no public registration are listed in not_found; when none is found the call fails with not_found.\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `activation_date` | string |  |\n| `business_types` | object[] |  |\n| `cage_code` | string |  |\n| `congressional_district` | string |  |\n| `country_of_incorporation_code` | string |  |\n| `dba_name` | string |  |\n| `electronic_business_poc` | object | Public tier: name, title and address only; SAM.gov publishes no POC email or phone. |\n| `entity_division_name` | string |  |\n| `entity_start_date` | string |  |\n| `entity_structure_code` | string |  |\n| `entity_structure_desc` | string |  |\n| `entity_type_desc` | string |  |\n| `entity_url` | string |  |\n| `exclusion_status_flag` | string | Y when an active exclusion exists, else N. |\n| `exclusion_url` | string |  |\n| `fiscal_year_end_close_date` | string |  |\n| `government_business_poc` | object | Public tier: name, title and address only; SAM.gov publishes no POC email or phone. |\n| `last_update_date` | string |  |\n| `legal_business_name` | string |  |\n| `mailing_address` | object | Null when the coreData section is not public for this registration. |\n| `naics_list` | object[] |  |\n| `organization_structure_desc` | string |  |\n| `physical_address` | object | Null when the coreData section is not public for this registration. |\n| `primary_naics` | string |  |\n| `profit_structure_desc` | string |  |\n| `psc_list` | object[] |  |\n| `publication_id` | string | `entity-information/v4:<retrieval date>`: the live API has no publication version. |\n| `purpose_of_registration_code` | string |  |\n| `purpose_of_registration_desc` | string |  |\n| `registration_date` | string | YYYY-MM-DD as SAM.gov states it. |\n| `registration_expiration_date` | string |  |\n| `registration_status` | string | Active or Expired, as SAM.gov states it. |\n| `retrieved_at` | string |  |\n| `sba_business_types` | object[] |  |\n| `sections_present` | object |  |\n| `source_record_id` | string | The UEI. |\n| `source_url` | string |  |\n| `state_of_incorporation_code` | string |  |\n| `submission_date` | string |  |\n| `uei_sam` | string |  |\n| `uei_status` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-10-18.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-18.",
                     "value": {
                       "by": "uei_sam",
                       "count": 1,
@@ -1010,16 +1017,9 @@
                       "total_records": 1
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "One to ten SAM.gov entity registrations by UEI or by CAGE code (the public Entity Management API, sections entityRegistration, coreData, assertions and pointsOfContact). Identifiers with no public registration are listed in not_found; when none is found the call fails with not_found.\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `activation_date` | string |  |\n| `business_types` | object[] |  |\n| `cage_code` | string |  |\n| `congressional_district` | string |  |\n| `country_of_incorporation_code` | string |  |\n| `dba_name` | string |  |\n| `electronic_business_poc` | object | Public tier: name, title and address only; SAM.gov publishes no POC email or phone. |\n| `entity_division_name` | string |  |\n| `entity_start_date` | string |  |\n| `entity_structure_code` | string |  |\n| `entity_structure_desc` | string |  |\n| `entity_type_desc` | string |  |\n| `entity_url` | string |  |\n| `exclusion_status_flag` | string | Y when an active exclusion exists, else N. |\n| `exclusion_url` | string |  |\n| `fiscal_year_end_close_date` | string |  |\n| `government_business_poc` | object | Public tier: name, title and address only; SAM.gov publishes no POC email or phone. |\n| `last_update_date` | string |  |\n| `legal_business_name` | string |  |\n| `mailing_address` | object | Null when the coreData section is not public for this registration. |\n| `naics_list` | object[] |  |\n| `organization_structure_desc` | string |  |\n| `physical_address` | object | Null when the coreData section is not public for this registration. |\n| `primary_naics` | string |  |\n| `profit_structure_desc` | string |  |\n| `psc_list` | object[] |  |\n| `publication_id` | string | `entity-information/v4:<retrieval date>`: the live API has no publication version. |\n| `purpose_of_registration_code` | string |  |\n| `purpose_of_registration_desc` | string |  |\n| `registration_date` | string | YYYY-MM-DD as SAM.gov states it. |\n| `registration_expiration_date` | string |  |\n| `registration_status` | string | Active or Expired, as SAM.gov states it. |\n| `retrieved_at` | string |  |\n| `sba_business_types` | object[] |  |\n| `sections_present` | object |  |\n| `source_record_id` | string | The UEI. |\n| `source_url` | string |  |\n| `state_of_incorporation_code` | string |  |\n| `submission_date` | string |  |\n| `uei_sam` | string |  |\n| `uei_status` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -1037,17 +1037,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-entities-get",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -1063,54 +1061,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:22c6d530fd01d82eba4cb087777d71f5fd0d7a4052d176ac2b1d0673339c2215",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "26b7a75eccf0"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "sam-gov.opportunities.entities-get",
+          "method": "POST",
           "path": "/apis/v1/sam-gov/opportunities/entities-get"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:22c6d530fd01d82eba4cb087777d71f5fd0d7a4052d176ac2b1d0673339c2215"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-entities-get"
       }
     },
     "/apis/v1/sam-gov/opportunities/entities-search": {
@@ -1118,66 +1118,60 @@
         "description": "Find registrants by name, NAICS or state; use entities_get when you already have a UEI or CAGE.",
         "operationId": "sam-gov.opportunities.entities-search",
         "requestBody": {
+          "required": false,
           "content": {
             "application/json": {
-              "examples": {
-                "provider": {
-                  "summary": "Official provider example; checked against AIsa request constraints",
-                  "value": {
-                    "legal_business_name": "moserworks"
-                  }
-                }
-              },
               "schema": {
+                "type": "object",
                 "additionalProperties": true,
                 "properties": {
                   "cage_code": {
-                    "description": "Five-character CAGE code. Pattern: ^[A-Za-z0-9]{5}$.",
                     "type": "string",
+                    "description": "Five-character CAGE code. Pattern: ^[A-Za-z0-9]{5}$.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "city": {
-                    "description": "Physical-address city.",
                     "type": "string",
+                    "description": "Physical-address city.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "legal_business_name": {
-                    "description": "Legal business name (SAM.gov matches on the name text).",
                     "type": "string",
+                    "description": "Legal business name (SAM.gov matches on the name text).",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "naics_code": {
-                    "description": "Any NAICS code on the registration. Pattern: ^[0-9]{6}$.",
                     "type": "string",
+                    "description": "Any NAICS code on the registration. Pattern: ^[0-9]{6}$.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "page": {
-                    "description": "0-based page (default 0); page * size may not exceed 10,000.\n\nProvider reference: minimum 0; maximum 9999.",
                     "type": "number",
+                    "description": "0-based page (default 0); page * size may not exceed 10,000.\n\nProvider reference: minimum 0; maximum 9999.",
                     "x-alexandria-option-metadata": {
                       "in": "body",
-                      "max": 9999,
-                      "min": 0
+                      "min": 0,
+                      "max": 9999
                     }
                   },
                   "primary_naics": {
-                    "description": "Six-digit primary NAICS code. Pattern: ^[0-9]{6}$.",
                     "type": "string",
+                    "description": "Six-digit primary NAICS code. Pattern: ^[0-9]{6}$.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "registration_status": {
-                    "description": "A (active, default) or E (expired).\n\nProvider reference: allowed values [\"A\", \"E\", \"a\", \"e\"].",
                     "type": "string",
+                    "description": "A (active, default) or E (expired).\n\nProvider reference: allowed values [\"A\", \"E\", \"a\", \"e\"].",
                     "x-alexandria-option-metadata": {
                       "in": "body",
                       "oneOf": [
@@ -1189,43 +1183,56 @@
                     }
                   },
                   "size": {
-                    "description": "Records per page, 1 to 10 (SAM.gov's hard limit; default 10).\n\nProvider reference: minimum 1; maximum 10.",
                     "type": "number",
+                    "description": "Records per page, 1 to 10 (SAM.gov's hard limit; default 10).\n\nProvider reference: minimum 1; maximum 10.",
                     "x-alexandria-option-metadata": {
                       "in": "body",
-                      "max": 10,
-                      "min": 1
+                      "min": 1,
+                      "max": 10
                     }
                   },
                   "state": {
-                    "description": "Physical-address state or province code (VA, CA ...). Pattern: ^[A-Za-z]{2}$.",
                     "type": "string",
+                    "description": "Physical-address state or province code (VA, CA ...). Pattern: ^[A-Za-z]{2}$.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "uei_sam": {
-                    "description": "Twelve-character Unique Entity ID. Pattern: ^[A-Za-z0-9]{12}$.",
                     "type": "string",
+                    "description": "Twelve-character Unique Entity ID. Pattern: ^[A-Za-z0-9]{12}$.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   }
-                },
-                "type": "object"
+                }
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "legal_business_name": "moserworks"
+                  }
+                }
               }
             }
-          },
-          "required": false
+          }
         },
         "responses": {
           "200": {
+            "description": "Search SAM.gov entity registrations (the public Entity Management API served keyless from sam.gov) by legal business name, primary or any NAICS code, physical-address state or city, CAGE or UEI, for active (default) or expired registrations. Each record carries UEI, CAGE, legal and DBA name, registration status and dates, exclusion flag, physical and mailing address, entity structure, state of incorporation, business types, primary NAICS and NAICS list, and the government and electronic business points of contact (name, title, address; the public tier has no email or phone). Pages of at most 10; SAM.gov serves at most 10,000 records per query.\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `activation_date` | string |  |\n| `business_types` | object[] |  |\n| `cage_code` | string |  |\n| `congressional_district` | string |  |\n| `country_of_incorporation_code` | string |  |\n| `dba_name` | string |  |\n| `electronic_business_poc` | object | Public tier: name, title and address only; SAM.gov publishes no POC email or phone. |\n| `entity_division_name` | string |  |\n| `entity_start_date` | string |  |\n| `entity_structure_code` | string |  |\n| `entity_structure_desc` | string |  |\n| `entity_type_desc` | string |  |\n| `entity_url` | string |  |\n| `exclusion_status_flag` | string | Y when an active exclusion exists, else N. |\n| `exclusion_url` | string |  |\n| `fiscal_year_end_close_date` | string |  |\n| `government_business_poc` | object | Public tier: name, title and address only; SAM.gov publishes no POC email or phone. |\n| `last_update_date` | string |  |\n| `legal_business_name` | string |  |\n| `mailing_address` | object | Null when the coreData section is not public for this registration. |\n| `naics_list` | object[] |  |\n| `organization_structure_desc` | string |  |\n| `physical_address` | object | Null when the coreData section is not public for this registration. |\n| `primary_naics` | string |  |\n| `profit_structure_desc` | string |  |\n| `psc_list` | object[] |  |\n| `publication_id` | string | `entity-information/v4:<retrieval date>`: the live API has no publication version. |\n| `purpose_of_registration_code` | string |  |\n| `purpose_of_registration_desc` | string |  |\n| `registration_date` | string | YYYY-MM-DD as SAM.gov states it. |\n| `registration_expiration_date` | string |  |\n| `registration_status` | string | Active or Expired, as SAM.gov states it. |\n| `retrieved_at` | string |  |\n| `sba_business_types` | object[] |  |\n| `sections_present` | object |  |\n| `source_record_id` | string | The UEI. |\n| `source_url` | string |  |\n| `state_of_incorporation_code` | string |  |\n| `submission_date` | string |  |\n| `uei_sam` | string |  |\n| `uei_status` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-10-18.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-18.",
                     "value": {
                       "count": 1,
                       "has_more": false,
@@ -1366,16 +1373,9 @@
                       "total_records": 1
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Search SAM.gov entity registrations (the public Entity Management API served keyless from sam.gov) by legal business name, primary or any NAICS code, physical-address state or city, CAGE or UEI, for active (default) or expired registrations. Each record carries UEI, CAGE, legal and DBA name, registration status and dates, exclusion flag, physical and mailing address, entity structure, state of incorporation, business types, primary NAICS and NAICS list, and the government and electronic business points of contact (name, title, address; the public tier has no email or phone). Pages of at most 10; SAM.gov serves at most 10,000 records per query.\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `activation_date` | string |  |\n| `business_types` | object[] |  |\n| `cage_code` | string |  |\n| `congressional_district` | string |  |\n| `country_of_incorporation_code` | string |  |\n| `dba_name` | string |  |\n| `electronic_business_poc` | object | Public tier: name, title and address only; SAM.gov publishes no POC email or phone. |\n| `entity_division_name` | string |  |\n| `entity_start_date` | string |  |\n| `entity_structure_code` | string |  |\n| `entity_structure_desc` | string |  |\n| `entity_type_desc` | string |  |\n| `entity_url` | string |  |\n| `exclusion_status_flag` | string | Y when an active exclusion exists, else N. |\n| `exclusion_url` | string |  |\n| `fiscal_year_end_close_date` | string |  |\n| `government_business_poc` | object | Public tier: name, title and address only; SAM.gov publishes no POC email or phone. |\n| `last_update_date` | string |  |\n| `legal_business_name` | string |  |\n| `mailing_address` | object | Null when the coreData section is not public for this registration. |\n| `naics_list` | object[] |  |\n| `organization_structure_desc` | string |  |\n| `physical_address` | object | Null when the coreData section is not public for this registration. |\n| `primary_naics` | string |  |\n| `profit_structure_desc` | string |  |\n| `psc_list` | object[] |  |\n| `publication_id` | string | `entity-information/v4:<retrieval date>`: the live API has no publication version. |\n| `purpose_of_registration_code` | string |  |\n| `purpose_of_registration_desc` | string |  |\n| `registration_date` | string | YYYY-MM-DD as SAM.gov states it. |\n| `registration_expiration_date` | string |  |\n| `registration_status` | string | Active or Expired, as SAM.gov states it. |\n| `retrieved_at` | string |  |\n| `sba_business_types` | object[] |  |\n| `sections_present` | object |  |\n| `source_record_id` | string | The UEI. |\n| `source_url` | string |  |\n| `state_of_incorporation_code` | string |  |\n| `submission_date` | string |  |\n| `uei_sam` | string |  |\n| `uei_status` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -1393,17 +1393,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-entities-search",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -1419,54 +1417,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:57885b6ec14d26a25d3402851a25d32d9df955976a139ed74ff92aedf672565d",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "f1bf4f198373"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "sam-gov.opportunities.entities-search",
+          "method": "POST",
           "path": "/apis/v1/sam-gov/opportunities/entities-search"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:57885b6ec14d26a25d3402851a25d32d9df955976a139ed74ff92aedf672565d"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-entities-search"
       }
     },
     "/apis/v1/sam-gov/opportunities/entities-status": {
@@ -1474,39 +1474,46 @@
         "description": "Learn whether a new monthly entity extract was published and get its URL, size, hash and record count before downloading it elsewhere.",
         "operationId": "sam-gov.opportunities.entities-status",
         "requestBody": {
+          "required": false,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "file_name": {
+                    "type": "string",
+                    "description": "Pin one listed file name (default: the newest SAM_PUBLIC_MONTHLY_V2 file).",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                }
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
                   "value": {}
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "file_name": {
-                    "description": "Pin one listed file name (default: the newest SAM_PUBLIC_MONTHLY_V2 file).",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  }
-                },
-                "type": "object"
               }
             }
-          },
-          "required": false
+          }
         },
         "responses": {
           "200": {
+            "description": "Version check and hand-off for the public monthly entity registration extract (SAM_PUBLIC_MONTHLY_V2_YYYYMMDD.ZIP in SAM.gov Data Services, about 149 MB): file name as publication_id, S3 Last-Modified, size and ETag from a 64 KB range read through the download route's 303 (the presigned URL is resolved per call and never stored), and the record count from the pipe file's BOF line decoded from the nested zip heads. hand_off is true because the file exceeds the runner's 32 MiB cap; file_url is the sam.gov download route. No daily public entity file exists.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `bof_file_date` | string |  |\n| `bof_line` | string |  |\n| `cadence` | string |  |\n| `content_hash` | string | The S3 ETag (multipart: not an MD5). |\n| `date_modified_label` | string | SAM.gov's own dateModified label (`Oct 04,2026`). |\n| `description` | string |  |\n| `etag` | string |  |\n| `file_date` | string | YYYY-MM-DD from the file name. |\n| `file_format` | string |  |\n| `file_name` | string |  |\n| `file_url` | string | sam.gov download route; answers 303 to a presigned S3 URL valid 2700 s, honours Range. |\n| `files_listed` | object[] |  |\n| `hand_off` | boolean |  |\n| `hand_off_reason` | string |  |\n| `hash_source` | string |  |\n| `inner_entry` | object |  |\n| `last_modified_header` | string |  |\n| `listing_url` | string |  |\n| `outer_entry` | object |  |\n| `publication_id` | string | The extract file name. |\n| `published_at` | string | S3 Last-Modified as ISO 8601. |\n| `record_count` | number | From the BOF line of the pipe file. |\n| `retrieved_at` | string |  |\n| `size_bytes` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-10-18.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-18.",
                     "value": {
                       "bof_file_date": "2026-10-05",
                       "bof_line": "BOF PUBLIC V2 00000000 20261005 0905712 0008359",
@@ -1581,16 +1588,9 @@
                       "size_bytes": 149228825
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Version check and hand-off for the public monthly entity registration extract (SAM_PUBLIC_MONTHLY_V2_YYYYMMDD.ZIP in SAM.gov Data Services, about 149 MB): file name as publication_id, S3 Last-Modified, size and ETag from a 64 KB range read through the download route's 303 (the presigned URL is resolved per call and never stored), and the record count from the pipe file's BOF line decoded from the nested zip heads. hand_off is true because the file exceeds the runner's 32 MiB cap; file_url is the sam.gov download route. No daily public entity file exists.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `bof_file_date` | string |  |\n| `bof_line` | string |  |\n| `cadence` | string |  |\n| `content_hash` | string | The S3 ETag (multipart: not an MD5). |\n| `date_modified_label` | string | SAM.gov's own dateModified label (`Oct 04,2026`). |\n| `description` | string |  |\n| `etag` | string |  |\n| `file_date` | string | YYYY-MM-DD from the file name. |\n| `file_format` | string |  |\n| `file_name` | string |  |\n| `file_url` | string | sam.gov download route; answers 303 to a presigned S3 URL valid 2700 s, honours Range. |\n| `files_listed` | object[] |  |\n| `hand_off` | boolean |  |\n| `hand_off_reason` | string |  |\n| `hash_source` | string |  |\n| `inner_entry` | object |  |\n| `last_modified_header` | string |  |\n| `listing_url` | string |  |\n| `outer_entry` | object |  |\n| `publication_id` | string | The extract file name. |\n| `published_at` | string | S3 Last-Modified as ISO 8601. |\n| `record_count` | number | From the BOF line of the pipe file. |\n| `retrieved_at` | string |  |\n| `size_bytes` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -1608,17 +1608,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-entities-status",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -1634,54 +1632,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:463879f9bfc3f136d1d54ad871792d0983f0114b9b7a95a67cbc0a57a525a359",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "092190856298"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "sam-gov.opportunities.entities-status",
+          "method": "POST",
           "path": "/apis/v1/sam-gov/opportunities/entities-status"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:463879f9bfc3f136d1d54ad871792d0983f0114b9b7a95a67cbc0a57a525a359"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-entities-status"
       }
     },
     "/apis/v1/sam-gov/opportunities/exclusions-get": {
@@ -1689,8 +1689,36 @@
         "description": "Look up one exclusion record, or check whether a registrant is excluded.",
         "operationId": "sam-gov.opportunities.exclusions-get",
         "requestBody": {
+          "required": false,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "cage_code": {
+                    "type": "string",
+                    "description": "Pattern: ^[A-Za-z0-9]{5}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "sam_number": {
+                    "type": "string",
+                    "description": "Exclusion SAM Number (UUID). Pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  },
+                  "uei_sam": {
+                    "type": "string",
+                    "description": "Pattern: ^[A-Za-z0-9]{12}$.",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                }
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
@@ -1698,46 +1726,25 @@
                     "sam_number": "bf32fd84-e837-4758-a315-4457e3ff5a15"
                   }
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "cage_code": {
-                    "description": "Pattern: ^[A-Za-z0-9]{5}$.",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  },
-                  "sam_number": {
-                    "description": "Exclusion SAM Number (UUID). Pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$.",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  },
-                  "uei_sam": {
-                    "description": "Pattern: ^[A-Za-z0-9]{12}$.",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  }
-                },
-                "type": "object"
               }
             }
-          },
-          "required": false
+          }
         },
         "responses": {
           "200": {
+            "description": "One exclusion by SAM Number (the UUID in the extract's `SAM Number` column, served by SAM.gov's view-exclusion-details service), or every exclusion of a UEI or CAGE code (the v4 exclusions API, with the SAM Number resolved through the UI exclusion index). Same record shape as exclusions_list; the `source` field says which service answered.\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `active_date` | string | As the source states it (extract and view-exclusion-details: YYYY-MM-DD or MM/DD/YYYY; v4 API: MM-DD-YYYY). |\n| `additional_comments` | string |  |\n| `address` | object |  |\n| `cage_code` | string |  |\n| `classification` | string |  |\n| `creation_date` | string |  |\n| `cross_reference` | string |  |\n| `ct_code` | string |  |\n| `excluding_agency_code` | string | Agency code as the extract and the v4 API state it (HUD, DOD-DLA ...); null from view-exclusion-details. |\n| `excluding_agency_name` | string | Agency name from the APIs; null from the extract. |\n| `excluding_agency_org_id` | string | Organization id from view-exclusion-details. |\n| `exclusion_program` | string |  |\n| `exclusion_type` | string |  |\n| `first_name` | string |  |\n| `is_fascsa_order` | boolean |  |\n| `last_name` | string |  |\n| `middle_name` | string |  |\n| `name` | string | Entity or vessel name; null for individuals. |\n| `npi` | string |  |\n| `open_data_flag` | string |  |\n| `prefix` | string |  |\n| `publication_id` | string |  |\n| `record_status` | string |  |\n| `retrieved_at` | string |  |\n| `row_number` | number | 1-based data row in the extract (extract records only). |\n| `sam_number` | string | UUID from the extract's `SAM Number` column, the sgs `_id` and the view-exclusion-details path. |\n| `source` | string |  |\n| `source_record_id` | string | The SAM Number (UUID); for API records whose SAM Number could not be resolved, `uei:<UEI>:<activation date>`. |\n| `source_url` | string |  |\n| `suffix` | string |  |\n| `termination_date` | string | As the source states it, including the literal `Indefinite`. |\n| `uei_sam` | string |  |\n| `update_date` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-10-18.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-18.",
                     "value": {
                       "by": "sam_number",
                       "count": 1,
@@ -1792,16 +1799,9 @@
                       "source_url": "https://sam.gov/api/prod/view-exclusion-details/v3/api/exclusion/bf32fd84-e837-4758-a315-4457e3ff5a15"
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "One exclusion by SAM Number (the UUID in the extract's `SAM Number` column, served by SAM.gov's view-exclusion-details service), or every exclusion of a UEI or CAGE code (the v4 exclusions API, with the SAM Number resolved through the UI exclusion index). Same record shape as exclusions_list; the `source` field says which service answered.\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `active_date` | string | As the source states it (extract and view-exclusion-details: YYYY-MM-DD or MM/DD/YYYY; v4 API: MM-DD-YYYY). |\n| `additional_comments` | string |  |\n| `address` | object |  |\n| `cage_code` | string |  |\n| `classification` | string |  |\n| `creation_date` | string |  |\n| `cross_reference` | string |  |\n| `ct_code` | string |  |\n| `excluding_agency_code` | string | Agency code as the extract and the v4 API state it (HUD, DOD-DLA ...); null from view-exclusion-details. |\n| `excluding_agency_name` | string | Agency name from the APIs; null from the extract. |\n| `excluding_agency_org_id` | string | Organization id from view-exclusion-details. |\n| `exclusion_program` | string |  |\n| `exclusion_type` | string |  |\n| `first_name` | string |  |\n| `is_fascsa_order` | boolean |  |\n| `last_name` | string |  |\n| `middle_name` | string |  |\n| `name` | string | Entity or vessel name; null for individuals. |\n| `npi` | string |  |\n| `open_data_flag` | string |  |\n| `prefix` | string |  |\n| `publication_id` | string |  |\n| `record_status` | string |  |\n| `retrieved_at` | string |  |\n| `row_number` | number | 1-based data row in the extract (extract records only). |\n| `sam_number` | string | UUID from the extract's `SAM Number` column, the sgs `_id` and the view-exclusion-details path. |\n| `source` | string |  |\n| `source_record_id` | string | The SAM Number (UUID); for API records whose SAM Number could not be resolved, `uei:<UEI>:<activation date>`. |\n| `source_url` | string |  |\n| `suffix` | string |  |\n| `termination_date` | string | As the source states it, including the literal `Indefinite`. |\n| `uei_sam` | string |  |\n| `update_date` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -1819,17 +1819,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-exclusions-get",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -1845,54 +1843,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:810b076c71c7b6cdf28b216a1930a1ca7084c6e891bb74fca5a8e127d3564a4a",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "f91fa7072bc7"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "sam-gov.opportunities.exclusions-get",
+          "method": "POST",
           "path": "/apis/v1/sam-gov/opportunities/exclusions-get"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:810b076c71c7b6cdf28b216a1930a1ca7084c6e891bb74fca5a8e127d3564a4a"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-exclusions-get"
       }
     },
     "/apis/v1/sam-gov/opportunities/exclusions-list": {
@@ -1900,23 +1900,16 @@
         "description": "Collect every active exclusion, or one classification, in pages.",
         "operationId": "sam-gov.opportunities.exclusions-list",
         "requestBody": {
+          "required": false,
           "content": {
             "application/json": {
-              "examples": {
-                "provider": {
-                  "summary": "Official provider example; checked against AIsa request constraints",
-                  "value": {
-                    "classification": "Firm",
-                    "page_size": 2
-                  }
-                }
-              },
               "schema": {
+                "type": "object",
                 "additionalProperties": true,
                 "properties": {
                   "classification": {
-                    "description": "Individual, Firm, Special Entity Designation or Vessel; default all.\n\nProvider reference: allowed values [\"Individual\", \"Firm\", \"Special Entity Designation\", \"Vessel\"].",
                     "type": "string",
+                    "description": "Individual, Firm, Special Entity Designation or Vessel; default all.\n\nProvider reference: allowed values [\"Individual\", \"Firm\", \"Special Entity Designation\", \"Vessel\"].",
                     "x-alexandria-option-metadata": {
                       "in": "body",
                       "oneOf": [
@@ -1928,36 +1921,50 @@
                     }
                   },
                   "continuation": {
-                    "description": "Opaque cursor from the previous page's meta.page.next_cursor (file|etag|offset).",
                     "type": "string",
+                    "description": "Opaque cursor from the previous page's meta.page.next_cursor (file|etag|offset).",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "page_size": {
-                    "description": "Rows per page, 1 to 500 (default 100). Each page downloads the whole 12 MB extract.\n\nProvider reference: minimum 1; maximum 500.",
                     "type": "number",
+                    "description": "Rows per page, 1 to 500 (default 100). Each page downloads the whole 12 MB extract.\n\nProvider reference: minimum 1; maximum 500.",
                     "x-alexandria-option-metadata": {
                       "in": "body",
-                      "max": 500,
-                      "min": 1
+                      "min": 1,
+                      "max": 500
                     }
                   }
-                },
-                "type": "object"
+                }
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "classification": "Firm",
+                    "page_size": 2
+                  }
+                }
               }
             }
-          },
-          "required": false
+          }
         },
         "responses": {
           "200": {
+            "description": "The full current list of SAM.gov exclusions from the daily public extract (SAM_Exclusions_Public_Extract_V2_YYDDD.ZIP: about 169,000 rows, individuals, firms, special entity designations and vessels), paged with a cursor pinned to the file name and its S3 ETag. Every page re-resolves the newest file through listfiles, downloads the 12 MB zip through the download route's 303, inflates and parses the quoted multi-line CSV in one pass and returns the rows of the requested window; when the publication moved on since the cursor was issued the call fails with invalid_input at /continuation (issue code publication_changed). source_record_id is the extract's SAM Number. Optional classification filter. Each daily file is a full snapshot: there is no exclusions changes feed, diff consecutive snapshots.\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `active_date` | string | As the source states it (extract and view-exclusion-details: YYYY-MM-DD or MM/DD/YYYY; v4 API: MM-DD-YYYY). |\n| `additional_comments` | string |  |\n| `address` | object |  |\n| `cage_code` | string |  |\n| `classification` | string |  |\n| `creation_date` | string |  |\n| `cross_reference` | string |  |\n| `ct_code` | string |  |\n| `excluding_agency_code` | string | Agency code as the extract and the v4 API state it (HUD, DOD-DLA ...); null from view-exclusion-details. |\n| `excluding_agency_name` | string | Agency name from the APIs; null from the extract. |\n| `excluding_agency_org_id` | string | Organization id from view-exclusion-details. |\n| `exclusion_program` | string |  |\n| `exclusion_type` | string |  |\n| `first_name` | string |  |\n| `is_fascsa_order` | boolean |  |\n| `last_name` | string |  |\n| `middle_name` | string |  |\n| `name` | string | Entity or vessel name; null for individuals. |\n| `npi` | string |  |\n| `open_data_flag` | string |  |\n| `prefix` | string |  |\n| `publication_id` | string |  |\n| `record_status` | string |  |\n| `retrieved_at` | string |  |\n| `row_number` | number | 1-based data row in the extract (extract records only). |\n| `sam_number` | string | UUID from the extract's `SAM Number` column, the sgs `_id` and the view-exclusion-details path. |\n| `source` | string |  |\n| `source_record_id` | string | The SAM Number (UUID); for API records whose SAM Number could not be resolved, `uei:<UEI>:<activation date>`. |\n| `source_url` | string |  |\n| `suffix` | string |  |\n| `termination_date` | string | As the source states it, including the literal `Indefinite`. |\n| `uei_sam` | string |  |\n| `update_date` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-10-18.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-18.",
                     "value": {
                       "columns": [
                         "Classification",
@@ -2106,16 +2113,9 @@
                       "uncompressed_size_bytes": 78631673
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "The full current list of SAM.gov exclusions from the daily public extract (SAM_Exclusions_Public_Extract_V2_YYDDD.ZIP: about 169,000 rows, individuals, firms, special entity designations and vessels), paged with a cursor pinned to the file name and its S3 ETag. Every page re-resolves the newest file through listfiles, downloads the 12 MB zip through the download route's 303, inflates and parses the quoted multi-line CSV in one pass and returns the rows of the requested window; when the publication moved on since the cursor was issued the call fails with invalid_input at /continuation (issue code publication_changed). source_record_id is the extract's SAM Number. Optional classification filter. Each daily file is a full snapshot: there is no exclusions changes feed, diff consecutive snapshots.\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `active_date` | string | As the source states it (extract and view-exclusion-details: YYYY-MM-DD or MM/DD/YYYY; v4 API: MM-DD-YYYY). |\n| `additional_comments` | string |  |\n| `address` | object |  |\n| `cage_code` | string |  |\n| `classification` | string |  |\n| `creation_date` | string |  |\n| `cross_reference` | string |  |\n| `ct_code` | string |  |\n| `excluding_agency_code` | string | Agency code as the extract and the v4 API state it (HUD, DOD-DLA ...); null from view-exclusion-details. |\n| `excluding_agency_name` | string | Agency name from the APIs; null from the extract. |\n| `excluding_agency_org_id` | string | Organization id from view-exclusion-details. |\n| `exclusion_program` | string |  |\n| `exclusion_type` | string |  |\n| `first_name` | string |  |\n| `is_fascsa_order` | boolean |  |\n| `last_name` | string |  |\n| `middle_name` | string |  |\n| `name` | string | Entity or vessel name; null for individuals. |\n| `npi` | string |  |\n| `open_data_flag` | string |  |\n| `prefix` | string |  |\n| `publication_id` | string |  |\n| `record_status` | string |  |\n| `retrieved_at` | string |  |\n| `row_number` | number | 1-based data row in the extract (extract records only). |\n| `sam_number` | string | UUID from the extract's `SAM Number` column, the sgs `_id` and the view-exclusion-details path. |\n| `source` | string |  |\n| `source_record_id` | string | The SAM Number (UUID); for API records whose SAM Number could not be resolved, `uei:<UEI>:<activation date>`. |\n| `source_url` | string |  |\n| `suffix` | string |  |\n| `termination_date` | string | As the source states it, including the literal `Indefinite`. |\n| `uei_sam` | string |  |\n| `update_date` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -2133,17 +2133,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-exclusions-list",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -2159,54 +2157,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:506ff778a783bde3605bb9d24f8cd57bd9d09dd2b09eefb08f48e6952d4cbaa6",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "afeac6a91eb4"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "sam-gov.opportunities.exclusions-list",
+          "method": "POST",
           "path": "/apis/v1/sam-gov/opportunities/exclusions-list"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:506ff778a783bde3605bb9d24f8cd57bd9d09dd2b09eefb08f48e6952d4cbaa6"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-exclusions-list"
       }
     },
     "/apis/v1/sam-gov/opportunities/exclusions-status": {
@@ -2214,39 +2214,46 @@
         "description": "Check for a new daily exclusions snapshot before exclusions_list, or to pin a publication.",
         "operationId": "sam-gov.opportunities.exclusions-status",
         "requestBody": {
+          "required": false,
           "content": {
             "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "file_name": {
+                    "type": "string",
+                    "description": "Pin one listed file name (default: the newest daily file).",
+                    "x-alexandria-option-metadata": {
+                      "in": "body"
+                    }
+                  }
+                }
+              },
               "examples": {
                 "provider": {
                   "summary": "Official provider example; checked against AIsa request constraints",
                   "value": {}
                 }
-              },
-              "schema": {
-                "additionalProperties": true,
-                "properties": {
-                  "file_name": {
-                    "description": "Pin one listed file name (default: the newest daily file).",
-                    "type": "string",
-                    "x-alexandria-option-metadata": {
-                      "in": "body"
-                    }
-                  }
-                },
-                "type": "object"
               }
             }
-          },
-          "required": false
+          }
         },
         "responses": {
           "200": {
+            "description": "Version check of the daily public exclusions extract (SAM_Exclusions_Public_Extract_V2_YYDDD.ZIP, Julian-dated, about 12 MB zip holding a 79 MB CSV): file name as publication_id, S3 Last-Modified, size and ETag from a 1 KB range read through the download route's 303, and the inner CSV's name and sizes from the zip local header. The zip fits the runner cap, so hand_off is false; exclusions_list reads it. record_count is null until a full read.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `cadence` | string |  |\n| `content_hash` | string |  |\n| `date_modified_label` | string |  |\n| `description` | string |  |\n| `etag` | string |  |\n| `file_date` | string | YYYY-MM-DD derived from the Julian stamp. |\n| `file_format` | string |  |\n| `file_name` | string |  |\n| `file_url` | string |  |\n| `files_listed` | object[] |  |\n| `hand_off` | boolean |  |\n| `hand_off_reason` | string |  |\n| `hash_source` | string |  |\n| `inner_entry` | object |  |\n| `julian_stamp` | string | YYDDD from the file name. |\n| `last_modified_header` | string |  |\n| `listing_url` | string |  |\n| `publication_id` | string |  |\n| `published_at` | string |  |\n| `record_count` | number |  |\n| `record_count_note` | string |  |\n| `retrieved_at` | string |  |\n| `size_bytes` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-10-18.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-10-18.",
                     "value": {
                       "cadence": "daily full snapshot (Julian YYDDD stamp); no delta feed, diff consecutive snapshots",
                       "content_hash": "a3236cae8121651415a56828f72dc690-2",
@@ -2639,16 +2646,9 @@
                       "size_bytes": 11878470
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Version check of the daily public exclusions extract (SAM_Exclusions_Public_Extract_V2_YYDDD.ZIP, Julian-dated, about 12 MB zip holding a 79 MB CSV): file name as publication_id, S3 Last-Modified, size and ETag from a 1 KB range read through the download route's 303, and the inner CSV's name and sizes from the zip local header. The zip fits the runner cap, so hand_off is false; exclusions_list reads it. record_count is null until a full read.\n\nThe response contains the tool result directly.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `cadence` | string |  |\n| `content_hash` | string |  |\n| `date_modified_label` | string |  |\n| `description` | string |  |\n| `etag` | string |  |\n| `file_date` | string | YYYY-MM-DD derived from the Julian stamp. |\n| `file_format` | string |  |\n| `file_name` | string |  |\n| `file_url` | string |  |\n| `files_listed` | object[] |  |\n| `hand_off` | boolean |  |\n| `hand_off_reason` | string |  |\n| `hash_source` | string |  |\n| `inner_entry` | object |  |\n| `julian_stamp` | string | YYDDD from the file name. |\n| `last_modified_header` | string |  |\n| `listing_url` | string |  |\n| `publication_id` | string |  |\n| `published_at` | string |  |\n| `record_count` | number |  |\n| `record_count_note` | string |  |\n| `retrieved_at` | string |  |\n| `size_bytes` | number |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -2666,17 +2666,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-exclusions-status",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -2692,54 +2690,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:851f67a93552ae54ab34f82336dc05b5ba0775e1a382bc9a5ca63b2753fb8504",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "b003f22ffbb7"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "sam-gov.opportunities.exclusions-status",
+          "method": "POST",
           "path": "/apis/v1/sam-gov/opportunities/exclusions-status"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:851f67a93552ae54ab34f82336dc05b5ba0775e1a382bc9a5ca63b2753fb8504"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-exclusions-status"
       }
     },
     "/apis/v1/sam-gov/opportunities/search": {
@@ -2747,108 +2747,100 @@
         "description": "Search SAM.gov contract opportunities by keyword, agency, notice status, publication date, NAICS, set-aside, notice type and response deadline. Returns one page (default 20, max 100) with an opaque cursor for the next page. By default each hit is enriched with its full notice detail (NAICS, set-aside, place of performance, full description).",
         "operationId": "sam-gov.opportunities.search",
         "requestBody": {
+          "required": false,
           "content": {
             "application/json": {
-              "examples": {
-                "provider": {
-                  "summary": "Official provider example; checked against AIsa request constraints",
-                  "value": {
-                    "include_details": false,
-                    "page_size": 2,
-                    "query": "cybersecurity"
-                  }
-                }
-              },
               "schema": {
+                "type": "object",
                 "additionalProperties": true,
                 "properties": {
                   "agency_ids": {
-                    "description": "SAM.gov federal organization ids at any hierarchy level (100000000 = Dept of Defense, 300000188 = Dept of the Navy, 100006688 = Dept of Veterans Affairs). Matched as OR.",
+                    "type": "array",
                     "items": {
                       "type": "string"
                     },
-                    "type": "array",
+                    "description": "SAM.gov federal organization ids at any hierarchy level (100000000 = Dept of Defense, 300000188 = Dept of the Navy, 100006688 = Dept of Veterans Affairs). Matched as OR.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "cursor": {
-                    "description": "Opaque cursor from a previous response's next_cursor. Bound to the same filters and page_size; valid for 24 hours; then cursor_expired.",
                     "type": "string",
+                    "description": "Opaque cursor from a previous response's next_cursor. Bound to the same filters and page_size; valid for 24 hours; then cursor_expired.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "include_attachments": {
-                    "description": "Also list each notice's attachments (one more upstream request per record). Requires include_details and page_size <= 50.",
                     "type": "boolean",
+                    "description": "Also list each notice's attachments (one more upstream request per record). Requires include_details and page_size <= 50.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "include_details": {
-                    "description": "Fetch each hit's notice detail (one extra upstream request per record) so naics_codes, set_aside, place_of_performance and the full description are populated. false returns summary records with detail_level=summary.",
                     "type": "boolean",
+                    "description": "Fetch each hit's notice detail (one extra upstream request per record) so naics_codes, set_aside, place_of_performance and the full description are populated. false returns summary records with detail_level=summary.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "naics_codes": {
-                    "description": "NAICS codes or prefixes (2 to 6 digits). Matched as OR.",
+                    "type": "array",
                     "items": {
                       "type": "string"
                     },
-                    "type": "array",
+                    "description": "NAICS codes or prefixes (2 to 6 digits). Matched as OR.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "notice_types": {
-                    "description": "Notice types (SAM.gov codes p,o,k,a,r,s,i,g,u,f,l). Empty = all.",
+                    "type": "array",
                     "items": {
                       "type": "string"
                     },
-                    "type": "array",
+                    "description": "Notice types (SAM.gov codes p,o,k,a,r,s,i,g,u,f,l). Empty = all.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "page_size": {
-                    "default": 20,
-                    "description": "Records per page. At most 50 when include_attachments is true.\n\nProvider reference: minimum 1; maximum 100; default 20.",
                     "type": "number",
+                    "description": "Records per page. At most 50 when include_attachments is true.\n\nProvider reference: minimum 1; maximum 100; default 20.",
+                    "default": 20,
                     "x-alexandria-option-metadata": {
                       "in": "body",
-                      "max": 100,
-                      "min": 1
+                      "min": 1,
+                      "max": 100
                     }
                   },
                   "published_from": {
-                    "description": "Inclusive lower bound (YYYY-MM-DD, US Eastern calendar day) on the notice's latest publication/modification date. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
                     "type": "string",
+                    "description": "Inclusive lower bound (YYYY-MM-DD, US Eastern calendar day) on the notice's latest publication/modification date. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "published_to": {
-                    "description": "Inclusive upper bound (YYYY-MM-DD). Must not be before published_from. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
                     "type": "string",
+                    "description": "Inclusive upper bound (YYYY-MM-DD). Must not be before published_from. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "query": {
-                    "default": "",
-                    "description": "Keyword query matched against title, solicitation number and description. Multi-word queries combine per query_mode (default: every word must match). Empty matches everything.\n\nProvider reference: default \"\".",
                     "type": "string",
+                    "description": "Keyword query matched against title, solicitation number and description. Multi-word queries combine per query_mode (default: every word must match). Empty matches everything.\n\nProvider reference: default \"\".",
+                    "default": "",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "query_mode": {
-                    "default": "all",
-                    "description": "How the words of query must match, as SAM.gov's own keyword search offers them (upstream qMode): all = every word (SAM.gov's default), any = at least one word, exact = the phrase as written.\n\nProvider reference: allowed values [\"all\", \"any\", \"exact\"]; default \"all\".",
                     "type": "string",
+                    "description": "How the words of query must match, as SAM.gov's own keyword search offers them (upstream qMode): all = every word (SAM.gov's default), any = at least one word, exact = the phrase as written.\n\nProvider reference: allowed values [\"all\", \"any\", \"exact\"]; default \"all\".",
+                    "default": "all",
                     "x-alexandria-option-metadata": {
                       "in": "body",
                       "oneOf": [
@@ -2859,33 +2851,33 @@
                     }
                   },
                   "response_deadline_from": {
-                    "description": "Inclusive lower bound (YYYY-MM-DD) on the response deadline.",
                     "type": "string",
+                    "description": "Inclusive lower bound (YYYY-MM-DD) on the response deadline.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "response_deadline_to": {
-                    "description": "Inclusive upper bound (YYYY-MM-DD) on the response deadline.",
                     "type": "string",
+                    "description": "Inclusive upper bound (YYYY-MM-DD) on the response deadline.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "set_asides": {
-                    "description": "SAM.gov set-aside codes (SBA = total small business, 8A, HZC = HUBZone, SDVOSBC, WOSB, EDWOSB, ...). Matched as OR.",
+                    "type": "array",
                     "items": {
                       "type": "string"
                     },
-                    "type": "array",
+                    "description": "SAM.gov set-aside codes (SBA = total small business, 8A, HZC = HUBZone, SDVOSBC, WOSB, EDWOSB, ...). Matched as OR.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   },
                   "sort": {
-                    "default": "updated_desc",
-                    "description": "sort\n\nProvider reference: allowed values [\"updated_desc\", \"updated_asc\", \"relevance\", \"deadline_asc\", \"deadline_desc\"]; default \"updated_desc\".",
                     "type": "string",
+                    "description": "sort\n\nProvider reference: allowed values [\"updated_desc\", \"updated_asc\", \"relevance\", \"deadline_asc\", \"deadline_desc\"]; default \"updated_desc\".",
+                    "default": "updated_desc",
                     "x-alexandria-option-metadata": {
                       "in": "body",
                       "oneOf": [
@@ -2898,30 +2890,45 @@
                     }
                   },
                   "statuses": {
-                    "description": "Notice status as SAM.gov indexes it. active = accepting responses / not yet archived; inactive = archived. Both = no status filter.",
+                    "type": "array",
                     "items": {
                       "type": "string"
                     },
-                    "type": "array",
+                    "description": "Notice status as SAM.gov indexes it. active = accepting responses / not yet archived; inactive = archived. Both = no status filter.",
                     "x-alexandria-option-metadata": {
                       "in": "body"
                     }
                   }
-                },
-                "type": "object"
+                }
+              },
+              "examples": {
+                "provider": {
+                  "summary": "Official provider example; checked against AIsa request constraints",
+                  "value": {
+                    "include_details": false,
+                    "page_size": 2,
+                    "query": "cybersecurity"
+                  }
+                }
               }
             }
-          },
-          "required": false
+          }
         },
         "responses": {
           "200": {
+            "description": "Search SAM.gov contract opportunities by keyword, agency, notice status, publication date, NAICS, set-aside, notice type and response deadline. Returns one page (default 20, max 100) with an opaque cursor for the next page. By default each hit is enriched with its full notice detail (NAICS, set-aside, place of performance, full description).\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `agency` | object | Top-level department (hierarchy level 1). |\n| `archive` | object | When SAM.gov will/did archive the notice (auto15 = 15 days after the deadline, autocustom = the given date, manual). |\n| `attachments` | object[] |  |\n| `attachments_retrieved` | boolean | false means the attachment list was not requested; an empty list with true means the notice has none. |\n| `award` | object |  |\n| `classification_code` | string | Product/service code (PSC). |\n| `description` | string | Plain text (HTML stripped). An excerpt on summary records. |\n| `description_is_excerpt` | boolean |  |\n| `detail_level` | string |  |\n| `history` | object[] | Only with detail include_history=true; newest version first. |\n| `is_active` | boolean |  |\n| `is_amendment` | boolean |  |\n| `is_archived` | boolean | null on summary records (the search index does not expose it). |\n| `is_cancelled` | boolean |  |\n| `is_latest` | boolean | false when a newer amendment supersedes this version; see latest_opportunity_id. |\n| `latest_opportunity_id` | string |  |\n| `modification_count` | number |  |\n| `naics_codes` | string[] | Empty on summary records (see detail_level) or when the notice lists none. |\n| `notice_type` | string |  |\n| `notice_type_code` | string | SAM.gov single-letter code (p,o,k,a,r,s,i,g,u,f,l). |\n| `notice_type_label` | string |  |\n| `office` | object | Deepest contracting office in the hierarchy. |\n| `opportunity_id` | string | SAM.gov notice id; stable for this published version. Amendments publish a new id whose parent_opportunity_id is the original. |\n| `organization_hierarchy` | object[] |  |\n| `parent_opportunity_id` | string | Original notice id when this record is an amendment. |\n| `place_of_performance` | object |  |\n| `points_of_contact` | object[] |  |\n| `previous_opportunity_id` | string |  |\n| `published_at` | string | When this version was published (UTC). |\n| `response_deadline` | string | Response due date-time in UTC. null when the notice has none (awards, many special notices) or when SAM.gov gives only a date or a time without an offset (then `response_deadline_local` and `response_deadline_date` still carry it) — not a zero or an empty string. |\n| `response_deadline_date` | string | Calendar date of the deadline in the notice's own timezone (the date shown on the SAM.gov page). |\n| `response_deadline_local` | string | The deadline exactly as SAM.gov stores it, with its own offset. |\n| `response_timezone` | string |  |\n| `set_aside` | string | SAM.gov set-aside code, null when none. |\n| `set_aside_label` | string |  |\n| `solicitation_number` | string |  |\n| `source_status` | string | Raw source state: search index gives active\\|inactive[,canceled]; the notice API gives its status code (published) plus ,archived / ,cancelled flags. |\n| `source_url` | string |  |\n| `status` | string | Normalized: cancelled if the notice was cancelled; open while SAM.gov lists it active/not archived (even past the deadline until the archive date); closed once inactive/archived. |\n| `title` | string |  |\n| `updated_at` | string |  |\n| `version` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so.",
             "content": {
               "application/json": {
+                "schema": {
+                  "not": {
+                    "type": "null"
+                  },
+                  "x-aisa-schema-completeness": "documented-fields-only"
+                },
                 "examples": {
                   "provider": {
-                    "description": "Published by the provider on 2026-09-09.",
                     "summary": "Official provider example",
+                    "description": "Published by the provider on 2026-09-09.",
                     "value": {
                       "complete": true,
                       "next_cursor": "s1:1:2:c88f395baad286d7:1788986400",
@@ -3116,16 +3123,9 @@
                       ]
                     }
                   }
-                },
-                "schema": {
-                  "not": {
-                    "type": "null"
-                  },
-                  "x-aisa-schema-completeness": "documented-fields-only"
                 }
               }
-            },
-            "description": "Search SAM.gov contract opportunities by keyword, agency, notice status, publication date, NAICS, set-aside, notice type and response deadline. Returns one page (default 20, max 100) with an opaque cursor for the next page. By default each hit is enriched with its full notice detail (NAICS, set-aside, place of performance, full description).\n\nThe response contains the tool result directly.\n\nThe provider identifies `records` as the primary payload key.\n\n| Documented field | Provider type | Description |\n| --- | --- | --- |\n| `agency` | object | Top-level department (hierarchy level 1). |\n| `archive` | object | When SAM.gov will/did archive the notice (auto15 = 15 days after the deadline, autocustom = the given date, manual). |\n| `attachments` | object[] |  |\n| `attachments_retrieved` | boolean | false means the attachment list was not requested; an empty list with true means the notice has none. |\n| `award` | object |  |\n| `classification_code` | string | Product/service code (PSC). |\n| `description` | string | Plain text (HTML stripped). An excerpt on summary records. |\n| `description_is_excerpt` | boolean |  |\n| `detail_level` | string |  |\n| `history` | object[] | Only with detail include_history=true; newest version first. |\n| `is_active` | boolean |  |\n| `is_amendment` | boolean |  |\n| `is_archived` | boolean | null on summary records (the search index does not expose it). |\n| `is_cancelled` | boolean |  |\n| `is_latest` | boolean | false when a newer amendment supersedes this version; see latest_opportunity_id. |\n| `latest_opportunity_id` | string |  |\n| `modification_count` | number |  |\n| `naics_codes` | string[] | Empty on summary records (see detail_level) or when the notice lists none. |\n| `notice_type` | string |  |\n| `notice_type_code` | string | SAM.gov single-letter code (p,o,k,a,r,s,i,g,u,f,l). |\n| `notice_type_label` | string |  |\n| `office` | object | Deepest contracting office in the hierarchy. |\n| `opportunity_id` | string | SAM.gov notice id; stable for this published version. Amendments publish a new id whose parent_opportunity_id is the original. |\n| `organization_hierarchy` | object[] |  |\n| `parent_opportunity_id` | string | Original notice id when this record is an amendment. |\n| `place_of_performance` | object |  |\n| `points_of_contact` | object[] |  |\n| `previous_opportunity_id` | string |  |\n| `published_at` | string | When this version was published (UTC). |\n| `response_deadline` | string | Response due date-time in UTC. null when the notice has none (awards, many special notices) or when SAM.gov gives only a date or a time without an offset (then `response_deadline_local` and `response_deadline_date` still carry it) — not a zero or an empty string. |\n| `response_deadline_date` | string | Calendar date of the deadline in the notice's own timezone (the date shown on the SAM.gov page). |\n| `response_deadline_local` | string | The deadline exactly as SAM.gov stores it, with its own offset. |\n| `response_timezone` | string |  |\n| `set_aside` | string | SAM.gov set-aside code, null when none. |\n| `set_aside_label` | string |  |\n| `solicitation_number` | string |  |\n| `source_status` | string | Raw source state: search index gives active\\|inactive[,canceled]; the notice API gives its status code (published) plus ,archived / ,cancelled flags. |\n| `source_url` | string |  |\n| `status` | string | Normalized: cancelled if the notice was cancelled; open while SAM.gov lists it active/not archived (even past the deadline until the archive date); closed once inactive/archived. |\n| `title` | string |  |\n| `updated_at` | string |  |\n| `version` | string |  |\n\n\nThese are the provider's documented fields. Field requiredness, nullability and nested object structures are specified only where the descriptions explicitly say so."
+            }
           },
           "default": {
             "content": {
@@ -3143,17 +3143,15 @@
         "x-aisa-capabilities": {
           "idempotency": "Idempotency-Key",
           "max_price": "X-AISA-Max-Price-USD",
-          "mpp": false,
-          "mpp_methods": [],
           "quote": {
             "header": "X-AISA-Cost-Mode",
             "value": "quote"
           },
+          "mpp": false,
+          "mpp_methods": [],
           "x402": false
         },
-        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-category": "data",
-        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-search",
         "x-aisa-passthrough": true,
         "x-aisa-pricing": {
           "cost_contract": "response_units",
@@ -3169,54 +3167,56 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-source": {
-          "content_hash": "sha256:da0df2924b7fbb7942e68f190190f001179cd20da504845b21d8cccab443808f",
-          "kind": "upstream_success_contract",
-          "source": {
-            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-            "converter": "reviewed-alexandria-descriptors-20261112",
-            "fetched_at": "2026-11-11T17:31:20Z",
-            "kind": "manual",
-            "owner": "AIsa-team/docs",
-            "path_space": "public",
-            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
-            "refresh_policy": "pinned",
-            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-            "review_period_days": 30,
-            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-            "url": "https://api.firecrawl.dev/v2/scrape"
-          }
-        },
         "x-aisa-revision": {
           "customer_pricing_ref": "660b80f46152",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
           "profile_ref": "e08ca8dc88ee"
         },
+        "x-aisa-status": "enabled",
+        "x-aisa-validation": "mixed",
+        "x-aisa-catalog-id": "sam-gov",
         "x-aisa-runtime-operation": {
-          "method": "POST",
           "operation_id": "sam-gov.opportunities.search",
+          "method": "POST",
           "path": "/apis/v1/sam-gov/opportunities/search"
         },
         "x-aisa-source": {
-          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
-          "converter": "reviewed-alexandria-descriptors-20261112",
-          "fetched_at": "2026-11-11T17:31:20Z",
           "kind": "manual",
-          "owner": "AIsa-team/docs",
-          "path_space": "public",
-          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d",
+          "url": "https://api.firecrawl.dev/v2/scrape",
+          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+          "converter": "reviewed-alexandria-descriptors-20261112",
           "refresh_policy": "pinned",
           "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
-          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
-          "review_period_days": 30,
+          "path_space": "public",
+          "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
           "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
-          "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
-          "url": "https://api.firecrawl.dev/v2/scrape"
+          "fetched_at": "2026-11-11T17:31:20Z",
+          "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+          "owner": "AIsa-team/docs",
+          "review_period_days": 30,
+          "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
         },
-        "x-aisa-status": "enabled",
-        "x-aisa-validation": "mixed"
+        "x-aisa-response-source": {
+          "kind": "upstream_success_contract",
+          "source": {
+            "kind": "manual",
+            "url": "https://api.firecrawl.dev/v2/scrape",
+            "source_revision": "sha256:7e24bbc94d0031674bc7a3e5840d14603335bb5d695345f268e5feb36fc11300",
+            "converter": "reviewed-alexandria-descriptors-20261112",
+            "refresh_policy": "pinned",
+            "refresh_reason": "Reacquire find-tools with options,response,examples and review exact production capability bindings before replacing descriptors.",
+            "path_space": "public",
+            "content_hash": "sha256:239173121da84e3b3aac13447d99bd22a43336549548026a9623ae4855092606",
+            "source_document_sha256": "efc14356139b7a687d859c5053490d0501b3522da67c83a7fab842f013abafc2",
+            "fetched_at": "2026-11-11T17:31:20Z",
+            "review_evidence": "All enabled operations in this source were matched by database operation_id, exact discovery execute identity and runtime profile_ref. Request constraints retain AIsa guards. Response fields and examples are official descriptors, not inferred requiredness or nesting. Success data is extracted verbatim by services/api-service/internal/integrationexec/catalog_guard.go at b231b1e976c96dbeeb1bbd24be404cc07dd978c4.",
+            "owner": "AIsa-team/docs",
+            "review_period_days": 30,
+            "policy_revision": "sha256:0bdff52b815746a8afecbbafbf8c9afe3803edf410791d6646e7bc0fecf21d5d"
+          },
+          "content_hash": "sha256:da0df2924b7fbb7942e68f190190f001179cd20da504845b21d8cccab443808f"
+        },
+        "x-aisa-docs-url": "https://aisa.one/docs/api-reference/sam-gov/sam-gov-opportunities-search"
       }
     }
   },

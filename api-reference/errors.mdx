@@ -7,24 +7,71 @@ icon: "triangle-exclamation"
 
 ## Response formats depend on the endpoint
 
-Integration APIs retain several compatible error formats. An `error` value can be a string or an object; a machine-readable `code` may be at the top level or inside that object. Do not require `type`, `code`, or `request_id` on every error.
+Integration APIs retain several compatible error formats. An `error` value can be a string or an object; a machine-readable `code` may be at the top level or inside that object. Do not require `type`, `code`, or `request_id` on every error. Operations that use the [standard error envelope](#standard-error-envelope) always return an object.
 
-The examples below describe gateway-generated Integration API errors. OpenAI-compatible and Anthropic-compatible endpoints have their own protocol shapes. Ordinary Provider responses can preserve the upstream status, body, and content type, including non-JSON errors. Check the HTTP status and content type before parsing a response.
+The examples below describe gateway-generated Integration API errors. OpenAI-compatible and Anthropic-compatible endpoints have their own protocol shapes. Outside the standard envelope, ordinary Provider responses can preserve the upstream status, body, and content type, including non-JSON errors. Check the HTTP status and content type before parsing a response.
 
-For support, retain `X-Request-ID` when returned, and `request_id` when present in the body. Their presence and location depend on the error path; the examples do not promise that every rejection includes both.
+For support, retain `X-Request-ID` when returned, and `request_id` when present in the body. Their presence and location depend on the error path; the examples do not promise that every rejection includes both. On operations that use the standard envelope, every error AIsa writes carries both, and they are equal.
+
+## Standard error envelope
+
+Some Integration API operations use one standard error envelope. You can recognize it in the body: `error` is an object carrying `code`, `message`, `retryable`, `retry_hint`, and `request_id`. On these operations, AIsa no longer passes through a supplier's status code, error code, or message.
+
+```json
+{
+  "error": {
+    "code": "service_unavailable",
+    "message": "Service temporarily unavailable.",
+    "retryable": true,
+    "retry_hint": "after_delay",
+    "request_id": "example-request-id"
+  }
+}
+```
+
+This example illustrates the envelope; the request ID is illustrative.
+
+- **Supplier-side failure: `503 service_unavailable`.** Every failure on the supplier's side has the same public answer: a rate limit, temporary unavailability, a timeout, an upstream error, an unusable response, or a problem with AIsa's own upstream account. `retry_hint` says what to do next. The message is fixed and never names the cause.
+- **Request error: `400 invalid_request`.** AIsa answers `400` when the request is wrong: the gateway's contract check failed, or the data source rejected the request's input. `param` names the parameter when it is known (always one of the parameters you sent or a path parameter); `missing` and `unsupported` list parameters when known.
+- **Not found: `404 not_found`.** The lookup completed and found nothing, for example an unknown profile, person, or company. Do not retry the same request. It is not charged.
+- **Not accessible: `403 target_not_accessible`.** The requested target exists but is private or restricted. Do not retry the same request.
+- In all three cases, `message` is a fixed text from AIsa, `retryable` is `false`, and `retry_hint` is `never`.
+- **No `502` or `504`.** AIsa never returns `502` or `504` on these operations. A `502` or `504`, or an HTML or `application/problem+json` error page, without `X-Request-ID` comes from the network edge in front of AIsa, not from AIsa. Retry it after a delay.
+- **Request ID.** `X-Request-ID` is always present and equals `error.request_id`. It is an opaque string, so do not parse it. It can start with `req_` when the request was rejected before a charge was reserved, and with `imc_` afterwards.
+- **Cost header.** `X-AISA-Customer-Cost-Micros-USD: 0` on an error confirms that the request was not charged. The header is absent while the outcome is pending reconciliation (`reconcile_first`).
+- **Timeouts.** When an operation publishes `x-aisa-latency.timeout_seconds`, it answers within that many seconds, with the `503` above when time runs out; set your client timeout a little above it. Operations without it have no fixed answer budget.
+
+| `retry_hint` | `retryable` | Meaning and next action |
+| --- | --- | --- |
+| `after_delay` | `true` | Transient condition: rate limit, temporary unavailability, timeout, or the call was not dispatched. Retry after a short delay, with bounded exponential backoff and jitter. |
+| `reconcile_first` | `false` | The call was dispatched, and its outcome and charge are not known yet. Do not resend automatically. Look the outcome up with `GET /v1/settlements/{request_id}` (the `X-Request-ID`), or `GET /v1/settlements?idempotency_key=<key>` if you sent one: `state` is `pending`, `charged`, or `not_charged`. |
+| `never` | `false` | Retrying the same request will not help. Correct the request (`400`), or treat the call as failed. |
+
+### Migration of public codes
+
+| Before | Now, on operations with the standard envelope |
+| --- | --- |
+| String envelope `{"error":"..."}` | The object envelope above |
+| `502` `provider request failed`, `provider response could not be accounted`, or `provider response cannot be reconciled` | `503 service_unavailable` |
+| `provider_unavailable`, `upstream_rate_limited`, `upstream_temporarily_unavailable`, `upstream_request_failed`, `provider_accounting_pending`, `provider_capacity_exhausted`, or a supplier-specific code | `503 service_unavailable`; `retry_hint` distinguishes the cases |
+| Supplier `429` passed through | `503 service_unavailable` with `retry_hint: after_delay` |
+| Supplier `4xx` passed through with the supplier's message | `404 not_found` for a lookup that found nothing, `403 target_not_accessible` for a private target, `400 invalid_request` (with `param` when known) for rejected input; any other rejection is `503 service_unavailable` |
+| No cost header on errors | `0` when confirmed not charged; absent while pending reconciliation |
+
+Operations outside the standard envelope keep the formats described in the rest of this page.
 
 ## Six diagnostic categories
 
 | Category | Typical Integration API response | Next action |
 | --- | --- | --- |
 | Authentication | `401`: `missing_api_key`, `invalid_api_key`, `api_key_disabled`, or `expired_api_key`; authentication dependency failure can be `503 authentication_unavailable` | Correct the AISA credential or investigate the authentication dependency. |
-| Parameters | `400`, sometimes a string-only error; managed product validation can return a structured code | Correct the request against the endpoint's contract. |
+| Parameters | `400`, sometimes a string-only error; managed product validation can return a structured code; the standard envelope uses `400 invalid_request` with `param` | Correct the request against the endpoint's contract. |
 | Budget | `402`: `estimated_price_exceeds_max_price`, `insufficient_api_key_balance`, or `insufficient_wallet_balance` | Review the spending limit and eligible balance; an estimate is not a settled charge. |
 | Idempotency | `409`: `request_in_progress`, `request_already_completed`, or `idempotency_conflict`; Similarweb retains prefixed compatibility codes | Check the original operation. Do not use a new key merely to bypass a conflict. |
-| Upstream | Native transport failure can be `502`; a managed Similarweb transport failure can be `503 provider_unavailable`; a Provider response can pass through | Establish whether dispatch or execution occurred before repeating a request. |
+| Upstream | Standard envelope: `503 service_unavailable` with `retry_hint`, never `502` or `504`. Elsewhere: native transport failure can be `502`; a managed Similarweb transport failure can be `503 provider_unavailable`; a Provider response can pass through | Follow `retry_hint` when present. Otherwise, establish whether dispatch or execution occurred before repeating a request. |
 | Configuration or dependency | `503`: `metered_v2_billing_config_invalid`, `metered_v2_billing_dependency_timeout`, or `metered_v2_billing_dependency_unavailable`; Similarweb can use the `similarweb_billing_` prefix | Distinguish configuration repair from transient dependency recovery. |
 
-A `503` does not by itself identify an upstream failure. A `404` can refer to a route or an upstream resource; authentication can run before route lookup, so a missing credential is not proof that a route is absent. `403`, `422`, and `429` remain endpoint-specific: do not assume a universal code list or rate-limit headers. Honor `Retry-After` when it is actually returned.
+A `503` does not by itself identify an upstream failure. A `404` can refer to a route or an upstream resource; authentication can run before route lookup, so a missing credential is not proof that a route is absent. `403`, `422`, and `429` remain endpoint-specific: do not assume a universal code list or rate-limit headers. On the standard envelope, a supplier's rate limit is `503` with `retry_hint: after_delay`, not `429`. Honor `Retry-After` when it is actually returned.
 
 ## Requests without a credential
 
@@ -128,7 +175,7 @@ HTTP `409`
 }
 ```
 
-### Upstream: native transport failure
+### Upstream: native transport failure (outside the standard envelope)
 
 {/* runtime-error: upstream/native_transport */}
 
@@ -191,11 +238,12 @@ HTTP `503`
 Cost-quote authentication errors use an object inside `error` with `code` and `message`, rather than the top-level authentication layout above. Validation failures for a supplied API key also return `request_id`; rejection when credentials are missing can omit it. Preserve an ID when returned, without requiring one on every quote rejection. Consult the endpoint's quote contract when handling that mode.
 
 
-For reported charges, see [Settled call cost](/api-reference#settled-call-cost); an error or missing cost header does not establish zero debit.
+For reported charges, see [Settled call cost](/api-reference#settled-call-cost); outside the standard envelope, an error or missing cost header does not establish zero debit. On the standard envelope, a cost header of `0` on an error confirms that the request was not charged.
 
 ## Retry guidance
 
 - Fix credentials, parameters, and budget limits before retrying the corresponding rejection.
+- When the error carries `retry_hint`, follow it: retry after a delay on `after_delay`; keep the request ID and do not resend on `reconcile_first`; do not retry unchanged on `never`.
 - A `retryable` hint does not guarantee that execution had no side effects, that the retry is free, or that an endpoint supports idempotency. Even repeated GET or chat requests can incur charges.
 - On `409`, inspect the original operation and follow that endpoint's idempotency rules. Keep the same key and payload when those rules require it; changing the key can create a second operation.
 - For a transient failure, first establish that repetition is safe. Respect an available `Retry-After`; otherwise use bounded exponential backoff with jitter. Do not blindly replay an ambiguous Provider create or a billed call.

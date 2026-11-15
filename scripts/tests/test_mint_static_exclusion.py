@@ -1,4 +1,4 @@
-"""Keep the oversized download outside Mint without hiding API page sources."""
+"""Keep internal contracts outside Mint while serving public API page schemas."""
 import json
 from pathlib import Path
 import unittest
@@ -10,10 +10,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class MintStaticExclusionTests(unittest.TestCase):
-    def test_only_aggregate_is_excluded_and_canonical_redirect_is_retained(self):
+    def test_internal_sources_are_excluded_and_canonical_redirect_is_retained(self):
         patterns = [line.strip() for line in (ROOT / '.mintignore').read_text().splitlines()
                     if line.strip() and not line.lstrip().startswith('#')]
-        self.assertEqual(patterns, ['/openapi.yaml', '/openapi/openapi.json'])
+        # Spec #1285 R1: provenance mirrors and internal evidence are not served;
+        # Projected API pages read openapi-public/; original files are excluded.
+        self.assertEqual(patterns[:5], ['/openapi.yaml', '/openapi/openapi.json', '/openapi/upstream/', '/docs/', '/scripts/'])
+        import public_projection
+        expected = [f'/openapi/{prefix}{name}.json' for name in public_projection.load_catalogs() for prefix in ('', 'zh/')]
+        self.assertEqual(patterns[5:], expected)
         config = json.loads((ROOT / 'docs.json').read_text())
         redirects = config['redirects']
         # Dev can preview the production API. Its download destination follows

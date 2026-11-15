@@ -237,6 +237,11 @@ class OpenInputWorkflowTests(unittest.TestCase):
         self.assertIn('--current',byname['Acquire one complete fresh immutable Runtime release']['run'])
         self.assertEqual(yaml.safe_load(WORKFLOW.read_text())['jobs']['contracts']['needs'],['changes','code-contracts','artifact-contracts'])
         self.assertNotIn('continue-on-error',WORKFLOW.read_text())
+        gate=byname['Release gate on the candidate (same mode as publication)']
+        self.assertNotIn('GH_TOKEN',gate['env'])
+        self.assertIn('python scripts/release_gate.py',gate['run'])
+        self.assertIn("needs.changes.outputs.input_candidate != 'true'",gate['if'])
+        self.assertIn('python scripts/check_reviewed_schema_inputs.py',byname['Check explicit reviewed source-only input without claiming formal output']['run'])
 
     def test_nonselected_parsed_workflow_preserves_every_original_job_and_step(self):
         workflow=yaml.safe_load(WORKFLOW.read_text())
@@ -248,7 +253,8 @@ class OpenInputWorkflowTests(unittest.TestCase):
             'Checkout exact trusted base for EKS source input reader','Select exact EKS source input diagnostic',
             'Generate existing read App token for EKS source evidence','Checkout pinned original Go snapshot validator',
             'Use original EKS snapshot Go validator toolchain','Check authenticated EKS source input diagnostic compatibility',
-            'Retain EKS source input compatibility receipt')
+            'Retain EKS source input compatibility receipt',
+            'Release gate on the candidate (same mode as publication)')
         original=[]
         for row in rows:
             if row.get('name') in added: continue
@@ -258,11 +264,16 @@ class OpenInputWorkflowTests(unittest.TestCase):
                 row['if']=row['if'].replace(" && steps.open_input_diagnostic.outputs.selected != 'true'",'').replace(" || steps.open_input_diagnostic.outputs.selected == 'true'",'')
                 if row['if']=="steps.open_input_diagnostic.outputs.selected != 'true'": del row['if']
             original.append(row)
+        for row in original:
+            if row.get('name') == 'Retain candidate assessment':
+                self.assertIn('/tmp/release-gate.json\n', row['with']['path'])
+                row['with']['path'] = row['with']['path'].replace('/tmp/release-gate.json\n', '')
         workflow['jobs']['artifact-contracts']['steps']=original
-        # Only an independently bound exact EKS source head receives the 20m
-        # diagnostic budget; every unselected ordinary assessment keeps 10m.
+        # The full catalog now has a 30m budget; only an independently bound
+        # exact EKS source head receives the additional 10m diagnostic budget.
         self.assertEqual(workflow['jobs']['artifact-contracts']['timeout-minutes'],
-            "${{ github.event_name == 'pull_request' && vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING != '' && fromJSON(vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING).head_revision == github.event.pull_request.head.sha && 20 || 10 }}")
+            "${{ github.event_name == 'pull_request' && vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING != '' && fromJSON(vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING).head_revision == github.event.pull_request.head.sha && 40 || 30 }}")
+        # Normalize the explicit budget-only change to the historical digest.
         workflow['jobs']['artifact-contracts']['timeout-minutes']=10
         # Assert the reviewed PR-scope correction, then normalize only those
         # three fields so the independent original workflow digest still guards

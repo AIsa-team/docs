@@ -46,6 +46,61 @@ class CandidateReadinessTests(unittest.TestCase):
                 else: previous = {}
                 self.assertFalse(pull_openapi.unindexed_empty_placeholder(previous, ['composio'], index, category))
 
+    def test_absent_provider_retains_disabled_history_only_with_complete_inventory(self):
+        (self.root / 'openapi/registry.yaml').write_text('auto_register: true\nproviders:\n  alpha: {}\n  gone: {}\n')
+        historical = copy.deepcopy(self.fact)
+        historical['paths'] = {'/historic': {'get': {
+            'operationId': 'historic', 'x-aisa-docs-url': 'https://docs.aisa.one/old',
+            'x-aisa-runtime-operation': {'old': True}, 'x-aisa-response-contract-hash': 'old',
+            'responses': {'200': {'description': 'Historical'}}}}}
+        (self.root / 'openapi/gone.json').write_text(json.dumps(historical))
+        self.index['schema_version'] = '1'
+        self.index['coverage']['scope'] = 'integration'
+        self.write_facts()
+        context = {'offline': True, 'unreviewed_runtime': True, 'baseline_coverage': {'providers': {}}}
+        stage(self.root, self.facts, 'https://api.aisa.one', with_pages=False, readiness_context=context)
+        self.assertEqual(context['report']['status'], 'passed', context['report'])
+        self.assertNotIn('gone', context['facts_by_provider'])
+        retained = context['documents']['gone']
+        self.assertNotIn('facts_hash', retained['info']['x-aisa-document'])
+        op = retained['paths']['/historic']['get']
+        self.assertEqual(op['operationId'], 'historic')
+        self.assertEqual(op['x-aisa-docs-url'], 'https://docs.aisa.one/old')
+        self.assertEqual(op['x-aisa-status'], 'disabled')
+        self.assertEqual(op['x-aisa-contract-state'], 'retained_legacy')
+        self.assertNotIn('x-aisa-runtime-operation', op)
+        self.assertNotIn('x-aisa-response-contract-hash', op)
+        for scenario in ('advertised', 'pending', 'excluded', 'missing_counts', 'inconsistent', 'bad_counts', 'partial_group'):
+            with self.subTest(scenario=scenario):
+                index = copy.deepcopy(self.index)
+                catalogs = ['gone']
+                if scenario == 'advertised': index['providers'].append({'id': 'gone'})
+                elif scenario == 'pending': index['pending_providers'].append({'id': 'gone'})
+                elif scenario == 'excluded': index['coverage']['excluded_endpoints'].append({'provider': 'gone'})
+                elif scenario == 'missing_counts': index['coverage'].pop('inventory_endpoint_count')
+                elif scenario == 'inconsistent': index['coverage']['inventory_endpoint_count'] += 1
+                elif scenario == 'bad_counts': index['coverage']['excluded_counts'] = None
+                else: catalogs.append('alpha')
+                self.assertFalse(pull_openapi.unindexed_historical_provider(historical, catalogs, index, {'apis': []}))
+
+    def test_retained_provider_preserves_shared_components_and_path_parameters(self):
+        historical = copy.deepcopy(self.fact)
+        historical['components'] = {'schemas': {'Result': {'type': 'object',
+            'properties': {'value': {'type': 'string'}}}},
+            'parameters': {'Limit': {'name': 'limit', 'in': 'query', 'schema': {'type': 'integer'}}}}
+        item = historical['paths']['/apis/v1/alpha/read']
+        item['parameters'] = [{'$ref': '#/components/parameters/Limit'}]
+        item['get']['responses']['200']['content']['application/json']['schema'] = {'$ref': '#/components/schemas/Result'}
+        before = copy.deepcopy(historical)
+        retained = pull_openapi.retain_unindexed_provider('alpha', historical)
+        self.assertEqual(historical, before)
+        self.assertEqual(retained['components'], historical['components'])
+        result = retained['paths']['/apis/v1/alpha/read']
+        self.assertEqual(result['parameters'], item['parameters'])
+        self.assertNotIn('parameters', result['get'])
+        self.assertEqual(result['get']['responses'], item['get']['responses'])
+        self.assertEqual(result['get']['x-aisa-status'], 'disabled')
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)

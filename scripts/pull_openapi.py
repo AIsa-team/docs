@@ -226,7 +226,7 @@ def existing_page_references(root: Path):
     from urllib.parse import urlsplit
     prefixes, references = {}, []
     for mdx in (root / 'api-reference').rglob('*.mdx'):
-        match = re.search(r"^openapi:\s*['\"]?((?:openapi|reference-contracts)/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", mdx.read_text(), re.M)
+        match = re.search(r"^openapi:\s*['\"]?((?:openapi(?:-public)?|reference-contracts)/[^\s'\"]+\.json)\s+(\w+)\s+([^\s'\"]+)", mdx.read_text(), re.M)
         if not match:
             continue
         # Production reference pages bind the same provider document under
@@ -454,7 +454,7 @@ def refresh_legacy_page_blocks(root, documents, changes, catalog):
                 continue
             header, _ = localization.split_frontmatter(text)
             reference = (yaml.safe_load(header) or {}).get("openapi", "")
-            match = re.fullmatch(r"(openapi|reference-contracts)/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)", reference)
+            match = re.fullmatch(r"(openapi(?:-public)?|reference-contracts)/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)", reference)
             if not match:
                 continue
             spec_path = reference.split()[0]
@@ -549,6 +549,78 @@ def unindexed_empty_placeholder(previous, catalogs, index, category):
     return bool(catalogs) and not set(catalogs).intersection(advertised)
 
 
+def unindexed_historical_provider(previous, catalogs, index, category):
+    """Prove absence from a complete inventory, not failure to fetch a provider.
+
+    Advertised, pending and excluded catalogs are never eligible. A missing or
+    inconsistent inventory cannot turn an unknown provider into historical data.
+    """
+    if previous and (not isinstance(previous, dict) or not previous.get('openapi')
+                     or not isinstance(previous.get('paths'), dict) or previous.get('webhooks')):
+        return False
+    if not unindexed_empty_placeholder({'openapi': '3.1.0', 'paths': {}}, catalogs, index, category):
+        return False
+    cov = index['coverage']
+    counts = [cov.get(key) for key in ('inventory_endpoint_count', 'selected_endpoint_count',
+                                      'projected_endpoint_count', 'pending_endpoint_count')]
+    if any(type(value) is not int or value < 0 for value in counts):
+        return False
+    inventory, selected, projected, pending = counts
+    excluded_counts = cov.get('excluded_counts', {})
+    if not isinstance(excluded_counts, dict):
+        return False
+    unpublished = excluded_counts.get('unpublished_duplicate_route', 0)
+    return (type(unpublished) is int and unpublished >= 0
+            and inventory == selected + len(cov['excluded_endpoints']) + unpublished
+            and selected == projected + pending
+            and projected == len(cov['projected_endpoints'])
+            and pending == len(index['pending_endpoints']))
+
+
+def retain_unindexed_provider(provider, previous):
+    """Keep published identities/links as unavailable history, with no fresh facts."""
+    document = copy.deepcopy(previous) if previous else {
+        'openapi': '3.1.0', 'info': {'title': provider, 'version': '1', 'x-aisa-provider': provider},
+        'paths': {}}
+    metadata = document.setdefault('info', {}).setdefault('x-aisa-document', {})
+    for key in ('facts_hash', 'identity_base_document_hash', 'identity_compatibility_hash'):
+        metadata.pop(key, None)
+    metadata.update(publication_state='retained_legacy',
+                    retained_from_sha256=digest(previous),
+                    availability='not_in_runtime_inventory',
+                    document_hash=digest({'historical_document': previous, 'availability': 'not_in_runtime_inventory'}))
+    retained = []
+    for path, method, old in operations(previous):
+        # The complete historical document already owns its paths, components,
+        # authentication and links. Keep those references intact: importing an
+        # operation into this same document duplicates shared schemas and
+        # inherited parameters and can exceed the bounded publication limits.
+        operation = document['paths'][path][method]
+        operation['x-aisa-status'] = 'disabled'
+        operation['x-aisa-contract-state'] = 'retained_legacy'
+        operation['x-aisa-contract-pending'] = 'provider_not_in_runtime_inventory'
+        from pricing_prose import remove_price_summary
+        remove_price_summary(operation)
+        for key in ('x-aisa-runtime-operation', 'x-aisa-response-contract-hash', 'x-aisa-response-contract-hashes'):
+            operation.pop(key, None)
+        retained.append({'path': path, 'method': method.upper(), 'operation_id': old['operationId']})
+    _finish_retention(document, previous, retained)
+    rebind_retained_identities(document)
+    return document
+
+
+def rebind_retained_identities(document):
+    """Bind retained identity proofs to the final membership after ownership moves."""
+    from identity_compatibility import KEY
+    meta = document['info']['x-aisa-document']
+    bindings = {op['operationId']: op[KEY] for _, _, op in operations(document) if KEY in op}
+    if bindings or 'identity_compatibility_hash' in meta:
+        base = meta.setdefault('identity_base_document_hash', meta['document_hash'])
+        bound = digest(bindings)
+        meta['identity_compatibility_hash'] = bound
+        meta['document_hash'] = digest({'document_hash': base, 'identity_compatibility_hash': bound})
+
+
 def _document_content_changed(previous: dict, current: dict) -> bool:
     """Detect meaningful generated changes while ignoring observation time.
 
@@ -641,6 +713,7 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
     moved = set()
     ready = {}
     recomposed_documents = {}
+    unindexed_history = {}
     facts_by_provider = {}
     indexed_hashes = {row['id']: row.get('facts_hash') for row in index.get('providers', [])}
     pending = copy.deepcopy(read_json(root / "openapi/pending.json", {"providers": {}}))
@@ -657,6 +730,14 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             pending['providers'].pop(provider, None)
             if readiness_context is not None:
                 readiness_context.setdefault('retained_empty_placeholders', []).append(provider)
+            continue
+        if (registry.get('auto_register') and not entry.get('pin')
+                and (readiness_context or {}).get('offline')
+                and (readiness_context or {}).get('unreviewed_runtime')
+                and unindexed_historical_provider(previous, entry.get('group', [provider]), index, category)):
+            unindexed_history[provider] = previous
+            pending['providers'].pop(provider, None)
+            readiness_context.setdefault('retained_unindexed_providers', []).append(provider)
             continue
         if entry.get("pin"):
             pin = str(entry["pin"])
@@ -866,6 +947,9 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
             generate_pages(root, provider, previous, changes, previous, decorate_links=False, page_references=page_references, page_identity_cache=page_identity_cache)
         pending["providers"][provider] = unresolved
         summary[provider] = {"changed": changed, "operations": sum(1 for _ in operations(document)), "pending": len(unresolved), "document_hash": new_hash}
+    for provider, previous in unindexed_history.items():
+        document = retain_unindexed_provider(provider, previous)
+        changes[root / f"openapi/{provider}.json"] = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
     # Retire only operations successfully moved to another output. Keeping
     # unmatched legacy operations avoids deleting docs outside runtime scope.
     from urllib.parse import urlsplit
@@ -898,6 +982,8 @@ def stage(root: Path, facts_dir: Path | None, base_url: str, with_pages: bool = 
                         operation["x-aisa-status"] = "disabled"
                         reason = "runtime_explicitly_disabled"
                 coverage["legacy_operations"].append(legacy_coverage_row(name, prefix + path, method, op.get("operationId"), reason == "runtime_explicitly_disabled"))
+        if name in unindexed_history:
+            rebind_retained_identities(retained)
         if retained != staged:
             changes[output_path] = json.dumps(retained, indent=2, ensure_ascii=False) + "\n"
     documents = dict(original_documents)

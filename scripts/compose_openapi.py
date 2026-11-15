@@ -14,7 +14,7 @@ from typing import Any
 from upstream_auth_transports import server_auth_headers, request_auth_headers
 from urllib.parse import urlsplit, unquote
 
-VERSION = "30"
+VERSION = "31"
 METHODS = frozenset({"get", "put", "post", "delete", "patch", "options", "head", "trace"})
 OVERLAY_KEYS = {"description", "x-aisa-notes"}
 SCHEMA_ANNOTATIONS = {"description", "summary", "title", "example", "examples", "deprecated", "readOnly", "writeOnly"}
@@ -27,6 +27,58 @@ NAMED_CONTRACT_MAPS = {"properties", "patternProperties", "$defs", "definitions"
 NON_PUBLIC_EXTENSIONS = {"x-stainless-override-schema"}
 
 
+def descriptive_text(editorial, runtime, mirror):
+    """Static prose explains the API; runtime declarations still own its behavior."""
+    if editorial.get("description"):
+        return editorial["description"]
+    parts = [mirror.get("description"), runtime.get("description")]
+    parts = [text.strip() for text in parts if isinstance(text, str) and text.strip()
+             and text.strip() != runtime.get("summary", "").strip()]
+    return "\n\n".join(dict.fromkeys(parts)) or runtime.get("description")
+
+
+def apply_observed_responses(operation):
+    """Fill missing schemas from immutable runtime evidence, never from local samples.
+
+    Reviewed/owned payloads win. Observed shapes are explicitly partial and cannot
+    assert required fields, enums, formats, bounds or production example values.
+    """
+    observations = operation.get("x-aisa-observed-responses", {})
+    if not isinstance(observations, dict):
+        raise ValueError("invalid observed response facts")
+    applied = []
+    for status, observation in observations.items():
+        if (not re.fullmatch(r"2[0-9]{2}", status) or not isinstance(observation, dict)
+                or set(observation) != {"schema", "completeness", "last_observed", "origins"}
+                or observation["completeness"] != "observed"):
+            raise ValueError("invalid observed response facts")
+        def validate_shape(schema, depth=0):
+            if (not isinstance(schema, dict) or depth > 13
+                    or set(schema) - {"type", "properties", "items", "additionalProperties"}):
+                raise ValueError("observed responses must contain only structural facts")
+            if schema.get("additionalProperties", True) is not True:
+                raise ValueError("observed objects must stay open")
+            for name, child in schema.get("properties", {}).items():
+                if not re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$-]{0,63}", name):
+                    raise ValueError("invalid observed response property")
+                validate_shape(child, depth + 1)
+            if "items" in schema:
+                validate_shape(schema["items"], depth + 1)
+        validate_shape(observation["schema"])
+        response = operation.setdefault("responses", {}).setdefault(status, {"description": "Successful response"})
+        # A declared empty object/array is still an official schema. Observations
+        # remain available in the extension, but never rewrite that declaration.
+        if has_response_payload(response):
+            continue
+        response["content"] = {"application/json": {"schema": copy.deepcopy(observation["schema"])}}
+        response["description"] = ("Observed successful JSON response. This partial structure comes from successful "
+                                   "probe or sampled requests; fields and types may vary. No field is guaranteed "
+                                   "to be present. Last observed: " + observation["last_observed"] + ".")
+        response["x-aisa-response-observation"] = {k: copy.deepcopy(v) for k, v in observation.items() if k != "schema"}
+        applied.append(status)
+    return applied
+
+
 def validate_payment_capabilities(operation: dict) -> None:
     """Keep optional Runtime payment method declarations closed and exact.
 
@@ -36,6 +88,9 @@ def validate_payment_capabilities(operation: dict) -> None:
     if "x-aisa-capabilities" not in operation:
         return
     capabilities = operation["x-aisa-capabilities"]
+    # Go code-owned descriptors with no capabilities serialize a nil map.
+    if capabilities is None and operation.get("x-aisa-contract-source") == "handler":
+        return
     # Code-owned handlers publish scope/shape identity in this same Runtime
     # envelope. Preserve it without interpreting it as payment enablement.
     text_fields = {"max_price", "idempotency", "capability", "required_scope",
@@ -750,6 +805,90 @@ def merge_body(upstream: dict, runtime: dict, constrained: set = frozenset(), ke
 # Publication of Runtime operations without reviewed inputs. The generic schema
 # claims only that the success body is JSON; it never describes its fields.
 UNREVIEWED_RUNTIME_POLICY = "unreviewed-runtime-v1"
+# Runtime-owned public contract metadata (Spec #1285 R1). These are part of the
+# customer contract, not provenance: the composer copies them from Runtime
+# facts unchanged and every public projection (Mintlify, llms, MCP) keeps them.
+PUBLIC_CONTRACT_EXTENSIONS = frozenset({"x-aisa-pagination", "x-aisa-latency-class", "x-aisa-latency"})
+PAGINATION_PROPERTY = "aisa_pagination"
+_PAGINATION_WRAPPER_KEYS = {"type", "properties", "additionalProperties", "required"}
+
+
+def runtime_pagination_property(runtime: dict) -> dict | None:
+    """The gateway-added ``aisa_pagination`` property of the Runtime 200 schema."""
+    if not isinstance(runtime.get("x-aisa-pagination"), dict):
+        return None
+    schema = (runtime.get("responses", {}).get("200", {}).get("content", {})
+              .get("application/json", {}).get("schema"))
+    properties = schema.get("properties") if isinstance(schema, dict) else None
+    value = properties.get(PAGINATION_PROPERTY) if isinstance(properties, dict) else None
+    return copy.deepcopy(value) if isinstance(value, dict) else None
+
+
+def is_pagination_wrapper(schema: Any) -> bool:
+    """A schema that only declares the gateway pagination envelope."""
+    return (isinstance(schema, dict) and set(schema) <= _PAGINATION_WRAPPER_KEYS
+            and schema.get("type", "object") == "object"
+            and isinstance(schema.get("properties"), dict) and set(schema["properties"]) == {PAGINATION_PROPERTY}
+            and set(schema.get("required", [])) <= {PAGINATION_PROPERTY})
+
+
+def without_pagination_payload(response: dict) -> dict:
+    """Remove the gateway ``aisa_pagination`` envelope from a success response.
+
+    Runtime declares ``aisa_pagination`` on otherwise payload-less 200
+    responses. That declaration must not suppress the reviewed source payload,
+    and a previously published envelope must not become part of a retained
+    success contract (it is re-merged from Runtime facts on every compose).
+    A pagination-only payload is dropped entirely.
+    """
+    if not isinstance(response, dict):
+        return response
+    media = response.get("content", {}).get("application/json") if isinstance(response.get("content"), dict) else None
+    schema = media.get("schema") if isinstance(media, dict) else None
+    if not isinstance(schema, dict):
+        return response
+    result = copy.deepcopy(response)
+    target = result["content"]["application/json"]
+    if is_pagination_wrapper(schema):
+        if set(response["content"]) == {"application/json"} and set(media) == {"schema"}:
+            result.pop("content")
+        else:
+            target.pop("schema")
+    elif set(schema) == {"allOf"} and isinstance(schema["allOf"], list) and len(schema["allOf"]) == 2 \
+            and is_pagination_wrapper(schema["allOf"][1]):
+        target["schema"] = copy.deepcopy(schema["allOf"][0])
+    elif isinstance(schema.get("properties"), dict) and PAGINATION_PROPERTY in schema["properties"]:
+        target["schema"]["properties"].pop(PAGINATION_PROPERTY)
+    else:
+        return response
+    return result
+
+
+def merge_pagination_property(response: dict, prop: dict) -> None:
+    """Merge Runtime's ``aisa_pagination`` into the effective 200 JSON schema (idempotent)."""
+    if not isinstance(response, dict) or "$ref" in response or response.get("x-aisa-no-content") is True:
+        return
+    content = response.get("content")
+    if not content:
+        content = response["content"] = {"application/json": {}}
+    media = content.get("application/json")
+    if not isinstance(media, dict):
+        # A non-JSON payload cannot carry the envelope; release_gate_pagination reports it.
+        return
+    schema = media.get("schema", {})
+    wrapper = {"type": "object", "properties": {PAGINATION_PROPERTY: copy.deepcopy(prop)}}
+    if schema is True or schema == {}:
+        media["schema"] = wrapper
+    elif isinstance(schema, dict) and isinstance(schema.get("allOf"), list) and set(schema) == {"allOf"} \
+            and schema["allOf"] and is_pagination_wrapper(schema["allOf"][-1]):
+        schema["allOf"][-1] = wrapper
+    elif isinstance(schema, dict) and not ({"$ref", "allOf", "anyOf", "oneOf", "not", "if"} & set(schema)) \
+            and schema.get("type", "object") == "object":
+        schema.setdefault("properties", {})[PAGINATION_PROPERTY] = copy.deepcopy(prop)
+    elif isinstance(schema, dict):
+        media["schema"] = {"allOf": [schema, wrapper]}
+
+
 UNREVIEWED_SUCCESS_SCHEMA = {}
 UNREVIEWED_SUCCESS_DESCRIPTION = "Successful response. The payload schema has not been reviewed yet."
 
@@ -851,7 +990,9 @@ def published_success_responses(previous: dict | None) -> dict:
             for status, response in operation.get("responses", {}).items():
                 if not re.fullmatch(r"2(?:[0-9]{2}|XX)", str(status)):
                     continue
-                resolved = response_object(response, previous)
+                resolved = without_pagination_payload(response_object(response, previous))
+                if resolved.get("x-aisa-response-observation") or operation.get("x-aisa-review", {}).get("response") == "generic":
+                    continue  # Expired observations and placeholders are not reviewed source contracts.
                 if has_response_payload(resolved):
                     # Do not copy legacy headers/links: runtime owns protocol.
                     responses[str(status)] = {
@@ -1030,7 +1171,16 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     server_auth = server_auth_headers(runtime, facts.get("info", {}).get("x-aisa-provider"), actual_method, selected_document, mirror)
                     request_auth = request_auth_headers(runtime, facts.get("info", {}).get("x-aisa-provider"), actual_method, selected_document, mirror, public_path=public_path)
                     operation = copy.deepcopy(runtime)
-                    capabilities = operation.get("x-aisa-capabilities", {})
+                    observed_methods = operation.pop("x-aisa-observed-response-methods", {})
+                    if method == "x-aisa-any" and observed_methods:
+                        operation["x-aisa-observed-responses"] = copy.deepcopy(observed_methods.get(actual_method.upper(), {}))
+                    pagination_property = runtime_pagination_property(runtime)
+                    runtime_responses = runtime.get("responses", {})
+                    if pagination_property is not None and isinstance(operation.get("responses", {}).get("200"), dict):
+                        # Runtime adds only the envelope; the payload comes from reviewed sources.
+                        operation["responses"]["200"] = without_pagination_payload(operation["responses"]["200"])
+                        runtime_responses = {**runtime_responses, "200": operation["responses"]["200"]}
+                    capabilities = operation.get("x-aisa-capabilities") or {}
                     for payment in ("mpp", "x402"):
                         if payment + "_methods" in capabilities:
                             capabilities[payment] = (capabilities.get(payment) is True
@@ -1120,7 +1270,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             operation["x-aisa-provider-required"] = sorted(kept_required)
                         operation["x-aisa-source"] = copy.deepcopy(operation_source)
                     editorial = overlay.get(operation["operationId"], overlay.get(base_id, {}))
-                    description = editorial.get("description") or runtime.get("description") or mirror.get("description")
+                    description = descriptive_text(editorial, runtime, mirror)
                     if description:
                         operation["description"] = description
                     notes = editorial.get("x-aisa-notes", [])
@@ -1141,13 +1291,52 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                     # Runtime explicitly attests unchanged response transport.
                     # This authority is independent from request validation and
                     # never discovers methods or contributes request fields.
-                    descriptor_present = any(k in runtime for k in ("x-aisa-response-passthrough", "x-aisa-response-upstream-path-sha256", "x-aisa-response-upstream-origin-sha256"))
+                    descriptor_present = any(k in runtime for k in ("x-aisa-response-passthrough", "x-aisa-response-upstream-path-sha256", "x-aisa-response-upstream-origin-sha256", "x-aisa-response-contract-hash", "x-aisa-response-contract-hashes"))
                     if descriptor_present:
                         response_operation, response_document = {}, {}
                         transport = runtime.get("x-aisa-response-passthrough")
                         path_hash = runtime.get("x-aisa-response-upstream-path-sha256")
                         origin_hash = runtime.get("x-aisa-response-upstream-origin-sha256")
-                        if type(transport) is not bool:
+                        commitments = runtime.get("x-aisa-response-contract-hashes", {})
+                        if not isinstance(commitments, dict):
+                            raise ValueError("invalid public response contract fingerprint map")
+                        commitment = commitments.get(actual_method.upper(), runtime.get("x-aisa-response-contract-hash"))
+                        if commitments and commitment is None:
+                            raise ValueError("missing method-specific public response contract fingerprint")
+                        if commitment is not None:
+                            operation.pop("x-aisa-response-contract-hashes", None)
+                            operation["x-aisa-response-contract-hash"] = commitment
+                        if commitment is not None:
+                            # Public replay binds the already selected response *content*,
+                            # never an enumerable supplier host/path hash. The first
+                            # internal pass still validates the private transport binding.
+                            selected = public_mirrors.get((public_path, actual_method), {})
+                            choices = selected.get("independent_response_candidates", [])
+                            if not choices and selected.get("source", {}).get("upstream_path_sha256"):
+                                choices = [selected]
+                            matches = []
+                            if not isinstance(commitment, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", commitment):
+                                response_error = "invalid public response contract fingerprint"
+                            else:
+                                for choice in ([] if commitment == digest({}) else choices):
+                                    candidate_source = choice["source"]
+                                    candidate_document = {"openapi": choice.get("openapi", "3.1.0"),
+                                                          "components": choice.get("response_components", {})}
+                                    candidate = source_success_responses(choice.get("response_operation", {}),
+                                        candidate_document, copy.deepcopy(output),
+                                        "response_" + digest(candidate_source)[7:19] + ".json", runtime_responses)
+                                    if digest(candidate) == commitment:
+                                        matches.append(choice)
+                                if len(matches) == 1:
+                                    selected_response = matches[0]
+                                    response_operation = selected_response.get("response_operation", {})
+                                    response_document = {"openapi": selected_response.get("openapi", "3.1.0"),
+                                                         "components": selected_response.get("response_components", {})}
+                                    response_source = selected_response["source"]
+                                    used_mirrors[f"response {actual_method} {public_path}"] = selected_response
+                                elif commitment != digest({}):
+                                    response_error = "public response contract fingerprint is missing or ambiguous in reviewed inputs"
+                        elif type(transport) is not bool:
                             response_error = "runtime response transport flag is missing or invalid"
                         elif transport is True:
                             selected = public_mirrors.get((public_path, actual_method), {})
@@ -1169,13 +1358,17 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                         elif any(k in runtime for k in ("x-aisa-response-upstream-path-sha256", "x-aisa-response-upstream-origin-sha256")):
                             response_error = "transformed response must not declare passthrough binding hashes"
                     try:
-                        fresh = source_success_responses(response_operation, response_document, output, "response_" + digest(response_source)[7:19] + ".json", runtime.get("responses", {}))
+                        fresh = source_success_responses(response_operation, response_document, output, "response_" + digest(response_source)[7:19] + ".json", runtime_responses)
                     except (ValueError, KeyError, TypeError) as exc:
                         response_error = str(exc)
+                    if "x-aisa-response-passthrough" in runtime:
+                        operation["x-aisa-response-contract-hash"] = digest(fresh)
                     source_payloads = {}
+                    if not editorial.get("description") and not mirror.get("description") and response_operation.get("description"):
+                        operation["description"] = descriptive_text(editorial, runtime, response_operation)
                     response_identity = (facts_prefix + path, actual_method, operation_id)
                     old_responses = {} if descriptor_present else published_responses.get(response_identity, {})
-                    if fresh and "200" not in fresh and (runtime.get("x-aisa-passthrough") is True or runtime.get("x-aisa-response-passthrough") is True) and not has_response_payload(operation.get("responses", {}).get("200", {})):
+                    if fresh and "200" not in fresh and (runtime.get("x-aisa-passthrough") is True or runtime.get("x-aisa-response-passthrough") is True or operation.get("x-aisa-response-contract-hash")) and not has_response_payload(operation.get("responses", {}).get("200", {})):
                         operation.get("responses", {}).pop("200", None)
                         old_responses = {status: response for status, response in old_responses.items() if status != "200"}
                     for status in sorted(set(old_responses) | set(fresh)):
@@ -1205,6 +1398,7 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             "kind": "published_success_contract",
                             "content_hash": digest(retained),
                         })
+                    observed_statuses = apply_observed_responses(operation)
                     unknown = [str(status) for status, response in operation.get("responses", {}).items()
                                if re.fullmatch(r"2(?:[0-9]{2}|XX)", str(status))
                                and not (str(status) in {"204", "205"} and not response.get("content"))
@@ -1228,11 +1422,11 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                             generic["description"] = UNREVIEWED_SUCCESS_DESCRIPTION
                             unreviewed_response.append(status)
                         unknown = [status for status in unknown if status not in unreviewed_response]
-                    if unreviewed_request or unreviewed_response:
+                    if unreviewed_request or unreviewed_response or observed_statuses:
                         operation["x-aisa-review"] = {
                             "status": "unreviewed",
                             "request": "runtime_binding" if unreviewed_request else "reviewed_source",
-                            "response": ("generic" if unreviewed_response else
+                            "response": ("observed" if observed_statuses else "generic" if unreviewed_response else
                                          "pending" if unknown or response_error else "reviewed_source"),
                         }
                     if unknown or response_error:
@@ -1240,6 +1434,9 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
                                "statuses": unknown, "reason": response_error or "public success response has no authoritative payload declaration"}
                         response_gaps.append(gap)
                         operation["x-aisa-response-pending"] = copy.deepcopy(gap)
+                    if pagination_property is not None and "200" in operation.get("responses", {}):
+                        # After gap detection: the envelope never counts as a reviewed payload.
+                        merge_pagination_property(operation["responses"]["200"], pagination_property)
                     if operation_id in ids:
                         raise IdentityError(f"duplicate operationId: {operation_id}")
                     ids.add(operation_id)
@@ -1256,15 +1453,18 @@ def compose(facts: dict, upstream: dict | None = None, overlay: dict | None = No
     if unreviewed_runtime:
         hash_inputs["unreviewed_runtime"] = UNREVIEWED_RUNTIME_POLICY
     document_meta["document_hash"] = digest(hash_inputs)
-    from playground_examples import add_get_code_sample, add_body_code_sample
+    from playground_examples import add_get_code_sample, add_body_code_sample, apply_example_verification
     for path, item in output["paths"].items():
         for method, operation in item.items():
             if method in METHODS:
+                if not apply_example_verification(operation):
+                    continue
                 if method == "get":
                     add_get_code_sample(operation, path, operation.get("servers", item.get("servers", output.get("servers", []))))
                 elif method in {"post", "put", "patch"}:
                     add_body_code_sample(operation, method, path, operation.get("servers", item.get("servers", output.get("servers", []))))
     from source_provenance import compact_document
     from pricing_prose import clean_document
-    output = clean_document(output)
+    from customer_wording import apply as customer_wording
+    output = customer_wording(clean_document(output))
     return compact_document(output), pending
