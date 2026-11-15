@@ -74,6 +74,12 @@ def verify_graph(root, origin, artifact, now=None):
     require(sha(pointer) == origin.get('current_sha256'), 'Origin pointer bytes differ')
     require(raw == artifact, 'Published formal receipt differs from authenticated producer artifact')
     hashes = publication_hashes(root)
+    if current.get('files_sha256') != hashes:
+        # An earlier formal publication is authenticated against the surface it
+        # recorded; it must still match that surface exactly, file for file.
+        legacy = publication_hashes(root, legacy=True)
+        if current.get('files_sha256') == legacy:
+            hashes = legacy
     core = {key: current.get(key) for key in ('schema_version', 'runtime', 'files_sha256')}
     require(not any((root / name).is_symlink() for name in hashes), 'Publication graph contains symlinks')
     require(current.get('schema_version') == 1 and current.get('status') == 'passed' and current.get('files_sha256') == hashes

@@ -16,21 +16,29 @@ from runtime_localize_openapi_zh import strip_translatable
 from identity_compatibility import published_history, validate_document_identities, canonicalize_localized
 
 
-def publication_files(root):
+# Public projections and production reference contracts joined the publication
+# surface with the public projection change. Formal publications recorded before
+# it hashed the surface without these paths, even where the files already existed.
+PUBLIC_PROJECTION_PATTERNS = ('openapi-public/**/*.json', 'openapi-public/*.yaml', 'reference-contracts/**/*.json')
+
+
+def publication_files(root, *, legacy=False):
     root = Path(root)
     files = {p for p in (root / 'openapi.yaml', root / 'llms.txt', root / 'docs.json', root / 'openapi/registry.yaml',
                         root / 'api-reference.mdx', root / 'zh/api-reference.mdx', root / POLICY_PATH, root / REBINDING_PATH, root / SALES_CATALOG_PATH) if p.is_file()}
     files.update(root / name for name in PAYMENT_FILES if (root / name).is_file())
-    for pattern in ('openapi/*.json', 'openapi/upstream/*.json', 'openapi/zh/*.json',
-                    'openapi-public/**/*.json', 'openapi-public/*.yaml', 'reference-contracts/**/*.json',
-                    'api-reference/**/*.mdx', 'zh/api-reference/**/*.mdx'):
+    patterns = ('openapi/*.json', 'openapi/upstream/*.json', 'openapi/zh/*.json',
+                'api-reference/**/*.mdx', 'zh/api-reference/**/*.mdx')
+    for pattern in patterns + (() if legacy else PUBLIC_PROJECTION_PATTERNS):
         files.update(root.glob(pattern))
     return sorted(files)
 
 
-def publication_hashes(root):
+def publication_hashes(root, *, legacy=False):
+    """New publications always record the current surface; legacy=True only
+    re-derives what an earlier formal publication recorded."""
     return {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in publication_files(root)}
+            for p in publication_files(root, legacy=legacy)}
 
 
 def navigation_pages(node):
