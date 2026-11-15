@@ -57,14 +57,27 @@ def navigation_pages(node):
             yield from navigation_pages(value)
 
 
+FRONTMATTER = re.compile(r'---\n(.*?)\n---[ \t]*(?:\n|$)', re.S)
+
+
+def frontmatter(text):
+    """YAML between the opening line and the next line that is exactly ---.
+
+    Quoted descriptions may contain markdown tables (|---|), so a plain split
+    on '---' is not a frontmatter boundary.
+    """
+    match = FRONTMATTER.match(text)
+    return match[1] if match else None
+
+
 def retired_archive(path):
     """A non-indexed human retirement page without an operation binding."""
     if not path.is_file():
         return False
-    parts = path.read_text().split('---', 2)
-    if len(parts) != 3 or parts[0]:
+    block = frontmatter(path.read_text())
+    if block is None:
         return False
-    header = yaml.safe_load(parts[1]) or {}
+    header = yaml.safe_load(block) or {}
     return (header.get('x-aisa-human-retirement') is True and header.get('noindex') in (True, 'true')
             and 'openapi' not in header)
 
@@ -144,10 +157,10 @@ def validate_surfaces(root, published_ref=None):
             text = path.read_text()
             if not text.startswith('---\n'):
                 continue
-            parts = text.split('---', 2)
-            if len(parts) != 3:
+            block = frontmatter(text)
+            if block is None:
                 raise ValueError('invalid MDX frontmatter: ' + str(path))
-            header = yaml.safe_load(parts[1]) or {}
+            header = yaml.safe_load(block) or {}
             reference = header.get('openapi')
             if not isinstance(reference, str):
                 if retired_archive(path):
