@@ -160,6 +160,33 @@ def mark_example_verification(operation, language="en"):
         operation['description'] = (description.rstrip() + '\n\n' + notice).lstrip()
 
 
+_NOTE_RULES = None
+
+
+def drop_internal_notes(operation):
+    """Remove description paragraphs that read as internal operator notes.
+
+    Runtime may still compile an older upstream declaration whose prose was
+    written for operators ("shared key", curation notes). The unpinned
+    refresh drops such descriptions; the public projection does the same so
+    the customer surface never carries them.
+    """
+    global _NOTE_RULES
+    import vocab_scan
+    if _NOTE_RULES is None:
+        _NOTE_RULES = vocab_scan.load_rules()
+    description = operation.get('description')
+    if not isinstance(description, str) or not description:
+        return
+    kept = [part for part in description.split('\n\n')
+            if not any(kind == 'internal_note' for kind, _ in vocab_scan.scan_text(part, _NOTE_RULES))]
+    text = '\n\n'.join(kept).strip()
+    if text:
+        operation['description'] = text
+    else:
+        operation.pop('description', None)
+
+
 def project(document, language="en"):
     """Projected catalog document (pure function of the formal document)."""
     projected = strip(document)
@@ -169,6 +196,7 @@ def project(document, language="en"):
             if method in {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'} and isinstance(operation, dict) and 'aisa-pricing:start' in operation.get('description', ''):
                 remove_price_summary(operation)
             if method in {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'} and isinstance(operation, dict):
+                drop_internal_notes(operation)
                 if 'x-aisa-example' in operation or method.upper() + ' ' + route in evidence_scope():
                     mark_example_verification(operation, language)
     info = projected.get('info')

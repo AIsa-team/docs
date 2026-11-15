@@ -118,8 +118,15 @@ class ReleaseGateTests(unittest.TestCase):
         for description in ('THIS IS THE PRICE DIAL', 'An AcmeFeeds-hosted asset', 'Served by api.zeta-gateway.dev'):
             with self.subTest(description=description):
                 op = operation(extra={'description': description})
-                report = self.tree({'/apis/v1/widgets/search': {'get': op}}).run()
-                self.assertEqual(report['gates']['G2']['status'], 'failed')
+                tree = self.tree({'/apis/v1/widgets/search': {'get': op}})
+                report = tree.run()
+                public = tree.root / 'openapi-public/widgets.json'
+                if 'DIAL' in description:
+                    # The projection removes an internal note before the gate.
+                    self.assertTrue(public.is_file())
+                    self.assertNotIn(description, public.read_text())
+                else:
+                    self.assertEqual(report['gates']['G2']['status'], 'failed')
                 self.assertNotIn('acmefeeds', json.dumps(report).lower())
                 self.assertNotIn('zeta-gateway', json.dumps(report).lower())
         report = self.tree(page_extra='Data from AcmeFeeds.\n').run()
