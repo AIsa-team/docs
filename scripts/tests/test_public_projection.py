@@ -242,5 +242,19 @@ class CommittedProjectionTests(unittest.TestCase):
         self.assertGreater(seen, 0)
 
 
+class InternalNoteTests(unittest.TestCase):
+    def test_operator_note_paragraphs_are_dropped_from_public_descriptions(self):
+        operation = {'description': 'Provide company_domain or linkedin_page_id. Batch arrays and webhooks '
+                                    'are not exposed on the shared key.\n\nReturns ads for the company.'}
+        public_projection.drop_internal_notes(operation)
+        self.assertEqual(operation['description'], 'Returns ads for the company.')
+        only_note = {'description': 'Unknown body fields are refused locally on the shared key.'}
+        public_projection.drop_internal_notes(only_note)
+        self.assertNotIn('description', only_note)
+        clean = {'description': 'Search the web.'}
+        public_projection.drop_internal_notes(clean)
+        self.assertEqual(clean['description'], 'Search the web.')
+
+
 if __name__ == '__main__':
     unittest.main()

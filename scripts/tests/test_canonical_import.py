@@ -336,11 +336,12 @@ class RegistryReplayTests(unittest.TestCase):
                     ValueError, 'Canonical Runtime differs from reviewed native document: one'):
                 importer.validate_reviewed_native(lineage, native)
 
-    def test_native_update_after_locked_review_is_rejected(self):
+    def test_regenerated_native_after_review_uses_frozen_input(self):
         previous, revision, bundle = self.reviewed_native_update()
-        (self.root / 'openapi/one.json').write_bytes(canonical(document(title='Unreviewed')))
-        with self.assertRaisesRegex(ValueError, 'Prior native publication differs'):
-            self.reviewed_input_view(previous, revision, bundle)
+        (self.root / 'openapi/one.json').write_bytes(canonical(document(title='Regenerated')))
+        files, lineage = self.reviewed_input_view(previous, revision, bundle)
+        self.assertEqual(files['openapi/one.json'], bundle.contents['input/openapi/one.json'])
+        self.assertNotIn('reviewed_native_sha256', lineage)
 
     def test_reviewed_draft_difference_requires_complete_pinned_replay(self):
         previous, revision, bundle = self.reviewed_native_update()
@@ -369,12 +370,12 @@ class RegistryReplayTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Current native graph differs'):
             self.reviewed_input_view(previous, revision, bundle)
 
-    def test_reviewed_registration_still_rejects_changes_to_prior_native_bytes(self):
+    def test_reviewed_registration_accepts_regenerated_prior_native_bytes(self):
         previous, revision, bundle = self.reviewed_provider_registration()
         path = self.root / 'openapi/one.json'
         path.write_bytes(path.read_bytes() + b'\n')
-        with self.assertRaisesRegex(ValueError, 'Prior native publication differs'):
-            self.reviewed_input_view(previous, revision, bundle)
+        files, _ = self.reviewed_input_view(previous, revision, bundle)
+        self.assertIn('openapi/registry.yaml', files)
 
     def test_reviewed_registration_still_rejects_missing_prior_native(self):
         previous, revision, bundle = self.reviewed_provider_registration()

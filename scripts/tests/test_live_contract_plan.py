@@ -104,6 +104,14 @@ class FetchTests(unittest.TestCase):
             self.assertEqual(plan.main(['--root', str(ROOT), '--github-output', str(output)]), 2)
             self.assertFalse(output.exists())
 
+    def test_main_skips_a_stale_release_with_exit_two(self):
+        stale = dict(index(('index.json', '1' * 64)), fresh=False)
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(plan, 'fetch', return_value=stale):
+            output = Path(directory) / 'out'
+            self.assertEqual(plan.main(['--root', str(ROOT), '--github-output', str(output)]), 2)
+            self.assertFalse(output.exists())
+
     def test_main_writes_key_outputs(self):
         responses = {plan.CURRENT: index(('index.json', '1' * 64), generation=13699),
                      plan.CATEGORY: {'apis': [], 'cached_at': 5}}
@@ -142,7 +150,7 @@ class WorkflowTests(unittest.TestCase):
         compose = self.jobs['compose']
         self.assertEqual(compose['needs'], 'plan')
         self.assertIn("needs.plan.outputs.changed == 'true'", compose['if'])
-        self.assertEqual(compose['continue-on-error'], "${{ github.event_name == 'schedule' }}")
+        self.assertNotIn('continue-on-error', compose)
         steps = {step.get('id'): step for step in self.jobs['plan']['steps']}
         self.assertIn('live_contract_plan.py', steps['live']['run'])
         self.assertTrue(steps['done']['with']['lookup-only'])

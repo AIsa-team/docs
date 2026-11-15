@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from publication_surface import validate_surfaces, publication_hashes
+from publication_surface import validate_surfaces, publication_hashes, frontmatter
 from pull_openapi import generate_pages
 
 
@@ -481,6 +481,13 @@ class PublicationSurfaceTests(unittest.TestCase):
         self.assertIn('Preserve old prose.', en.read_text())
         self.assertIn('Preserve old prose.', zh.read_text())
         self.assertEqual(validate_surfaces(root)['operations'], 1)
+
+
+class FrontmatterTests(unittest.TestCase):
+    def test_markdown_table_in_quoted_description_is_not_a_boundary(self):
+        text = '---\ntitle: Book\ndescription: "Rates\\n|a|b|\\n|---|---|"\nopenapi: openapi/x.json POST /b\n---\n\nBody\n'
+        self.assertEqual(frontmatter(text).splitlines()[-1], 'openapi: openapi/x.json POST /b')
+        self.assertIsNone(frontmatter('title: none\n'))
 
 
 if __name__ == '__main__':

@@ -16,21 +16,29 @@ from runtime_localize_openapi_zh import strip_translatable
 from identity_compatibility import published_history, validate_document_identities, canonicalize_localized
 
 
-def publication_files(root):
+# Public projections and production reference contracts joined the publication
+# surface with the public projection change. Formal publications recorded before
+# it hashed the surface without these paths, even where the files already existed.
+PUBLIC_PROJECTION_PATTERNS = ('openapi-public/**/*.json', 'openapi-public/*.yaml', 'reference-contracts/**/*.json')
+
+
+def publication_files(root, *, legacy=False):
     root = Path(root)
     files = {p for p in (root / 'openapi.yaml', root / 'llms.txt', root / 'docs.json', root / 'openapi/registry.yaml',
                         root / 'api-reference.mdx', root / 'zh/api-reference.mdx', root / POLICY_PATH, root / REBINDING_PATH, root / SALES_CATALOG_PATH) if p.is_file()}
     files.update(root / name for name in PAYMENT_FILES if (root / name).is_file())
-    for pattern in ('openapi/*.json', 'openapi/upstream/*.json', 'openapi/zh/*.json',
-                    'openapi-public/**/*.json', 'openapi-public/*.yaml', 'reference-contracts/**/*.json',
-                    'api-reference/**/*.mdx', 'zh/api-reference/**/*.mdx'):
+    patterns = ('openapi/*.json', 'openapi/upstream/*.json', 'openapi/zh/*.json',
+                'api-reference/**/*.mdx', 'zh/api-reference/**/*.mdx')
+    for pattern in patterns + (() if legacy else PUBLIC_PROJECTION_PATTERNS):
         files.update(root.glob(pattern))
     return sorted(files)
 
 
-def publication_hashes(root):
+def publication_hashes(root, *, legacy=False):
+    """New publications always record the current surface; legacy=True only
+    re-derives what an earlier formal publication recorded."""
     return {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in publication_files(root)}
+            for p in publication_files(root, legacy=legacy)}
 
 
 def navigation_pages(node):
@@ -49,14 +57,27 @@ def navigation_pages(node):
             yield from navigation_pages(value)
 
 
+FRONTMATTER = re.compile(r'---\n(.*?)\n---[ \t]*(?:\n|$)', re.S)
+
+
+def frontmatter(text):
+    """YAML between the opening line and the next line that is exactly ---.
+
+    Quoted descriptions may contain markdown tables (|---|), so a plain split
+    on '---' is not a frontmatter boundary.
+    """
+    match = FRONTMATTER.match(text)
+    return match[1] if match else None
+
+
 def retired_archive(path):
     """A non-indexed human retirement page without an operation binding."""
     if not path.is_file():
         return False
-    parts = path.read_text().split('---', 2)
-    if len(parts) != 3 or parts[0]:
+    block = frontmatter(path.read_text())
+    if block is None:
         return False
-    header = yaml.safe_load(parts[1]) or {}
+    header = yaml.safe_load(block) or {}
     return (header.get('x-aisa-human-retirement') is True and header.get('noindex') in (True, 'true')
             and 'openapi' not in header)
 
@@ -136,10 +157,10 @@ def validate_surfaces(root, published_ref=None):
             text = path.read_text()
             if not text.startswith('---\n'):
                 continue
-            parts = text.split('---', 2)
-            if len(parts) != 3:
+            block = frontmatter(text)
+            if block is None:
                 raise ValueError('invalid MDX frontmatter: ' + str(path))
-            header = yaml.safe_load(parts[1]) or {}
+            header = yaml.safe_load(block) or {}
             reference = header.get('openapi')
             if not isinstance(reference, str):
                 if retired_archive(path):

@@ -274,6 +274,45 @@ class OriginTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'not an ancestor'):
                 origin.inspect_publication(self.root, self.ref, historical=True)
 
+    def test_publication_recorded_before_public_projection_surface_still_verifies(self):
+        import export_contract_publication
+        import publication_surface
+        from fetch_runtime_release import sha
+        # The historical tree already held reference contracts that the surface
+        # of that time did not hash; its pointer recorded only the legacy surface.
+        reference = self.root/'reference-contracts/provider.json'
+        reference.parent.mkdir(parents=True); reference.write_text('{}')
+        legacy = lambda root: publication_surface.publication_hashes(root, legacy=True)
+        self.fixture.report['publication_artifact']['files_sha256'] = legacy(self.root)
+        with patch.object(export_contract_publication, 'publication_hashes', legacy):
+            self.install()
+        pointer = (self.root/'docs/publication/current.json').read_bytes()
+        receipt = dict(self.receipt, current_sha256=sha(pointer),
+                       contract_release=json.loads(pointer)['contract_release'])
+        self.assertNotIn('reference-contracts/provider.json', json.loads(pointer)['files_sha256'])
+        current = origin.verify_graph(self.root, receipt, self.artifact, self.end)
+        self.assertEqual(current['contract_release'], receipt['contract_release'])
+        # The legacy surface is still verified file for file.
+        path = self.root/'openapi.yaml'; path.write_text(path.read_text()+'# unassessed\n')
+        with self.assertRaisesRegex(ValueError, 'Publication graph or C differs'):
+            origin.verify_graph(self.root, receipt, self.artifact, self.end)
+
+    def test_current_surface_publication_cannot_drop_public_projection_files(self):
+        # A publication recorded on the current surface may not later verify
+        # through the legacy surface once its reference contracts change.
+        reference = self.root/'reference-contracts/provider.json'
+        reference.parent.mkdir(parents=True); reference.write_text('{}')
+        self.fixture.report['publication_artifact']['files_sha256'] = origin.publication_hashes(self.root)
+        self.install()
+        from fetch_runtime_release import sha
+        pointer = (self.root/'docs/publication/current.json').read_bytes()
+        receipt = dict(self.receipt, current_sha256=sha(pointer),
+                       contract_release=json.loads(pointer)['contract_release'])
+        origin.verify_graph(self.root, receipt, self.artifact, self.end)
+        reference.write_text('{"changed": true}')
+        with self.assertRaisesRegex(ValueError, 'Publication graph or C differs'):
+            origin.verify_graph(self.root, receipt, self.artifact, self.end)
+
     def test_graph_artifact_or_current_drift_rejected_but_elapsed_time_is_not(self):
         with self.assertRaises(ValueError):
             origin.verify_graph(self.root, self.receipt, b'{}', self.end)

@@ -71,8 +71,7 @@ jobs:
     needs: plan
     if: github.event_name == 'workflow_dispatch' || needs.plan.outputs.changed == 'true'
     runs-on: ubuntu-latest
-    # A scheduled refusal stays a warning (see record); the next tick retries.
-    continue-on-error: ${{ github.event_name == 'schedule' }}
+    # A stale Runtime release is skipped by plan; any refusal here fails visibly.
     # Runner headroom for the complete strict graph checks; acceptance remains 1h/4h.
     # The complete catalog (550 providers, ~14,000 projected files) takes about
     # 14 minutes locally across stage, assess and export.
@@ -166,8 +165,12 @@ jobs:
       - name: Generate payment discovery from the same staged contracts
         if: steps.pull.outputs.available == 'true'
         run: |
-          python scripts/refresh_payment_publication.py --facts-dir /tmp/formal-runtime-facts \
-            --observation-report /tmp/payment-observation.json
+          # Refreshing payment evidence is an observation; when Runtime moves on
+          # mid-run, keep the published evidence and continue publishing.
+          if ! python scripts/refresh_payment_publication.py --facts-dir /tmp/formal-runtime-facts \
+            --observation-report /tmp/payment-observation.json; then
+            echo '::warning::Payment evidence not refreshed; published evidence kept.'
+          fi
           python scripts/generate_payment_discovery.py
       - name: Retain real payment observations without renewing unchanged publication
         if: always()
