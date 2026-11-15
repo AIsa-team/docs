@@ -165,8 +165,12 @@ jobs:
       - name: Generate payment discovery from the same staged contracts
         if: steps.pull.outputs.available == 'true'
         run: |
-          python scripts/refresh_payment_publication.py --facts-dir /tmp/formal-runtime-facts \
-            --observation-report /tmp/payment-observation.json
+          # Refreshing payment evidence is an observation; when Runtime moves on
+          # mid-run, keep the published evidence and continue publishing.
+          if ! python scripts/refresh_payment_publication.py --facts-dir /tmp/formal-runtime-facts \
+            --observation-report /tmp/payment-observation.json; then
+            echo '::warning::Payment evidence not refreshed; published evidence kept.'
+          fi
           python scripts/generate_payment_discovery.py
       - name: Retain real payment observations without renewing unchanged publication
         if: always()
