@@ -113,14 +113,15 @@ def project_metadata(input_view, catalog_facts, index, category, native, produce
             'Canonical producer readiness did not pass')
     original = published_documents(root)
     placeholders = retained_empty_placeholders(registry, original, native, index, category)
-    require(set(registry['providers']) - placeholders == set(producer_readiness.get('providers', {})),
+    historical = retained_unindexed_providers(registry, original, native, index, category, placeholders)
+    require(set(registry['providers']) - placeholders - historical == set(producer_readiness.get('providers', {})),
             'Canonical readiness provider scope differs from derived registry')
     mirrors = public_mirror_index(root)
     coverage = {'schema_version': 2, 'providers': {}, 'response_gaps': {}, 'legacy_operations': []}
     pending, facts_by_provider, moved = {'providers': {}}, {}, set()
     for provider, config in sorted(registry['providers'].items()):
-        if provider in placeholders:
-            continue  # Unchanged empty historic file; the producer staged no facts for it.
+        if provider in placeholders or provider in historical:
+            continue  # Historical-only output has no current Runtime facts.
         entry = copy.deepcopy(config or {})
         catalogs = entry.get('group', [provider])
         require(provider in native and all(name in catalog_facts for name in catalogs),
@@ -158,7 +159,8 @@ def project_metadata(input_view, catalog_facts, index, category, native, produce
                     operation.get('operationId'), prefix + path in disabled.get(name, set())))
     return {'registry': registry, 'coverage': coverage, 'pending': pending,
             'facts_by_provider': facts_by_provider, 'runtime_index': copy.deepcopy(index),
-            'retained_empty_placeholders': sorted(placeholders)}
+            'retained_empty_placeholders': sorted(placeholders),
+            'retained_unindexed_providers': sorted(historical)}
 
 
 def retained_empty_placeholders(registry, original, native, index, category):
@@ -180,6 +182,35 @@ def retained_empty_placeholders(registry, original, native, index, category):
             continue
         require(canonical(native.get(provider)) == canonical(original[provider]),
                 'Retained empty placeholder differs from its published document')
+        result.add(provider)
+    return result
+
+
+def retained_unindexed_providers(registry, original, native, index, category, placeholders=()):
+    """Independently verify exact disabled history against the closed inventory."""
+    from pull_openapi import (unindexed_historical_provider, retain_unindexed_provider,
+                              rebind_retained_identities, METHODS)
+    if not registry.get('auto_register'):
+        return set()
+    result = set()
+    for provider, entry in registry['providers'].items():
+        entry = entry or {}
+        if (provider in placeholders or entry.get('pin') or not unindexed_historical_provider(
+                original.get(provider, {}), entry.get('group', [provider]), index, category)):
+            continue
+        expected = retain_unindexed_provider(provider, original.get(provider, {}))
+        prefix = urlsplit((expected.get('servers') or [{'url': ''}])[0]['url']).path.rstrip('/')
+        moved = {(p, m, op.get('operationId')) for owner, doc in native.items() if owner != provider
+                 for p, m, op in operations(doc)
+                 if op.get('x-aisa-contract-state') != 'retained_legacy'}
+        for path, method, operation in list(operations(expected)):
+            if (prefix + path, method, operation.get('operationId')) in moved:
+                del expected['paths'][path][method]
+                if not set(expected['paths'][path]) & METHODS:
+                    del expected['paths'][path]
+        rebind_retained_identities(expected)
+        require(canonical(native.get(provider)) == canonical(expected),
+                'Retained unindexed provider differs from verified historical projection: ' + provider)
         result.add(provider)
     return result
 
@@ -259,6 +290,20 @@ def validate_derived_registry(frozen, current, frozen_native, previous_native):
     moved = set()
     for provider, config in expected['providers'].items():
         info = previous_native.get(provider, {}).get('info', {})
+        from compose_openapi import digest
+        metadata = info.get('x-aisa-document', {})
+        if (frozen.get('auto_register') and provider in declared and not (config or {}).get('pin')
+                and metadata.get('publication_state') == 'retained_legacy'
+                and metadata.get('availability') == 'not_in_runtime_inventory'
+                and metadata.get('retained_from_sha256') == digest(frozen_native.get(provider, {}))
+                and not metadata.get('facts_hash')):
+            # Fixed registry fields remain exact. project_metadata separately
+            # checks the inventory proof and every historical declaration.
+            continue
+        if (frozen.get('auto_register') and provider in declared and not (config or {}).get('pin')
+                and frozen_native.get(provider, {}).get('paths') == {}
+                and canonical(previous_native.get(provider)) == canonical(frozen_native[provider])):
+            continue
         require(info.get('x-aisa-provider') == provider and
                 info.get('x-aisa-document', {}).get('facts_hash'),
                 'Registry derivation lacks prior canonical facts metadata')
