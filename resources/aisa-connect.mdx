@@ -1,0 +1,392 @@
+---
+title: "AIsa Connect"
+sidebarTitle: "AIsa Connect"
+icon: "link"
+description: "Let your end users connect their own Shopify, WooCommerce, GitHub, Google and other app accounts, then browse the app catalog and run app actions on their behalf with one AIsa API key."
+---
+
+AIsa Connect lets your end users, for example the merchants you serve, connect their own app accounts such as Shopify, WooCommerce, GitHub or Google to AIsa. With one AIsa API key you then browse the app catalog and run app actions for those users: read orders, update products, list repositories and so on. AIsa's app integration holds the end users' tokens and keys, so your system does not store them and cannot read them back.
+
+All AIsa accounts can use AIsa Connect with their existing API key and balance. No separate sign-up is needed.
+
+## When to use it
+
+- Your product acts inside apps that **your users** own, and you do not want to build and maintain an OAuth app or a credential vault for each one.
+- You want one catalog of apps and actions, each with a JSON Schema for its input, instead of one SDK per app.
+- You want to pay only for actions that succeed, from the same balance as your models and data APIs.
+
+To read public data that needs no user account, such as marketplace listings, use the [Data APIs](/resources/data-apis) instead. For one request shape across social and ad platforms, see [Unified APIs](/resources/unified-apis).
+
+## Core concepts
+
+| Concept | Meaning |
+| --- | --- |
+| **End user** (`externalUserId`) | A user in **your** system, identified by your own ID. You do not register it with AIsa first. |
+| **App** | An app your end users can connect, such as `shopify` or `github`. `authTypes` says how it connects. |
+| **Action** | Something an app can do, keyed `<app>.<action name>`, such as `shopify.get_shop`. Each action has an `operationType` and an `inputSchema`. |
+| **Connection** (`con_…`) | One app account that one end user connected. It belongs to your AIsa account plus that `externalUserId`. |
+| **Connect session** (`cs_…`) | One run of the hosted OAuth flow. It expires after 30 minutes. |
+| **Run** (`run_…`) | One execution of an action for an end user. Only successful runs are charged. |
+
+## How it works
+
+<Steps>
+  <Step title="Pick an app and an action">
+    Search the catalog for the app, read its `authTypes` and `credentialFields`, and look up the action's `inputSchema`. Browsing is free. See [Browse apps and actions](#browse-apps-and-actions).
+  </Step>
+  <Step title="Connect the end user's account">
+    For `api_key` and `custom_credential` apps, collect the fields in your UI and send them to AIsa. For `oauth2` apps, send the user to the AIsa hosted page and poll the session. See [Connect with credentials](#connect-with-credentials) and [Connect with OAuth](#connect-with-oauth-hosted-page).
+  </Step>
+  <Step title="Run actions">
+    Call `POST /actions/run` with the action key, the `externalUserId` and an `input` that matches the schema. See [Run actions](#run-actions).
+  </Step>
+</Steps>
+
+## Before you start
+
+```bash
+export AISA_BASE=https://api.aisa.one/apis/v1/connector
+export AISA_API_KEY=sk-...   # keep the key out of your code repository
+```
+
+- **Authentication.** Send `Authorization: Bearer $AISA_API_KEY` on every request; `x-api-key: $AISA_API_KEY` also works. AIsa Connect accepts **API keys only**: an OAuth access token from MCP or CLI sign-in is rejected with `401`. See [Authentication](/guides/authentication) for creating, limiting and rotating keys.
+- **Server side only.** Call AIsa Connect from your backend. Never put the API key in a browser or mobile app.
+- **Availability.** If every AIsa Connect path returns `404` with `{"error":"api endpoint not found"}`, AIsa Connect is temporarily unavailable in that environment. Contact [developer@aisa.one](mailto:developer@aisa.one).
+
+## End user IDs
+
+`externalUserId` is the ID of the end user **in your system**. AIsa uses it to keep your end users apart.
+
+- **Format:** 1–250 printable ASCII characters, with no leading or trailing spaces. Use a stable ID that contains no personal data, such as `store_8812`. Do not use an email address.
+- **Where it is required:** starting a connection and running an action. When listing connections it is an optional filter.
+- **Isolation:** a connection belongs to your AIsa account **and** one `externalUserId`. When user A runs an action, AIsa never uses user B's connection.
+
+<Warning>
+`GET /connections/{connectionId}` and `DELETE /connections/{connectionId}` only check that the connection belongs to **your AIsa account**. They do not check the end user. Keep the mapping from connection to end user in your backend, and never let an end user pass in an arbitrary connection ID.
+</Warning>
+
+## Browse apps and actions
+
+Reading the catalog is free.
+
+```bash
+# Apps: q searches names, aliases and categories; limit is 1–200, default 50
+curl -s "$AISA_BASE/apps?q=shopify&limit=20" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+```json
+{
+  "data": [
+    {
+      "key": "shopify",
+      "name": "Shopify",
+      "description": "...",
+      "aliases": ["..."],
+      "categories": [{ "id": "...", "name": "..." }],
+      "authTypes": ["api_key", "oauth2"],
+      "credentialFields": {
+        "api_key": [
+          { "key": "apiKey", "label": "Admin API access token", "required": true, "secret": true },
+          { "key": "shopDomain", "label": "Shop domain", "required": true, "secret": false }
+        ]
+      },
+      "iconUrl": null,
+      "homepageUrl": "...",
+      "documentationUrl": "..."
+    }
+  ]
+}
+```
+
+```bash
+# Actions of one app: q filters by key, name and description
+curl -s "$AISA_BASE/apps/shopify/actions?q=order" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  | jq '.data[] | {key, name, operationType}'
+
+# One action, to read its input schema. Use the key exactly as the list returns it.
+curl -s "$AISA_BASE/actions/shopify.get_shop" \
+  -H "Authorization: Bearer $AISA_API_KEY" | jq '.inputSchema'
+```
+
+An action has `key`, `app`, `name`, `description`, `operationType` (`read`, `write` or `destructive`), `requiredScopes`, `inputSchema` and `outputSchema`.
+
+An app's `authTypes` decides how it connects:
+
+| `authTypes` value | How to connect |
+| --- | --- |
+| `api_key`, `custom_credential` | [Connect with credentials](#connect-with-credentials) |
+| `oauth2` | [Connect with OAuth](#connect-with-oauth-hosted-page) |
+
+`credentialFields` lists the credential fields for each credential auth type. Each field has `key` (the name to send), `label` (usable as a form label), `required`, and `secret` (render it as a password input). For `api_key`, the first field is always `apiKey`. If an auth type is missing from `credentialFields`, AIsa does not know its fields and the app checks whatever you submit. An app that only supports OAuth has `credentialFields: {}`.
+
+## Connect with credentials
+
+Most commerce apps, including Shopify and WooCommerce, connect with credentials. Ask the end user for the fields listed in the app's `credentialFields`, then forward them to AIsa in `credentials`. `apiKey` can also be sent at the top level; it is the same as `credentials.apiKey`.
+
+<CodeGroup>
+
+```bash Shopify (api_key)
+curl -s -X POST "$AISA_BASE/connect/shopify/credentials" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "externalUserId": "store_8812",
+    "apiKey": "<ADMIN_API_ACCESS_TOKEN>",
+    "credentials": { "shopDomain": "acme.myshopify.com" }
+  }'
+```
+
+```bash WooCommerce (custom_credential)
+curl -s -X POST "$AISA_BASE/connect/woocommerce/credentials" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "externalUserId": "store_8812",
+    "credentials": {
+      "storeUrl": "https://shop.example.com",
+      "consumerKey": "ck_...",
+      "consumerSecret": "cs_..."
+    }
+  }'
+```
+
+</CodeGroup>
+
+- **Shopify** takes the store's Admin API access token (`shpat_…`) as `apiKey`, and the store's myshopify.com domain as `shopDomain`, such as `acme.myshopify.com`. The Shopify admin URL of the same store is also accepted.
+- **WooCommerce** requires `storeUrl` (the HTTPS store address), `consumerKey` and `consumerSecret`. `wordpressUsername` and `wordpressApplicationPassword` are optional; some WordPress endpoints need them.
+- **Apps that take one key**, such as OpenAI, need only `"apiKey": "..."`.
+
+A successful connect returns the new connection:
+
+```json
+{
+  "id": "con_...",
+  "app": "shopify",
+  "externalUserId": "store_8812",
+  "status": "active",
+  "scopes": [],
+  "connectedAt": "2026-11-12T08:00:00Z",
+  "updatedAt": "2026-11-12T08:00:00Z"
+}
+```
+
+### How credentials are checked
+
+1. **AIsa checks the fields first,** against the app's `credentialFields`. A missing required field, or a field the app does not take, returns `400 invalid_request`. `param` names the problem (`apiKey` or `credentials`), and `message` lists every field the app takes, for example `credential shopDomain is required; the app takes apiKey, shopDomain (required)`. Nothing is sent to the app and nothing is created.
+2. **The app then checks the credentials themselves.** A wrong token, a shop domain that is not a myshopify.com domain, or a WooCommerce address that is not HTTPS returns `400 connect_failed`. Ask the user to check what they entered.
+
+Other rules:
+
+- Send `apiKey` once: at the top level **or** in `credentials`, not both. Sending no credentials at all is also `400 invalid_request`.
+- Unknown fields in the request body are rejected with `400 invalid_request`.
+- An app that is not in the catalog returns `404 not_found`. An app that only supports OAuth returns `400 invalid_request` with `param: "app"`; use the [hosted page](#connect-with-oauth-hosted-page) instead.
+- AIsa does not store, log or return the credentials you send, and error messages never contain credential values.
+
+## Connect with OAuth (hosted page)
+
+For `oauth2` apps, AIsa hosts the authorization page. Start a connect session for the end user:
+
+```bash
+curl -s -G "$AISA_BASE/connect/github" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  --data-urlencode "externalUserId=store_8812" \
+  --data-urlencode "redirectUrl=https://app.example.com/aisa/done"   # optional
+```
+
+```json
+{
+  "connectUrl": "https://.../connect/cs_...#<secret>",
+  "connectSessionId": "cs_...",
+  "expiresAt": "..."
+}
+```
+
+<Steps>
+  <Step title="Open the complete connectUrl">
+    Open the **complete** `connectUrl` in the end user's browser. The part after `#` is the session secret: do not cut it off, and do not write it to logs. The session expires after 30 minutes.
+  </Step>
+  <Step title="The user authorizes the app">
+    When the flow ends, the browser goes to `redirectUrl` with `?connectSessionId=cs_...&connectionId=con_...`, plus `&error=<code>` on failure. `redirectUrl` must be HTTPS and on your account's redirect allowlist. To add a URL prefix to the allowlist, send it to [developer@aisa.one](mailto:developer@aisa.one). Without `redirectUrl`, the user stays on AIsa's result page.
+  </Step>
+  <Step title="Poll the session from your server">
+    The session is the source of truth. Poll it every 2–3 seconds until `state` is `completed`, `failed` or `expired`:
+
+    ```bash
+    curl -s "$AISA_BASE/connect/sessions/cs_..." \
+      -H "Authorization: Bearer $AISA_API_KEY"
+    ```
+
+    ```json
+    { "id": "cs_...", "app": "github", "state": "completed", "connectionId": "con_...", "expiresAt": "..." }
+    ```
+
+    A failed session also has `"error": {"code": "connect_denied", "message": "...", "isUserFixable": true}`.
+  </Step>
+</Steps>
+
+Session states are `created`, `authorizing`, `completed`, `failed` and `expired`.
+
+| Outcome | `state` | `error.code` |
+| --- | --- | --- |
+| Connected | `completed` | none; `connectionId` is set |
+| The user did not grant access | `failed` | `connect_denied` |
+| The user signed in to a different account while reauthorizing | `failed` | `connect_account_mismatch` |
+| The connection could not be completed | `failed` | `connect_failed` |
+| Your account reached its connection limit | `failed` | `user_quota_exceeded` |
+| The app's authorization window (about 10 minutes) or the 30-minute session ran out | `expired` | `connect_expired` |
+
+AIsa creates the connection only after it confirms with the app that authorization finished. The parameters on the redirect are not trusted on their own, so you do not need to forward them to AIsa. If the user returns before the app has recorded the authorization, the hosted page checks again for about 10 seconds; if the user comes back without finishing, the page sends them back to the app's authorization screen.
+
+**Reauthorize a connection.** When a connection needs reconnecting, start a session again with `connectionId=con_...`. The existing connection is updated in place.
+
+## Manage connections
+
+Listing, reading and deleting connections is free.
+
+```bash
+# Both filters are optional; newest first
+curl -s -G "$AISA_BASE/connections" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  --data-urlencode "externalUserId=store_8812" \
+  --data-urlencode "app=shopify"
+
+curl -s "$AISA_BASE/connections/con_..." \
+  -H "Authorization: Bearer $AISA_API_KEY"
+
+curl -s -X DELETE "$AISA_BASE/connections/con_..." \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+Deleting returns the connection with `"status": "disconnected"`. After that, reading it returns `404 not_found`.
+
+| `status` | Meaning |
+| --- | --- |
+| `active` | The connection works. |
+| `needs_reconnect` | The app no longer accepts this authorization. Ask the user to [reconnect](#connect-with-oauth-hosted-page). |
+| `disconnected` | Deleted. It no longer appears in lists. |
+
+By default an AIsa account can have **100 active connections**, counted across all of your end users. Beyond that, connecting returns `403 user_quota_exceeded`. Delete connections you no longer use, or contact us to raise the limit.
+
+## Run actions
+
+```bash
+curl -s -i -X POST "$AISA_BASE/actions/run" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"actionKey": "shopify.get_shop", "externalUserId": "store_8812", "input": {}}'
+```
+
+```http
+HTTP/1.1 200 OK
+X-AISA-Customer-Cost-Micros-USD: 300
+
+{"runId": "run_...", "connectionId": "con_...", "output": {...}}
+```
+
+- **Which connection.** `connectionId` is optional. Without it, AIsa uses the end user's newest `active` connection for the action's app, and the response tells you which connection it used.
+- **Input validation.** `input` is checked against the action's `inputSchema` before anything is sent. A mismatch returns `422 validation_failed`, with `path` and `message` for each problem in `error.details.errors`. Fields the schema does not declare are rejected.
+- **No automatic retries.** Each run is sent to the app once. AIsa never retries it for you.
+- **Run ID.** Errors that happen after the run was sent carry `error.details.runId`. Include it when you contact us.
+
+<Warning>
+Treat `write` and `destructive` actions with care. Check `operationType` before you run an action, and confirm with the end user when the action changes their data. If a write returns `app_error` or `outcome_unknown`, the change may already have happened: check the result in the app before you decide to retry, so you do not write twice.
+</Warning>
+
+## Billing
+
+- Only **successful** runs are charged, at **USD 0.0003 per run** (300 micro-USD). The price is the same on every plan; no plan multiplier applies.
+- Failed runs are never charged. That includes validation failures, missing connections, connections that need reconnecting, rate limiting, app errors and unknown outcomes.
+- Browsing the catalog, connecting, and reading or deleting connections are free.
+- Each run reports what it cost in the `X-AISA-Customer-Cost-Micros-USD` response header, in micro-USD (1 USD = 1,000,000 micro-USD).
+- Before a run is sent, AIsa reserves the cost of one run. If the balance is too low, the request fails with `402` and the action is not sent.
+
+A `402` has a different body from the [other errors](#errors):
+
+```json
+{ "error": { "code": "insufficient_wallet_balance", "message": "...", "retryable": false } }
+```
+
+If the API key has a spending limit and that limit is used up, `code` is `insufficient_api_key_balance`. Top up or adjust the key's limit as described in [Billing & Credits](/guides/pricing).
+
+## Rate limits
+
+Limits apply per API key:
+
+| Requests | Limit |
+| --- | --- |
+| Reads (catalog, sessions, connections) | 300 per minute |
+| Writes (running actions, starting connections, deleting connections) | 60 per minute |
+
+Over the limit, AIsa returns `429 rate_limited` with a `Retry-After` header. An app can also rate limit a request; then the error has `attribution: "upstream"`, and the app's wait time, when it gives one, is passed on in `Retry-After` and in `error.details.retryAfterSeconds`. Rate-limited requests are not charged.
+
+## Errors
+
+Apart from the unavailable-service `404` and the `402` above, every error has this shape:
+
+```json
+{
+  "error": {
+    "code": "connection_required",
+    "message": "...",
+    "type": "invalid_request_error",
+    "param": null,
+    "retryable": false,
+    "retryHint": "never",
+    "attribution": "user",
+    "details": {}
+  }
+}
+```
+
+`attribution` says where the problem is: `user` (the request or the end user's connection), `upstream` (the app) or `aisa` (AIsa). Handle errors by `code`, not by the text of `message`.
+
+| HTTP | `code` | Meaning | What to do |
+| --- | --- | --- | --- |
+| 404 | none: `{"error":"api endpoint not found"}` | AIsa Connect is temporarily unavailable in this environment (every path answers this way) | Contact us |
+| 401 | `unauthorized` | The API key is missing or invalid, or an OAuth token was sent | Check the key |
+| 400 | `invalid_request` | Invalid parameters or body: unknown fields, a bad `externalUserId`, empty credentials or `apiKey` sent twice, a missing credential field (such as Shopify's `shopDomain`) or one the app does not take, an OAuth-only app, a connection that belongs to another app, a `redirectUrl` not on the allowlist | Fix it using `param` and `message`; take credential fields from `credentialFields` in `GET /apps` |
+| 422 | `validation_failed` | `input` does not match `inputSchema`, or the app rejected the input | Fix it using `details.errors` and the schema |
+| 404 | `not_found` | The app, action, connection or session does not exist, including deleted connections and connections of other end users | Check the key or ID |
+| 400 | `connect_failed` | The app rejected the credentials (invalid token, wrong shop domain or store address), or the connection did not complete | Ask the user to check the credentials and try again |
+| (session result) | `connect_denied`, `connect_expired`, `connect_account_mismatch` | Hosted OAuth results, only in the session's `error.code` and the `error` parameter on `redirectUrl`: the user did not grant access, the link expired (`state` is `expired`), or the user signed in to a different account while reauthorizing | Ask the user to connect again |
+| 409 | `connection_required` | The end user has not connected this app | [Connect](#connect-with-credentials) first |
+| 409 | `reconnect_required` | The connection is `needs_reconnect` | Ask the user to reconnect, and delete the old connection |
+| 403 | `user_quota_exceeded` | Your account reached its active connection limit (100 by default) | Delete unused connections, or contact us to raise the limit |
+| 429 | `rate_limited` | AIsa's per-key limit, or the app's own limit (`attribution: upstream`). Can happen when connecting, running actions, browsing the catalog or deleting connections | Retry after `Retry-After`; not charged |
+| 402 | `insufficient_wallet_balance`, `insufficient_api_key_balance` | The balance or the key's spending limit cannot cover one run | Top up, or adjust the key's limit |
+| 502 | `app_error` | The app failed to run the action. A write may already have taken effect. Not charged | Check in the app before retrying |
+| 502 | `outcome_unknown` | The result is unknown. Not charged | Check in the app before retrying |
+| 503 | `connect_unavailable` | Temporarily unavailable, including an app that is not yet enabled on AIsa, or billing for runs that is not yet enabled (the message says so) | Retry later; contact us if it persists |
+| 500 | `internal_error` | An error inside AIsa | Retry later; if it persists, contact us with the time and the `runId` |
+
+When you contact [developer@aisa.one](mailto:developer@aisa.one), include the approximate UTC time, the method and path, the status, the error `code`, and the `runId` when there is one. Never include API keys, end user credentials or the `connectUrl` secret.
+
+## API reference
+
+Paths are relative to `https://api.aisa.one/apis/v1/connector`.
+
+| Endpoint | Reference | Charge |
+| --- | --- | --- |
+| `GET /apps` | [List apps](/api-reference/aisa-connector/get_aisa_connector_apis_v1_connector_apps) | Free |
+| `GET /apps/{app}/actions` | [List the actions of an app](/api-reference/aisa-connector/get_aisa_connector_apis_v1_connector_apps_app_actions) | Free |
+| `GET /actions/{actionKey}` | [Get an action](/api-reference/aisa-connector/get_aisa_connector_apis_v1_connector_actions_actionkey) | Free |
+| `POST /connect/{app}/credentials` | [Connect an app account with credentials](/api-reference/aisa-connector/post_aisa_connector_apis_v1_connector_connect_app_0fbeef) | Free |
+| `GET /connect/{app}` | [Start a hosted connect](/api-reference/aisa-connector/get_aisa_connector_apis_v1_connector_connect_app) | Free |
+| `GET /connect/sessions/{sessionId}` | [Get a connect session](/api-reference/aisa-connector/get_aisa_connector_apis_v1_connector_connect_sess_bfc4e5) | Free |
+| `GET /connections` | [List connections](/api-reference/aisa-connector/get_aisa_connector_apis_v1_connector_connections) | Free |
+| `GET /connections/{connectionId}` | [Get a connection](/api-reference/aisa-connector/get_aisa_connector_apis_v1_connector_connections__b41217) | Free |
+| `DELETE /connections/{connectionId}` | [Disconnect a connection](/api-reference/aisa-connector/delete_aisa_connector_apis_v1_connector_connectio_b41217) | Free |
+| `POST /actions/run` | [Run an action](/api-reference/aisa-connector/post_aisa_connector_apis_v1_connector_actions_run) | Successful runs only |
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Billing & Credits" icon="credit-card" href="/guides/pricing">
+    How your balance, top-ups and key spending limits work.
+  </Card>
+  <Card title="Authentication" icon="lock" href="/guides/authentication">
+    Create, limit, store and rotate API keys.
+  </Card>
+</CardGroup>
