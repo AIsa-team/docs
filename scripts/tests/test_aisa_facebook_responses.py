@@ -9,7 +9,7 @@ from jsonschema import Draft202012Validator, ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from compose_openapi import compose
+from compose_openapi import compose, without_pagination_payload
 from runtime_registry import public_mirror_index
 
 
@@ -56,7 +56,10 @@ class AisaCustomerResponseTests(unittest.TestCase):
         self.assertEqual(len(self.review['sources']), 8)
         self.assertTrue(all(row['nonempty_samples'] > 0 for row in self.review['sources']))
         for row in self.review['sources']:
-            schema = self.media(row)['schema']
+            # Runtime merges its gateway aisa_pagination envelope on top of the
+            # reviewed payload; the frozen review facts predate it.
+            response = self.document['paths'][row['path']][row['method']]['responses']['200']
+            schema = without_pagination_payload(response)['content']['application/json']['schema']
             self.assertEqual(schema, fresh['paths'][row['path']][row['method']]['responses']['200']['content']['application/json']['schema'])
             data = schema['oneOf'][0]['properties']['data']
             self.assertEqual(data['type'], 'object')

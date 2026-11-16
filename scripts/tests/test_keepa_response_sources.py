@@ -11,6 +11,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from compose_openapi import compose
+from publication_surface import frontmatter
 from runtime_registry import public_mirror_index
 from source_governance import policy_errors
 
@@ -67,7 +68,7 @@ class KeepaResponseSourceTests(unittest.TestCase):
             identities = set()
             for page in pages:
                 with self.subTest(page=page.relative_to(ROOT).as_posix()):
-                    header = yaml.safe_load(page.read_text().split('---', 2)[1])
+                    header = yaml.safe_load(frontmatter(page.read_text()) or '')
                     name, method, path = header['openapi'].split()
                     if name not in documents:
                         documents[name] = json.loads((ROOT / name).read_text())
