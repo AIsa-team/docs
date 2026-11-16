@@ -511,4 +511,4 @@ examples plus 143 Monid schemas. Per-operation acquisition bindings remain in
 the reviewed schema inputs, and repeated response descriptions/discovery fields
 are not copied into every public document. The combined release budget is
 192 MiB for the facts, native documents and aggregate together; individual roles
-remain 64 MiB for the aggregate, 8 MiB for ordinary files and 1 MiB for metadata.
+remain 96 MiB for the aggregate, 8 MiB for ordinary files and 1 MiB for metadata.

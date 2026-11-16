@@ -62,9 +62,15 @@ def _publication_string(dumper, value):
 RuntimePublicationDumper.add_representer(str, _publication_string)
 
 
+# GitHub rejects any committed file over 100 MiB. Block-style indentation made
+# openapi.yaml 1.55x its JSON graph (103.6 MB for the 66.9 MB production
+# aggregate); flow style is about 1.2x and parses to the same document.
+GITHUB_FILE_LIMIT = 100 << 20
+
+
 def publication_yaml(document):
     return yaml.dump(document, Dumper=RuntimePublicationDumper,
-                     default_flow_style=False, sort_keys=False,
+                     default_flow_style=True, sort_keys=False,
                      allow_unicode=True, width=120)
 
 DISCOVERY_BEGIN = "<!-- aisa-contract-source:start -->"
@@ -703,6 +709,8 @@ def main():
         "# ──────────────────────────────────────────────────────────────────\n"
     )
     output = banner + output
+    if len(output.encode("utf-8")) >= GITHUB_FILE_LIMIT:
+        raise SystemExit(f"openapi.yaml is {len(output.encode('utf-8')):,} bytes; GitHub rejects files over 100 MiB")
 
     if args.output:
         os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
@@ -710,7 +718,7 @@ def main():
             f.write(output)
         json_path = Path(args.output).resolve().parent / "openapi/openapi.json"
         json_path.parent.mkdir(parents=True, exist_ok=True)
-        # The complete aggregate must fit its 64 MiB publication role budget.
+        # The complete aggregate must fit its 96 MiB publication role budget.
         # Match Runtime's compact JSON while preserving every declaration.
         json_path.write_text(json.dumps(unified, ensure_ascii=False, separators=(",", ":"), allow_nan=False) + "\n")
         index_path = Path(args.output).resolve().parent / "llms.txt"

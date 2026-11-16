@@ -25,6 +25,8 @@ class RuntimeYamlStringTests(unittest.TestCase):
     def test_python_roundtrip_preserves_every_scalar_type_and_value(self):
         fixture = self.fixture()
         self.assertEqual(fixture, yaml.safe_load(publication_yaml(fixture)))
+        # Flow style keeps the production aggregate under GitHub's file limit.
+        self.assertTrue(publication_yaml(fixture).startswith('{'))
         # The dedicated dumper must not change the existing legacy serializer.
         self.assertEqual('plain\n...\n', yaml.dump('plain'))
 
