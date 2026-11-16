@@ -1,12 +1,14 @@
 """Keep internal contracts outside Mint while serving public API page schemas."""
 import json
 from pathlib import Path
+import sys
 import unittest
 
 import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'scripts'))
 
 
 class MintStaticExclusionTests(unittest.TestCase):
@@ -38,13 +40,14 @@ class MintStaticExclusionTests(unittest.TestCase):
         self.assertNotIn('openapi.yaml', json.dumps(config['navigation']))
 
     def test_all_bilingual_api_page_sources_remain_available(self):
+        from publication_surface import frontmatter as yaml_block
         for directory in ('api-reference', 'zh/api-reference'):
             count = 0
             for page in (ROOT / directory).rglob('*.mdx'):
                 text = page.read_text()
                 if not text.startswith('---\n'):
                     continue
-                frontmatter = yaml.safe_load(text.split('---', 2)[1]) or {}
+                frontmatter = yaml.safe_load(yaml_block(text) or '') or {}
                 reference = frontmatter.get('openapi')
                 if not isinstance(reference, str):
                     continue
