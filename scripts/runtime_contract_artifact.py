@@ -10,9 +10,10 @@ MANIFEST = 'contracts/manifest.json'
 AGGREGATE = 'contracts/openapi.json'
 READINESS = 'contracts/readiness.json'
 MAX_METADATA = 1 << 20
-# The current production aggregate is about 45 MB. Keep an explicit ceiling
-# while accepting the complete graph; individual provider limits stay separate.
-MAX_AGGREGATE = 64 << 20
+# The production aggregate reached 66.9 MB on 2026-11-16, 242 KB under the
+# former 64 MiB ceiling, and complete observed response structures add about
+# 2.5 MB. Keep an explicit ceiling; individual provider limits stay separate.
+MAX_AGGREGATE = 96 << 20
 # Native catalogs can group raw facts differently. Bound their inventory
 # separately while retaining the outer 2,048-file cap over the whole release.
 MAX_CANONICAL_MEMBERS = 1024
