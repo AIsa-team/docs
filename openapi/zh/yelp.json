@@ -37,21 +37,12 @@
       "/apis/v1/yelp/businesses/{alias}/reviews"
     ],
     "x-aisa-document": {
-      "facts_hash": "1e5a5cb00ecdf714483ceba8e978100d14806483fa255c5507ca0f694838f4f1",
+      "facts_hash": "f633d259c90f17bbb8a78a8eca93f4dbf7b209a46e384868f512ea146705ef00",
       "generator_version": "3",
       "protocol_version": "1",
       "schema_version": "1",
       "composer_version": "29",
       "response_pending": [
-        {
-          "operation_id": "yelp.businesses.search",
-          "path": "/apis/v1/yelp/businesses/search",
-          "method": "GET",
-          "statuses": [
-            "200"
-          ],
-          "reason": "public success response has no authoritative payload declaration"
-        },
         {
           "operation_id": "yelp.businesses.alias",
           "path": "/apis/v1/yelp/businesses/{alias}",
@@ -60,27 +51,9 @@
             "200"
           ],
           "reason": "public success response has no authoritative payload declaration"
-        },
-        {
-          "operation_id": "yelp.businesses.alias.photos",
-          "path": "/apis/v1/yelp/businesses/{alias}/photos",
-          "method": "GET",
-          "statuses": [
-            "200"
-          ],
-          "reason": "public success response has no authoritative payload declaration"
-        },
-        {
-          "operation_id": "yelp.businesses.alias.reviews",
-          "path": "/apis/v1/yelp/businesses/{alias}/reviews",
-          "method": "GET",
-          "statuses": [
-            "200"
-          ],
-          "reason": "public success response has no authoritative payload declaration"
         }
       ],
-      "document_hash": "sha256:3a63ff262820697770cecaa1e3d969a6e46718f4f0c289c9104203ce25dcb7c9"
+      "document_hash": "sha256:28b092c29a4985c7a6705d38888a2f7ed11ec50b415f939817907df8a76024d7"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -96,7 +69,7 @@
         "title": "Yelp",
         "description": "",
         "x-aisa-document": {
-          "facts_hash": "1e5a5cb00ecdf714483ceba8e978100d14806483fa255c5507ca0f694838f4f1",
+          "facts_hash": "f633d259c90f17bbb8a78a8eca93f4dbf7b209a46e384868f512ea146705ef00",
           "generator_version": "3",
           "protocol_version": "1",
           "schema_version": "1"
@@ -135,21 +108,15 @@
   "paths": {
     "/apis/v1/yelp/businesses/search": {
       "get": {
+        "description": "Searches Yelp businesses by name, category, or location. Required inputs: `query` and `location`. Results are paged: while `data.page.hasMore` is true, send `data.page.nextPage` as `page` to get the next page.",
         "operationId": "yelp.businesses.search",
         "parameters": [
           {
-            "examples": {
-              "default": {
-                "value": "example"
-              },
-              "minimal": {
-                "value": "example"
-              }
-            },
             "in": "query",
             "name": "location",
             "required": true,
             "schema": {
+              "description": "City, neighbourhood, postcode or address to search near.",
               "maxLength": 4096,
               "minLength": 1,
               "type": "string"
@@ -160,24 +127,18 @@
             "name": "page",
             "required": false,
             "schema": {
+              "description": "Page number, starting at 1. Each page has up to 10 businesses.",
               "maximum": 9223372036854775807,
               "minimum": 1,
               "type": "integer"
             }
           },
           {
-            "examples": {
-              "default": {
-                "value": "nike"
-              },
-              "minimal": {
-                "value": "nike"
-              }
-            },
             "in": "query",
             "name": "query",
             "required": true,
             "schema": {
+              "description": "Business name, service, or category to search for.",
               "maxLength": 4096,
               "minLength": 1,
               "type": "string"
@@ -188,6 +149,7 @@
             "name": "sort",
             "required": false,
             "schema": {
+              "description": "Result order. `recommended` is Yelp's default ranking. `highest_rated` and `most_reviewed` use Yelp's own sorts.",
               "enum": [
                 "highest_rated",
                 "most_reviewed",
@@ -201,7 +163,60 @@
         ],
         "responses": {
           "200": {
-            "description": "成功响应"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "aisa_pagination": {
+                      "additionalProperties": false,
+                      "description": "AIsa pagination. Pass next_cursor as page to fetch the next page; has_more is false on the last page.",
+                      "properties": {
+                        "has_more": {
+                          "type": "boolean"
+                        },
+                        "next_cursor": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "next_param": {
+                          "const": "page",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "has_more",
+                        "next_cursor",
+                        "next_param"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "成功响应",
+            "headers": {
+              "X-AISA-Has-More": {
+                "description": "Mirrors aisa_pagination.has_more.",
+                "schema": {
+                  "enum": [
+                    "true",
+                    "false"
+                  ],
+                  "type": "string"
+                }
+              },
+              "X-AISA-Next-Cursor": {
+                "description": "Mirrors aisa_pagination.next_cursor; absent on the last page.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "default": {
             "content": {
@@ -228,6 +243,188 @@
           "x402": false
         },
         "x-aisa-category": "social",
+        "x-aisa-example": {
+          "reason": "no_fixture",
+          "request_contract_sha256": "afce7aca5cba474cb221fbb06b958d088b4f4a2b08e15dd7ce56ff956117d06d",
+          "state": "pending"
+        },
+        "x-aisa-latency": {
+          "basis": "sweep_seed"
+        },
+        "x-aisa-latency-class": "slow",
+        "x-aisa-observed-responses": {
+          "200": {
+            "completeness": "observed",
+            "last_observed": "2026-11-14",
+            "origins": [
+              "probe"
+            ],
+            "schema": {
+              "additionalProperties": true,
+              "properties": {
+                "data": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "businesses": {
+                      "items": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "address": {
+                            "additionalProperties": true,
+                            "properties": {
+                              "city": {
+                                "type": "string"
+                              },
+                              "country": {
+                                "type": "string"
+                              },
+                              "formatted": {
+                                "type": "string"
+                              },
+                              "line1": {
+                                "type": "string"
+                              },
+                              "line2": {
+                                "type": [
+                                  "null",
+                                  "string"
+                                ]
+                              },
+                              "postalCode": {
+                                "type": "string"
+                              },
+                              "region": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "alias": {
+                            "type": "string"
+                          },
+                          "categories": {
+                            "items": {
+                              "additionalProperties": true,
+                              "properties": {
+                                "alias": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "coordinates": {
+                            "additionalProperties": true,
+                            "properties": {
+                              "latitude": {
+                                "type": "number"
+                              },
+                              "longitude": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "isClosed": {
+                            "type": "null"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "phone": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "photoUrl": {
+                            "type": "string"
+                          },
+                          "priceRange": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "ranking": {
+                            "type": "integer"
+                          },
+                          "rating": {
+                            "type": "number"
+                          },
+                          "reviewCount": {
+                            "type": "integer"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "page": {
+                      "additionalProperties": true,
+                      "properties": {
+                        "hasMore": {
+                          "type": "boolean"
+                        },
+                        "nextPage": {
+                          "type": "integer"
+                        },
+                        "page": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "query": {
+                      "type": "string"
+                    },
+                    "resolvedLocation": {
+                      "type": "string"
+                    },
+                    "sort": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "totalResults": {
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                },
+                "meta": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "x-aisa-pagination": {
+          "ordering": "stable",
+          "request": {
+            "in": "query",
+            "param": "page"
+          },
+          "style": "page"
+        },
         "x-aisa-pricing": {
           "cost_contract": "response_units",
           "customer_multiplier": 1.0,
@@ -243,9 +440,9 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-passthrough": true,
-        "x-aisa-response-upstream-origin-sha256": "f0e4ae514d1a43a38999ea43c73bb405c7b0d1bcf929f5c9c22d2f8c7ad85b6b",
-        "x-aisa-response-upstream-path-sha256": "461e3821b8fbde1419100b648d55dc52c591c2a127c48ab4ed22fb421c47e4f9",
+        "x-aisa-response-contract-hashes": {
+          "GET": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
         "x-aisa-revision": {
           "customer_pricing_ref": "b35ec6a8f68b",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
@@ -259,42 +456,20 @@
           "method": "GET",
           "path": "/apis/v1/yelp/businesses/search"
         },
-        "x-aisa-response-pending": {
-          "operation_id": "yelp.businesses.search",
-          "path": "/apis/v1/yelp/businesses/search",
-          "method": "GET",
-          "statuses": [
-            "200"
-          ],
-          "reason": "public success response has no authoritative payload declaration"
-        },
-        "x-codeSamples": [
-          {
-            "lang": "text",
-            "label": "Reference example",
-            "source": "# Fixed reference example. Playground inputs do not update this sample.\ncurl --request GET \\\n  --url 'https://api.aisa.one/apis/v1/yelp/businesses/search?location=example&query=nike' \\\n  --header 'Authorization: Bearer <token>'"
-          }
-        ],
         "x-aisa-docs-url": "/api-reference/yelp/yelp-businesses-search"
       }
     },
     "/apis/v1/yelp/businesses/{alias}": {
       "get": {
+        "description": "Returns public details for a Yelp business.",
         "operationId": "yelp.businesses.alias",
         "parameters": [
           {
-            "examples": {
-              "default": {
-                "value": "example"
-              },
-              "minimal": {
-                "value": "example"
-              }
-            },
             "in": "path",
             "name": "alias",
             "required": true,
             "schema": {
+              "description": "Yelp business alias or full business URL.",
               "maxLength": 4096,
               "minLength": 1,
               "type": "string"
@@ -330,6 +505,133 @@
           "x402": false
         },
         "x-aisa-category": "social",
+        "x-aisa-example": {
+          "reason": "no_fixture",
+          "request_contract_sha256": "99864f31e108d2f82d10e3b6c25d7a20788d811f26166fc484d023e2a7f1e464",
+          "state": "pending"
+        },
+        "x-aisa-latency": {
+          "basis": "sweep_seed"
+        },
+        "x-aisa-latency-class": "fast",
+        "x-aisa-observed-responses": {
+          "200": {
+            "completeness": "observed",
+            "last_observed": "2026-11-14",
+            "origins": [
+              "probe"
+            ],
+            "schema": {
+              "additionalProperties": true,
+              "properties": {
+                "data": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "address": {
+                      "additionalProperties": true,
+                      "properties": {
+                        "city": {
+                          "type": "string"
+                        },
+                        "country": {
+                          "type": "string"
+                        },
+                        "formatted": {
+                          "type": "string"
+                        },
+                        "line1": {
+                          "type": "string"
+                        },
+                        "line2": {
+                          "type": "null"
+                        },
+                        "postalCode": {
+                          "type": "string"
+                        },
+                        "region": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "alias": {
+                      "type": "string"
+                    },
+                    "amenities": {
+                      "items": {},
+                      "type": "array"
+                    },
+                    "businessId": {
+                      "type": "string"
+                    },
+                    "categories": {
+                      "items": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "alias": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "coordinates": {
+                      "type": "null"
+                    },
+                    "isClaimed": {
+                      "type": "boolean"
+                    },
+                    "isClosed": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "openingHours": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "phone": {
+                      "type": "null"
+                    },
+                    "priceRange": {
+                      "type": "null"
+                    },
+                    "rating": {
+                      "type": "number"
+                    },
+                    "reviewCount": {
+                      "type": "integer"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "website": {
+                      "type": "null"
+                    }
+                  },
+                  "type": "object"
+                },
+                "meta": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
         "x-aisa-pricing": {
           "cost_contract": "response_units",
           "customer_multiplier": 1.0,
@@ -345,9 +647,9 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-passthrough": true,
-        "x-aisa-response-upstream-origin-sha256": "f0e4ae514d1a43a38999ea43c73bb405c7b0d1bcf929f5c9c22d2f8c7ad85b6b",
-        "x-aisa-response-upstream-path-sha256": "d95570b79c8f5f2e3d7ffd85cdf401d029508363aec292bb09ef14791e85f994",
+        "x-aisa-response-contract-hashes": {
+          "GET": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
         "x-aisa-revision": {
           "customer_pricing_ref": "b35ec6a8f68b",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
@@ -370,33 +672,20 @@
           ],
           "reason": "public success response has no authoritative payload declaration"
         },
-        "x-codeSamples": [
-          {
-            "lang": "text",
-            "label": "Reference example",
-            "source": "# Fixed reference example. Playground inputs do not update this sample.\ncurl --request GET \\\n  --url https://api.aisa.one/apis/v1/yelp/businesses/example \\\n  --header 'Authorization: Bearer <token>'"
-          }
-        ],
         "x-aisa-docs-url": "/api-reference/yelp/yelp-businesses-alias"
       }
     },
     "/apis/v1/yelp/businesses/{alias}/photos": {
       "get": {
+        "description": "Lists public photos for a Yelp business. Results are paged: while `data.page.hasMore` is true, send `data.page.nextCursor` as `cursor` to get the next page.",
         "operationId": "yelp.businesses.alias.photos",
         "parameters": [
           {
-            "examples": {
-              "default": {
-                "value": "example"
-              },
-              "minimal": {
-                "value": "example"
-              }
-            },
             "in": "path",
             "name": "alias",
             "required": true,
             "schema": {
+              "description": "Yelp business alias or full business URL.",
               "maxLength": 4096,
               "minLength": 1,
               "type": "string"
@@ -407,6 +696,7 @@
             "name": "cursor",
             "required": false,
             "schema": {
+              "description": "Cursor returned with the previous page.",
               "maxLength": 16384,
               "minLength": 1,
               "type": "string"
@@ -415,7 +705,60 @@
         ],
         "responses": {
           "200": {
-            "description": "成功响应"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "aisa_pagination": {
+                      "additionalProperties": false,
+                      "description": "AIsa pagination. Pass next_cursor as cursor to fetch the next page; has_more is false on the last page.",
+                      "properties": {
+                        "has_more": {
+                          "type": "boolean"
+                        },
+                        "next_cursor": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "next_param": {
+                          "const": "cursor",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "has_more",
+                        "next_cursor",
+                        "next_param"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "成功响应",
+            "headers": {
+              "X-AISA-Has-More": {
+                "description": "Mirrors aisa_pagination.has_more.",
+                "schema": {
+                  "enum": [
+                    "true",
+                    "false"
+                  ],
+                  "type": "string"
+                }
+              },
+              "X-AISA-Next-Cursor": {
+                "description": "Mirrors aisa_pagination.next_cursor; absent on the last page.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "default": {
             "content": {
@@ -442,6 +785,113 @@
           "x402": false
         },
         "x-aisa-category": "social",
+        "x-aisa-example": {
+          "reason": "no_fixture",
+          "request_contract_sha256": "6dd4089c25065fb36502c7d25b07f9fabef8216f674ec1ad1bfb18a138e4a7cd",
+          "state": "pending"
+        },
+        "x-aisa-latency": {
+          "basis": "sweep_seed"
+        },
+        "x-aisa-latency-class": "fast",
+        "x-aisa-observed-responses": {
+          "200": {
+            "completeness": "observed",
+            "last_observed": "2026-11-14",
+            "origins": [
+              "probe"
+            ],
+            "schema": {
+              "additionalProperties": true,
+              "properties": {
+                "data": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "alias": {
+                      "type": "string"
+                    },
+                    "businessId": {
+                      "type": "string"
+                    },
+                    "businessName": {
+                      "type": "string"
+                    },
+                    "isTruncated": {
+                      "type": "boolean"
+                    },
+                    "page": {
+                      "additionalProperties": true,
+                      "properties": {
+                        "hasMore": {
+                          "type": "boolean"
+                        },
+                        "nextCursor": {
+                          "type": "null"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "photos": {
+                      "items": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "caption": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "height": {
+                            "type": "integer"
+                          },
+                          "photoId": {
+                            "type": "string"
+                          },
+                          "thumbnail": {
+                            "type": "string"
+                          },
+                          "uploadedAt": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "width": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "sourceMediaCount": {
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                },
+                "meta": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "x-aisa-pagination": {
+          "ordering": "stable",
+          "request": {
+            "in": "query",
+            "param": "cursor"
+          },
+          "style": "cursor"
+        },
         "x-aisa-pricing": {
           "cost_contract": "response_units",
           "customer_multiplier": 1.0,
@@ -457,9 +907,9 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-passthrough": true,
-        "x-aisa-response-upstream-origin-sha256": "f0e4ae514d1a43a38999ea43c73bb405c7b0d1bcf929f5c9c22d2f8c7ad85b6b",
-        "x-aisa-response-upstream-path-sha256": "91b8bc02c87a29d3538720c1ce980e5a070fd83204dcfa45f38276f644fb6d6f",
+        "x-aisa-response-contract-hashes": {
+          "GET": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
         "x-aisa-revision": {
           "customer_pricing_ref": "b35ec6a8f68b",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
@@ -473,60 +923,31 @@
           "method": "GET",
           "path": "/apis/v1/yelp/businesses/{alias}/photos"
         },
-        "x-aisa-response-pending": {
-          "operation_id": "yelp.businesses.alias.photos",
-          "path": "/apis/v1/yelp/businesses/{alias}/photos",
-          "method": "GET",
-          "statuses": [
-            "200"
-          ],
-          "reason": "public success response has no authoritative payload declaration"
-        },
-        "x-codeSamples": [
-          {
-            "lang": "text",
-            "label": "Reference example",
-            "source": "# Fixed reference example. Playground inputs do not update this sample.\ncurl --request GET \\\n  --url https://api.aisa.one/apis/v1/yelp/businesses/example/photos \\\n  --header 'Authorization: Bearer <token>'"
-          }
-        ],
         "x-aisa-docs-url": "/api-reference/yelp/yelp-businesses-alias-photos"
       }
     },
     "/apis/v1/yelp/businesses/{alias}/reviews": {
       "get": {
+        "description": "Lists public reviews for a Yelp business, filtered to the review category given in `category`. Required input: `category`. Results are paged: while `data.page.hasMore` is true, send `data.page.nextCursor` as `cursor` to get the next page.",
         "operationId": "yelp.businesses.alias.reviews",
         "parameters": [
           {
-            "examples": {
-              "default": {
-                "value": "example"
-              },
-              "minimal": {
-                "value": "example"
-              }
-            },
             "in": "path",
             "name": "alias",
             "required": true,
             "schema": {
+              "description": "Yelp business alias or full business URL.",
               "maxLength": 4096,
               "minLength": 1,
               "type": "string"
             }
           },
           {
-            "examples": {
-              "default": {
-                "value": "not_recommended"
-              },
-              "minimal": {
-                "value": "not_recommended"
-              }
-            },
             "in": "query",
             "name": "category",
             "required": true,
             "schema": {
+              "description": "Review category to return.",
               "enum": [
                 "not_recommended",
                 "recommended",
@@ -542,6 +963,7 @@
             "name": "cursor",
             "required": false,
             "schema": {
+              "description": "Cursor returned with the previous page.",
               "maxLength": 16384,
               "minLength": 1,
               "type": "string"
@@ -550,7 +972,60 @@
         ],
         "responses": {
           "200": {
-            "description": "成功响应"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "aisa_pagination": {
+                      "additionalProperties": false,
+                      "description": "AIsa pagination. Pass next_cursor as cursor to fetch the next page; has_more is false on the last page.",
+                      "properties": {
+                        "has_more": {
+                          "type": "boolean"
+                        },
+                        "next_cursor": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "next_param": {
+                          "const": "cursor",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "has_more",
+                        "next_cursor",
+                        "next_param"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "成功响应",
+            "headers": {
+              "X-AISA-Has-More": {
+                "description": "Mirrors aisa_pagination.has_more.",
+                "schema": {
+                  "enum": [
+                    "true",
+                    "false"
+                  ],
+                  "type": "string"
+                }
+              },
+              "X-AISA-Next-Cursor": {
+                "description": "Mirrors aisa_pagination.next_cursor; absent on the last page.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "default": {
             "content": {
@@ -577,6 +1052,235 @@
           "x402": false
         },
         "x-aisa-category": "social",
+        "x-aisa-example": {
+          "reason": "no_fixture",
+          "request_contract_sha256": "9ad52319f8aaae081d1dad4c642e31c99c81ca04f38a2103a314bf51627531a3",
+          "state": "pending"
+        },
+        "x-aisa-latency": {
+          "basis": "sweep_seed"
+        },
+        "x-aisa-latency-class": "fast",
+        "x-aisa-observed-responses": {
+          "200": {
+            "completeness": "observed",
+            "last_observed": "2026-11-14",
+            "origins": [
+              "probe"
+            ],
+            "schema": {
+              "additionalProperties": true,
+              "properties": {
+                "data": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "alias": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "discoveredCount": {
+                      "type": "integer"
+                    },
+                    "listing": {
+                      "additionalProperties": true,
+                      "properties": {
+                        "businessId": {
+                          "type": "string"
+                        },
+                        "businessName": {
+                          "type": "string"
+                        },
+                        "isClaimed": {
+                          "type": "boolean"
+                        },
+                        "notRecommendedReviewCount": {
+                          "type": "integer"
+                        },
+                        "overallRating": {
+                          "type": "number"
+                        },
+                        "recommendedReviewCount": {
+                          "type": "integer"
+                        },
+                        "removedReviewCount": {
+                          "type": "null"
+                        },
+                        "stars": {
+                          "additionalProperties": true,
+                          "properties": {
+                            "five": {
+                              "type": "integer"
+                            },
+                            "four": {
+                              "type": "integer"
+                            },
+                            "one": {
+                              "type": "integer"
+                            },
+                            "three": {
+                              "type": "integer"
+                            },
+                            "two": {
+                              "type": "integer"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "starsReconciled": {
+                          "type": "boolean"
+                        },
+                        "starsTotal": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "page": {
+                      "additionalProperties": true,
+                      "properties": {
+                        "hasMore": {
+                          "type": "boolean"
+                        },
+                        "nextCursor": {
+                          "type": "null"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "reviews": {
+                      "items": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "address": {
+                            "type": "string"
+                          },
+                          "date": {
+                            "type": "string"
+                          },
+                          "eliteYear": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "friends": {
+                            "type": "integer"
+                          },
+                          "isUpdated": {
+                            "type": "boolean"
+                          },
+                          "language": {
+                            "type": "string"
+                          },
+                          "link": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "ownerReplies": {
+                            "items": {},
+                            "type": "array"
+                          },
+                          "photos": {
+                            "type": "integer"
+                          },
+                          "previousVersions": {
+                            "items": {},
+                            "type": "array"
+                          },
+                          "rating": {
+                            "type": "integer"
+                          },
+                          "reactions": {
+                            "additionalProperties": true,
+                            "properties": {
+                              "helpful": {
+                                "type": "integer"
+                              },
+                              "loveThis": {
+                                "type": "integer"
+                              },
+                              "ohNo": {
+                                "type": "integer"
+                              },
+                              "thanks": {
+                                "type": "integer"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "reason": {
+                            "type": "null"
+                          },
+                          "reviewId": {
+                            "type": "string"
+                          },
+                          "reviewPhotos": {
+                            "items": {
+                              "additionalProperties": true,
+                              "properties": {
+                                "caption": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "link": {
+                                  "type": "string"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "reviews": {
+                            "type": "integer"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "thumbnail": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "userId": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
+                "meta": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "x-aisa-pagination": {
+          "ordering": "stable",
+          "request": {
+            "in": "query",
+            "param": "cursor"
+          },
+          "style": "cursor"
+        },
         "x-aisa-pricing": {
           "cost_contract": "response_units",
           "customer_multiplier": 1.0,
@@ -592,9 +1296,9 @@
           "ignore_undeclared": false,
           "request_wins": false
         },
-        "x-aisa-response-passthrough": true,
-        "x-aisa-response-upstream-origin-sha256": "f0e4ae514d1a43a38999ea43c73bb405c7b0d1bcf929f5c9c22d2f8c7ad85b6b",
-        "x-aisa-response-upstream-path-sha256": "080ac8f3f410426413c99066d2f0a492a0748c0b69dbd51fa58689f9e8d8f5e6",
+        "x-aisa-response-contract-hashes": {
+          "GET": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
         "x-aisa-revision": {
           "customer_pricing_ref": "b35ec6a8f68b",
           "plan_policy_version": "e70a0959cd1b93b84ae16dffd7a538273ddb9c1d46277b82823c37ff1b6bc0fb",
@@ -608,22 +1312,6 @@
           "method": "GET",
           "path": "/apis/v1/yelp/businesses/{alias}/reviews"
         },
-        "x-aisa-response-pending": {
-          "operation_id": "yelp.businesses.alias.reviews",
-          "path": "/apis/v1/yelp/businesses/{alias}/reviews",
-          "method": "GET",
-          "statuses": [
-            "200"
-          ],
-          "reason": "public success response has no authoritative payload declaration"
-        },
-        "x-codeSamples": [
-          {
-            "lang": "text",
-            "label": "Reference example",
-            "source": "# Fixed reference example. Playground inputs do not update this sample.\ncurl --request GET \\\n  --url 'https://api.aisa.one/apis/v1/yelp/businesses/example/reviews?category=not_recommended' \\\n  --header 'Authorization: Bearer <token>'"
-          }
-        ],
         "x-aisa-docs-url": "/api-reference/yelp/yelp-businesses-alias-reviews"
       }
     },
