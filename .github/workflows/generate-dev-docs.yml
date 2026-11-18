@@ -52,6 +52,13 @@ jobs:
           python scripts/sync_dev_runtime.py --source production --write "${options[@]}" \
             --report "$RUNNER_TEMP/dev-runtime-report.json"
           git diff --check
+      - name: Generate the Task pages from the dev Task catalog
+        # Tasks are on dev before production, so they come from the dev API's
+        # public catalog, not the production contract preview above. A failed
+        # read keeps the saved pages; the next run retries.
+        run: |
+          python scripts/sync_dev_tasks.py --api https://dev-api.aisa.one
+          git diff --check
       - name: Refresh the model pages from the live model price list
         # A failed read keeps the saved snapshot; the next run retries.
         run: |
@@ -69,7 +76,7 @@ jobs:
           assessed_base=$(git rev-parse HEAD)
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add -- docs.json openapi.yaml openapi api-reference zh/api-reference docs/dev-runtime.json resources/data-apis.mdx zh/resources/data-apis.mdx catalog/models.json models zh/models guides/models.mdx zh/guides/models.mdx
+          git add -- docs.json openapi.yaml openapi api-reference zh/api-reference tasks zh/tasks docs/dev-runtime.json resources/data-apis.mdx zh/resources/data-apis.mdx catalog/models.json models zh/models guides/models.mdx zh/guides/models.mdx
           if git diff --cached --quiet; then
             echo 'Dev documentation is already up to date.' >> "$GITHUB_STEP_SUMMARY"
             exit 0

@@ -1,0 +1,103 @@
+---
+title: "任务"
+description: "一个任务一次调用：AIsa 选择数据源，把结果映射成统一的结构，只在找到结果时收费。"
+---
+
+<Note>任务目前只在 dev API（`https://dev-api.aisa.one`）上线，生产环境尚未开放。</Note>
+
+一个任务对应一件事，例如*获取帖子*或*搜索账号*。同一个任务在它支持的所有平台上，输入契约和输出结构都一样。AIsa 把调用路由到数据源，第一个失败或没找到时换下一个，并把每个结果映射到同样的字段，所以无论哪个数据源回答，结果的含义都相同。
+
+## 可用任务
+
+| 任务 | 用途 | 平台 | 计费 |
+| --- | --- | --- | --- |
+| [`social.analyze_comments`](/zh/tasks/social-analyze-comments) | 分析评论主题与情绪 | YouTube | 按找到的调用 |
+| [`social.download_media`](/zh/tasks/social-download-media) | 获取帖子媒体文件下载地址 | TikTok | 按找到的调用 |
+| [`social.get_community`](/zh/tasks/social-get-community) | 获取群组、社区、频道或列表及其内容 | Reddit, YouTube, X | 按找到的调用 |
+| [`social.get_live`](/zh/tasks/social-get-live) | 获取直播间状态与详情 | TikTok, X | 按找到的调用 |
+| [`social.get_post`](/zh/tasks/social-get-post) | 获取帖子或视频详情与数据 | TikTok, YouTube, X, Reddit, Instagram | 按找到的调用 |
+| [`social.get_profile`](/zh/tasks/social-get-profile) | 获取社媒主页资料与数据 | TikTok, YouTube, X, Instagram | 按找到的调用 |
+| [`social.get_transcript`](/zh/tasks/social-get-transcript) | 获取视频或帖子的字幕文本 | TikTok, YouTube, X, Reddit, Instagram | 按找到的调用 |
+| [`social.get_trending`](/zh/tasks/social-get-trending) | 获取热门内容、话题与热搜榜 | TikTok, YouTube, Instagram | 按返回条数 |
+| [`social.list_comments`](/zh/tasks/social-list-comments) | 获取帖子或视频的评论列表 | TikTok, YouTube, X, Reddit, Instagram | 按返回条数 |
+| [`social.list_engagers`](/zh/tasks/social-list-engagers) | 列出点赞、转发或互动的人 | X | 按返回条数 |
+| [`social.list_followers`](/zh/tasks/social-list-followers) | 列出粉丝或关注列表 | TikTok, X, Instagram | 按返回条数 |
+| [`social.list_profile_posts`](/zh/tasks/social-list-profile-posts) | 列出主页最近的帖子或视频 | TikTok, YouTube, X, Instagram | 按返回条数 |
+| [`social.list_topic_posts`](/zh/tasks/social-list-topic-posts) | 列出话题、音乐、地点下的内容 | TikTok, YouTube, X, Reddit, Instagram | 按返回条数 |
+| [`social.resolve_id`](/zh/tasks/social-resolve-id) | 社媒 URL、用户名与平台 ID 互转 | TikTok, YouTube, X, Instagram | 按找到的调用 |
+| [`social.search_posts`](/zh/tasks/social-search-posts) | 按关键词搜索社媒帖子 | TikTok, YouTube, X, Reddit, Instagram | 按返回条数 |
+| [`social.search_profiles`](/zh/tasks/social-search-profiles) | 搜索账号 | TikTok, YouTube, X, Instagram | 按返回条数 |
+
+## 调用任务
+
+用 AIsa API key 发送 `POST /v1/tasks/{task_id}`。请求体包含任务输入和可选的 options：
+
+```bash
+curl -sS https://dev-api.aisa.one/v1/tasks/social.get_post \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"input": {"platform": "tiktok", "url": "https://www.tiktok.com/@nasa/video/7300000000000000000"}, "options": {"strategy": "auto"}}'
+```
+
+### Options
+
+| | |
+| --- | --- |
+| `strategy` | `auto`（多数任务的默认值）：按顺序尝试数据源，拿到第一个答复就停止。`waterfall`：未命中时继续下一个数据源。`merge`：并行请求多个数据源并合并字段。`compare`：在 `result.by_source` 里并列返回每个数据源的结果。`any_hit`：任一数据源找到即为 found。 |
+| `max_providers` | 降低一个策略最多尝试的数据源数量。 |
+| `providers` | `{"only": [...]}` 或 `{"exclude": [...]}`，限定数据源。 |
+| `detail` | `full` 会在 `meta.raw` 里附上每个数据源的原始响应。 |
+
+## 响应
+
+所有任务都返回 HTTP 200 和同样的外层结构：
+
+```json
+{
+  "task": "social.get_post",
+  "version": 1,
+  "status": "found",
+  "result": {
+    "platform": "tiktok",
+    "post_id": "7300000000000000000",
+    "views": 1200
+  },
+  "meta": {
+    "sources": [],
+    "attempts": [],
+    "missing_fields": {},
+    "approximate_fields": [],
+    "delivered": true
+  }
+}
+```
+
+| | |
+| --- | --- |
+| `status` | `found`、`partial`（找到了，但部分字段缺失）或 `not_found`。 |
+| `result` | 任务结果，见各任务页面。列表类任务返回 `{"items": [...]}`。 |
+| `meta.missing_fields` | 结果里为 null 的字段及原因。 |
+| `meta.approximate_fields` | 平台只显示约数的计数（例如 1.2K）。 |
+| `meta.sources / meta.attempts` | 由哪个数据源回答，以及每次尝试的结果。 |
+| `meta.delivered` | 这次调用是否交付了结果，即是否收费。 |
+
+## 计费
+
+只有交付了结果才收费：`not_found` 不收费。`fixed` 任务每次找到收一次固定价，与策略无关。`per_unit` 任务按返回的条数收费，最多到 `limit`。任务的实时价格在 `GET /v1/tasks/{task_id}` 的 `pricing` 里；`X-AISA-Max-Price-USD` 设定价格上限，`X-AISA-Cost-Mode: quote` 只报价、不执行。
+
+## 重试
+
+带上 `Idempotency-Key` 可以安全重试：同一个 key 最多扣一次费。已扣费的 key 在 24 小时内返回第一次的结果（`Idempotent-Replayed: true`）；之前没有扣费的 key 会重新执行。
+
+## 错误
+
+| HTTP | |
+| --- | --- |
+| 400 | `invalid_request`，或 `unsupported_route`（返回任务支持的平台） |
+| 404 | `task_not_found`，返回最相近的任务 ID |
+| 422 | `invalid_input`，或平台判定输入有误时的 `provider_rejected_input` |
+| 502 | `all_providers_failed`：所有数据源都失败，不收费 |
+
+## 查找任务
+
+`GET /v1/tasks` 列出所有任务（`?q=` 搜索，`?domain=` 过滤）。`GET /v1/tasks/{task_id}` 返回输入契约、支持的平台及各平台返回的字段、输出结构、计费方式和价格。加 `?lang=zh` 返回中文说明。
