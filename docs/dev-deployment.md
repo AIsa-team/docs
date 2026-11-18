@@ -135,6 +135,29 @@ except dev before acquisition or writes. `--source dev` remains available for
 explicit dev API checks; its complete live-facts reader retains double reads,
 provider hashes, a stable catalog and no redirects.
 
+## Task pages on dev
+
+Tasks (`POST /v1/tasks/{task_id}`) are published on the dev API before
+production, so the production contract preview above has none.
+`scripts/sync_dev_tasks.py` reads the public dev Task catalog instead
+(`GET https://dev-api.aisa.one/v1/tasks`, then each task's detail in English
+and with `?lang=zh`) and writes:
+
+- `tasks/overview.mdx` and one page per task, mirrored under `zh/tasks/`;
+- `tasks/openapi.json` and `zh/tasks/openapi.json`, one `POST` per task, with
+  the dev API as server;
+- a `Tasks` / `任务` group in the API Reference tab, after `Overview`.
+
+The pages live outside `api-reference/` and `openapi/`, so the Runtime
+generator neither rewrites their URLs to production nor marks them as
+unverified production references. `generate-dev-docs.yml` runs the script
+after the Runtime step on every run, and each run rewrites all Task files, so
+a removed task disappears. When the catalog cannot be read (or a detail lacks
+its output schema), nothing is written and the saved pages stay. The input
+contract, platforms, fields, output schema and billing mode come from the
+API (AIsaServices `packages/tasklayer/taskdoc`); the overview copy is in the
+script. Local run: `python scripts/sync_dev_tasks.py`.
+
 ## Automatic preview generation
 
 The default-branch timer only dispatches `generate-dev-docs.yml` at `ref: dev`.

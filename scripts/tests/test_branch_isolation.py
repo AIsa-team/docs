@@ -139,7 +139,9 @@ class BranchIsolationTests(unittest.TestCase):
             'zh/api-reference', 'docs/dev-runtime.json',
             # Generated blocks: the Data APIs cards and the model tables.
             'resources/data-apis.mdx', 'zh/resources/data-apis.mdx',
-            'catalog/models.json', 'models', 'zh/models', 'guides/models.mdx', 'zh/guides/models.mdx'})
+            'catalog/models.json', 'models', 'zh/models', 'guides/models.mdx', 'zh/guides/models.mdx',
+            # The Task pages generated from the dev Task catalog.
+            'tasks', 'zh/tasks'})
         self.assertIn('git push origin HEAD:dev', publish)
         text = yaml.safe_dump(value)
         for operation in ('create-pull-request', '--force', '--expected-runtime-revision', 'secrets.',
