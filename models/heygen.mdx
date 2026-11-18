@@ -1,0 +1,50 @@
+---
+title: HeyGen Video API
+description: Generate a video from a prompt and retrieve it through the HeyGen-compatible or AIsa video API.
+sidebarTitle: HeyGen
+---
+
+Use `heygen-video-1` to generate one video from text. Both endpoints use your AIsa API key and the same task ID. Video generation is billed once per task according to its duration and resolution.
+
+## Create a video
+
+Set the native base URL to `https://api.aisa.one/v1/heygen`. Submit a prompt with `mode` set to `text_to_video`. The response is HTTP 202.
+
+```bash
+curl -sS https://api.aisa.one/v1/heygen/v3/models/videos \
+  -H "x-api-key: $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"heygen-video-1","mode":"text_to_video","prompt":"A blue paper boat on a pond.","duration":5,"resolution":"480p","aspect_ratio":"16:9"}'
+```
+
+```json
+{"data":{"video_id":"video_task_example","status":"pending","input_video_duration":0}}
+```
+
+## Retrieve the result
+
+Set `VIDEO_ID` to the returned `data.video_id`. Poll until `data.status` is `completed`, `failed`, or `cancelled`. Download a completed video from `data.video_url` before the signed link expires. A failed task includes `failure_message`.
+
+```bash
+curl -sS "https://api.aisa.one/v1/heygen/v3/models/videos/$VIDEO_ID" \
+  -H "x-api-key: $AISA_API_KEY"
+```
+
+## AIsa video API
+
+The shared endpoint returns the task ID as `id` and the completed video as `result.video_url`. You can query the same task using either API.
+
+```bash
+curl -sS https://api.aisa.one/v1/video/generations \
+  -H "Authorization: Bearer $AISA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"model":"heygen-video-1","prompt":"A blue paper boat on a pond.","duration":5}'
+
+curl -sS "https://api.aisa.one/v1/video/generations/$VIDEO_ID" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+## Supported parameters
+
+The duration is 5–15 whole seconds (default 5). Resolution defaults to `768p`; supported values are `480p`, `768p`, `1080p` and `2k` when priced for your model. At 1080p and 2k, select `16:9` or `9:16`. Lower resolutions also support `21:9`, `4:3`, `1:1`, and `3:4`. An optional integer `seed` ranges from 0 to 4294967295.
+
+This integration supports text input. Submit once and keep the task ID for polling. Sending an `Idempotency-Key` returns an error. The query returns the stored result URL.
