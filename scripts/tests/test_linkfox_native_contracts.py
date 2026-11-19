@@ -35,6 +35,72 @@ sif/asinKeywords sif/keywordOverview sif/keywordSummary sorftime/walmart/keyword
 tool-jungle-scout/keywords/by-keyword'''.split()
 
 
+NEXT_ROUTES = '''chuhaijiang/ad-creative/ads/detail
+chuhaijiang/ad-creative/ads/related-products
+chuhaijiang/ad-creative/ads/search
+chuhaijiang/ad-creative/creatives/detail
+chuhaijiang/ad-creative/creatives/search
+chuhaijiang/creators/detail
+chuhaijiang/creators/rankings/agencies
+chuhaijiang/creators/rankings/commercial
+chuhaijiang/creators/rankings/growth
+chuhaijiang/creators/related-lives
+chuhaijiang/creators/related-products
+chuhaijiang/creators/related-videos
+chuhaijiang/creators/search
+chuhaijiang/lives/detail
+chuhaijiang/lives/related-products
+chuhaijiang/lives/search
+chuhaijiang/products/rankings/most-promoted
+chuhaijiang/products/rankings/new-arrivals
+chuhaijiang/products/rankings/top-selling
+chuhaijiang/products/related-creators
+chuhaijiang/products/related-lives
+chuhaijiang/products/related-videos
+chuhaijiang/products/reviews
+chuhaijiang/sellers/detail
+chuhaijiang/sellers/rankings/most-promoted
+chuhaijiang/sellers/rankings/top-selling
+chuhaijiang/sellers/related-creators
+chuhaijiang/sellers/related-products
+chuhaijiang/sellers/related-videos
+chuhaijiang/sellers/search
+chuhaijiang/videos/detail
+chuhaijiang/videos/related-products
+chuhaijiang/videos/reviews
+chuhaijiang/videos/search
+kalodata/creator/detail
+kalodata/livestream/detail
+kalodata/livestream/rank
+kalodata/product/detail
+kalodata/shop/detail
+kalodata/shop/rank
+kalodata/video/detail
+kalodata/video/rank
+echotik/getVideoDownloadUrl
+echotik/listNewProductRank
+geekbi/temu/categorySearch
+geekbi/temu/keywordSearch
+geekbi/temu/siteList
+amazon/alexaSearch
+amazon/opportunity/searchByMetrics
+amazon/policyFeed
+amazon/policyFeedDetail
+jiimore/getNicheInfo
+jiimore/getNicheInfoByAsin
+jiimore/getNicheReviewFromKeyword
+jiimore/pageAsinsByAsin
+jiimore/productDiscovery
+sellersprite/competitor-lookup
+sellersprite/market/research
+sellersprite/traffic/keyword
+sif/asinSummary
+tool-jungle-scout/keywords/historical-search-volume
+tool-jungle-scout/keywords/share-of-voice
+tool-jungle-scout/sales-estimates/query
+googleTrend/getTrendByTime'''.split()
+ROUTES += NEXT_ROUTES
+
 def runtime_facts():
     paths = {}
     for index, route in enumerate(ROUTES):
@@ -52,6 +118,8 @@ def runtime_facts():
     upload = paths['/apis/v1/linkfox/chuhaijiang/upload/presigned-url']['post']
     upload['x-aisa-pricing'] = {'kind': 'fixed_success', 'price_usd': 0.001}
     constraints = {
+        'amazon/opportunity/searchByMetrics': {'limit': {'type': 'integer', 'minimum': 1, 'maximum': 200, 'default': 25}},
+        'amazon/alexaSearch': {'prompts': {'type': 'array', 'minItems': 1, 'maxItems': 1, 'items': {'type': 'string', 'minLength': 1, 'maxLength': 255}}},
         'chuhaijiang/upload/presigned-url': {'fileName': {'type': 'string', 'minLength': 1}},
         'amazon/product/detail': {'asins': {'type': 'string', 'minLength': 1}},
         'amazon/reviews/list': {f'star{i}Num': {'type': 'integer', 'minimum': 0, 'maximum': 100} for i in range(1, 6)},
@@ -92,7 +160,7 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
         self.assertIn('parentCatId', after['requestBody']['content']['application/json']['schema']['properties'])
         self.assertIn('categories', after['responses']['200']['content']['application/json']['schema']['properties'])
 
-    def test_registry_and_44_source_routes_are_complete_and_pinned(self):
+    def test_registry_and_108_source_routes_are_complete_and_pinned(self):
         entry = yaml.safe_load((ROOT / 'openapi/registry.yaml').read_text())['providers']['linkfox']
         rows, _ = source_configurations('linkfox', entry)
         source = self.source['info']['x-aisa-source']
@@ -108,7 +176,7 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
     def test_every_request_response_example_and_runtime_authority(self):
         document = self.composed()
         validate(document)
-        self.assertEqual(len(document['paths']), 44)
+        self.assertEqual(len(document['paths']), 108)
         for path, item in document['paths'].items():
             with self.subTest(path=path):
                 op, runtime = item['post'], self.facts['paths'][path]['post']
@@ -118,7 +186,7 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
                 for media in (op['requestBody']['content']['application/json'],
                               op['responses']['200']['content']['application/json']):
                     schema = media['schema']
-                    self.assertTrue(schema['properties'])
+                    self.assertTrue(schema['properties'] or path.endswith('/geekbi/temu/siteList'))
                     Draft202012Validator.check_schema(schema)
                     self.assertTrue(media['examples'])
                     for example in media['examples'].values():
@@ -126,7 +194,7 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
                 response = op['responses']['200']['content']['application/json']['schema']
                 self.assertNotIn('required', response)
                 # Jiimore explicitly documents costToken in the native HTTP body.
-                if not path.endswith('/jiimore/getNicheInfoByKeyword'):
+                if not path.endswith('/jiimore/getNicheInfoByKeyword') and path.removeprefix('/apis/v1/linkfox/') not in NEXT_ROUTES:
                     self.assertNotIn('costToken', response['properties'])
                 for local in ('costCredit', '_cache', '_asyncTask', '_http_status'):
                     self.assertNotIn(local, response['properties'])
@@ -198,13 +266,50 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
         self.assertEqual(set(market['cpc']['properties']), {'high', 'medium', 'low'})
         self.assertEqual(response['columns']['items'], {})
 
-    def test_public_projection_and_all_88_page_bindings(self):
+    def test_new_batch_dependencies_nested_fields_and_limits(self):
+        ops = self.composed()['paths']
+        def request(route):
+            return ops['/apis/v1/linkfox/' + route]['post']['requestBody']['content']['application/json']['schema']
+        def response(route):
+            return ops['/apis/v1/linkfox/' + route]['post']['responses']['200']['content']['application/json']['schema']['properties']
+        self.assertEqual(len(NEXT_ROUTES), 64)
+        self.assertEqual(len(set(ROUTES)), 108)
+        for route in ('amazon/opportunity/reportByKeyword', 'keepa/productRequest', 'keepa/productSearch',
+                      'sorftime/walmart/categoryMarket', 'sorftime/walmart/productAnalysis',
+                      'tool-jungle-scout/keywords/by-asin', 'tool-jungle-scout/product-database/query',
+                      'geekbi/temu/goodsImageSearch'):
+            self.assertNotIn(route, ROUTES)
+        metrics = request('amazon/opportunity/searchByMetrics')
+        self.assertEqual(len(metrics['properties']), 59)
+        self.assertEqual(metrics['properties']['limit']['default'], 25)
+        for limit in (1, 25, 26, 200):
+            Draft202012Validator(metrics).validate({'keyword': 'kettle', 'limit': limit})
+        for limit in (0, 201, 1.5, '25', None):
+            self.assertFalse(Draft202012Validator(metrics).is_valid({'keyword': 'kettle', 'limit': limit}))
+        alexa = Draft202012Validator(request('amazon/alexaSearch'))
+        alexa.validate({'prompts': ['best kettle']})
+        for prompts in ([], ['one', 'two'], ['x' * 256], [None]):
+            self.assertFalse(alexa.is_valid({'prompts': prompts}))
+        self.assertEqual(request('geekbi/temu/siteList')['properties'], {})
+        self.assertIn('/apis/v1/linkfox/chuhaijiang/creators/search',
+                      request('chuhaijiang/creators/detail')['properties']['id']['description'])
+        self.assertIn('regionId', request('geekbi/temu/keywordSearch')['properties'])
+        self.assertEqual(set(response('jiimore/getNicheInfoByAsin')['nicheInfoVoList']['items']['properties']['cpc']['properties']), {'high', 'medium', 'low'})
+        voice = response('tool-jungle-scout/keywords/share-of-voice')['shareOfVoice']['properties']
+        self.assertIn('conversionRate', voice['topAsins']['items']['properties'])
+        self.assertIn('organicBasicSov', voice['brands']['items']['properties'])
+        self.assertIn('estimatedUnitsSold', response('tool-jungle-scout/sales-estimates/query')['salesEstimateList']['items']['properties']['dailyEstimates']['items']['properties'])
+        order = request('sellersprite/competitor-lookup')['properties']
+        self.assertNotIn('desc', order)
+        self.assertIn('desc', order['order']['properties'])
+
+    def test_public_projection_and_all_216_page_bindings(self):
         document = self.composed()
         for language in ('en', 'zh'):
             public = project(document, language=language)
             self.assertEqual(set(public['paths']), set(document['paths']))
             for path, item in public['paths'].items():
-                self.assertTrue(item['post']['requestBody']['content']['application/json']['schema']['properties'])
+                self.assertTrue(item['post']['requestBody']['content']['application/json']['schema']['properties'] or path.endswith('/geekbi/temu/siteList'))
                 self.assertTrue(item['post']['responses']['200']['content']['application/json']['schema']['properties'])
             localized = localize_tree(public, {'entries': {}}, allow_untranslated=True)
             self.assertEqual(strip_translatable(localized), strip_translatable(public))
@@ -214,8 +319,8 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
             changes = {}
             generate_pages(root, 'linkfox', document, changes, page_references=[])
             pages = {str(p.relative_to(root)): text for p, text in changes.items() if p.suffix == '.mdx'}
-            self.assertEqual(len(pages), 88)
-            self.assertEqual(sum(p.startswith('zh/') for p in pages), 44)
+            self.assertEqual(len(pages), 216)
+            self.assertEqual(sum(p.startswith('zh/') for p in pages), 108)
             for page, text in pages.items():
                 self.assertIn('POST /apis/v1/linkfox/', text)
                 self.assertIn('openapi/zh/linkfox.json' if page.startswith('zh/') else 'openapi/linkfox.json', text)
