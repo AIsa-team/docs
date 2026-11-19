@@ -30,7 +30,7 @@ echotik/listProductVideo echotik/listSeller echotik/listSellerProduct echotik/li
 echotik/listVideoRank echotik/sellerDetail geekbi/temu/categoryList
 geekbi/temu/goodsDetail geekbi/temu/goodsSearch geekbi/temu/mallSearch
 googleTrend/getTrendByKeys kalodata/creator/rank kalodata/product/rank
-keepa/productSeries sellersprite/market/statistics sellersprite/productSearch
+jiimore/getNicheInfoByKeyword keepa/productSeries sellersprite/market/statistics sellersprite/productSearch
 sif/asinKeywords sif/keywordOverview sif/keywordSummary sorftime/walmart/keywordResearch
 tool-jungle-scout/keywords/by-keyword'''.split()
 
@@ -92,7 +92,7 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
         self.assertIn('parentCatId', after['requestBody']['content']['application/json']['schema']['properties'])
         self.assertIn('categories', after['responses']['200']['content']['application/json']['schema']['properties'])
 
-    def test_registry_and_43_source_routes_are_complete_and_pinned(self):
+    def test_registry_and_44_source_routes_are_complete_and_pinned(self):
         entry = yaml.safe_load((ROOT / 'openapi/registry.yaml').read_text())['providers']['linkfox']
         rows, _ = source_configurations('linkfox', entry)
         source = self.source['info']['x-aisa-source']
@@ -108,7 +108,7 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
     def test_every_request_response_example_and_runtime_authority(self):
         document = self.composed()
         validate(document)
-        self.assertEqual(len(document['paths']), 43)
+        self.assertEqual(len(document['paths']), 44)
         for path, item in document['paths'].items():
             with self.subTest(path=path):
                 op, runtime = item['post'], self.facts['paths'][path]['post']
@@ -125,7 +125,10 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
                         Draft202012Validator(schema).validate(example['value'])
                 response = op['responses']['200']['content']['application/json']['schema']
                 self.assertNotIn('required', response)
-                for local in ('costToken', 'costCredit', '_cache', '_asyncTask', '_http_status'):
+                # Jiimore explicitly documents costToken in the native HTTP body.
+                if not path.endswith('/jiimore/getNicheInfoByKeyword'):
+                    self.assertNotIn('costToken', response['properties'])
+                for local in ('costCredit', '_cache', '_asyncTask', '_http_status'):
                     self.assertNotIn(local, response['properties'])
 
     def test_required_business_fields_and_gateway_constraints_survive(self):
@@ -175,7 +178,27 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
             'marketQuery', 'searchByName', 'searchProducts', 'detail', 'productKeywords',
             'relatedKeywords', 'favoriteAdd', 'favoriteList'})
 
-    def test_public_projection_and_all_86_page_bindings(self):
+    def test_jiimore_market_contract_and_parameter_boundaries(self):
+        op = self.composed()['paths']['/apis/v1/linkfox/jiimore/getNicheInfoByKeyword']['post']
+        request = op['requestBody']['content']['application/json']['schema']
+        validator = Draft202012Validator(request)
+        validator.validate({'keyword': 'water bottle'})
+        validator.validate({'keyword': 'water bottle', 'countryCode': 'DE', 'pageSize': 100,
+                            'newProductRateT180': 0.5})
+        for invalid in ({}, {'keyword': 'x' * 1001}, {'keyword': 'x', 'countryCode': 'GB'},
+                        {'keyword': 'x', 'pageSize': 9}, {'keyword': 'x', 'pageSize': 101},
+                        {'keyword': 'x', 'newProductRateT180': 50}):
+            self.assertFalse(validator.is_valid(invalid), invalid)
+        self.assertEqual(len(request['properties']), 45)
+        self.assertEqual(len(request['properties']['sortField']['enum']), 27)
+        response = op['responses']['200']['content']['application/json']['schema']['properties']
+        market = response['data']['items']['properties']
+        self.assertIn('unitsSoldWeekly', market)
+        self.assertNotIn('unitsSoldT7', market)
+        self.assertEqual(set(market['cpc']['properties']), {'high', 'medium', 'low'})
+        self.assertEqual(response['columns']['items'], {})
+
+    def test_public_projection_and_all_88_page_bindings(self):
         document = self.composed()
         for language in ('en', 'zh'):
             public = project(document, language=language)
@@ -191,8 +214,8 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
             changes = {}
             generate_pages(root, 'linkfox', document, changes, page_references=[])
             pages = {str(p.relative_to(root)): text for p, text in changes.items() if p.suffix == '.mdx'}
-            self.assertEqual(len(pages), 86)
-            self.assertEqual(sum(p.startswith('zh/') for p in pages), 43)
+            self.assertEqual(len(pages), 88)
+            self.assertEqual(sum(p.startswith('zh/') for p in pages), 44)
             for page, text in pages.items():
                 self.assertIn('POST /apis/v1/linkfox/', text)
                 self.assertIn('openapi/zh/linkfox.json' if page.startswith('zh/') else 'openapi/linkfox.json', text)
