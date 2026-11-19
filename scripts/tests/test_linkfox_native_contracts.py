@@ -21,7 +21,8 @@ ROOT = Path(__file__).resolve().parents[2]
 # Independent public route inventory: adding a source cannot silently omit a route.
 ROUTES = '''alibaba1688/imageSearch alibaba1688/productDetail amazon/product/detail
 amazon/reviews/list amazon/search amazon/searchByImage chuhaijiang/products/detail
-chuhaijiang/products/image-search dld/productBillboard dld/productSearch
+chuhaijiang/products/image-search chuhaijiang/products/search
+chuhaijiang/upload/presigned-url dld/productBillboard dld/productSearch
 echotik/batchProductDetail echotik/batchVideoDetail echotik/category/detail
 echotik/category/l1 echotik/category/l2 echotik/category/l3 echotik/category/trend
 echotik/influencer/detail echotik/influencer/trend echotik/listProduct
@@ -48,7 +49,10 @@ def runtime_facts():
             'requestBody': {'required': True, 'content': {'application/json': {
                 'schema': {'type': 'object', 'additionalProperties': True}}}},
             'responses': {'200': {'description': 'Successful response'}}}}
+    upload = paths['/apis/v1/linkfox/chuhaijiang/upload/presigned-url']['post']
+    upload['x-aisa-pricing'] = {'kind': 'fixed_success', 'price_usd': 0.001}
     constraints = {
+        'chuhaijiang/upload/presigned-url': {'fileName': {'type': 'string', 'minLength': 1}},
         'amazon/product/detail': {'asins': {'type': 'string', 'minLength': 1}},
         'amazon/reviews/list': {f'star{i}Num': {'type': 'integer', 'minimum': 0, 'maximum': 100} for i in range(1, 6)},
         'amazon/search': {'includeSellerSpriteData': {'type': 'boolean', 'enum': [False], 'default': False}},
@@ -88,7 +92,7 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
         self.assertIn('parentCatId', after['requestBody']['content']['application/json']['schema']['properties'])
         self.assertIn('categories', after['responses']['200']['content']['application/json']['schema']['properties'])
 
-    def test_registry_and_41_source_routes_are_complete_and_pinned(self):
+    def test_registry_and_43_source_routes_are_complete_and_pinned(self):
         entry = yaml.safe_load((ROOT / 'openapi/registry.yaml').read_text())['providers']['linkfox']
         rows, _ = source_configurations('linkfox', entry)
         source = self.source['info']['x-aisa-source']
@@ -104,7 +108,7 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
     def test_every_request_response_example_and_runtime_authority(self):
         document = self.composed()
         validate(document)
-        self.assertEqual(len(document['paths']), 41)
+        self.assertEqual(len(document['paths']), 43)
         for path, item in document['paths'].items():
             with self.subTest(path=path):
                 op, runtime = item['post'], self.facts['paths'][path]['post']
@@ -171,7 +175,7 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
             'marketQuery', 'searchByName', 'searchProducts', 'detail', 'productKeywords',
             'relatedKeywords', 'favoriteAdd', 'favoriteList'})
 
-    def test_public_projection_and_all_82_page_bindings(self):
+    def test_public_projection_and_all_86_page_bindings(self):
         document = self.composed()
         for language in ('en', 'zh'):
             public = project(document, language=language)
@@ -187,8 +191,8 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
             changes = {}
             generate_pages(root, 'linkfox', document, changes, page_references=[])
             pages = {str(p.relative_to(root)): text for p, text in changes.items() if p.suffix == '.mdx'}
-            self.assertEqual(len(pages), 82)
-            self.assertEqual(sum(p.startswith('zh/') for p in pages), 41)
+            self.assertEqual(len(pages), 86)
+            self.assertEqual(sum(p.startswith('zh/') for p in pages), 43)
             for page, text in pages.items():
                 self.assertIn('POST /apis/v1/linkfox/', text)
                 self.assertIn('openapi/zh/linkfox.json' if page.startswith('zh/') else 'openapi/linkfox.json', text)

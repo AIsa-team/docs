@@ -7,7 +7,7 @@
       "kind": "manual",
       "url": "https://github.com/linkfox-ai/linkfox-skills/tree/57465352b58c1e978d1e25e004fb3540f1954df9",
       "fetched_at": "2026-11-19T00:00:00+00:00",
-      "content_hash": "sha256:70e6a3a46a98a6d97f668a8daa9aa10d505cc655d7f1d4295b9272530100629b",
+      "content_hash": "sha256:4810182a33b43ea48c76210a33b31a7f2c39dbd68bb476d76c5022a501ce6bb0",
       "converter": "reviewed-linkfox-reference-tables-v1",
       "refresh_policy": "pinned",
       "refresh_reason": "Reviewed native wire declarations from pinned Linkfox skill references. Amazon reviews uses the historical synchronous reference; do not substitute the newer asynchronous API.",
@@ -2479,7 +2479,7 @@
                   },
                   "id": {
                     "type": "string",
-                    "description": "未指定; 商品 ID"
+                    "description": "Product ID from data.items[].id returned by POST /apis/v1/linkfox/chuhaijiang/products/search or /apis/v1/linkfox/chuhaijiang/products/image-search. Use the same market; detail country must be lowercase."
                   },
                   "include": {
                     "type": "string",
@@ -2697,7 +2697,7 @@
     "/chuhaijiang/products/image-search": {
       "post": {
         "summary": "Chuhaijiang image search",
-        "description": "Linkfox native synchronous API. HTTP 200 can contain a business error: inspect errcode and errmsg when present. osKey is an existing uploaded image object key; replace the example with your own key.",
+        "description": "First call POST /apis/v1/linkfox/chuhaijiang/upload/presigned-url, PUT the image bytes to data.url, then use data.os_key as osKey here. A normal image URL or local filename is not an osKey. country uses uppercase (default US). Results data.items[].id can be used for product detail with a lowercase country. HTTP 200 can contain a business error; inspect errcode and errmsg.",
         "externalDocs": {
           "url": "https://github.com/linkfox-ai/linkfox-skills/blob/57465352b58c1e978d1e25e004fb3540f1954df9/skills/linkfox-chuhaijiang-tiktok-product/references/api.md"
         },
@@ -13047,6 +13047,381 @@
                       ],
                       "errcode": 200,
                       "errmsg": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chuhaijiang/products/search": {
+      "post": {
+        "summary": "Chuhaijiang product search",
+        "description": "Search products by keyword and optional filters. Pass data.items[].id to POST /apis/v1/linkfox/chuhaijiang/products/detail with the same lowercase country. HTTP 200 can contain a business error; inspect errcode and errmsg.",
+        "externalDocs": {
+          "url": "https://github.com/linkfox-ai/linkfox-skills/blob/57465352b58c1e978d1e25e004fb3540f1954df9/skills/linkfox-chuhaijiang-tiktok-product/references/api.md"
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "country": {
+                    "type": "string",
+                    "description": "Lowercase country code; use the same country for product detail.",
+                    "enum": [
+                      "br",
+                      "de",
+                      "es",
+                      "fr",
+                      "gb",
+                      "id",
+                      "it",
+                      "jp",
+                      "mx",
+                      "my",
+                      "ph",
+                      "sg",
+                      "th",
+                      "us",
+                      "vn"
+                    ]
+                  },
+                  "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page number."
+                  },
+                  "pageSize": {
+                    "type": "integer",
+                    "maximum": 10,
+                    "description": "Maximum 10 products per page."
+                  },
+                  "keyword": {
+                    "type": "string",
+                    "description": "Search keyword."
+                  },
+                  "category": {
+                    "type": "string",
+                    "description": "Optional product category ID."
+                  },
+                  "sellerType": {
+                    "type": "string",
+                    "description": "1: overseas non-brand; 2: local; 3: brand; 4: non-brand.",
+                    "enum": [
+                      "1",
+                      "2",
+                      "3",
+                      "4"
+                    ]
+                  },
+                  "minPrice": {
+                    "type": "number",
+                    "description": "Minimum price in USD."
+                  },
+                  "maxPrice": {
+                    "type": "number",
+                    "description": "Maximum price in USD."
+                  },
+                  "minRating": {
+                    "type": "number",
+                    "description": "Minimum rating.",
+                    "minimum": 0,
+                    "maximum": 5
+                  },
+                  "maxRating": {
+                    "type": "number",
+                    "description": "Maximum rating.",
+                    "minimum": 0,
+                    "maximum": 5
+                  },
+                  "minSold7d": {
+                    "type": "number",
+                    "description": "Minimum sales in 7 days."
+                  },
+                  "maxSold7d": {
+                    "type": "number",
+                    "description": "Maximum sales in 7 days."
+                  },
+                  "minSold30d": {
+                    "type": "number",
+                    "description": "Minimum sales in 30 days."
+                  },
+                  "maxSold30d": {
+                    "type": "number",
+                    "description": "Maximum sales in 30 days."
+                  },
+                  "freeShipping": {
+                    "type": "boolean",
+                    "description": "Filter free shipping."
+                  },
+                  "sort": {
+                    "type": "string",
+                    "description": "field:asc or field:desc; fields: daily_sold, gmv_30d, gmv_7d, price, rating, sold_30d, sold_7d.",
+                    "default": "gmv_7d:desc"
+                  }
+                },
+                "required": [
+                  "country"
+                ]
+              },
+              "examples": {
+                "request": {
+                  "summary": "Illustrative request.",
+                  "value": {
+                    "country": "us",
+                    "keyword": "beauty",
+                    "pageSize": 5
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider response; inspect the business status in the body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "errcode": {
+                      "type": [
+                        "integer",
+                        "string",
+                        "null"
+                      ],
+                      "description": "网关业务状态码；成功示例值为 200，判断遵循公共规则"
+                    },
+                    "errmsg": {
+                      "type": "string",
+                      "description": "消息，成功时为 `ok`"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "description": "请求追踪 ID"
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "description": "业务数据，按本接口结构解析",
+                      "properties": {
+                        "total_count": {
+                          "type": "integer",
+                          "description": "匹配记录总数"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "description": "商品标识，用于详情和关联查询"
+                              },
+                              "product_name": {
+                                "type": "string",
+                                "description": "商品标题"
+                              },
+                              "product_images": {
+                                "type": [
+                                  "array",
+                                  "object"
+                                ],
+                                "items": {},
+                                "additionalProperties": true,
+                                "description": "主图与缩略图，按实际嵌套结构解析"
+                              },
+                              "floor_price": {
+                                "type": [
+                                  "object",
+                                  "number"
+                                ],
+                                "additionalProperties": true,
+                                "description": "当前最低价格；对象保留 unit、value"
+                              },
+                              "ceiling_price": {
+                                "type": [
+                                  "object",
+                                  "number"
+                                ],
+                                "additionalProperties": true,
+                                "description": "当前最高价格；对象保留 unit、value"
+                              },
+                              "product_rating": {
+                                "type": "number",
+                                "description": "商品评分"
+                              },
+                              "review_count": {
+                                "type": "integer",
+                                "description": "评论数（返回时展示）"
+                              },
+                              "product_sold_count": {
+                                "type": "number",
+                                "description": "累计销量；带周期后缀的 `product_sold_count*` 按其周期解释"
+                              },
+                              "product_gmv": {
+                                "type": [
+                                  "object",
+                                  "number"
+                                ],
+                                "additionalProperties": true,
+                                "description": "累计 GMV；周期字段按实际窗口解释"
+                              },
+                              "seller_id": {
+                                "type": "string",
+                                "description": "卖家标识"
+                              },
+                              "shop_name": {
+                                "type": "string",
+                                "description": "店铺名称"
+                              }
+                            }
+                          },
+                          "description": "本接口业务记录列表"
+                        }
+                      }
+                    }
+                  },
+                  "description": "Provider JSON response. Optional fields can be omitted; additional provider fields are preserved. This schema documents the HTTP body, excluding client-added costToken/costCredit and local cache fields."
+                },
+                "examples": {
+                  "illustration": {
+                    "summary": "Illustrative structure, not a recorded response.",
+                    "value": {
+                      "errcode": 200,
+                      "errmsg": "ok",
+                      "request_id": "example",
+                      "data": {
+                        "total_count": 1,
+                        "items": [
+                          {
+                            "id": "example",
+                            "product_name": "example",
+                            "product_images": [],
+                            "floor_price": {},
+                            "ceiling_price": {},
+                            "product_rating": 1,
+                            "review_count": 1,
+                            "product_sold_count": 1
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chuhaijiang/upload/presigned-url": {
+      "post": {
+        "summary": "Chuhaijiang image upload URL",
+        "description": "Request a temporary upload URL using fileName (JPG, JPEG or PNG). After success, PUT the raw image bytes to data.url with the matching image Content-Type, without an AISA or Linkfox Authorization header. A PUT response of 200, 201 or 204 confirms upload. Then pass data.os_key as osKey to POST /apis/v1/linkfox/chuhaijiang/products/image-search. data.signed_url is a temporary read URL, never the PUT target. Treat signed URLs as temporary credentials; do not publish them. Successful URL issuance costs $0.001 even if you do not subsequently upload; failed issuance is not charged.",
+        "externalDocs": {
+          "url": "https://github.com/linkfox-ai/linkfox-skills/blob/57465352b58c1e978d1e25e004fb3540f1954df9/skills/linkfox-chuhaijiang-tiktok-product/references/api.md"
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "fileName": {
+                    "type": "string",
+                    "description": "Image filename including .jpg, .jpeg or .png extension.",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "fileName"
+                ]
+              },
+              "examples": {
+                "request": {
+                  "summary": "Illustrative request.",
+                  "value": {
+                    "fileName": "product.jpg"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider response; inspect the business status in the body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "errcode": {
+                      "type": [
+                        "integer",
+                        "string",
+                        "null"
+                      ],
+                      "description": "网关业务状态码；成功示例值为 200，判断遵循公共规则"
+                    },
+                    "errmsg": {
+                      "type": "string",
+                      "description": "消息，成功时为 `ok`"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "description": "请求追踪 ID"
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "properties": {
+                        "url": {
+                          "type": "string",
+                          "description": "Temporary PUT upload URL. Upload raw image bytes here without API authorization."
+                        },
+                        "os_key": {
+                          "type": "string",
+                          "description": "Use as image-search osKey after the PUT succeeds."
+                        },
+                        "os_bucket": {
+                          "type": "string",
+                          "description": "Storage bucket."
+                        },
+                        "signed_url": {
+                          "type": "string",
+                          "description": "Temporary read URL; do not use it as the upload target."
+                        }
+                      }
+                    }
+                  },
+                  "description": "Provider JSON response. Optional fields can be omitted; additional provider fields are preserved. This schema documents the HTTP body, excluding client-added costToken/costCredit and local cache fields."
+                },
+                "examples": {
+                  "illustration": {
+                    "summary": "Illustrative structure; these example URLs cannot be used for uploads.",
+                    "value": {
+                      "errcode": 200,
+                      "errmsg": "ok",
+                      "request_id": "example",
+                      "data": {
+                        "url": "https://upload.example.invalid/upload/product.jpg",
+                        "os_key": "upload/product.jpg",
+                        "os_bucket": "example",
+                        "signed_url": "https://read.example.invalid/upload/product.jpg"
+                      }
                     }
                   }
                 }
