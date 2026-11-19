@@ -7,7 +7,7 @@
       "kind": "manual",
       "url": "https://github.com/linkfox-ai/linkfox-skills/tree/57465352b58c1e978d1e25e004fb3540f1954df9",
       "fetched_at": "2026-11-19T00:00:00+00:00",
-      "content_hash": "sha256:202c0ef826bff4a4dbb9ec9d10d91cd7ec094157360dc28b5fe5237b51072289",
+      "content_hash": "sha256:c69568640365a32db34fce1187af717198f9e87e326530c714129ecfae9dc743",
       "converter": "reviewed-linkfox-reference-tables-v1",
       "refresh_policy": "pinned",
       "refresh_reason": "Reviewed native wire declarations from pinned Linkfox skill references. Amazon reviews uses the historical synchronous reference; do not substitute the newer asynchronous API.",
@@ -173,11 +173,11 @@
                 "properties": {
                   "imageUrl": {
                     "type": "string",
-                    "description": "直接 API 要求 URL 实际返回 JPEG/PNG；最大长度 1000。Skill 脚本保持 JPEG/PNG 不变，并自动转换 WebP。imageUrl/imageBase64/imageId 三选一必填"
+                    "description": "JPEG/PNG image URL, maximum 1000 characters. Supply imageUrl, imageBase64 or imageId."
                   },
                   "imageBase64": {
                     "type": "string",
-                    "description": "纯 Base64，不含 data URL 前缀。Skill 脚本保持 JPEG/PNG 不变，并自动将 WebP Base64 转成 JPEG Base64"
+                    "description": "JPEG/PNG bytes encoded as Base64, without a data URL prefix."
                   },
                   "imageId": {
                     "type": "string",
@@ -216,7 +216,24 @@
                     "description": "货盘ID，单选。有效值见下方「支持的货盘ID」"
                   }
                 },
-                "description": " JSON body forwarded to Linkfox. Field descriptions and constraints below come from the pinned provider reference; gateway-enforced constraints take precedence."
+                "description": " JSON body forwarded to Linkfox. Field descriptions and constraints below come from the pinned provider reference; gateway-enforced constraints take precedence.",
+                "anyOf": [
+                  {
+                    "required": [
+                      "imageUrl"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "imageBase64"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "imageId"
+                    ]
+                  }
+                ]
               },
               "examples": {
                 "request": {
@@ -443,7 +460,7 @@
                   },
                   "country": {
                     "type": "string",
-                    "description": "`en`; 上游兼容字段；本技能不将其作为用户能力，通常省略"
+                    "description": "Compatibility field; the provider documents en as the default and normally permits omission."
                   },
                   "currency": {
                     "type": "string",
@@ -2016,7 +2033,7 @@
                   },
                   "includeSellerSpriteData": {
                     "type": "boolean",
-                    "description": "高级参数，每次 Skill 调用必须显式传入；`true` 时调用卖家精灵补全销量、销售额、品牌、履约等竞品数据，并按成功批次追加动态算力消耗，不需要补全时传 `false`。服务端为兼容旧调用，缺省时仍按 `false` 处理"
+                    "description": "Whether to enrich results with SellerSprite data. Use the values permitted by the gateway schema."
                   }
                 },
                 "description": " JSON body forwarded to Linkfox. Field descriptions and constraints below come from the pinned provider reference; gateway-enforced constraints take precedence."
@@ -3555,17 +3572,41 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "无; 商品ID列表（最多 1000 个）。示例：`[\"1729382310407603945\", \"1729382310407603946\"]`"
+                    "description": "无; 商品ID列表（最多 1000 个）。示例：`[\"1729382310407603945\", \"1729382310407603946\"]`",
+                    "maxItems": 1000
                   },
                   "productUrls": {
                     "type": "array",
                     "items": {
                       "type": "string"
                     },
-                    "description": "无; 商品URL列表（最多 1000 个），形如 `https://shop.tiktok.com/us/pdp/<slug>/<productId>?...`；后端会从每个URL中提取末尾的 `productId` 并合并到 `productIds`，与 `productIds` 不互斥"
+                    "description": "无; 商品URL列表（最多 1000 个），形如 `https://shop.tiktok.com/us/pdp/<slug>/<productId>?...`；后端会从每个URL中提取末尾的 `productId` 并合并到 `productIds`，与 `productIds` 不互斥",
+                    "maxItems": 1000
                   }
                 },
-                "description": " JSON body forwarded to Linkfox. Field descriptions and constraints below come from the pinned provider reference; gateway-enforced constraints take precedence."
+                "description": " JSON body forwarded to Linkfox. Field descriptions and constraints below come from the pinned provider reference; gateway-enforced constraints take precedence. Supply at least one identifier or URL list; both lists are allowed. At most 1000 items in total.",
+                "anyOf": [
+                  {
+                    "required": [
+                      "productIds"
+                    ],
+                    "properties": {
+                      "productIds": {
+                        "minItems": 1
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "productUrls"
+                    ],
+                    "properties": {
+                      "productUrls": {
+                        "minItems": 1
+                      }
+                    }
+                  }
+                ]
               },
               "examples": {
                 "request": {
@@ -4009,17 +4050,41 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "TikTok视频ID列表，最多1000个。从 `linkfox-echotik-list-video` 等结果获取"
+                    "description": "TikTok视频ID列表，最多1000个。从 `linkfox-echotik-list-video` 等结果获取",
+                    "maxItems": 1000
                   },
                   "videoUrls": {
                     "type": "array",
                     "items": {
                       "type": "string"
                     },
-                    "description": "TikTok视频URL列表（形如 `https://www.tiktok.com/@<unique_id>/video/<videoId>` 或 `https://www.tiktok.com/video/<videoId>`），最多1000个；服务端从每个URL提取末尾 `videoId` 并合并到 `videoIds`，与 `videoIds` 不互斥"
+                    "description": "TikTok视频URL列表（形如 `https://www.tiktok.com/@<unique_id>/video/<videoId>` 或 `https://www.tiktok.com/video/<videoId>`），最多1000个；服务端从每个URL提取末尾 `videoId` 并合并到 `videoIds`，与 `videoIds` 不互斥",
+                    "maxItems": 1000
                   }
                 },
-                "description": " JSON body forwarded to Linkfox. Field descriptions and constraints below come from the pinned provider reference; gateway-enforced constraints take precedence."
+                "description": " JSON body forwarded to Linkfox. Field descriptions and constraints below come from the pinned provider reference; gateway-enforced constraints take precedence. Supply at least one identifier or URL list; both lists are allowed. At most 1000 items in total.",
+                "anyOf": [
+                  {
+                    "required": [
+                      "videoIds"
+                    ],
+                    "properties": {
+                      "videoIds": {
+                        "minItems": 1
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "videoUrls"
+                    ],
+                    "properties": {
+                      "videoUrls": {
+                        "minItems": 1
+                      }
+                    }
+                  }
+                ]
               },
               "examples": {
                 "request": {
@@ -5085,17 +5150,33 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "两组列表必须二选一；最多10个，去重后以英文逗号传给上游。userIds为数字ID；uniqueIds为账号，不带@或URL。"
+                    "description": "两组列表必须二选一；最多10个，去重后以英文逗号传给上游。userIds为数字ID；uniqueIds为账号，不带@或URL。",
+                    "minItems": 1,
+                    "maxItems": 10
                   },
                   "uniqueIds": {
                     "type": "array",
                     "items": {
                       "type": "string"
                     },
-                    "description": "两组列表必须二选一；最多10个，去重后以英文逗号传给上游。userIds为数字ID；uniqueIds为账号，不带@或URL。"
+                    "description": "两组列表必须二选一；最多10个，去重后以英文逗号传给上游。userIds为数字ID；uniqueIds为账号，不带@或URL。",
+                    "minItems": 1,
+                    "maxItems": 10
                   }
                 },
-                "description": " JSON body forwarded to Linkfox. Field descriptions and constraints below come from the pinned provider reference; gateway-enforced constraints take precedence."
+                "description": " JSON body forwarded to Linkfox. Field descriptions and constraints below come from the pinned provider reference; gateway-enforced constraints take precedence.",
+                "oneOf": [
+                  {
+                    "required": [
+                      "userIds"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "uniqueIds"
+                    ]
+                  }
+                ]
               },
               "examples": {
                 "request": {
@@ -6582,7 +6663,7 @@
                   },
                   "pageSize": {
                     "type": "integer",
-                    "description": "50; 每页条数。**须为10的倍数，最大100**；非法值可能被拒绝或调整。上游单页最多10条，由服务端按每页10条多次拉取后合并，例如50最多返回50条；业务脚本不自行增加这层分页请求"
+                    "description": "50; 每页条数。**须为10的倍数，最大100**；非法值可能被拒绝或调整。上游单页最多10条，由服务端按每页10条多次拉取后合并，例如50最多返回50条"
                   },
                   "pageNum": {
                     "type": "integer",
