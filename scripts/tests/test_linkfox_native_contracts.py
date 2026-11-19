@@ -144,6 +144,20 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
         self.assertIn('reviewId', response['data']['items']['properties'])
         self.assertNotIn('taskId', response)
 
+    def test_alternative_inputs_and_walmart_response_variants(self):
+        ops = self.composed()['paths']
+        for route in ('alibaba1688/imageSearch', 'echotik/batchProductDetail', 'echotik/batchVideoDetail', 'echotik/influencer/detail'):
+            schema = ops['/apis/v1/linkfox/' + route]['post']['requestBody']['content']['application/json']['schema']
+            self.assertFalse(Draft202012Validator(schema).is_valid({}), route)
+        op = ops['/apis/v1/linkfox/sorftime/walmart/keywordResearch']['post']
+        response = op['responses']['200']['content']['application/json']['schema']
+        for value in (None, [], ['folder'], 0, {'Keyword': 'water bottle'}, [{'Keyword': 'water bottle'}]):
+            Draft202012Validator(response).validate({'errcode': 200, 'code': 200, 'data': {'value': value}})
+        examples = op['requestBody']['content']['application/json']['examples']
+        self.assertEqual({e['value']['operation'] for e in examples.values()}, {
+            'marketQuery', 'searchByName', 'searchProducts', 'detail', 'productKeywords',
+            'relatedKeywords', 'favoriteAdd', 'favoriteList'})
+
     def test_public_projection_and_all_82_page_bindings(self):
         document = self.composed()
         for language in ('en', 'zh'):
