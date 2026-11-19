@@ -299,6 +299,17 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
         self.assertIn('conversionRate', voice['topAsins']['items']['properties'])
         self.assertIn('organicBasicSov', voice['brands']['items']['properties'])
         self.assertIn('estimatedUnitsSold', response('tool-jungle-scout/sales-estimates/query')['salesEstimateList']['items']['properties']['dailyEstimates']['items']['properties'])
+        traffic = Draft202012Validator(request('sellersprite/traffic/keyword'))
+        traffic.validate({'marketplace': 'US', 'asin': 'B0B1N5P9S7',
+                          'badges': 'naturalSearching,ads', 'trafficKeywordTypes': 'primary,precise',
+                          'conversionKeywordTypes': 'excellent,stable'})
+        for route, field, source, output in (
+            ('amazon/policyFeedDetail', 'id', '/apis/v1/linkfox/amazon/policyFeed', 'data[].id'),
+            ('jiimore/getNicheInfo', 'nicheId', '/apis/v1/linkfox/jiimore/getNicheInfoByKeyword', 'data[].nicheId'),
+        ):
+            description = request(route)['properties'][field]['description']
+            self.assertIn(source, description)
+            self.assertIn(output, description)
         order = request('sellersprite/competitor-lookup')['properties']
         self.assertNotIn('desc', order)
         self.assertIn('desc', order['order']['properties'])
