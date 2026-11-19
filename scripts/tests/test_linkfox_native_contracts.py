@@ -138,6 +138,19 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
         self.assertNotIn('favoriteChange', body('sorftime/walmart/keywordResearch')['properties']['operation']['enum'])
         for field in ('name', 'keyword', 'productId', 'pattern'):
             self.assertIn(field, body('sorftime/walmart/keywordResearch')['properties'])
+        # Supplementary provider tables must reach the field documentation,
+        # rather than leave an unresolved "see below" in a generated page.
+        for route, field, values in [
+            ('alibaba1688/imageSearch', 'filter', ['1688Selection', 'TWFL']),
+            ('alibaba1688/imageSearch', 'productCollectionId', ['262105288', '262185282']),
+            ('amazon/product/detail', 'amazonDomain', ['amazon.com', 'amazon.com.be']),
+            ('keepa/productSeries', 'domain', ['`1`', '`12`', 'string']),
+            ('sellersprite/productSearch', 'dimensionType', ['EL15O', 'SPO', 'JP', 'CA']),
+            ('sif/keywordSummary', 'condition', ['nfPosition', 'sbvKeywordCnt.in']),
+        ]:
+            description = body(route)['properties'][field]['description']
+            for value in values:
+                self.assertIn(value, description)
         reviews = ops['/apis/v1/linkfox/amazon/reviews/list']['post']
         self.assertIn('b222e5f4e88586a36b0f3799a8840dc4918c61a5', self.source['paths']['/amazon/reviews/list']['post']['externalDocs']['url'])
         response = reviews['responses']['200']['content']['application/json']['schema']['properties']
