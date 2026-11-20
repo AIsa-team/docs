@@ -314,6 +314,33 @@ class LinkfoxNativeContractsTest(unittest.TestCase):
         self.assertNotIn('desc', order)
         self.assertIn('desc', order['order']['properties'])
 
+    def test_chuhaijiang_ranking_and_query_page_size_boundaries(self):
+        rankings = {
+            'chuhaijiang/creators/rankings/agencies',
+            'chuhaijiang/creators/rankings/commercial',
+            'chuhaijiang/creators/rankings/growth',
+            'chuhaijiang/products/rankings/most-promoted',
+            'chuhaijiang/products/rankings/new-arrivals',
+            'chuhaijiang/products/rankings/top-selling',
+            'chuhaijiang/sellers/rankings/most-promoted',
+            'chuhaijiang/sellers/rankings/top-selling',
+        }
+        ops = self.composed()['paths']
+        for route in NEXT_ROUTES:
+            if not route.startswith('chuhaijiang/'):
+                continue
+            fields = ops['/apis/v1/linkfox/' + route]['post']['requestBody']['content']['application/json']['schema']['properties']
+            if 'pageSize' not in fields:
+                continue
+            # Official rankings accept 1-20; search/related queries accept 1-10.
+            maximum = 20 if route in rankings else 10
+            validator = Draft202012Validator(fields['pageSize'])
+            with self.subTest(route=route):
+                for value in (1, 10, maximum):
+                    validator.validate(value)
+                for value in (0, maximum + 1, 1.5, '10', None):
+                    self.assertFalse(validator.is_valid(value), value)
+
     def test_public_projection_and_all_216_page_bindings(self):
         document = self.composed()
         for language in ('en', 'zh'):
