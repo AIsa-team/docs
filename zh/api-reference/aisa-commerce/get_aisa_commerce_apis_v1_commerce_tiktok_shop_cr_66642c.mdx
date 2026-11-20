@@ -2,8 +2,8 @@
 title: "TikTok Shop: Get creator videos"
 openapi: "openapi/zh/aisa-commerce.json GET /apis/v1/commerce/tiktok-shop/creators/{country}/{creator_id}/videos"
 x-aisa-operation-id: "get_aisa_commerce_apis_v1_commerce_tiktok_shop_cr_66642c"
-description: "Retrieve videos associated with a TikTok Shop creator, optionally filtered by product. Returns available video attributes and metrics.\n\n### Pagination\nThe source may repeat videos across pages. Results are not deduplicated across requests.\n\n### Data and provenance\nBy default, each value includes value and source. Shared collection time, license, origin, and value_type are grouped in meta.sources. Use provenance=full for complete per-value provenance. Requested fields not delivered by a source are listed in missing with a reason."
-x-aisa-generated-description-sha256: "c5de565684d19ccfeb7fa68f6c5e4ffd32d3f9fecd7e41e9ed48b3cacdf7cd2d"
+description: "Get a creator's TikTok Shop videos. Pass period to select Kalodata with optional shop_id and listing_id filters and sorting by gmv, video_view_count or ad_roas. Omit period for the historical EchoTik view where available. This view sorts by video_like_count, published_at or video_view_count. In the Kalodata view, metrics.gmv and metrics.sales_count retain figures supplied for each video in the filtered query. The filters identify the returned video set. Sales allocation to an individual shop or product is unverified.\n\n### Data and provenance\nBy default, each value includes value and source. Shared collection time, license, origin, and value_type are grouped in meta.sources. Use provenance=full for complete per-value provenance. Requested fields not delivered by a source are listed in missing with a reason."
+x-aisa-generated-description-sha256: "379c001ab8a673f831f203a7ef2c90d706770cb83038222ba81b0f0f81174151"
 ---
 {/* aisa-contract-details:start */}
 
@@ -21,6 +21,8 @@ x-aisa-generated-description-sha256: "c5de565684d19ccfeb7fa68f6c5e4ffd32d3f9fecd
 - **sort&#95;order:** query; 可选
 - **fields:** query; 可选
 - **provenance:** query; 可选
+- **period:** query; 可选
+- **shop&#95;id:** query; 可选
 
 [完整 OpenAPI 定义](https://aisa.one/docs/openapi/zh/aisa-commerce.json)
 
@@ -45,17 +47,26 @@ x-aisa-generated-description-sha256: "c5de565684d19ccfeb7fa68f6c5e4ffd32d3f9fecd
       "schema": {
         "description": "Marketplace country as an uppercase ISO 3166-1 alpha-2 code (GB, not UK). See the enum for supported countries.",
         "enum": [
+          "AT",
+          "BE",
           "BR",
+          "CZ",
           "DE",
           "ES",
           "FR",
           "GB",
+          "GR",
+          "HU",
           "ID",
+          "IE",
           "IT",
           "JP",
           "MX",
           "MY",
+          "NL",
           "PH",
+          "PL",
+          "PT",
           "SA",
           "SG",
           "TH",
@@ -108,12 +119,12 @@ x-aisa-generated-description-sha256: "c5de565684d19ccfeb7fa68f6c5e4ffd32d3f9fecd
       }
     },
     {
-      "description": "Number of items per page. Accepts 1-10; default 10. A full page returns a next_cursor to probe for more results; the next page may be empty. A successful empty page ends pagination.",
+      "description": "Number of items per page. Accepts 1–10 without period and 1–100 with period. Defaults to 10. A full page may return a next_cursor to probe for more results.",
       "in": "query",
       "name": "page_size",
       "required": false,
       "schema": {
-        "description": "Number of items per page. Accepts 1-10; default 10. A full page returns a next_cursor to probe for more results; the next page may be empty. A successful empty page ends pagination.",
+        "description": "Number of items per page. Accepts 1–10 without period and 1–100 with period. Defaults to 10. A full page may return a next_cursor to probe for more results.",
         "type": [
           "string",
           "null"
@@ -121,13 +132,15 @@ x-aisa-generated-description-sha256: "c5de565684d19ccfeb7fa68f6c5e4ffd32d3f9fecd
       }
     },
     {
-      "description": "Sort key. Usually an output field name; operation-specific notes explain keys that do not correspond to an output field. published_at sorts by publication time; the response exposes published_at_raw rather than a same-named field.",
+      "description": "Sort key. Usually an output field name; operation-specific notes explain keys that do not correspond to an output field. published_at sorts by publication time, returned as published_at_raw. video_view_count is available with or without period. ad_roas sorts by reported advertising return on spend and requires period.",
       "in": "query",
       "name": "sort_by",
       "required": false,
       "schema": {
-        "description": "Sort key. Usually an output field name; operation-specific notes explain keys that do not correspond to an output field. published_at sorts by publication time; the response exposes published_at_raw rather than a same-named field.",
+        "description": "Sort key. Usually an output field name; operation-specific notes explain keys that do not correspond to an output field. published_at sorts by publication time, returned as published_at_raw. video_view_count is available with or without period. ad_roas sorts by reported advertising return on spend and requires period.",
         "enum": [
+          "ad_roas",
+          "gmv",
           "published_at",
           "video_like_count",
           "video_view_count"
@@ -240,6 +253,37 @@ x-aisa-generated-description-sha256: "c5de565684d19ccfeb7fa68f6c5e4ffd32d3f9fecd
           "compact",
           "full"
         ],
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    {
+      "description": "Reporting window. 1d, 7d, 30d, and 90d are rolling windows ending at the latest update; calendar_month and calendar_week select the calendar period identified by date. See the enum for supported values. Set 1d, 7d, or 30d to select the Kalodata view. The historical EchoTik view is available without period in its supported markets.",
+      "in": "query",
+      "name": "period",
+      "required": false,
+      "schema": {
+        "description": "Reporting window. 1d, 7d, 30d, and 90d are rolling windows ending at the latest update; calendar_month and calendar_week select the calendar period identified by date. See the enum for supported values. Set 1d, 7d, or 30d to select the Kalodata view. The historical EchoTik view is available without period in its supported markets.",
+        "enum": [
+          "1d",
+          "30d",
+          "7d"
+        ],
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    {
+      "description": "Native shop or seller ID on the platform.",
+      "in": "query",
+      "name": "shop_id",
+      "required": false,
+      "schema": {
+        "description": "Native shop or seller ID on the platform.",
         "type": [
           "string",
           "null"
