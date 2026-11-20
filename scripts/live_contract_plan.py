@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Decide whether the Docs contract mirrors need a rebuild.
 
-The input key combines three hashes, so a tick with nothing new is a no-op:
+The input key combines Runtime, generator and optional Task hashes, so a tick
+with nothing new is a no-op:
 - the live Services contract content: the sorted "name sha256" pairs listed by
   /public/api-contract/current, excluding generation and other metadata;
 - the live category content (/info/apis/category without cached_at), which
   the generator also reads;
 - Docs' own generator inputs: every tracked file except the generated mirror
   outputs, with openapi/registry.yaml counted as an input.
+- With --include-tasks, both languages of every enabled Task's live detail.
 
 Network failures are retried and then reported with exit status 2, so the
 workflow can warn and try again on the next tick.
@@ -30,7 +32,7 @@ HEX64 = re.compile(r'[0-9a-f]{64}')
 # generator input; registry.yaml is both and counts as an input.
 OUTPUTS = ('openapi/', 'api-reference/', 'zh/api-reference/', 'docs.json', 'llms.txt',
            'openapi.yaml', 'docs/publication/', 'discovery/payment-evidence.json',
-           'discovery/openapi.json')
+           'discovery/openapi.json', 'tasks/', 'zh/tasks/')
 INPUT_OVERRIDES = ('openapi/registry.yaml',)
 MAX_BYTES = 16 << 20
 
@@ -94,13 +96,15 @@ def docs_inputs(root):
     return hashlib.sha256(('\n'.join(kept) + '\n').encode()).hexdigest()
 
 
-def input_key(contract, category, docs):
+def input_key(contract, category, docs, tasks=''):
+    if tasks:
+        return hashlib.sha256(f'contract {contract}\ncategory {category}\ndocs {docs}\ntasks {tasks}\n'.encode()).hexdigest()
     return hashlib.sha256(f'contract {contract}\ncategory {category}\ndocs {docs}\n'.encode()).hexdigest()
 
 
-def plan(index, category, docs):
+def plan(index, category, docs, tasks=''):
     contract, live_category = content_hash(index), category_hash(category)
-    return {'input_key': input_key(contract, live_category, docs), 'contract_hash': contract,
+    return {'input_key': input_key(contract, live_category, docs, tasks), 'contract_hash': contract,
             'category_hash': live_category, 'docs_inputs': docs,
             'artifact_revision': index.get('artifact_revision', ''),
             'generation': index.get('generation', 0)}
@@ -109,6 +113,7 @@ def plan(index, category, docs):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base-url', default='https://api.aisa.one')
+    parser.add_argument('--include-tasks', action='store_true', help='Include the independent public Task catalog in change detection')
     parser.add_argument('--root', type=Path, default=Path('.'))
     parser.add_argument('--github-output', type=Path, help='append key=value outputs for GitHub Actions')
     args = parser.parse_args(argv)
@@ -117,14 +122,20 @@ def main(argv=None):
         if not isinstance(index, dict) or index.get('fresh') is not True:
             # Runtime is recompiling; wait for the next tick instead of failing.
             raise Unavailable(CURRENT + ' is not fresh')
-        result = plan(index, fetch(args.base_url, CATEGORY), docs_inputs(args.root))
-    except Unavailable as exc:
+        task_hash = ''
+        if args.include_tasks:
+            from sync_tasks import acquire, catalog_hash
+            task_hash = catalog_hash(acquire(args.base_url.rstrip('/')))
+        result = plan(index, fetch(args.base_url, CATEGORY), docs_inputs(args.root), task_hash)
+        if args.include_tasks:
+            result['task_hash'] = task_hash
+    except (Unavailable, OSError, ValueError, KeyError, TypeError) as exc:
         print(json.dumps({'available': False, 'reason': str(exc)}))
         return 2
     print(json.dumps(result, sort_keys=True))
     if args.github_output:
         with args.github_output.open('a') as output:
-            for key in ('input_key', 'contract_hash', 'artifact_revision', 'generation'):
+            for key in ('input_key', 'contract_hash', 'artifact_revision', 'generation', *(['task_hash'] if args.include_tasks else [])):
                 output.write(f'{key}={result[key]}\n')
     return 0
 

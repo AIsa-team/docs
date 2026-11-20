@@ -30,13 +30,14 @@ jobs:
     outputs:
       changed: ${{ steps.decide.outputs.changed }}
       input_key: ${{ steps.live.outputs.input_key }}
+      task_hash: ${{ steps.live.outputs.task_hash }}
     steps:
       - uses: actions/checkout@v4
       - name: Hash the live contract and Docs generator inputs
         id: live
         run: |
           set +e
-          python scripts/live_contract_plan.py --github-output "$GITHUB_OUTPUT"
+          python scripts/live_contract_plan.py --include-tasks --github-output "$GITHUB_OUTPUT"
           status=$?
           set -e
           if [ "$status" -ne 0 ]; then
@@ -179,6 +180,11 @@ jobs:
           name: payment-observation
           path: /tmp/payment-observation.json
           if-no-files-found: ignore
+      - name: Generate Tasks from the same planned public catalog
+        if: steps.pull.outputs.available == 'true'
+        env:
+          PLANNED_TASK_HASH: ${{ needs.plan.outputs.task_hash }}
+        run: python scripts/sync_tasks.py --api https://api.aisa.one --expected-hash "$PLANNED_TASK_HASH"
       - name: Validate page references
         if: steps.pull.outputs.available == 'true'
         run: python scripts/validate_runtime_api_reference_slugs.py --generated-only
@@ -250,6 +256,11 @@ jobs:
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git add openapi api-reference zh/api-reference docs.json llms.txt openapi.yaml docs/publication discovery/payment-evidence.json discovery/openapi.json
           if [ -d openapi-public ]; then git add openapi-public; fi
+          for directory in tasks zh/tasks; do
+            if [ -d "$directory" ] || [ -n "$(git ls-files -- "$directory")" ]; then
+              git add -A -- "$directory"
+            fi
+          done
           if git diff --cached --quiet; then exit 0; fi
           # Export deliberately retains an equivalent authorized publication.
           # Non-graph observations alone cannot create a new consumer identity.
