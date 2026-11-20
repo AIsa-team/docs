@@ -27,7 +27,7 @@
       "post": {
         "operationId": "task_creators_find_contact",
         "summary": "查找达人联系邮箱",
-        "description": "Find at least one email for a known creator profile. A phone, contact form or unfinished lookup is not an email hit. Deliverability is unknown unless explicitly verified.",
+        "description": "根据已知达人主页查找至少一个联系邮箱。电话、联系表单或未完成查询不算邮箱命中，未验证的邮箱不承诺可投递。",
         "tags": [
           "任务"
         ],
@@ -56,7 +56,8 @@
                     "properties": {
                       "profile_url": {
                         "type": "string",
-                        "maxLength": 2048
+                        "maxLength": 2048,
+                        "description": "Instagram、TikTok、YouTube 或 X 的 HTTPS 达人主页，不接受作品链接或短链。"
                       }
                     },
                     "required": [
@@ -324,6 +325,7 @@
                           ],
                           "properties": {
                             "profile_url": {
+                              "description": "HTTPS creator profile URL on Instagram, TikTok, YouTube or X; post URLs and short links are unsupported.",
                               "maxLength": 2048,
                               "pattern": "\\S",
                               "type": "string"
@@ -748,7 +750,7 @@
       "post": {
         "operationId": "task_creators_find_linked_accounts",
         "summary": "查找达人关联账号",
-        "description": "Find other platform accounts from a supported creator profile. Provider assertions retain their source. Linktree is only an auxiliary step with a known trusted URL; matching handles do not prove ownership.",
+        "description": "根据受支持的达人主页查找其他平台的关联账号并保留来源依据。已知可信 Linktree 链接仅作为辅助步骤，相同账号名不证明属于同一人。",
         "tags": [
           "任务"
         ],
@@ -777,7 +779,8 @@
                     "properties": {
                       "profile_url": {
                         "type": "string",
-                        "maxLength": 2048
+                        "maxLength": 2048,
+                        "description": "Instagram、TikTok、YouTube、X、Twitch 或 OnlyFans 的 HTTPS 达人主页，不接受独立 Linktree URL。"
                       }
                     },
                     "required": [
@@ -1240,6 +1243,7 @@
                           ],
                           "properties": {
                             "profile_url": {
+                              "description": "HTTPS creator profile URL on Instagram, TikTok, YouTube, X, Twitch or OnlyFans; not a standalone Linktree URL.",
                               "maxLength": 2048,
                               "pattern": "\\S",
                               "type": "string"
@@ -1664,7 +1668,7 @@
       "post": {
         "operationId": "task_creators_find_similar",
         "summary": "查找相似达人",
-        "description": "Find source-recommended accounts similar to one reference account, excluding the seed. Scores retain their source meaning.",
+        "description": "查找指定平台上与参考账号相似的推荐达人，排除参考账号；相似分数保留来源原始含义。",
         "tags": [
           "任务"
         ],
@@ -1693,7 +1697,8 @@
                     "properties": {
                       "handle": {
                         "type": "string",
-                        "maxLength": 256
+                        "maxLength": 256,
+                        "description": "平台账号名，不是显示名称或 URL；与 profile_url、native_id 恰选一个。"
                       },
                       "id_namespace": {
                         "type": "string",
@@ -1704,17 +1709,20 @@
                           "tiktok.sec_uid",
                           "xiaohongshu.user",
                           "xingtu.author"
-                        ]
+                        ],
+                        "description": "native_id 所属命名空间，必须与 native_id 成对提供且匹配所选平台。"
                       },
                       "limit": {
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 100,
-                        "default": 20
+                        "default": 20,
+                        "description": "合并去重并排除参考账号后，最多交付的账号数。"
                       },
                       "native_id": {
                         "type": "string",
-                        "maxLength": 256
+                        "maxLength": 256,
+                        "description": "以字符串提供原生账号 ID，必须同时提供 id_namespace；可用命名空间由平台决定。"
                       },
                       "platform": {
                         "type": "string",
@@ -1725,11 +1733,13 @@
                           "tiktok",
                           "xiaohongshu",
                           "youtube"
-                        ]
+                        ],
+                        "description": "参考账号和返回相似账号所属的同一平台。"
                       },
                       "profile_url": {
                         "type": "string",
-                        "maxLength": 2048
+                        "maxLength": 2048,
+                        "description": "所选平台的 HTTPS 账号主页；与 handle、native_id 恰选一个，不接受作品链接或短链。"
                       }
                     },
                     "required": [
@@ -2871,6 +2881,7 @@
                             "handle": {
                               "anyOf": [
                                 {
+                                  "description": "Account handle, not a display name or URL; choose exactly one of profile_url, handle or native_id.",
                                   "maxLength": 256,
                                   "pattern": "\\S",
                                   "type": "string"
@@ -2883,6 +2894,7 @@
                             "id_namespace": {
                               "anyOf": [
                                 {
+                                  "description": "Namespace of native_id; must be paired with native_id and match the selected platform.",
                                   "enum": [
                                     "instagram.user",
                                     "tiktok.sec_uid",
@@ -2902,6 +2914,7 @@
                               "anyOf": [
                                 {
                                   "default": 20,
+                                  "description": "Maximum distinct accounts after merging and excluding the reference account.",
                                   "maximum": 100,
                                   "minimum": 1,
                                   "type": "integer"
@@ -2914,6 +2927,7 @@
                             "native_id": {
                               "anyOf": [
                                 {
+                                  "description": "Native account ID as a string in the paired id_namespace; accepted namespaces depend on platform.",
                                   "maxLength": 256,
                                   "pattern": "\\S",
                                   "type": "string"
@@ -2924,6 +2938,7 @@
                               ]
                             },
                             "platform": {
+                              "description": "Platform shared by the reference account and all returned similar accounts.",
                               "enum": [
                                 "instagram",
                                 "tiktok",
@@ -2937,6 +2952,7 @@
                             "profile_url": {
                               "anyOf": [
                                 {
+                                  "description": "HTTPS account profile URL on the selected platform; choose exactly one of profile_url, handle or native_id.",
                                   "maxLength": 2048,
                                   "pattern": "\\S",
                                   "type": "string"
@@ -3479,7 +3495,7 @@
       "post": {
         "operationId": "task_creators_get_audience",
         "summary": "获取达人画像与表现",
-        "description": "Compare source-specific audience and performance reports, preserving population, denominator and actual observation window. Missing required parts are partial delivery.",
+        "description": "对比同一达人各来源的粉丝画像与表现，保留样本人群、分母和真实统计窗口；缺少必要部分时交付 partial。",
         "tags": [
           "任务"
         ],
@@ -3508,7 +3524,8 @@
                     "properties": {
                       "handle": {
                         "type": "string",
-                        "maxLength": 256
+                        "maxLength": 256,
+                        "description": "平台账号名，不是显示名称或 URL；与 profile_url、native_id 恰选一个。"
                       },
                       "id_namespace": {
                         "type": "string",
@@ -3519,11 +3536,13 @@
                           "instagram.user",
                           "xiaohongshu.user",
                           "xingtu.kol"
-                        ]
+                        ],
+                        "description": "native_id 所属命名空间，必须与 native_id 成对提供且匹配所选平台。"
                       },
                       "native_id": {
                         "type": "string",
-                        "maxLength": 256
+                        "maxLength": 256,
+                        "description": "以字符串提供原生账号 ID，必须同时提供 id_namespace；可用命名空间由平台决定。"
                       },
                       "platform": {
                         "type": "string",
@@ -3537,11 +3556,13 @@
                           "twitter",
                           "xiaohongshu",
                           "youtube"
-                        ]
+                        ],
+                        "description": "达人账号所属平台，决定可用的身份输入形式。"
                       },
                       "profile_url": {
                         "type": "string",
-                        "maxLength": 2048
+                        "maxLength": 2048,
+                        "description": "所选平台的 HTTPS 账号主页；与 handle、native_id 恰选一个，不接受作品链接或短链。"
                       }
                     },
                     "required": [
@@ -5482,6 +5503,7 @@
                             "handle": {
                               "anyOf": [
                                 {
+                                  "description": "Account handle, not a display name or URL; choose exactly one of profile_url, handle or native_id.",
                                   "maxLength": 256,
                                   "pattern": "\\S",
                                   "type": "string"
@@ -5494,6 +5516,7 @@
                             "id_namespace": {
                               "anyOf": [
                                 {
+                                  "description": "Namespace of native_id; must be paired with native_id and match the selected platform.",
                                   "enum": [
                                     "instagram.user",
                                     "douyin.user",
@@ -5512,6 +5535,7 @@
                             "native_id": {
                               "anyOf": [
                                 {
+                                  "description": "Native account ID as a string in the paired id_namespace; accepted namespaces depend on platform.",
                                   "maxLength": 256,
                                   "pattern": "\\S",
                                   "type": "string"
@@ -5522,6 +5546,7 @@
                               ]
                             },
                             "platform": {
+                              "description": "Platform of the creator account; determines the supported identity forms.",
                               "enum": [
                                 "instagram",
                                 "tiktok",
@@ -5538,6 +5563,7 @@
                             "profile_url": {
                               "anyOf": [
                                 {
+                                  "description": "HTTPS account profile URL on the selected platform; choose exactly one of profile_url, handle or native_id.",
                                   "maxLength": 2048,
                                   "pattern": "\\S",
                                   "type": "string"
@@ -10919,7 +10945,7 @@
       "post": {
         "operationId": "task_creators_search",
         "summary": "搜索达人",
-        "description": "Discover platform creators by content intent and supported hard filters. A binding must apply every requested filter or be excluded before dispatch.",
+        "description": "按内容方向与受支持的筛选条件搜索达人。每个来源必须应用全部请求条件，否则不参与调用。",
         "tags": [
           "任务"
         ],
@@ -10951,23 +10977,26 @@
                         "items": {
                           "type": "string"
                         },
-                        "description": "V1 verified value subset, not a complete country list; see platform and query conditions in the final contract."
+                        "description": "达人所在地，仅接受一个 US 或 GB；省略表示不限国家。可用国家还受平台及 query 条件限制。"
                       },
                       "followers_max": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 1000000000000
+                        "maximum": 1000000000000,
+                        "description": "粉丝人数上限，包含边界；与下限同时提供时不得小于下限。"
                       },
                       "followers_min": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 1000000000000
+                        "maximum": 1000000000000,
+                        "description": "粉丝人数下限，包含边界；省略表示不设下限。"
                       },
                       "limit": {
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 100,
-                        "default": 20
+                        "default": 20,
+                        "description": "跨来源、跨平台去重后的交付账号总上限，不是每个平台的数量。"
                       },
                       "platform": {
                         "type": "string",
@@ -10978,11 +11007,13 @@
                           "tiktok",
                           "xiaohongshu",
                           "youtube"
-                        ]
+                        ],
+                        "description": "可选平台；省略时选择能应用全部请求条件的平台与来源。"
                       },
                       "query": {
                         "type": "string",
-                        "maxLength": 50
+                        "maxLength": 50,
+                        "description": "内容方向或领域关键词，不表示账号昵称或统一类目 ID。"
                       }
                     }
                   },
@@ -11712,6 +11743,7 @@
                             "followers_max": {
                               "anyOf": [
                                 {
+                                  "description": "Inclusive maximum follower count; must be at least followers_min when both are provided.",
                                   "maximum": 1000000000000,
                                   "minimum": 0,
                                   "type": "integer"
@@ -11724,6 +11756,7 @@
                             "followers_min": {
                               "anyOf": [
                                 {
+                                  "description": "Inclusive minimum follower count; omitted means no lower bound.",
                                   "maximum": 1000000000000,
                                   "minimum": 0,
                                   "type": "integer"
@@ -11737,6 +11770,7 @@
                               "anyOf": [
                                 {
                                   "default": 20,
+                                  "description": "Maximum number of distinct delivered accounts across all selected sources and platforms.",
                                   "maximum": 100,
                                   "minimum": 1,
                                   "type": "integer"
@@ -11749,6 +11783,7 @@
                             "platform": {
                               "anyOf": [
                                 {
+                                  "description": "Optional platform. When omitted, select eligible platforms and sources that apply every requested filter.",
                                   "enum": [
                                     "instagram",
                                     "tiktok",
@@ -11767,6 +11802,7 @@
                             "query": {
                               "anyOf": [
                                 {
+                                  "description": "Content topic or niche keyword; not an account name or a shared category ID.",
                                   "maxLength": 50,
                                   "pattern": "\\S",
                                   "type": "string"
