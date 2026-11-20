@@ -275,6 +275,10 @@ class OpenInputWorkflowTests(unittest.TestCase):
             "${{ github.event_name == 'pull_request' && vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING != '' && fromJSON(vars.CONTRACT_EKS_INPUT_DIAGNOSTIC_BINDING).head_revision == github.event.pull_request.head.sha && 40 || 30 }}")
         # Normalize the explicit budget-only change to the historical digest.
         workflow['jobs']['artifact-contracts']['timeout-minutes']=10
+        # Assert the immutable event checkout, then exclude this one intentional
+        # addition from the historical digest; all remaining guards stay frozen.
+        artifact_checkout = workflow['jobs']['artifact-contracts']['steps'][0]
+        self.assertEqual(artifact_checkout['with'].pop('ref'), '${{ github.sha }}')
         # Assert the reviewed PR-scope correction, then normalize only those
         # three fields so the independent original workflow digest still guards
         # every formal/input job, permission, trigger and required aggregate.
