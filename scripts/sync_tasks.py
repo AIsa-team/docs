@@ -150,7 +150,7 @@ def openapi(tasks: list[dict], language: str, api: str) -> dict:
     c = COPY[language]
     for task in tasks:
         detail = task[language]
-        stem = detail["task_id"].replace(".", "_")
+        stem = detail["task_id"]
         for kind, schema in (("request", request_schema(detail)), ("response", detail["response_schema"]), ("error", detail["error_schema"])):
             schemas[stem + "_" + kind] = component(schema, stem + "_" + kind)
         ref = lambda kind: {"$ref": "#/components/schemas/" + stem + "_" + kind}
@@ -179,7 +179,7 @@ def page_path(language: str, name: str) -> str:
 
 
 def slug(task_id: str) -> str:
-    return task_id.replace(".", "-").replace("_", "-")
+    return task_id.replace(".", "-")
 
 
 def prose(text: str) -> str:

@@ -79,8 +79,8 @@ class SchemaTests(unittest.TestCase):
         two["response_schema"]["$defs"]["Identity"]["properties"]["platform"]["const"] = "instagram"
         doc = sync.openapi(tasks(one, two), "en", "https://api.aisa.one")
         schemas = doc["components"]["schemas"]
-        self.assertNotIn("const", schemas["creators_search_response"]["$defs"]["Identity"]["properties"]["platform"])
-        self.assertEqual("instagram", schemas["creators_find_similar_response"]["$defs"]["Identity"]["properties"]["platform"]["const"])
+        self.assertNotIn("const", schemas["creators.search_response"]["$defs"]["Identity"]["properties"]["platform"])
+        self.assertEqual("instagram", schemas["creators.find_similar_response"]["$defs"]["Identity"]["properties"]["platform"]["const"])
         self.assertEqual("#/$defs/Request", one["request_schema"]["$ref"])
 
     def test_social_fallback_keeps_json_schema_and_does_not_invent_options(self):
@@ -100,6 +100,20 @@ class SchemaTests(unittest.TestCase):
     def test_recursive_local_refs_remain_finite(self):
         schema = {"type": "object", "properties": {"parent": {"$ref": "#"}}}
         self.assertEqual("#/components/schemas/Task", sync.component(schema, "Task")["properties"]["parent"]["$ref"])
+
+    def test_legal_underscore_names_keep_distinct_components_and_pages(self):
+        ids = ("foo_bar.baz", "foo.bar_baz")
+        rows = tasks(*(detail(task_id) for task_id in ids))
+        doc = sync.openapi(rows, "en", "https://api.aisa.one")
+        self.assertEqual(6, len(doc["components"]["schemas"]))
+        self.assertEqual(2, len({method["post"]["operationId"] for method in doc["paths"].values()}))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "docs.json").write_text(json.dumps(navigation()))
+            sync.write(root, rows, "https://api.aisa.one")
+            for name in ("foo_bar-baz", "foo-bar_baz"):
+                self.assertTrue((root / ("tasks/" + name + ".mdx")).is_file())
+            self.assertEqual(6, len(sync.validate_publication(root)))
 
 
 class AcquisitionTests(unittest.TestCase):
@@ -168,7 +182,7 @@ class PublicationTests(unittest.TestCase):
     def test_repeated_generation_is_deterministic_and_removes_old_task(self):
         sync.write(self.root, tasks(detail(), detail("creators.find_similar")), "https://api.aisa.one")
         sync.write(self.root, tasks(detail()), "https://api.aisa.one")
-        self.assertFalse((self.root / "tasks/creators-find-similar.mdx").exists())
+        self.assertFalse((self.root / "tasks/creators-find_similar.mdx").exists())
         before = (self.root / "docs.json").read_bytes()
         sync.write(self.root, tasks(detail()), "https://api.aisa.one")
         self.assertEqual(before, (self.root / "docs.json").read_bytes())
@@ -205,6 +219,27 @@ class PublicationTests(unittest.TestCase):
         sync.write(fixture.root, [], "https://api.aisa.one")
         self.assertEqual(1, validate_surfaces(fixture.root)["operations"])
 
+    def test_task_only_change_replaces_formal_pointer_without_raw_change(self):
+        from test_contract_publication import PublicationTests as ExportFixture
+        fixture = ExportFixture()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        (fixture.root / "docs.json").write_text(json.dumps(navigation()))
+        sync.write(fixture.root, tasks(detail()), "https://api.aisa.one")
+        fixture.report["publication_artifact"]["files_sha256"] = publication_hashes(fixture.root)
+        old = fixture.publish_report()
+        before = fixture.publication_bytes()
+        changed = detail()
+        changed["description"] = "Changed Task only"
+        sync.write(fixture.root, tasks(changed), "https://api.aisa.one")
+        fixture.report["publication_artifact"]["files_sha256"] = publication_hashes(fixture.root)
+        new = fixture.publish_report()
+        self.assertEqual(old["runtime"], new["runtime"])
+        self.assertEqual(old["openapi"], new["openapi"])
+        self.assertNotEqual(old["contract_release"], new["contract_release"])
+        self.assertNotEqual(before["current.json"], fixture.publication_bytes()["current.json"])
+        self.assertNotEqual(before["formal-contract-readiness.json"], fixture.publication_bytes()["formal-contract-readiness.json"])
+
 
 class PipelineTests(unittest.TestCase):
     def test_new_domain_and_every_contract_change_are_dynamic(self):
@@ -227,7 +262,7 @@ class PipelineTests(unittest.TestCase):
             root = Path(directory)
             (root / "docs.json").write_text(json.dumps(navigation()))
             sync.write(root, tasks(added), "https://api.aisa.one")
-            self.assertTrue((root / "tasks/research-find-sources.mdx").is_file())
+            self.assertTrue((root / "tasks/research-find_sources.mdx").is_file())
             self.assertIn("Research", (root / "docs.json").read_text())
 
     def test_task_only_changes_affect_plan_including_empty_withdrawal(self):

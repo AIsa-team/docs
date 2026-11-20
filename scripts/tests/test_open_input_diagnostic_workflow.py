@@ -286,6 +286,14 @@ class OpenInputWorkflowTests(unittest.TestCase):
             '--head "$CANDIDATE_HEAD" ${{ github.event_name == \'pull_request\' && \'--merge-base\' || \'\' }} '
             '>> "$GITHUB_OUTPUT"\n')
         scope['run'] = 'python scripts/contract_change_scope.py --base "$BASE" >> "$GITHUB_OUTPUT"\n'
+        # Task publication files now join the existing formal artifact gate.
+        # Verify only the added trigger paths, retaining the historical digest
+        # for every existing job/permission/selection rule.
+        triggers = workflow.get('on', workflow.get(True))
+        for event in ('pull_request', 'push'):
+            for pattern in ('tasks/**', 'zh/tasks/**'):
+                self.assertEqual(triggers[event]['paths'].count(pattern), 1)
+                triggers[event]['paths'].remove(pattern)
         def normalize(value):
             if type(value) is dict:return {str(k):normalize(v) for k,v in value.items()}
             if type(value) is list:return [normalize(v) for v in value]
