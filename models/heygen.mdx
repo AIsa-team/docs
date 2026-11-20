@@ -4,11 +4,24 @@ description: Generate a video from text or an image and retrieve it through the 
 sidebarTitle: HeyGen
 ---
 
-Use `heygen-video-1` to generate one video from text, a first-frame image, or reference images. Both endpoints use your AIsa API key and the same task ID. Video generation is billed once per task according to its duration and resolution.
+AIsa serves `heygen-video-1` through Vercel for text-to-video, first-frame and reference-based generation. Existing HeyGen clients can use the official create and status formats. If you already use the AIsa video API, keep using `POST /v1/video/generations`. Both routes share task IDs and each task is billed once.
 
-## Create a video
+## Use the official HeyGen API format
 
-Set the native base URL to `https://api.aisa.one/v1/heygen`. Submit a prompt with `mode` set to `text_to_video`. The response is HTTP 202.
+If your client already calls HeyGen’s `/v3/models/videos`, keep the same paths and request body for the parameters listed below. Replace the URL prefix and supply your AIsa API key in the existing `x-api-key` header.
+
+| | Official HeyGen API | Through AIsa |
+| --- | --- | --- |
+| URL prefix | `https://api.heygen.com` | `https://api.aisa.one/v1/heygen` |
+| Create a task | `POST /v3/models/videos` | Same path |
+| Get a task | `GET /v3/models/videos/{video_id}` | Same path |
+| Authentication | HeyGen API key in `x-api-key` | AIsa API key in `x-api-key` |
+
+**Compatibility covers creation and status for this model.** Last-frame conditioning, asset uploads and callback delivery are currently unsupported. Omit `Idempotency-Key` when creating a task. Both routes reject this replay header with HTTP 400 before charging.
+
+### Create a video
+
+This example generates a five-second video at 480p. A successful submission returns HTTP 202. Save the `data.video_id` from the response.
 
 ```bash
 curl -sS https://api.aisa.one/v1/heygen/v3/models/videos \
@@ -21,7 +34,7 @@ curl -sS https://api.aisa.one/v1/heygen/v3/models/videos \
 {"data":{"video_id":"video_task_example","status":"pending","input_video_duration":0}}
 ```
 
-## Retrieve the result
+### Retrieve the result
 
 Set `VIDEO_ID` to the returned `data.video_id`. Poll until `data.status` is `completed`, `failed`, or `cancelled`. Download a completed video from `data.video_url` before the signed link expires. A failed task includes `failure_message`.
 
@@ -30,14 +43,14 @@ curl -sS "https://api.aisa.one/v1/heygen/v3/models/videos/$VIDEO_ID" \
   -H "x-api-key: $AISA_API_KEY"
 ```
 
-## AIsa video API
+## Use the AIsa video generation API
 
-The shared endpoint returns the task ID as `id` and the completed video as `result.video_url`. You can query the same task using either API.
+If your client already uses `POST /v1/video/generations`, keep the same endpoint and Bearer authentication and set `model` to `heygen-video-1`. The create response returns the task ID in `id`. Use it as `VIDEO_ID` below. Once the task completes, read `result.video_url`. You can also poll that same ID through the HeyGen route without creating another task.
 
 ```bash
 curl -sS https://api.aisa.one/v1/video/generations \
   -H "Authorization: Bearer $AISA_API_KEY" -H "Content-Type: application/json" \
-  -d '{"model":"heygen-video-1","prompt":"A blue paper boat on a pond.","duration":5}'
+  -d '{"model":"heygen-video-1","mode":"text_to_video","prompt":"A blue paper boat on a pond.","duration":5,"resolution":"480p","aspect_ratio":"16:9"}'
 
 curl -sS "https://api.aisa.one/v1/video/generations/$VIDEO_ID" \
   -H "Authorization: Bearer $AISA_API_KEY"
@@ -49,10 +62,14 @@ Duration defaults to 5 seconds. Reference mode requires 5–15 seconds, at least
 
 For `image_to_video`, pass the first frame in `image`. For `reference_to_video`, pass images in `reference_images`. Use an HTTPS URL or inline Base64. For example, a first-frame input looks like `{"type":"url","url":"https://example.com/first.png"}`. The output follows the first frame’s aspect ratio.
 
-On the native create endpoint, retry with the same `Idempotency-Key` within 24 hours to replay the response. A concurrent duplicate returns HTTP 409. Keep the task ID for polling. For a completed task, both endpoints reuse a refreshed result URL for up to one minute per API instance. During a temporary Gateway outage, the API returns the last available URL.
+## What if creation times out?
+
+Once you have a task ID, poll it for the result. A `503 video_submission_pending` response can also include an ID you can poll. If the connection drops before you receive an ID, avoid automatically retrying the create request: each accepted submission starts a separately billed task.
+
+For a completed task, both endpoints reuse a refreshed result URL for up to one minute per API instance. During a temporary Gateway outage, the API returns the last available URL.
+
+## Billing
 
 The generation mode selects the per-second rate. In `reference_to_video`, image-only references use the reference-mode rate for the output seconds. For example, at a customer rate of $0.035 per second, a 5-second output costs $0.175. The additional 15-second reservation and invoice-based calculation below apply only when the request includes a reference video.
 
 Pass up to three videos in `reference_videos`, each as an HTTPS URL or inline Base64. Each video may be up to 16 MiB. Use a stable HTTPS URL for large files: the Vercel asynchronous job envelope has a 300 KB limit on inline requests. The URL must serve the same file until the task completes. For any number of reference videos, AIsa reserves the requested output duration plus 15 seconds total at your customer rate. AIsa does not download the references. After generation, AIsa divides the verified Gateway charge by the upstream per-second rate saved at submission, then applies your saved customer rate to those billable seconds. For example, a 5-second request reserves 20 seconds; if the upstream charge corresponds to 7 seconds, you pay for 7 and the other 13 are released. If the charge is unavailable or inconsistent, settlement remains pending and is retried. For video references, input_video_duration is omitted while pending and derived from the billable seconds after settlement.
-
-The current adapter does not support last-frame conditioning, asset uploads, or callback delivery.

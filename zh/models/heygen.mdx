@@ -4,11 +4,24 @@ description: 通过 HeyGen 兼容接口或 AIsa 视频接口提交文本并查�
 sidebarTitle: HeyGen
 ---
 
-使用 `heygen-video-1` 从文本生成一段视频。两个入口使用 AIsa API Key，共享同一个任务 ID，每个任务按时长和分辨率计费一次。
+AIsa 通过 Vercel 提供 `heygen-video-1`，支持文生视频、首帧生视频和参考素材生视频。已有 HeyGen 调用可以沿用官方的创建和查询格式；已有 AIsa 视频客户端可以继续使用 `POST /v1/video/generations`。两个入口共享任务 ID，每个任务只结算一次。
 
-## 创建视频
+## 使用 HeyGen 官方 API 格式
 
-将原生接口的 base URL 设为 `https://api.aisa.one/v1/heygen`，提交提示词并将 `mode` 设为 `text_to_video`。受理成功返回 HTTP 202。
+如果你已经在调用 HeyGen 的 `/v3/models/videos`，对于下文支持的参数，请保留原有请求路径和请求体，只把 URL 前缀换成 AIsa，并在原来的 `x-api-key` 请求头中填入 AIsa API Key。
+
+| | HeyGen 官方 | 通过 AIsa 调用 |
+| --- | --- | --- |
+| URL 前缀 | `https://api.heygen.com` | `https://api.aisa.one/v1/heygen` |
+| 创建任务 | `POST /v3/models/videos` | 相同路径 |
+| 查询任务 | `GET /v3/models/videos/{video_id}` | 相同路径 |
+| 认证 | `x-api-key` 使用 HeyGen API Key | `x-api-key` 使用 AIsa API Key |
+
+**兼容范围**覆盖上述模型的创建与查询。尾帧控制、素材上传和回调投递暂不支持。创建请求请省略 `Idempotency-Key`：两个入口均不支持按该请求头重放，携带它创建任务会在扣费前返回 HTTP 400。
+
+### 创建视频
+
+以下示例生成一段 480p、5 秒的视频。受理成功返回 HTTP 202，请保存响应中的 `data.video_id`。
 
 ```bash
 curl -sS https://api.aisa.one/v1/heygen/v3/models/videos \
@@ -21,7 +34,7 @@ curl -sS https://api.aisa.one/v1/heygen/v3/models/videos \
 {"data":{"video_id":"video_task_example","status":"pending","input_video_duration":0}}
 ```
 
-## 查询结果
+### 查询结果
 
 将 `VIDEO_ID` 设为响应中的 `data.video_id`，轮询直到 `data.status` 为 `completed`、`failed` 或 `cancelled`。成功后请在签名链接过期前从 `data.video_url` 下载视频。失败原因见 `failure_message`。
 
@@ -30,14 +43,14 @@ curl -sS "https://api.aisa.one/v1/heygen/v3/models/videos/$VIDEO_ID" \
   -H "x-api-key: $AISA_API_KEY"
 ```
 
-## AIsa 视频接口
+## 使用 AIsa 视频生成协议
 
-通用入口通过 `id` 返回任务 ID，成功结果位于 `result.video_url`。从任一入口创建的任务都可以通过另一入口查询。
+如果你已接入 AIsa 视频生成协议，沿用 `POST /v1/video/generations` 和 Bearer 认证，把 `model` 设为 `heygen-video-1` 即可。创建响应中的任务 ID 位于 `id`。把它填入下方的 `VIDEO_ID`，查询完成后从 `result.video_url` 读取视频链接。也可以用同一个 ID 从 HeyGen 格式的接口查询，无需再次创建。
 
 ```bash
 curl -sS https://api.aisa.one/v1/video/generations \
   -H "Authorization: Bearer $AISA_API_KEY" -H "Content-Type: application/json" \
-  -d '{"model":"heygen-video-1","prompt":"A blue paper boat on a pond.","duration":5}'
+  -d '{"model":"heygen-video-1","mode":"text_to_video","prompt":"A blue paper boat on a pond.","duration":5,"resolution":"480p","aspect_ratio":"16:9"}'
 
 curl -sS "https://api.aisa.one/v1/video/generations/$VIDEO_ID" \
   -H "Authorization: Bearer $AISA_API_KEY"
@@ -49,10 +62,14 @@ curl -sS "https://api.aisa.one/v1/video/generations/$VIDEO_ID" \
 
 使用 `image_to_video` 时，在 `image` 传入首帧。使用 `reference_to_video` 时，在 `reference_images` 传入参考图。两者均可传入 HTTPS URL 或内联 Base64。首帧输入示例为 `{"type":"url","url":"https://example.com/first.png"}`，输出画幅跟随首帧。
 
-原生创建接口支持 `Idempotency-Key`。24 小时内重试同一键会重放原响应，并发重复请求返回 HTTP 409。请保存任务 ID 用于轮询，任务完成后，两个入口在同一 API 实例最多复用刷新后的链接一分钟。Gateway 暂时不可用时返回最近可用的链接。
+## 创建超时怎么办？
+
+拿到任务 ID 后，请用它轮询结果。若返回 `503 video_submission_pending` 并附带任务 ID，也请保留该 ID 查询。如果连接中断且没有收到任务 ID，请避免自动重发创建请求，以免生成两个分别计费的任务。
+
+任务完成后，两个入口在同一 API 实例最多复用刷新后的链接一分钟。Gateway 暂时不可用时返回最近可用的链接。
+
+## 计费
 
 每秒单价由生成模式决定。`reference_to_video` 仅传参考图时，按参考模式单价收取输出秒数。例如客户单价为每秒 0.035 美元时，5 秒成片收费 0.175 美元。只有传入参考视频时，才会额外预扣 15 秒并按上游账单反推计费时长。
 
 在 `reference_videos` 中最多传入三个视频，每项可使用 HTTPS URL 或内联 Base64，单个视频最多 16 MiB。Vercel 异步任务的内联请求上限为 300 KB，大文件请使用稳定的 HTTPS 地址。任务完成前，该地址应持续提供同一文件。有参考视频时，AIsa 按请求输出时长加 15 秒输入预扣，多段参考视频合计也只预留 15 秒。AIsa 无需下载参考视频。生成完成后，AIsa 用已核实的 Gateway 费用除以提交时保存的上游每秒费率，得到计费总秒数，再乘以提交时保存的客户单价。例如，请求 5 秒成片先预扣 20 秒，若账单对应 7 秒，则实扣 7 秒并释放其余 13 秒的预扣。费用暂不可用或与计价条件不符时，任务保留预扣并重试结算。含参考视频的任务在等待期间省略 input_video_duration，结算后按账单推算。
-
-当前适配器尚未支持尾帧控制、素材上传或回调投递。
