@@ -6,7 +6,7 @@ import unittest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from contract_change_scope import (git_requires_artifact_check, verify_required_jobs,
+from contract_change_scope import (git_changed_paths, git_requires_artifact_check, verify_required_jobs,
                                    requires_artifact_check, is_reviewed_input_change)
 from identity_compatibility import PublishedHistory
 
@@ -226,6 +226,42 @@ class ChangeScopeTests(unittest.TestCase):
                 with self.subTest(base=invalid), self.assertRaises(subprocess.CalledProcessError):
                     subprocess.check_output([sys.executable, str(script), '--root', str(root),
                         '--base', invalid, '--head', head, '--merge-base'], stderr=subprocess.PIPE)
+
+    def test_artifact_checkout_keeps_the_event_merge_when_main_advances(self):
+        workflow = yaml.safe_load((Path(__file__).resolve().parents[2] /
+                                   '.github/workflows/test-runtime-contracts.yml').read_text())
+        checkout = workflow['jobs']['artifact-contracts']['steps'][0]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            def git(*args):
+                return subprocess.check_output(['git', *args], cwd=root, text=True).strip()
+            git('init', '-q', '-b', 'main')
+            git('config', 'user.name', 'Test')
+            git('config', 'user.email', 'test@example.invalid')
+            publication = root / 'docs/publication/current.json'
+            publication.parent.mkdir(parents=True)
+            publication.write_text('{"generation":1}\n')
+            git('add', '.'); git('commit', '-qm', 'event base')
+            base = git('rev-parse', 'HEAD')
+            git('checkout', '-qb', 'pr')
+            for name in ('docs/schema-inputs/context.json', 'openapi/upstream/source.json'):
+                path = root / name; path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('{}\n')
+            git('add', '.'); git('commit', '-qm', 'source-only change')
+            head = git('rev-parse', 'HEAD')
+            git('checkout', '-qb', 'event-merge', base)
+            git('merge', '--no-ff', '-qm', 'event merge', head)
+            event_merge = git('rev-parse', 'HEAD')
+            git('checkout', '-q', 'main')
+            publication.write_text('{"generation":2}\n')
+            git('add', '.'); git('commit', '-qm', 'later main publication')
+            git('merge', '--no-ff', '-qm', 'moving pull merge ref', head)
+            moving_merge = git('rev-parse', 'HEAD')
+            # Checkout without an explicit ref resolves the moving PR merge.
+            selected = event_merge if checkout['with'].get('ref') == '${{ github.sha }}' else moving_merge
+            self.assertFalse(is_reviewed_input_change(git_changed_paths(root, base, moving_merge)))
+            self.assertTrue(is_reviewed_input_change(git_changed_paths(root, base, selected)))
+        self.assertEqual(checkout['with']['ref'], '${{ github.sha }}')
 
     def test_pr_classifier_receives_fixed_head_and_merge_base_mode(self):
         workflow = yaml.safe_load((Path(__file__).resolve().parents[2] /
