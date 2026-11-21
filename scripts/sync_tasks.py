@@ -27,22 +27,22 @@ COPY = {
     "en": {
         "group": "Tasks", "tab": "API Reference", "overview": "Overview",
         "intro": "Each Task has one input contract and a normalized result. The API chooses sources using the task's strategy. Availability and fields depend on the selected input; a backup source is not guaranteed.",
-        "source": "API origin", "list": "Available tasks", "task": "Task", "description": "Description",
+        "list": "Available tasks", "task": "Task", "description": "Description",
         "contract": "The request and response panels use the schemas published by this API. Conditional requirements and allowed combinations are part of the request schema. Check the complete schema before combining filters or identities.",
         "billing": "Billing", "price": "Obtain an input-specific quote by sending the same request with `X-AISA-Cost-Mode: quote`; quoting neither executes the Task nor reserves funds. Execution reserves the estimated request charge and settles under the rules above. Use `X-AISA-Max-Price-USD` to cap the price.",
         "retry": "Use an `Idempotency-Key` when executing a Task. For errors, inspect `error.code`, `error.request_id`, `error.retryable` and `error.retry_hint`. A reconciliation hint requires checking the existing request before retrying; do not assume a pending settlement is a refund.",
         "success": "Successful delivery or a normal empty result", "error": "Error; use the returned HTTP status and retry guidance",
-        "strategy": "Default strategy", "social": "Social", "creators": "Creators",
+        "social": "Social", "creators": "Creators",
     },
     "zh": {
         "group": "任务", "tab": "API 参考", "overview": "概览",
         "intro": "每个任务使用统一的输入契约和结果结构。API 按任务策略选择数据源；可用能力和字段取决于具体输入，不保证每组条件都有备用来源。",
-        "source": "API 地址", "list": "可用任务", "task": "任务", "description": "说明",
+        "list": "可用任务", "task": "任务", "description": "说明",
         "contract": "上方请求和响应面板使用此 API 发布的 Schema。条件必填和参数组合限制属于请求契约；组合筛选条件或账号身份前，请查看完整 Schema。",
         "billing": "计费", "price": "发送相同请求并带上 `X-AISA-Cost-Mode: quote`，获取与输入对应的报价；报价不执行任务，也不预扣资金。实际执行时预扣预计请求费用，按上述规则结算。用 `X-AISA-Max-Price-USD` 设置价格上限。",
         "retry": "执行任务时使用 `Idempotency-Key`。错误时查看 `error.code`、`error.request_id`、`error.retryable` 和 `error.retry_hint`。提示先核对结算时，应先查询原请求再决定是否重试；不能把待结算当作已退款。",
         "success": "成功交付或正常查空", "error": "错误；以实际 HTTP 状态和重试指引为准",
-        "strategy": "默认策略", "social": "社媒", "creators": "达人",
+        "social": "社媒", "creators": "达人",
     },
 }
 
@@ -247,12 +247,12 @@ def prose(text: str) -> str:
 def task_page(detail: dict, language: str, api: str) -> str:
     c = COPY[language]
     front = f'---\nopenapi: "{page_path(language, "openapi.json")} POST {detail["path"]}"\ntitle: {json.dumps(detail["name"], ensure_ascii=False)}\n---\n'
-    return front + f'\n`{detail["task_id"]}` · v{detail.get("version", 1)}\n\n{c["source"]}: `{api}`\n\n{c["contract"]}\n\n{c["strategy"]}: `{prose(detail.get("strategy", ""))}`\n\n## {c["billing"]}\n\n' + pricing_markdown(detail, language) + "\n" + c["price"] + "\n\n" + c["retry"] + "\n"
+    return front + f'\n{c["contract"]}\n\n## {c["billing"]}\n\n' + pricing_markdown(detail, language) + "\n" + c["price"] + "\n\n" + c["retry"] + "\n"
 
 
 def overview(tasks: list[dict], language: str, api: str) -> str:
     c = COPY[language]
-    lines = ["---", "title: " + json.dumps(c["group"], ensure_ascii=False), "---", "", c["intro"], "", f'{c["source"]}: `{api}`', "", f'## {c["list"]}', "", f'| {c["task"]} | {c["description"]} |', '| --- | --- |']
+    lines = ["---", "title: " + json.dumps(c["group"], ensure_ascii=False), "---", "", c["intro"], "", f'## {c["list"]}', "", f'| {c["task"]} | {c["description"]} |', '| --- | --- |']
     for task in tasks:
         d = task[language]
         lines.append(f'| [`{d["task_id"]}`](/{page_path(language, slug(d["task_id"]))}) | {prose(d["name"])} |')
