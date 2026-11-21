@@ -139,7 +139,7 @@ provider hashes, a stable catalog and no redirects.
 
 Tasks (`POST /v1/tasks/{task_id}`) are published on the dev API before
 production, so the production contract preview above has none.
-`scripts/sync_dev_tasks.py` reads the public dev Task catalog instead
+`scripts/sync_tasks.py` reads the public dev Task catalog instead
 (`GET https://dev-api.aisa.one/v1/tasks`, then each task's detail in English
 and with `?lang=zh`) and writes:
 
@@ -153,10 +153,10 @@ generator neither rewrites their URLs to production nor marks them as
 unverified production references. `generate-dev-docs.yml` runs the script
 after the Runtime step on every run, and each run rewrites all Task files, so
 a removed task disappears. When the catalog cannot be read (or a detail lacks
-its output schema), nothing is written and the saved pages stay. The input
+its public response or error schema), nothing is written and the saved pages stay. The input
 contract, platforms, fields, output schema and billing mode come from the
 API (AIsaServices `packages/tasklayer/taskdoc`); the overview copy is in the
-script. Local run: `python scripts/sync_dev_tasks.py`.
+script. Local run: `python scripts/sync_tasks.py --api https://dev-api.aisa.one`.
 
 ## Automatic preview generation
 
@@ -205,3 +205,23 @@ npx --yes mint@4.2.1006 broken-links --files '**/*.mdx' --check-redirects
 References: [Mintlify Git source settings](https://www.mintlify.com/docs/deploy/github),
 [custom domains](https://www.mintlify.com/docs/customize/custom-domain), and
 [preview deployments](https://www.mintlify.com/docs/deploy/preview-deployments).
+
+### Public Task schema validation
+
+The dev workflow uses the same `sync_tasks.py` generator as the proposed
+production publisher, with `--api https://dev-api.aisa.one`. It consumes the
+complete public request, response, and error schemas, preserving conditions,
+references and nullability in OpenAPI 3.1. Social compatibility reads the
+published input fields when a full request schema is absent. No Task is executed.
+
+New Task IDs and domains generate bilingual pages automatically. An authoritative
+empty catalog removes pages; a failed acquisition or invalid schema fails the run
+before replacing the previous Task pages. Repeated generation is deterministic.
+Task page slugs preserve underscores to avoid collisions between valid Task IDs.
+The dev workflow and Mintlify project remain isolated from main.
+
+Validate offline with `python -m unittest discover -s scripts/tests -p test_sync_tasks.py`.
+
+Dev CI and generation pin PyYAML 6.0.3: 6.0.4 changes nested YAML merge
+precedence and fails the existing official-source anchor/override tests. Keep
+those tests as the upgrade gate; do not accept changed source field values.
