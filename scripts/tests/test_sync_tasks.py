@@ -324,6 +324,17 @@ class PublicationTests(unittest.TestCase):
 
 
 class PricingTests(unittest.TestCase):
+    def test_equal_tiers_show_one_customer_price_without_internal_labels(self):
+        d = detail()
+        for apply in (False, True):
+            d["pricing"]["apply_plan_multiplier"] = apply
+            for language, header in (("en", "Price (USD)"), ("zh", "价格 (USD)")):
+                page = pricing_markdown(d, language)
+                self.assertIn(header, page)
+                self.assertEqual(1, page.count("0.12"))
+                for hidden in ("normal (USD)", "vip (USD)", "svip (USD)", "revision", "价格版本", "team", "builder", "payg", "倍率", "multiplier"):
+                    self.assertNotIn(hidden, page)
+
     def test_fixed_success_and_delivery_prices_have_amounts_units_and_quote_semantics(self):
         d = detail()
         for language, expected in (("en", "Per delivered item"), ("zh", "每条实际交付结果")):
@@ -368,15 +379,35 @@ class PricingTests(unittest.TestCase):
         self.assertIn("successful partial result still charges the requested size", page)
         self.assertNotIn("Per delivered item", page)
 
-    def test_requested_units_and_membership_multipliers_are_explicit(self):
+    def test_requested_units_remain_explicit_without_unit_plan_multipliers(self):
         d = detail()
         d["pricing"].update(unit="requested_unit", apply_plan_multiplier=True)
         d["pricing"]["units"].update(estimate_input="characters", unit_size=1000, settlement="requested_units")
-        d["pricing"]["plan_policy"]["team_ppm"] = 800000
         page = pricing_markdown(d, "en")
         self.assertIn("ceil(characters / 1000)", page)
         self.assertIn("settles the requested units", page)
-        self.assertIn("team: 0.8×", page)
+        self.assertNotIn("team", page)
+
+    def test_unrepresented_price_differences_preserve_saved_publication(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "docs.json").write_text(json.dumps(navigation()))
+            sync.write(root, tasks(detail()), "https://api.aisa.one")
+            saved = lambda: {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+            before = saved()
+            for difference in ("base", "parameter", "multiplier"):
+                bad = tasks(detail())
+                p = bad[0]["zh"]["pricing"]
+                if difference == "base":
+                    p["tiers_micros_usd"]["vip"] = 100000
+                elif difference == "parameter":
+                    p["price_by"] = {"input": "platform", "values": {"alpha": {"normal": 1000, "vip": 2000}}}
+                else:
+                    p["apply_plan_multiplier"] = True
+                    p["plan_policy"]["team_ppm"] = 800000
+                with self.assertRaisesRegex(ValueError, "explicit customer price presentation"):
+                    sync.write(root, bad, "https://api.aisa.one")
+                self.assertEqual(before, saved())
 
     def test_unsupported_missing_or_inconsistent_rules_are_refused(self):
         for mutation in (lambda p: p.pop("currency"), lambda p: p.pop("plan_policy"),
