@@ -221,3 +221,7 @@ Task page slugs preserve underscores to avoid collisions between valid Task IDs.
 The dev workflow and Mintlify project remain isolated from main.
 
 Validate offline with `python -m unittest discover -s scripts/tests -p test_sync_tasks.py`.
+
+Dev CI and generation pin PyYAML 6.0.3: 6.0.4 changes nested YAML merge
+precedence and fails the existing official-source anchor/override tests. Keep
+those tests as the upgrade gate; do not accept changed source field values.
