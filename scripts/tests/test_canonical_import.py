@@ -496,6 +496,50 @@ class SurfaceProjectionTests(unittest.TestCase):
         self.metadata = {'registry': {'providers': {'fixture': {}}}, 'coverage': {'providers': {'fixture': []}},
                          'pending': {'providers': {'fixture': []}}}
 
+    def test_disappeared_generated_bilingual_pages_are_removed_before_validation(self):
+        from publication_surface import navigation_pages
+        document = json.loads(self.raw['fixture'])
+        document['paths'] = {}
+        self.raw['fixture'] = canonical(document)
+        changes = importer.project_surfaces(self.root, self.raw, self.raw['fixture'], self.metadata)
+        removed = {name for name, raw in changes.items() if raw is None}
+        self.assertEqual(removed, {'api-reference/fixture/one.mdx', 'zh/api-reference/fixture/one.mdx'})
+        self.assertEqual(list(navigation_pages(json.loads(changes['docs.json']))), [])
+        # Projection is a plan: no saved publication changes before staging.
+        self.assertTrue(all((self.root / name).is_file() for name in removed))
+        for name, raw in changes.items():
+            path = self.root / name
+            if raw is None:
+                path.unlink()
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(raw)
+        self.assertEqual(surfaces.validate_surfaces(self.root)['operations'], 0)
+
+    def test_cleanup_preserves_authored_pages_and_unproved_or_live_identities(self):
+        from publication_surface import disappeared_generated_pages
+        previous = {'fixture': json.loads(self.raw['fixture'])}
+        missing = copy.deepcopy(previous)
+        missing['fixture']['paths'] = {}
+        page = self.root / 'api-reference/fixture/one.mdx'
+        original = page.read_text()
+        for text in (original + '\nHandwritten explanation.\n',
+                     original.replace('title:', 'description: Authored metadata\ntitle:', 1),
+                     original.replace('x-aisa-operation-id:', 'manual-operation-id:', 1),
+                     original.replace('"one"', '"unproved-identity"')):
+            with self.subTest(text=text[:80]):
+                page.write_text(text)
+                self.assertNotIn(page.relative_to(self.root).as_posix(),
+                                 disappeared_generated_pages(self.root, previous, missing))
+        page.write_text(original)
+        self.assertEqual(disappeared_generated_pages(self.root, previous, {}), set())
+        self.assertEqual(disappeared_generated_pages(self.root, {}, missing), set())
+        moved = copy.deepcopy(missing)
+        moved['other'] = previous['fixture']
+        self.assertEqual(disappeared_generated_pages(self.root, previous, moved), set())
+        previous['fixture']['paths']['/one']['get']['x-aisa-status'] = 'disabled'
+        self.assertEqual(disappeared_generated_pages(self.root, previous, previous), set())
+
     def test_exact_native_bytes_retained_and_page_semantics_revalidated(self):
         original = copy.deepcopy(self.raw)
         changes = importer.project_surfaces(self.root, self.raw, self.raw['fixture'], self.metadata)

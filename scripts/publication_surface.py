@@ -82,6 +82,48 @@ def retired_archive(path):
             and 'openapi' not in header)
 
 
+def disappeared_generated_pages(root, previous, native):
+    """Plan removals only after the caller verifies the complete canonical graph.
+
+    Both the old contract identity and generator-owned page body must agree.
+    Authored prose, manual headers and editorial archives require human review.
+    Identities still present anywhere (including disabled or moved) survive.
+    """
+    from readable_contract_notes import BEGIN, END, strip_generated_block
+    live = {op['operationId'] for doc in native.values()
+            for item in doc.get('paths', {}).values() for method, op in item.items() if method in METHODS}
+    removed = set()
+    for prefix in ('', 'zh/'):
+        for path in (Path(root) / (prefix + 'api-reference')).rglob('*.mdx'):
+            text = path.read_text()
+            block = frontmatter(text)
+            header = yaml.safe_load(block) if block is not None else None
+            if not isinstance(header, dict) or set(header) - {'title', 'openapi', 'x-aisa-operation-id', 'noindex'}:
+                continue
+            reference = header.get('openapi')
+            if not isinstance(reference, str) or not isinstance(header.get('x-aisa-operation-id'), str):
+                continue
+            match = re.fullmatch(r'(?:openapi(?:-public)?|reference-contracts)/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)', reference)
+            if not match or bool(match[1]) != bool(prefix) or match[2] not in native:
+                continue  # A missing provider is not proof of a complete graph.
+            document = previous.get(match[2], {})
+            if not document.get('info', {}).get('x-aisa-document', {}).get('document_hash'):
+                continue
+            old = document.get('paths', {}).get(match[4], {}).get(match[3].lower(), {})
+            identity = old.get('operationId')
+            aliases = {row['operation_id'] for row in old.get('x-aisa-identity', {}).get('historical_aliases', [])}
+            if not identity or identity in live or header['x-aisa-operation-id'] not in {identity, *aliases}:
+                continue
+            body = text[FRONTMATTER.match(text).end():]
+            if BEGIN not in body or END not in body:
+                continue
+            body = strip_generated_block(body)
+            body = re.sub(r'\{/\* aisa-contract-status:start \*/\}.*?\{/\* aisa-contract-status:end \*/\}', '', body, flags=re.S)
+            if not body.strip():
+                removed.add(path.relative_to(root).as_posix())
+    return removed
+
+
 def validate_surfaces(root, published_ref=None):
     root = Path(root)
     documents, all_documents = {}, {}
