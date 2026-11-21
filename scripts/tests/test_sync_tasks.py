@@ -230,6 +230,23 @@ class AcquisitionTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 sync.acquired_tasks(path)
 
+    def test_unmanifested_task_file_cannot_be_attached_to_a_historical_release(self):
+        current, _, _, reader = release_fixture({}, missing=True)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "facts"
+            save(path, sync.acquire_release(current["artifact_revision"], current["compiler_revision"], reader))
+            (path / "tasks").mkdir()
+            (path / sync.TASK_CATALOG).write_bytes(encoded({"schema_version": 1, "tasks": tasks(detail())}))
+            with self.assertRaisesRegex(ValueError, "no manifested Task catalog"):
+                sync.acquired_tasks(path)
+            root = Path(folder) / "site"
+            root.mkdir()
+            (root / "docs.json").write_text(json.dumps(navigation()))
+            receipt = json.loads((path / "acquisition-receipt.json").read_text())
+            sync.write(root, tasks(detail()), "https://api.aisa.one", receipt)
+            with self.assertRaisesRegex(ValueError, "no manifested Task catalog"):
+                sync.validate_release_publication(root, path, receipt)
+
 
 class PublicationTests(unittest.TestCase):
     def setUp(self):

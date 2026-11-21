@@ -17,7 +17,7 @@ import shutil
 import time
 
 from fetch_runtime_release import (PublicReader, acquire as acquire_release, decode,
-                                   validate_current, require, ACQUISITION_SECONDS)
+                                   validate_current, require, sha, ACQUISITION_SECONDS)
 from runtime_contract_artifact import TASK_CATALOG
 from task_pricing import pricing_markdown
 
@@ -101,7 +101,17 @@ def acquired_tasks(directory: Path) -> tuple[list[dict], dict]:
     # and Tasks use exactly the same revision, hashes and freshness evidence.
     from export_contract_publication import acquired_input
     receipt, _ = acquired_input(directory)
-    return release_tasks({TASK_CATALOG: (directory / TASK_CATALOG).read_bytes()}), receipt
+    return release_tasks(saved_task_catalog(directory, receipt)), receipt
+
+
+def saved_task_catalog(directory: Path, receipt: dict) -> dict:
+    # Saved acquisitions may contain unrelated files. Only the manifest grants
+    # membership, and rechecking bytes also covers changes after acquired_input.
+    member = next((row for row in receipt["manifest_files"] if row["name"] == TASK_CATALOG), None)
+    require(member is not None, "Runtime release has no manifested Task catalog")
+    raw = (directory / TASK_CATALOG).read_bytes()
+    require(sha(raw) == member["sha256"], "Saved Task artifact hash differs from Runtime manifest")
+    return {TASK_CATALOG: raw}
 
 
 def catalog_hash(tasks: list[dict]) -> str:
@@ -346,7 +356,7 @@ def validate_release_publication(root: Path, facts: Path, receipt: dict) -> None
     path = facts / TASK_CATALOG
     if not path.exists() and not (root / "docs/task-runtime.json").exists() and not (root / "tasks").exists():
         return  # Historical releases before the Task role remain readable.
-    tasks = release_tasks({TASK_CATALOG: path.read_bytes()} if path.exists() else {})
+    tasks = release_tasks(saved_task_catalog(facts, receipt))
     validate_publication(root)
     files = rendered_files(tasks, "https://api.aisa.one", receipt)
     actual = {p.relative_to(root).as_posix() for language in LANGUAGES
