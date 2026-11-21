@@ -1,52 +1,20 @@
 ---
 openapi: "tasks/openapi.json POST /v1/tasks/creators.search"
 title: "Discover creators"
-description: "Discover platform creators by content intent and supported hard filters. A binding must apply every requested filter or be excluded before dispatch."
 ---
-
-<Note>Tasks are live on the dev API (`https://dev-api.aisa.one`) and not yet in production.</Note>
 
 `creators.search` · v1
 
-## Platforms and fields
+API origin: `https://dev-api.aisa.one`
 
-A field not listed for a platform is `null` on that platform.
+The request and response panels use the schemas published by this API. Conditional requirements and allowed combinations are part of the request schema. Check the complete schema before combining filters or identities.
 
-| Platform | Fields returned |
-| --- | --- |
-| Instagram | `creator`, `matches` |
-| TikTok | `creator`, `matches` |
-| YouTube | `creator`, `matches` |
-| xiaohongshu | `creator`, `matches` |
-| bilibili | `creator`, `matches` |
-| douyin | `creator`, `matches` |
-
-## Input
-
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `creator_countries` | string_array | no | V1 verified value subset, not a complete country list; see platform and query conditions in the final contract. |
-| `followers_max` | integer | no | Inclusive maximum follower count; must be at least followers_min when both are provided. |
-| `followers_min` | integer | no | Inclusive minimum follower count; omitted means no lower bound. |
-| `limit` | integer | no | Maximum number of distinct delivered accounts across all selected sources and platforms. |
-| `platform` | string: `bilibili`, `douyin`, `instagram`, `tiktok`, `xiaohongshu`, `youtube` | no | Optional platform. When omitted, select eligible platforms and sources that apply every requested filter. |
-| `query` | string | no | Content topic or niche keyword; not an account name or a shared category ID. |
-
-## Found or not found
-
-The call is `found` when it returns at least one item.
+Default strategy: `merge`
 
 ## Billing
 
-`per_unit`: charged per returned item, up to `limit` (default 20, at most 100). An empty list is not charged.
+Charged per delivered item, not the requested limit. The quote reserves for the requested quantity; settlement uses the actual delivered quantity.
 
-## Example
+Obtain an input-specific quote by sending the same request with `X-AISA-Cost-Mode: quote`; this does not execute the Task. Use `X-AISA-Max-Price-USD` to cap the price. The catalog's base price is not a quote for every platform or input.
 
-```bash
-curl -sS https://dev-api.aisa.one/v1/tasks/creators.search \
-  -H "Authorization: Bearer $AISA_API_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{"input": {"platform": "instagram"}}'
-```
-
-The full output schema, with every field's meaning, is in the response section above.
+Use an `Idempotency-Key` when executing a Task. For errors, inspect `error.code`, `error.request_id`, `error.retryable` and `error.retry_hint`. A reconciliation hint requires checking the existing request before retrying; do not assume a pending settlement is a refund.

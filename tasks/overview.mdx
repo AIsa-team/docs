@@ -1,110 +1,35 @@
 ---
 title: "Tasks"
-description: "One call per job: AIsa picks the data source, maps the answer to one schema and charges only when it finds something."
 ---
 
-<Note>Tasks are live on the dev API (`https://dev-api.aisa.one`) and not yet in production.</Note>
+Each Task has one input contract and a normalized result. The API chooses sources using the task's strategy. Availability and fields depend on the selected input; a backup source is not guaranteed.
 
-A task is one job, such as *get a post* or *search profiles*, with one input contract and one output schema for every platform it covers. AIsa routes the call to a data source, falls back to another one when the first fails or finds nothing, and maps every answer to the same fields, so the result reads the same whichever source answered.
+API origin: `https://dev-api.aisa.one`
 
 ## Available tasks
 
-| Task | What it does | Platforms | Billing |
-| --- | --- | --- | --- |
-| [`creators.find_contact`](/tasks/creators-find-contact) | Find creator contact email | - | per found call |
-| [`creators.find_linked_accounts`](/tasks/creators-find-linked-accounts) | Find linked creator accounts | - | per found call |
-| [`creators.find_similar`](/tasks/creators-find-similar) | Find similar creators | Instagram, TikTok, YouTube, douyin, xiaohongshu, bilibili | per returned item |
-| [`creators.get_audience`](/tasks/creators-get-audience) | Get creator audience and performance | TikTok, Instagram, douyin, xiaohongshu, bilibili, YouTube, twitter, twitch, onlyfans | per found call |
-| [`creators.get_commerce_stats`](/tasks/creators-get-commerce-stats) | Get creator commerce data | TikTok, douyin, xiaohongshu, bilibili | per found call |
-| [`creators.get_rankings`](/tasks/creators-get-rankings) | Get creator rankings | TikTok, douyin, bilibili | per found call |
-| [`creators.search`](/tasks/creators-search) | Discover creators | Instagram, TikTok, YouTube, xiaohongshu, bilibili, douyin | per returned item |
-| [`social.analyze_comments`](/tasks/social-analyze-comments) | Analyze the comments of a video | YouTube | per found call |
-| [`social.download_media`](/tasks/social-download-media) | Get media download URLs | TikTok | per found call |
-| [`social.get_community`](/tasks/social-get-community) | Get a community, group or playlist | Reddit, YouTube, X | per found call |
-| [`social.get_live`](/tasks/social-get-live) | Get an account's live status | TikTok, X | per found call |
-| [`social.get_post`](/tasks/social-get-post) | Get a social post | TikTok, YouTube, X, Reddit, Instagram | per found call |
-| [`social.get_profile`](/tasks/social-get-profile) | Get a social profile | TikTok, YouTube, X, Instagram | per found call |
-| [`social.get_transcript`](/tasks/social-get-transcript) | Get the transcript of a social video | TikTok, YouTube, X, Reddit, Instagram | per found call |
-| [`social.get_trending`](/tasks/social-get-trending) | Get trending posts | TikTok, YouTube, Instagram | per returned item |
-| [`social.list_comments`](/tasks/social-list-comments) | List comments on a social post | TikTok, YouTube, X, Reddit, Instagram | per returned item |
-| [`social.list_engagers`](/tasks/social-list-engagers) | List the accounts that reposted a post | X | per returned item |
-| [`social.list_followers`](/tasks/social-list-followers) | List followers or followings | TikTok, X, Instagram | per returned item |
-| [`social.list_profile_posts`](/tasks/social-list-profile-posts) | List a profile's posts | TikTok, YouTube, X, Instagram | per returned item |
-| [`social.list_topic_posts`](/tasks/social-list-topic-posts) | List posts under a topic | TikTok, YouTube, X, Reddit, Instagram | per returned item |
-| [`social.resolve_id`](/tasks/social-resolve-id) | Resolve a social account id | TikTok, YouTube, X, Instagram | per found call |
-| [`social.search_posts`](/tasks/social-search-posts) | Search social posts | TikTok, YouTube, X, Reddit, Instagram | per returned item |
-| [`social.search_profiles`](/tasks/social-search-profiles) | Search social accounts | TikTok, YouTube, X, Instagram | per returned item |
-
-## Calling a task
-
-Send `POST /v1/tasks/{task_id}` with your AIsa API key. The body has the task input and optional options:
-
-```bash
-curl -sS https://dev-api.aisa.one/v1/tasks/social.get_post \
-  -H "Authorization: Bearer $AISA_API_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{"input": {"platform": "tiktok", "url": "https://www.tiktok.com/@nasa/video/7300000000000000000"}, "options": {"strategy": "auto"}}'
-```
-
-### Options
-
-| | |
+| Task | Description |
 | --- | --- |
-| `strategy` | `auto` (default for most tasks): try sources in order and stop at the first answer. `waterfall`: continue to the next source after a miss. `merge`: ask sources in parallel and merge their fields. `compare`: return each source's result side by side under `result.by_source`. `any_hit`: report found when any source finds it. |
-| `max_providers` | Lower the number of sources a strategy may try. |
-| `providers` | `{"only": [...]}` or `{"exclude": [...]}` to restrict sources. |
-| `detail` | `full` attaches each source's raw response in `meta.raw`. |
-
-## Response
-
-Every task answers HTTP 200 with the same envelope:
-
-```json
-{
-  "task": "social.get_post",
-  "version": 1,
-  "status": "found",
-  "result": {
-    "platform": "tiktok",
-    "post_id": "7300000000000000000",
-    "views": 1200
-  },
-  "meta": {
-    "sources": [],
-    "attempts": [],
-    "missing_fields": {},
-    "approximate_fields": [],
-    "delivered": true
-  }
-}
-```
-
-| | |
-| --- | --- |
-| `status` | `found`, `partial` (found, some fields missing) or `not_found`. |
-| `result` | The task's result, as documented on its page. A list task returns `{"items": [...]}`. |
-| `meta.missing_fields` | Fields of the result that are null, and why. |
-| `meta.approximate_fields` | Counts the platform only shows rounded (for example 1.2K). |
-| `meta.sources / meta.attempts` | Which source answered and what each attempt returned. |
-| `meta.delivered` | Whether the call delivered a result, and so whether it was charged. |
-
-## Billing
-
-A call is charged only when it delivers: `not_found` is free. A `fixed` task charges one price per found call, whatever the strategy. A `per_unit` task charges per returned item, up to `limit`. The live price of a task is in `pricing` of `GET /v1/tasks/{task_id}`; `X-AISA-Max-Price-USD` caps it and `X-AISA-Cost-Mode: quote` returns the price without running the task.
-
-## Retries
-
-Send an `Idempotency-Key` to retry safely: a key is charged at most once. A charged key returns the first result for 24 hours (`Idempotent-Replayed: true`); a key whose earlier call was not charged runs again.
-
-## Errors
-
-| HTTP | |
-| --- | --- |
-| 400 | `invalid_request`, or `unsupported_route` with the platforms the task supports |
-| 404 | `task_not_found`, with the closest task ids |
-| 422 | `invalid_input`, or `provider_rejected_input` when the platform rejects the input |
-| 502 | `all_providers_failed`: every source failed; not charged |
-
-## Discovering tasks
-
-`GET /v1/tasks` lists the tasks (`?q=` searches, `?domain=` filters). `GET /v1/tasks/{task_id}` returns the input contract, the platforms and the fields each returns, the output schema, billing and price. Add `?lang=zh` for Chinese descriptions.
+| [`creators.find_contact`](/tasks/creators-find_contact) | Find creator contact email |
+| [`creators.find_linked_accounts`](/tasks/creators-find_linked_accounts) | Find linked creator accounts |
+| [`creators.find_similar`](/tasks/creators-find_similar) | Find similar creators |
+| [`creators.get_audience`](/tasks/creators-get_audience) | Get creator audience and performance |
+| [`creators.get_commerce_stats`](/tasks/creators-get_commerce_stats) | Get creator commerce data |
+| [`creators.get_rankings`](/tasks/creators-get_rankings) | Get creator rankings |
+| [`creators.search`](/tasks/creators-search) | Discover creators |
+| [`social.analyze_comments`](/tasks/social-analyze_comments) | Analyze the comments of a video |
+| [`social.download_media`](/tasks/social-download_media) | Get media download URLs |
+| [`social.get_community`](/tasks/social-get_community) | Get a community, group or playlist |
+| [`social.get_live`](/tasks/social-get_live) | Get an account's live status |
+| [`social.get_post`](/tasks/social-get_post) | Get a social post |
+| [`social.get_profile`](/tasks/social-get_profile) | Get a social profile |
+| [`social.get_transcript`](/tasks/social-get_transcript) | Get the transcript of a social video |
+| [`social.get_trending`](/tasks/social-get_trending) | Get trending posts |
+| [`social.list_comments`](/tasks/social-list_comments) | List comments on a social post |
+| [`social.list_engagers`](/tasks/social-list_engagers) | List the accounts that reposted a post |
+| [`social.list_followers`](/tasks/social-list_followers) | List followers or followings |
+| [`social.list_profile_posts`](/tasks/social-list_profile_posts) | List a profile's posts |
+| [`social.list_topic_posts`](/tasks/social-list_topic_posts) | List posts under a topic |
+| [`social.resolve_id`](/tasks/social-resolve_id) | Resolve a social account id |
+| [`social.search_posts`](/tasks/social-search_posts) | Search social posts |
+| [`social.search_profiles`](/tasks/social-search_profiles) | Search social accounts |
