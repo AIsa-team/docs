@@ -120,29 +120,55 @@ def pointer(document: dict, ref: str):
 
 
 def component(schema: dict, name: str) -> dict:
-    """Relocate a complete schema without dropping conditions or inlining cycles."""
+    """Lift referenced schemas into components understood by the docs renderer.
+
+    Keep a finite reference graph, rather than recursively inlining objects.
+    Mintlify does not render references into nested $defs, even in OpenAPI 3.1.
+    All conditions and reference siblings retain their original semantics.
+    """
     from jsonschema import Draft202012Validator
     Draft202012Validator.check_schema(schema)
-    prefix = "#/components/schemas/" + name
+    targets = {"#": schema}
 
-    def walk(value):
-        if isinstance(value, list):
-            return [walk(item) for item in value]
+    def map_schemas(value, transform):
         if not isinstance(value, dict):
             return value
-        if "$id" in value or "$anchor" in value or "$dynamicRef" in value:
+        out = dict(value)
+        for key, child in value.items():
+            if key in ("$defs", "definitions", "properties", "patternProperties", "dependentSchemas"):
+                out[key] = {field: map_schemas(item, transform) for field, item in child.items()}
+            elif key in ("allOf", "anyOf", "oneOf", "prefixItems"):
+                out[key] = [map_schemas(item, transform) for item in child]
+            elif key in ("items", "additionalProperties", "unevaluatedProperties", "unevaluatedItems",
+                         "contains", "propertyNames", "if", "then", "else", "not", "contentSchema"):
+                out[key] = map_schemas(child, transform)
+        return transform(out)
+
+    def discover(value):
+        if any(key in value for key in ("$id", "$anchor", "$dynamicRef")):
             raise ValueError("Schema resource identifiers require explicit support before publication")
-        out = {key: walk(item) for key, item in value.items()}
         if "$ref" in value:
             ref = value["$ref"]
-            if ref == "#":
-                out["$ref"] = prefix
-            else:
-                pointer(schema, ref)  # Refuse unresolved or external references.
-                out["$ref"] = prefix + ref[1:]
-        return out
+            targets[ref] = schema if ref == "#" else pointer(schema, ref)
+        return value
 
-    return walk(schema)
+    map_schemas(schema, discover)
+    names = {"#": name}
+    for index, ref in enumerate(sorted(set(targets) - {"#"})):
+        label = re.sub(r"[^a-zA-Z0-9_-]", "_", ref.rsplit("/", 1)[-1])
+        # Task component roots have one dot; lifted definitions have two, so
+        # they cannot collide with another valid Task/section root.
+        names[ref] = f"{name}.{index}_{label}"
+
+    def relocate(value):
+        value.pop("$defs", None)
+        value.pop("definitions", None)
+        if "$ref" in value:
+            value["$ref"] = "#/components/schemas/" + names[value["$ref"]]
+        return value
+
+    return {names[ref]: map_schemas(target, relocate) for ref, target in targets.items()}
+
 
 
 def openapi(tasks: list[dict], language: str, api: str) -> dict:
@@ -152,7 +178,7 @@ def openapi(tasks: list[dict], language: str, api: str) -> dict:
         detail = task[language]
         stem = detail["task_id"]
         for kind, schema in (("request", request_schema(detail)), ("response", detail["response_schema"]), ("error", detail["error_schema"])):
-            schemas[stem + "_" + kind] = component(schema, stem + "_" + kind)
+            schemas.update(component(schema, stem + "_" + kind))
         ref = lambda kind: {"$ref": "#/components/schemas/" + stem + "_" + kind}
         paths[detail["path"]] = {"post": {
             "operationId": "task_" + stem, "summary": detail["name"], "description": detail.get("description", ""),
