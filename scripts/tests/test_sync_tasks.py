@@ -13,6 +13,10 @@ from referencing import Registry, Resource
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import sync_tasks as sync
+import test_fetch_runtime_release as release_tests
+from test_fetch_runtime_release import encoded
+from fetch_runtime_release import sha, save
+from task_pricing import pricing_markdown, usd
 
 
 def detail(task_id="creators.search"):
@@ -20,6 +24,10 @@ def detail(task_id="creators.search"):
         "task_id": task_id, "domain": task_id.split(".")[0], "method": "POST",
         "path": "/v1/tasks/" + task_id, "name": "Find creators", "description": "Test contract",
         "version": 1, "strategy": "merge", "billing": {"mode": "per_unit"},
+        "pricing": {"kind": "per_unit", "revision": 2, "currency": "USD", "unit": "delivered_item",
+                    "tiers_micros_usd": {"normal": 120000, "vip": 120000, "svip": 120000},
+                    "apply_plan_multiplier": False, "plan_policy": {"version": "test", "team_ppm": 1000000, "builder_ppm": 1000000, "payg_ppm": 1000000},
+                    "units": {"estimate_input": "limit", "unit_size": 1, "maximum_units": 100, "settlement": "delivered_units"}},
         "input": [{"name": "platform", "type": "string", "enum": ["tiktok", "instagram"]}],
         "request_schema": {"$ref": "#/$defs/Request", "$defs": {
             "Request": {"type": "object", "required": ["input"], "properties": {"input": {"$ref": "#/$defs/Input"}}},
@@ -141,32 +149,103 @@ class SchemaTests(unittest.TestCase):
             self.assertEqual(6, len(sync.validate_publication(root)))
 
 
+def release_fixture(catalog, *, missing=False):
+    _, compiler, _, current, payload, _ = release_tests.PublicReleaseTests().fixture()
+    if not missing:
+        payload[sync.TASK_CATALOG] = encoded(catalog)
+    current["files"] = [{"name": name, "media_type": "application/json", "sha256": sha(raw)}
+                        for name, raw in sorted(payload.items())]
+    manifest = {key: current[key] for key in ("schema_version", "source_digest", "compiler_revision", "files")}
+    revision = sha(encoded(manifest))
+    current["artifact_revision"] = revision
+    calls = []
+    def reader(path):
+        calls.append(path)
+        if path == "/public/api-contract/current":
+            return encoded(current), {}
+        if path == "/info/apis/category":
+            return b'{"apis":[]}', {}
+        prefix = "/public/api-contract/releases/" + revision + "/"
+        if not path.startswith(prefix):
+            raise AssertionError("Unexpected live Task read: " + path)
+        raw = payload[path.removeprefix(prefix)]
+        return raw, {"etag": '"' + sha(raw) + '"'}
+    return current, payload, calls, reader
+
+
 class AcquisitionTests(unittest.TestCase):
-    def test_empty_catalog_is_authoritative_but_malformed_is_not(self):
-        with patch.object(sync, "get", return_value={"data": []}) as get:
-            self.assertEqual([], sync.acquire("https://api.aisa.one"))
-            self.assertEqual(2, get.call_count)
-        for listing in ({}, {"data": None}, {"data": [{}]}, {"data": [{"task_id": "../bad"}]}):
-            with self.subTest(listing=listing), self.assertRaises(ValueError):
-                sync.catalog_ids(listing)
+    def test_same_release_task_artifact_preserves_raw_counts_and_never_reads_live_tasks(self):
+        current, _, calls, reader = release_fixture({"schema_version": 1, "tasks": tasks(detail())})
+        rows, receipt = sync.acquire("https://dev-api.aisa.one", reader)
+        self.assertEqual(rows, tasks(detail()))
+        self.assertEqual(receipt["artifact_revision"], current["artifact_revision"])
+        self.assertEqual(receipt["selected_endpoint_count"], 1)
+        self.assertEqual(receipt["provider_count"], 1)
+        self.assertFalse(any(path.startswith("/v1/tasks") for path in calls))
+        self.assertEqual(calls.count("/public/api-contract/current"), 3)
 
-    def test_disabled_tasks_are_not_read_and_only_get_is_used(self):
-        d = detail()
-        listing = {"data": [{"task_id": d["task_id"]}]}
-        with patch.object(sync, "get", side_effect=[listing, d, copy.deepcopy(d), listing]) as get:
-            self.assertEqual(1, len(sync.acquire("https://api.aisa.one")))
-            self.assertEqual(["/v1/tasks", "/v1/tasks/creators.search?lang=en", "/v1/tasks/creators.search?lang=zh", "/v1/tasks"], [call.args[1] for call in get.call_args_list])
+    def test_valid_empty_withdraws_but_missing_or_malformed_artifact_does_not(self):
+        _, _, _, reader = release_fixture({"schema_version": 1, "tasks": []})
+        self.assertEqual(sync.acquire("https://dev-api.aisa.one", reader)[0], [])
+        for catalog, missing in (({}, True), ({}, False), ({"schema_version": 1, "tasks": None}, False),
+                                 ({"schema_version": True, "tasks": []}, False)):
+            _, _, _, reader = release_fixture(catalog, missing=missing)
+            with self.subTest(catalog=catalog, missing=missing), self.assertRaises(ValueError):
+                sync.acquire("https://dev-api.aisa.one", reader)
 
-    def test_missing_public_schema_refuses_before_writing(self):
-        d = detail()
-        del d["response_schema"]
-        with patch.object(sync, "get", side_effect=[{"data": [{"task_id": d["task_id"]}]}, d]), self.assertRaisesRegex(ValueError, "missing response_schema"):
-            sync.acquire("https://api.aisa.one")
+    def test_incomplete_language_schema_or_mixed_prices_refuse_publication(self):
+        for mutation in (lambda rows: rows[0].pop("zh"),
+                         lambda rows: rows[0]["en"].pop("response_schema"),
+                         lambda rows: rows[0]["zh"]["pricing"].update(revision=3)):
+            rows = tasks(detail())
+            mutation(rows)
+            _, _, _, reader = release_fixture({"schema_version": 1, "tasks": rows})
+            with self.assertRaises(ValueError):
+                sync.acquire("https://api.aisa.one", reader)
 
-    def test_catalog_change_refuses_partial_publication(self):
-        d = detail()
-        with patch.object(sync, "get", side_effect=[{"data": [{"task_id": d["task_id"]}]}, d, d, {"data": []}]), self.assertRaisesRegex(ValueError, "availability changed"):
-            sync.acquire("https://api.aisa.one")
+    def test_bad_hash_stale_or_changed_revision_fails(self):
+        for mutation in ("hash", "stale", "changed"):
+            current, payload, calls, original = release_fixture({"schema_version": 1, "tasks": tasks(detail())})
+            def reader(path):
+                if mutation == "changed" and path == "/public/api-contract/current" and calls.count(path) == 2:
+                    current["generation"] += 1
+                raw, headers = original(path)
+                if mutation == "hash" and path.endswith(sync.TASK_CATALOG):
+                    raw += b" "
+                return raw, headers
+            if mutation == "stale":
+                current["fresh"] = False
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                sync.acquire("https://api.aisa.one", reader)
+
+    def test_existing_acquisition_reuses_the_formal_release_and_rejects_tampering(self):
+        current, _, _, reader = release_fixture({"schema_version": 1, "tasks": tasks(detail())})
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "facts"
+            save(path, sync.acquire_release(current["artifact_revision"], current["compiler_revision"], reader))
+            rows, receipt = sync.acquired_tasks(path)
+            self.assertEqual(rows, tasks(detail()))
+            self.assertEqual(receipt["artifact_revision"], current["artifact_revision"])
+            (path / sync.TASK_CATALOG).write_bytes(b'{"schema_version":1,"tasks":[]}')
+            with self.assertRaises(ValueError):
+                sync.acquired_tasks(path)
+
+    def test_unmanifested_task_file_cannot_be_attached_to_a_historical_release(self):
+        current, _, _, reader = release_fixture({}, missing=True)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "facts"
+            save(path, sync.acquire_release(current["artifact_revision"], current["compiler_revision"], reader))
+            (path / "tasks").mkdir()
+            (path / sync.TASK_CATALOG).write_bytes(encoded({"schema_version": 1, "tasks": tasks(detail())}))
+            with self.assertRaisesRegex(ValueError, "no manifested Task catalog"):
+                sync.acquired_tasks(path)
+            root = Path(folder) / "site"
+            root.mkdir()
+            (root / "docs.json").write_text(json.dumps(navigation()))
+            receipt = json.loads((path / "acquisition-receipt.json").read_text())
+            sync.write(root, tasks(detail()), "https://api.aisa.one", receipt)
+            with self.assertRaisesRegex(ValueError, "no manifested Task catalog"):
+                sync.validate_release_publication(root, path, receipt)
 
 
 class PublicationTests(unittest.TestCase):
@@ -211,6 +290,104 @@ class PublicationTests(unittest.TestCase):
         before = (self.root / "docs.json").read_bytes()
         sync.write(self.root, tasks(detail()), "https://api.aisa.one")
         self.assertEqual(before, (self.root / "docs.json").read_bytes())
+
+    def test_formal_task_output_is_bound_to_exact_release_including_empty_catalog(self):
+        for rows in (tasks(detail()), []):
+            current, payload, _, reader = release_fixture({"schema_version": 1, "tasks": rows})
+            actual, receipt = sync.acquire("https://api.aisa.one", reader)
+            sync.write(self.root, actual, "https://api.aisa.one", receipt)
+            with tempfile.TemporaryDirectory() as folder:
+                facts = Path(folder)
+                (facts / "tasks").mkdir()
+                (facts / sync.TASK_CATALOG).write_bytes(payload[sync.TASK_CATALOG])
+                sync.validate_release_publication(self.root, facts, receipt)
+                from publication_surface import publication_hashes
+                hashes = publication_hashes(self.root)
+                self.assertIn("docs/task-runtime.json", hashes)
+                self.assertEqual(bool(rows), "tasks/openapi.json" in hashes)
+                changed = {**receipt, "artifact_revision": "d" * 64}
+                with self.assertRaisesRegex(ValueError, "differs from"):
+                    sync.validate_release_publication(self.root, facts, changed)
+                if not rows:
+                    sync.write(self.root, tasks(detail()), "https://api.aisa.one", receipt)
+                    with self.assertRaisesRegex(ValueError, "membership differs"):
+                        sync.validate_release_publication(self.root, facts, receipt)
+
+    def test_missing_price_rules_preserve_saved_pages_and_navigation(self):
+        sync.write(self.root, tasks(detail()), "https://api.aisa.one")
+        before = {str(p.relative_to(self.root)): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        bad = tasks(detail())
+        bad[0]["zh"]["pricing"].pop("units")
+        with self.assertRaisesRegex(ValueError, "unit accounting"):
+            sync.write(self.root, bad, "https://api.aisa.one")
+        self.assertEqual(before, {str(p.relative_to(self.root)): p.read_bytes() for p in self.root.rglob("*") if p.is_file()})
+
+
+class PricingTests(unittest.TestCase):
+    def test_fixed_success_and_delivery_prices_have_amounts_units_and_quote_semantics(self):
+        d = detail()
+        for language, expected in (("en", "Per delivered item"), ("zh", "每条实际交付结果")):
+            page = sync.task_page(d, language, "https://api.aisa.one")
+            self.assertIn("0.12", page)
+            self.assertIn(expected, page)
+        self.assertIn("quoting neither executes the Task nor reserves funds", sync.task_page(d, "en", "https://api.aisa.one"))
+        d["billing"] = {"mode": "fixed"}
+        d["pricing"].update(kind="fixed_success", unit="successful_request", tiers_micros_usd={"normal": 10000000})
+        d["pricing"].pop("units")
+        self.assertIn("Per successful request | 10 |", pricing_markdown(d, "en"))
+        self.assertEqual("0.000001", usd(1))
+        self.assertEqual("0", usd(0))
+        self.assertIn("正常查空不收费", pricing_markdown(d, "zh"))
+
+    def test_parameter_table_never_presents_representative_base_as_every_input_price(self):
+        d = detail("research.discover")
+        d["pricing"]["tiers_micros_usd"] = {"normal": 999999}
+        d["pricing"]["price_by"] = {"input": "platform", "values": {
+            "alpha": {"normal": 1000}, "beta": {"normal": 120000}}}
+        d["input"][0]["selector"] = "input.platform"
+        page = pricing_markdown(d, "en")
+        self.assertIn("input.platform = alpha | Per delivered item | 0.001", page)
+        self.assertIn("input.platform = beta | Per delivered item | 0.12", page)
+        self.assertNotIn("0.999999", page)
+        d["pricing"]["price_by"]["unknown_uses_default_tiers"] = True
+        self.assertIn("Other or omitted value | Per delivered item | 0.999999", pricing_markdown(d, "en"))
+
+    def test_request_size_blocks_are_successful_request_prices_not_delivered_item_prices(self):
+        d = detail("research.rankings")
+        d["billing"] = {"mode": "fixed"}
+        d["pricing"].update(kind="fixed_success", unit="successful_request", price_by={
+            "input": "board", "values": {"monthly": {"normal": 98590}, "weekly": {"normal": 73400}},
+            "request_scale": {"input": "limit", "values": ["monthly"], "unit_size": 10,
+                              "max_quantity": 100, "round_up_micros_usd": 100}})
+        d["pricing"].pop("units")
+        page = pricing_markdown(d, "en")
+        self.assertIn("board = monthly | Per 10 requested units | 0.09859", page)
+        self.assertIn("board = weekly | Per successful request | 0.0734", page)
+        self.assertIn("ceil(limit / 10)", page)
+        self.assertIn("multiple of USD 0.0001", page)
+        self.assertIn("successful partial result still charges the requested size", page)
+        self.assertNotIn("Per delivered item", page)
+
+    def test_requested_units_and_membership_multipliers_are_explicit(self):
+        d = detail()
+        d["pricing"].update(unit="requested_unit", apply_plan_multiplier=True)
+        d["pricing"]["units"].update(estimate_input="characters", unit_size=1000, settlement="requested_units")
+        d["pricing"]["plan_policy"]["team_ppm"] = 800000
+        page = pricing_markdown(d, "en")
+        self.assertIn("ceil(characters / 1000)", page)
+        self.assertIn("settles the requested units", page)
+        self.assertIn("team: 0.8×", page)
+
+    def test_unsupported_missing_or_inconsistent_rules_are_refused(self):
+        for mutation in (lambda p: p.pop("currency"), lambda p: p.pop("plan_policy"),
+                         lambda p: p.update(kind="provider_cost_multiplier"),
+                         lambda p: p["tiers_micros_usd"].update(normal=True),
+                         lambda p: p["units"].update(unit_size=0),
+                         lambda p: p["units"].update(settlement="requested_units")):
+            d = detail()
+            mutation(d["pricing"])
+            with self.assertRaises(ValueError):
+                pricing_markdown(d, "en")
 
 
 class DynamicTests(unittest.TestCase):

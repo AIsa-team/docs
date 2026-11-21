@@ -130,6 +130,9 @@ jobs:
       - name: Validate page references
         if: steps.pull.outputs.available == 'true'
         run: python scripts/validate_runtime_api_reference_slugs.py --generated-only
+      - name: Render Tasks from the same immutable Runtime release
+        if: steps.pull.outputs.available == 'true'
+        run: python scripts/sync_tasks.py --api https://api.aisa.one --runtime-input-dir /tmp/formal-runtime-facts
       - name: Check formal artifact readiness before publication
         if: steps.pull.outputs.available == 'true'
         env:
@@ -177,6 +180,10 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git add openapi api-reference zh/api-reference docs.json llms.txt openapi.yaml docs/publication discovery/payment-evidence.json discovery/openapi.json
+          if [ -f docs/task-runtime.json ]; then git add docs/task-runtime.json; fi
+          for directory in tasks zh/tasks; do
+            if [ -d "$directory" ] || [ -n "$(git ls-files -- "$directory")" ]; then git add -A -- "$directory"; fi
+          done
           if git diff --cached --quiet; then exit 0; fi
           # Export deliberately retains an equivalent authorized publication.
           # Non-graph observations alone cannot create a new consumer identity.

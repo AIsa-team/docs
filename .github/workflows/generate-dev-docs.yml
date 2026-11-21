@@ -52,10 +52,11 @@ jobs:
           python scripts/sync_dev_runtime.py --source production --write "${options[@]}" \
             --report "$RUNNER_TEMP/dev-runtime-report.json"
           git diff --check
-      - name: Generate the Task pages from the dev Task catalog
-        # Tasks are on dev before production, so they come from the dev API's
-        # public catalog, not the production contract preview above. A failed
-        # read keeps the saved pages; the next run retries.
+      - name: Generate the Task pages from the dev worker release
+        # Keep this explicitly mixed-environment preview: Raw APIs use the
+        # production release above, Tasks the dev immutable worker release.
+        # docs/dev-runtime.json and docs/task-runtime.json record both pins.
+        # Missing, stale or invalid Task artifacts fail; no live GET fallback.
         run: |
           python scripts/sync_tasks.py --api https://dev-api.aisa.one
           git diff --check
@@ -76,7 +77,10 @@ jobs:
           assessed_base=$(git rev-parse HEAD)
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add -- docs.json openapi.yaml openapi api-reference zh/api-reference tasks zh/tasks docs/dev-runtime.json resources/data-apis.mdx zh/resources/data-apis.mdx catalog/models.json models zh/models guides/models.mdx zh/guides/models.mdx
+          git add -- docs.json openapi.yaml openapi api-reference zh/api-reference docs/dev-runtime.json docs/task-runtime.json resources/data-apis.mdx zh/resources/data-apis.mdx catalog/models.json models zh/models guides/models.mdx zh/guides/models.mdx
+          for directory in tasks zh/tasks; do
+            if [ -d "$directory" ] || [ -n "$(git ls-files -- "$directory")" ]; then git add -A -- "$directory"; fi
+          done
           if git diff --cached --quiet; then
             echo 'Dev documentation is already up to date.' >> "$GITHUB_STEP_SUMMARY"
             exit 0

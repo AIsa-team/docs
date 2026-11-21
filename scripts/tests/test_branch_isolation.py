@@ -136,12 +136,14 @@ class BranchIsolationTests(unittest.TestCase):
         add = next(line for line in publish.splitlines() if line.startswith('git add -- '))
         self.assertEqual(set(shlex.split(add)[3:]), {
             'docs.json', 'openapi.yaml', 'openapi', 'api-reference',
-            'zh/api-reference', 'docs/dev-runtime.json',
+            'zh/api-reference', 'docs/dev-runtime.json', 'docs/task-runtime.json',
             # Generated blocks: the Data APIs cards and the model tables.
             'resources/data-apis.mdx', 'zh/resources/data-apis.mdx',
-            'catalog/models.json', 'models', 'zh/models', 'guides/models.mdx', 'zh/guides/models.mdx',
-            # The Task pages generated from the dev Task catalog.
-            'tasks', 'zh/tasks'})
+            'catalog/models.json', 'models', 'zh/models', 'guides/models.mdx', 'zh/guides/models.mdx'})
+        # Also stage deletion of all Task pages when a valid catalog is empty;
+        # an absent and never-tracked directory must not fail git add.
+        self.assertIn('for directory in tasks zh/tasks; do', publish)
+        self.assertIn('git add -A -- "$directory"', publish)
         self.assertIn('git push origin HEAD:dev', publish)
         text = yaml.safe_dump(value)
         for operation in ('create-pull-request', '--force', '--expected-runtime-revision', 'secrets.',

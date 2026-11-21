@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Publish bilingual Task docs from the public catalog, separately from Raw APIs.
+"""Render bilingual Tasks from the worker's immutable Runtime release.
 
-Only GET /v1/tasks and GET /v1/tasks/{id} are used. All schemas are supplied by
-Services. A valid empty catalog withdraws pages; acquisition/schema failure
-preserves the previous publication and exits nonzero. No Task is executed.
+Task schemas and customer prices share one release. A valid empty catalog
+withdraws pages; acquisition/schema failure preserves the previous publication.
+No Task is executed, and live Task endpoints are never a publication fallback.
 """
 from __future__ import annotations
 
@@ -14,7 +14,12 @@ import json
 from pathlib import Path
 import re
 import shutil
-import urllib.request
+import time
+
+from fetch_runtime_release import (PublicReader, acquire as acquire_release, decode,
+                                   validate_current, require, sha, ACQUISITION_SECONDS)
+from runtime_contract_artifact import TASK_CATALOG
+from task_pricing import pricing_markdown
 
 ROOT = Path(__file__).resolve().parents[1]
 LANGUAGES = ("en", "zh")
@@ -24,10 +29,8 @@ COPY = {
         "intro": "Each Task has one input contract and a normalized result. The API chooses sources using the task's strategy. Availability and fields depend on the selected input; a backup source is not guaranteed.",
         "source": "API origin", "list": "Available tasks", "task": "Task", "description": "Description",
         "contract": "The request and response panels use the schemas published by this API. Conditional requirements and allowed combinations are part of the request schema. Check the complete schema before combining filters or identities.",
-        "billing": "Billing", "price": "Obtain an input-specific quote by sending the same request with `X-AISA-Cost-Mode: quote`; this does not execute the Task. Use `X-AISA-Max-Price-USD` to cap the price. The catalog's base price is not a quote for every platform or input.",
+        "billing": "Billing", "price": "Obtain an input-specific quote by sending the same request with `X-AISA-Cost-Mode: quote`; quoting neither executes the Task nor reserves funds. Execution reserves the estimated request charge and settles under the rules above. Use `X-AISA-Max-Price-USD` to cap the price.",
         "retry": "Use an `Idempotency-Key` when executing a Task. For errors, inspect `error.code`, `error.request_id`, `error.retryable` and `error.retry_hint`. A reconciliation hint requires checking the existing request before retrying; do not assume a pending settlement is a refund.",
-        "fixed": "Charged per successful delivery; an empty result is not charged.",
-        "per_unit": "Charged per delivered item, not the requested limit. The quote reserves for the requested quantity; settlement uses the actual delivered quantity.",
         "success": "Successful delivery or a normal empty result", "error": "Error; use the returned HTTP status and retry guidance",
         "strategy": "Default strategy", "social": "Social", "creators": "Creators",
     },
@@ -36,23 +39,12 @@ COPY = {
         "intro": "每个任务使用统一的输入契约和结果结构。API 按任务策略选择数据源；可用能力和字段取决于具体输入，不保证每组条件都有备用来源。",
         "source": "API 地址", "list": "可用任务", "task": "任务", "description": "说明",
         "contract": "上方请求和响应面板使用此 API 发布的 Schema。条件必填和参数组合限制属于请求契约；组合筛选条件或账号身份前，请查看完整 Schema。",
-        "billing": "计费", "price": "发送相同请求并带上 `X-AISA-Cost-Mode: quote`，获取与输入对应的报价，此操作不执行任务。用 `X-AISA-Max-Price-USD` 设置价格上限。目录基础价格不代表所有平台或输入的具体报价。",
+        "billing": "计费", "price": "发送相同请求并带上 `X-AISA-Cost-Mode: quote`，获取与输入对应的报价；报价不执行任务，也不预扣资金。实际执行时预扣预计请求费用，按上述规则结算。用 `X-AISA-Max-Price-USD` 设置价格上限。",
         "retry": "执行任务时使用 `Idempotency-Key`。错误时查看 `error.code`、`error.request_id`、`error.retryable` 和 `error.retry_hint`。提示先核对结算时，应先查询原请求再决定是否重试；不能把待结算当作已退款。",
-        "fixed": "按成功交付计费；正常查空不收费。",
-        "per_unit": "按实际交付条数收费，不按请求的 limit 收费。报价按请求数量预扣，结算按实际交付数量计算。",
         "success": "成功交付或正常查空", "error": "错误；以实际 HTTP 状态和重试指引为准",
         "strategy": "默认策略", "social": "社媒", "creators": "达人",
     },
 }
-
-
-def get(api: str, path: str) -> dict:
-    request = urllib.request.Request(api + path, headers={"Accept": "application/json", "User-Agent": "aisa-docs-tasks"})
-    with urllib.request.urlopen(request, timeout=30) as response:
-        result = json.load(response)
-    if not isinstance(result, dict):
-        raise ValueError(f"{path}: expected an object")
-    return result
 
 
 def catalog_ids(listing: dict) -> list[str]:
@@ -66,23 +58,60 @@ def catalog_ids(listing: dict) -> list[str]:
     return sorted(ids)
 
 
-def acquire(api: str) -> list[dict]:
-    ids = catalog_ids(get(api, "/v1/tasks"))
-    tasks = []
-    for task_id in ids:
-        task = {}
-        for language in LANGUAGES:
-            detail = get(api, f"/v1/tasks/{task_id}?lang={language}")
+def release_tasks(contents: dict) -> list[dict]:
+    require(TASK_CATALOG in contents, "Runtime release has no Task catalog; deploy the Task publisher first")
+    catalog = decode(contents[TASK_CATALOG])
+    require(isinstance(catalog, dict) and type(catalog.get("schema_version")) is int and
+            catalog["schema_version"] == 1 and isinstance(catalog.get("tasks"), list),
+            "Unsupported Runtime Task catalog")
+    tasks = catalog["tasks"]
+    ids = []
+    for task in tasks:
+        require(isinstance(task, dict) and set(task) == set(LANGUAGES), "Task languages are incomplete")
+        require(all(isinstance(detail, dict) for detail in task.values()), "Invalid Task detail")
+        task_id = task["en"].get("task_id")
+        ids.append(task_id)
+        for language, detail in task.items():
+            require(isinstance(detail, dict), "Invalid Task detail")
             if detail.get("task_id") != task_id or detail.get("method") != "POST" or detail.get("path") != f"/v1/tasks/{task_id}":
                 raise ValueError(f"{task_id}: inconsistent Task identity")
             for key in ("response_schema", "error_schema"):
                 if not isinstance(detail.get(key), dict) or not detail[key]:
                     raise ValueError(f"{task_id}: missing {key}; deploy the shared public contract first")
-            task[language] = detail
-        tasks.append(task)
-    if catalog_ids(get(api, "/v1/tasks")) != ids:
-        raise ValueError("Task availability changed during acquisition; retry on the next run")
+        require(task["en"].get("pricing") == task["zh"].get("pricing") and
+                task["en"].get("billing") == task["zh"].get("billing"),
+                "Task billing differs between languages")
+    require(catalog_ids({"data": [{"task_id": task_id} for task_id in ids]}) == ids,
+            "Task catalog identities are not sorted")
     return tasks
+
+
+def acquire(api: str, reader=None) -> tuple[list[dict], dict]:
+    reader = reader or PublicReader(api, time.monotonic() + ACQUISITION_SECONDS)
+    current = decode(reader("/public/api-contract/current")[0])
+    revision, compiler = current.get("artifact_revision"), current.get("compiler_revision")
+    validate_current(current, revision, compiler)
+    contents, _, before, _, receipt = acquire_release(revision, compiler, reader)
+    require(decode(before) == current, "Current release changed after Task discovery")
+    return release_tasks(contents), receipt
+
+
+def acquired_tasks(directory: Path) -> tuple[list[dict], dict]:
+    # The production publisher can pass its existing acquisition, so Raw APIs
+    # and Tasks use exactly the same revision, hashes and freshness evidence.
+    from export_contract_publication import acquired_input
+    receipt, _ = acquired_input(directory)
+    return release_tasks(saved_task_catalog(directory, receipt)), receipt
+
+
+def saved_task_catalog(directory: Path, receipt: dict) -> dict:
+    # Saved acquisitions may contain unrelated files. Only the manifest grants
+    # membership, and rechecking bytes also covers changes after acquired_input.
+    member = next((row for row in receipt["manifest_files"] if row["name"] == TASK_CATALOG), None)
+    require(member is not None, "Runtime release has no manifested Task catalog")
+    raw = (directory / TASK_CATALOG).read_bytes()
+    require(sha(raw) == member["sha256"], "Saved Task artifact hash differs from Runtime manifest")
+    return {TASK_CATALOG: raw}
 
 
 def catalog_hash(tasks: list[dict]) -> str:
@@ -171,7 +200,7 @@ def component(schema: dict, name: str) -> dict:
 
 
 
-def openapi(tasks: list[dict], language: str, api: str) -> dict:
+def openapi(tasks: list[dict], language: str, api: str, release=None) -> dict:
     schemas, paths = {}, {}
     c = COPY[language]
     for task in tasks:
@@ -195,6 +224,9 @@ def openapi(tasks: list[dict], language: str, api: str) -> dict:
         }
     result = {"openapi": "3.1.0", "info": {"title": "AIsa Tasks", "version": "1"}, "servers": [{"url": api}],
               "security": [{"bearer": []}], "components": {"schemas": schemas, "securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}, "paths": paths}
+    if release is not None:
+        result["info"]["x-aisa-runtime-release"] = {key: release[key] for key in
+            ("artifact_revision", "compiler_revision", "source_digest", "generation")}
     from openapi_spec_validator import validate as validate_openapi
     validate_openapi(result)
     return result
@@ -215,8 +247,7 @@ def prose(text: str) -> str:
 def task_page(detail: dict, language: str, api: str) -> str:
     c = COPY[language]
     front = f'---\nopenapi: "{page_path(language, "openapi.json")} POST {detail["path"]}"\ntitle: {json.dumps(detail["name"], ensure_ascii=False)}\n---\n'
-    billing = (detail.get("billing") or {}).get("mode")
-    return front + f'\n`{detail["task_id"]}` · v{detail.get("version", 1)}\n\n{c["source"]}: `{api}`\n\n{c["contract"]}\n\n{c["strategy"]}: `{prose(detail.get("strategy", ""))}`\n\n## {c["billing"]}\n\n' + (c[billing] + "\n\n" if billing in ("fixed", "per_unit") else "") + c["price"] + "\n\n" + c["retry"] + "\n"
+    return front + f'\n`{detail["task_id"]}` · v{detail.get("version", 1)}\n\n{c["source"]}: `{api}`\n\n{c["contract"]}\n\n{c["strategy"]}: `{prose(detail.get("strategy", ""))}`\n\n## {c["billing"]}\n\n' + pricing_markdown(detail, language) + "\n" + c["price"] + "\n\n" + c["retry"] + "\n"
 
 
 def overview(tasks: list[dict], language: str, api: str) -> str:
@@ -228,16 +259,24 @@ def overview(tasks: list[dict], language: str, api: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write(root: Path, tasks: list[dict], api: str) -> None:
-    # Render/validate everything before touching the saved publication.
+def rendered_files(tasks: list[dict], api: str, release=None) -> dict[str, str]:
     files = {}
+    if release is not None:
+        identity = {key: release[key] for key in ("artifact_revision", "compiler_revision", "source_digest", "generation")}
+        files["docs/task-runtime.json"] = json.dumps({"schema_version": 1, "api_origin": api, **identity}, indent=2, sort_keys=True) + "\n"
     for language in LANGUAGES:
         if tasks:
-            files[page_path(language, "openapi.json")] = json.dumps(openapi(tasks, language, api), indent=2, ensure_ascii=False) + "\n"
+            files[page_path(language, "openapi.json")] = json.dumps(openapi(tasks, language, api, release), indent=2, ensure_ascii=False) + "\n"
             files[page_path(language, "overview.mdx")] = overview(tasks, language, api)
             for task in tasks:
                 detail = task[language]
                 files[page_path(language, slug(detail["task_id"]) + ".mdx")] = task_page(detail, language, api)
+    return files
+
+
+def write(root: Path, tasks: list[dict], api: str, release=None) -> None:
+    # Render/validate everything before touching the saved publication.
+    files = rendered_files(tasks, api, release)
     docs = json.loads((root / "docs.json").read_text())
     for entry in docs["navigation"]["languages"]:
         language = entry["language"]
@@ -266,22 +305,27 @@ def write(root: Path, tasks: list[dict], api: str) -> None:
     (root / "docs.json").write_text(json.dumps(docs, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def validate_publication(root: Path) -> set[str]:
+def validate_publication(root: Path, api="https://api.aisa.one") -> set[str]:
     """Validate Task page bindings before the existing formal publisher exports."""
+    if not (root / "docs.json").exists() and not any((root / page_path(lang, "")).exists() for lang in LANGUAGES):
+        return set()  # Historical API-only fixtures have no site navigation.
     from openapi_spec_validator import validate as validate_openapi
     pages = set()
     paths_by_language = []
+    sources = []
     for language in LANGUAGES:
         folder = root / page_path(language, "")
         if not folder.exists():
             paths_by_language.append(set())
             continue
         document = json.loads((folder / "openapi.json").read_text())
+        sources.append((document.get("servers"), document.get("info", {}).get("x-aisa-runtime-release")))
         validate_openapi(document)
         expected = {"overview.mdx", "openapi.json"}
         paths = set(document["paths"])
-        if not paths or document.get("servers") != [{"url": "https://api.aisa.one"}]:
-            raise ValueError("Production Task publication requires a nonempty production contract")
+        allowed = (api,) if api else ("https://api.aisa.one", "https://dev-api.aisa.one")
+        if not paths or document.get("servers") not in [[{"url": origin}] for origin in allowed]:
+            raise ValueError("Task publication requires a nonempty contract from the selected API")
         for path, methods in document["paths"].items():
             task_id = path.removeprefix("/v1/tasks/")
             if path != "/v1/tasks/" + task_id or not re.fullmatch(r"[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*", task_id) or set(methods) != {"post"}:
@@ -297,6 +341,8 @@ def validate_publication(root: Path) -> set[str]:
         paths_by_language.append(paths)
     if paths_by_language[0] != paths_by_language[1]:
         raise ValueError("Task languages publish different operations")
+    if sources and any(source != sources[0] for source in sources):
+        raise ValueError("Task languages use different Runtime releases")
     from publication_surface import navigation_pages
     docs = json.loads((root / "docs.json").read_text())
     task_nav = [p for p in navigation_pages(docs) if p.startswith(("tasks/", "zh/tasks/"))]
@@ -305,17 +351,35 @@ def validate_publication(root: Path) -> set[str]:
     return pages
 
 
+def validate_release_publication(root: Path, facts: Path, receipt: dict) -> None:
+    """The formal publisher must render Tasks from its exact Raw API release."""
+    path = facts / TASK_CATALOG
+    if not path.exists() and not (root / "docs/task-runtime.json").exists() and not (root / "tasks").exists():
+        return  # Historical releases before the Task role remain readable.
+    tasks = release_tasks(saved_task_catalog(facts, receipt))
+    validate_publication(root)
+    files = rendered_files(tasks, "https://api.aisa.one", receipt)
+    actual = {p.relative_to(root).as_posix() for language in LANGUAGES
+              for p in (root / page_path(language, "")).glob("*") if p.is_file()}
+    require(actual == set(files) - {"docs/task-runtime.json"},
+            "Task publication membership differs from the assessed Runtime release")
+    for name, expected in files.items():
+        require((root / name).is_file() and (root / name).read_text() == expected,
+                "Task publication differs from the assessed Runtime release")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api", default="https://api.aisa.one", choices=("https://api.aisa.one", "https://dev-api.aisa.one"))
     parser.add_argument("--root", type=Path, default=ROOT)
+    parser.add_argument("--runtime-input-dir", type=Path, help="Reuse the publisher's verified immutable Runtime acquisition")
     parser.add_argument("--expected-hash", default="", help="Refuse changes since the publication plan")
     args = parser.parse_args()
-    tasks = acquire(args.api)
+    tasks, release = acquired_tasks(args.runtime_input_dir) if args.runtime_input_dir else acquire(args.api)
     if args.expected_hash and catalog_hash(tasks) != args.expected_hash:
         raise ValueError("Task contracts changed since planning; retry from fresh inputs")
-    write(args.root, tasks, args.api)
-    print(f"Published local docs for {len(tasks)} Tasks from {args.api}; no Tasks executed")
+    write(args.root, tasks, args.api, release)
+    print(f"Rendered {len(tasks)} Tasks from Runtime release {release['artifact_revision']}; no Tasks executed")
 
 
 if __name__ == "__main__":

@@ -137,11 +137,10 @@ provider hashes, a stable catalog and no redirects.
 
 ## Task pages on dev
 
-Tasks (`POST /v1/tasks/{task_id}`) are published on the dev API before
-production, so the production contract preview above has none.
-`scripts/sync_tasks.py` reads the public dev Task catalog instead
-(`GET https://dev-api.aisa.one/v1/tasks`, then each task's detail in English
-and with `?lang=zh`) and writes:
+Task pages preview the dev API independently of the production Raw API preview
+above. `scripts/sync_tasks.py` reads the dev worker's immutable
+`tasks/catalog.json` through `https://dev-api.aisa.one/public/api-contract/current`.
+It verifies the release manifest, file hashes and freshness, then writes:
 
 - `tasks/overview.mdx` and one page per task, mirrored under `zh/tasks/`;
 - `tasks/openapi.json` and `zh/tasks/openapi.json`, one `POST` per task, with
@@ -152,11 +151,14 @@ The pages live outside `api-reference/` and `openapi/`, so the Runtime
 generator neither rewrites their URLs to production nor marks them as
 unverified production references. `generate-dev-docs.yml` runs the script
 after the Runtime step on every run, and each run rewrites all Task files, so
-a removed task disappears. When the catalog cannot be read (or a detail lacks
-its public response or error schema), nothing is written and the saved pages stay. The input
-contract, platforms, fields, output schema and billing mode come from the
-API (AIsaServices `packages/tasklayer/taskdoc`); the overview copy is in the
-script. Local run: `python scripts/sync_tasks.py --api https://dev-api.aisa.one`.
+a disabled or removed task disappears after the next successful worker publication
+and documentation generation. Missing, stale or invalid artifacts preserve the
+saved pages and fail the run. Request, response and error schemas come from
+AIsaServices `packages/tasklayer/taskdoc`; effective V2 prices and enable state
+are included in the same worker release. There is no fallback to live Task
+detail requests. `docs/task-runtime.json` records the source release. The
+overview copy is in the script. Local run:
+`python scripts/sync_tasks.py --api https://dev-api.aisa.one`.
 
 ## Automatic preview generation
 
