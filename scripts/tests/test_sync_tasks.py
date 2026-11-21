@@ -255,15 +255,28 @@ class PublicationTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         (self.root / "docs.json").write_text(json.dumps(navigation()))
 
-    def test_bilingual_pages_use_selected_origin_and_no_private_metadata(self):
+    def test_bilingual_pages_omit_redundant_copy_and_keep_contract_metadata(self):
+        d = detail("creators.find_contact")
+        d["strategy"] = "waterfall"
         for api in ("https://api.aisa.one", "https://dev-api.aisa.one"):
-            sync.write(self.root, tasks(detail()), api)
+            sync.write(self.root, tasks(d), api)
             for language in sync.LANGUAGES:
-                page = (self.root / sync.page_path(language, "creators-search.mdx")).read_text()
-                self.assertIn(api, page)
+                page = (self.root / sync.page_path(language, "creators-find_contact.mdx")).read_text()
+                body = page.split("---\n", 2)[2]
+                overview = (self.root / sync.page_path(language, "overview.mdx")).read_text()
+                for redundant in (d["task_id"], "· v1", api, "API origin", "API 地址", "Default strategy", "默认策略", "waterfall"):
+                    self.assertNotIn(redundant, body)
+                for redundant in (api, "API origin", "API 地址"):
+                    self.assertNotIn(redundant, overview)
+                self.assertIn(f'[`{d["task_id"]}`](/{sync.page_path(language, "creators-find_contact")})', overview)
+                self.assertIn(sync.COPY[language]["contract"], body)
+                self.assertIn(pricing_markdown(d, language), body)
+                self.assertIn(f'POST {d["path"]}', page)
                 self.assertNotIn("meta.raw", page)
                 doc = json.loads((self.root / sync.page_path(language, "openapi.json")).read_text())
                 self.assertEqual([{"url": api}], doc["servers"])
+                self.assertEqual({key: d[key] for key in ("version", "strategy", "billing", "pricing")},
+                                 doc["paths"][d["path"]]["post"]["x-aisa-task"])
             docs = json.loads((self.root / "docs.json").read_text())
             self.assertEqual("existing-page", docs["navigation"]["languages"][0]["tabs"][0]["groups"][0]["pages"][0])
 
@@ -338,10 +351,10 @@ class PricingTests(unittest.TestCase):
     def test_fixed_success_and_delivery_prices_have_amounts_units_and_quote_semantics(self):
         d = detail()
         for language, expected in (("en", "Per delivered item"), ("zh", "每条实际交付结果")):
-            page = sync.task_page(d, language, "https://api.aisa.one")
+            page = sync.task_page(d, language)
             self.assertIn("0.12", page)
             self.assertIn(expected, page)
-        self.assertIn("quoting neither executes the Task nor reserves funds", sync.task_page(d, "en", "https://api.aisa.one"))
+        self.assertIn("quoting neither executes the Task nor reserves funds", sync.task_page(d, "en"))
         d["billing"] = {"mode": "fixed"}
         d["pricing"].update(kind="fixed_success", unit="successful_request", tiers_micros_usd={"normal": 10000000})
         d["pricing"].pop("units")
