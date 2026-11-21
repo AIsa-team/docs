@@ -2,9 +2,7 @@
 from decimal import Decimal
 import re
 
-
-def text(value):
-    return re.sub(r"([{}<>`])", r"\\\1", str(value)).replace("|", "\\|").replace("\n", " ")
+from readable_contract_notes import code, safe
 
 
 def integer(value, *, positive=False):
@@ -86,7 +84,8 @@ def pricing_markdown(detail, language):
         label = labels[unit]
         if scale and value in scale["values"]:
             label = (f"每 {scale['unit_size']} 个请求单位" if zh else f"Per {scale['unit_size']} requested units")
-        lines.append("| " + " | ".join([text(selection), label, usd(amounts.pop())]) + " |")
+        selection = safe(re.sub(r"[\r\n]+", " ", selection))
+        lines.append("| " + " | ".join([selection, label, usd(amounts.pop())]) + " |")
     lines.append("")
     if price_by and not price_by.get("unknown_uses_default_tiers", False):
         lines.append("仅表内参数值有价格；未列出的值不会回退到基础价格。" if zh else
@@ -101,22 +100,24 @@ def pricing_markdown(detail, language):
         settlement = units.get("settlement")
         if settlement != {"delivered_item": "delivered_units", "requested_unit": "requested_units"}[unit]:
             raise ValueError("Task price unit and settlement disagree")
+        reserved_units = code(f"ceil({estimate} / {size})")
         if zh:
-            lines.append(f"执行时按 `ceil({text(estimate)} / {size})` 个单位预扣，最多 {maximum} 个单位。")
+            lines.append(f"执行时按 {reserved_units} 个单位预扣，最多 {maximum} 个单位。")
             lines.append("按实际交付数量结算，上限为预扣数量；未使用的预扣金额释放。" if settlement == "delivered_units" else
                          "成功请求按请求单位数量结算，不按实际交付条数结算。")
         else:
-            lines.append(f"Execution reserves for `ceil({text(estimate)} / {size})` units, up to {maximum} units.")
+            lines.append(f"Execution reserves for {reserved_units} units, up to {maximum} units.")
             lines.append("Settlement uses delivered units, capped at reserved units; unused reservation is released." if settlement == "delivered_units" else
                          "A successful request settles the requested units, rather than the number of delivered items.")
     if scale:
-        quantity = text(field(detail, scale["input"]))
+        quantity = field(detail, scale["input"])
         rounding = usd(scale["round_up_micros_usd"])
-        values = ", ".join(text(value) for value in scale["values"])
+        values = ", ".join(safe(re.sub(r"[\r\n]+", " ", value)) for value in scale["values"])
+        formula = code(f"ceil({quantity} / {scale['unit_size']}) × " + ("所选单价" if zh else "selected unit price"))
         if zh:
-            lines.append(f"对于 {values}：请求价格 = `ceil({quantity} / {scale['unit_size']}) × 所选单价`，总额向上取整到 USD {rounding} 的倍数；请求数量上限 {scale['max_quantity']}。成功返回较少结果仍按请求数量计价。")
+            lines.append(f"对于 {values}：请求价格 = {formula}，总额向上取整到 USD {rounding} 的倍数；请求数量上限 {scale['max_quantity']}。成功返回较少结果仍按请求数量计价。")
         else:
-            lines.append(f"For {values}: request price = `ceil({quantity} / {scale['unit_size']}) × selected unit price`, rounded up once to a multiple of USD {rounding}; maximum requested quantity {scale['max_quantity']}. A successful partial result still charges the requested size.")
+            lines.append(f"For {values}: request price = {formula}, rounded up once to a multiple of USD {rounding}; maximum requested quantity {scale['max_quantity']}. A successful partial result still charges the requested size.")
     lines.append("成功交付才收费；正常查空不收费。" if zh else "Successful delivery is charged; a normal empty result is not charged.")
     policy = p.get("plan_policy")
     if not isinstance(policy, dict):

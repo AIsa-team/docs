@@ -392,6 +392,36 @@ class PublicationTests(unittest.TestCase):
 
 
 class PricingTests(unittest.TestCase):
+    def test_price_conditions_are_text_and_formulas_preserve_literal_selectors(self):
+        d = detail()
+        value = r'[open](https://example.test) ![img](x) \{a} | `code`' + '\r\n月榜'
+        selector = r'input.`[limit]`{value}|\path' + '\r\nnext'
+        d['input'][0]['selector'] = 'input.[platform]'
+        d['input'].append({'name': 'limit', 'selector': selector})
+        d['pricing']['price_by'] = {'input': 'platform', 'values': {value: {'normal': 120000}}}
+        for scaled in (False, True):
+            if scaled:
+                d['billing'] = {'mode': 'fixed'}
+                d['pricing'].update(kind='fixed_success', unit='successful_request')
+                d['pricing'].pop('units')
+                d['pricing']['price_by']['request_scale'] = {
+                    'input': 'limit', 'values': [value], 'unit_size': 10,
+                    'max_quantity': 100, 'round_up_micros_usd': 100}
+            before = copy.deepcopy(d)
+            for language in sync.LANGUAGES:
+                page = pricing_markdown(d, language)
+                row = next(line for line in page.splitlines() if line.startswith('| input.'))
+                self.assertEqual(row.count('|'), 4)
+                cell = row.split('|')[1].strip()
+                self.assertEqual(html.unescape(cell), 'input.[platform] = ' + value.replace('\r\n', ' '))
+                self.assertFalse(any(c in cell for c in '\\`[]{}<>|\r\n'))
+                self.assertTrue(row.endswith(' | 0.12 |'))
+                expression = r'ceil(input.`[limit]`{value}|\path next / ' + ('10' if scaled else '1') + ')'
+                if scaled:
+                    expression += ' × ' + ('所选单价' if language == 'zh' else 'selected unit price')
+                self.assertIn('``' + expression + '``', page)
+                self.assertEqual(d, before)
+
     def test_equal_tiers_show_one_customer_price_without_internal_labels(self):
         d = detail()
         for apply in (False, True):
