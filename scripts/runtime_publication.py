@@ -86,12 +86,16 @@ def stage_canonical(root, facts, *, baseline, source_receipts=None, checked_at=N
     if write:
         for name, raw in changes.items():
             target = root / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(raw)
+            if raw is None:
+                target.unlink()
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(raw)
     report.update(evaluation='runtime_canonical_projection_before_payment_and_formal_replay',
         scope='staging_only_not_formal_publication', baseline_ref=baseline,
         assessed_base=assessed, previous_formal_ref=previous,
-        canonical_inputs=assessment, registry_lineage=lineage, projected_files=len(changes), dry_run=not write)
+        canonical_inputs=assessment, registry_lineage=lineage, projected_files=len(changes),
+        removed_generated_pages=sorted(name for name, raw in changes.items() if raw is None), dry_run=not write)
     return report
 
 
