@@ -290,7 +290,7 @@ class OpenInputWorkflowTests(unittest.TestCase):
         # their independently checked historical digest.
         triggers = workflow.get('on', workflow.get(True))
         for event in ('pull_request', 'push'):
-            for pattern in ('tasks/**', 'zh/tasks/**'):
+            for pattern in ('tasks/**', 'zh/tasks/**', 'docs/task-runtime.json'):
                 self.assertEqual(triggers[event]['paths'].count(pattern), 1)
                 triggers[event]['paths'].remove(pattern)
         # Assert the reader regression pin without changing the independent

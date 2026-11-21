@@ -80,6 +80,7 @@ jobs:
       docs_commit: ${{ steps.publish.outputs.docs_commit }}
       completed: ${{ steps.completed.outputs.completed }}
       publication_release: ${{ steps.completed.outputs.publication_release }}
+      input_key: ${{ steps.completed.outputs.input_key }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -330,7 +331,12 @@ jobs:
         # Runtime leave the inputs to be retried.
         if: github.ref == 'refs/heads/main' && steps.pull.outputs.available == 'true' && (inputs.publish == true || (github.event_name != 'workflow_dispatch' && vars.RUNTIME_CONTRACT_PUBLISH != 'false'))
         run: |
-          python -c 'from pathlib import Path; from scripts.live_contract_plan import publication_release; print("publication_release=" + publication_release(Path(".")))' >> "$GITHUB_OUTPUT"
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          from pathlib import Path
+          from scripts.live_contract_plan import publication_release, published_input_key
+          print('publication_release=' + publication_release(Path('.')))
+          print('input_key=' + published_input_key(Path('.')))
+          PY
           echo 'completed=true' >> "$GITHUB_OUTPUT"
 
   record:
@@ -345,14 +351,14 @@ jobs:
       - name: Prepare completion record
         if: needs.compose.outputs.completed == 'true'
         env:
-          INPUT_KEY: ${{ needs.plan.outputs.input_key }}
+          INPUT_KEY: ${{ needs.compose.outputs.input_key }}
         run: mkdir -p .cache && echo "$INPUT_KEY" > .cache/pull-openapi-done
       - name: Remember these inputs as completed
         if: needs.compose.outputs.completed == 'true'
         uses: actions/cache/save@v4
         with:
           path: .cache/pull-openapi-done
-          key: pull-openapi-done-${{ needs.plan.outputs.input_key }}-${{ needs.compose.outputs.publication_release }}
+          key: pull-openapi-done-${{ needs.compose.outputs.input_key }}-${{ needs.compose.outputs.publication_release }}
 
   notify-consumers:
     needs: compose

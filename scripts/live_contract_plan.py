@@ -118,6 +118,13 @@ def publication_release(root):
     return revision
 
 
+def published_input_key(root):
+    """Record the inputs actually published, even if Runtime advanced after plan."""
+    receipt = json.loads((root / 'docs/publication/runtime-acquisition.json').read_text())
+    return input_key(content_hash({'files': receipt['manifest_files']}),
+                     receipt['category_content_sha256'], docs_inputs(root))
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base-url', default='https://api.aisa.one')

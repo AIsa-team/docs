@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-import hashlib
 import json
 from pathlib import Path
 import re
@@ -112,10 +111,6 @@ def saved_task_catalog(directory: Path, receipt: dict) -> dict:
     raw = (directory / TASK_CATALOG).read_bytes()
     require(sha(raw) == member["sha256"], "Saved Task artifact hash differs from Runtime manifest")
     return {TASK_CATALOG: raw}
-
-
-def catalog_hash(tasks: list[dict]) -> str:
-    return hashlib.sha256(json.dumps(tasks, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def request_schema(detail: dict) -> dict:

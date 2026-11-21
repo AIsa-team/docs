@@ -469,15 +469,8 @@ class PricingTests(unittest.TestCase):
 
 
 class DynamicTests(unittest.TestCase):
-    def test_new_domain_and_every_contract_change_are_dynamic(self):
+    def test_new_domain_pages_navigation_and_price_metadata_are_dynamic(self):
         original = tasks(detail())
-        variants = []
-        for field, value in (("description", "New description"), ("pricing", {"revision": 2, "tiers_micros_usd": {"default": 120000}}), ("input", [{"name": "new_field", "type": "string"}]), ("request_schema", {"type": "object"}), ("error_schema", {"type": "object"})):
-            changed = copy.deepcopy(original)
-            changed[0]["en"][field] = value
-            variants.append(changed)
-        for changed in variants:
-            self.assertNotEqual(sync.catalog_hash(original), sync.catalog_hash(changed))
         added = detail("research.find_sources")
         doc = sync.openapi(tasks(detail(), added), "en", "https://api.aisa.one")
         self.assertEqual({"/v1/tasks/creators.search", "/v1/tasks/research.find_sources"}, set(doc["paths"]))

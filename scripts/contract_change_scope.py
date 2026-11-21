@@ -45,7 +45,7 @@ def requires_artifact_check(paths):
                                'tasks/', 'zh/tasks/',
                                'docs/publication/',
                                'docs/current-source-review-20261009/', 'docs/schema-inputs/'))
-               or path in ('llms.txt', 'discovery/openapi.json', 'openapi.yaml', 'docs.json', 'api-reference.mdx',
+               or path in ('llms.txt', 'discovery/openapi.json', 'openapi.yaml', 'docs.json', 'docs/task-runtime.json', 'api-reference.mdx',
                            'zh/api-reference.mdx', 'docs/response-source-review-receipts.json') for path in paths)
 
 
