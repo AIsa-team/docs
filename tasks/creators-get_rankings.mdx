@@ -13,8 +13,20 @@ Default strategy: `auto`
 
 ## Billing
 
-Charged per successful delivery; an empty result is not charged.
+Currency: USD. Price revision: 2.
 
-Obtain an input-specific quote by sending the same request with `X-AISA-Cost-Mode: quote`; this does not execute the Task. Use `X-AISA-Max-Price-USD` to cap the price. The catalog's base price is not a quote for every platform or input.
+| Input | Price unit | normal (USD) | svip (USD) | vip (USD) |
+| --- | --- | --- | --- | --- |
+| /input/ranking_key = bilibili.follower_growth | Per successful request | 0.02 | 0.02 | 0.02 |
+| /input/ranking_key = douyin.hot_accounts.24h | Per successful request | 0.0034 | 0.0034 | 0.0034 |
+| /input/ranking_key = tiktok_shop.creator_gmv.last7days | Per successful request | 0.0734 | 0.0734 | 0.0734 |
+| /input/ranking_key = tiktok_shop.creator_gmv.monthly | Per 10 requested units | 0.09859 | 0.09859 | 0.09859 |
+
+Only the listed values are priced; other values do not fall back to the catalog base price.
+For tiktok_shop.creator_gmv.monthly: request price = `ceil(/input/limit / 10) × selected unit price`, rounded up once to a multiple of USD 0.0001; maximum requested quantity 100. A successful partial result still charges the requested size.
+Successful delivery is charged; a normal empty result is not charged.
+No additional plan multiplier applies to these prices.
+
+Obtain an input-specific quote by sending the same request with `X-AISA-Cost-Mode: quote`; quoting neither executes the Task nor reserves funds. Execution reserves the estimated request charge and settles under the rules above. Use `X-AISA-Max-Price-USD` to cap the price.
 
 Use an `Idempotency-Key` when executing a Task. For errors, inspect `error.code`, `error.request_id`, `error.retryable` and `error.retry_hint`. A reconciliation hint requires checking the existing request before retrying; do not assume a pending settlement is a refund.

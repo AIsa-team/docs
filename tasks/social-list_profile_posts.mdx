@@ -13,8 +13,17 @@ Default strategy: `auto`
 
 ## Billing
 
-Charged per delivered item, not the requested limit. The quote reserves for the requested quantity; settlement uses the actual delivered quantity.
+Currency: USD. Price revision: 1.
 
-Obtain an input-specific quote by sending the same request with `X-AISA-Cost-Mode: quote`; this does not execute the Task. Use `X-AISA-Max-Price-USD` to cap the price. The catalog's base price is not a quote for every platform or input.
+| Input | Price unit | normal (USD) | svip (USD) | vip (USD) |
+| --- | --- | --- | --- | --- |
+| All valid inputs | Per delivered item | 0.0015 | 0.0015 | 0.0015 |
+
+Execution reserves for `ceil(/input/limit / 1)` units, up to 20 units.
+Settlement uses delivered units, capped at reserved units; unused reservation is released.
+Successful delivery is charged; a normal empty result is not charged.
+Apply the current plan multiplier to the prices above (team: 1×; builder: 1×; payg: 1×).
+
+Obtain an input-specific quote by sending the same request with `X-AISA-Cost-Mode: quote`; quoting neither executes the Task nor reserves funds. Execution reserves the estimated request charge and settles under the rules above. Use `X-AISA-Max-Price-USD` to cap the price.
 
 Use an `Idempotency-Key` when executing a Task. For errors, inspect `error.code`, `error.request_id`, `error.retryable` and `error.retry_hint`. A reconciliation hint requires checking the existing request before retrying; do not assume a pending settlement is a refund.
