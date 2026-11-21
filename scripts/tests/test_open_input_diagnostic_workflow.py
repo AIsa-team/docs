@@ -286,6 +286,13 @@ class OpenInputWorkflowTests(unittest.TestCase):
             '--head "$CANDIDATE_HEAD" ${{ github.event_name == \'pull_request\' && \'--merge-base\' || \'\' }} '
             '>> "$GITHUB_OUTPUT"\n')
         scope['run'] = 'python scripts/contract_change_scope.py --base "$BASE" >> "$GITHUB_OUTPUT"\n'
+        # Assert the reader regression pin without changing the independent
+        # historical digest for any other dependency or workflow behavior.
+        for job, step in (('code-contracts', 'Install test dependencies'),
+                          ('artifact-contracts', 'Install assessment dependencies')):
+            install = next(row for row in workflow['jobs'][job]['steps'] if row.get('name') == step)
+            self.assertEqual(install['run'], "pip install 'PyYAML==6.0.3' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'")
+            install['run'] = install['run'].replace('PyYAML==6.0.3', 'PyYAML>=6,<7')
         def normalize(value):
             if type(value) is dict:return {str(k):normalize(v) for k,v in value.items()}
             if type(value) is list:return [normalize(v) for v in value]
