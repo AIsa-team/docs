@@ -244,13 +244,13 @@ def prose(text: str) -> str:
     return re.sub(r"([{}<>])", r"\\\1", text).replace("|", "\\|").replace("\n", " ")
 
 
-def task_page(detail: dict, language: str, api: str) -> str:
+def task_page(detail: dict, language: str) -> str:
     c = COPY[language]
     front = f'---\nopenapi: "{page_path(language, "openapi.json")} POST {detail["path"]}"\ntitle: {json.dumps(detail["name"], ensure_ascii=False)}\n---\n'
     return front + f'\n{c["contract"]}\n\n## {c["billing"]}\n\n' + pricing_markdown(detail, language) + "\n" + c["price"] + "\n\n" + c["retry"] + "\n"
 
 
-def overview(tasks: list[dict], language: str, api: str) -> str:
+def overview(tasks: list[dict], language: str) -> str:
     c = COPY[language]
     lines = ["---", "title: " + json.dumps(c["group"], ensure_ascii=False), "---", "", c["intro"], "", f'## {c["list"]}', "", f'| {c["task"]} | {c["description"]} |', '| --- | --- |']
     for task in tasks:
@@ -267,10 +267,10 @@ def rendered_files(tasks: list[dict], api: str, release=None) -> dict[str, str]:
     for language in LANGUAGES:
         if tasks:
             files[page_path(language, "openapi.json")] = json.dumps(openapi(tasks, language, api, release), indent=2, ensure_ascii=False) + "\n"
-            files[page_path(language, "overview.mdx")] = overview(tasks, language, api)
+            files[page_path(language, "overview.mdx")] = overview(tasks, language)
             for task in tasks:
                 detail = task[language]
-                files[page_path(language, slug(detail["task_id"]) + ".mdx")] = task_page(detail, language, api)
+                files[page_path(language, slug(detail["task_id"]) + ".mdx")] = task_page(detail, language)
     return files
 
 

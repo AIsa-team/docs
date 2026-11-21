@@ -351,10 +351,10 @@ class PricingTests(unittest.TestCase):
     def test_fixed_success_and_delivery_prices_have_amounts_units_and_quote_semantics(self):
         d = detail()
         for language, expected in (("en", "Per delivered item"), ("zh", "每条实际交付结果")):
-            page = sync.task_page(d, language, "https://api.aisa.one")
+            page = sync.task_page(d, language)
             self.assertIn("0.12", page)
             self.assertIn(expected, page)
-        self.assertIn("quoting neither executes the Task nor reserves funds", sync.task_page(d, "en", "https://api.aisa.one"))
+        self.assertIn("quoting neither executes the Task nor reserves funds", sync.task_page(d, "en"))
         d["billing"] = {"mode": "fixed"}
         d["pricing"].update(kind="fixed_success", unit="successful_request", tiers_micros_usd={"normal": 10000000})
         d["pricing"].pop("units")
