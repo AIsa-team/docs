@@ -1,8 +1,11 @@
 # Runtime publication compatibility for Tasks and removed internal operations
 
-This consumer change is required before Services #1531 and #1533 reach
-production. It does not publish Task pages or prices; that renderer remains in
-Docs #386.
+Docs #387 supplies this compatibility layer and the Task renderer before
+Services #1536 reaches production. Initially the old producer has no Task role,
+so Raw publication continues without generating Tasks. After the worker
+publishes the role, the same formal pipeline generates Task schemas, prices and
+pages from that immutable release. See the repository README for the complete
+publication and rollout rules.
 
 The optional `tasks/catalog.json` member belongs to the immutable outer Runtime
 release. Its bytes receive the same manifest, SHA-256, ETag, JSON and size checks

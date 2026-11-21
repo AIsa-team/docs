@@ -30,7 +30,7 @@ HEX64 = re.compile(r'[0-9a-f]{64}')
 # generator input; registry.yaml is both and counts as an input.
 OUTPUTS = ('openapi/', 'api-reference/', 'zh/api-reference/', 'docs.json', 'llms.txt',
            'openapi.yaml', 'docs/publication/', 'discovery/payment-evidence.json',
-           'discovery/openapi.json')
+           'discovery/openapi.json', 'tasks/', 'zh/tasks/', 'docs/task-runtime.json')
 INPUT_OVERRIDES = ('openapi/registry.yaml',)
 MAX_BYTES = 16 << 20
 
@@ -106,6 +106,18 @@ def plan(index, category, docs):
             'generation': index.get('generation', 0)}
 
 
+def publication_release(root):
+    """Bind completed-input caches to the publication the site currently serves."""
+    path = root / 'docs/publication/current.json'
+    if not path.exists():
+        return 'unpublished'
+    current = json.loads(path.read_text())
+    revision = current.get('contract_release', '')
+    if current.get('status') != 'passed' or not HEX64.fullmatch(revision):
+        raise Unavailable('Docs formal publication is invalid')
+    return revision
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base-url', default='https://api.aisa.one')
@@ -118,13 +130,14 @@ def main(argv=None):
             # Runtime is recompiling; wait for the next tick instead of failing.
             raise Unavailable(CURRENT + ' is not fresh')
         result = plan(index, fetch(args.base_url, CATEGORY), docs_inputs(args.root))
+        result['publication_release'] = publication_release(args.root)
     except Unavailable as exc:
         print(json.dumps({'available': False, 'reason': str(exc)}))
         return 2
     print(json.dumps(result, sort_keys=True))
     if args.github_output:
         with args.github_output.open('a') as output:
-            for key in ('input_key', 'contract_hash', 'artifact_revision', 'generation'):
+            for key in ('input_key', 'contract_hash', 'artifact_revision', 'generation', 'publication_release'):
                 output.write(f'{key}={result[key]}\n')
     return 0
 

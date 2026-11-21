@@ -24,11 +24,12 @@ PUBLIC_PROJECTION_PATTERNS = ('openapi-public/**/*.json', 'openapi-public/*.yaml
 
 def publication_files(root, *, legacy=False):
     root = Path(root)
-    files = {p for p in (root / 'openapi.yaml', root / 'llms.txt', root / 'docs.json', root / 'openapi/registry.yaml',
+    files = {p for p in (root / 'openapi.yaml', root / 'llms.txt', root / 'docs.json', root / 'docs/task-runtime.json', root / 'openapi/registry.yaml',
                         root / 'api-reference.mdx', root / 'zh/api-reference.mdx', root / POLICY_PATH, root / REBINDING_PATH, root / SALES_CATALOG_PATH) if p.is_file()}
     files.update(root / name for name in PAYMENT_FILES if (root / name).is_file())
     patterns = ('openapi/*.json', 'openapi/upstream/*.json', 'openapi/zh/*.json',
-                'api-reference/**/*.mdx', 'zh/api-reference/**/*.mdx')
+                'api-reference/**/*.mdx', 'zh/api-reference/**/*.mdx',
+                'tasks/*.json', 'tasks/*.mdx', 'zh/tasks/*.json', 'zh/tasks/*.mdx')
     for pattern in patterns + (() if legacy else PUBLIC_PROJECTION_PATTERNS):
         files.update(root.glob(pattern))
     return sorted(files)
@@ -127,6 +128,10 @@ def disappeared_generated_pages(root, previous, native, withdrawn_providers=()):
 
 def validate_surfaces(root, published_ref=None):
     root = Path(root)
+    task_pages = set()
+    if (root / 'tasks').exists() or (root / 'zh/tasks').exists():
+        from sync_tasks import validate_publication
+        task_pages = validate_publication(root)
     documents, all_documents = {}, {}
     for path in (root / 'openapi').glob('*.json'):
         if path.name == 'openapi.json':
@@ -186,6 +191,8 @@ def validate_surfaces(root, published_ref=None):
             raise ValueError('runtime API navigation must have one tab per language')
         nav[language] = list(navigation_pages(tabs[0]))
         for page in nav[language]:
+            if page in task_pages:
+                continue
             if not re.fullmatch(r'(?:zh/)?api-reference(?:/[A-Za-z0-9_.-]+)*', page):
                 raise ValueError('invalid API navigation target: ' + page)
             if not (root / (page + '.mdx')).is_file():

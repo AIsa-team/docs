@@ -286,6 +286,13 @@ class OpenInputWorkflowTests(unittest.TestCase):
             '--head "$CANDIDATE_HEAD" ${{ github.event_name == \'pull_request\' && \'--merge-base\' || \'\' }} '
             '>> "$GITHUB_OUTPUT"\n')
         scope['run'] = 'python scripts/contract_change_scope.py --base "$BASE" >> "$GITHUB_OUTPUT"\n'
+        # Task outputs join the existing gate; all prior workflow rules retain
+        # their independently checked historical digest.
+        triggers = workflow.get('on', workflow.get(True))
+        for event in ('pull_request', 'push'):
+            for pattern in ('tasks/**', 'zh/tasks/**'):
+                self.assertEqual(triggers[event]['paths'].count(pattern), 1)
+                triggers[event]['paths'].remove(pattern)
         # Assert the reader regression pin without changing the independent
         # historical digest for any other dependency or workflow behavior.
         for job, step in (('code-contracts', 'Install test dependencies'),

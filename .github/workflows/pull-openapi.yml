@@ -51,7 +51,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .cache/pull-openapi-done
-          key: pull-openapi-done-${{ steps.live.outputs.input_key }}
+          key: pull-openapi-done-${{ steps.live.outputs.input_key }}-${{ steps.live.outputs.publication_release }}
           lookup-only: true
       - name: Decide
         id: decide
@@ -79,6 +79,7 @@ jobs:
     outputs:
       docs_commit: ${{ steps.publish.outputs.docs_commit }}
       completed: ${{ steps.completed.outputs.completed }}
+      publication_release: ${{ steps.completed.outputs.publication_release }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -180,6 +181,12 @@ jobs:
           name: payment-observation
           path: /tmp/payment-observation.json
           if-no-files-found: ignore
+      - name: Render Tasks from the same immutable Runtime release
+        if: steps.pull.outputs.available == 'true'
+        run: |
+          if [ -f /tmp/formal-runtime-facts/tasks/catalog.json ]; then
+            python scripts/sync_tasks.py --api https://api.aisa.one --runtime-input-dir /tmp/formal-runtime-facts
+          fi
       - name: Validate page references
         if: steps.pull.outputs.available == 'true'
         run: python scripts/validate_runtime_api_reference_slugs.py --generated-only
@@ -251,6 +258,11 @@ jobs:
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git add openapi api-reference zh/api-reference docs.json llms.txt openapi.yaml docs/publication discovery/payment-evidence.json discovery/openapi.json
           if [ -d openapi-public ]; then git add openapi-public; fi
+          for path in tasks zh/tasks docs/task-runtime.json; do
+            if [ -e "$path" ] || [ -n "$(git ls-files -- "$path")" ]; then
+              git add -A -- "$path"
+            fi
+          done
           if git diff --cached --quiet; then exit 0; fi
           # Export deliberately retains an equivalent authorized publication.
           # Non-graph observations alone cannot create a new consumer identity.
@@ -317,7 +329,9 @@ jobs:
         # Only a run that could publish counts; dry runs and an unavailable
         # Runtime leave the inputs to be retried.
         if: github.ref == 'refs/heads/main' && steps.pull.outputs.available == 'true' && (inputs.publish == true || (github.event_name != 'workflow_dispatch' && vars.RUNTIME_CONTRACT_PUBLISH != 'false'))
-        run: echo 'completed=true' >> "$GITHUB_OUTPUT"
+        run: |
+          python -c 'from pathlib import Path; from scripts.live_contract_plan import publication_release; print("publication_release=" + publication_release(Path(".")))' >> "$GITHUB_OUTPUT"
+          echo 'completed=true' >> "$GITHUB_OUTPUT"
 
   record:
     needs: [plan, compose]
@@ -338,7 +352,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: .cache/pull-openapi-done
-          key: pull-openapi-done-${{ needs.plan.outputs.input_key }}
+          key: pull-openapi-done-${{ needs.plan.outputs.input_key }}-${{ needs.compose.outputs.publication_release }}
 
   notify-consumers:
     needs: compose
