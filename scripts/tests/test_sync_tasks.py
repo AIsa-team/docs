@@ -79,8 +79,8 @@ class SchemaTests(unittest.TestCase):
         two["response_schema"]["$defs"]["Identity"]["properties"]["platform"]["const"] = "instagram"
         doc = sync.openapi(tasks(one, two), "en", "https://api.aisa.one")
         schemas = doc["components"]["schemas"]
-        self.assertNotIn("const", schemas["creators.search_response"]["$defs"]["Identity"]["properties"]["platform"])
-        self.assertEqual("instagram", schemas["creators.find_similar_response"]["$defs"]["Identity"]["properties"]["platform"]["const"])
+        self.assertNotIn("const", next(v for k, v in schemas.items() if k.startswith("creators.search_response.") and k.endswith("_Identity"))["properties"]["platform"])
+        self.assertEqual("instagram", next(v for k, v in schemas.items() if k.startswith("creators.find_similar_response.") and k.endswith("_Identity"))["properties"]["platform"]["const"])
         self.assertEqual("#/$defs/Request", one["request_schema"]["$ref"])
 
     def test_social_fallback_keeps_json_schema_and_does_not_invent_options(self):
@@ -99,13 +99,41 @@ class SchemaTests(unittest.TestCase):
 
     def test_recursive_local_refs_remain_finite(self):
         schema = {"type": "object", "properties": {"parent": {"$ref": "#"}}}
-        self.assertEqual("#/components/schemas/Task", sync.component(schema, "Task")["properties"]["parent"]["$ref"])
+        self.assertEqual("#/components/schemas/Task", sync.component(schema, "Task")["Task"]["properties"]["parent"]["$ref"])
+
+    def test_lifted_definitions_have_direct_component_refs_and_keep_recursion(self):
+        schema = {"$ref": "#/$defs/Node", "$defs": {"Node": {
+            "type": "object", "properties": {"child": {"$ref": "#/$defs/Node"}},
+        }}}
+        components = sync.component(schema, "creators.tree_response")
+        self.assertEqual(2, len(components))
+        root_ref = components["creators.tree_response"]["$ref"]
+        node = components[root_ref.removeprefix("#/components/schemas/")]
+        self.assertEqual(root_ref, node["properties"]["child"]["$ref"])
+        self.assertNotIn("$defs", components["creators.tree_response"])
+
+    def test_default_error_resolves_to_fields_and_annotations_are_not_schemas(self):
+        d = detail()
+        d["request_schema"]["$defs"]["Input"]["properties"]["definitions"] = {"type": "string"}
+        d["request_schema"]["examples"] = [{"$ref": "literal-business-value", "$defs": "keep"}]
+        doc = sync.openapi(tasks(d, detail("social.get_post")), "en", "https://dev-api.aisa.one")
+        for task_id in ("creators.search", "social.get_post"):
+            schema = doc["paths"]["/v1/tasks/" + task_id]["post"]["responses"]["default"]["content"]["application/json"]["schema"]
+            while "$ref" in schema:
+                self.assertEqual(4, len(schema["$ref"].split("/")))
+                schema = sync.pointer(doc, schema["$ref"])
+            self.assertIn("error", schema["properties"])
+        root = doc["components"]["schemas"]["creators.search_request"]
+        self.assertEqual(d["request_schema"]["examples"], root["examples"])
+        fields = next(v["properties"] for k, v in doc["components"]["schemas"].items()
+                      if k.startswith("creators.search_request.") and k.endswith("_Input"))
+        self.assertEqual({"type": "string"}, fields["definitions"])
 
     def test_legal_underscore_names_keep_distinct_components_and_pages(self):
         ids = ("foo_bar.baz", "foo.bar_baz")
         rows = tasks(*(detail(task_id) for task_id in ids))
         doc = sync.openapi(rows, "en", "https://api.aisa.one")
-        self.assertEqual(6, len(doc["components"]["schemas"]))
+        self.assertEqual(6, sum(k.count(".") == 1 for k in doc["components"]["schemas"]))
         self.assertEqual(2, len({method["post"]["operationId"] for method in doc["paths"].values()}))
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
