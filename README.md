@@ -509,3 +509,42 @@ largest generated blocks on the actual candidate. A frozen historical fixture
 with duplicate legacy pages produced 7,282 request blocks (22.43 MB total,
 75.4 KB largest) before the final renderer review; it is a sizing diagnostic,
 not the size or acceptance result of the current live publication.
+
+### Task contracts and customer prices
+
+`scripts/sync_tasks.py` consumes the worker's `tasks/catalog.json` member of
+the immutable Runtime release. Its version-1 payload is
+`{"schema_version":1,"tasks":[{"en":<detail>,"zh":<detail>}]}`, ordered by
+Task ID and containing only enabled entries. The existing release reader checks
+the whole manifest, file hashes/ETags, current revision and freshness before
+rendering. Tasks share that release but do not enter Raw API or canonical
+provider inventory counts. There is no fallback to live `/v1/tasks` reads.
+
+Each detail publishes the Task's effective customer pricing revision in USD:
+fixed successful requests or per-unit prices, parameter price tables, requested
+size blocks and rounding, unit reservation/settlement rules, and plan multiplier
+policy. The bilingual renderer displays these rules without copying supplier
+costs or interpreting a representative base tier as every input's price.
+Quotes estimate without executing or reserving funds; execution performs the
+reservation. Incomplete or unsupported price contracts stop generation before
+saved pages change.
+
+The dev preview intentionally keeps Raw APIs from the production release and
+Tasks from the dev worker release. `docs/dev-runtime.json` and
+`docs/task-runtime.json` record those separate origins and immutable revisions.
+The formal publisher instead passes its existing acquisition directory:
+
+```bash
+python scripts/sync_tasks.py --api https://api.aisa.one --runtime-input-dir /tmp/formal-runtime-facts
+```
+
+Task pages, OpenAPI and provenance join the existing formal publication hashes.
+Before export, the publisher reproduces the Task outputs from the same release
+used for Raw APIs and refuses altered prices, schemas, pages or revision pins.
+A valid empty Task artifact removes both language directories and navigation;
+a missing, stale or invalid artifact preserves the saved publication and fails
+the run. Deploy the Services Task artifact/price-contract producer before
+enabling this consumer; this change does not deploy or enable Tasks.
+
+Focused validation: `python -m unittest discover -s scripts/tests -p test_sync_tasks.py -v`
+and `python -m unittest discover -s scripts/tests -p test_runtime_contract_artifact.py -v`.

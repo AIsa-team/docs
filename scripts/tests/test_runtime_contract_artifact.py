@@ -115,6 +115,18 @@ class CanonicalArtifactTests(unittest.TestCase):
         revision, compiler, reader, *_ = public_tests.PublicReleaseTests().fixture()
         self.assertNotIn('canonical_validation', fetch.acquire(revision, compiler, reader)[-1])
 
+    def test_tasks_share_outer_release_without_entering_raw_or_canonical_inventory(self):
+        original = self.revision
+        self.contents[contract.TASK_CATALOG] = encoded({'schema_version': 1, 'tasks': []})
+        self.outer()
+        self.assertNotEqual(original, self.revision)
+        result = self.acquire()
+        self.assertEqual(result[-1]['provider_count'], 1)
+        self.assertEqual(result[-1]['selected_endpoint_count'], 1)
+        self.assertEqual(result[-1]['canonical_validation']['operation_identity_count'], 1)
+        self.assertIn(contract.TASK_CATALOG, result[0])
+        self.assertNotIn(contract.TASK_CATALOG, fetch.facts_members(result[0]))
+
     def test_same_immutable_artifact_can_be_republished_at_a_later_generation(self):
         original = self.contents.copy()
         revision = self.revision

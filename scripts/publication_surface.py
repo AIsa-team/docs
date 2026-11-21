@@ -18,11 +18,12 @@ from identity_compatibility import published_history, validate_document_identiti
 
 def publication_files(root):
     root = Path(root)
-    files = {p for p in (root / 'openapi.yaml', root / 'llms.txt', root / 'docs.json', root / 'openapi/registry.yaml',
+    files = {p for p in (root / 'openapi.yaml', root / 'llms.txt', root / 'docs.json', root / 'docs/task-runtime.json', root / 'openapi/registry.yaml',
                         root / 'api-reference.mdx', root / 'zh/api-reference.mdx', root / POLICY_PATH, root / REBINDING_PATH, root / SALES_CATALOG_PATH) if p.is_file()}
     files.update(root / name for name in PAYMENT_FILES if (root / name).is_file())
     for pattern in ('openapi/*.json', 'openapi/upstream/*.json', 'openapi/zh/*.json',
-                    'api-reference/**/*.mdx', 'zh/api-reference/**/*.mdx'):
+                    'api-reference/**/*.mdx', 'zh/api-reference/**/*.mdx',
+                    'tasks/*.json', 'tasks/*.mdx', 'zh/tasks/*.json', 'zh/tasks/*.mdx'):
         files.update(root.glob(pattern))
     return sorted(files)
 
@@ -62,6 +63,8 @@ def retired_archive(path):
 
 def validate_surfaces(root, published_ref=None):
     root = Path(root)
+    from sync_tasks import validate_publication as validate_tasks
+    validate_tasks(root, api=None)
     documents, all_documents = {}, {}
     for path in (root / 'openapi').glob('*.json'):
         if path.name == 'openapi.json':
