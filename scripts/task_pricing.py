@@ -38,7 +38,7 @@ def pricing_markdown(detail, language):
     p = detail.get("pricing")
     if not isinstance(p, dict) or p.get("currency") != "USD" or type(p.get("apply_plan_multiplier")) is not bool:
         raise ValueError("Task requires the complete published USD customer price contract")
-    revision = integer(p.get("revision"), positive=True)
+    integer(p.get("revision"), positive=True)
     kind, unit = p.get("kind"), p.get("unit")
     if (kind, unit) not in {("fixed_success", "successful_request"), ("per_unit", "delivered_item"), ("per_unit", "requested_unit")}:
         raise ValueError("Unsupported Task customer pricing kind or unit")
@@ -77,16 +77,16 @@ def pricing_markdown(detail, language):
                 raise ValueError("Invalid Task scaled price selections")
     else:
         rows.append(("所有有效输入" if zh else "All valid inputs", base, None))
-    tier_names = sorted({key for _, rates, _ in rows for key in rates})
-    lines = [(f"币种：USD。价格版本：{revision}。" if zh else f"Currency: USD. Price revision: {revision}."), ""]
-    headers = ["输入", "计价单位"] if zh else ["Input", "Price unit"]
-    lines.extend(["| " + " | ".join(headers + [text(tier) + " (USD)" for tier in tier_names]) + " |",
-                  "| " + " | ".join(["---"] * (2 + len(tier_names))) + " |"])
+    headers = ["输入", "计价单位", "价格 (USD)"] if zh else ["Input", "Price unit", "Price (USD)"]
+    lines = ["| " + " | ".join(headers) + " |", "| --- | --- | --- |"]
     for selection, rates, value in rows:
+        amounts = set(rates.values())
+        if len(amounts) != 1:
+            raise ValueError("Different Task tier prices require an explicit customer price presentation")
         label = labels[unit]
         if scale and value in scale["values"]:
             label = (f"每 {scale['unit_size']} 个请求单位" if zh else f"Per {scale['unit_size']} requested units")
-        lines.append("| " + " | ".join([text(selection), label] + [usd(rates[tier]) if tier in rates else "—" for tier in tier_names]) + " |")
+        lines.append("| " + " | ".join([text(selection), label, usd(amounts.pop())]) + " |")
     lines.append("")
     if price_by and not price_by.get("unknown_uses_default_tiers", False):
         lines.append("仅表内参数值有价格；未列出的值不会回退到基础价格。" if zh else
@@ -122,11 +122,8 @@ def pricing_markdown(detail, language):
     if not isinstance(policy, dict):
         raise ValueError("Missing Task plan policy")
     if p["apply_plan_multiplier"]:
-        multipliers = []
         for name in ("team", "builder", "payg"):
             ppm = integer(policy.get(name + "_ppm"), positive=True)
-            multipliers.append(f"{name}: {format(Decimal(ppm) / Decimal(1_000_000), 'f')}×")
-        lines.append(("以上价格再乘当前套餐倍率（" if zh else "Apply the current plan multiplier to the prices above (") + "; ".join(multipliers) + ("）。" if zh else ")."))
-    else:
-        lines.append("以上价格不再乘套餐倍率。" if zh else "No additional plan multiplier applies to these prices.")
+            if ppm != 1_000_000:
+                raise ValueError("Non-unit Task plan multiplier requires an explicit customer price presentation")
     return "\n".join(lines) + "\n"
